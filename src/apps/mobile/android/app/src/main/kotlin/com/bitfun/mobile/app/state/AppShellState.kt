@@ -54,6 +54,7 @@ internal class AppShellState(
     sidebarQuery: String,
     remoteSessionId: String? = null,
     remoteCreating: Boolean = false,
+    remoteScanRequested: Boolean = false,
 ) {
     internal var surface: MobileSurface by mutableStateOf(surface)
         private set
@@ -82,6 +83,9 @@ internal class AppShellState(
     internal var remoteCreating: Boolean by mutableStateOf(remoteCreating)
         private set
 
+    internal var remoteScanRequested: Boolean by mutableStateOf(remoteScanRequested)
+        private set
+
     internal fun show(next: MobileSurface) {
         surface = next
     }
@@ -94,6 +98,7 @@ internal class AppShellState(
 
     internal fun createRemoteSession() {
         surface = MobileSurface.REMOTE
+        remoteScanRequested = false
         remoteCreating = true
         remoteSessionId = null
     }
@@ -101,6 +106,17 @@ internal class AppShellState(
     internal fun closeRemoteSession() {
         remoteCreating = false
         remoteSessionId = null
+    }
+
+    internal fun openRemoteScanner() {
+        surface = MobileSurface.REMOTE
+        remoteCreating = false
+        remoteSessionId = null
+        remoteScanRequested = true
+    }
+
+    internal fun closeRemoteScanner() {
+        remoteScanRequested = false
     }
 
     /** Opens the requested settings surface in the shared overlay host. */
@@ -159,6 +175,7 @@ internal class AppShellState(
                     it.sidebarQuery,
                     it.remoteSessionId,
                     it.remoteCreating,
+                    it.remoteScanRequested,
                 )
             },
             restore = {
@@ -172,6 +189,7 @@ internal class AppShellState(
                     sidebarQuery = it[6] as String,
                     remoteSessionId = it.getOrNull(7) as String?,
                     remoteCreating = it.getOrNull(8) as? Boolean ?: false,
+                    remoteScanRequested = it.getOrNull(9) as? Boolean ?: false,
                 )
             },
         )
@@ -190,5 +208,6 @@ internal fun rememberAppShellState(): AppShellState = rememberSaveable(saver = A
         sidebarQuery = "",
         remoteSessionId = null,
         remoteCreating = false,
+        remoteScanRequested = false,
     )
 }

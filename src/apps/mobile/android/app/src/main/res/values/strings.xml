@@ -9,6 +9,7 @@
     <string name="settings_account">Account</string>
     <string name="settings_account_signed_out">Not signed in</string>
     <string name="settings_language_section">Language</string>
+    <string name="settings_general_section">General</string>
     <string name="settings_language_title">Language</string>
     <string name="settings_language_choose">Choose language</string>
     <string name="settings_language_english">English</string>
@@ -49,6 +50,11 @@
     <string name="account_devices_retry">Retry</string>
     <string name="account_devices_loading">Loading…</string>
     <string name="account_devices_empty">This account has no other registered devices yet.</string>
+    <string name="connect_account_devices_title">Choose a desktop</string>
+    <string name="connect_account_devices_subtitle">Remote</string>
+    <string name="connect_account_devices_body">Choose an online desktop to continue.</string>
+    <string name="connect_account_devices_available">Account devices</string>
+    <string name="connect_account_devices_scan">Scan QR code to connect</string>
     <!-- The device currently being driven, followed by whether it is reachable. -->
     <string name="account_device_controlling">Controlling · %1$s</string>
     <string name="account_invalid_credentials">Enter a valid username and password.</string>
@@ -73,6 +79,7 @@
     <string name="general_chat_service_unavailable">The model service is temporarily unavailable. Try again later.</string>
     <string name="general_chat_invalid_response">The model service returned an unrecognized response.</string>
     <string name="general_chat_network">Could not reach the provider.</string>
+    <string name="chat_load_older_messages">Load earlier messages</string>
 
     <string name="model_service_title">Model</string>
     <string name="model_service_local_title">Local custom model</string>
@@ -100,6 +107,8 @@
     <string name="model_service_api_key_required">Enter an API key.</string>
     <string name="model_service_secure_store_failed">The system secure storage is unavailable. Try again later.</string>
     <string name="model_service_manage_title">Chat model</string>
+    <string name="model_service_choose_account">Choose account model</string>
+    <string name="model_service_sources">Model sources</string>
     <string name="model_service_local_section">Local custom</string>
     <string name="model_service_test_connection">Test connection</string>
     <string name="model_service_testing">Testing…</string>
@@ -218,6 +227,7 @@
     <string name="status_ready">Ready</string>
     <string name="common_close">Close</string>
     <string name="common_back">Back</string>
+    <string name="common_open">Open</string>
     <string name="session_messages_title">Messages</string>
     <string name="message_input_label">Ask BitFun</string>
     <string name="message_send">Send</string>
@@ -328,6 +338,8 @@
     <string name="sidebar_new_chat">Chat</string>
     <string name="sidebar_signed_out_new_chat">New chat</string>
     <string name="sidebar_sign_in">Sign in to BitFun account</string>
+    <string name="sidebar_scan_to_connect">Scan to connect</string>
+    <string name="connect_choose_connection">Choose how to connect</string>
     <string name="shell_open_sidebar">Open sidebar</string>
     <string name="connection_connected">Connected</string>
     <string name="connection_reconnecting">Reconnecting</string>
@@ -383,6 +395,7 @@
     <string name="tool_cancel">Stop</string>
     <string name="tool_answer_label">Your answer</string>
     <string name="tool_answer_send">Send answer</string>
+    <string name="tool_option_other">Other</string>
     <string name="tool_question_default">The agent is waiting for an answer.</string>
     <string name="tool_line_running">Running \"%1$s\"</string>
     <string name="tool_line_failed">%1$s failed</string>

@@ -48,6 +48,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 
 internal const val HEADER_ACTION_MENU_TEST_TAG: String = "header-action-menu"
 
@@ -112,18 +113,23 @@ internal fun BitFunHeaderActionMenu(
                 Surface(
                     modifier = modifier
                         .testTag(HEADER_ACTION_MENU_TEST_TAG)
-                        .width(292.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .width(MobileDesignGeometry.PopoverWidth)
+                        .clip(RoundedCornerShape(MobileDesignGeometry.PopoverRadius))
                         .border(
                             BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            RoundedCornerShape(16.dp),
+                            RoundedCornerShape(MobileDesignGeometry.PopoverRadius),
                         ),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(MobileDesignGeometry.PopoverRadius),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                     tonalElevation = 0.dp,
-                    shadowElevation = 18.dp,
+                    shadowElevation = MobileDesignGeometry.PopoverShadowRadius,
                 ) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Column(
+                        Modifier.padding(
+                            horizontal = MobileDesignGeometry.PopoverPadding,
+                            vertical = MobileDesignGeometry.PopoverVerticalPadding,
+                        ),
+                    ) {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(28.dp).padding(start = 8.dp),
                             contentAlignment = Alignment.CenterStart,
@@ -187,7 +193,7 @@ private fun HeaderActionRow(action: BitFunHeaderAction, onDismiss: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(MobileDesignGeometry.PopoverActionHeight)
             .clip(RoundedCornerShape(10.dp))
             .background(
                 if (action.selected) MaterialTheme.colorScheme.surfaceVariant

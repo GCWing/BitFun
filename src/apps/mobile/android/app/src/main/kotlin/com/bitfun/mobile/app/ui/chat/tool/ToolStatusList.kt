@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.ToolAction
 import com.bitfun.mobile.core.feature.session.ToolCard
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.ToolOperation
 import com.bitfun.mobile.core.feature.session.ToolPhase
 import com.bitfun.mobile.core.feature.session.ToolRow
@@ -64,6 +65,7 @@ internal fun ToolStatusList(
     onReject: (String, String) -> Unit,
     onCancel: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
+    onAnswerStructured: (String, List<QuestionAnswer>) -> Unit,
     onOpenFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
@@ -81,6 +83,7 @@ internal fun ToolStatusList(
                     onReject = { reason -> onReject(row.tool.id, reason) },
                     onCancel = { reason -> onCancel(row.tool.id, reason) },
                     onAnswer = { answer -> onAnswer(row.tool.id, answer) },
+                    onAnswerStructured = { answers -> onAnswerStructured(row.tool.id, answers) },
                     onOpenFile = onOpenFile,
                     modifier = Modifier,
                 )
@@ -147,6 +150,7 @@ private fun CollapsedToolGroup(
                     onReject = {},
                     onCancel = {},
                     onAnswer = {},
+                    onAnswerStructured = {},
                     onOpenFile = onOpenFile,
                     modifier = Modifier,
                 )
@@ -170,6 +174,7 @@ internal fun ToolStatusRow(
     onReject: (String) -> Unit,
     onCancel: (String) -> Unit,
     onAnswer: (String) -> Unit,
+    onAnswerStructured: (List<QuestionAnswer>) -> Unit,
     onOpenFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
@@ -271,13 +276,22 @@ internal fun ToolStatusRow(
         }
 
         if (ToolAction.ANSWER in tool.actions) {
-            ToolQuestionAnswerPanel(
-                toolId = tool.id,
-                // The agent did not always send a prompt to quote, so we ask in ours.
-                prompt = tool.question ?: stringResource(R.string.tool_question_default),
-                enabled = enabled,
-                onSubmit = onAnswer,
-            )
+            if (tool.questions.isNotEmpty()) {
+                ToolStructuredQuestionPanel(
+                    toolId = tool.id,
+                    questions = tool.questions,
+                    enabled = enabled,
+                    onSubmit = onAnswerStructured,
+                )
+            } else {
+                ToolQuestionAnswerPanel(
+                    toolId = tool.id,
+                    // The agent did not always send a prompt to quote, so we ask in ours.
+                    prompt = tool.question ?: stringResource(R.string.tool_question_default),
+                    enabled = enabled,
+                    onSubmit = onAnswer,
+                )
+            }
         }
 
         if (ToolAction.CANCEL in tool.actions) {

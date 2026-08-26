@@ -1,6 +1,7 @@
 package com.bitfun.mobile.app.ui.settings
 
 import androidx.annotation.DrawableRes
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +24,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.chat.messageRes
 import com.bitfun.mobile.app.ui.theme.bitFunColors
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigFailure
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigUi
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConnectionTestUi
@@ -109,46 +110,58 @@ internal fun ModelServiceScreen(
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
-    var editing by rememberSaveable { mutableStateOf(false) }
-    // Whatever the last page left behind is not an answer about this one: a
-    // refused save and a failed probe both belong to the form they happened in.
-    val leaveEditor = {
-        editing = false
+    var page by rememberSaveable { mutableStateOf(ModelServicePage.OVERVIEW) }
+    val leaveChild = {
+        page = ModelServicePage.OVERVIEW
         onIntent(GeneralChatIntent.ClearConfigFailure)
         onIntent(GeneralChatIntent.ClearConnectionTest)
     }
+    BackHandler(enabled = page != ModelServicePage.OVERVIEW, onBack = leaveChild)
 
     Column(modifier = modifier.testTag(MODEL_SERVICE_TEST_TAG)) {
         ModelServiceHeader(
             title = stringResource(
-                if (editing) R.string.model_service_local_title else R.string.model_service_manage_title,
+                when (page) {
+                    ModelServicePage.OVERVIEW -> R.string.model_service_manage_title
+                    ModelServicePage.ACCOUNT -> R.string.model_service_choose_account
+                    ModelServicePage.LOCAL -> R.string.model_service_local_title
+                },
             ),
-            onBack = if (editing) leaveEditor else null,
+            onBack = if (page == ModelServicePage.OVERVIEW) null else leaveChild,
             onClose = onClose,
         )
 
-        if (editing) {
-            LocalModelEditor(
+        when (page) {
+            ModelServicePage.LOCAL -> LocalModelEditor(
                 config = config,
                 failure = failure,
                 connectionTest = connectionTest,
                 onIntent = onIntent,
                 onSave = onSave,
-                onSaved = { editing = false },
-                // `weight` rather than `fillMaxSize`: the body gets what the
-                // header left, and the centred page measures itself against that.
-                // Filling the parent instead would make the column taller than
-                // the sheet by exactly the height of the header, which pushes the
-                // content it is centring off the bottom edge.
+                onSaved = { page = ModelServicePage.OVERVIEW },
                 modifier = Modifier.weight(1f),
             )
-        } else {
-            ModelOverview(
+            ModelServicePage.ACCOUNT -> AccountModelSelection(
+                models = models.filter { it.source == GeneralChatModelSource.ACCOUNT },
+                activeModelId = activeModelId,
+                onSelect = {
+                    onIntent(GeneralChatIntent.SelectModel(it))
+                    page = ModelServicePage.OVERVIEW
+                },
+                modifier = Modifier.weight(1f),
+            )
+            ModelServicePage.OVERVIEW -> ModelOverview(
                 config = config,
                 models = models,
                 activeModelId = activeModelId,
+                onOpenAccount = { page = ModelServicePage.ACCOUNT },
+                onSelectLocal = {
+                    models.firstOrNull { it.source == GeneralChatModelSource.LOCAL }?.let { model ->
+                        onIntent(GeneralChatIntent.SelectModel(model.id))
+                    }
+                },
                 onEditLocal = {
-                    editing = true
+                    page = ModelServicePage.LOCAL
                     onIntent(GeneralChatIntent.ClearConfigFailure)
                     onIntent(GeneralChatIntent.ClearConnectionTest)
                 },
@@ -157,6 +170,8 @@ internal fun ModelServiceScreen(
         }
     }
 }
+
+private enum class ModelServicePage { OVERVIEW, ACCOUNT, LOCAL }
 
 /**
  * Back, title, close — the one row that stays put while the page under it swaps.
@@ -170,15 +185,15 @@ private fun ModelServiceHeader(title: String, onBack: (() -> Unit)?, onClose: ()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(66.dp)
-                .padding(start = 22.dp, end = 18.dp),
+                .height(MobileDesignGeometry.SheetHeaderHeight)
+                .padding(start = 16.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let { back ->
-                FilledTonalIconButton(
+                IconButton(
                     onClick = back,
                     modifier = Modifier
-                        .padding(end = 12.dp)
+                        .padding(end = 8.dp)
                         .size(42.dp)
                         .testTag(MODEL_SERVICE_BACK_TEST_TAG),
                 ) {
@@ -191,7 +206,7 @@ private fun ModelServiceHeader(title: String, onBack: (() -> Unit)?, onClose: ()
             }
             Text(
                 title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -200,14 +215,15 @@ private fun ModelServiceHeader(title: String, onBack: (() -> Unit)?, onClose: ()
                 // that had room to spare.
                 modifier = Modifier.weight(1f).padding(end = 12.dp),
             )
-            FilledTonalIconButton(
+            IconButton(
                 onClick = onClose,
-                modifier = Modifier.size(42.dp).testTag(MODEL_SERVICE_CLOSE_TEST_TAG),
+                modifier = Modifier.size(MobileDesignGeometry.SelectionCloseSize)
+                    .testTag(MODEL_SERVICE_CLOSE_TEST_TAG),
             ) {
                 Icon(
                     painterResource(R.drawable.ic_symbol_xmark),
                     contentDescription = stringResource(R.string.common_close),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -220,21 +236,29 @@ private fun ModelOverview(
     config: GeneralChatConfigUi,
     models: List<GeneralChatModelUi>,
     activeModelId: String,
+    onOpenAccount: () -> Unit,
+    onSelectLocal: () -> Unit,
     onEditLocal: () -> Unit,
     modifier: Modifier,
 ) {
-    // "Complete" rather than "has a model name": a model with no endpoint or no
-    // key cannot answer, so naming it the current model would be a claim the
-    // first message disproves.
     val complete = config.baseUrl.isNotBlank() && config.model.isNotBlank() && config.hasApiKey
     val notConfigured = stringResource(R.string.model_service_not_configured)
     val localSource = stringResource(R.string.model_service_local_source)
     val accountSource = stringResource(R.string.model_service_account_source)
     val active = models.firstOrNull { it.id == activeModelId }
-    val accountModels = models.count { it.source == GeneralChatModelSource.ACCOUNT }
-    val accountActive = active?.source == GeneralChatModelSource.ACCOUNT
+    val accountModels = models.filter { it.source == GeneralChatModelSource.ACCOUNT }
 
-    CentredPage(modifier = modifier) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = MobileDesignGeometry.ModelOverviewTopPadding,
+                bottom = MobileDesignGeometry.ModelOverviewBottomPadding,
+            ),
+        verticalArrangement = Arrangement.spacedBy(MobileDesignGeometry.ModelSectionGap),
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OverviewSectionHeader(stringResource(R.string.model_service_current))
             OverviewRow(
@@ -254,7 +278,7 @@ private fun ModelOverview(
                     GeneralChatModelSource.ACCOUNT -> accountSource
                     null -> ""
                 },
-                minHeight = 68,
+                minHeight = MobileDesignGeometry.ModelCurrentRowHeight.value.toInt(),
                 selected = false,
                 chevron = false,
                 onClick = null,
@@ -263,49 +287,163 @@ private fun ModelOverview(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OverviewSectionHeader(stringResource(R.string.model_service_account_section))
-            OverviewRow(
-                icon = R.drawable.ic_symbol_cloud,
-                iconSize = 21,
-                // Dimmed to `outline` when nothing synced, which is the source's
-                // SUBTLE: the row is there either way, and the icon is what says
-                // whether it has anything behind it.
-                iconTint = if (accountModels > 0) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.outline
-                },
-                title = stringResource(R.string.model_service_account_summary),
-                subtitle = if (accountModels > 0) {
-                    stringResource(R.string.model_service_account_synced, accountModels)
-                } else {
-                    stringResource(R.string.model_service_account_empty)
-                },
-                minHeight = 62,
-                selected = accountActive,
-                chevron = false,
-                // Not tappable, as the source has it: these models are defined on
-                // the desktop and chosen in the composer, so there is nothing this
-                // panel could open that the user could act on.
-                onClick = null,
-                modifier = Modifier.testTag(MODEL_SERVICE_ACCOUNT_TEST_TAG),
+            OverviewSectionHeader(stringResource(R.string.model_service_sources))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(MobileDesignGeometry.SettingsCompactCardRadius))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                ModelSourceRow(
+                    icon = R.drawable.ic_symbol_cloud,
+                    title = stringResource(R.string.model_service_account_summary),
+                    subtitle = if (accountModels.isEmpty()) {
+                        stringResource(R.string.model_service_account_empty)
+                    } else {
+                        stringResource(R.string.model_service_account_synced, accountModels.size)
+                    },
+                    onBodyClick = onOpenAccount,
+                    onChevronClick = onOpenAccount,
+                    modifier = Modifier.testTag(MODEL_SERVICE_ACCOUNT_TEST_TAG),
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                ModelSourceRow(
+                    icon = R.drawable.ic_symbol_wrench_and_screwdriver,
+                    title = if (complete) config.model else notConfigured,
+                    subtitle = if (complete) localSource else "",
+                    onBodyClick = if (complete) onSelectLocal else onEditLocal,
+                    onChevronClick = onEditLocal,
+                    modifier = Modifier.testTag(MODEL_SERVICE_LOCAL_TEST_TAG),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSourceRow(
+    @DrawableRes icon: Int,
+    title: String,
+    subtitle: String,
+    onBodyClick: () -> Unit,
+    onChevronClick: () -> Unit,
+    modifier: Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(MobileDesignGeometry.ModelSourceRowHeight)
+                .clickable(onClick = onBodyClick)
+                .padding(start = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle.isNotEmpty()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+        IconButton(
+            onClick = onChevronClick,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_symbol_chevron_right),
+                contentDescription = stringResource(R.string.common_open),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
             )
         }
+    }
+}
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OverviewSectionHeader(stringResource(R.string.model_service_local_section))
-            OverviewRow(
-                icon = R.drawable.ic_symbol_wrench_and_screwdriver,
-                iconSize = 23,
-                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                title = if (complete) config.model else notConfigured,
-                subtitle = if (complete) localSource else "",
-                minHeight = 62,
-                selected = active?.source == GeneralChatModelSource.LOCAL,
-                chevron = true,
-                onClick = onEditLocal,
-                modifier = Modifier.testTag(MODEL_SERVICE_LOCAL_TEST_TAG),
-            )
+@Composable
+private fun AccountModelSelection(
+    models: List<GeneralChatModelUi>,
+    activeModelId: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier,
+) {
+    if (models.isEmpty()) {
+        Text(
+            stringResource(R.string.model_service_account_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier
+                .fillMaxWidth()
+                .heightIn(min = MobileDesignGeometry.ModelEmptyAccountHeight)
+                .padding(horizontal = 16.dp, vertical = MobileDesignGeometry.ModelListTopPadding),
+        )
+        return
+    }
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = 10.dp,
+                end = 10.dp,
+                top = MobileDesignGeometry.ModelListTopPadding,
+                bottom = MobileDesignGeometry.ModelListBottomPadding,
+            ),
+        verticalArrangement = Arrangement.spacedBy(MobileDesignGeometry.ModelAccountRowGap),
+    ) {
+        models.forEach { model ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MobileDesignGeometry.ModelAccountRowHeight)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(
+                        if (model.id == activeModelId) MaterialTheme.colorScheme.surfaceVariant
+                        else Color.Transparent,
+                    )
+                    .clickable { onSelect(model.id) }
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                    if (model.id == activeModelId) {
+                        Icon(
+                            painterResource(R.drawable.ic_symbol_checkmark_circle),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        model.label,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        stringResource(R.string.model_service_account_source),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

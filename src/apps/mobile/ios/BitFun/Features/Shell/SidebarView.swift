@@ -1,24 +1,39 @@
 import SwiftUI
 
+struct SidebarSessionActionsAnchorKey: PreferenceKey {
+    static var defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(
+        value: inout [String: Anchor<CGRect>],
+        nextValue: () -> [String: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
+struct SidebarWorkspaceCreateAnchorKey: PreferenceKey {
+    static var defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(
+        value: inout [String: Anchor<CGRect>],
+        nextValue: () -> [String: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
 struct SidebarView: View {
     @ObservedObject var model: MobileAppModel
+    var permanent = false
+    var onCollapse: (() -> Void)? = nil
+    var onPermanentActions: ((ChatSession) -> Void)? = nil
     @State private var search = ""
     @State private var searchVisible = false
-
-    private var devices: [SidebarDevice] {
-        if let accountDeviceName = model.accountDeviceName, !accountDeviceName.isEmpty {
-            return [SidebarDevice(name: accountDeviceName, online: true)]
-        }
-        return [
-            SidebarDevice(name: "Mac-userdeMacBook-Pro.local", online: true),
-            SidebarDevice(name: "DESKTOP-KM3L4UI", online: true),
-        ]
-    }
-
-    private let workspaces = [
-        SidebarWorkspace(name: "arkanaly...", sessions: ["本项目是啥", "Remote Code ..."]),
-        SidebarWorkspace(name: "BitFun", sessions: ["你在哪个分支", "你去拉一下Deep...", "你去看看issue里..."])
-    ]
+    @State private var visibleRecentCount = 6
+    @State private var expandedWorkspacePaths: Set<String> = []
+    @State private var compactActionSession: ChatSession?
+    @State private var workspaceCreatePath: String?
+    @State private var remoteChatsCollapsed = false
 
     private var recentSessions: [ChatSession] {
         let source = model.sessions
@@ -26,10 +41,48 @@ struct SidebarView: View {
         return source.filter { $0.title.localizedCaseInsensitiveContains(search) }
     }
 
+    private var shownRecentSessions: [ChatSession] {
+        Array(recentSessions.prefix(search.isEmpty ? visibleRecentCount : recentSessions.count))
+    }
+
+    private var hasActiveRemoteViewFilter: Bool {
+        !model.remoteWorkspaceFilter.isEmpty ||
+            !model.remoteViewAgentFilter.isEmpty ||
+            !model.remoteStatusFilter.isEmpty
+    }
+
+    private var sidebarDevices: [MobileAccountDevice] {
+        var devices = model.accountDevices.map { device in
+            MobileAccountDevice(
+                id: device.id,
+                name: device.name,
+                online: device.online,
+                selected: model.usesDirectPairing
+                    ? device.name == model.directPairingDeviceName
+                    : device.selected
+            )
+        }
+        if model.usesDirectPairing,
+           let name = model.directPairingDeviceName,
+           !name.isEmpty,
+           !devices.contains(where: { $0.name == name }) {
+            devices.insert(
+                MobileAccountDevice(
+                    id: model.directPairingSidebarDeviceID,
+                    name: name,
+                    online: true,
+                    selected: true
+                ),
+                at: 0
+            )
+        }
+        return devices
+    }
+
     var body: some View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
-                authenticatedHeader
+                if model.accountUser == nil { signedOutHeader } else { authenticatedHeader }
                 if searchVisible {
                     searchField
                 }
@@ -38,24 +91,117 @@ struct SidebarView: View {
                         recentSection
                         workspaceSection
                     }
-                    .padding(.bottom, 84)
+                    .padding(.bottom, model.accountUser == nil && !model.remoteConnected ? 142 : 84)
                 }
                 footer
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
             .padding(.bottom, 16)
-            .frame(width: min(320, proxy.size.width * 0.68), height: proxy.size.height, alignment: .topLeading)
+            .frame(
+                width: permanent ? proxy.size.width : min(320, proxy.size.width * 0.68),
+                height: proxy.size.height,
+                alignment: .topLeading
+            )
             .background(BitFunTheme.page)
+        }
+        .sheet(item: $compactActionSession) { session in
+            let surface = SessionActionSurface(
+                model: model,
+                session: session,
+                presentation: .bottomSheet,
+                canViewDetails: true,
+                canArchive: model.surface == .local,
+                canExport: model.surface == .local,
+                canDelete: true,
+                onViewDetails: { openDetails(afterClosing: session) },
+                onArchive: { if model.surface == .local { model.archiveLocalSession(session) } },
+                onExport: { if model.surface == .local { model.exportLocalSession(session) } },
+                onDelete: {
+                    if model.surface == .remote { model.deleteRemoteSession(session) }
+                    else { model.deleteLocalSession(session) }
+                },
+                onClose: { compactActionSession = nil }
+            )
+            .presentationDetents([.height(380)])
+            .presentationDragIndicator(.hidden)
+            if #available(iOS 16.4, *) {
+                surface.presentationCornerRadius(MobileDesignGeometry.popoverRadius)
+            } else {
+                surface
+            }
+        }
+        .overlayPreferenceValue(SidebarWorkspaceCreateAnchorKey.self) { anchors in
+            GeometryReader { proxy in
+                if let path = workspaceCreatePath,
+                   let workspace = model.remoteWorkspaces.first(where: { $0.path == path }),
+                   let anchor = anchors[path] {
+                    let frame = proxy[anchor]
+                    let menuHeight = MobileDesignGeometry.compactPopoverActionHeight * 2 + 16
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { workspaceCreatePath = nil }
+                        workspaceCreateMenu(workspace)
+                            .position(
+                                x: min(
+                                    max(MobileDesignGeometry.compactPopoverWidth / 2 + 8, frame.midX),
+                                    proxy.size.width - MobileDesignGeometry.compactPopoverWidth / 2 - 8
+                                ),
+                                y: max(menuHeight / 2 + 8, frame.minY - menuHeight / 2 - 6)
+                            )
+                    }
+                }
+            }
+        }
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("--project-create-menu"),
+               workspaceCreatePath == nil,
+               let workspace = model.remoteWorkspaces.first {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                workspaceCreatePath = workspace.path
+            } else if ProcessInfo.processInfo.arguments.contains("--sidebar-actions"),
+                      compactActionSession == nil,
+                      let session = shownRecentSessions.first {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                if permanent { onPermanentActions?(session) }
+                else { compactActionSession = session }
+            }
         }
     }
 
     private var authenticatedHeader: some View {
         HStack(spacing: 6) {
-            Text("BitFun")
+            Text(verbatim: "BitFun")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(BitFunTheme.ink)
             Spacer(minLength: 0)
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .frame(width: 38, height: 38)
+                        .background(BitFunTheme.card)
+                        .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(model.localized("收起侧栏")))
+            }
+            if model.remoteConnected {
+                Button { model.remoteViewSettingsOpen = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .frame(width: 38, height: 38)
+                        .background(BitFunTheme.card)
+                        .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(model.localized("视图设置")))
+            }
             Button {
                 withAnimation(.easeOut(duration: 0.18)) { searchVisible.toggle() }
                 if !searchVisible { search = "" }
@@ -68,13 +214,44 @@ struct SidebarView: View {
                     .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("搜索")
+            .accessibilityLabel(Text(model.localized("搜索")))
+        }
+        .frame(height: 50)
+    }
+
+    private var signedOutHeader: some View {
+        HStack(spacing: 8) {
+            Button { model.newLocalChat() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 17, weight: .medium))
+                    Text(model.localized("聊天"))
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .foregroundStyle(BitFunTheme.ink)
+                .frame(height: 42)
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: 0)
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .frame(width: 38, height: 38)
+                        .background(BitFunTheme.card)
+                        .overlay(Circle().stroke(BitFunTheme.line, lineWidth: 1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(model.localized("收起侧栏")))
+            }
         }
         .frame(height: 50)
     }
 
     private var searchField: some View {
-        TextField("搜索对话", text: $search)
+        TextField(model.localized("搜索对话"), text: $search)
             .font(.system(size: 14))
             .foregroundStyle(BitFunTheme.ink)
             .padding(.horizontal, 14)
@@ -82,26 +259,57 @@ struct SidebarView: View {
             .background(BitFunTheme.soft)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .padding(.top, 12)
+            .onChange(of: search) { value in
+                if model.surface == .remote { model.searchRemoteSessions(value) }
+            }
     }
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("最近对话")
+            Text(model.localized("最近对话"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(BitFunTheme.muted)
                 .padding(.top, 16)
                 .padding(.bottom, 6)
-            ForEach(recentSessions) { session in
-                SidebarRecentRow(session: session, selected: session.id == model.selectedSessionID) {
-                    model.surface = .local
-                    model.select(session)
-                }
+            if shownRecentSessions.isEmpty {
+                Text(model.localized(search.isEmpty ? "暂无最近会话" : "没有匹配的会话"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(BitFunTheme.muted)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44, alignment: .leading)
             }
-            if recentSessions.count > 6 {
-                HStack(spacing: 8) {
-                    Text("···")
-                    Text("还有 \(recentSessions.count - 6) 个会话")
+            ForEach(shownRecentSessions) { session in
+                SidebarRecentRow(
+                    model: model,
+                    session: session,
+                    selected: model.surface == .local && session.id == model.selectedSessionID,
+                    onOpen: {
+                        model.surface = .local
+                        model.select(session)
+                    },
+                    onActions: {
+                        model.surface = .local
+                        if permanent { onPermanentActions?(session) }
+                        else { compactActionSession = session }
+                    }
+                )
+            }
+            if visibleRecentCount < recentSessions.count && search.isEmpty {
+                Button {
+                    visibleRecentCount = min(visibleRecentCount + 6, recentSessions.count)
+                } label: {
+                    HStack(spacing: 8) {
+                    Text(verbatim: "···")
+                        Text(
+                            model.localizedFormat(
+                                "还有 %lld 个会话",
+                                Int64(recentSessions.count - visibleRecentCount)
+                            )
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(BitFunTheme.muted)
                 .frame(height: 40, alignment: .leading)
@@ -110,25 +318,59 @@ struct SidebarView: View {
         }
     }
 
+    private func openDetails(afterClosing session: ChatSession) {
+        compactActionSession = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            model.showSessionDetails(session)
+        }
+    }
+
     private var workspaceSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("设备")
+                Text(model.localized("设备"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(BitFunTheme.muted)
                 Spacer()
-                Button { model.connectRemote() } label: {
+                if model.accountUser != nil {
+                    Button { model.refreshRemoteDevices() } label: {
+                        if model.accountRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(BitFunTheme.muted)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(model.localized("刷新设备")))
+                }
+                Button { model.scanRemote() } label: {
                     ReferenceImage(assetName: "SidebarPlusGlyph", width: 17, height: 20)
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("添加连接")
+                .accessibilityLabel(Text(model.localized("添加连接")))
             }
             .frame(height: 38)
             .padding(.top, 18)
 
-            ForEach(devices) { device in
-                Button { model.connectRemote() } label: {
+            if sidebarDevices.isEmpty {
+                Text(model.localized("尚未连接桌面设备"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(BitFunTheme.muted)
+                    .padding(.horizontal, 10)
+                    .frame(height: 42, alignment: .leading)
+            }
+
+            ForEach(sidebarDevices) { device in
+                Button {
+                    if model.usesDirectPairing && device.name == model.directPairingDeviceName {
+                        model.openRemoteSurface()
+                    } else {
+                        model.selectRemoteDevice(device)
+                    }
+                } label: {
                     HStack(spacing: 10) {
                         ReferenceImage(assetName: "SidebarDeviceGlyph", width: 22, height: 18)
                         Text(device.name)
@@ -136,8 +378,11 @@ struct SidebarView: View {
                             .foregroundStyle(BitFunTheme.ink)
                             .lineLimit(1)
                         Spacer(minLength: 0)
+                        Circle()
+                            .fill(device.online ? BitFunTheme.green : BitFunTheme.muted)
+                            .frame(width: 7, height: 7)
                         ReferenceImage(
-                            assetName: device.online ? "SidebarChevronGlyph" : "SidebarDownGlyph",
+                            assetName: device.selected ? "SidebarDownGlyph" : "SidebarChevronGlyph",
                             width: 14,
                             height: 14
                         )
@@ -147,20 +392,346 @@ struct SidebarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(!device.online && !device.selected)
+                if device.selected { activeRemoteDeviceBody }
             }
 
-            ForEach(workspaces) { workspace in
-                SidebarWorkspaceRow(workspace: workspace)
+        }
+    }
+
+    @ViewBuilder
+    private var activeRemoteDeviceBody: some View {
+        if model.workspaceLoading && model.remoteWorkspaces.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(model.localized("正在加载工作区"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(BitFunTheme.muted)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 42)
+        } else if model.workspaceLoadFailed && model.remoteWorkspaces.isEmpty {
+                Button { model.retryRemoteWorkspaces() } label: {
+                    Text(model.localized("工作区加载失败，点按重试"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(BitFunTheme.red)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                        .padding(.horizontal, 10)
+                }
+                .buttonStyle(.plain)
+        }
+
+        if model.remoteConnected {
+            remoteGroupedSessionSections(model.sessionListSections)
+        }
+        if model.remoteHasMore {
+            Button { model.loadMoreRemoteSessions() } label: {
+                Text(model.localized(model.busy ? "正在加载" : "加载更多会话"))
+                    .font(.system(size: 13)).foregroundStyle(BitFunTheme.muted)
+                    .frame(maxWidth: .infinity, minHeight: 42)
+            }
+            .buttonStyle(.plain).disabled(model.busy)
+        }
+    }
+
+    @ViewBuilder
+    private func remoteGroupedSessionSections(
+        _ sections: [MobileSessionListSectionProjection]
+    ) -> some View {
+        let visibleSessions = sections.flatMap(\.sessions)
+        let chatSessions = sections.first(where: { $0.kind == .chat })?.sessions ?? []
+        if visibleSessions.isEmpty && !model.workspaceLoading {
+            Text(model.localized(hasActiveRemoteViewFilter ? "没有匹配的会话" : "暂无远程会话"))
+                .font(.system(size: 13))
+                .foregroundStyle(BitFunTheme.muted)
+                .padding(.horizontal, 10)
+                .frame(height: 42, alignment: .leading)
+        } else {
+            switch model.remoteGroupMode {
+            case "TIME":
+                remoteTimeSections(sections)
+            case "CHAT":
+                if !chatSessions.isEmpty { remoteChatSection(chatSessions) }
+                remoteProjectSections(sections)
+            default:
+                remoteProjectSections(sections)
+                if !chatSessions.isEmpty { remoteChatSection(chatSessions) }
             }
         }
     }
 
+    private func remoteProjectSections(
+        _ sections: [MobileSessionListSectionProjection]
+    ) -> some View {
+        let workspaces = sections.compactMap { section -> MobileWorkspaceGroup? in
+            guard section.kind == .project else { return nil }
+            let source = model.remoteWorkspaces.first {
+                normalizedWorkspacePath($0.path) == normalizedWorkspacePath(section.path)
+            }
+            return MobileWorkspaceGroup(
+                path: section.path,
+                name: section.name,
+                selected: source?.selected ?? false,
+                sessions: section.sessions
+            )
+        }
+        return ForEach(workspaces) { workspace in
+            SidebarWorkspaceRow(
+                workspace: workspace,
+                expanded: expandedWorkspacePaths.contains(workspace.path) || workspace.selected,
+                selectedSessionID: model.surface == .remote ? model.selectedSessionID : nil,
+                metadata: remoteSessionMetadata,
+                onToggle: {
+                    if expandedWorkspacePaths.contains(workspace.path) {
+                        expandedWorkspacePaths.remove(workspace.path)
+                    } else {
+                        expandedWorkspacePaths.insert(workspace.path)
+                    }
+                },
+                onToggleCreate: {
+                    workspaceCreatePath = workspaceCreatePath == workspace.path ? nil : workspace.path
+                },
+                onOpenWorkspace: { model.selectRemoteWorkspace(workspace) },
+                onOpenSession: { model.surface = .remote; model.select($0) },
+                onActions: { session in
+                    model.surface = .remote
+                    if permanent { onPermanentActions?(session) }
+                    else { compactActionSession = session }
+                }
+            )
+        }
+    }
+
+    private func remoteTimeSections(
+        _ sections: [MobileSessionListSectionProjection]
+    ) -> some View {
+        let buckets = sections.compactMap { section -> RemoteTimeBucket? in
+            switch section.kind {
+            case .today: return RemoteTimeBucket(id: section.id, title: "今天", sessions: section.sessions)
+            case .yesterday: return RemoteTimeBucket(id: section.id, title: "昨天", sessions: section.sessions)
+            case .earlier: return RemoteTimeBucket(id: section.id, title: "更早", sessions: section.sessions)
+            default: return nil
+            }
+        }
+        return ForEach(buckets) { bucket in
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.localized(bucket.title))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(BitFunTheme.muted)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+                ForEach(bucket.sessions) { session in
+                    SidebarRecentRow(
+                        model: model,
+                        session: session,
+                        selected: model.surface == .remote && session.id == model.selectedSessionID,
+                        metadata: remoteSessionMetadata(session),
+                        onOpen: { model.surface = .remote; model.select(session) },
+                        onActions: {
+                            model.surface = .remote
+                            if permanent { onPermanentActions?(session) }
+                            else { compactActionSession = session }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private func remoteChatSection(_ sessions: [ChatSession]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) { remoteChatsCollapsed.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(model.localized("聊天"))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(BitFunTheme.muted)
+                        Text(verbatim: "\(sessions.count)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(BitFunTheme.muted)
+                        Image(systemName: remoteChatsCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(BitFunTheme.muted)
+                    }
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                Button { model.createRemoteAssistantSession() } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.busy)
+                .accessibilityLabel(Text(model.localized("新建远程会话")))
+            }
+            .frame(height: 44)
+
+            if !remoteChatsCollapsed {
+                ForEach(sessions.prefix(4)) { session in
+                    SidebarRecentRow(
+                        model: model,
+                        session: session,
+                        selected: model.surface == .remote && session.id == model.selectedSessionID,
+                        metadata: remoteSessionMetadata(session),
+                        onOpen: { model.surface = .remote; model.select(session) },
+                        onActions: {
+                            model.surface = .remote
+                            if permanent { onPermanentActions?(session) }
+                            else { compactActionSession = session }
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func remoteIsAssistant(_ session: ChatSession) -> Bool {
+        let agent = session.agentType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if ["claw", "assistant", "chat"].contains(agent) { return true }
+        let path = normalizedWorkspacePath(session.workspacePath)
+        return !path.isEmpty && model.remoteAssistants.contains {
+            normalizedWorkspacePath($0.path) == path
+        }
+    }
+
+    private func remoteWorkspacePath(_ session: ChatSession) -> String {
+        let own = normalizedWorkspacePath(session.workspacePath)
+        if !own.isEmpty { return own }
+        if remoteIsAssistant(session) { return "" }
+        return normalizedWorkspacePath(model.remoteWorkspaces.first(where: \.selected)?.path)
+    }
+
+    private func normalizedWorkspacePath(_ path: String?) -> String {
+        var result = (path ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        while result.count > 1 && (result.hasSuffix("/") || result.hasSuffix("\\")) {
+            result.removeLast()
+        }
+        return result
+    }
+
+    private func remoteSessionMetadata(_ session: ChatSession) -> String? {
+        var parts: [String] = []
+        if model.remoteShowWorkspaceMetadata {
+            let name = session.workspaceName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let path = remoteWorkspacePath(session)
+            if !name.isEmpty { parts.append(name) }
+            else if !path.isEmpty { parts.append(path) }
+        }
+        if model.remoteShowUpdatedMetadata, !session.updatedLabel.isEmpty {
+            parts.append(relativeUpdatedLabel(session))
+        }
+        if model.remoteShowStatusMetadata, !session.status.isEmpty {
+            parts.append(remoteStatusLabel(session.status))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func remoteStatusLabel(_ status: String) -> String {
+        switch status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "active", "running": return model.localized("运行中")
+        case "ready", "idle": return model.localized("就绪")
+        case "archived": return model.localized("已归档")
+        default: return status
+        }
+    }
+
+    private func relativeUpdatedLabel(_ session: ChatSession) -> String {
+        let date = remoteSessionDate(session)
+        guard date != .distantPast else { return session.updatedLabel }
+        if abs(date.timeIntervalSinceNow) < 60 { return model.localized("刚刚") }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: model.appLanguage.rawValue)
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func remoteSessionDate(_ session: ChatSession) -> Date {
+        parsedRemoteDate(session.updatedLabel) ?? parsedRemoteDate(session.createdAt) ?? .distantPast
+    }
+
+    private func parsedRemoteDate(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let numeric = Double(trimmed) {
+            return Date(timeIntervalSince1970: numeric > 10_000_000_000 ? numeric / 1_000 : numeric)
+        }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: trimmed) { return date }
+        return ISO8601DateFormatter().date(from: trimmed)
+    }
+
+    private func pairedDeviceRow(name: String) -> some View {
+        Button { model.openRemoteSurface() } label: {
+            HStack(spacing: 10) {
+                ReferenceImage(assetName: "SidebarDeviceGlyph", width: 22, height: 18)
+                Text(name)
+                    .font(.system(size: 15))
+                    .foregroundStyle(BitFunTheme.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Circle().fill(BitFunTheme.green).frame(width: 7, height: 7)
+                ReferenceImage(assetName: "SidebarDownGlyph", width: 14, height: 14)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func workspaceCreateMenu(_ workspace: MobileWorkspaceGroup) -> some View {
+        VStack(spacing: 0) {
+            workspaceCreateMenuRow("Code") {
+                workspaceCreatePath = nil
+                model.createRemoteSession(in: workspace, agentType: "code")
+            }
+            workspaceCreateMenuRow("Cowork") {
+                workspaceCreatePath = nil
+                model.createRemoteSession(in: workspace, agentType: "Cowork")
+            }
+        }
+        .bitFunCompactPopoverSurface()
+    }
+
+    private func workspaceCreateMenuRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(BitFunTheme.ink)
+                .frame(maxWidth: .infinity, minHeight: MobileDesignGeometry.compactPopoverActionHeight, alignment: .leading)
+                .padding(.horizontal, 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var footer: some View {
+        Group {
+            if model.accountUser == nil {
+                SignedOutConnectionActions(
+                    scanTitle: model.localized("扫码连接"),
+                    accountTitle: model.localized("登录 BitFun 账号"),
+                    onScan: model.scanRemote,
+                    onOpenAccount: { model.accountSheetOpen = true; model.drawerOpen = false },
+                    showScan: !model.remoteConnected
+                )
+            } else {
+                authenticatedFooter
+            }
+        }
+    }
+
+    private var authenticatedFooter: some View {
         HStack(spacing: 0) {
-            Button { model.surface = .local; model.drawerOpen = false } label: {
+            Button { model.newLocalChat() } label: {
                 HStack(spacing: 9) {
                     ReferenceImage(assetName: "SidebarEditGlyph", width: 24, height: 24)
-                    Text("聊天")
+                    Text(model.localized("聊天"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(BitFunTheme.ink)
                 }
@@ -180,25 +751,48 @@ struct SidebarView: View {
                     .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("设置")
+            .accessibilityLabel(Text(model.localized("设置")))
         }
         .frame(height: 56)
     }
 }
 
+private struct RemoteTimeBucket: Identifiable {
+    let id: String
+    let title: String
+    let sessions: [ChatSession]
+}
+
 private struct SidebarRecentRow: View {
+    @ObservedObject var model: MobileAppModel
     let session: ChatSession
     let selected: Bool
-    let action: () -> Void
-
+    var metadata: String? = nil
+    let onOpen: () -> Void
+    let onActions: () -> Void
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(session.title)
-                    .font(.system(size: 15))
-                    .foregroundStyle(BitFunTheme.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+        HStack(spacing: 0) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.title)
+                        .font(.system(size: 15, weight: selected ? .medium : .regular))
+                        .foregroundStyle(BitFunTheme.ink)
+                        .lineLimit(1)
+                    if let metadata, !metadata.isEmpty {
+                        Text(metadata)
+                            .font(MobileDesignTypography.labelSmall.font)
+                            .foregroundStyle(BitFunTheme.muted)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onActions()
+            } label: {
                 HStack(spacing: 3) {
                     Circle().fill(BitFunTheme.muted).frame(width: 3.5, height: 3.5)
                     Circle().fill(BitFunTheme.muted).frame(width: 3.5, height: 3.5)
@@ -207,61 +801,149 @@ private struct SidebarRecentRow: View {
                 .frame(width: 34, height: 40)
                 .opacity(0.62)
             }
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .background(selected ? BitFunTheme.soft : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(model.localized("会话操作")))
+            .anchorPreference(
+                key: SidebarSessionActionsAnchorKey.self,
+                value: .bounds,
+                transform: { [session.id: $0] }
+            )
         }
-        .buttonStyle(.plain)
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(minHeight: metadata == nil ? 44 : 56)
+        .background(selected ? BitFunTheme.soft : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
 private struct SidebarWorkspaceRow: View {
-    let workspace: SidebarWorkspace
+    let workspace: MobileWorkspaceGroup
+    let expanded: Bool
+    let selectedSessionID: String?
+    let metadata: (ChatSession) -> String?
+    let onToggle: () -> Void
+    let onToggleCreate: () -> Void
+    let onOpenWorkspace: () -> Void
+    let onOpenSession: (ChatSession) -> Void
+    let onActions: (ChatSession) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                ReferenceImage(assetName: "SidebarFolderGlyph", width: 24, height: 20)
-                Text(workspace.name)
-                    .font(.system(size: 15))
-                    .foregroundStyle(BitFunTheme.ink)
-                    .lineLimit(1)
+                Button(action: onOpenWorkspace) {
+                    HStack(spacing: 10) {
+                        ReferenceImage(assetName: "SidebarFolderGlyph", width: 24, height: 20)
+                        Text(workspace.name)
+                            .font(.system(size: 15, weight: workspace.selected ? .medium : .regular))
+                            .foregroundStyle(BitFunTheme.ink)
+                            .lineLimit(1)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 Spacer(minLength: 0)
-                ReferenceImage(assetName: "SidebarEditGlyph", width: 22, height: 22)
+                Button(action: onToggleCreate) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .frame(width: 32, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(MobileLocalization.text("新建远程会话"))
+                .anchorPreference(
+                    key: SidebarWorkspaceCreateAnchorKey.self,
+                    value: .bounds,
+                    transform: { [workspace.path: $0] }
+                )
+                Button(action: onToggle) {
+                    ReferenceImage(
+                        assetName: expanded ? "SidebarDownGlyph" : "SidebarChevronGlyph",
+                        width: 14,
+                        height: 14
+                    )
                     .opacity(0.62)
-                ReferenceImage(assetName: "SidebarDownGlyph", width: 14, height: 14)
-                    .opacity(0.62)
+                    .frame(width: 32, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    MobileLocalization.text(expanded ? "收起工作区" : "展开工作区")
+                )
             }
             .padding(.horizontal, 10)
             .frame(height: 46)
-            ForEach(Array(workspace.sessions.enumerated()), id: \.offset) { _, title in
-                HStack(spacing: 10) {
-                    Image(systemName: "doc")
-                        .font(.system(size: 21, weight: .regular))
+            .background(workspace.selected ? BitFunTheme.soft.opacity(0.75) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            if expanded {
+                if workspace.sessions.isEmpty {
+                    Text(MobileLocalization.text("此工作区暂无会话"))
+                        .font(.system(size: 13))
                         .foregroundStyle(BitFunTheme.muted)
-                        .frame(width: 22)
-                    Text(title)
-                        .font(.system(size: 15))
-                        .foregroundStyle(BitFunTheme.ink)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
+                        .padding(.leading, 42)
+                        .frame(height: 38, alignment: .leading)
                 }
-                .padding(.leading, 32)
-                .frame(height: 44)
+                ForEach(workspace.sessions.prefix(4)) { session in
+                    HStack(spacing: 0) {
+                        Button { onOpenSession(session) } label: {
+                            HStack(spacing: 10) {
+                            Image(systemName: "doc")
+                                .font(.system(size: 18, weight: .regular))
+                                .foregroundStyle(BitFunTheme.muted)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.title)
+                                    .font(.system(
+                                        size: 15,
+                                        weight: selectedSessionID == session.id ? .medium : .regular
+                                    ))
+                                    .foregroundStyle(BitFunTheme.ink)
+                                    .lineLimit(1)
+                                if let detail = metadata(session), !detail.isEmpty {
+                                    Text(detail)
+                                        .font(MobileDesignTypography.labelSmall.font)
+                                        .foregroundStyle(BitFunTheme.muted)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Button { onActions(session) } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(BitFunTheme.muted)
+                                .frame(width: 36, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(MobileLocalization.text("会话操作"))
+                        .anchorPreference(
+                            key: SidebarSessionActionsAnchorKey.self,
+                            value: .bounds,
+                            transform: { [session.id: $0] }
+                        )
+                    }
+                    .padding(.leading, 32)
+                    .padding(.trailing, 4)
+                    .frame(minHeight: metadata(session) == nil ? 44 : 56)
+                    .background(selectedSessionID == session.id ? BitFunTheme.soft : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                }
+                if workspace.sessions.count > 4 {
+                    Text(
+                        MobileLocalization.format(
+                            "还有 %lld 个会话",
+                            language: MobileLocalization.restoredLanguage(),
+                            Int64(workspace.sessions.count - 4)
+                        )
+                    )
+                        .font(.system(size: 13))
+                        .foregroundStyle(BitFunTheme.muted)
+                        .padding(.leading, 42)
+                        .frame(height: 36, alignment: .leading)
+                }
             }
         }
     }
-}
-
-private struct SidebarDevice: Identifiable {
-    let id = UUID()
-    let name: String
-    let online: Bool
-}
-
-private struct SidebarWorkspace: Identifiable {
-    let id = UUID()
-    let name: String
-    let sessions: [String]
 }

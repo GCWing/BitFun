@@ -1,0 +1,2688 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "BitFun 桌面版": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "BitFun Desktop" } } }
+    },
+    "不再询问，允许桌面端执行所有操作。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Allow the desktop to perform all operations without asking." } } }
+    },
+    "其他": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Other" } } }
+    },
+    "其他连接方式": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Other ways to connect" } } }
+    },
+    "启用完全访问": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Enable full access" } } }
+    },
+    "尚未连接桌面端": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No desktop connected yet" } } }
+    },
+    "当前远程控制": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Current remote control" } } }
+    },
+    "执行需要授权的操作前先询问。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Ask before performing an operation that requires approval." } } }
+    },
+    "扫码配对": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "QR pairing" } } }
+    },
+    "扫描二维码连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Scan QR code to connect" } } }
+    },
+    "控制桌面端执行工具时采用的确认方式。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Choose how the desktop confirms tool operations." } } }
+    },
+    "断开": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Disconnect" } } }
+    },
+    "未连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Not connected" } } }
+    },
+    "正在重新连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Reconnecting" } } }
+    },
+    "完全访问会取消所有操作确认。仅在你信任当前桌面端时启用。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Full access removes all operation confirmations. Enable it only when you trust this desktop." } } }
+    },
+    "确认完全访问": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Confirm full access" } } }
+    },
+    "自动允许": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Allow automatically" } } }
+    },
+    "自动允许常规操作，高风险操作仍会询问。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Allow routine operations automatically and still ask for high-risk operations." } } }
+    },
+    "账号设备": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Account device" } } }
+    },
+    "连接已断开": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Connection lost" } } }
+    },
+    "连接来源": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Connection source" } } }
+    },
+    "适用于临时配对或未登录账号的桌面端。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Use this for a temporary pair or a desktop that is not signed in." } } }
+    },
+    "远程控制": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Remote control" } } }
+    },
+    "远程控制设置": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Remote control settings" } } }
+    },
+    "重新连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Reconnect" } } }
+    },
+    "会话详情": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session details"
+          }
+        }
+      }
+    },
+    "删除后无法恢复此会话，是否继续？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session cannot be recovered after deletion. Continue?"
+          }
+        }
+      }
+    },
+    "工作区路径": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace path"
+          }
+        }
+      }
+    },
+    "已归档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archived"
+          }
+        }
+      }
+    },
+    "执行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        }
+      }
+    },
+    "收起侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse sidebar"
+          }
+        }
+      }
+    },
+    "未知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        }
+      }
+    },
+    "API Key（留空则保留）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key (leave blank to keep saved key)"
+          }
+        }
+      }
+    },
+    "BitFun iOS版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitFun for iOS"
+          }
+        }
+      }
+    },
+    "English": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        }
+      }
+    },
+    "三端的组件和样式可以保持一致吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can components and styles stay consistent across all three platforms?"
+          }
+        }
+      }
+    },
+    "下载失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download failed"
+          }
+        }
+      }
+    },
+    "个人资料": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile"
+          }
+        }
+      }
+    },
+    "产品": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Product"
+          }
+        }
+      }
+    },
+    "仅远程工作区文件支持预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only files in a remote workspace can be previewed"
+          }
+        }
+      }
+    },
+    "从剪贴板粘贴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste from clipboard"
+          }
+        }
+      }
+    },
+    "从这里开始新的对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a new conversation here"
+          }
+        }
+      }
+    },
+    "代码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code"
+          }
+        }
+      }
+    },
+    "代码审查助手": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code review assistant"
+          }
+        }
+      }
+    },
+    "会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        }
+      }
+    },
+    "会话操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session actions"
+          }
+        }
+      }
+    },
+    "会话标题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session title"
+          }
+        }
+      }
+    },
+    "会话标题（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session title (optional)"
+          }
+        }
+      }
+    },
+    "会话类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session type"
+          }
+        }
+      }
+    },
+    "你好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hello"
+          }
+        }
+      }
+    },
+    "保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
+    "保存失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save failed"
+          }
+        }
+      }
+    },
+    "停止": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "停止听写": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop dictation"
+          }
+        }
+      }
+    },
+    "停止执行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop task"
+          }
+        }
+      }
+    },
+    "允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        }
+      }
+    },
+    "允许 Agent 直接执行操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow the agent to perform operations directly"
+          }
+        }
+      }
+    },
+    "先对照 HarmonyOS 的消息顺序与工具状态，再核对 Android 的交互策略。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare the HarmonyOS message order and tool states, then verify Android interactions."
+          }
+        }
+      }
+    },
+    "全部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        }
+      }
+    },
+    "关于": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "关闭": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "关闭文件预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close file preview"
+          }
+        }
+      }
+    },
+    "写入文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write file"
+          }
+        }
+      }
+    },
+    "刚刚": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just now"
+          }
+        }
+      }
+    },
+    "创建会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create session"
+          }
+        }
+      }
+    },
+    "删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "删除文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete file"
+          }
+        }
+      }
+    },
+    "制定行动计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make an action plan"
+          }
+        }
+      }
+    },
+    "刷新设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh devices"
+          }
+        }
+      }
+    },
+    "刷新远程会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh remote sessions"
+          }
+        }
+      }
+    },
+    "加载更多会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load more sessions"
+          }
+        }
+      }
+    },
+    "加载更早消息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load older messages"
+          }
+        }
+      }
+    },
+    "协作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cowork"
+          }
+        }
+      }
+    },
+    "发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "发送回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send reply"
+          }
+        }
+      }
+    },
+    "取消": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "取消归档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unarchive"
+          }
+        }
+      }
+    },
+    "取消置顶": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpin"
+          }
+        }
+      }
+    },
+    "可以。共享视觉契约，三端继续使用原生渲染。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yes. Share the visual contract while keeping native rendering on each platform."
+          }
+        }
+      }
+    },
+    "向 BitFun 提问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask BitFun"
+          }
+        }
+      }
+    },
+    "启动子任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start subtask"
+          }
+        }
+      }
+    },
+    "告诉 Agent 要做什么": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tell the agent what to do"
+          }
+        }
+      }
+    },
+    "回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply"
+          }
+        }
+      }
+    },
+    "在线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Online"
+          }
+        }
+      }
+    },
+    "复制": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "子任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtask"
+          }
+        }
+      }
+    },
+    "完全访问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full access"
+          }
+        }
+      }
+    },
+    "导出会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export session"
+          }
+        }
+      }
+    },
+    "尚未连接桌面设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No desktop connected"
+          }
+        }
+      }
+    },
+    "尝试次数过多，请稍后再试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many attempts. Try again later."
+          }
+        }
+      }
+    },
+    "展开工作区": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand workspace"
+          }
+        }
+      }
+    },
+    "工作区加载失败，点按重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load workspaces. Tap to retry."
+          }
+        }
+      }
+    },
+    "工作区助手": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace assistants"
+          }
+        }
+      }
+    },
+    "工具": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools"
+          }
+        }
+      }
+    },
+    "已上传文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploaded files"
+          }
+        }
+      }
+    },
+    "已下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded"
+          }
+        }
+      }
+    },
+    "已达到图片上限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image limit reached"
+          }
+        }
+      }
+    },
+    "已连接桌面端": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop connected"
+          }
+        }
+      }
+    },
+    "帮我写点内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Help me write"
+          }
+        }
+      }
+    },
+    "归档会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive session"
+          }
+        }
+      }
+    },
+    "当前会话暂无已上传文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No files uploaded in this session"
+          }
+        }
+      }
+    },
+    "当前设备暂时无法使用语音识别": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech recognition is unavailable on this device"
+          }
+        }
+      }
+    },
+    "思考过程": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking"
+          }
+        }
+      }
+    },
+    "打开侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open sidebar"
+          }
+        }
+      }
+    },
+    "打开网页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open webpage"
+          }
+        }
+      }
+    },
+    "扫描二维码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan QR code"
+          }
+        }
+      }
+    },
+    "扫描桌面端显示的二维码，开始远程处理任务。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the QR code on the desktop to start remote work."
+          }
+        }
+      }
+    },
+    "扫描桌面端显示的二维码，或粘贴连接链接。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the QR code shown on the desktop, or paste the connection link."
+          }
+        }
+      }
+    },
+    "找不到桌面端房间，请确认桌面端仍在等待连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop room not found. Make sure the desktop is still waiting."
+          }
+        }
+      }
+    },
+    "找到 4 处结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Found 4 results"
+          }
+        }
+      }
+    },
+    "拒绝": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deny"
+          }
+        }
+      }
+    },
+    "按桌面端策略自动决定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decide automatically using desktop policy"
+          }
+        }
+      }
+    },
+    "搜索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "搜索代码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search code"
+          }
+        }
+      }
+    },
+    "搜索对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search chats"
+          }
+        }
+      }
+    },
+    "搜索网页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the web"
+          }
+        }
+      }
+    },
+    "收起工作区": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse workspace"
+          }
+        }
+      }
+    },
+    "敏感操作前请求确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask before sensitive operations"
+          }
+        }
+      }
+    },
+    "文件保存失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the file"
+          }
+        }
+      }
+    },
+    "文件较大，当前仅显示部分内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file is large; only part of it is shown"
+          }
+        }
+      }
+    },
+    "断开桌面连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect desktop"
+          }
+        }
+      }
+    },
+    "新建远程会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New remote session"
+          }
+        }
+      }
+    },
+    "无法启动语音输入，请检查麦克风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not start voice input. Check the microphone."
+          }
+        }
+      }
+    },
+    "无法读取所选图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the selected image"
+          }
+        }
+      }
+    },
+    "无法预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview unavailable"
+          }
+        }
+      }
+    },
+    "普通对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General chat"
+          }
+        }
+      }
+    },
+    "普通对话服务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General chat service"
+          }
+        }
+      }
+    },
+    "暂无最近会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recent sessions"
+          }
+        }
+      }
+    },
+    "暂无设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No devices"
+          }
+        }
+      }
+    },
+    "更新待办": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update tasks"
+          }
+        }
+      }
+    },
+    "最多添加 4 张且每张不超过 10 MB 的图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add up to 4 images, each no larger than 10 MB"
+          }
+        }
+      }
+    },
+    "最多添加 4 张图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add up to 4 images"
+          }
+        }
+      }
+    },
+    "最近对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent chats"
+          }
+        }
+      }
+    },
+    "服务地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Service URL"
+          }
+        }
+      }
+    },
+    "未命名会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled session"
+          }
+        }
+      }
+    },
+    "未登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not signed in"
+          }
+        }
+      }
+    },
+    "未配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not configured"
+          }
+        }
+      }
+    },
+    "本地会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local session"
+          }
+        }
+      }
+    },
+    "权限状态加载失败，点按重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load permission status. Tap to retry."
+          }
+        }
+      }
+    },
+    "查看差异": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View differences"
+          }
+        }
+      }
+    },
+    "桌面端已连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop connected"
+          }
+        }
+      }
+    },
+    "桌面端拒绝了这次连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The desktop rejected this connection"
+          }
+        }
+      }
+    },
+    "桌面端版本不兼容，请升级后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The desktop version is incompatible. Upgrade and retry."
+          }
+        }
+      }
+    },
+    "桌面设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop devices"
+          }
+        }
+      }
+    },
+    "梳理一个问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Organize a problem"
+          }
+        }
+      }
+    },
+    "检查深色模式下的边框对比度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check border contrast in dark mode"
+          }
+        }
+      }
+    },
+    "检查结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Results"
+          }
+        }
+      }
+    },
+    "模型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        }
+      }
+    },
+    "正在": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        }
+      }
+    },
+    "正在下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading"
+          }
+        }
+      }
+    },
+    "正在保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving"
+          }
+        }
+      }
+    },
+    "正在准备下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing download"
+          }
+        }
+      }
+    },
+    "正在加载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "正在加载工作区": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading workspaces"
+          }
+        }
+      }
+    },
+    "正在加载文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading file"
+          }
+        }
+      }
+    },
+    "正在发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending"
+          }
+        }
+      }
+    },
+    "正在回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answering"
+          }
+        }
+      }
+    },
+    "正在思考": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking"
+          }
+        }
+      }
+    },
+    "正在恢复连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring connection"
+          }
+        }
+      }
+    },
+    "正在生成原生截图，并按相同基线并排展示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating native captures for side-by-side comparison."
+          }
+        }
+      }
+    },
+    "正在由 MacBook Pro 运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running on MacBook Pro"
+          }
+        }
+      }
+    },
+    "正在聆听": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening"
+          }
+        }
+      }
+    },
+    "正在连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting"
+          }
+        }
+      }
+    },
+    "正在重新连接桌面端": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting to the desktop"
+          }
+        }
+      }
+    },
+    "此工作区暂无会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sessions in this workspace"
+          }
+        }
+      }
+    },
+    "此文件类型暂不支持预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file type cannot be previewed"
+          }
+        }
+      }
+    },
+    "每次询问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask every time"
+          }
+        }
+      }
+    },
+    "比较三端的输入框、消息气泡和标题栏。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare the composer, message bubbles, and header across all three platforms."
+          }
+        }
+      }
+    },
+    "没有匹配的会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching sessions"
+          }
+        }
+      }
+    },
+    "测试连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test connection"
+          }
+        }
+      }
+    },
+    "添加图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add image"
+          }
+        }
+      }
+    },
+    "添加连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add connection"
+          }
+        }
+      }
+    },
+    "清除已保存的 API Key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear saved API Key"
+          }
+        }
+      }
+    },
+    "滚动到底部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll to bottom"
+          }
+        }
+      }
+    },
+    "版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "用户": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User"
+          }
+        }
+      }
+    },
+    "登录失败，请检查账号、密码和 relay 地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in failed. Check the account, password, and relay URL."
+          }
+        }
+      }
+    },
+    "登录超时，请稍后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in timed out. Try again later."
+          }
+        }
+      }
+    },
+    "离线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
+          }
+        }
+      }
+    },
+    "移除图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove image"
+          }
+        }
+      }
+    },
+    "等待重新连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to reconnect"
+          }
+        }
+      }
+    },
+    "简体中文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简体中文"
+          }
+        }
+      }
+    },
+    "粘贴桌面端连接链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the desktop connection link"
+          }
+        }
+      }
+    },
+    "统一移动端设计系统": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unified mobile design system"
+          }
+        }
+      }
+    },
+    "编辑文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit file"
+          }
+        }
+      }
+    },
+    "网络不可用，请检查 relay 地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network unavailable. Check the relay URL."
+          }
+        }
+      }
+    },
+    "网络不可用，请检查手机与桌面端的网络": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network unavailable. Check the phone and desktop networks."
+          }
+        }
+      }
+    },
+    "置顶会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin session"
+          }
+        }
+      }
+    },
+    "聊天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat"
+          }
+        }
+      }
+    },
+    "自动处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      }
+    },
+    "要同时运行远程场景回归吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run remote scenario regression tests too?"
+          }
+        }
+      }
+    },
+    "设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device"
+          }
+        }
+      }
+    },
+    "设备列表刷新失败，仍显示上次结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not refresh devices; showing the previous results."
+          }
+        }
+      }
+    },
+    "设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        }
+      }
+    },
+    "语音识别已中断，请重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech recognition was interrupted. Try again."
+          }
+        }
+      }
+    },
+    "语音输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice input"
+          }
+        }
+      }
+    },
+    "请先连接桌面设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a desktop first"
+          }
+        }
+      }
+    },
+    "请在系统设置中允许语音识别": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow speech recognition in System Settings"
+          }
+        }
+      }
+    },
+    "请在系统设置中允许麦克风访问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow microphone access in System Settings"
+          }
+        }
+      }
+    },
+    "请检查移动端的消息、工具和文件交互。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check mobile messages, tools, and file interactions."
+          }
+        }
+      }
+    },
+    "请求确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask for confirmation"
+          }
+        }
+      }
+    },
+    "请输入 API Key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter API Key"
+          }
+        }
+      }
+    },
+    "请输入回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a reply"
+          }
+        }
+      }
+    },
+    "请输入有效的服务地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a valid service URL"
+          }
+        }
+      }
+    },
+    "请输入桌面端密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the desktop password"
+          }
+        }
+      }
+    },
+    "请输入桌面端账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the desktop account"
+          }
+        }
+      }
+    },
+    "请输入模型名称": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the model name"
+          }
+        }
+      }
+    },
+    "请重新连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnect"
+          }
+        }
+      }
+    },
+    "读取完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read complete"
+          }
+        }
+      }
+    },
+    "读取文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read file"
+          }
+        }
+      }
+    },
+    "账号或密码错误": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incorrect account or password"
+          }
+        }
+      }
+    },
+    "跨端视觉校验": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cross-platform visual verification"
+          }
+        }
+      }
+    },
+    "输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input"
+          }
+        }
+      }
+    },
+    "输入消息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a message"
+          }
+        }
+      }
+    },
+    "输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output"
+          }
+        }
+      }
+    },
+    "运行命令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run command"
+          }
+        }
+      }
+    },
+    "这台桌面设备当前离线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This desktop is offline"
+          }
+        }
+      }
+    },
+    "这是 BitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the BitFun mobile conversation UI. Connect to a desktop to view workspaces, sessions, and agent status."
+          }
+        }
+      }
+    },
+    "这是 BitFun 的远程会话预览。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is a BitFun remote session preview."
+          }
+        }
+      }
+    },
+    "远程会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote session"
+          }
+        }
+      }
+    },
+    "远程权限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote permissions"
+          }
+        }
+      }
+    },
+    "连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect"
+          }
+        }
+      }
+    },
+    "连接不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection unavailable"
+          }
+        }
+      }
+    },
+    "连接失败，请检查桌面端链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed. Check the desktop link."
+          }
+        }
+      }
+    },
+    "连接成功": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        }
+      }
+    },
+    "连接暂时中断。恢复后会从上次游标继续。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection was interrupted. It will resume from the last cursor."
+          }
+        }
+      }
+    },
+    "连接桌面端": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect desktop"
+          }
+        }
+      }
+    },
+    "连接超时，请重新尝试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection timed out. Try again."
+          }
+        }
+      }
+    },
+    "连接链接无效，请重新扫描或粘贴桌面端链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid connection link. Scan or paste it again."
+          }
+        }
+      }
+    },
+    "退出账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out"
+          }
+        }
+      }
+    },
+    "选择": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select"
+          }
+        }
+      }
+    },
+    "选择已有会话，或在当前工作区创建一个新会话。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a session or create one in the current workspace."
+          }
+        }
+      }
+    },
+    "选择模型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select model"
+          }
+        }
+      }
+    },
+    "选择语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose language"
+          }
+        }
+      }
+    },
+    "通用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        }
+      }
+    },
+    "配置无法保存，请稍后重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the configuration. Try again later."
+          }
+        }
+      }
+    },
+    "重新发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send again"
+          }
+        }
+      }
+    },
+    "重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        }
+      }
+    },
+    "%@失败%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ failed%@"
+          }
+        }
+      }
+    },
+    "下载 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download %@"
+          }
+        }
+      }
+    },
+    "当前会话已上传 %lld 个文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld files uploaded in this session"
+          }
+        }
+      }
+    },
+    "还有 %lld 个会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld more sessions"
+          }
+        }
+      }
+    },
+    "连接失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed: %@"
+          }
+        }
+      }
+    },
+    "文件预览失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File preview failed: %@"
+          }
+        }
+      }
+    },
+    "已保存 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %@"
+          }
+        }
+      }
+    },
+    "已完成 %lld 项读取与搜索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed %lld read and search operations"
+          }
+        }
+      }
+    },
+    "正在%@%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running %@%@"
+          }
+        }
+      }
+    },
+    "正在下载 %@ / %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading %@ / %@"
+          }
+        }
+      }
+    },
+    "等待执行 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to run · %@"
+          }
+        }
+      }
+    },
+    "等待确认 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting confirmation · %@"
+          }
+        }
+      }
+    },
+    "Relay 地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay URL"
+          }
+        }
+      }
+    },
+    "密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        }
+      }
+    },
+    "登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in"
+          }
+        }
+      }
+    },
+    "登录 BitFun 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to BitFun"
+          }
+        }
+      }
+    },
+    "登录后可查看并连接账号下的桌面设备。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to view and connect your desktop devices."
+          }
+        }
+      }
+    },
+    "登录服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in server"
+          }
+        }
+      }
+    },
+    "返回": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "正在登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signing in"
+          }
+        }
+      }
+    },
+    "正在刷新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refreshing"
+          }
+        }
+      }
+    },
+    "用户名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username"
+          }
+        }
+      }
+    },
+    "普通对话模型": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Chat model" } }
+      }
+    },
+    "选择账号模型": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose account model" } }
+      }
+    },
+    "本机自定义模型": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Local custom model" } }
+      }
+    },
+    "当前使用": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "In use" } }
+      }
+    },
+    "模型来源": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Model sources" } }
+      }
+    },
+    "云端账号模型": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Account models" } }
+      }
+    },
+    "暂无可用的账号模型": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No account models available" } }
+      }
+    },
+    "已同步 %d 个": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%d synced" } }
+      }
+    },
+    "本机": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "On this device" } }
+      }
+    },
+    "云端账号": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Account" } }
+      }
+    },
+    "模型名称": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Model name" } }
+      }
+    },
+    "例如 chat-model": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "e.g. chat-model" } }
+      }
+    },
+    "保留已保存的 Key": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Keep the saved key" } }
+      }
+    },
+    "保留或输入 API Key 后可测试连接。": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Keep or enter an API key to test the connection." } }
+      }
+    },
+    "测试中…": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Testing…" } }
+      }
+    },
+    "从桌面端获取配对码": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Get a pairing code from desktop" } } }
+    },
+    "在桌面端打开 BitFun，然后进入远程连接。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Open BitFun on desktop, then go to Remote Connect." } } }
+    },
+    "点击“添加设备”获取配对二维码。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Choose Add device to get a pairing QR code." } } }
+    },
+    "我有配对码": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "I have a pairing code" } } }
+    },
+    "手动输入配对码": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Enter pairing code manually" } } }
+    },
+    "输入桌面端显示的配对链接或代码。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Enter the pairing link or code shown on desktop." } } }
+    },
+    "配对码或连接链接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Pairing code or connection link" } } }
+    },
+    "账号认证配对": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Account-authenticated pairing" } } }
+    },
+    "此桌面要求使用 BitFun 账号验证身份。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "This desktop requires your BitFun account to verify your identity." } } }
+    },
+    "BitFun 用户名": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "BitFun username" } } }
+    },
+    "BitFun 密码": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "BitFun password" } } }
+    },
+    "账号凭据只用于本次加密配对，不会保存。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Account credentials are used only for this encrypted pairing attempt and are not saved." } } }
+    },
+    "配对": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Pair" } } }
+    },
+    "BitFun 账号": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "BitFun account" } } }
+    },
+    "已登录": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Signed in" } } }
+    },
+    "当前以 %@ 登录。": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Currently signed in as %@." } } }
+    },
+    "设备管理": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Device management" } } }
+    },
+    "刷新": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Refresh" } } }
+    },
+    "暂无可连接的桌面设备": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No desktop devices are available" } } }
+    },
+    "个人资料详情": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Profile details" } } }
+    },
+    "用户 ID": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "User ID" } } }
+    },
+    "设备 ID": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Device ID" } } }
+    },
+    "告诉 BitFun 要做什么": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Tell BitFun what to do" } } }
+    },
+    "选择桌面设备": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Choose a desktop" } } }
+    },
+    "对话": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Chat" } } }
+    },
+    "暂无可用模型": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No models available" } } }
+    },
+    "工作区": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Workspace" } } }
+    },
+    "视图设置": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "View settings" } } }
+    },
+    "调整会话列表的分组和信息密度": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Adjust session grouping and information density" } } }
+    },
+    "分组方式": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Grouping" } } }
+    },
+    "按项目": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "By project" } } }
+    },
+    "按时间倒序排列": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Newest first" } } }
+    },
+    "聊天优先": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Chat first" } } }
+    },
+    "筛选": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Filters" } } }
+    },
+    "所有工作区": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "All workspaces" } } }
+    },
+    "Agent 类型": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Agent type" } } }
+    },
+    "所有 Agent 类型": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "All agent types" } } }
+    },
+    "状态": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Status" } } }
+    },
+    "所有状态": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "All statuses" } } }
+    },
+    "显示信息": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Shown details" } } }
+    },
+    "更新时间": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Updated" } } }
+    },
+    "运行中": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Running" } } }
+    },
+    "就绪": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Ready" } } }
+    },
+    "今天": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Today" } } }
+    },
+    "昨天": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Yesterday" } } }
+    },
+    "更早": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Earlier" } } }
+    },
+    "暂无远程会话": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No remote sessions yet" } } }
+    },
+    "问问 BitFun": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask BitFun"
+          }
+        }
+      }
+    },
+    "查看详情": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "View details" } } }
+    },
+    "创建时间": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Created" } } }
+    },
+    "消息数量": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Messages" } } }
+    },
+    "展开侧栏": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Expand sidebar" } } }
+    },
+    "选择连接方式": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Choose how to connect" } } }
+    },
+    "扫码连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Scan to connect" } } }
+    },
+    "已连接": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Connected" } } }
+    }
+  },
+  "version": "1.0"
+}

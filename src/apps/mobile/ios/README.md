@@ -51,7 +51,10 @@ action, and the unified drawer mirrors the HarmonyOS recent-chat, device,
 workspace, chat, and settings sections. A connected preview exposes the
 remote empty home through the same conversation chrome.
 
-For repeatable simulator captures, pass `--remote`, `--connected`, and/or
-`--drawer` after the bundle identifier in `simctl launch`. These launch flags
+For repeatable simulator captures, pass `--remote`, `--connected`, `--drawer`,
+`--settings`, `--remote-settings`, `--remote-view-settings`, `--remote-view-density`, `--model-settings`, `--composer-model-picker`, `--pairing`, `--pairing-manual`, `--pairing-account`, `--remote-create`, `--remote-create-workspace-picker`, `--remote-chat-section`, `--project-create-menu`, `--file-preview`, `--session-actions`, `--sidebar-actions`, `--local-actions`, and/or
+`--account-login` or `--account-profile` after the bundle identifier in `simctl launch`. The local
+actions flag can be combined with the session-actions flag; the account-login
+flag opens a deterministic signed-out surface without storing credentials. These launch flags
 select deterministic inspection states; normal launches use the live KMP
 pairing/session stores.

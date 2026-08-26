@@ -45,6 +45,8 @@ class ConversationViewTest {
             BitFunTheme(dark = false) {
                 ConversationTimelineView(
                     rows = listOf(assistantRow(answer)),
+                    hasMoreMessages = false,
+                    onLoadOlder = {},
                     enabled = true,
                     onApproveTool = {},
                     onRejectTool = { _, _ -> },
@@ -175,6 +177,8 @@ class ConversationViewTest {
     private fun TimelineForTest(rows: List<ConversationRow>) {
         ConversationTimelineView(
             rows = rows,
+            hasMoreMessages = false,
+            onLoadOlder = {},
             enabled = true,
             onApproveTool = {},
             onRejectTool = { _, _ -> },

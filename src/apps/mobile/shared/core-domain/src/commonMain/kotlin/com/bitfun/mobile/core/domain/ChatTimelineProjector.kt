@@ -1,7 +1,6 @@
 package com.bitfun.mobile.core.domain
 
 import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
-import com.bitfun.mobile.core.protocol.ImageAttachment
 import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
 import kotlin.math.absoluteValue
 
@@ -103,7 +102,9 @@ public object ChatTimelineProjector {
         pendingMessages: List<ChatMessage>,
         messages: List<ChatMessage>,
     ): List<ChatMessage> = pendingMessages.filter { pending ->
-        messages.none { message -> isPersistedUserDuplicate(pending, message) }
+        messages.none { message ->
+            pending.role == "user" && message.role == "user" && pending.id == message.id
+        }
     }
 
     private fun markLatestFailedMessageRetryable(items: MutableList<ChatTimelineItem>) {
@@ -146,9 +147,8 @@ public object ChatTimelineProjector {
         if (!activeTurn.turnId.isNullOrEmpty() && message.id == "${activeTurn.turnId}_assistant") {
             return true
         }
-        val activeText = activeTurn.text.trim()
-        val messageText = message.text.trim()
-        return activeText.isNotEmpty() && activeText == messageText
+        return !activeTurn.turnId.isNullOrEmpty() && !message.turnId.isNullOrEmpty() &&
+            activeTurn.turnId == message.turnId
     }
 
     private fun hasDisplayableAssistantFinal(message: ChatMessage): Boolean {
@@ -213,20 +213,6 @@ public object ChatTimelineProjector {
             ).joinToString(":")
         }.joinToString(",")
 
-    private fun isPersistedUserDuplicate(
-        pending: ChatMessage,
-        message: ChatMessage,
-    ): Boolean {
-        if (pending.role != "user" || message.role != "user") return false
-        if (pending.id == message.id) return true
-        val pendingText = pending.text.trim()
-        val messageText = message.text.trim()
-        if (pendingText.isEmpty() || pendingText != messageText) return false
-        return imageSignature(pending.images.orEmpty()) == imageSignature(message.images.orEmpty())
-    }
-
-    private fun imageSignature(images: List<ImageAttachment>): String =
-        images.map { image -> "${image.name}:${image.dataUrl}" }.sorted().joinToString("|")
 }
 
 private fun stableTextHash(text: String): String {

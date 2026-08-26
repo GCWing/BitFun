@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.session.PermissionModeFailure
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
@@ -91,7 +92,10 @@ internal fun PermissionSection(
             }
         }
 
-        SettingsCard(modifier = Modifier, radius = 28) {
+        SettingsCard(
+            modifier = Modifier,
+            radius = MobileDesignGeometry.SettingsProminentCardRadius,
+        ) {
             Text(
                 stringResource(R.string.permission_scope),
                 style = MaterialTheme.typography.bodySmall,

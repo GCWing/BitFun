@@ -25,6 +25,14 @@ public object SessionAgentTypes {
      */
     public fun isAssistant(agentType: String): Boolean =
         agentType.lowercase() in setOf("claw", "assistant", "chat")
+
+    /**
+     * ACP sessions are owned by Desktop integrations and cannot be controlled
+     * by any native mobile surface. Keep this beside the other agent-type
+     * semantics so Android and iOS cannot drift on the same relay page.
+     */
+    public fun isMobileVisible(agentType: String): Boolean =
+        !agentType.trim().lowercase().startsWith("acp:")
 }
 
 /**

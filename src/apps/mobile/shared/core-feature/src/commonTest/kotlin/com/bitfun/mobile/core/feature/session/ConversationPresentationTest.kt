@@ -7,6 +7,7 @@ import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
 import com.bitfun.mobile.core.protocol.RemoteModelCatalog
 import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
+import com.bitfun.mobile.core.protocol.RelayJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,10 +25,10 @@ class ConversationPresentationTest {
         val optimistic = timeline(optimistic = listOf(message("local-1", "user", "ship it")))
         assertEquals(listOf(true), optimistic.conversationRows().map { it.pending })
 
-        // Same text persisted: one row, no longer pending. Reading
+        // The same message identity persisted: one row, no longer pending. Reading
         // persistedMessages directly would have shown it twice.
         val persisted = timeline(
-            persisted = listOf(message("remote-1", "user", "ship it")),
+            persisted = listOf(message("local-1", "user", "ship it")),
             optimistic = listOf(message("local-1", "user", "ship it")),
         )
         val rows = persisted.conversationRows()
@@ -95,6 +96,34 @@ class ConversationPresentationTest {
 
         assertEquals(setOf(ToolAction.ANSWER), card.actions)
         assertEquals("Which branch?", card.question)
+    }
+
+    @Test
+    fun aStructuredQuestionKeepsTheLegacyPromptAndExposesChoices() {
+        val card = cardsFor(
+            tool(
+                name = "AskUserQuestion",
+                status = "sent",
+                inputPreview = "Which branch?",
+                toolInput = RelayJson.parseToJsonElement(
+                    """{"questions":[{"header":"Dropped","options":[{"label":"ignored"}]},{"header":"Branch","question":"Which branch?","options":[{"label":"main","description":"Stable"},{"label":"dev"}],"multiSelect":true}]}""",
+                ),
+            ),
+        ).single()
+
+        assertEquals("Which branch?", card.question)
+        assertEquals(
+            listOf(
+                ToolQuestion(
+                    index = 1,
+                    header = "Branch",
+                    question = "Which branch?",
+                    options = listOf(QuestionOption("main", "Stable"), QuestionOption("dev", null)),
+                    multiSelect = true,
+                ),
+            ),
+            card.questions,
+        )
     }
 
     @Test
@@ -189,10 +218,12 @@ private fun tool(
     status: String,
     inputPreview: String? = null,
     resultPreview: String? = null,
+    toolInput: kotlinx.serialization.json.JsonElement? = null,
 ) = RemoteToolStatusResponse(
     id = id,
     name = name,
     status = status,
     inputPreview = inputPreview,
     resultPreview = resultPreview,
+    toolInput = toolInput,
 )

@@ -2,6 +2,7 @@ package com.bitfun.mobile.core.feature.session
 
 import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.domain.ModelLabelPolicy
+import com.bitfun.mobile.core.protocol.RemoteModelCatalog
 
 /**
  * One row of the model picker.
@@ -50,6 +51,42 @@ public fun ChatTimelineState.modelOptions(fallbackLabel: String): List<ModelOpti
 /** The option the composer's model chip names, or null when nothing is usable. */
 public fun ChatTimelineState.selectedModelOption(fallbackLabel: String): ModelOption? =
     modelOptions(fallbackLabel).firstOrNull { it.selected }
+
+/** Models available while creating a session, before a transcript exists. */
+public fun RemoteSessionUiState.Ready.createModelOptions(fallbackLabel: String): List<ModelOption> {
+    val catalog = modelCatalog ?: timeline?.modelCatalog ?: return emptyList()
+    val selectedId = listOf(
+        timeline?.selectedModelId,
+        catalog.sessionModelId,
+        catalog.defaultModels.primary,
+    ).firstNotNullOfOrNull { candidate ->
+        candidate?.takeIf { id -> catalog.models.any { model -> model.id == id && model.enabled } }
+    }
+    return catalog.presentationOptions(fallbackLabel, selectedId)
+}
+
+private fun RemoteModelCatalog.presentationOptions(
+    fallbackLabel: String,
+    selectedId: String?,
+): List<ModelOption> = models.filter { it.enabled }.map { model ->
+    ModelOption(
+        id = model.id,
+        primaryLabel = ModelLabelPolicy.primaryLabel(
+            model.id,
+            model.name,
+            model.modelName,
+            fallbackLabel,
+        ),
+        secondaryLabel = ModelLabelPolicy.secondaryLabel(
+            model.id,
+            model.name,
+            model.modelName,
+            model.provider,
+            fallbackLabel,
+        ),
+        selected = model.id == selectedId,
+    )
+}
 
 /**
  * Which model the desktop would actually use.

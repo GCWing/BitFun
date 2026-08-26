@@ -297,7 +297,7 @@ private fun AccountBackButton(onClick: () -> Unit, modifier: Modifier) {
     }
 }
 
-private fun AccountFailureReason.messageRes(): Int = when (this) {
+internal fun AccountFailureReason.messageRes(): Int = when (this) {
     AccountFailureReason.INVALID_CREDENTIALS -> R.string.account_invalid_credentials
     AccountFailureReason.AUTHENTICATION -> R.string.account_authentication
     AccountFailureReason.RATE_LIMITED -> R.string.account_rate_limited

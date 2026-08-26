@@ -19,16 +19,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.shell.SidebarSections
@@ -55,8 +64,9 @@ internal fun SidebarSessionList(
     archivedExpanded: Boolean,
     onToggleArchived: () -> Unit,
     onOpenSession: (SidebarSessionRow) -> Unit,
-    onOpenActions: (SidebarSessionRow) -> Unit,
+    onOpenActions: (SidebarSessionRow, IntRect) -> Unit,
     workspaceContent: @Composable () -> Unit,
+    footerRoom: Dp = 84.dp,
     modifier: Modifier,
 ) {
     LazyColumn(
@@ -135,7 +145,7 @@ internal fun SidebarSessionList(
 
         // Room for the footer, which floats over the bottom of this list rather
         // than pushing it up — the same 84dp the source reserves.
-        item(key = "footer-room") { Box(Modifier.height(84.dp)) }
+        item(key = "footer-room") { Box(Modifier.height(footerRoom)) }
     }
 }
 
@@ -164,18 +174,22 @@ private fun SessionRow(
     pinned: Boolean,
     selected: Boolean,
     onOpen: (SidebarSessionRow) -> Unit,
-    onOpenActions: (SidebarSessionRow) -> Unit,
+    onOpenActions: (SidebarSessionRow, IntRect) -> Unit,
 ) {
     val title = session.title.ifBlank { stringResource(R.string.sidebar_untitled) }
+    var anchorBounds by remember { mutableStateOf(IntRect.Zero) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .onGloballyPositioned { coordinates ->
+                anchorBounds = coordinates.boundsInWindow().toIntRect()
+            }
             .combinedClickable(
                 onClick = { onOpen(session) },
-                onLongClick = { onOpenActions(session) },
+                onLongClick = { onOpenActions(session, anchorBounds) },
             )
             .padding(start = 12.dp, end = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -202,7 +216,7 @@ private fun SessionRow(
                 .width(34.dp)
                 .height(40.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable { onOpenActions(session) }
+                .clickable { onOpenActions(session, anchorBounds) }
                 .testTag(SIDEBAR_MORE_TEST_TAG),
             contentAlignment = Alignment.Center,
         ) {
@@ -215,6 +229,13 @@ private fun SessionRow(
         }
     }
 }
+
+private fun Rect.toIntRect(): IntRect = IntRect(
+    left = left.toInt(),
+    top = top.toInt(),
+    right = right.toInt(),
+    bottom = bottom.toInt(),
+)
 
 /** The archive, shown as how much is in it rather than as what is in it. */
 @Composable

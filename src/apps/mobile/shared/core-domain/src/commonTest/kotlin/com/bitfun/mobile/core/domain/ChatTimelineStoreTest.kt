@@ -5,6 +5,7 @@ import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChatTimelineStoreTest {
@@ -26,6 +27,44 @@ class ChatTimelineStoreTest {
         state = store.snapshot()
         assertEquals(2, state.persistedMessages.size)
         assertEquals(null, state.activeTurn)
+    }
+
+    @Test
+    fun onePersistedMessageAcknowledgesOnlyOneRepeatedOptimisticSend() {
+        val store = ChatTimelineStore()
+        store.reset("session-repeated")
+        store.appendOptimisticMessage(message("msg-local-1", "user", "same request"))
+        store.appendOptimisticMessage(message("msg-local-2", "user", "same request"))
+
+        store.mergePersistedMessages(listOf(message("remote-user-1", "user", "same request")))
+
+        assertEquals(listOf("msg-local-2"), store.snapshot().optimisticMessages.map { it.id })
+    }
+
+    @Test
+    fun replayedHistoryCannotAcknowledgeANewRepeatedSend() {
+        val store = ChatTimelineStore()
+        store.reset("session-replay")
+        val history = message("remote-user-1", "user", "same request")
+        store.setPersistedMessages(listOf(history))
+        store.appendOptimisticMessage(message("msg-local-2", "user", "same request"))
+
+        store.mergePersistedMessages(listOf(history))
+
+        assertEquals(listOf("msg-local-2"), store.snapshot().optimisticMessages.map { it.id })
+    }
+
+    @Test
+    fun anOlderIdenticalAssistantMessageDoesNotHideTheActiveTurn() {
+        val store = ChatTimelineStore()
+        store.reset("session-repeat-assistant")
+        store.setPersistedMessages(listOf(message("older", "assistant", "same answer")))
+        store.setActiveTurn(activeMessage("new-turn", "same answer", "completed"))
+
+        assertEquals("active-new-turn", store.snapshot().activeTurn?.id)
+
+        store.mergePersistedMessages(listOf(message("new-final", "assistant", "same answer")))
+        assertNull(store.snapshot().activeTurn)
     }
 
     @Test

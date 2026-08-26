@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.common.SignedOutConnectionActions
 
 internal const val SIDEBAR_NEW_CHAT_TEST_TAG: String = "app-sidebar-new-chat"
 internal const val SIDEBAR_SETTINGS_TEST_TAG: String = "app-sidebar-settings"
@@ -85,21 +86,16 @@ internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: (
  * draws it. Filled rather than carded because it is the only thing to press here.
  */
 @Composable
-internal fun SidebarSignedOutFooter(onOpenAccount: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .clickable(onClick = onOpenAccount),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            stringResource(R.string.sidebar_sign_in),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimary,
-        )
-    }
+internal fun SidebarSignedOutFooter(
+    showScan: Boolean,
+    onScanDesktop: () -> Unit,
+    onOpenAccount: () -> Unit,
+) {
+    SignedOutConnectionActions(
+        scanLabel = stringResource(R.string.sidebar_scan_to_connect),
+        accountLabel = stringResource(R.string.sidebar_sign_in),
+        onScan = onScanDesktop,
+        onOpenAccount = onOpenAccount,
+        showScan = showScan,
+    )
 }

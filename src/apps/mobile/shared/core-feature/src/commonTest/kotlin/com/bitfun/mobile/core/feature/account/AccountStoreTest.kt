@@ -101,6 +101,25 @@ class AccountStoreTest {
     }
 
     @Test
+    fun expiredRefreshClearsDevicesAndThePersistedSession() = runTest {
+        val secure = MemorySecureStore()
+        val backend = FakeAccountBackend()
+        val store = AccountStore.create(this, backend, secure, "phone-1", "Android")
+        store.dispatch(AccountIntent.Login("https://relay.test", "user", "password"))
+        advanceUntilIdle()
+        assertTrue(assertIs<AccountUiState.Ready>(store.state.value).devices.isNotEmpty())
+
+        backend.listFailure = CloudAccountFailure.AUTHENTICATION
+        store.dispatch(AccountIntent.RefreshDevices)
+        advanceUntilIdle()
+
+        val failed = assertIs<AccountUiState.Failed>(store.state.value)
+        assertEquals(AccountFailureReason.AUTHENTICATION, failed.reason)
+        assertNull(secure.read("cloud_account_session"))
+        assertNull(store.createSessionStore(this))
+    }
+
+    @Test
     fun signInWithNothingOnlinePicksNoTarget() = runTest {
         val backend = FakeAccountBackend().also { it.desktop1Online = false }
         val store = AccountStore.create(this, backend, MemorySecureStore(), "phone-1", "Android")

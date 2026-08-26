@@ -5,6 +5,7 @@ import com.bitfun.mobile.core.domain.ChatTimelineItemType
 import com.bitfun.mobile.core.domain.ChatTimelineProjector
 import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.domain.ToolInputPolicy
+import com.bitfun.mobile.core.domain.ToolQuestionPolicy
 import com.bitfun.mobile.core.domain.ToolStatusPolicy
 import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
 import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
@@ -81,8 +82,38 @@ public data class ToolCard public constructor(
      * preview to quote — the app asks in its own words.
      */
     public val question: String?,
+    public val questions: List<ToolQuestion>,
     public val actions: Set<ToolAction>,
-)
+) {
+    public constructor(
+        id: String,
+        name: String,
+        phase: ToolPhase,
+        kind: ToolKind,
+        operation: ToolOperation,
+        target: String,
+        filePath: String,
+        fileLabel: String,
+        input: String,
+        output: String,
+        question: String?,
+        actions: Set<ToolAction>,
+    ) : this(
+        id,
+        name,
+        phase,
+        kind,
+        operation,
+        target,
+        filePath,
+        fileLabel,
+        input,
+        output,
+        question,
+        emptyList(),
+        actions,
+    )
+}
 
 /**
  * One bubble in the conversation.
@@ -223,6 +254,19 @@ internal fun toolCard(tool: RemoteToolStatusResponse): ToolCard {
     } else {
         null
     }
+    val questions = if (ToolStatusPolicy.isQuestion(tool)) {
+        ToolQuestionPolicy.parse(tool).map { spec ->
+            ToolQuestion(
+                index = spec.index,
+                header = spec.header,
+                question = spec.question,
+                options = spec.options.map { QuestionOption(it.label, it.description) },
+                multiSelect = spec.multiSelect,
+            )
+        }
+    } else {
+        emptyList()
+    }
     // Every action is addressed by tool id, so a tool without one gets none of
     // them: offering a button that cannot be delivered is worse than offering
     // nothing. The phase below is still shown, because that much is knowable.
@@ -251,6 +295,7 @@ internal fun toolCard(tool: RemoteToolStatusResponse): ToolCard {
         input = ToolStatusPolicy.inputText(tool),
         output = ToolStatusPolicy.outputText(tool),
         question = question,
+        questions = questions,
         actions = actions,
     )
 }

@@ -170,7 +170,7 @@ internal fun ConversationHeader(
                         if (canStop) {
                             add(
                                 BitFunHeaderAction(
-                                    icon = R.drawable.ic_symbol_xmark,
+                                    icon = R.drawable.ic_symbol_gearshape,
                                     label = stringResource(R.string.message_stop),
                                     onClick = onStop,
                                     dividerBefore = true,
@@ -199,7 +199,7 @@ internal fun ConversationHeader(
 
 /** Rename in place: a field and the two verdicts, as the source's row is. */
 @Composable
-private fun TitleEditor(
+internal fun TitleEditor(
     draft: String,
     enabled: Boolean,
     onDraftChange: (String) -> Unit,

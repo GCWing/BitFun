@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -31,17 +34,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.ConversationRow
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 /** Timeline renderer over feature-owned presentation rows; session routing stays above it. */
 @Composable
 internal fun ConversationTimelineView(
     rows: List<ConversationRow>,
+    hasMoreMessages: Boolean,
+    onLoadOlder: () -> Unit,
     enabled: Boolean,
     onApproveTool: (String) -> Unit,
     onRejectTool: (String, String) -> Unit,
     onCancelTool: (String, String) -> Unit,
     onAnswerTool: (String, String) -> Unit,
+    onAnswerToolStructured: (String, List<QuestionAnswer>) -> Unit,
     onRetry: (String) -> Unit,
     onOpenFile: (String, String) -> Unit,
     previewingRemotePath: String,
@@ -81,6 +88,15 @@ internal fun ConversationTimelineView(
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
         ) {
+            if (hasMoreMessages) {
+                item(key = "load-older-messages") {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        TextButton(onClick = onLoadOlder, enabled = enabled) {
+                            Text(stringResource(R.string.chat_load_older_messages))
+                        }
+                    }
+                }
+            }
             items(rows, key = { it.id }) { row ->
                 ChatMessageBubble(
                     row = row,
@@ -89,6 +105,7 @@ internal fun ConversationTimelineView(
                     onRejectTool = onRejectTool,
                     onCancelTool = onCancelTool,
                     onAnswerTool = onAnswerTool,
+                    onAnswerToolStructured = onAnswerToolStructured,
                     onRetry = onRetry,
                     onOpenLink = onOpenFile,
                     previewingRemotePath = previewingRemotePath,

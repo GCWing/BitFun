@@ -40,6 +40,7 @@ import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.account.AccountDeviceUi
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.connection.ConnectionStatusPresenter
+import com.bitfun.mobile.core.feature.connection.RemoteControlSource
 import com.bitfun.mobile.core.feature.shell.RemoteSidebarPresentation
 import com.bitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
@@ -55,6 +56,7 @@ internal const val SIDEBAR_REMOTE_SESSION_TEST_TAG: String = "app-sidebar-remote
 @Composable
 internal fun SidebarRemoteWorkspaceSection(
     connectionPhase: ConnectionPhase,
+    controlSource: RemoteControlSource,
     devices: List<AccountDeviceUi>,
     selectedDeviceId: String?,
     deviceName: String,
@@ -69,6 +71,25 @@ internal fun SidebarRemoteWorkspaceSection(
     onOpenWorkspace: (String) -> Unit,
 ) {
     val connected = ConnectionStatusPresenter.canReachSessions(connectionPhase)
+    val transientDeviceKey = remember(deviceName) { "qr:$deviceName" }
+    val projectedDevices = remember(devices, controlSource, deviceName) {
+        if (
+            controlSource == RemoteControlSource.QR_PAIRING &&
+            deviceName.isNotBlank() &&
+            devices.none { it.name == deviceName }
+        ) {
+            listOf(AccountDeviceUi(transientDeviceKey, deviceName, true, null)) + devices
+        } else {
+            devices
+        }
+    }
+    val activeDeviceId = when (controlSource) {
+        RemoteControlSource.QR_PAIRING -> projectedDevices.firstOrNull {
+            it.id == transientDeviceKey || it.name == deviceName
+        }?.id
+        RemoteControlSource.ACCOUNT_DEVICE -> selectedDeviceId
+        RemoteControlSource.NONE -> null
+    }
     var expandedDeviceIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var visibleDeviceCount by rememberSaveable { mutableStateOf(DEVICES_PER_BATCH) }
     var cachedRemoteStates by remember {
@@ -78,8 +99,8 @@ internal fun SidebarRemoteWorkspaceSection(
         mutableStateOf(emptyMap<String, RemoteWorkspaceUiState.Ready>())
     }
 
-    LaunchedEffect(selectedDeviceId, remoteState, workspaceState) {
-        selectedDeviceId?.let { id ->
+    LaunchedEffect(activeDeviceId, remoteState, workspaceState) {
+        activeDeviceId?.let { id ->
             if (id !in expandedDeviceIds) expandedDeviceIds = expandedDeviceIds + id
             (remoteState as? RemoteSessionUiState.Ready)?.let { ready ->
                 cachedRemoteStates = cachedRemoteStates + (id to ready)
@@ -102,7 +123,7 @@ internal fun SidebarRemoteWorkspaceSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Box(Modifier.weight(1f))
-            if (!connected && devices.isEmpty()) {
+            if (!connected && projectedDevices.isEmpty()) {
                 Text(
                     stringResource(R.string.sidebar_workspaces_offline),
                     fontSize = 12.sp,
@@ -123,7 +144,7 @@ internal fun SidebarRemoteWorkspaceSection(
             }
         }
 
-        if (devices.isEmpty()) {
+        if (projectedDevices.isEmpty()) {
             SidebarActiveDeviceBody(
                 connected = connected,
                 loading = remoteState is RemoteSessionUiState.Loading ||
@@ -141,9 +162,11 @@ internal fun SidebarRemoteWorkspaceSection(
                 onOpenWorkspace = onOpenWorkspace,
             )
         } else {
-            devices.take(visibleDeviceCount).forEach { device ->
+            projectedDevices.take(visibleDeviceCount).forEach { device ->
                 val expanded = device.id in expandedDeviceIds
-                val active = device.id == selectedDeviceId
+                val active = device.id == activeDeviceId
+                val transient = controlSource == RemoteControlSource.QR_PAIRING &&
+                    device.id == activeDeviceId
                 val cachedRemote = cachedRemoteStates[device.id]
                 val cachedWorkspace = cachedWorkspaceStates[device.id]
                 val shownRemote = if (active) {
@@ -178,8 +201,8 @@ internal fun SidebarRemoteWorkspaceSection(
                             } else {
                                 expandedDeviceIds + device.id
                             }
-                        } else if (device.online) {
-                            selectedDeviceId?.let { currentId ->
+                        } else if (device.online && !transient) {
+                            activeDeviceId?.let { currentId ->
                                 (remoteState as? RemoteSessionUiState.Ready)?.let { ready ->
                                     cachedRemoteStates = cachedRemoteStates + (currentId to ready)
                                 }
@@ -209,9 +232,9 @@ internal fun SidebarRemoteWorkspaceSection(
                     )
                 }
             }
-            if (visibleDeviceCount < devices.size) {
+            if (visibleDeviceCount < projectedDevices.size) {
                 MoreRow(
-                    hidden = devices.size - visibleDeviceCount,
+                    hidden = projectedDevices.size - visibleDeviceCount,
                     startPadding = 10,
                     onClick = { visibleDeviceCount += DEVICES_PER_BATCH },
                     devices = true,

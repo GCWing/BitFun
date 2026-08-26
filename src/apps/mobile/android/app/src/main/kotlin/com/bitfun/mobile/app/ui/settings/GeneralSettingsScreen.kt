@@ -1,6 +1,7 @@
 package com.bitfun.mobile.app.ui.settings
 
 import androidx.annotation.DrawableRes
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,7 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.platform.AppLocale
 import com.bitfun.mobile.app.platform.AppLocaleController
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigFailure
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConfigUi
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatConnectionTestUi
@@ -101,6 +103,11 @@ internal fun GeneralSettingsScreen(
     val context = LocalContext.current
     val selectedLocale = AppLocaleController.current(LocalConfiguration.current)
 
+    BackHandler(enabled = showLanguagePicker || showModelService) {
+        showLanguagePicker = false
+        showModelService = false
+    }
+
     Box(modifier = modifier.fillMaxSize().testTag(GENERAL_SETTINGS_TEST_TAG)) {
         Column(
             modifier = Modifier
@@ -123,7 +130,7 @@ internal fun GeneralSettingsScreen(
 
             SettingsCard(
                 modifier = Modifier.testTag(GENERAL_SETTINGS_PROFILE_TEST_TAG),
-                radius = 8,
+                radius = MobileDesignGeometry.SettingsCompactCardRadius,
                 bordered = false,
             ) {
                 AccountEntryRow(
@@ -138,20 +145,23 @@ internal fun GeneralSettingsScreen(
                 )
             }
 
-            GeneralSectionTitle(stringResource(R.string.settings_language_section))
-            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
-                LanguageSettingsRow(
-                    value = when (selectedLocale) {
-                        AppLocale.ENGLISH -> stringResource(R.string.settings_language_english)
-                        AppLocale.SIMPLIFIED_CHINESE -> stringResource(R.string.settings_language_chinese)
-                    },
-                    onClick = { showLanguagePicker = true },
-                )
-            }
-
-            GeneralSectionTitle(stringResource(R.string.settings_general_chat_section))
-            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
+            GeneralSectionTitle(stringResource(R.string.settings_general_section))
+            SettingsCard(
+                modifier = Modifier,
+                radius = MobileDesignGeometry.SettingsCompactCardRadius,
+                bordered = false,
+            ) {
                 Column(modifier = Modifier.padding(vertical = 5.dp)) {
+                    LanguageSettingsRow(
+                        value = when (selectedLocale) {
+                            AppLocale.ENGLISH -> stringResource(R.string.settings_language_english)
+                            AppLocale.SIMPLIFIED_CHINESE -> stringResource(R.string.settings_language_chinese)
+                        },
+                        onClick = { showLanguagePicker = true },
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.fillMaxWidth(0.84f).align(Alignment.CenterHorizontally),
+                    )
                     GeneralSettingsRow(
                         icon = R.drawable.ic_symbol_square_grid_2x2,
                         title = stringResource(R.string.model_service_title),
@@ -169,7 +179,11 @@ internal fun GeneralSettingsScreen(
             }
 
             GeneralSectionTitle(stringResource(R.string.settings_about_section))
-            SettingsCard(modifier = Modifier, radius = 8, bordered = false) {
+            SettingsCard(
+                modifier = Modifier,
+                radius = MobileDesignGeometry.SettingsCompactCardRadius,
+                bordered = false,
+            ) {
                 Column(modifier = Modifier.padding(vertical = 5.dp)) {
                     StaticSettingsRow(
                         title = stringResource(R.string.settings_about_product),
@@ -284,55 +298,47 @@ private fun LanguagePickerOverlay(
     onDismiss: () -> Unit,
     onSelect: (AppLocale) -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.BottomCenter,
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(
+            topStart = MobileDesignGeometry.SelectionTopRadius,
+            topEnd = MobileDesignGeometry.SelectionTopRadius,
+        ),
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                topStart = 28.dp,
-                topEnd = 28.dp,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = {})
-                .defaultMinSize(minHeight = 194.dp),
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(66.dp)
-                        .padding(start = 22.dp, end = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MobileDesignGeometry.SheetHeaderHeight)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.settings_language_choose),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.weight(1f))
+                Surface(
+                    onClick = onDismiss,
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.size(MobileDesignGeometry.SelectionCloseSize),
                 ) {
-                    Text(
-                        stringResource(R.string.settings_language_choose),
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Surface(
-                        onClick = onDismiss,
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(42.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painterResource(R.drawable.ic_symbol_xmark),
-                                contentDescription = stringResource(R.string.common_close),
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(R.drawable.ic_symbol_xmark),
+                            contentDescription = stringResource(R.string.common_close),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
-                HorizontalDivider()
+            }
+            HorizontalDivider()
+            Column(Modifier.padding(top = 8.dp, bottom = 28.dp)) {
                 LanguageChoiceRow(
                     label = stringResource(R.string.settings_language_chinese),
                     selected = selected == AppLocale.SIMPLIFIED_CHINESE,
@@ -343,7 +349,6 @@ private fun LanguagePickerOverlay(
                     selected = selected == AppLocale.ENGLISH,
                     onClick = { onSelect(AppLocale.ENGLISH) },
                 )
-                Spacer(Modifier.size(28.dp))
             }
         }
     }
@@ -354,7 +359,7 @@ private fun LanguageChoiceRow(label: String, selected: Boolean, onClick: () -> U
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(MobileDesignGeometry.SelectionRowHeight)
             .clickable(onClick = onClick)
             .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -368,7 +373,7 @@ private fun LanguageChoiceRow(label: String, selected: Boolean, onClick: () -> U
         )
         if (selected) {
             Icon(
-                painterResource(R.drawable.ic_symbol_checkmark_circle),
+                painterResource(R.drawable.ic_symbol_list_checkmark),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(18.dp),

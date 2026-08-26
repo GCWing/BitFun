@@ -3,6 +3,7 @@ package com.bitfun.mobile.core.feature.session
 import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.domain.RemoteSession
 import com.bitfun.mobile.core.domain.SessionAgentTypes
+import com.bitfun.mobile.core.protocol.RemoteModelCatalog
 
 /**
  * Which agent kinds the session list is narrowed to.
@@ -98,6 +99,16 @@ public sealed interface RemoteSessionUiState {
         public val agentFilter: SessionAgentFilter,
         /** Whether another `list_sessions` page is worth asking for. */
         public val hasMore: Boolean,
+        /** Whether the open transcript has an older page above what is visible. */
+        public val hasMoreMessages: Boolean,
+        /**
+         * Desktop model choices are account/device facts, not session facts.
+         *
+         * Keeping the catalog beside the session list lets a new-session surface
+         * offer the same model picker before any transcript has been opened.
+         * Older peers that do not expose the command simply leave this null.
+         */
+        public val modelCatalog: RemoteModelCatalog?,
     ) : RemoteSessionUiState
 
     /**
@@ -123,6 +134,9 @@ public sealed interface RemoteSessionIntent {
     /** Fetch the next page of the session list, keeping what is already shown. */
     public data object LoadMore : RemoteSessionIntent
 
+    /** Fetch the transcript page immediately before the oldest visible message. */
+    public data object LoadOlderMessages : RemoteSessionIntent
+
     public data class Search public constructor(
         public val query: String,
     ) : RemoteSessionIntent
@@ -147,8 +161,16 @@ public sealed interface RemoteSessionIntent {
         public val title: String,
         public val instruction: String,
         public val modelId: String?,
+        public val workspacePath: String?,
     ) : RemoteSessionIntent {
-        public constructor(agentType: String) : this(agentType, "", "", null)
+        public constructor(
+            agentType: String,
+            title: String,
+            instruction: String,
+            modelId: String?,
+        ) : this(agentType, title, instruction, modelId, null)
+
+        public constructor(agentType: String) : this(agentType, "", "", null, null)
     }
 
     public data class DeleteSession public constructor(
@@ -165,6 +187,12 @@ public sealed interface RemoteSessionIntent {
         public val sessionId: String,
         public val toolId: String,
         public val answer: String,
+    ) : RemoteSessionIntent
+
+    public data class AnswerStructuredQuestion public constructor(
+        public val sessionId: String,
+        public val toolId: String,
+        public val answers: List<QuestionAnswer>,
     ) : RemoteSessionIntent
 
     public data class SendMessage public constructor(

@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.DeserializationStrategy
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -38,6 +39,19 @@ class RemoteSessionStoreTest {
         assertEquals(30, list.limit)
         assertEquals(0, list.offset)
         assertNull(list.query)
+        assertEquals("model-primary", ready.modelCatalog?.defaultModels?.primary)
+    }
+
+    @Test
+    fun hidesDesktopOnlyAcpSessions() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("s-code", "s-cowork", "s-agentic"), ready.sessions.map { it.id })
     }
 
     @Test
@@ -88,19 +102,16 @@ class RemoteSessionStoreTest {
     }
 
     @Test
-    fun loadMoreAppendsTheNextPageWithoutRepeatingRows() = runTest {
+    fun initialLoadFollowsServerPagesWithoutRepeatingRows() = runTest {
         val transport = FakeSessionTransport()
         transport.paged = true
         val store = RemoteSessionStore.create(this, transport)
         store.dispatch(RemoteSessionIntent.Load)
         advanceUntilIdle()
-        assertTrue(assertIs<RemoteSessionUiState.Ready>(store.state.value).hasMore)
-
-        store.dispatch(RemoteSessionIntent.LoadMore)
-        advanceUntilIdle()
 
         val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
         assertEquals(listOf("page-0", "page-1"), ready.sessions.map { it.id })
+        assertFalse(ready.hasMore)
         assertEquals(1, transport.commands.last { it.cmd == "list_sessions" }.offset)
     }
 
@@ -124,6 +135,28 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun loadOlderMessagesPrependsThePreviousTranscriptPage() = runTest {
+        val transport = FakeSessionTransport()
+        transport.messages = """[{"id":"m-new","role":"assistant","content":"new"}]"""
+        transport.olderMessages = """[{"id":"m-old","role":"user","content":"old"}]"""
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        assertTrue(assertIs<RemoteSessionUiState.Ready>(store.state.value).hasMoreMessages)
+
+        store.dispatch(RemoteSessionIntent.LoadOlderMessages)
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("m-old", "m-new"), ready.timeline?.persistedMessages?.map { it.id })
+        assertEquals(false, ready.hasMoreMessages)
+        val request = transport.commands.last { it.cmd == "get_session_messages" }
+        assertEquals("m-new", request.beforeMessageId)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun createSessionUsesTheWorkspaceTheDesktopIsOnNow() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -138,6 +171,36 @@ class RemoteSessionStoreTest {
         runCurrent()
 
         assertEquals("/other", transport.commands.first { it.cmd == "create_session" }.workspacePath)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun crossWorkspaceCreateDoesNotSwitchTheDesktopAndStaysProjected() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        transport.commands.clear()
+
+        store.dispatch(
+            RemoteSessionIntent.CreateSession(
+                agentType = "code",
+                title = "",
+                instruction = "",
+                modelId = null,
+                workspacePath = "/other",
+            ),
+        )
+        runCurrent()
+
+        assertTrue(transport.commands.none { it.cmd == "get_workspace_info" })
+        assertEquals("/other", transport.commands.first { it.cmd == "create_session" }.workspacePath)
+        val created = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            .sessions.first { it.id == "s-new" }
+        assertEquals("/other", created.workspacePath)
+        store.dispatch(RemoteSessionIntent.Refresh)
+        runCurrent()
+        assertTrue(assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions.any { it.id == "s-new" })
         store.dispatch(RemoteSessionIntent.Stop)
     }
 
@@ -189,6 +252,30 @@ class RemoteSessionStoreTest {
         val answer = transport.commands.first { it.cmd == "answer_question" }
         assertEquals("tool-1", answer.toolId)
         assertEquals("""{"answer":"yes","0":"yes"}""", answer.answers.toString())
+    }
+
+    @Test
+    fun structuredQuestionAnswersUseIndexedTextAndChoiceValues() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        store.dispatch(
+            RemoteSessionIntent.AnswerStructuredQuestion(
+                "s-code",
+                "tool-1",
+                listOf(
+                    QuestionAnswer(0, QuestionAnswerValue.Text("yes")),
+                    QuestionAnswer(1, QuestionAnswerValue.Choice(listOf("a", "b"))),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val answer = transport.commands.first { it.cmd == "answer_question" }
+        assertEquals("tool-1", answer.toolId)
+        assertEquals("""{"0":"yes","1":["a","b"]}""", answer.answers.toString())
     }
 
     @Test
@@ -320,7 +407,7 @@ class RemoteSessionStoreTest {
 
         assertTrue(transport.commands.count { it.cmd == "get_session_messages" } >= 2)
         val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
-        assertNull(ready.timeline?.activeTurn)
+        assertNull(ready.timeline?.activeTurn, ready.timeline.toString())
         // The re-read replaced the transcript wholesale, so the next poll is
         // asked to describe everything rather than a delta from a spent version.
         assertEquals(0, transport.commands.last { it.cmd == "poll_session" }.sinceVersion)
@@ -372,6 +459,9 @@ private class FakeSessionTransport : RemoteCommandTransport {
     /** What `get_session_messages` is holding right now, re-read on every call. */
     var messages: String = "[]"
 
+    /** Optional previous page, served only for a cursor-bearing message request. */
+    var olderMessages: String? = null
+
     override suspend fun <T : CommandStatus> send(
         deserializer: DeserializationStrategy<T>,
         command: RemoteCommand,
@@ -391,8 +481,23 @@ private class FakeSessionTransport : RemoteCommandTransport {
         val json = when (command.cmd) {
             "get_workspace_info" ->
                 """{"resp":"ok","has_workspace":${workspacePath.isNotEmpty()},"path":"$workspacePath"}"""
+            "get_model_catalog" -> """{
+                "resp":"ok",
+                "catalog":{
+                  "version":7,
+                  "models":[{
+                    "id":"model-primary","name":"Primary","provider":"account",
+                    "base_url":"","model_name":"primary","enabled":true
+                  }],
+                  "default_models":{"primary":"model-primary"}
+                }
+            }""".trimIndent()
             "list_sessions" -> if (paged) pagedSessions(command.offset ?: 0) else allSessions()
-            "get_session_messages" -> """{"resp":"ok","messages":$messages,"has_more":false}"""
+            "get_session_messages" -> if (command.beforeMessageId != null) {
+                """{"resp":"ok","messages":${olderMessages ?: "[]"},"has_more":false}"""
+            } else {
+                """{"resp":"ok","messages":$messages,"has_more":${olderMessages != null}}"""
+            }
             "get_permission_mode" -> """{"resp":"ok","mode":"ask"}"""
             "poll_session" -> polls[minOf(pollIndex++, polls.lastIndex)]
             "create_session" -> """{"resp":"ok","session_id":"s-new"}"""
@@ -408,7 +513,8 @@ private class FakeSessionTransport : RemoteCommandTransport {
         {"resp":"ok","has_more":false,"sessions":[
           {"id":"s-code","title":"Code","agent_type":"code"},
           {"id":"s-cowork","title":"Cowork","agent_type":"cowork"},
-          {"id":"s-agentic","title":"Legacy","agent_type":"agentic"}
+          {"id":"s-agentic","title":"Legacy","agent_type":"agentic"},
+          {"id":"s-acp","title":"Desktop ACP","agent_type":"acp:codex"}
         ]}
     """.trimIndent()
 

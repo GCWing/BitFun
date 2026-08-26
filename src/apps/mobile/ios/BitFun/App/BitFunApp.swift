@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct BitFunApp: App {
     @StateObject private var model = MobileAppModel.launchConfigured
+    @Environment(\.scenePhase) private var scenePhase
     private let designPreviewScenario = Self.resolveDesignPreviewScenario()
 
     var body: some Scene {
@@ -12,6 +13,8 @@ struct BitFunApp: App {
                     .preferredColorScheme(scenario.appearance == "dark" ? .dark : .light)
             } else {
                 MobileShellView(model: model)
+                    .onChange(of: scenePhase) { model.handleScenePhase($0) }
+                    .environment(\.locale, Locale(identifier: model.appLanguage.rawValue))
             }
         }
     }

@@ -70,6 +70,8 @@ class RemoteSidebarPresentationTest {
         query = "",
         agentFilter = SessionAgentFilter.ALL,
         hasMore = false,
+        hasMoreMessages = false,
+        modelCatalog = null,
     )
 
     private fun selected(path: String, name: String) = SelectedWorkspace(path, name, "main", "git", null)

@@ -30,7 +30,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 
 /**
  * The pieces every section of the remote-control settings page is built from.
@@ -70,12 +72,12 @@ internal fun SettingsSectionHeader(text: String, modifier: Modifier) {
 @Composable
 internal fun SettingsCard(
     modifier: Modifier,
-    radius: Int = 24,
+    radius: Dp = MobileDesignGeometry.SettingsCardRadius,
     bordered: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        shape = RoundedCornerShape(radius.dp),
+        shape = RoundedCornerShape(radius),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = if (bordered) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)

@@ -29,11 +29,13 @@ public data class ChatTimelineState public constructor(
 
 public class ChatTimelineStore public constructor() {
     private var state: ChatTimelineState = emptyState("")
+    private var recentlyCoveredTurn: CoveredTurn? = null
 
     public fun reset(): Unit = reset("")
 
     public fun reset(sessionId: String) {
         state = emptyState(sessionId)
+        recentlyCoveredTurn = null
     }
 
     public fun snapshot(): ChatTimelineState = state.copy(
@@ -64,19 +66,34 @@ public class ChatTimelineStore public constructor() {
 
     public fun setPersistedMessages(messages: List<ChatMessage>) {
         val persisted = realMessages(messages)
+        val previousIds = state.persistedMessages.mapTo(mutableSetOf()) { it.id }
+        val newlyPersisted = persisted.filterNot { it.id in previousIds }
+        val activeCovered = state.activeTurn?.let { active ->
+            val coveredByContent = coveredByNewAssistantContent(active, newlyPersisted)
+            if (coveredByContent) recentlyCoveredTurn = CoveredTurn.from(active)
+            isActiveTurnCoveredByMessages(active, persisted) || coveredByContent
+        } == true
         state = state.copy(
             persistedMessages = persisted,
-            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, persisted),
-            activeTurn = state.activeTurn?.takeUnless { isActiveTurnCoveredByMessages(it, persisted) },
+            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, newlyPersisted),
+            activeTurn = state.activeTurn?.takeUnless { activeCovered },
         )
     }
 
     public fun mergePersistedMessages(messages: List<ChatMessage>) {
-        val persisted = mergeMessages(state.persistedMessages, realMessages(messages))
+        val incoming = realMessages(messages)
+        val previousIds = state.persistedMessages.mapTo(mutableSetOf()) { it.id }
+        val newlyPersisted = incoming.filterNot { it.id in previousIds }
+        val persisted = mergeMessages(state.persistedMessages, incoming)
+        val activeCovered = state.activeTurn?.let { active ->
+            val coveredByContent = coveredByNewAssistantContent(active, newlyPersisted)
+            if (coveredByContent) recentlyCoveredTurn = CoveredTurn.from(active)
+            isActiveTurnCoveredByMessages(active, persisted) || coveredByContent
+        } == true
         state = state.copy(
             persistedMessages = persisted,
-            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, persisted),
-            activeTurn = state.activeTurn?.takeUnless { isActiveTurnCoveredByMessages(it, persisted) },
+            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, newlyPersisted),
+            activeTurn = state.activeTurn?.takeUnless { activeCovered },
         )
     }
 
@@ -152,6 +169,13 @@ public class ChatTimelineStore public constructor() {
 
     public fun setActiveTurn(activeTurn: ChatMessage?) {
         val normalized = activeTurn?.takeIf { it.id.isNotEmpty() }
+        if (normalized == null) {
+            recentlyCoveredTurn = null
+        } else if (recentlyCoveredTurn?.matches(normalized) == true) {
+            recentlyCoveredTurn = null
+            state = state.copy(activeTurn = null, syncPhase = ChatSyncPhase.IDLE)
+            return
+        }
         val merged = activeTurnForUpdate(state.activeTurn, normalized)
         val next = activeTurnForState(merged)
         state = state.copy(
@@ -161,7 +185,22 @@ public class ChatTimelineStore public constructor() {
     }
 
     public fun clearActiveTurn() {
+        recentlyCoveredTurn = null
         state = state.copy(activeTurn = null, syncPhase = ChatSyncPhase.IDLE)
+    }
+
+    private data class CoveredTurn(val turnId: String?, val text: String) {
+        fun matches(message: ChatMessage): Boolean = when {
+            !turnId.isNullOrEmpty() && !message.turnId.isNullOrEmpty() -> turnId == message.turnId
+            else -> text.isNotEmpty() && text == message.text.trim()
+        }
+
+        companion object {
+            fun from(message: ChatMessage): CoveredTurn = CoveredTurn(
+                turnId = message.turnId?.takeIf(String::isNotEmpty),
+                text = message.text.trim(),
+            )
+        }
     }
 
     public fun applySnapshot(snapshot: ChatSessionSnapshot) {
@@ -270,8 +309,20 @@ public class ChatTimelineStore public constructor() {
         public fun optimisticMessagesNotPersisted(
             optimisticMessages: List<ChatMessage>,
             persistedMessages: List<ChatMessage>,
-        ): List<ChatMessage> = optimisticMessages.filter { pending ->
-            persistedMessages.none { message -> isPersistedUserDuplicate(pending, message) }
+        ): List<ChatMessage> {
+            val acknowledgedIndexes = mutableSetOf<Int>()
+            return optimisticMessages.filter { pending ->
+                val acknowledgedIndex = persistedMessages.indices.firstOrNull { index ->
+                    index !in acknowledgedIndexes &&
+                        isPersistedUserDuplicate(pending, persistedMessages[index])
+                }
+                if (acknowledgedIndex == null) {
+                    true
+                } else {
+                    acknowledgedIndexes += acknowledgedIndex
+                    false
+                }
+            }
         }
 
         public fun isActiveTurnCoveredByMessages(
@@ -439,8 +490,7 @@ public class ChatTimelineStore public constructor() {
                 if (existingIndex >= 0) {
                     merged[existingIndex] = mergeMessageSnapshot(merged[existingIndex], message)
                 } else {
-                    val optimisticIndex = merged.indexOfFirst { isOptimisticDuplicate(it, message) }
-                    if (optimisticIndex >= 0) merged[optimisticIndex] = message else merged += message
+                    merged += message
                 }
             }
             return merged
@@ -463,15 +513,24 @@ public class ChatTimelineStore public constructor() {
             )
         }
 
-        private fun isOptimisticDuplicate(local: ChatMessage, remote: ChatMessage): Boolean =
-            local.role == "user" && local.id.startsWith("msg-") && local.role == remote.role &&
-                local.text.trim().isNotEmpty() && local.text.trim() == remote.text.trim()
-
         private fun isPersistedAssistantDuplicate(activeTurn: ChatMessage, message: ChatMessage): Boolean {
             if (message.role != "assistant" || !hasDisplayableAssistantFinal(message)) return false
             if (message.id == activeTurn.id) return true
             if (!activeTurn.turnId.isNullOrEmpty() && message.id == "${activeTurn.turnId}_assistant") return true
-            return activeTurn.text.trim().isNotEmpty() && activeTurn.text.trim() == message.text.trim()
+            return !activeTurn.turnId.isNullOrEmpty() && !message.turnId.isNullOrEmpty() &&
+                activeTurn.turnId == message.turnId
+        }
+
+        private fun coveredByNewAssistantContent(
+            activeTurn: ChatMessage,
+            messages: List<ChatMessage>,
+        ): Boolean {
+            val activeText = activeTurn.text.trim()
+            if (activeText.isEmpty()) return false
+            return messages.any { message ->
+                message.role == "assistant" && hasDisplayableAssistantFinal(message) &&
+                    message.text.trim() == activeText
+            }
         }
 
         private fun hasDisplayableAssistantFinal(message: ChatMessage): Boolean {

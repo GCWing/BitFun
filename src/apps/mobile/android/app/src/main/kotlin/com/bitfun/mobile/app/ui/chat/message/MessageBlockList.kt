@@ -32,6 +32,7 @@ import com.bitfun.mobile.app.ui.chat.FileReferenceCards
 import com.bitfun.mobile.app.ui.chat.MarkdownContent
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusList
 import com.bitfun.mobile.core.feature.session.MessageBlock
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 internal const val SUBAGENT_GROUP_TEST_TAG: String = "subagent-group"
@@ -43,6 +44,7 @@ internal data class MessageBlockCallbacks(
     val onRejectTool: (String, String) -> Unit,
     val onCancelTool: (String, String) -> Unit,
     val onAnswerTool: (String, String) -> Unit,
+    val onAnswerToolStructured: (String, List<QuestionAnswer>) -> Unit,
     val onOpenLink: (String, String) -> Unit,
     /** The file the preview surface is showing, so its card can say so. */
     val previewingRemotePath: String,
@@ -100,6 +102,7 @@ private fun MessageBlockView(block: MessageBlock, callbacks: MessageBlockCallbac
             onReject = callbacks.onRejectTool,
             onCancel = callbacks.onCancelTool,
             onAnswer = callbacks.onAnswerTool,
+            onAnswerStructured = callbacks.onAnswerToolStructured,
             onOpenFile = callbacks.onOpenLink,
             modifier = Modifier,
         )

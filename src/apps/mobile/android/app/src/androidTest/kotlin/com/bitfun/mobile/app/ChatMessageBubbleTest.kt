@@ -6,6 +6,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.test.platform.app.InstrumentationRegistry
 import com.bitfun.mobile.app.ui.chat.ChatMessageBubble
 import com.bitfun.mobile.app.ui.chat.message.SUBAGENT_GROUP_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.message.TYPING_DOTS_TEST_TAG
@@ -91,12 +92,12 @@ class ChatMessageBubbleTest {
     }
 
     @Test
-    fun aMessageThatNeverLeftTheDeviceSaysSo() {
+    fun aMessageThatNeverLeftTheDeviceUsesTheSendFailureCopy() {
         composeRule.setContent {
             Bubble(row(kind = ConversationRowKind.USER, text = "ship it", showRetry = true))
         }
 
-        composeRule.onNodeWithText("Not delivered.").assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.chat_send_failed)).assertIsDisplayed()
     }
 
     @Test
@@ -181,4 +182,7 @@ class ChatMessageBubbleTest {
         question = null,
         actions = emptySet(),
     )
+
+    private fun string(resource: Int): String =
+        InstrumentationRegistry.getInstrumentation().targetContext.getString(resource)
 }

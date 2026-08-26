@@ -9,6 +9,7 @@
     <string name="settings_account">账号</string>
     <string name="settings_account_signed_out">未登录</string>
     <string name="settings_language_section">语言</string>
+    <string name="settings_general_section">通用</string>
     <string name="settings_language_title">语言</string>
     <string name="settings_language_choose">选择语言</string>
     <string name="settings_language_english">English</string>
@@ -48,6 +49,11 @@
     <string name="account_devices_retry">重试</string>
     <string name="account_devices_loading">正在加载设备…</string>
     <string name="account_devices_empty">账号下还没有其他已注册设备。</string>
+    <string name="connect_account_devices_title">选择桌面设备</string>
+    <string name="connect_account_devices_subtitle">远程</string>
+    <string name="connect_account_devices_body">选择一台在线桌面继续工作。</string>
+    <string name="connect_account_devices_available">账号设备</string>
+    <string name="connect_account_devices_scan">扫描二维码连接</string>
     <string name="account_device_controlling">当前控制 · %1$s</string>
     <string name="account_invalid_credentials">请输入有效的用户名和密码。</string>
     <string name="account_authentication">用户名或密码被拒绝。</string>
@@ -98,6 +104,8 @@
     <string name="model_service_api_key_required">请输入 API Key。</string>
     <string name="model_service_secure_store_failed">无法访问系统安全存储，请稍后重试。</string>
     <string name="model_service_manage_title">普通对话模型</string>
+    <string name="model_service_choose_account">选择账号模型</string>
+    <string name="model_service_sources">模型来源</string>
     <string name="model_service_local_section">本机自定义</string>
     <string name="model_service_test_connection">测试连接</string>
     <string name="model_service_testing">测试中…</string>
@@ -213,6 +221,7 @@
     <string name="status_ready">就绪</string>
     <string name="common_close">关闭</string>
     <string name="common_back">返回</string>
+    <string name="common_open">打开</string>
     <string name="session_messages_title">消息</string>
     <string name="message_input_label">向 BitFun 提问</string>
     <string name="message_send">发送</string>
@@ -316,6 +325,8 @@
     <string name="sidebar_new_chat">聊天</string>
     <string name="sidebar_signed_out_new_chat">新聊天</string>
     <string name="sidebar_sign_in">登录 BitFun 账号</string>
+    <string name="sidebar_scan_to_connect">扫码连接</string>
+    <string name="connect_choose_connection">选择连接方式</string>
     <string name="shell_open_sidebar">打开侧边栏</string>
     <string name="connection_connected">已连接</string>
     <string name="connection_reconnecting">正在重连</string>
@@ -368,6 +379,7 @@
     <string name="tool_cancel">停止</string>
     <string name="tool_answer_label">你的回答</string>
     <string name="tool_answer_send">发送回答</string>
+    <string name="tool_option_other">其他</string>
     <string name="tool_question_default">智能体正在等待你的回答。</string>
     <string name="tool_line_running">正在运行“%1$s”</string>
     <string name="tool_line_failed">%1$s失败</string>
@@ -412,4 +424,5 @@
     <string name="remote_settings_device_id">本机设备 ID</string>
     <string name="remote_settings_bitfun_user">BitFun 用户</string>
     <string name="remote_settings_account_signed_in">已认证</string>
+    <string name="chat_load_older_messages">加载更早消息</string>
 </resources>

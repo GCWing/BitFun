@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,13 +26,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.settings.RemoteSettingsSheet
+import com.bitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
+import com.bitfun.mobile.core.feature.session.RemoteSessionIntent.AnswerStructuredQuestion
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.session.conversationRows
+import com.bitfun.mobile.core.feature.session.modelOptions
 import com.bitfun.mobile.core.feature.session.selectedModelOption
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import java.util.UUID
@@ -66,6 +70,7 @@ private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
 internal fun ConversationView(
     state: RemoteSessionUiState.Ready,
     phase: ConnectionPhase,
+    settingsPlacement: SettingsPlacement,
     onBack: () -> Unit,
     onOpenSidebar: (() -> Unit)? = null,
     onIntent: (RemoteSessionIntent) -> Unit,
@@ -162,6 +167,8 @@ internal fun ConversationView(
 
         ConversationTimelineView(
             rows = visibleRows,
+            hasMoreMessages = state.hasMoreMessages,
+            onLoadOlder = { onIntent(RemoteSessionIntent.LoadOlderMessages) },
             enabled = !state.busy,
             onApproveTool = { toolId ->
                 onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
@@ -174,6 +181,9 @@ internal fun ConversationView(
             },
             onAnswerTool = { toolId, answer ->
                 onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
+            },
+            onAnswerToolStructured = { toolId, answers ->
+                onIntent(AnswerStructuredQuestion(sessionId, toolId, answers))
             },
             onRetry = { text ->
                 onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
@@ -195,11 +205,15 @@ internal fun ConversationView(
             streaming = timeline.activeTurn != null,
             phase = phase,
             model = timeline.selectedModelOption(stringResource(R.string.models_unnamed)),
+            modelOptions = timeline.modelOptions(stringResource(R.string.models_unnamed)),
             capabilities = ChatComposerCapabilities.RemoteChat,
             placeholder = stringResource(R.string.message_input_label),
             onDraftChange = { draft = it },
             onRemoveImage = { id -> images = images.filterNot { it.id == id } },
             onOpenModels = { showSettings = true },
+            onSelectModel = { modelId ->
+                onIntent(RemoteSessionIntent.SelectModel(sessionId, modelId))
+            },
             modifier = Modifier,
             onAttach = {
                 photoPicker.launch(
@@ -234,12 +248,16 @@ internal fun ConversationView(
     }
 
     if (showSettings) {
-        ModalBottomSheet(onDismissRequest = { showSettings = false }) {
+        AdaptiveModalSurface(
+            visible = true,
+            placement = settingsPlacement,
+            onDismissRequest = { showSettings = false },
+        ) { surfaceModifier ->
             RemoteSettingsSheet(
                 state = state,
                 sessionId = sessionId,
                 onIntent = onIntent,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = surfaceModifier.padding(16.dp),
             )
         }
     }

@@ -25,7 +25,7 @@ class ChatTimelineProjectorTest {
     fun deduplicatesOptimisticUserMessagesReplacedByPersistedMessages() {
         val items = ChatTimelineProjector.project(
             messages = listOf(message("remote-user-1", "user", "Explain this file")),
-            pendingMessages = listOf(message("msg-local-1", "user", " Explain this file ")),
+            pendingMessages = listOf(message("remote-user-1", "user", " Explain this file ")),
             activeTurn = null,
             hasMoreMessages = false,
         )
@@ -33,6 +33,19 @@ class ChatTimelineProjectorTest {
         assertEquals(1, items.size)
         assertEquals("message-remote-user-1", items[0].id)
         assertEquals(ChatTimelineItemType.USER_MESSAGE, items[0].type)
+    }
+
+    @Test
+    fun projectorKeepsARepeatedPendingMessageWithDifferentIdentity() {
+        val items = ChatTimelineProjector.project(
+            messages = listOf(message("remote-user-1", "user", "Explain this file")),
+            pendingMessages = listOf(message("msg-local-2", "user", "Explain this file")),
+            activeTurn = null,
+            hasMoreMessages = false,
+        )
+
+        assertEquals(2, items.size)
+        assertEquals("pending-msg-local-2", items[1].id)
     }
 
     @Test
@@ -69,6 +82,7 @@ class ChatTimelineProjectorTest {
             role = "assistant",
             text = "Done with the edit",
             status = "completed",
+            turnId = "turn-1",
         )
         val beforeFinal = ChatTimelineProjector.project(
             messages = listOf(message("remote-user-1", "user", "Please edit")),
@@ -79,7 +93,7 @@ class ChatTimelineProjectorTest {
         val afterFinal = ChatTimelineProjector.project(
             messages = listOf(
                 message("remote-user-1", "user", "Please edit"),
-                message("assistant-final-1", "assistant", "Done with the edit"),
+                message("assistant-final-1", "assistant", "Done with the edit", turnId = "turn-1"),
             ),
             pendingMessages = emptyList(),
             activeTurn = activeTurn,

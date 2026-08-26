@@ -129,7 +129,11 @@ public class AccountStore internal constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: CloudAccountException) {
-                _state.value = AccountUiState.Failed(error.failure.toUiReason(), true)
+                if (error.failure == CloudAccountFailure.AUTHENTICATION) {
+                    expireSession(error.failure.toUiReason())
+                } else {
+                    _state.value = AccountUiState.Failed(error.failure.toUiReason(), true)
+                }
             } catch (_: Throwable) {
                 _state.value = AccountUiState.Failed(AccountFailureReason.NETWORK, true)
             }
@@ -209,7 +213,11 @@ public class AccountStore internal constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: CloudAccountException) {
-                _state.value = ready.copy(refreshing = false, refreshFailure = error.failure.toUiReason())
+                if (error.failure == CloudAccountFailure.AUTHENTICATION) {
+                    expireSession(error.failure.toUiReason())
+                } else {
+                    _state.value = ready.copy(refreshing = false, refreshFailure = error.failure.toUiReason())
+                }
             } catch (_: Throwable) {
                 _state.value = ready.copy(refreshing = false, refreshFailure = AccountFailureReason.NETWORK)
             }
@@ -225,6 +233,18 @@ public class AccountStore internal constructor(
             _state.value = AccountUiState.SignedOut
         } catch (_: Throwable) {
             _state.value = AccountUiState.Failed(AccountFailureReason.SECURE_STORAGE, true)
+        }
+    }
+
+    /** Clears every observable and persisted fact owned by an expired token. */
+    private fun expireSession(reason: AccountFailureReason) {
+        session = null
+        _state.value = AccountUiState.Failed(reason, true)
+        try {
+            secureStore.delete(SESSION_KEY)
+        } catch (_: Throwable) {
+            // The in-memory projection is already safe. A storage failure must
+            // not put stale account devices back on screen.
         }
     }
 

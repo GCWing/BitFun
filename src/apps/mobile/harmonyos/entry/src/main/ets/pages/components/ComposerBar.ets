@@ -233,7 +233,7 @@ export struct ComposerBar {
         .width('100%')
       }
 
-      List({ space: 6 }) {
+      List({ space: MobileDesignGeometry.composerModelSelectorRowGap }) {
         ForEach(this.selectorModels(), (model: ConversationUiModel) => {
           ListItem() {
             this.ModelRow(model)
@@ -246,10 +246,11 @@ export struct ComposerBar {
       .edgeEffect(EdgeEffect.Spring)
       .divider(null)
     }
-    .width(asSheet ? '100%' : 330)
+    .width(asSheet ? '100%' : MobileDesignGeometry.composerModelSelectorWidth)
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
     .backgroundColor(asSheet ? CARD : FLOATING_PANEL_BG)
-    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } : 14)
+    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
+      MobileDesignGeometry.composerModelSelectorRadius)
     .border({ width: asSheet ? 0 : 1, color: asSheet ? '#00000000' : LINE })
     .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? '#00000000' : '#18000000', offsetY: 7 })
   }
@@ -284,10 +285,10 @@ export struct ComposerBar {
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .height(48)
+    .height(MobileDesignGeometry.composerModelSelectorRowHeight)
     .padding({ left: 10, right: 10 })
     .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
-    .borderRadius(9)
+    .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
       this.closeModelSelector();
       this.onSelectModel(model.id);
@@ -586,7 +587,8 @@ export struct ComposerBar {
 
   private modelListHeight(): number {
     const visibleRows = Math.min(this.enabledModels().length, 7);
-    return visibleRows * 48 + Math.max(0, visibleRows - 1) * 6;
+    return visibleRows * MobileDesignGeometry.composerModelSelectorRowHeight +
+      Math.max(0, visibleRows - 1) * MobileDesignGeometry.composerModelSelectorRowGap;
   }
 
   private selectorModels(): ConversationUiModel[] {
