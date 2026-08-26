@@ -337,6 +337,7 @@ pub(crate) fn build_http_client(
     options: &SubscriptionHttpOptions,
     provider: &str,
 ) -> Result<reqwest::Client> {
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     let mut builder = reqwest::Client::builder()
         .tls_backend_rustls()
         .timeout(Duration::from_secs(30))

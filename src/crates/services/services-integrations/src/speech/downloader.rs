@@ -25,7 +25,7 @@ pub(super) async fn download_and_install_model<F>(
 where
     F: Fn(SpeechModelProgress) + Send + Sync,
 {
-    let client = reqwest::Client::builder()
+    let client = crate::reqwest_client_builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(30 * 60))
         .build()

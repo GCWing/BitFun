@@ -9,6 +9,17 @@ const agentRuntimeRootUnexpectedLine = new RegExp(
 
 export const forbiddenContentRules = [
   {
+    path: 'Cargo.toml',
+    reason:
+      'workspace Rustls owns only the compatible version; concrete provider features belong to services-core',
+    patterns: [
+      {
+        regex: /^rustls\s*=\s*\{[^\n}]*,\s*features\s*=/m,
+        message: 'root workspace Rustls dependency must not select crypto-provider capabilities',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/lib.rs',
     reason:
       'Agent Runtime root is a flat feature-owned module wrapper, not a feature-free implementation surface',
@@ -3967,6 +3978,39 @@ export const forbiddenContentRules = [
       },
     ],
   },
+  {
+    path: 'src/apps/server/src/bootstrap.rs',
+    reason:
+      'Server must not assemble a second Agent Runtime beside the canonical Core owner',
+    patterns: [
+      {
+        regex: /\b(?:EventQueue|EventRouter|SessionManager|ToolPipeline|ExecutionEngine|ConversationCoordinator)::new\s*\(/,
+        message: 'Server bootstrap must not directly construct canonical Agent Runtime components',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/server/src/main.rs',
+    reason:
+      'Server must retain the product event-queue owner instead of bypassing legacy queue draining',
+    patterns: [
+      {
+        regex: /\bAgentEventSource::new\s*\(/,
+        message: 'Server must not construct an unowned Agent event source',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/desktop/src/api/app_state.rs',
+    reason:
+      'token usage publication belongs to the canonical Core Agent Runtime initializer for every embedded host',
+    patterns: [
+      {
+        regex: /\bset_global_token_usage_service\s*\(/,
+        message: 'Desktop AppState must not re-own canonical token usage publication',
+      },
+    ],
+  },
 ];
 
 export const rustWebUiSourceBoundaryRule = {
@@ -4372,6 +4416,38 @@ export const forbiddenContentUnderRules = [
       {
         regex: /\bvalidate_deferred_tool_usage\s*\(/,
         message: 'deferred-tool admission must stay behind validate_tool_execution_admission',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src',
+    reason:
+      'integration modules must use the crate-level provider-initializing Reqwest constructors',
+    patterns: [
+      {
+        regex: /\breqwest::(?:get|Client::(?:new|builder)|ClientBuilder::new)\s*\(/,
+        allowPaths: ['src/crates/services/services-integrations/src/lib.rs'],
+        message: 'use crate::reqwest_client or crate::reqwest_client_builder',
+      },
+      {
+        regex: /use\s+reqwest(?:::(?:Client|ClientBuilder)|::\{[^}]*\b(?:Client|ClientBuilder)\b[^}]*\})[^;]*;/,
+        message: 'keep Reqwest client types fully qualified and construct them through crate-level TLS helpers',
+      },
+      {
+        regex: /use\s+reqwest\s+as\s+\w+\s*;/,
+        message: 'do not alias Reqwest around the centralized client-construction guard',
+      },
+    ],
+  },
+  {
+    path: 'src',
+    reason:
+      'services-core is the only owner allowed to install the process-wide Rustls provider',
+    patterns: [
+      {
+        regex: /\brustls::crypto::(?:ring|aws_lc_rs)\b/,
+        allowPaths: ['src/crates/services/services-core/src/tls_provider.rs'],
+        message: 'delegate built-in Rustls provider selection to services-core::tls_provider',
       },
     ],
   },

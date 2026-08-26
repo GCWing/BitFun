@@ -31,6 +31,7 @@ struct IdentityResponse {
 
 impl IdentityVerifier {
     pub(crate) fn new(me_url: Url) -> anyhow::Result<Self> {
+        bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
         Ok(Self {
             client: Client::builder()
                 .connect_timeout(Duration::from_secs(3))

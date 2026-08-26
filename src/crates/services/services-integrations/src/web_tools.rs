@@ -64,7 +64,7 @@ pub struct WebToolNetworkProvider;
 
 impl WebToolNetworkProvider {
     pub async fn fetch_text(url: &str) -> Result<WebFetchResponse, WebToolNetworkError> {
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .user_agent(USER_AGENT_VALUE)
             .timeout(Duration::from_secs(WEB_FETCH_TIMEOUT_SECS))
             .build()
@@ -105,7 +105,7 @@ impl WebToolNetworkProvider {
     }
 
     pub async fn search_exa(request: ExaSearchRequest<'_>) -> Result<String, WebToolNetworkError> {
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .timeout(Duration::from_secs(EXA_TIMEOUT_SECS))
             .build()
             .map_err(|error| WebToolNetworkError::BuildClient(error.to_string()))?;

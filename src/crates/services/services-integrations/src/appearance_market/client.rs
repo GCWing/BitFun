@@ -57,7 +57,7 @@ impl AppearanceMarketClient {
     ) -> Result<Self, MarketClientError> {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         validate_market_url(&base_url)?;
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .user_agent(format!("BitFun-Desktop/{}", env!("CARGO_PKG_VERSION")))
             .redirect(reqwest::redirect::Policy::none())
             .build()

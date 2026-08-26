@@ -32,7 +32,7 @@ pub(crate) struct ReviewHttpClient {
 
 impl ReviewHttpClient {
     pub(crate) fn new_review_platform() -> Result<Self, ReviewHttpError> {
-        let inner = reqwest::Client::builder()
+        let inner = crate::reqwest_client_builder()
             .tls_backend_rustls()
             .redirect(review_redirect_policy())
             .timeout(Duration::from_secs(REVIEW_PLATFORM_TIMEOUT_SECS))

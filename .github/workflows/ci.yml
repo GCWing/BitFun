@@ -301,7 +301,12 @@ jobs:
         run: cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
 
       - name: Run core library tests
+        if: runner.os != 'Linux'
         run: cargo test --locked -p bitfun-core --lib
+
+      - name: Run full core library tests on Linux
+        if: runner.os == 'Linux'
+        run: cargo test --locked -p bitfun-core --features product-full --lib
 
       - name: Run desktop library tests
         if: runner.os != 'Windows'

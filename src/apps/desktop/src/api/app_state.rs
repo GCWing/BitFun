@@ -104,11 +104,6 @@ impl AppState {
     ) -> BitFunResult<Self> {
         let start_time = std::time::Instant::now();
 
-        // Make the usage store reachable from tools that call the model outside
-        // the round executor (e.g. `analyze_image`), so their consumption is
-        // included in the usage statistics.
-        token_usage::set_global_token_usage_service(token_usage_service.clone());
-
         let config_service = config::get_global_config_service().await.map_err(|e| {
             BitFunError::config(format!("Failed to get global config service: {}", e))
         })?;

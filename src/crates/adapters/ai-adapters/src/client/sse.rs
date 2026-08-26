@@ -585,7 +585,7 @@ mod tests {
                 .expect("retry fixture should run");
         });
         let url = format!("http://{address}/chat/completions");
-        let client = reqwest::Client::new();
+        let client = crate::client::http::create_http_client(None, false);
         let request_body = serde_json::json!({"model": "configured-model"});
 
         let result = execute_sse_request(
@@ -623,7 +623,7 @@ mod tests {
                 .expect("retry-after fixture should run");
         });
         let url = format!("http://{address}/chat/completions");
-        let client = reqwest::Client::new();
+        let client = crate::client::http::create_http_client(None, false);
         let request_body = serde_json::json!({"model": "configured-model"});
 
         let result = execute_sse_request(

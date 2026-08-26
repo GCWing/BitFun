@@ -53,6 +53,7 @@ struct UpdaterManifestInfo {
 /// lives inside it, so fetching bytes by hand and calling `Update::install`
 /// would silently skip signature checking.
 async fn updater_endpoints_by_policy() -> Vec<tauri::Url> {
+    crate::ensure_rustls_crypto_provider();
     let client = match reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
         .read_timeout(PROBE_WINDOW)

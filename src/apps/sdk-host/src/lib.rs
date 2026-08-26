@@ -11,7 +11,7 @@ pub const SDK_HOST_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 /// Installs process-global prerequisites before any service or descendant starts.
 pub fn initialize_process_runtime() -> std::io::Result<()> {
     bitfun_services_core::process_manager::contain_current_process_tree()?;
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     Ok(())
 }
 

@@ -2371,7 +2371,7 @@ fn release_target(os: &str, arch: &str) -> Result<&'static str> {
 }
 
 fn release_http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    crate::reqwest_client_builder()
         .connect_timeout(Duration::from_secs(10))
         // Per-read rather than whole-request: a genuine slow link may take
         // longer than an arbitrary archive deadline, but a stalled source must

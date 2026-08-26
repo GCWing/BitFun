@@ -225,7 +225,7 @@ impl ModelsDevCatalogService {
                 refresh_state.last_attempt = Some(now);
                 drop(refresh_state);
 
-                let client = match reqwest::Client::builder()
+                let client = match crate::reqwest_client_builder()
                     .timeout(Duration::from_secs(10))
                     .build()
                 {

@@ -254,7 +254,7 @@ impl WeixinProviderClient {
     async fn post_ilink(&self, endpoint: &str, body: Value, timeout: Duration) -> Result<String> {
         let url = format!("{}{}", self.base_url(), endpoint.trim_start_matches('/'));
         let body_str = serde_json::to_string(&body)?;
-        let client = reqwest::Client::builder().timeout(timeout).build()?;
+        let client = crate::reqwest_client_builder().timeout(timeout).build()?;
         let resp = client
             .post(&url)
             .headers(self.build_auth_headers())
@@ -660,7 +660,7 @@ impl WeixinProviderClient {
             Some(url) => url.to_string(),
             None => build_cdn_download_url(DEFAULT_CDN_BASE_URL, encrypted_query_param),
         };
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .timeout(Duration::from_secs(120))
             .build()?;
         let resp = client.get(&url).send().await?;
@@ -804,7 +804,7 @@ impl WeixinProviderClient {
     }
 
     async fn post_weixin_cdn_upload(&self, cdn_url: &str, ciphertext: &[u8]) -> Result<String> {
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .timeout(Duration::from_secs(120))
             .build()?;
         let mut last_err: Option<anyhow::Error> = None;
@@ -945,7 +945,7 @@ async fn poll_found_qr_session(
         url.push_str(&urlencoding::encode(code));
     }
 
-    let client = reqwest::Client::builder()
+    let client = crate::reqwest_client_builder()
         .timeout(Duration::from_secs(QR_POLL_TIMEOUT_SECS))
         .build()?;
 
@@ -1508,7 +1508,7 @@ async fn fetch_qr_code(base: &str, local_token_list: &[String]) -> Result<QrCode
         HeaderValue::from_str(&random_wechat_uin_header())
             .unwrap_or(HeaderValue::from_static("MA==")),
     );
-    let client = reqwest::Client::builder()
+    let client = crate::reqwest_client_builder()
         .timeout(Duration::from_secs(API_TIMEOUT_SECS))
         .build()?;
     let response = client

@@ -85,7 +85,7 @@ impl BrowserLauncher {
     /// Check if a CDP debug port is already listening.
     pub async fn is_cdp_available(port: u16) -> bool {
         let url = format!("http://127.0.0.1:{}/json/version", port);
-        reqwest::Client::new()
+        crate::reqwest_client()
             .get(&url)
             .timeout(std::time::Duration::from_secs(2))
             .send()

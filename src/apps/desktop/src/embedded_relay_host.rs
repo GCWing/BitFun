@@ -294,6 +294,7 @@ mod tests {
         let host = DesktopEmbeddedRelayHost::default();
         let port = start_on_free_port(&host, Some(static_dir.to_string_lossy().into_owned())).await;
 
+        crate::ensure_rustls_crypto_provider();
         let client = reqwest::Client::new();
         let index = client
             .get(format!("http://127.0.0.1:{port}/"))

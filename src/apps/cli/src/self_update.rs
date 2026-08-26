@@ -671,6 +671,7 @@ fn platform_asset<'a>(
 }
 
 fn build_client() -> Result<Client> {
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     Client::builder()
         .connect_timeout(Duration::from_secs(8))
         // Deliberately no `.timeout()`: a whole-request ceiling turns "slow" into

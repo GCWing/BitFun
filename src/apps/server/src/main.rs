@@ -5,12 +5,12 @@
 // it. Matches the compiler's own suggestion in the overflow diagnostic.
 #![recursion_limit = "256"]
 
-//! Legacy Web Server entrypoint.
+//! Loopback Web Server and App Server Host entrypoint.
 //!
-//! This host was already deprecated before the current App Server refactor.
-//! Refactor work in this app validates protocol and host boundaries; it is not
-//! expected to preserve or complete every legacy Web/Desktop capability, and
-//! it must not be treated as a production-readiness claim.
+//! The host owns one embedded ProductFull Agent Runtime and exposes it through
+//! the in-process App Server. Local workspace mutations remain gated by Core
+//! Runtime ownership. This is a loopback, single-user compatibility surface;
+//! it does not claim a remote, multi-user, or public Server Agent API.
 
 use anyhow::Result;
 /// BitFun Server
@@ -56,7 +56,7 @@ const DEFAULT_ALLOWED_BROWSER_ORIGINS: [&str; 2] =
 #[derive(Debug, Parser)]
 #[command(name = "bitfun-server")]
 struct ServerArgs {
-    /// Project workspace owned by this Server Host.
+    /// Initial local workspace opened when this Server Host starts.
     #[arg(long, value_name = "PATH")]
     workspace: Option<PathBuf>,
 
@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
         .init();
 
     tracing::info!("BitFun Server v{}", env!("CARGO_PKG_VERSION"));
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     let args = ServerArgs::parse();
     let external_workspace_root = args
@@ -128,11 +129,9 @@ async fn main() -> Result<()> {
             server_state.token_usage_service.clone(),
         )
         .map_err(|error| anyhow::anyhow!("Failed to build agent runtime: {error}"))?;
-    // The event source wraps the same `EventQueue` the coordinator publishes to;
-    // each connection's `serve` main loop subscribes independently and projects
-    // runtime events to the frontend shape before pushing them to the browser.
-    let event_source =
-        bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
+    // The product owner keeps the legacy queue drained while each connection's
+    // `serve` loop independently subscribes to and projects Runtime events.
+    let event_source = server_state.agent_event_queue_owner.runtime_source();
     let product_search = Arc::new(
         bitfun_core::product_runtime::CoreAgentRuntimeCompatibility::build(
             server_state.coordinator.clone(),
@@ -165,10 +164,9 @@ async fn main() -> Result<()> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    // This is a narrow controller/observer capability. It deliberately does
-    // not initialize the Server Host's dormant Agent Runtime: authoritative
-    // sessions and execution stay inside the target-side `bitfun dispatch`
-    // worker.
+    // Detached dispatch remains a narrow controller/observer capability beside
+    // the host-owned Agent Runtime. It keeps its SSH/process state separate and
+    // does not construct another Agent Runtime or widen the App Server scope.
     let path_manager = Arc::new(bitfun_core::infrastructure::PathManager::new()?);
     let ssh_data_dir = dirs::data_local_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve the local data directory"))?
@@ -270,40 +268,5 @@ mod tests {
         ] {
             assert!(normalize_browser_origin(invalid).is_err(), "{invalid}");
         }
-    }
-
-    #[test]
-    fn agent_bootstrap_reuses_core_ownership_without_activating_the_http_shell() {
-        let bootstrap = include_str!("bootstrap.rs");
-        assert!(bootstrap.contains("CoreRuntimeOwnership::embedded"));
-        let coordinator = bootstrap
-            .split("ConversationCoordinator::new")
-            .nth(1)
-            .and_then(|source| source.split(");").next())
-            .expect("Server agent bootstrap Coordinator assembly");
-        assert!(coordinator.contains("runtime_ownership"));
-        assert!(bootstrap.contains("open_workspace_with_runtime_ownership"));
-        assert!(!bootstrap.contains("initialize_snapshot_manager_for_workspace"));
-
-        let rpc = include_str!("rpc_dispatcher.rs");
-        let delete = rpc
-            .split("\"delete_session\" =>")
-            .nth(1)
-            .and_then(|source| source.split("\"start_dialog_turn\" =>").next())
-            .expect("Server delete RPC");
-        assert!(delete.contains("ensure_workspace_runtime_ownership"));
-
-        let main_source = include_str!("main.rs")
-            .split("#[cfg(test)]")
-            .next()
-            .expect("Server production entrypoint");
-        assert!(
-            !main_source.contains("bootstrap::initialize"),
-            "the current read-only HTTP shell must not silently start an Agent Runtime"
-        );
-        assert!(
-            main_source.contains("DispatchHostState"),
-            "the lightweight Server Host should expose dispatch without booting an Agent Runtime"
-        );
     }
 }

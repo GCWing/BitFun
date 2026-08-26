@@ -98,6 +98,7 @@ pub(crate) async fn run_stream_fixture_with_options(
 ) -> StreamFixtureRunOutput {
     let fixture_bytes = load_fixture_bytes(fixture_relative_path);
     let fixture_server = FixtureSseServer::spawn(fixture_bytes, options.server_options).await;
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 
     let response = tokio::time::timeout(
         options.request_timeout,

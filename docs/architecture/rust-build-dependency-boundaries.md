@@ -97,10 +97,11 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 ### 3.4 Reqwest 能力由客户端 owner 选择
 
 - workspace 级 `reqwest` 只统一版本并关闭默认 feature，不替任何客户端选择 HTTP/2、序列化、表单、流、代理或 TLS 能力；
-- 真正创建 client 的 app、service 或 adapter 必须在自身依赖声明中显式选择实际使用的 Reqwest feature 和 `reqwest/rustls`；只使用 `reqwest::Url` 的 contract/assembly 路径不加载传输能力；
-- capability crate 的每个 Reqwest owner feature 必须独立带齐自己的数据/传输 feature 与 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
-- 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest feature union，防止传递依赖重新激活 Native TLS；
-- 不并列启用 native-tls 兼容栈。只有真实产品场景无法由 Rustls 平台证书验证承载时，才以明确行为证据评审替换方案，而不是重新叠加第二后端。
+- 真正创建 client 的 app、service 或 adapter 必须在自身依赖声明中显式选择实际使用的 Reqwest feature 和 provider-neutral 的 `reqwest/rustls-no-provider`；只使用 `reqwest::Url` 的 contract/assembly 路径不加载传输能力；
+- capability crate 的每个 Reqwest owner feature 必须独立带齐自己的数据/传输 feature、`reqwest/rustls-no-provider` 和进程级 TLS provider owner，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
+- workspace 级 `rustls` 只统一兼容版本并关闭默认 feature；`services-core/tls-provider` 是内置 crypto provider 的唯一 owner，精确选择并安装 `ring`、`std` 和 `tls12`。产品进程入口或集中 client helper 必须在构造 TLS client 前确保该 provider 已安装；
+- 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest/Rustls feature union，拒绝缺失 provider、同时选择多个 provider、传递依赖重新激活 AWS-LC 或 Native TLS，以及绕过集中 helper 的 Reqwest client 构造；
+- 不并列启用 Native TLS 或 AWS-LC 兼容栈。只有真实产品场景无法由当前 Ring/Rustls 平台证书验证承载时，才以明确行为证据评审替换方案；替换时由同一 owner 切换 provider，不能在同一产品闭包叠加第二后端。
 
 ### 3.5 稳定契约 crate 按消费能力切片
 

@@ -188,6 +188,71 @@ test('Agent Runtime leaf capabilities have one managed feature and source contra
   }
 });
 
+test('Server canonical Agent Runtime ownership is protected by source boundary rules', async () => {
+  const bootstrapPath = 'src/apps/server/src/bootstrap.rs';
+  const mainPath = 'src/apps/server/src/main.rs';
+  const bootstrapRequired = requiredContentRules.find((rule) => rule.path === bootstrapPath);
+  const bootstrapForbidden = forbiddenContentRules.find((rule) => rule.path === bootstrapPath);
+  const mainRequired = requiredContentRules.find((rule) => rule.path === mainPath);
+  const mainForbidden = forbiddenContentRules.find((rule) => rule.path === mainPath);
+
+  assert.ok(bootstrapRequired, 'Server bootstrap must have a required ownership contract');
+  assert.ok(bootstrapForbidden, 'Server bootstrap must reject duplicate Runtime assembly');
+  assert.ok(mainRequired, 'Server main must retain the product event owner');
+  assert.ok(mainForbidden, 'Server main must reject an unowned event source');
+
+  const [bootstrapSource, mainSource] = await Promise.all([
+    readFile(new URL('../src/apps/server/src/bootstrap.rs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/apps/server/src/main.rs', import.meta.url), 'utf8'),
+  ]);
+  for (const pattern of bootstrapRequired.patterns) {
+    assert.match(bootstrapSource, pattern.regex, pattern.message);
+  }
+  for (const pattern of mainRequired.patterns) {
+    assert.match(mainSource, pattern.regex, pattern.message);
+  }
+  assert.match(
+    'let queue = EventQueue::new(Default::default());',
+    bootstrapForbidden.patterns[0].regex,
+  );
+  assert.match(
+    'let source = AgentEventSource::new(event_queue);',
+    mainForbidden.patterns[0].regex,
+  );
+});
+
+test('TLS source boundaries reject bypasses of the centralized provider owner', () => {
+  const integrationsRule = forbiddenContentUnderRules.find((rule) =>
+    rule.path === 'src/crates/services/services-integrations/src'
+      && rule.reason.includes('provider-initializing Reqwest constructors'));
+  const providerRule = forbiddenContentUnderRules.find((rule) =>
+    rule.path === 'src'
+      && rule.reason.includes('only owner allowed to install'));
+  assert.ok(integrationsRule, 'integration Reqwest constructors must be guarded');
+  assert.ok(providerRule, 'direct Rustls provider installation must be guarded');
+
+  assert.ok(integrationsRule.patterns.some((pattern) => pattern.regex.test(
+    'use reqwest::Client;\nfn client() { let _ = Client::builder(); }',
+  )));
+  assert.ok(integrationsRule.patterns.some((pattern) => pattern.regex.test(
+    'use reqwest::{Client as HttpClient, Url};\nfn client() { let _ = HttpClient::new(); }',
+  )));
+  assert.ok(integrationsRule.patterns.some((pattern) => pattern.regex.test(
+    'fn client() { let _ = reqwest::ClientBuilder::new(); }',
+  )));
+  assert.ok(integrationsRule.patterns.some((pattern) => pattern.regex.test(
+    'use reqwest as http;\nfn client() { let _ = http::Client::new(); }',
+  )));
+  assert.match(
+    'rustls::crypto::ring::default_provider().install_default();',
+    providerRule.patterns[0].regex,
+  );
+  assert.doesNotMatch(
+    'unrelated_component.install_default();',
+    providerRule.patterns[0].regex,
+  );
+});
+
 test('Core and ACP defaults preserve their explicit assembly contracts', async () => {
   const [coreManifest, acpManifest] = await Promise.all([
     readFile(new URL('../src/crates/assembly/core/Cargo.toml', import.meta.url), 'utf8'),
@@ -2640,11 +2705,11 @@ test('services integrations Reqwest policy uses Cargo-decoded feature references
   const pkg = servicesIntegrationsPackage(`
 [features]
 reqwest = ["dep:reqwest"]
-announcement = ["reqwest", "reqwest/rustls"]
+announcement = ["reqwest", "reqwest/rustls-no-provider"]
 file-watch = ["reqwest?/__native-tls"]
-mcp = ["reqwest", "reqwest/rustls", "reqwest/json"]
-models-dev = ["reqwest", "reqwest/rustls", "reqwest/system-proxy"]
-speech = ["reqwest", "reqwest/rustls", "reqwest/http3"]
+mcp = ["reqwest", "reqwest/rustls-no-provider", "reqwest/json"]
+models-dev = ["reqwest", "reqwest/rustls-no-provider", "reqwest/system-proxy"]
+speech = ["reqwest", "reqwest/rustls-no-provider", "reqwest/http3"]
 `);
 
   const messages = findServicesIntegrationsReqwestFeatureViolations(pkg)
@@ -2655,6 +2720,26 @@ speech = ["reqwest", "reqwest/rustls", "reqwest/http3"]
   assert.match(messages, /mcp.*missing Reqwest feature reference reqwest\/stream/);
   assert.doesNotMatch(messages, /models-dev.*system-proxy/);
   assert.match(messages, /speech.*unreviewed Reqwest feature reference reqwest\/http3/);
+  assert.doesNotMatch(messages, /missing reqwest\/rustls\b/);
+  assert.doesNotMatch(messages, /unreviewed.*reqwest\/rustls-no-provider/);
+});
+
+test('every services integrations Reqwest owner activates the reviewed TLS provider', async () => {
+  const manifest = await readFile(
+    new URL('../src/crates/services/services-integrations/Cargo.toml', import.meta.url),
+    'utf8',
+  );
+  const mutated = removeFeatureValue(
+    manifest,
+    'review-platform',
+    'bitfun-services-core/tls-provider',
+  );
+  assert.notEqual(mutated, manifest, 'review-platform must own the TLS provider in the fixture');
+
+  const messages = findServicesIntegrationsReqwestFeatureViolations(
+    servicesIntegrationsPackage(mutated),
+  ).map((violation) => violation.message).join('\n');
+  assert.match(messages, /review-platform.*missing bitfun-services-core\/tls-provider/);
 });
 
 test('direct Reqwest clients reject extra decoded dependency and package features', () => {
@@ -2667,7 +2752,7 @@ test('direct Reqwest clients reject extra decoded dependency and package feature
       features: [
         'http2',
         'stream',
-        'rustls',
+        'rustls-no-provider',
         '__native-tls',
       ],
     }]),
@@ -2691,26 +2776,42 @@ test('direct Reqwest clients reject extra decoded dependency and package feature
 test('AI adapters Reqwest profile owns the supported SOCKS transport', () => {
   const baseFeatures = ['http2', 'json', 'stream'];
   const valid = {
-    ...packageAt('bitfun-ai-adapters', 'src/crates/adapters/ai-adapters/Cargo.toml', [{
-      name: 'reqwest',
-      kind: null,
-      optional: false,
-      uses_default_features: false,
-      features: [...baseFeatures, 'rustls', 'socks'],
-    }]),
+    ...packageAt('bitfun-ai-adapters', 'src/crates/adapters/ai-adapters/Cargo.toml', [
+      {
+        name: 'reqwest',
+        kind: null,
+        optional: false,
+        uses_default_features: false,
+        features: [...baseFeatures, 'rustls-no-provider', 'socks'],
+      },
+      {
+        name: 'bitfun-services-core',
+        kind: null,
+        optional: false,
+        features: ['tls-provider'],
+      },
+    ]),
     features: { 'subscription-auth': ['reqwest/form'] },
   };
   const missingSocks = {
     ...packageAt(
     'bitfun-ai-adapters',
     'src/crates/adapters/ai-adapters/Cargo.toml',
-    [{
-      name: 'reqwest',
-      kind: null,
-      optional: false,
-      uses_default_features: false,
-      features: [...baseFeatures, 'rustls'],
-    }],
+    [
+      {
+        name: 'reqwest',
+        kind: null,
+        optional: false,
+        uses_default_features: false,
+        features: [...baseFeatures, 'rustls-no-provider'],
+      },
+      {
+        name: 'bitfun-services-core',
+        kind: null,
+        optional: false,
+        features: ['tls-provider'],
+      },
+    ],
     ),
     features: { 'subscription-auth': ['reqwest/form'] },
   };
@@ -2783,8 +2884,11 @@ test('Reqwest consumers inherit the workspace version without duplicating featur
   assert.equal(rules.length, 7);
   for (const rule of rules) {
     const pattern = rule.patterns[0].regex;
-    assert.match('reqwest = { workspace = true, features = ["rustls"] }', pattern);
-    assert.doesNotMatch('reqwest = { version = "99", features = ["rustls"] }', pattern);
+    assert.match('reqwest = { workspace = true, features = ["rustls-no-provider"] }', pattern);
+    assert.doesNotMatch(
+      'reqwest = { version = "99", features = ["rustls-no-provider"] }',
+      pattern,
+    );
   }
 });
 
@@ -2977,6 +3081,11 @@ test('resolved Reqwest feature union rejects every native TLS backend alias', ()
         version: '0.12.28',
         features: ['rustls-tls', 'default-tls'],
       },
+      {
+        name: 'rustls',
+        version: '0.23.42',
+        features: ['ring', 'std'],
+      },
     ],
     { root: TEST_ROOT },
   );
@@ -2985,6 +3094,132 @@ test('resolved Reqwest feature union rejects every native TLS backend alias', ()
   const messages = violations.map((violation) => violation.message).join('\n');
   assert.match(messages, /__native-tls, native-tls-vendored-no-alpn/);
   assert.match(messages, /reqwest 0\.12\.28.*default-tls/);
+});
+
+test('resolved Reqwest feature union rejects the AWS-LC selecting Rustls alias', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [{
+      name: 'reqwest',
+      version: '0.13.4',
+      features: ['rustls', 'rustls-no-provider'],
+    }, {
+      name: 'rustls',
+      version: '0.23.42',
+      features: ['ring', 'std'],
+    }],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /rustls.*AWS-LC/);
+});
+
+test('resolved Rustls feature union rejects multiple crypto providers', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [
+      {
+        name: 'reqwest',
+        version: '0.13.4',
+        features: ['rustls-no-provider'],
+      },
+      {
+        name: 'rustls',
+        version: '0.23.42',
+        features: ['aws_lc_rs', 'ring', 'std'],
+      },
+    ],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /only the ring crypto provider.*aws_lc_rs, ring/);
+});
+
+test('resolved Rustls feature union normalizes and rejects AWS-LC aliases once', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [
+      {
+        name: 'reqwest',
+        version: '0.13.4',
+        features: ['rustls-no-provider'],
+      },
+      {
+        name: 'rustls',
+        version: '0.23.42',
+        features: ['aws-lc-rs', 'aws_lc_rs', 'std'],
+      },
+    ],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /selects aws_lc_rs$/);
+});
+
+test('resolved Rustls feature union rejects providers split across Rustls versions', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [
+      {
+        name: 'reqwest',
+        version: '0.13.4',
+        features: ['rustls-no-provider'],
+      },
+      {
+        name: 'rustls',
+        version: '0.23.42',
+        features: ['ring', 'std'],
+      },
+      {
+        name: 'rustls',
+        version: '0.22.4',
+        features: ['aws_lc_rs', 'std'],
+      },
+    ],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /only the ring crypto provider.*aws_lc_rs, ring/);
+});
+
+test('resolved Reqwest Rustls closure rejects a missing crypto provider', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [{
+      name: 'reqwest',
+      version: '0.13.4',
+      features: ['rustls-no-provider'],
+    }],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /selects \(no provider\)/);
+});
+
+test('resolved Reqwest Rustls closure rejects linked AWS-LC packages', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [
+      {
+        name: 'reqwest',
+        version: '0.13.4',
+        features: ['rustls-no-provider'],
+      },
+      {
+        name: 'rustls',
+        version: '0.23.42',
+        features: ['ring', 'std'],
+      },
+      {
+        name: 'aws-lc-rs',
+        version: '1.13.3',
+        features: [],
+      },
+    ],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /aws_lc_rs, ring/);
 });
 
 test('Cargo metadata Tokio policy catches table-style and renamed full dependencies', () => {

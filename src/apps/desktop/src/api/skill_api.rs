@@ -1233,6 +1233,7 @@ async fn fetch_skill_market(query: &str, limit: u32) -> Result<Vec<SkillMarketIt
     let base_url = api_base.trim_end_matches('/');
     let endpoint = format!("{}/api/search", base_url);
 
+    crate::ensure_rustls_crypto_provider();
     let client = Client::new();
     let response = client
         .get(&endpoint)

@@ -52,7 +52,9 @@ impl CdpEndpointProvider {
     /// Discover browser version on the given debug port.
     pub async fn get_version(port: u16) -> Result<CdpVersionInfo, CdpEndpointError> {
         let url = format!("http://127.0.0.1:{}/json/version", port);
-        let resp = reqwest::get(&url)
+        let resp = crate::reqwest_client()
+            .get(&url)
+            .send()
             .await
             .map_err(|source| CdpEndpointError::VersionRequest {
                 port,
@@ -66,13 +68,14 @@ impl CdpEndpointProvider {
     /// List all pages/tabs on the given debug port.
     pub async fn list_pages(port: u16) -> Result<Vec<CdpPageInfo>, CdpEndpointError> {
         let url = format!("http://127.0.0.1:{}/json", port);
-        let resp =
-            reqwest::get(&url)
-                .await
-                .map_err(|source| CdpEndpointError::ListPagesRequest {
-                    port,
-                    message: source.to_string(),
-                })?;
+        let resp = crate::reqwest_client()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|source| CdpEndpointError::ListPagesRequest {
+                port,
+                message: source.to_string(),
+            })?;
         resp.json()
             .await
             .map_err(|source| CdpEndpointError::ListPagesResponse(source.to_string()))
@@ -89,7 +92,7 @@ impl CdpEndpointProvider {
         } else {
             format!("http://127.0.0.1:{}/json/new", port)
         };
-        let resp = reqwest::Client::new()
+        let resp = crate::reqwest_client()
             .put(&endpoint)
             .send()
             .await
