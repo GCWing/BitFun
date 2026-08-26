@@ -75,6 +75,8 @@ impl TaskAction {
 #[derive(Debug, Clone)]
 pub(super) struct TaskInvocation {
     pub(super) action: TaskAction,
+    /// Internal-only caller-selected ID for a newly spawned background agent.
+    pub(super) requested_agent_id: Option<String>,
     pub(super) description: Option<String>,
     pub(super) prompt: Option<String>,
     pub(super) context_mode: SubagentContextMode,
@@ -119,6 +121,7 @@ impl TaskTool {
 
             return Ok(TaskInvocation {
                 action: TaskAction::Spawn,
+                requested_agent_id: None,
                 description: Self::string_field(input, "description", "DeepReview Task calls")?,
                 prompt: Self::string_field(input, "prompt", "DeepReview Task calls")?,
                 context_mode: SubagentContextMode::Fresh,
@@ -152,6 +155,8 @@ impl TaskTool {
 
         match action {
             TaskAction::Spawn => {
+                let requested_agent_id =
+                    Self::optional_trimmed_string(input, "requested_agent_id")?;
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
                 if Self::optional_trimmed_string(input, "agent_id")?.is_some() {
@@ -189,6 +194,7 @@ impl TaskTool {
 
                 Ok(TaskInvocation {
                     action,
+                    requested_agent_id,
                     description,
                     prompt,
                     context_mode,
@@ -223,6 +229,7 @@ impl TaskTool {
 
                 Ok(TaskInvocation {
                     action,
+                    requested_agent_id: None,
                     description,
                     prompt,
                     context_mode: SubagentContextMode::Fresh,
@@ -258,6 +265,7 @@ impl TaskTool {
 
                 Ok(TaskInvocation {
                     action,
+                    requested_agent_id: None,
                     description: None,
                     prompt: None,
                     context_mode: SubagentContextMode::Fresh,

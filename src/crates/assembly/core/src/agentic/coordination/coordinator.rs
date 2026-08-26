@@ -467,6 +467,7 @@ pub enum SubagentResultStatus {
 #[derive(Debug, Clone)]
 pub(crate) struct SubagentExecutionRequest {
     pub(crate) task_description: String,
+    pub(crate) requested_agent_id: Option<String>,
     pub(crate) context_mode: SubagentContextMode,
     pub(crate) target_session_id: Option<String>,
     pub(crate) subagent_type: Option<String>,
@@ -684,6 +685,7 @@ struct PersistedSubagentContinuationContext {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HiddenSubagentExecutionRequest {
+    requested_agent_id: Option<String>,
     target_session_id: Option<String>,
     dialog_turn_id: Option<String>,
     session_name: String,
@@ -4273,6 +4275,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some(binding.runtime_agent_key),
@@ -9348,6 +9351,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<SubagentResult> {
         let HiddenSubagentExecutionRequest {
+            requested_agent_id: _,
             target_session_id,
             dialog_turn_id,
             session_name,
@@ -11090,6 +11094,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .session_manager
                         .is_transient_session(&session.session_id);
                     return Ok(HiddenSubagentExecutionRequest {
+                        requested_agent_id: request.requested_agent_id,
                         target_session_id: Some(session.session_id.clone()),
                         dialog_turn_id: None,
                         session_name: session.session_name.clone(),
@@ -11183,6 +11188,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_config.model_binding_fingerprint = immutable_model_fingerprint;
 
                 Ok(HiddenSubagentExecutionRequest {
+                    requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
                     session_name: format!("Subagent: {}", task_description),
@@ -11270,6 +11276,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 initial_messages.push(Message::user(task_description.clone()));
 
                 Ok(HiddenSubagentExecutionRequest {
+                    requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
                     session_name: format!("Fork: {}", task_description),
@@ -11570,6 +11577,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<String> {
         self.background_subagent_outcomes
             .agent_id_for_session(parent_session_id, subagent_session_id)
+            .await
+    }
+
+    pub(crate) async fn existing_agent_id_for_subagent_session(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        self.background_subagent_outcomes
+            .existing_agent_id_for_session(parent_session_id, subagent_session_id)
             .await
     }
 
@@ -11880,6 +11897,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let logical_agent_type = request.agent_type.clone();
 
         let hidden_request = HiddenSubagentExecutionRequest {
+            requested_agent_id: None,
             target_session_id: None,
             dialog_turn_id: None,
             session_name: request.session_name,
@@ -12017,7 +12035,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .background_subagent_outcomes
             .register(BackgroundTaskRegistration {
                 parent_session_id: subagent_parent_info.session_id.clone(),
-                requested_agent_id: None,
+                requested_agent_id: request.requested_agent_id.clone(),
                 child_session_id: subagent_session_id.clone(),
                 parent_dialog_turn_id: subagent_parent_info.dialog_turn_id.clone(),
                 parent_tool_call_id: subagent_parent_info.tool_call_id.clone(),
@@ -12045,19 +12063,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
-            if let Err(error) = self.background_subagent_outcomes.discard(task_pk).await {
-                warn!(
-                    "Failed to discard cancelled background task start: task_pk={}, error={}",
-                    task_pk, error
-                );
-            }
-            self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
-                .await;
-            if is_new_swarm_node {
-                let _ = self
-                    .background_subagent_outcomes
-                    .rollback_swarm_child(&subagent_session_id)
+            let cleanup_is_safe = match self
+                .background_subagent_outcomes
+                .discard(task_pk, request.prepared_session_created)
+                .await
+            {
+                Ok(released_agent_reservation) => {
+                    !request.prepared_session_created || released_agent_reservation
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to discard cancelled background task start; preserving the prepared session: task_pk={}, error={}",
+                        task_pk, error
+                    );
+                    false
+                }
+            };
+            if cleanup_is_safe {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                     .await;
+                if is_new_swarm_node {
+                    let _ = self
+                        .background_subagent_outcomes
+                        .rollback_swarm_child(&subagent_session_id)
+                        .await;
+                }
             }
             return Err(BitFunError::Cancelled(
                 "Background subagent start was cancelled".to_string(),
@@ -12082,21 +12112,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             {
                 Ok(submit_result) => submit_result,
                 Err(error) => {
-                    if let Err(discard_error) =
-                        self.background_subagent_outcomes.discard(task_pk).await
+                    let cleanup_is_safe = match self
+                        .background_subagent_outcomes
+                        .discard(task_pk, request.prepared_session_created)
+                        .await
                     {
-                        warn!(
-                            "Failed to discard unsubmitted background task: task_pk={}, error={}",
-                            task_pk, discard_error
-                        );
-                    }
-                    self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
-                        .await;
-                    if is_new_swarm_node {
-                        let _ = self
-                            .background_subagent_outcomes
-                            .rollback_swarm_child(&subagent_session_id)
+                        Ok(released_agent_reservation) => {
+                            !request.prepared_session_created || released_agent_reservation
+                        }
+                        Err(discard_error) => {
+                            warn!(
+                                "Failed to discard unsubmitted background task; preserving the prepared session: task_pk={}, error={}",
+                                task_pk, discard_error
+                            );
+                            false
+                        }
+                    };
+                    if cleanup_is_safe {
+                        self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                             .await;
+                        if is_new_swarm_node {
+                            let _ = self
+                                .background_subagent_outcomes
+                                .rollback_swarm_child(&subagent_session_id)
+                                .await;
+                        }
                     }
                     return Err(BitFunError::tool(error));
                 }
@@ -15611,6 +15651,7 @@ mod tests {
         cancellation_token.cancel();
         let request = SubagentExecutionRequest {
             task_description: "should not start".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: None,
             subagent_type: Some("Explore".to_string()),
@@ -19240,6 +19281,7 @@ mod tests {
         let resolved = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Inspect the managed worktree".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19316,6 +19358,7 @@ mod tests {
         let resolved = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Inspect the workspace".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19379,6 +19422,7 @@ mod tests {
         let fresh_only = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Run once".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19482,6 +19526,7 @@ mod tests {
 
         let request = SubagentExecutionRequest {
             task_description: "Continue the investigation".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(subagent_session.session_id.clone()),
             subagent_type: None,
@@ -19546,6 +19591,7 @@ mod tests {
 
         let inherit_request = SubagentExecutionRequest {
             task_description: "Continue with the parent model".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(subagent_session.session_id.clone()),
             subagent_type: None,
@@ -19618,6 +19664,7 @@ mod tests {
 
         let request = SubagentExecutionRequest {
             task_description: "Fork and inspect the repo".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fork,
             target_session_id: None,
             subagent_type: None,
@@ -19661,6 +19708,7 @@ mod tests {
 
         let inherit_request = SubagentExecutionRequest {
             task_description: "Fork with the parent model".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fork,
             target_session_id: None,
             subagent_type: None,

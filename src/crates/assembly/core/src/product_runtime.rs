@@ -483,6 +483,7 @@ fn runtime_lineage_snapshot(
                     subagent_type: relationship
                         .as_ref()
                         .and_then(|value| value.subagent_type.clone()),
+                    agent_id: None,
                     workspace_path: metadata.workspace_path,
                     remote_connection_id: remote_connection_id.map(str::to_string),
                     remote_ssh_host: remote_ssh_host.map(str::to_string),
@@ -2042,6 +2043,13 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
                 .active_turn_id_in_storage_path(&storage_path, &entry.session_id)
                 .await
                 .map_err(runtime_port_error)?;
+            if let Some(parent_session_id) = entry.parent_session_id.as_deref() {
+                entry.agent_id = self
+                    .coordinator
+                    .existing_agent_id_for_subagent_session(parent_session_id, &entry.session_id)
+                    .await
+                    .map_err(runtime_port_error)?;
+            }
         }
         Ok(Some(snapshot))
     }

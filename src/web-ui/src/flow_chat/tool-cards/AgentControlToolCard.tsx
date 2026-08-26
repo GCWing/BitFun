@@ -1,7 +1,6 @@
 import React, {
   useCallback,
   useLayoutEffect,
-  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -11,9 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import { flowChatStore } from '../store/FlowChatStore';
 import {
-  getSubagentNameDefinition,
   SubagentAvatar,
-  useSubagentIdentity,
 } from '../subagent-identity';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import {
@@ -100,7 +97,6 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
   const toolId = toolItem.id ?? toolCall?.id;
   const params = toolItem.partialParams ?? toolCall?.input;
   const prompt = readString(params, 'prompt');
-  const description = readString(params, 'description');
   const inputAgentType = readString(params, 'agent_type', 'agentType');
   const agentId = readString(params, 'agent_id', 'agentId')
     || readString(toolItem.toolResult?.result, 'agent_id', 'agentId');
@@ -119,27 +115,19 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
   const linkedSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
-  const identity = useSubagentIdentity(linkedSubagentSessionId);
-  const identityName = useMemo(() => {
-    if (!identity) {
-      return '';
-    }
-    const definition = getSubagentNameDefinition(identity.nameId);
-    return t(definition.labelKey, { defaultValue: definition.fallback });
-  }, [identity, t]);
   const lifecycle = linkedSession
     ? sessionLineageLifecycleForSession(linkedSession)
     : fallbackLifecycle(status);
-  const agentName = identityName
+  const agentName = agentId
     || linkedSession?.subagentType?.trim()
     || linkedSession?.mode?.trim()
     || inputAgentType
-    || agentId
     || t('toolCards.taskTool.defaultAgentKind');
   const stableAgentType = linkedSession?.mode?.trim()
     || linkedSession?.config?.agentType?.trim()
     || inputAgentType;
   const stableSubagentType = linkedSession?.subagentType?.trim() || inputAgentType;
+  const secondaryAgentType = stableSubagentType || stableAgentType;
   const isParameterStreaming = Boolean(toolItem.isParamsStreaming)
     || PARAMETER_STREAMING_STATUSES.has(status);
   const canExpand = Boolean(prompt) && !isParameterStreaming;
@@ -179,7 +167,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
       parentSessionId: sessionId,
       workspacePath: parentSession?.workspacePath,
       sessionKind: 'subagent',
-      sessionTitle: description || agentName,
+      sessionTitle: agentName,
       agentType: stableAgentType || undefined,
       parentToolCallId: toolCall?.id || toolItem.id,
       subagentType: stableSubagentType || undefined,
@@ -189,7 +177,6 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
     });
   }, [
     agentName,
-    description,
     linkedSubagentSessionId,
     sessionId,
     stableAgentType,
@@ -208,8 +195,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
         {linkedSubagentSessionId ? (
           <SubagentAvatar
             sessionId={linkedSubagentSessionId}
-            identity={identity}
-            name={identityName}
+            name={agentName}
             size={22}
             status={lifecycle}
           />
@@ -256,6 +242,15 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
           {agentPillContent}
         </span>
       )}
+      {secondaryAgentType && secondaryAgentType !== agentName ? (
+        <span
+          className="agent-control-tool-card__type"
+          data-bf-component="agent-control-tool-card"
+          data-bf-part="type"
+        >
+          {secondaryAgentType}
+        </span>
+      ) : null}
       <span
         className={`agent-control-tool-card__status agent-control-tool-card__status--${lifecycle}`}
         data-bf-component="agent-control-tool-card"

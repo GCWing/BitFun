@@ -82,7 +82,7 @@ fn lineage_points(snapshot: &AgentSessionLineageSnapshot) -> Vec<ConversationPoi
             let title = format!(
                 "{}{}",
                 "  ".repeat(depth.saturating_sub(1)),
-                entry.session_name
+                entry.agent_id.as_deref().unwrap_or(&entry.session_name)
             );
             let kind = entry
                 .subagent_type
@@ -142,6 +142,7 @@ mod tests {
             parent_session_id: parent.map(str::to_string),
             parent_tool_call_id: None,
             subagent_type: Some("explore".to_string()),
+            agent_id: Some(id.to_string()),
             workspace_path: None,
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -177,6 +178,19 @@ mod tests {
         assert_eq!(points[0].id, "child");
         assert_eq!(points[1].id, "grandchild");
         assert_eq!(points[1].title, "  grandchild");
+    }
+
+    #[test]
+    fn selector_prefers_the_runtime_agent_id() {
+        let mut child = entry("child", Some("root"), 2);
+        child.session_name = "Generated session title".to_string();
+        child.agent_id = Some("parser-review".to_string());
+        let snapshot = AgentSessionLineageSnapshot {
+            root_session_id: "root".to_string(),
+            sessions: vec![entry("root", None, 1), child],
+        };
+
+        assert_eq!(lineage_points(&snapshot)[0].title, "parser-review");
     }
 
     #[test]

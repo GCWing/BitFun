@@ -1407,6 +1407,9 @@ pub struct AgentSessionLineageEntry {
     pub parent_tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagent_type: Option<String>,
+    /// Parent-scoped semantic handle assigned when this subagent was launched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3292,6 +3295,7 @@ mod tests {
                 parent_session_id: Some("root_1".to_string()),
                 parent_tool_call_id: Some("tool_1".to_string()),
                 subagent_type: Some("explore".to_string()),
+                agent_id: Some("parser-review".to_string()),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),
@@ -3340,6 +3344,17 @@ mod tests {
         assert_eq!(snapshot_json["rootSessionId"], "root_1");
         assert_eq!(snapshot_json["sessions"][0]["status"], "completed");
         assert_eq!(snapshot_json["sessions"][0]["parentSessionId"], "root_1");
+        assert_eq!(snapshot_json["sessions"][0]["agentId"], "parser-review");
+
+        let legacy_entry = serde_json::from_value::<AgentSessionLineageEntry>(serde_json::json!({
+            "sessionId": "legacy-child",
+            "sessionName": "Legacy child",
+            "agentType": "explore",
+            "createdAtMs": 1,
+            "status": "completed"
+        }))
+        .expect("legacy lineage entries without agentId remain readable");
+        assert!(legacy_entry.agent_id.is_none());
         assert_eq!(
             snapshot_json["sessions"][0]["unreadCompletion"],
             "interrupted"

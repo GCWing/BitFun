@@ -1,16 +1,11 @@
 import React from 'react';
 import type { SessionLineageLifecycle } from '../utils/sessionLineage';
 import { getSubagentAvatarDefinition } from './catalog';
-import type { SubagentIdentityAssignment } from './allocator';
-import {
-  resolveSubagentAvatarColor,
-  resolveSubagentAvatarPresentation,
-} from './avatarResolver';
+import { resolveSubagentAvatarPresentation } from './avatarResolver';
 import './SubagentAvatar.scss';
 
 export interface SubagentAvatarProps {
   sessionId?: string;
-  identity?: SubagentIdentityAssignment;
   name?: string;
   size?: number;
   status?: SessionLineageLifecycle;
@@ -20,23 +15,17 @@ export interface SubagentAvatarProps {
 
 export const SubagentAvatar: React.FC<SubagentAvatarProps> = ({
   sessionId,
-  identity,
   name,
   size = 28,
   status = 'idle',
   decorative = true,
   className = '',
 }) => {
-  if (!sessionId && !identity) {
+  if (!sessionId) {
     return null;
   }
 
-  const presentation = sessionId
-    ? resolveSubagentAvatarPresentation(sessionId)
-    : {
-      avatarId: identity!.avatarId,
-      ...resolveSubagentAvatarColor(''),
-    };
+  const presentation = resolveSubagentAvatarPresentation(sessionId);
   const avatar = getSubagentAvatarDefinition(presentation.avatarId);
   const classes = [
     'subagent-avatar',
@@ -52,7 +41,6 @@ export const SubagentAvatar: React.FC<SubagentAvatarProps> = ({
       data-bf-part="root"
       data-bf-avatar-id={presentation.avatarId}
       data-bf-avatar-color-id={presentation.colorId}
-      data-bf-name-id={identity?.nameId}
       data-bf-state={status}
       style={{
         '--subagent-avatar-size': `${size}px`,

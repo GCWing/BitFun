@@ -144,9 +144,9 @@ impl AgentSpawnTool {
         json!({
             "type": "object",
             "properties": {
-                "description": {
+                "agent_id": {
                     "type": "string",
-                    "description": "A short (3-5 word) description of the work"
+                    "description": "A meaningful and unique ID for the new agent. It must match the pattern [a-z][a-z0-9_-]{0,31}."
                 },
                 "prompt": {
                     "type": "string",
@@ -161,7 +161,7 @@ impl AgentSpawnTool {
                     "description": "Optional model selection. Can be 'inherit', 'primary', 'fast', or a configured model ID."
                 }
             },
-            "required": ["description", "prompt", "agent_type"],
+            "required": ["agent_id", "prompt", "agent_type"],
             "additionalProperties": false
         })
     }
@@ -171,13 +171,15 @@ impl AgentSpawnTool {
 
 Choose an `agent_type` permitted by the current system prompt. Each type has its own role and tool set.
 
+Choose a meaningful `agent_id` for this agent. It must be unique among agents launched by the current parent session and match `[a-z][a-z0-9_-]{0,31}`. Reusing an existing or deleted agent's ID fails; the runtime never renames it automatically.
+
 Write a self-contained `prompt` that gives the agent everything it needs to complete the work:
 - State the objective, scope, relevant paths or symbols, constraints, and expected result.
 - Say whether code changes are expected or the work is read-only.
 - Pass precise references instead of pasting large file contents.
 - Keep the prompt under 180 lines / 16KB when practical; split broad work into focused agents with clear ownership.
 
-The agent shares the current workspace and starts with a fresh conversation. The result includes an `agent_id` and `bg_task_id`. Use `bg_task_id` with AgentWait to collect the result. For agents that support follow-up turns, use `agent_id` with AgentSendInput; use it with AgentInterrupt to stop active work.
+The agent shares the current workspace and starts with a fresh conversation. The result includes a `bg_task_id`. Use `bg_task_id` with AgentWait to collect the result. For agents that support follow-up turns, use the requested `agent_id` with AgentSendInput; use it with AgentInterrupt to stop active work.
 
 Set `model_id` only when a particular model is required. Omit it to use the agent's configured model. `inherit` selects the current model; `primary` and `fast` select the corresponding configured model slots. Call ListModels before using a configured model ID.
 
@@ -193,11 +195,7 @@ impl AgentSendInputTool {
             "properties": {
                 "agent_id": {
                     "type": "string",
-                    "description": "The agent ID returned when the agent was launched."
-                },
-                "description": {
-                    "type": "string",
-                    "description": "A short (3-5 word) description of this round of work"
+                    "description": "The agent ID chosen when the agent was launched."
                 },
                 "prompt": {
                     "type": "string",
@@ -208,7 +206,7 @@ impl AgentSendInputTool {
                     "description": "Optional model selection for this and later turns. Can be 'inherit', 'primary', 'fast', or a configured model ID."
                 }
             },
-            "required": ["agent_id", "description", "prompt"],
+            "required": ["agent_id", "prompt"],
             "additionalProperties": false
         })
     }
@@ -216,7 +214,7 @@ impl AgentSendInputTool {
     pub(super) fn render_agent_send_input_description(&self) -> String {
         r#"Send a new instruction to an existing agent. The instruction starts a background turn and the call returns immediately.
 
-Use the `agent_id` returned when the agent was launched. The agent retains its earlier conversation, so the `prompt` can refer to prior findings or ask it to continue, refine, verify, or change direction. State the new objective and expected result clearly.
+Use the `agent_id` chosen when the agent was launched. The agent retains its earlier conversation, so the `prompt` can refer to prior findings or ask it to continue, refine, verify, or change direction. State the new objective and expected result clearly.
 
 The result includes a new `bg_task_id`. Use it with AgentWait to collect the result of this turn."#
             .to_string()
@@ -246,7 +244,7 @@ impl AgentInterruptTool {
     pub(super) fn render_agent_interrupt_description(&self) -> String {
         r#"Interrupt an agent's active background work.
 
-Use the `agent_id` returned when the agent was launched. Set `cascade` to true when the target's active descendant agents should also be interrupted; otherwise descendants continue independently. The result reports how many active background runs were interrupted. Use this when the work is no longer needed, its scope has changed, or it should stop before further side effects occur."#
+Use the `agent_id` chosen when the agent was launched. Set `cascade` to true when the target's active descendant agents should also be interrupted; otherwise descendants continue independently. The result reports how many active background runs were interrupted. Use this when the work is no longer needed, its scope has changed, or it should stop before further side effects occur."#
             .to_string()
     }
 }

@@ -24,10 +24,7 @@ import {
   type SessionLineageNode,
 } from '../../utils/sessionLineage';
 import {
-  getSubagentNameDefinition,
   SubagentAvatar,
-  useSubagentIdentityStore,
-  type SubagentIdentitySubject,
 } from '../../subagent-identity';
 import './SessionTreePopover.scss';
 
@@ -38,6 +35,7 @@ export interface SessionTreeSelection {
   title: string;
   agentType?: string;
   subagentType?: string;
+  agentId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -70,22 +68,6 @@ function nodeHasActiveWork(node: SessionLineageNode): boolean {
   return node.lifecycle === 'running' || node.lifecycle === 'finishing';
 }
 
-function collectSubagentIdentitySubjects(tree: SessionLineageNode): SubagentIdentitySubject[] {
-  const subjects: SubagentIdentitySubject[] = [];
-  const visit = (node: SessionLineageNode) => {
-    if (!node.isRoot) {
-      subjects.push({
-        sessionId: node.sessionId,
-        createdAt: node.createdAt,
-        active: !['completed', 'cancelled', 'error'].includes(node.lifecycle),
-      });
-    }
-    node.children.forEach(visit);
-  };
-  visit(tree);
-  return subjects;
-}
-
 export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   sessionId,
   fallbackWorkspacePath,
@@ -107,8 +89,6 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   const [collapsedSessionIds, setCollapsedSessionIds] = useState<Set<string>>(new Set());
   const [openActionSessionId, setOpenActionSessionId] = useState<string | null>(null);
   const [cancellingSessionIds, setCancellingSessionIds] = useState<Set<string>>(new Set());
-  const identities = useSubagentIdentityStore(state => state.assignments);
-  const reconcileIdentityRoot = useSubagentIdentityStore(state => state.reconcileRoot);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -289,11 +269,6 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     );
   }, [liveRevision, sessionId, snapshot]);
 
-  useLayoutEffect(() => {
-    if (!tree) return;
-    reconcileIdentityRoot(tree.sessionId, collectSubagentIdentitySubjects(tree));
-  }, [reconcileIdentityRoot, tree]);
-
   const descendantCount = countSessionLineageDescendants(tree);
   const panelLayout = useAnchoredPopoverPosition({
     open: isOpen && !embedded,
@@ -348,6 +323,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       title: node.title,
       agentType: node.agentType,
       subagentType: node.subagentType,
+      agentId: node.agentId,
       workspacePath: node.workspacePath,
       remoteConnectionId: node.remoteConnectionId,
       remoteSshHost: node.remoteSshHost,
@@ -387,6 +363,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       title: node.title,
       agentType: node.agentType,
       subagentType: node.subagentType,
+      agentId: node.agentId,
       workspacePath: node.workspacePath,
       remoteConnectionId: node.remoteConnectionId,
       remoteSshHost: node.remoteSshHost,
@@ -415,12 +392,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       ? t('flowChatHeader.agentTreeCancelling')
       : lifecycleLabel(node.lifecycle, t);
     const secondaryLabel = node.subagentType || node.agentType;
-    const identity = node.isRoot ? undefined : identities[node.sessionId];
-    const nameDefinition = identity ? getSubagentNameDefinition(identity.nameId) : undefined;
-    const identityName = nameDefinition
-      ? t(nameDefinition.labelKey, { defaultValue: nameDefinition.fallback })
-      : undefined;
-    const primaryLabel = identityName || node.title;
+    const primaryLabel = node.isRoot ? node.title : node.agentId || node.title;
     const nodeMeta = node.isRoot
       ? secondaryLabel
       : [secondaryLabel, node.title]
@@ -470,21 +442,18 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             onClick={() => handleSelect(node)}
             aria-label={node.isRoot
               ? undefined
-              : [identityName, secondaryLabel, node.title, statusLabel].filter(Boolean).join(', ')}
+              : [primaryLabel, secondaryLabel, node.title, statusLabel].filter(Boolean).join(', ')}
           >
             {node.isRoot
               ? <MessageSquare size={13} aria-hidden="true" />
-              : identity
-                ? (
-                    <SubagentAvatar
-                      sessionId={node.sessionId}
-                      identity={identity}
-                      name={identityName}
-                      size={embedded ? 24 : 28}
-                      status={node.lifecycle}
-                    />
-                  )
-                : <Bot size={13} aria-hidden="true" />}
+              : (
+                  <SubagentAvatar
+                    sessionId={node.sessionId}
+                    name={primaryLabel}
+                    size={embedded ? 24 : 28}
+                    status={node.lifecycle}
+                  />
+                )}
             <span className="session-tree-popover__node-copy">
               <span
                 className="session-tree-popover__node-title"
@@ -543,7 +512,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
               ) : null}
             </div>
           ) : null}
-          {node.isRoot || !identity ? (
+          {node.isRoot ? (
             <span
               className={`session-tree-popover__status session-tree-popover__status--${node.lifecycle}`}
               title={statusLabel}

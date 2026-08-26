@@ -21,7 +21,6 @@ import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Sessio
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
-import { useSubagentIdentityStore } from '../../subagent-identity';
 
 const {
   buildBuiltInBrowserTabOptions,
@@ -627,12 +626,10 @@ describe('mergeParamsPartialEventData', () => {
 describe('subagent parent helpers', () => {
   beforeEach(() => {
     resetFlowChatStore();
-    useSubagentIdentityStore.getState().clear();
   });
 
   afterEach(() => {
     resetFlowChatStore();
-    useSubagentIdentityStore.getState().clear();
   });
 
   it('finds the parent task card by subagent session and dialog turn', () => {
@@ -724,10 +721,6 @@ describe('subagent parent helpers', () => {
     expect(
       FlowChatStore.getInstance().getState().sessions.get('review-child')?.focusedReviewDisplayLabel,
     ).toBe('Authentication boundary');
-    expect(useSubagentIdentityStore.getState().assignments['review-child']).toMatchObject({
-      rootSessionId: 'parent-session',
-      sessionId: 'review-child',
-    });
   });
 
   it('stores an absolute parent Turn index when linking from a partial restored tail', () => {

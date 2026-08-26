@@ -108,7 +108,7 @@ describe('sessionLineage', () => {
     );
   });
 
-  it('keeps the persisted title when a live child session has a placeholder title', () => {
+  it('keeps the persisted title and agent ID when a live child shell overlays it', () => {
     const snapshot: SessionLineageSnapshot = {
       rootSessionId: 'root',
       sessions: [
@@ -116,6 +116,7 @@ describe('sessionLineage', () => {
         {
           ...metadata('child', 'root', 2),
           sessionName: 'Review authentication boundary',
+          agentId: 'security-review',
         },
       ],
     };
@@ -131,6 +132,7 @@ describe('sessionLineage', () => {
     expect(tree?.children[0]).toMatchObject({
       sessionId: 'child',
       title: 'Review authentication boundary',
+      agentId: 'security-review',
       lifecycle: 'running',
     });
   });

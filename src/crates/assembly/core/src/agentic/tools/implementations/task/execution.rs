@@ -95,6 +95,7 @@ struct BackgroundTaskStartRequest<'a> {
     coordinator: &'a std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
     context: &'a ToolUseContext,
     context_mode: SubagentContextMode,
+    requested_agent_id: Option<String>,
     target_session_id: Option<String>,
     subagent_type: Option<String>,
     logical_subagent_type: Option<String>,
@@ -273,6 +274,7 @@ impl TaskTool {
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
         let description = invocation.description.clone();
+        let requested_agent_id = invocation.requested_agent_id.clone();
         let mut prompt = invocation.prompt.clone().ok_or_else(|| {
             BitFunError::tool(
                 "Required parameters: prompt and description. Missing prompt".to_string(),
@@ -777,6 +779,7 @@ impl TaskTool {
                 coordinator: &coordinator,
                 context,
                 context_mode,
+                requested_agent_id,
                 target_session_id,
                 subagent_type,
                 logical_subagent_type,
@@ -839,6 +842,7 @@ impl TaskTool {
             coordinator,
             context,
             context_mode,
+            requested_agent_id,
             target_session_id,
             subagent_type,
             logical_subagent_type,
@@ -870,6 +874,7 @@ impl TaskTool {
         .await?;
         let request = SubagentExecutionRequest {
             task_description: prepared_prompt,
+            requested_agent_id,
             context_mode,
             target_session_id,
             subagent_type,
@@ -973,6 +978,7 @@ impl TaskTool {
             );
             let request = SubagentExecutionRequest {
                 task_description: prepared_prompt.clone(),
+                requested_agent_id: None,
                 context_mode,
                 target_session_id: target_session_id.clone(),
                 subagent_type: subagent_type.clone(),
