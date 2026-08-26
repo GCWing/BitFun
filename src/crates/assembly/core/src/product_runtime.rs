@@ -19,7 +19,8 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionLineageEntry, AgentSessionLineageInspection, AgentSessionLineagePort,
     AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
     AgentSessionUsagePort, AgentSessionUsageRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentTurnSettlementResult,
+    AgentTurnSettlementStatus, SessionTranscript,
 };
 use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 #[cfg(feature = "product-search")]
@@ -55,6 +56,7 @@ use crate::agentic::events::EventQueue;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
+use crate::agentic::session::transcript_render::transcript_final_assistant_content;
 #[cfg(feature = "product-search")]
 use crate::agentic::session::transcript_render::{
     transcript_display_assistant_content, transcript_display_user_content,
@@ -2289,22 +2291,107 @@ impl AgentTurnSettlementPort for CoreSessionOperationsPort {
     async fn wait_for_turn_settlement(
         &self,
         request: AgentTurnSettlementRequest,
-    ) -> PortResult<()> {
+    ) -> PortResult<AgentTurnSettlementResult> {
         if request.wait_timeout_ms == 0 {
             return Err(PortError::new(
                 PortErrorKind::InvalidRequest,
                 "turn settlement timeout must be greater than zero",
             ));
         }
-        self.coordinator
+        let wait_error = self
+            .coordinator
             .wait_for_turn_settlement(
                 &request.session_id,
                 &request.turn_id,
                 Duration::from_millis(request.wait_timeout_ms),
             )
             .await
-            .map_err(runtime_port_error)
+            .err()
+            .map(runtime_port_error);
+        if let Some(error) = wait_error
+            .as_ref()
+            .filter(|error| error.kind != PortErrorKind::OutcomeUnknown)
+        {
+            return Err(error.clone());
+        }
+
+        let session_manager = self.coordinator.get_session_manager();
+        let _mutation = session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error)?;
+        let turn_is_loaded = session_manager
+            .get_session(&request.session_id)
+            .is_some_and(|session| {
+                session
+                    .dialog_turn_ids
+                    .iter()
+                    .any(|turn_id| turn_id == &request.turn_id)
+            });
+        let persisted_turns = session_manager
+            .load_persisted_transcript_turns_locked(&request.session_id)
+            .await
+            .map_err(runtime_port_error)?;
+        let turn = persisted_turns
+            .as_deref()
+            .and_then(|turns| turns.iter().find(|turn| turn.turn_id == request.turn_id));
+
+        if let Some(turn) = turn.filter(|turn| turn.status != TurnStatus::InProgress) {
+            let persisted_result = persisted_turn_settlement_result(turn)?;
+            if let Some(cached_result) = session_manager
+                .turn_settlement_result(&request.session_id, &request.turn_id)
+                .filter(|cached| cached.status == persisted_result.status)
+            {
+                return Ok(cached_result);
+            }
+            return Ok(persisted_result);
+        }
+        if persisted_turns.is_none() && turn_is_loaded {
+            if let Some(cached_result) =
+                session_manager.turn_settlement_result(&request.session_id, &request.turn_id)
+            {
+                return Ok(cached_result);
+            }
+        }
+        if let Some(error) = wait_error {
+            return Err(error);
+        }
+
+        Err(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            format!(
+                "Authoritative turn result is unavailable: session_id={}, turn_id={}",
+                request.session_id, request.turn_id
+            ),
+        ))
     }
+}
+
+fn persisted_turn_settlement_result(
+    turn: &DialogTurnData,
+) -> PortResult<AgentTurnSettlementResult> {
+    let final_response = transcript_final_assistant_content(turn);
+    let status = match turn.status {
+        TurnStatus::Completed if turn.has_final_response != Some(false) => {
+            AgentTurnSettlementStatus::Completed
+        }
+        TurnStatus::Completed | TurnStatus::Error => AgentTurnSettlementStatus::Failed,
+        TurnStatus::Cancelled => AgentTurnSettlementStatus::Cancelled,
+        TurnStatus::InProgress => {
+            return Err(PortError::new(
+                PortErrorKind::OutcomeUnknown,
+                format!("Dialog turn is still in progress: {}", turn.turn_id),
+            ));
+        }
+    };
+
+    Ok(AgentTurnSettlementResult {
+        final_response: (status == AgentTurnSettlementStatus::Completed)
+            .then_some(final_response)
+            .flatten(),
+        finish_reason: turn.finish_reason.clone(),
+        status,
+    })
 }
 
 #[cfg(test)]
@@ -2314,7 +2401,10 @@ mod tests {
     use std::time::Duration;
 
     use crate::service::session::SessionTranscriptExportOptions;
-    use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
+    use bitfun_agent_runtime::sdk::{
+        AgentEventSource, AgentRuntime, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+        AgentTurnSettlementResult, AgentTurnSettlementStatus,
+    };
     use bitfun_runtime_ports::{
         AgentContextReloadRequest, AgentContextReloadTarget, LocalWorkspaceSnapshotSessionRequest,
         LocalWorkspaceSnapshotTurnRequest,
@@ -2350,8 +2440,8 @@ mod tests {
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::infrastructure::PathManager;
     use crate::service::session::{
-        DialogTurnData, DialogTurnRecoveryData, DialogTurnRecoveryStatus, SessionMetadata,
-        TurnStatus, UserMessageData,
+        DialogTurnData, DialogTurnRecoveryData, DialogTurnRecoveryStatus, SessionKind,
+        SessionMetadata, TurnStatus, UserMessageData,
     };
     use crate::service::session_usage::UsageTokenSource;
     use crate::service::snapshot::manager::clear_snapshot_manager_for_test;
@@ -3273,7 +3363,7 @@ mod tests {
                 max_active_sessions: 100,
                 session_idle_timeout: Duration::from_secs(3600),
                 auto_save_interval: Duration::from_secs(300),
-                enable_persistence: false,
+                enable_persistence: true,
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         ));
@@ -3396,6 +3486,66 @@ mod tests {
             })
             .await
             .expect("latest-turn fork should restore through the resolved storage path");
+
+        let settlement = port
+            .wait_for_turn_settlement(AgentTurnSettlementRequest {
+                session_id: session_id.to_string(),
+                turn_id: visible_turn.turn_id.clone(),
+                wait_timeout_ms: 10,
+            })
+            .await
+            .expect("a cold persisted turn should remain authoritative without a live tracker");
+        assert_eq!(settlement.status, AgentTurnSettlementStatus::Completed);
+
+        let transient = session_manager
+            .create_transient_session_with_id_and_details(
+                Some("session-transient-settlement".to_string()),
+                "Transient settlement".to_string(),
+                "agentic".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(workspace_root.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("transient session");
+        let transient_turn_id = session_manager
+            .start_dialog_turn(
+                &transient.session_id,
+                "agentic".to_string(),
+                "finish transiently".to_string(),
+                Some("turn-transient-settlement".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("transient turn");
+        session_manager
+            .reset_session_state_if_processing(&transient.session_id, &transient_turn_id);
+        session_manager.record_turn_settlement_result(
+            &transient.session_id,
+            &transient_turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Completed,
+                final_response: Some("transient final answer".to_string()),
+                finish_reason: Some("complete".to_string()),
+            },
+        );
+
+        let transient_settlement = port
+            .wait_for_turn_settlement(AgentTurnSettlementRequest {
+                session_id: transient.session_id,
+                turn_id: transient_turn_id,
+                wait_timeout_ms: 10,
+            })
+            .await
+            .expect("transient settlement should use the Runtime-owned result cache");
+        assert_eq!(
+            transient_settlement.final_response.as_deref(),
+            Some("transient final answer")
+        );
 
         assert_ne!(result.session_id, session_id);
         assert_eq!(result.agent_type, "agentic");

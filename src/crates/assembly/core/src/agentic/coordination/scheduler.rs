@@ -4316,7 +4316,14 @@ mod tests {
             .await
             .expect_err("missing settlement evidence must not be treated as success");
 
-        assert!(matches!(error, BitFunError::Service(_)), "{error}");
+        assert!(
+            matches!(
+                &error,
+                BitFunError::OutcomeUnknown(message)
+                    if message.contains(session_id) && message.contains(turn_id)
+            ),
+            "{error}"
+        );
     }
 
     fn desktop_active_turn(turn_id: &str) -> ActiveDialogTurn {

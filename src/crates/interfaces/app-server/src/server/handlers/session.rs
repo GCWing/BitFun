@@ -354,7 +354,7 @@ pub(in crate::server) fn builder(
                             .runtime()
                             .wait_for_turn_settlement(request.0)
                             .await
-                            .map(|()| WaitForSettlementResponse {})
+                            .map(|_| WaitForSettlementResponse {})
                             .map_err(|error| {
                                 BitfunAppRuntime::session_runtime_error(&session_id, error)
                             }),

@@ -87,6 +87,20 @@ pub(crate) fn transcript_display_user_content(turn: &DialogTurnData) -> String {
         .unwrap_or_else(|| strip_prompt_markup(&turn.user_message.content))
 }
 
+/// Returns the last visible assistant response from the effective model
+/// attempt. Intermediate tool rounds and private subagent output are excluded.
+pub(crate) fn transcript_final_assistant_content(turn: &DialogTurnData) -> Option<String> {
+    transcript_round_blocks(turn, &SessionTranscriptExportOptions::default())
+        .into_iter()
+        .rev()
+        .find_map(|round| {
+            round.blocks.into_iter().find_map(|block| match block {
+                TranscriptRoundBlock::Assistant(content) => Some(content),
+                TranscriptRoundBlock::Thinking(_) | TranscriptRoundBlock::Tool(_) => None,
+            })
+        })
+}
+
 /// Final visible assistant prose for product search and other read-only views.
 /// Thinking, tool inputs/results, superseded attempts, and subagent items are
 /// excluded by the same transcript projection used for exports.
@@ -643,5 +657,18 @@ mod search_projection_tests {
         assert_eq!(content, "final visible answer");
         assert!(!content.contains("private"));
         assert!(!content.contains("subagent"));
+
+        let mut prior_round = turn.model_rounds[0].clone();
+        prior_round.id = "round_0".to_string();
+        prior_round.round_index = 0;
+        prior_round.text_items = vec![text("intermediate", "intermediate answer", 0, false)];
+        let mut final_turn = turn;
+        final_turn.model_rounds[0].round_index = 1;
+        final_turn.model_rounds.insert(0, prior_round);
+
+        assert_eq!(
+            transcript_final_assistant_content(&final_turn).as_deref(),
+            Some("final visible answer")
+        );
     }
 }
