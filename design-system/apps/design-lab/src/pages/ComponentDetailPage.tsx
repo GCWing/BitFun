@@ -38,7 +38,7 @@ type PreviewIcon = "chevron" | "none";
 type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
 
-const buttonVariants = ["fill", "outline"] as const;
+const buttonVariants = ["outline", "fill", "primary", "text"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
@@ -57,9 +57,11 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   off: "detail.option.off",
   on: "detail.option.on",
   outline: "detail.option.outline",
+  primary: "detail.option.primary",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
+  text: "detail.option.text",
   unselected: "detail.option.unselected",
 };
 

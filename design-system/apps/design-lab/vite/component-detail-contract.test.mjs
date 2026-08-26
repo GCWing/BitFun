@@ -4,14 +4,14 @@ import test from "node:test";
 
 const detailSource = new URL("../src/pages/ComponentDetailPage.tsx", import.meta.url);
 
-test("Button preview exposes only the two real presentation variants", async () => {
+test("Button preview exposes the public presentation variants", async () => {
   const source = await readFile(detailSource, "utf8");
   const declaration = /const buttonVariants = \[([^\]]+)\] as const;/.exec(source);
 
   assert.ok(declaration);
   assert.deepEqual(
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["fill", "outline"],
+    ["outline", "fill", "primary", "text"],
   );
 });
 
