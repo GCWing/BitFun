@@ -477,6 +477,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
               : identity
                 ? (
                     <SubagentAvatar
+                      sessionId={node.sessionId}
                       identity={identity}
                       name={identityName}
                       size={embedded ? 24 : 28}

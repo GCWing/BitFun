@@ -4,6 +4,7 @@ import {
   type SubagentIdentityAssignments,
   type SubagentIdentitySubject,
 } from './allocator';
+import { resolveSubagentAvatarId } from './avatarResolver';
 
 function subjects(count: number, active = true): SubagentIdentitySubject[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -14,11 +15,14 @@ function subjects(count: number, active = true): SubagentIdentitySubject[] {
 }
 
 describe('subagent identity allocator', () => {
-  it('keeps the first fifteen avatars and first thirty names unique', () => {
+  it('maps avatars from session IDs while keeping the first thirty names unique', () => {
     const assignments = reconcileSubagentIdentityAssignments('root', subjects(30, false));
     const ordered = subjects(30, false).map(subject => assignments[subject.sessionId]);
 
-    expect(new Set(ordered.slice(0, 15).map(identity => identity.avatarId))).toHaveLength(15);
+    for (const subject of subjects(30, false)) {
+      expect(assignments[subject.sessionId].avatarId)
+        .toBe(resolveSubagentAvatarId(subject.sessionId));
+    }
     expect(new Set(ordered.map(identity => identity.nameId))).toHaveLength(30);
   });
 
@@ -30,7 +34,7 @@ describe('subagent identity allocator', () => {
     expect(reversed).toEqual(forward);
   });
 
-  it('preserves existing identities and reuses released capacity for later active agents', () => {
+  it('preserves existing names and reuses released name capacity for later active agents', () => {
     const historical = subjects(15, false);
     const initial = reconcileSubagentIdentityAssignments('root', historical);
     const nextSubjects = [
@@ -41,11 +45,12 @@ describe('subagent identity allocator', () => {
     const next = reconcileSubagentIdentityAssignments('root', nextSubjects, initial);
 
     expect(next['child-01']).toEqual(initial['child-01']);
-    expect(next['child-16'].avatarId).not.toBe(next['child-17'].avatarId);
+    expect(next['child-16'].avatarId).toBe(resolveSubagentAvatarId('child-16'));
+    expect(next['child-17'].avatarId).toBe(resolveSubagentAvatarId('child-17'));
     expect(next['child-16'].nameId).not.toBe(next['child-17'].nameId);
   });
 
-  it('repairs collisions between live agents while keeping the older identity', () => {
+  it('repairs live name collisions while replacing stored avatars with the session mapping', () => {
     const previous: SubagentIdentityAssignments = {
       older: {
         rootSessionId: 'root',
@@ -65,8 +70,9 @@ describe('subagent identity allocator', () => {
       { sessionId: 'older', createdAt: 1, active: true },
     ], previous);
 
-    expect(next.older).toEqual(previous.older);
-    expect(next.newer.avatarId).not.toBe(next.older.avatarId);
+    expect(next.older.nameId).toBe(previous.older.nameId);
+    expect(next.older.avatarId).toBe(resolveSubagentAvatarId('older'));
+    expect(next.newer.avatarId).toBe(resolveSubagentAvatarId('newer'));
     expect(next.newer.nameId).not.toBe(next.older.nameId);
   });
 });

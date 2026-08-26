@@ -1,10 +1,10 @@
 import {
-  SUBAGENT_AVATAR_IDS,
   SUBAGENT_IDENTITY_CATALOG_VERSION,
   SUBAGENT_NAME_IDS,
   type SubagentAvatarId,
   type SubagentNameId,
 } from './catalog';
+import { resolveSubagentAvatarId } from './avatarResolver';
 
 export interface SubagentIdentitySubject {
   sessionId: string;
@@ -148,20 +148,16 @@ export function reconcileSubagentIdentityAssignments(
 
   for (const subject of orderedSubjects) {
     const existing = next[subject.sessionId];
-    const existingIsValid = existing?.rootSessionId === rootSessionId
-      && SUBAGENT_AVATAR_IDS.includes(existing.avatarId)
+    const avatarId = resolveSubagentAvatarId(subject.sessionId);
+    const existingNameIsValid = existing?.rootSessionId === rootSessionId
       && SUBAGENT_NAME_IDS.includes(existing.nameId);
-    if (existingIsValid) continue;
+    if (existingNameIsValid) {
+      if (existing.avatarId !== avatarId) {
+        next[subject.sessionId] = { ...existing, avatarId };
+      }
+      continue;
+    }
 
-    const avatarId = chooseCatalogId({
-      pool: SUBAGENT_AVATAR_IDS,
-      seed: `${SUBAGENT_IDENTITY_CATALOG_VERSION}:${rootSessionId}:avatar:${subject.sessionId}`,
-      rootSessionId,
-      active: subject.active,
-      assignments: next,
-      activeSessionIds,
-      read: assignment => assignment.avatarId,
-    });
     const nameId = chooseCatalogId({
       pool: SUBAGENT_NAME_IDS,
       seed: `${SUBAGENT_IDENTITY_CATALOG_VERSION}:${rootSessionId}:name:${subject.sessionId}`,
@@ -179,15 +175,6 @@ export function reconcileSubagentIdentityAssignments(
     };
   }
 
-  next = repairActiveCollisions({
-    pool: SUBAGENT_AVATAR_IDS,
-    salt: 'avatar',
-    rootSessionId,
-    subjects: orderedSubjects,
-    assignments: next,
-    read: assignment => assignment.avatarId,
-    write: (assignment, avatarId) => ({ ...assignment, avatarId }),
-  });
   return repairActiveCollisions({
     pool: SUBAGENT_NAME_IDS,
     salt: 'name',

@@ -205,8 +205,9 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
         data-bf-component="agent-control-tool-card"
         data-bf-part="avatar"
       >
-        {identity ? (
+        {linkedSubagentSessionId ? (
           <SubagentAvatar
+            sessionId={linkedSubagentSessionId}
             identity={identity}
             name={identityName}
             size={22}
