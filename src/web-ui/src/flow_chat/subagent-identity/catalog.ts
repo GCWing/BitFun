@@ -15,6 +15,7 @@ import robot14 from '../assets/subagent-avatars/robot-14.webp';
 import robot15 from '../assets/subagent-avatars/robot-15.webp';
 
 export const SUBAGENT_IDENTITY_CATALOG_VERSION = 'subagent-identity-v1';
+export const SUBAGENT_AVATAR_COLOR_CATALOG_VERSION = 'subagent-avatar-color-v1';
 
 export const SUBAGENT_AVATAR_CATALOG = [
   { id: 'robot-01', src: robot01 },
@@ -32,6 +33,23 @@ export const SUBAGENT_AVATAR_CATALOG = [
   { id: 'robot-13', src: robot13 },
   { id: 'robot-14', src: robot14 },
   { id: 'robot-15', src: robot15 },
+] as const;
+
+// The order is part of the session-to-color mapping contract. Bump
+// SUBAGENT_AVATAR_COLOR_CATALOG_VERSION before changing this catalog.
+export const SUBAGENT_AVATAR_COLOR_CATALOG = [
+  { id: 'cyan', hueShiftDegrees: 0 },
+  { id: 'azure', hueShiftDegrees: 30 },
+  { id: 'indigo', hueShiftDegrees: 60 },
+  { id: 'violet', hueShiftDegrees: 90 },
+  { id: 'magenta', hueShiftDegrees: 120 },
+  { id: 'rose', hueShiftDegrees: 150 },
+  { id: 'red', hueShiftDegrees: 180 },
+  { id: 'orange', hueShiftDegrees: 210 },
+  { id: 'amber', hueShiftDegrees: 240 },
+  { id: 'lime', hueShiftDegrees: 270 },
+  { id: 'green', hueShiftDegrees: 300 },
+  { id: 'teal', hueShiftDegrees: 330 },
 ] as const;
 
 export const SUBAGENT_NAME_CATALOG = [
@@ -68,9 +86,11 @@ export const SUBAGENT_NAME_CATALOG = [
 ] as const;
 
 export type SubagentAvatarId = typeof SUBAGENT_AVATAR_CATALOG[number]['id'];
+export type SubagentAvatarColorId = typeof SUBAGENT_AVATAR_COLOR_CATALOG[number]['id'];
 export type SubagentNameId = typeof SUBAGENT_NAME_CATALOG[number]['id'];
 
 export const SUBAGENT_AVATAR_IDS = SUBAGENT_AVATAR_CATALOG.map(item => item.id);
+export const SUBAGENT_AVATAR_COLOR_IDS = SUBAGENT_AVATAR_COLOR_CATALOG.map(item => item.id);
 export const SUBAGENT_NAME_IDS = SUBAGENT_NAME_CATALOG.map(item => item.id);
 
 const avatarById = new Map<SubagentAvatarId, typeof SUBAGENT_AVATAR_CATALOG[number]>(

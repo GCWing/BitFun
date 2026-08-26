@@ -1,5 +1,6 @@
 .subagent-avatar {
   --subagent-avatar-size: 28px;
+  --subagent-avatar-hue-shift: 0deg;
 
   position: relative;
   display: inline-grid;
@@ -21,6 +22,7 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+    filter: hue-rotate(var(--subagent-avatar-hue-shift));
     user-select: none;
   }
 

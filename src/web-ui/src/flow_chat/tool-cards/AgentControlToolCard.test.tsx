@@ -3,12 +3,16 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
-import { useSubagentIdentityStore } from '../subagent-identity';
+import {
+  resolveSubagentAvatarPresentation,
+  useSubagentIdentityStore,
+} from '../subagent-identity';
 import { AgentControlToolCard } from './AgentControlToolCard';
 
 const mocks = vi.hoisted(() => ({
   openBtwSessionInAuxPane: vi.fn(),
   listeners: new Set<() => void>(),
+  includeChildSession: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -37,8 +41,8 @@ vi.mock('../store/FlowChatStore', () => ({
       mocks.listeners.add(listener);
       return () => mocks.listeners.delete(listener);
     },
-    getState: () => ({
-      sessions: new Map([
+    getState: () => {
+      const sessions = new Map<string, any>([
         ['parent-session', {
           sessionId: 'parent-session',
           workspacePath: 'D:\\workspace\\repo',
@@ -47,7 +51,9 @@ vi.mock('../store/FlowChatStore', () => ({
           config: { agentType: 'Ultra' },
           dialogTurns: [],
         }],
-        ['child-session', {
+      ]);
+      if (mocks.includeChildSession) {
+        sessions.set('child-session', {
           sessionId: 'child-session',
           sessionKind: 'subagent',
           parentSessionId: 'parent-session',
@@ -63,9 +69,10 @@ vi.mock('../store/FlowChatStore', () => ({
             status: 'processing',
             modelRounds: [],
           }],
-        }],
-      ]),
-    }),
+        });
+      }
+      return { sessions };
+    },
   },
 }));
 
@@ -140,6 +147,7 @@ describeWithJsdom('AgentControlToolCard', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     useSubagentIdentityStore.getState().clear();
+    mocks.includeChildSession = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -206,6 +214,30 @@ describeWithJsdom('AgentControlToolCard', () => {
       );
     },
   );
+
+  it('renders the session-mapped avatar before the restored child session is loaded', async () => {
+    mocks.includeChildSession = false;
+
+    await act(async () => {
+      root.render(
+        <AgentControlToolCard
+          toolItem={agentToolItem('AgentSendInput')}
+          config={{ ...config, toolName: 'AgentSendInput' }}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
+    const presentation = resolveSubagentAvatarPresentation('child-session');
+    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe(presentation.avatarId);
+    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe(presentation.colorId);
+    expect(avatar?.getAttribute('style')).toContain(
+      `--subagent-avatar-hue-shift: ${presentation.hueShiftDegrees}deg`,
+    );
+    expect(container.querySelector('.agent-control-tool-card__fallback-avatar')).toBeNull();
+    expect(container.textContent).toContain('agent-1');
+  });
 
   it('stays collapsed and disables expansion while parameters are streaming', async () => {
     await act(async () => {

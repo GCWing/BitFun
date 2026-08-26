@@ -4,7 +4,10 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionTreePopover } from './SessionTreePopover';
-import { useSubagentIdentityStore } from '../../subagent-identity';
+import {
+  resolveSubagentAvatarPresentation,
+  useSubagentIdentityStore,
+} from '../../subagent-identity';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -140,7 +143,7 @@ describe('SessionTreePopover', () => {
     }));
   });
 
-  it('assigns distinct avatar and name identities to sibling subagents', async () => {
+  it('maps sibling avatars from session IDs while keeping names distinct', async () => {
     mocks.sessions.set('child-2', createSession('child-2', 'subagent', 'root'));
     mocks.sessions.set('child-3', createSession('child-3', 'subagent', 'root'));
     const t = (key: string) => key;
@@ -159,11 +162,22 @@ describe('SessionTreePopover', () => {
       await Promise.resolve();
     });
 
-    const avatars = Array.from(document.querySelectorAll<HTMLElement>(
-      '.session-tree-popover__panel [data-bf-component="subagent-avatar"]',
+    const subagentNodes = Array.from(document.querySelectorAll<HTMLElement>(
+      '.session-tree-popover__panel [role="treeitem"]:not([data-session-id="root"])',
     ));
+    const avatars = subagentNodes.map((node) => {
+      const sessionId = node.dataset.sessionId!;
+      const avatar = node.querySelector<HTMLElement>(
+        '[data-bf-component="subagent-avatar"]',
+      )!;
+      const presentation = resolveSubagentAvatarPresentation(sessionId);
+
+      expect(avatar.dataset.bfAvatarId).toBe(presentation.avatarId);
+      expect(avatar.dataset.bfAvatarColorId).toBe(presentation.colorId);
+      return avatar;
+    });
+
     expect(avatars).toHaveLength(3);
-    expect(new Set(avatars.map(avatar => avatar.dataset.bfAvatarId)).size).toBe(3);
     expect(new Set(avatars.map(avatar => avatar.dataset.bfNameId)).size).toBe(3);
   });
 

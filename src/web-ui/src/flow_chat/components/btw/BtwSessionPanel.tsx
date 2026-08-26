@@ -1022,6 +1022,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             {subagentIdentity ? (
               <>
                 <SubagentAvatar
+                  sessionId={childSessionId}
                   identity={subagentIdentity}
                   name={subagentIdentityName}
                   size={24}

@@ -763,8 +763,9 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   );
 
   const renderToolIcon = () => {
-    return subagentIdentity ? (
+    return linkedSubagentSessionId ? (
       <SubagentAvatar
+        sessionId={linkedSubagentSessionId}
         identity={subagentIdentity}
         name={subagentIdentityName}
         size={22}
