@@ -519,7 +519,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         <div className="diff-editor-toolbar__actions" data-bf-component="diff-editor" data-bf-part="toolbarActions">
           <Tooltip content={t('editor.diffEditor.prevChange')} placement="top">
             <IconButton
-              aria-label={t('editor.diffEditor.previousChange')}
+              aria-label={t('editor.diffEditor.prevChange')}
               className="diff-editor-toolbar__btn"
               onClick={navigateToPrevChange}
               disabled={changes.length === 0}
