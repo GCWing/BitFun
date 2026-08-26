@@ -147,14 +147,29 @@ impl CoordinationStore {
         parent_session_id: &str,
         child_session_id: &str,
     ) -> BitFunResult<String> {
+        self.agent_id_for_session_with_requested_id(parent_session_id, child_session_id, None)
+            .await
+    }
+
+    pub(crate) async fn agent_id_for_session_with_requested_id(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+        requested_agent_id: Option<&str>,
+    ) -> BitFunResult<String> {
         let parent_session_id = parent_session_id.to_string();
         let child_session_id = child_session_id.to_string();
+        let requested_agent_id = requested_agent_id.map(str::to_string);
         self.with_connection(move |connection| {
             let transaction = connection
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(db_error)?;
-            let (_, agent_id) =
-                get_or_create_agent(&transaction, &parent_session_id, &child_session_id, None)?;
+            let (_, agent_id) = get_or_create_agent(
+                &transaction,
+                &parent_session_id,
+                &child_session_id,
+                requested_agent_id.as_deref(),
+            )?;
             transaction.commit().map_err(db_error)?;
             Ok(agent_id)
         })
@@ -1329,6 +1344,29 @@ mod tests {
                 .await
                 .expect("resolve named agent"),
             "child-reviewer"
+        );
+    }
+
+    #[tokio::test]
+    async fn caller_selected_foreground_agent_id_is_registered_and_resolvable() {
+        let (_root, store) = test_store();
+
+        let agent_id = store
+            .agent_id_for_session_with_requested_id(
+                "parent",
+                "foreground-child",
+                Some("parser-review"),
+            )
+            .await
+            .expect("register caller-selected foreground agent id");
+
+        assert_eq!(agent_id, "parser-review");
+        assert_eq!(
+            store
+                .resolve_agent_id("parent", "parser-review")
+                .await
+                .expect("resolve caller-selected foreground agent id"),
+            "foreground-child"
         );
     }
 

@@ -508,6 +508,21 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    pub(crate) async fn agent_id_for_session_with_requested_id(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+        requested_agent_id: Option<&str>,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .agent_id_for_session_with_requested_id(
+                parent_session_id,
+                child_session_id,
+                requested_agent_id,
+            )
+            .await
+    }
+
     pub(crate) async fn existing_agent_id_for_session(
         &self,
         parent_session_id: &str,

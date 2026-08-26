@@ -109,8 +109,7 @@ impl AgentSpawnTool {
         let model_id = optional_string(object, "model_id")?;
         let mut task_input = json!({
             "action": "spawn",
-            "requested_agent_id": agent_id,
-            "description": "Agent task",
+            "agent_id": agent_id,
             "prompt": prompt,
             "subagent_type": agent_type,
             "run_in_background": true
@@ -253,7 +252,6 @@ impl AgentSendInputTool {
         let mut task_input = json!({
             "action": "send_input",
             "agent_id": agent_id,
-            "description": "Agent follow-up",
             "prompt": prompt,
             "run_in_background": true
         });
