@@ -831,7 +831,10 @@ impl ToolPipeline {
         }?;
         let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let validation = tool
-            .validate_input(&task.original_effective_arguments, Some(&tool_context))
+            .validate_input_rewrite_invariants(
+                &task.original_effective_arguments,
+                Some(&tool_context),
+            )
             .await;
         validation.blocks_input_rewrite().then_some(validation)
     }
@@ -2825,6 +2828,19 @@ mod tests {
             input: &serde_json::Value,
             _context: Option<&ToolUseContext>,
         ) -> ValidationResult {
+            let valid = input
+                .get("city")
+                .and_then(serde_json::Value::as_str)
+                .is_some()
+                && input.as_object().is_some_and(|object| object.len() == 1);
+            if !valid {
+                return ValidationResult {
+                    result: false,
+                    message: Some("city must be the only target argument".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
             if input.get("city").and_then(serde_json::Value::as_str) == Some("protected") {
                 return ValidationResult {
                     result: false,
@@ -2833,16 +2849,28 @@ mod tests {
                     meta: Some(json!({ "blocks_input_rewrite": true })),
                 };
             }
-            let valid = input
-                .get("city")
-                .and_then(serde_json::Value::as_str)
-                .is_some()
-                && input.as_object().is_some_and(|object| object.len() == 1);
             ValidationResult {
-                result: valid,
-                message: (!valid).then(|| "city must be the only target argument".to_string()),
-                error_code: (!valid).then_some(400),
+                result: true,
+                message: None,
+                error_code: None,
                 meta: None,
+            }
+        }
+
+        async fn validate_input_rewrite_invariants(
+            &self,
+            input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> ValidationResult {
+            if input.get("city").and_then(serde_json::Value::as_str) == Some("protected") {
+                ValidationResult {
+                    result: false,
+                    message: Some("the original target is protected".to_string()),
+                    error_code: Some(403),
+                    meta: Some(json!({ "blocks_input_rewrite": true })),
+                }
+            } else {
+                ValidationResult::default()
             }
         }
 
@@ -3446,6 +3474,45 @@ mod tests {
             .execute_single_tool(tool_id)
             .await
             .expect_err("protected original input must block execution");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_cannot_hide_a_protected_target_behind_a_repairable_error() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-malformed-protected-original",
+            "get_weather",
+            json!({ "city": "protected", "unexpected": true }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "Paris" }))
+                .await,
+            "a repairable schema error must not hide a protected original target"
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert!(persisted
+            .input_rewrite_rejection
+            .as_ref()
+            .is_some_and(ValidationResult::blocks_input_rewrite));
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected original target must block execution");
         assert!(matches!(error, BitFunError::Validation(_)));
         assert!(received_arguments
             .lock()

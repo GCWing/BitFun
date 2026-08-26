@@ -562,6 +562,19 @@ Usage notes:
         }
     }
 
+    async fn validate_input_rewrite_invariants(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        let Some((context, command)) = context.zip(input.get("command").and_then(Value::as_str))
+        else {
+            return ValidationResult::default();
+        };
+        crate::agentic::execution::edit_constraint_guard::check_bash_command(context, command)
+            .unwrap_or_default()
+    }
+
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
         if let Some(command) = input.get("command").and_then(|v| v.as_str()) {
             // Clean up any command that uses the quoted HEREDOC pattern
