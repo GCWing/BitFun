@@ -68,7 +68,6 @@ pub(crate) async fn ensure_plugin_workspace_ready(
         target.directory,
         target.worktree,
         target.project_id,
-        serde_json::Map::new(),
     )
     .await
     .map(|_| ())
@@ -112,10 +111,10 @@ mod tests {
     }
 
     #[test]
-    fn cli_does_not_enable_unowned_plugin_execution() {
+    fn cli_enables_configured_plugin_execution() {
         assert_eq!(
             crate::PLUGIN_HOST_LAUNCH_POLICY,
-            bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled
+            bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled
         );
     }
 }

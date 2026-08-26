@@ -3521,10 +3521,21 @@ impl WorkspaceExternalSourceService {
                 )
             })?;
         if matches!(candidate.kind, ExternalToolConflictCandidateKind::External) {
-            let source_key = candidate.source.as_ref().ok_or_else(|| {
-                missing_candidate_error("External tool conflict source is missing")
-            })?;
-            ensure_source_capability_active(&snapshot, source_key, EXTERNAL_CAPABILITY_TOOL)?;
+            match candidate.source.as_ref() {
+                Some(source_key) => {
+                    ensure_source_capability_active(
+                        &snapshot,
+                        source_key,
+                        EXTERNAL_CAPABILITY_TOOL,
+                    )?;
+                }
+                None if candidate.provider_id == "opencode-plugin" => {}
+                None => {
+                    return Err(missing_candidate_error(
+                        "External tool conflict source is missing",
+                    ));
+                }
+            }
         }
         validate_conflict_preference(conflict_key, candidate_id)?;
         let preferences =

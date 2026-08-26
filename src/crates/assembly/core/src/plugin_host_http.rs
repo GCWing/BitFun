@@ -464,6 +464,24 @@ pub(crate) async fn register_plugin_host_backend_handlers(
         })
         .await
         .map_err(plugin_host_handler_error)?;
+    client
+        .register_handler("backend.tool.ask", |params| async move {
+            crate::agentic::tools::plugin_host_tool::handle_tool_ask(params).await
+        })
+        .await
+        .map_err(plugin_host_handler_error)?;
+    client
+        .register_handler("backend.tool.metadata", |params| async move {
+            crate::agentic::tools::plugin_host_tool::handle_tool_metadata(params).await
+        })
+        .await
+        .map_err(plugin_host_handler_error)?;
+    client
+        .register_handler("backend.diagnostic.publish", |params| async move {
+            crate::plugin_host::publish_plugin_host_diagnostic(params).await
+        })
+        .await
+        .map_err(plugin_host_handler_error)?;
     PLUGIN_HOST_BACKEND_BRIDGE
         .set(bridge.clone())
         .map_err(|_| {

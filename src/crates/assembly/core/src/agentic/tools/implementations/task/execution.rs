@@ -20,6 +20,19 @@ fn external_subagent_model_override_requested(
     model_id.is_some() || inherit_parent_model
 }
 
+pub(super) fn resolved_subagent_is_available(
+    available_agent_types: &[String],
+    logical_id: &str,
+    runtime_agent_key: &str,
+) -> bool {
+    available_agent_types
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(logical_id))
+        || available_agent_types
+            .iter()
+            .any(|candidate| candidate == runtime_agent_key)
+}
+
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
     subagent_type: Option<&str>,
@@ -359,9 +372,18 @@ impl TaskTool {
                                 subagent_type
                             ))
                         })?;
-                    if !all_agent_types.contains(&subagent_type)
-                        && !all_agent_types.contains(&binding.runtime_agent_key)
-                    {
+                    // External Agent routes are resolved using their canonical
+                    // case-insensitive logical id, but the model may emit a
+                    // different casing (for example `Explore` for the
+                    // plugin-registered `explore`). Validate against the
+                    // resolved logical id as well as the generation key so a
+                    // successful route lookup is not rejected by this second
+                    // check.
+                    if !resolved_subagent_is_available(
+                        &all_agent_types,
+                        &binding.logical_id,
+                        &binding.runtime_agent_key,
+                    ) {
                         return Err(BitFunError::tool(format!(
                             "subagent_type {} is not valid, must be one of: {}",
                             subagent_type,

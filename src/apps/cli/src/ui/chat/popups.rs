@@ -803,6 +803,7 @@ mod tests {
         view.show_agent_selector(
             vec![AgentItem {
                 id: "agentic".to_string(),
+                route_key: None,
                 description: "General purpose".to_string(),
             }],
             Some("agentic".to_string()),
@@ -822,6 +823,7 @@ mod tests {
         view.show_agent_modes_only(
             vec![AgentItem {
                 id: "agentic".to_string(),
+                route_key: None,
                 description: "General purpose".to_string(),
             }],
             Some("agentic".to_string()),

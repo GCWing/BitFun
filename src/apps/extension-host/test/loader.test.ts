@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { z } from "zod"
@@ -420,7 +421,7 @@ describe("plugin tool schemas", () => {
 })
 
 async function temporaryDirectory() {
-  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", "opencode-extension-host-"))
+  const directory = await mkdtemp(path.join(tmpdir(), "opencode-extension-host-"))
   temporaryDirectories.push(directory)
   return directory
 }

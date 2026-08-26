@@ -20,20 +20,184 @@
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 pub use crate::service::config::types::AgentHooksConfig;
+use async_trait::async_trait;
 use bitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookEvent, AgentHookEventPayload, AgentHookMatcher, AgentHookOutcome,
     AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome,
-    AgentHookScope, AgentHookSettings, AgentHookSettingsLayer, MAX_HOOKS_FILE_BYTES,
+    AgentHookScope, AgentHookSettings, AgentHookSettingsLayer, BuiltinHookExecutor, HookCall,
+    HookCallPayload, HookHandler, HookHandlerResult, RuntimeHookKind, RuntimeHookPlan,
+    RuntimeHookRegistration, RuntimeHookRegistry, RuntimeHookSource, MAX_HOOKS_FILE_BYTES,
+};
+use bitfun_agent_runtime::post_call_hooks::{
+    resolve_deep_review_shared_context_tool_use, DeepReviewSharedContextToolUseFacts,
 };
 use dashmap::DashMap;
 use log::{debug, info, warn};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-const MAX_CACHED_WORKSPACE_ENGINES: usize = 32;
+const MAX_CACHED_WORKSPACE_HOOK_SOURCES: usize = 32;
 const MAX_PENDING_CONTEXT_SESSIONS: usize = 1024;
+
+pub(crate) fn new_runtime_hook_registry() -> RuntimeHookRegistry {
+    let registry = RuntimeHookRegistry::default();
+    registry
+        .register_batch(vec![deep_review_builtin_registration()])
+        .expect("deep review builtin registration must be valid");
+    registry
+}
+
+pub(crate) fn runtime_hook_registry() -> RuntimeHookRegistry {
+    crate::agentic::coordination::get_global_coordinator()
+        .map(|coordinator| coordinator.hook_registry().clone())
+        .expect("Agent Runtime hook registry is unavailable before coordinator initialization")
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) fn plugin_hook_registry(_workspace_scope: &str) -> RuntimeHookRegistry {
+    runtime_hook_registry()
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) async fn dispatch_plugin_hook(
+    workspace_scope: &str,
+    generation: Option<&bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity>,
+    hook_name: &str,
+    input: Value,
+    output: Value,
+) -> bitfun_agent_runtime::native_hooks::PluginHookDispatchResult {
+    AgentHookEngine::with_registry(plugin_hook_registry(workspace_scope))
+        .dispatch_plugin_hook_for_generation(
+            Some(workspace_scope),
+            generation,
+            hook_name,
+            input,
+            output,
+        )
+        .await
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) async fn dispatch_plugin_tool_before(
+    workspace_scope: &str,
+    tool_name: &str,
+    session_id: Option<&str>,
+    call_id: Option<&str>,
+    runtime_agent_key: Option<&str>,
+    args: Value,
+) -> Option<Value> {
+    let generation = match runtime_agent_key {
+        Some(runtime_agent_key) => {
+            let generation = crate::plugin_host::plugin_hook_generation_for_agent(
+                workspace_scope,
+                runtime_agent_key,
+            )
+            .await;
+            if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
+                && generation.is_none()
+            {
+                return None;
+            }
+            generation
+        }
+        None => None,
+    };
+    let result = dispatch_plugin_hook(
+        workspace_scope,
+        generation.as_ref(),
+        "tool.execute.before",
+        serde_json::json!({
+            "tool": tool_name,
+            "sessionID": session_id,
+            "callID": call_id,
+        }),
+        serde_json::json!({ "args": args }),
+    )
+    .await;
+    for warning in &result.warnings {
+        warn!("OpenCode plugin hook warning (tool.execute.before): {warning}");
+    }
+    result
+        .output
+        .get("args")
+        .cloned()
+        .filter(|updated| updated != &serde_json::Value::Null)
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) async fn dispatch_plugin_tool_after(
+    workspace_scope: &str,
+    tool_name: &str,
+    session_id: Option<&str>,
+    call_id: Option<&str>,
+    runtime_agent_key: Option<&str>,
+    args: Value,
+    title: String,
+    output: String,
+    metadata: Value,
+) -> Option<PluginToolAfterOutput> {
+    let generation = match runtime_agent_key {
+        Some(runtime_agent_key) => {
+            let generation = crate::plugin_host::plugin_hook_generation_for_agent(
+                workspace_scope,
+                runtime_agent_key,
+            )
+            .await;
+            if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
+                && generation.is_none()
+            {
+                return None;
+            }
+            generation
+        }
+        None => None,
+    };
+    let result = dispatch_plugin_hook(
+        workspace_scope,
+        generation.as_ref(),
+        "tool.execute.after",
+        serde_json::json!({
+            "tool": tool_name,
+            "sessionID": session_id,
+            "callID": call_id,
+            "args": args,
+        }),
+        serde_json::json!({
+            "title": title,
+            "output": output,
+            "metadata": metadata,
+        }),
+    )
+    .await;
+    for warning in &result.warnings {
+        warn!("OpenCode plugin hook warning (tool.execute.after): {warning}");
+    }
+    match serde_json::from_value::<PluginToolAfterOutput>(result.output) {
+        Ok(output) => Some(output),
+        Err(error) => {
+            warn!("Ignoring invalid tool.execute.after output: {error}");
+            None
+        }
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PluginToolAfterOutput {
+    pub(crate) title: String,
+    pub(crate) output: String,
+    pub(crate) metadata: Value,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) fn clear_plugin_hook_workspace(workspace_scope: &str) {
+    runtime_hook_registry()
+        .clear_source_workspace(RuntimeHookSource::OpenCodePlugin, workspace_scope);
+}
 
 /// Everything a dispatch site knows about the running session.
 #[derive(Debug, Clone, Copy)]
@@ -344,10 +508,222 @@ pub fn clear_session_hook_state(session_id: &str) {
     pending_session_context().remove(session_id);
 }
 
+/// Built-in DeepReview shared-context measurement hook.
+///
+/// Registered as a SuccessfulToolPostCall builtin so the shared hook
+/// registry owns it alongside command hooks, instead of a hard-coded
+/// function call in the tool pipeline.
+struct DeepReviewSharedContextExecutor;
+
+#[async_trait]
+impl BuiltinHookExecutor for DeepReviewSharedContextExecutor {
+    async fn execute(&self, call: &HookCall) -> HookHandlerResult {
+        let HookCallPayload::ToolUse {
+            name,
+            input,
+            custom_data,
+            agent_type,
+        } = &call.payload
+        else {
+            return HookHandlerResult::default();
+        };
+        let facts = DeepReviewSharedContextToolUseFacts {
+            tool_name: name.as_str(),
+            input,
+            custom_data,
+            workspace_root: call.workspace_root.as_deref(),
+            is_remote: call.is_remote,
+            agent_type: agent_type.as_deref(),
+        };
+        if let Some(record) = resolve_deep_review_shared_context_tool_use(facts) {
+            crate::agentic::deep_review_policy::record_deep_review_shared_context_tool_use(
+                &record.parent_turn_id,
+                &record.subagent_type,
+                &record.tool_name,
+                &record.measured_path,
+            );
+        }
+        HookHandlerResult::default()
+    }
+}
+
+fn deep_review_builtin_registration() -> RuntimeHookRegistration {
+    let plan = RuntimeHookPlan::new(
+        "deep-review.shared-context",
+        RuntimeHookKind::SuccessfulToolPostCall,
+        RuntimeHookSource::Builtin { priority: 0 },
+    );
+    RuntimeHookRegistration::new(
+        plan,
+        HookHandler::Builtin {
+            executor: Arc::new(DeepReviewSharedContextExecutor),
+        },
+        AgentHookMatcher::Any,
+    )
+}
+
+fn canonical_hook_workspace_scope(path: &Path) -> Option<String> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let mut scope = crate::agentic::workspace::canonical_local_workspace_path(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    #[cfg(windows)]
+    scope.make_ascii_lowercase();
+    Some(scope)
+}
+
+fn command_registration_id(
+    source: RuntimeHookSource,
+    workspace_scope: Option<&str>,
+    original_id: &str,
+) -> String {
+    let identity = format!(
+        "{}\0{}\0{}",
+        source,
+        workspace_scope.unwrap_or("<global>"),
+        original_id
+    );
+    format!(
+        "command.{}.{}",
+        source,
+        hex::encode(Sha256::digest(identity.as_bytes()))
+    )
+}
+
+fn registrations_for_source(
+    settings: AgentHookSettings,
+    source: RuntimeHookSource,
+    workspace_scope: Option<&str>,
+) -> Vec<RuntimeHookRegistration> {
+    settings
+        .registrations()
+        .into_iter()
+        .filter(|entry| match source {
+            RuntimeHookSource::UserCommand => entry.plan.source() == RuntimeHookSource::UserCommand,
+            RuntimeHookSource::ProjectCommand => {
+                entry.plan.source() == RuntimeHookSource::ProjectCommand
+            }
+            RuntimeHookSource::ImportedCommand => true,
+            _ => false,
+        })
+        .map(|mut entry| {
+            let original_id = entry.plan.id().to_string();
+            entry.plan = entry
+                .plan
+                .with_source(source)
+                .with_id(command_registration_id(
+                    source,
+                    workspace_scope,
+                    &original_id,
+                ));
+            entry.workspace_scope = workspace_scope.map(str::to_string);
+            entry
+        })
+        .collect()
+}
+
+fn publish_command_registrations(
+    registry: &RuntimeHookRegistry,
+    workspace_scope: Option<&str>,
+    manual_settings: AgentHookSettings,
+    imported_settings: AgentHookSettings,
+) -> Result<(), bitfun_agent_runtime::native_hooks::RuntimeHookRegistryError> {
+    let manual = manual_settings.registrations();
+    let user_entries = manual
+        .iter()
+        .filter(|entry| entry.plan.source() == RuntimeHookSource::UserCommand)
+        .cloned()
+        .map(|mut entry| {
+            let original_id = entry.plan.id().to_string();
+            entry.plan = entry.plan.with_id(command_registration_id(
+                RuntimeHookSource::UserCommand,
+                None,
+                &original_id,
+            ));
+            entry
+        })
+        .collect();
+    let project_entries = manual
+        .into_iter()
+        .filter(|entry| entry.plan.source() == RuntimeHookSource::ProjectCommand)
+        .map(|mut entry| {
+            let original_id = entry.plan.id().to_string();
+            entry.plan = entry.plan.with_id(command_registration_id(
+                RuntimeHookSource::ProjectCommand,
+                workspace_scope,
+                &original_id,
+            ));
+            entry.workspace_scope = workspace_scope.map(str::to_string);
+            entry
+        })
+        .collect();
+    let imported_entries = registrations_for_source(
+        imported_settings,
+        RuntimeHookSource::ImportedCommand,
+        workspace_scope,
+    );
+
+    registry.replace_command_source(RuntimeHookSource::UserCommand, None, user_entries)?;
+    registry.replace_command_source(
+        RuntimeHookSource::ProjectCommand,
+        workspace_scope,
+        project_entries,
+    )?;
+    registry.replace_command_source(
+        RuntimeHookSource::ImportedCommand,
+        workspace_scope,
+        imported_entries,
+    )
+}
+
+/// Dispatch SuccessfulToolPostCall builtin hooks (currently the DeepReview
+/// shared-context measurement) for one successful tool call. Command hooks
+/// are not dispatched here because the tool pipeline owns post-call context.
+pub async fn dispatch_successful_tool_post_call(
+    workspace_root: Option<&Path>,
+    is_remote: bool,
+    tool_name: &str,
+    input: &Value,
+    custom_data: &HashMap<String, Value>,
+    agent_type: Option<&str>,
+) {
+    let config = hooks_config().await;
+    let Some(engine) = engine_for(workspace_root, config.project_hooks_enabled).await else {
+        return;
+    };
+    let call = HookCall {
+        kind: RuntimeHookKind::SuccessfulToolPostCall,
+        cwd: workspace_root.map(Path::to_path_buf).unwrap_or_default(),
+        session_id: None,
+        turn_id: None,
+        workspace_root: workspace_root.map(Path::to_path_buf),
+        is_remote,
+        model: None,
+        bypass_permissions: false,
+        payload: HookCallPayload::ToolUse {
+            name: tool_name.to_string(),
+            input: input.clone(),
+            custom_data: custom_data.clone(),
+            agent_type: agent_type.map(str::to_string),
+        },
+    };
+    let _ = engine
+        .dispatch_call(
+            workspace_root
+                .and_then(canonical_hook_workspace_scope)
+                .as_deref(),
+            &call,
+        )
+        .await;
+}
+
 struct PreparedDispatch<'a> {
-    engine: Arc<AgentHookEngine>,
+    engine: AgentHookEngine,
     facts: NativeHookSessionFacts<'a>,
     cwd: PathBuf,
+    workspace_scope: Option<String>,
 }
 
 impl PreparedDispatch<'_> {
@@ -368,7 +744,10 @@ impl PreparedDispatch<'_> {
             event,
         };
         let event_name = payload.event();
-        let outcome = self.engine.dispatch(&payload, &self.cwd).await;
+        let outcome = self
+            .engine
+            .dispatch_for_workspace(&payload, &self.cwd, self.workspace_scope.as_deref())
+            .await;
         for warning in &outcome.warnings {
             warn!("Agent hook warning ({event_name}): {warning}");
         }
@@ -397,7 +776,10 @@ async fn prepare<'a>(
         return None;
     }
     let engine = engine_for(facts.workspace_root, config.project_hooks_enabled).await?;
-    if !engine.has_rules(event) {
+    let workspace_scope = facts
+        .workspace_root
+        .and_then(canonical_hook_workspace_scope);
+    if !engine.has_rules_for_workspace(event, workspace_scope.as_deref()) {
         return None;
     }
     let cwd = facts
@@ -405,7 +787,12 @@ async fn prepare<'a>(
         .map(Path::to_path_buf)
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_default();
-    Some(PreparedDispatch { engine, facts, cwd })
+    Some(PreparedDispatch {
+        engine,
+        facts,
+        cwd,
+        workspace_scope,
+    })
 }
 
 /// Dot-path of the hook gates inside the settings document. Config paths
@@ -447,17 +834,16 @@ fn fingerprint(path: PathBuf) -> HookFileFingerprint {
     }
 }
 
-struct CachedHookEngine {
-    engine: Arc<AgentHookEngine>,
+struct CachedHookSourceState {
     fingerprints: Vec<HookFileFingerprint>,
     project_hooks_enabled: bool,
     imported_generation: u64,
 }
 
-type EngineCache = tokio::sync::Mutex<BTreeMap<Option<PathBuf>, CachedHookEngine>>;
+type HookSourceCache = tokio::sync::Mutex<BTreeMap<Option<PathBuf>, CachedHookSourceState>>;
 
-fn engine_cache() -> &'static EngineCache {
-    static CACHE: OnceLock<EngineCache> = OnceLock::new();
+fn hook_source_cache() -> &'static HookSourceCache {
+    static CACHE: OnceLock<HookSourceCache> = OnceLock::new();
     CACHE.get_or_init(|| tokio::sync::Mutex::new(BTreeMap::new()))
 }
 
@@ -541,12 +927,9 @@ pub(crate) fn build_engine(paths: &[(AgentHookScope, PathBuf)]) -> AgentHookEngi
 async fn engine_for(
     workspace_root: Option<&Path>,
     project_hooks_enabled: bool,
-) -> Option<Arc<AgentHookEngine>> {
+) -> Option<AgentHookEngine> {
     let key = workspace_root.map(Path::to_path_buf);
     let paths = hook_settings_paths(workspace_root, project_hooks_enabled);
-    if paths.is_empty() {
-        return None;
-    }
     let fingerprints = paths
         .iter()
         .map(|(_, path)| fingerprint(path.clone()))
@@ -568,15 +951,15 @@ async fn engine_for(
         }
     };
     {
-        let cache = engine_cache().lock().await;
+        let cache = hook_source_cache().lock().await;
         if let Some(cached) = cache.get(&key) {
-            if let Some(engine) = reusable_cached_engine(
+            if reusable_cached_hook_source(
                 cached,
                 &fingerprints,
                 project_hooks_enabled,
                 imported_generation,
             ) {
-                return Some(engine);
+                return Some(AgentHookEngine::with_registry(runtime_hook_registry()));
             }
         }
     }
@@ -601,41 +984,53 @@ async fn engine_for(
     for message in &skipped {
         warn!("{message}");
     }
-    let layers = ordered_layers(manual_layers, imported_layers);
-    let (settings, issues) = AgentHookSettings::from_layers(&layers);
-    for issue in &issues {
+    let (manual_settings, manual_issues) = AgentHookSettings::from_layers(&manual_layers);
+    let (imported_settings, imported_issues) = AgentHookSettings::from_layers(&imported_layers);
+    for issue in manual_issues.iter().chain(imported_issues.iter()) {
         warn!("Agent hook configuration issue: {issue}");
     }
-    let engine = Arc::new(AgentHookEngine::new(settings));
-    let mut cache = engine_cache().lock().await;
-    if cache.len() >= MAX_CACHED_WORKSPACE_ENGINES && !cache.contains_key(&key) {
+    let workspace_scope = workspace_root.and_then(canonical_hook_workspace_scope);
+    if let Err(error) = publish_command_registrations(
+        &runtime_hook_registry(),
+        workspace_scope.as_deref(),
+        manual_settings,
+        imported_settings,
+    ) {
+        warn!("Failed to publish agent hook registrations: {error}");
+        return None;
+    }
+    let mut cache = hook_source_cache().lock().await;
+    if cache.len() >= MAX_CACHED_WORKSPACE_HOOK_SOURCES && !cache.contains_key(&key) {
         let oldest = cache.keys().next().cloned();
         if let Some(oldest) = oldest {
             cache.remove(&oldest);
+            if let Some(scope) = oldest.as_deref().and_then(canonical_hook_workspace_scope) {
+                let registry = runtime_hook_registry();
+                registry.clear_source_workspace(RuntimeHookSource::ProjectCommand, &scope);
+                registry.clear_source_workspace(RuntimeHookSource::ImportedCommand, &scope);
+            }
         }
     }
     cache.insert(
         key,
-        CachedHookEngine {
-            engine: Arc::clone(&engine),
+        CachedHookSourceState {
             fingerprints,
             project_hooks_enabled,
             imported_generation,
         },
     );
-    Some(engine)
+    Some(AgentHookEngine::with_registry(runtime_hook_registry()))
 }
 
-fn reusable_cached_engine(
-    cached: &CachedHookEngine,
+fn reusable_cached_hook_source(
+    cached: &CachedHookSourceState,
     fingerprints: &[HookFileFingerprint],
     project_hooks_enabled: bool,
     imported_generation: u64,
-) -> Option<Arc<AgentHookEngine>> {
-    (cached.fingerprints == fingerprints
+) -> bool {
+    cached.fingerprints == fingerprints
         && cached.project_hooks_enabled == project_hooks_enabled
-        && cached.imported_generation == imported_generation)
-        .then(|| Arc::clone(&cached.engine))
+        && cached.imported_generation == imported_generation
 }
 
 #[cfg(test)]
@@ -643,19 +1038,15 @@ mod cache_tests {
     use super::*;
 
     #[test]
-    fn imported_generation_replaces_the_next_engine_without_invalidating_a_captured_one() {
-        let captured = Arc::new(AgentHookEngine::new(Default::default()));
-        let cached = CachedHookEngine {
-            engine: Arc::clone(&captured),
+    fn imported_generation_invalidates_the_cached_hook_source_state() {
+        let cached = CachedHookSourceState {
             fingerprints: Vec::new(),
             project_hooks_enabled: false,
             imported_generation: 7,
         };
 
-        let reused = reusable_cached_engine(&cached, &[], false, 7).unwrap();
-        assert!(Arc::ptr_eq(&captured, &reused));
-        assert!(reusable_cached_engine(&cached, &[], false, 8).is_none());
-        assert_eq!(Arc::strong_count(&captured), 3);
+        assert!(reusable_cached_hook_source(&cached, &[], false, 7));
+        assert!(!reusable_cached_hook_source(&cached, &[], false, 8));
     }
 }
 

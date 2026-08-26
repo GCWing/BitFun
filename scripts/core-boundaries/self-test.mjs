@@ -1603,7 +1603,7 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
+    'load_opencode_package_adapter,load_opencode_config_snapshot,OpenCodeConfigSnapshot,OpenCodeConfigSnapshotError,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
       'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
@@ -2818,24 +2818,24 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
+      path: 'src/crates/execution/agent-runtime/src/native_hooks/kind.rs',
+      contracts: ['RuntimeHookKind', 'SuccessfulToolPostCall'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/native_hooks/registry.rs',
       contracts: [
-        'RuntimeHookKind',
         'RuntimeHookErrorPolicy',
         'RuntimeHookPlan',
         'RuntimeHookRegistry',
         'EmptyHookId',
         'InvalidTimeoutMillis',
-        'successful_tool_post_call_hooks',
-        'SuccessfulToolPostCallHookExecutor',
-        'run_successful_tool_post_call_hooks',
       ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/agent_interaction_contracts/post_call_hook_contracts.rs',
       contracts: [
-        'successful_tool_call_routes_to_shared_context_measurement_hook',
-        'runtime_hook_registry_preserves_order_timeout_and_error_policy',
+        'successful_tool_call_uses_stable_builtin_registration_id',
+        'runtime_hook_registry_preserves_source_order_timeout_and_error_policy',
         'runtime_hook_registry_rejects_duplicate_ids',
         'runtime_hook_registry_rejects_unstable_ids_and_zero_timeouts',
       ],

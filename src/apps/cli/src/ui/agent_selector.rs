@@ -20,6 +20,7 @@ use crate::ui::{
 #[derive(Debug, Clone)]
 pub(crate) struct AgentItem {
     pub id: String,
+    pub route_key: Option<String>,
     pub description: String,
 }
 
@@ -381,10 +382,12 @@ mod tests {
         vec![
             AgentItem {
                 id: "agentic".to_string(),
+                route_key: None,
                 description: "General purpose".to_string(),
             },
             AgentItem {
                 id: "ask".to_string(),
+                route_key: None,
                 description: "Read only".to_string(),
             },
         ]

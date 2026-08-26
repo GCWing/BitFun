@@ -394,11 +394,16 @@ impl DesktopSessionApplication {
         let scope = self.resolved_scope(request).await;
         self.ensure_runtime_ownership(&scope)?;
         if scope.remote_connection_id.is_some() {
-            log::debug!(
-                "Configured plugin host activation skipped for remote workspace: workspace_path={}",
+            if !bitfun_core::plugin_host::configured_plugins_present()
+                .await
+                .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?
+            {
+                return Ok(None);
+            }
+            return Err(DesktopSessionApplicationError::Core(format!(
+                "OpenCode plugin hooks are unavailable for remote workspace {} because the remote execution domain does not provide a plugin host",
                 scope.workspace_path
-            );
-            return Ok(None);
+            )));
         }
         let workspace_path = PathBuf::from(&scope.workspace_path);
         bitfun_core::plugin_host::ensure_configured_plugin_instance(
@@ -406,7 +411,6 @@ impl DesktopSessionApplication {
             workspace_path.clone(),
             workspace_path,
             project_id,
-            serde_json::Map::new(),
         )
         .await
         .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))

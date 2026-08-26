@@ -334,6 +334,10 @@ enum WorkspaceRoute {
         tool: Arc<LoadedExternalTool>,
         conflict: Option<ConflictExpectation>,
     },
+    Live {
+        tool: Arc<dyn Tool>,
+        conflict: Option<ConflictExpectation>,
+    },
     Unavailable {
         conflict: Option<ConflictExpectation>,
     },
@@ -344,6 +348,7 @@ impl WorkspaceRoute {
         match self {
             Self::Original { conflict }
             | Self::External { conflict, .. }
+            | Self::Live { conflict, .. }
             | Self::Unavailable { conflict } => conflict.as_ref(),
         }
     }
@@ -431,6 +436,9 @@ fn retain_fail_closed_routes_during_reconcile(
                 WorkspaceRoute::External {
                     conflict: Some(_),
                     ..
+                } | WorkspaceRoute::Live {
+                    conflict: Some(_),
+                    ..
                 } | WorkspaceRoute::Unavailable { conflict: Some(_) }
             )
     });
@@ -438,10 +446,13 @@ fn retain_fail_closed_routes_during_reconcile(
         if discovered_names.contains(name) {
             continue;
         }
-        if let WorkspaceRoute::External { conflict, .. } = route {
-            *route = WorkspaceRoute::Unavailable {
-                conflict: conflict.clone(),
-            };
+        match route {
+            WorkspaceRoute::External { conflict, .. } | WorkspaceRoute::Live { conflict, .. } => {
+                *route = WorkspaceRoute::Unavailable {
+                    conflict: conflict.clone(),
+                };
+            }
+            _ => {}
         }
     }
 }
@@ -502,7 +513,31 @@ impl ExternalToolMux {
             // a local route solely because the remote path text matches.
             return self.original();
         }
-        self.selected_for_workspace(context.and_then(ToolUseContext::workspace_root))
+        let workspace_key = workspace_route_key(context.and_then(ToolUseContext::workspace_root));
+        match self
+            .routes
+            .read()
+            .expect("external tool route lock poisoned")
+            .get(&workspace_key)
+            .cloned()
+        {
+            Some(WorkspaceRoute::Live { tool, .. })
+                if tool.dynamic_provider_id() == Some("opencode-plugin") =>
+            {
+                if context
+                    .and_then(|context| context.agent_type.as_deref())
+                    .is_some_and(crate::plugin_config_projection::is_plugin_agent_runtime_key)
+                {
+                    Some(tool)
+                } else {
+                    self.original()
+                }
+            }
+            Some(WorkspaceRoute::External { tool, .. }) => Some(tool),
+            Some(WorkspaceRoute::Live { tool, .. }) => Some(tool),
+            Some(WorkspaceRoute::Unavailable { .. }) => None,
+            Some(WorkspaceRoute::Original { .. }) | None => self.original(),
+        }
     }
 
     fn selected_for_workspace(&self, workspace_root: Option<&Path>) -> Option<Arc<dyn Tool>> {
@@ -515,6 +550,7 @@ impl ExternalToolMux {
             .cloned()
         {
             Some(WorkspaceRoute::External { tool, .. }) => Some(tool),
+            Some(WorkspaceRoute::Live { tool, .. }) => Some(tool),
             Some(WorkspaceRoute::Unavailable { .. }) => None,
             Some(WorkspaceRoute::Original { .. }) | None => self.original(),
         }
@@ -593,7 +629,10 @@ impl Tool for ExternalToolMux {
     }
 
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        self.selected(context).is_some()
+        match self.selected(context) {
+            Some(tool) => tool.is_available_in_context(context).await,
+            None => false,
+        }
     }
 
     fn is_readonly(&self) -> bool {
@@ -683,6 +722,14 @@ impl Tool for ExternalToolMux {
         }
         match route {
             Some(WorkspaceRoute::External { tool, .. }) => tool.call(input, context).await,
+            Some(WorkspaceRoute::Live { .. }) => {
+                self.selected(Some(context))
+                    .ok_or_else(|| {
+                        BitFunError::tool(format!("tool '{}' is unavailable", self.name))
+                    })?
+                    .call(input, context)
+                    .await
+            }
             Some(WorkspaceRoute::Original { .. }) | None => {
                 self.original()
                     .ok_or_else(|| {
@@ -704,19 +751,173 @@ impl Tool for ExternalToolMux {
 
 struct ExternalToolRouter {
     muxes: StdMutex<BTreeMap<String, Arc<ExternalToolMux>>>,
+    live_candidates:
+        StdMutex<HashMap<String, BTreeMap<String, BTreeMap<String, LiveExternalToolCandidate>>>>,
     mutation_gate: Mutex<()>,
+}
+
+#[derive(Clone)]
+struct LiveExternalToolCandidate {
+    tool: Arc<dyn Tool>,
+    candidate: ExternalToolConflictCandidate,
 }
 
 impl Default for ExternalToolRouter {
     fn default() -> Self {
         Self {
             muxes: StdMutex::new(BTreeMap::new()),
+            live_candidates: StdMutex::new(HashMap::new()),
             mutation_gate: Mutex::new(()),
         }
     }
 }
 
 impl ExternalToolRouter {
+    fn register_live_candidate(
+        &self,
+        workspace_key: &str,
+        tool: Arc<dyn Tool>,
+        provider_id: &str,
+        content_version: String,
+    ) {
+        let name = tool.name().to_string();
+        let candidate_id = format!("external:live:{provider_id}:{name}");
+        let candidate = ExternalToolConflictCandidate {
+            candidate_id: candidate_id.clone(),
+            display_name: name.clone(),
+            kind: ExternalToolConflictCandidateKind::External,
+            provider_id: provider_id.to_string(),
+            content_version,
+            source: None,
+            source_location: None,
+        };
+        self.live_candidates
+            .lock()
+            .expect("external live tool candidate lock poisoned")
+            .entry(workspace_key.to_string())
+            .or_default()
+            .entry(name)
+            .or_default()
+            .insert(candidate_id, LiveExternalToolCandidate { tool, candidate });
+    }
+
+    fn unregister_live_candidate(&self, workspace_key: &str, name: &str, provider_id: &str) {
+        let candidate_id = format!("external:live:{provider_id}:{name}");
+        let mut by_workspace = self
+            .live_candidates
+            .lock()
+            .expect("external live tool candidate lock poisoned");
+        let Some(by_name) = by_workspace.get_mut(workspace_key) else {
+            return;
+        };
+        if let Some(candidates) = by_name.get_mut(name) {
+            candidates.remove(&candidate_id);
+            if candidates.is_empty() {
+                by_name.remove(name);
+            }
+        }
+        if by_name.is_empty() {
+            by_workspace.remove(workspace_key);
+        }
+    }
+
+    fn live_candidates(
+        &self,
+        workspace_key: &str,
+    ) -> BTreeMap<String, Vec<LiveExternalToolCandidate>> {
+        self.live_candidates
+            .lock()
+            .expect("external live tool candidate lock poisoned")
+            .get(workspace_key)
+            .map(|by_name| {
+                by_name
+                    .iter()
+                    .map(|(name, candidates)| {
+                        (name.clone(), candidates.values().cloned().collect())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    async fn apply_initial_live_candidate_route(
+        &self,
+        workspace_key: &str,
+        name: &str,
+        tool: Arc<dyn Tool>,
+    ) {
+        let mut routes = self.workspace_routes(workspace_key);
+        if let Some(existing) = routes.get(name).cloned() {
+            match existing {
+                WorkspaceRoute::External { conflict, .. } => {
+                    routes.insert(name.to_string(), WorkspaceRoute::Unavailable { conflict });
+                    self.apply_routes(workspace_key, routes).await;
+                }
+                WorkspaceRoute::Live {
+                    conflict: Some(conflict),
+                    ..
+                } => {
+                    routes.insert(
+                        name.to_string(),
+                        WorkspaceRoute::Unavailable {
+                            conflict: Some(conflict),
+                        },
+                    );
+                    self.apply_routes(workspace_key, routes).await;
+                }
+                _ => {}
+            }
+            return;
+        }
+        let route = if tool.dynamic_provider_id() == Some("opencode-plugin") {
+            WorkspaceRoute::Live {
+                tool,
+                conflict: None,
+            }
+        } else if self.original_tool(name).await.is_some() {
+            WorkspaceRoute::Original { conflict: None }
+        } else {
+            WorkspaceRoute::Live {
+                tool,
+                conflict: None,
+            }
+        };
+        routes.insert(name.to_string(), route);
+        self.apply_routes(workspace_key, routes).await;
+    }
+
+    async fn withdraw_live_candidate_route(&self, workspace_key: &str, name: &str) {
+        let mut routes = self.workspace_routes(workspace_key);
+        let Some(route) = routes.remove(name) else {
+            return;
+        };
+        match route {
+            WorkspaceRoute::Live {
+                conflict: Some(conflict),
+                ..
+            } => {
+                routes.insert(
+                    name.to_string(),
+                    WorkspaceRoute::Unavailable {
+                        conflict: Some(conflict),
+                    },
+                );
+            }
+            WorkspaceRoute::Live { conflict: None, .. } => {
+                if self.original_tool(name).await.is_some() {
+                    routes.insert(
+                        name.to_string(),
+                        WorkspaceRoute::Original { conflict: None },
+                    );
+                }
+            }
+            other => {
+                routes.insert(name.to_string(), other);
+            }
+        }
+        self.apply_routes(workspace_key, routes).await;
+    }
+
     fn known_name(&self, tool_name: &str) -> Option<String> {
         self.muxes
             .lock()
@@ -837,6 +1038,26 @@ impl ExternalToolRouter {
             return tool;
         }
         mux.replace_original(Some(tool));
+        let mut routes = mux
+            .routes
+            .write()
+            .expect("external tool route lock poisoned");
+        for route in routes.values_mut() {
+            match route {
+                WorkspaceRoute::Live { conflict: None, .. } => {
+                    *route = WorkspaceRoute::Original { conflict: None };
+                }
+                WorkspaceRoute::Live {
+                    conflict: Some(conflict),
+                    ..
+                } => {
+                    *route = WorkspaceRoute::Unavailable {
+                        conflict: Some(conflict.clone()),
+                    };
+                }
+                _ => {}
+            }
+        }
         routed
     }
 
@@ -914,6 +1135,34 @@ impl ExternalToolRouter {
 
 pub(crate) fn intercept_external_tool_registry_registration(tool: Arc<dyn Tool>) -> Arc<dyn Tool> {
     router().intercept_registration(tool)
+}
+
+pub(crate) async fn register_live_external_tool_candidate(
+    workspace_root: &Path,
+    tool: Arc<dyn Tool>,
+    provider_id: &str,
+    content_version: String,
+) {
+    let workspace_key = workspace_route_key(Some(workspace_root));
+    router().register_live_candidate(&workspace_key, tool.clone(), provider_id, content_version);
+    let name = tool.name().to_string();
+    router()
+        .apply_initial_live_candidate_route(&workspace_key, &name, tool)
+        .await;
+    crate::external_sources::notify_external_tool_registry_changed();
+}
+
+pub(crate) async fn unregister_live_external_tool_candidate(
+    workspace_root: &Path,
+    name: &str,
+    provider_id: &str,
+) {
+    let workspace_key = workspace_route_key(Some(workspace_root));
+    router().unregister_live_candidate(&workspace_key, name, provider_id);
+    router()
+        .withdraw_live_candidate_route(&workspace_key, name)
+        .await;
+    crate::external_sources::notify_external_tool_registry_changed();
 }
 
 pub(crate) fn detach_external_tool_mcp_server(server_id: &str) -> Vec<Arc<dyn Tool>> {
@@ -1328,6 +1577,7 @@ pub(super) async fn reconcile_external_tools(
     let workspace_key = workspace_route_key(workspace_root);
     let snapshot = control_plane.tools(|coordinator| coordinator.snapshot());
     let mut state = ExternalToolProductState::default();
+    let mut live_candidates_by_name = router().live_candidates(&workspace_key);
     let source_by_key = snapshot
         .sources
         .iter()
@@ -1342,11 +1592,12 @@ pub(super) async fn reconcile_external_tools(
             .or_default()
             .push(tool);
     }
-    let discovered_names = target_groups
+    let mut discovered_names = target_groups
         .values()
         .flatten()
         .map(|tool| tool.name.clone())
         .collect::<BTreeSet<_>>();
+    discovered_names.extend(live_candidates_by_name.keys().cloned());
     let mut names_to_quiesce = BTreeSet::new();
     let mut preapproved_runtime_targets = BTreeSet::new();
     for (target_id, definitions) in &target_groups {
@@ -1842,12 +2093,18 @@ pub(super) async fn reconcile_external_tools(
         .await;
 
     let conflict_domain = workspace_conflict_domain(execution_domain_id, &workspace_key);
-    let mut names_by_normalized = BTreeMap::<String, Vec<String>>::new();
+    let mut names_by_normalized = BTreeMap::<String, BTreeSet<String>>::new();
     for name in conflict_candidates_by_name.keys() {
         names_by_normalized
             .entry(name.clone())
             .or_default()
-            .push(name.clone());
+            .insert(name.clone());
+    }
+    for name in live_candidates_by_name.keys() {
+        names_by_normalized
+            .entry(name.clone())
+            .or_default()
+            .insert(name.clone());
     }
     let conflict_prefix = format!("external_tool:{conflict_domain}:");
     for conflict_key in decisions.conflict_choices.keys() {
@@ -1861,7 +2118,7 @@ pub(super) async fn reconcile_external_tools(
             .entry(normalized_name.to_string())
             .or_default();
         if names.is_empty() {
-            names.push(
+            names.insert(
                 router()
                     .known_name(normalized_name)
                     .unwrap_or_else(|| normalized_name.to_string()),
@@ -1874,8 +2131,9 @@ pub(super) async fn reconcile_external_tools(
         let external_candidates = conflict_candidates_by_name
             .remove(&name)
             .unwrap_or_default();
+        let live_candidates = live_candidates_by_name.remove(&name).unwrap_or_default();
         let original = router().original_tool(&name).await;
-        if external_candidates.is_empty() && original.is_none() {
+        if external_candidates.is_empty() && live_candidates.is_empty() && original.is_none() {
             continue;
         }
         let mut candidates = Vec::new();
@@ -1894,6 +2152,11 @@ pub(super) async fn reconcile_external_tools(
                 source_location: Some(definition.module_path.clone()),
             });
         }
+        candidates.extend(
+            live_candidates
+                .iter()
+                .map(|candidate| candidate.candidate.clone()),
+        );
 
         let has_conflict_history = if external_candidates.is_empty() {
             tool_conflict_history_requires_fail_closed(
@@ -1916,6 +2179,14 @@ pub(super) async fn reconcile_external_tools(
                         }
                     });
                 routes.insert(name, route);
+            } else if let Some(candidate) = live_candidates.first() {
+                routes.insert(
+                    name,
+                    WorkspaceRoute::Live {
+                        tool: candidate.tool.clone(),
+                        conflict: None,
+                    },
+                );
             }
             continue;
         }
@@ -1930,10 +2201,15 @@ pub(super) async fn reconcile_external_tools(
                 )
             }),
         );
-        let external_candidate_ids = external_candidates
+        let mut external_candidate_ids = external_candidates
             .iter()
             .map(ExternalToolDefinition::candidate_id)
             .collect::<BTreeSet<_>>();
+        external_candidate_ids.extend(
+            live_candidates
+                .iter()
+                .map(|candidate| candidate.candidate.candidate_id.clone()),
+        );
         let (selected, route_choice) = resolve_conflict_route_choice(
             &conflict_key,
             &candidates,
@@ -1947,15 +2223,24 @@ pub(super) async fn reconcile_external_tools(
         });
         let route = match route_choice {
             ConflictRouteChoice::External(candidate_id) => {
-                loaded_by_candidate_id.get(&candidate_id).cloned().map_or(
-                    WorkspaceRoute::Unavailable {
-                        conflict: conflict.clone(),
-                    },
-                    |tool| WorkspaceRoute::External {
+                if let Some(tool) = loaded_by_candidate_id.get(&candidate_id).cloned() {
+                    WorkspaceRoute::External {
                         tool,
                         conflict: conflict.clone(),
-                    },
-                )
+                    }
+                } else if let Some(candidate) = live_candidates
+                    .iter()
+                    .find(|candidate| candidate.candidate.candidate_id == candidate_id)
+                {
+                    WorkspaceRoute::Live {
+                        tool: candidate.tool.clone(),
+                        conflict: conflict.clone(),
+                    }
+                } else {
+                    WorkspaceRoute::Unavailable {
+                        conflict: conflict.clone(),
+                    }
+                }
             }
             ConflictRouteChoice::Original => WorkspaceRoute::Original {
                 conflict: conflict.clone(),
@@ -2134,6 +2419,55 @@ mod tests {
         }
     }
 
+    struct PluginTestTool {
+        name: String,
+    }
+
+    #[async_trait]
+    impl Tool for PluginTestTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("plugin test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "plugin test tool".to_string()
+        }
+
+        fn input_schema(&self) -> Value {
+            serde_json::json!({ "type": "object" })
+        }
+
+        fn dynamic_provider_id(&self) -> Option<&str> {
+            Some("opencode-plugin")
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn local_tool_context(workspace_root: &Path, runtime_agent_key: &str) -> ToolUseContext {
+        crate::agentic::tools::tool_context_runtime::build_tool_description_context(
+            runtime_agent_key,
+            Some(&crate::agentic::WorkspaceBinding::new(
+                None,
+                workspace_root.to_path_buf(),
+            )),
+            None,
+            None,
+            &Default::default(),
+            &Default::default(),
+        )
+    }
+
     fn candidate(
         id: &str,
         kind: ExternalToolConflictCandidateKind,
@@ -2258,6 +2592,48 @@ mod tests {
         assert!(has_tool_conflict_history(&choices, "domain", "read"));
     }
 
+    #[test]
+    fn live_plugin_route_is_visible_only_to_opencode_plugin_agents() {
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let tool_name = "plugin_agent_scope_contract".to_string();
+        let original: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let plugin: Arc<dyn Tool> = Arc::new(PluginTestTool {
+            name: tool_name.clone(),
+        });
+        let mux = ExternalToolMux::new(tool_name, Some(original.clone()));
+        mux.set_route(
+            workspace_route_key(Some(&workspace)),
+            WorkspaceRoute::Live {
+                tool: plugin.clone(),
+                conflict: None,
+            },
+        );
+
+        let plugin_context = local_tool_context(
+            &workspace,
+            "external_subagent_runtime:opencode-plugin:generation-agent",
+        );
+        assert!(Arc::ptr_eq(
+            &mux.selected(Some(&plugin_context)).expect("plugin route"),
+            &plugin
+        ));
+
+        for runtime_agent_key in [
+            "Agentic",
+            "Plan",
+            "external_subagent_runtime:other-provider:agent",
+            "external_subagent_runtime:opencode:agent",
+        ] {
+            let context = local_tool_context(&workspace, runtime_agent_key);
+            assert!(Arc::ptr_eq(
+                &mux.selected(Some(&context)).expect("native fallback"),
+                &original
+            ));
+        }
+    }
+
     #[tokio::test]
     async fn concurrent_workspace_routes_install_one_shared_mux() {
         let router = Arc::new(ExternalToolRouter::default());
@@ -2290,6 +2666,226 @@ mod tests {
             .write()
             .await
             .unregister_tool(&tool_name);
+    }
+
+    #[tokio::test]
+    async fn live_plugin_conflict_preserves_builtin_until_selected() {
+        use bitfun_product_domains::external_sources::{
+            ExecutionDomainId, ExternalMcpRevisionKey, ExternalSourceContext,
+        };
+
+        let directory = tempfile::tempdir().expect("temporary workspace");
+        let workspace_key = workspace_route_key(Some(directory.path()));
+        let tool_name = format!("live_plugin_conflict_{}", std::process::id());
+        let original: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        get_global_tool_registry()
+            .write()
+            .await
+            .register_tool_without_external_source_notification(original.clone());
+        let live: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let candidate_id = format!("external:live:opencode-plugin:{tool_name}");
+        let control_plane = Arc::new(
+            ExternalSourceControlPlane::new(
+                ExternalSourceContext {
+                    workspace_root: Some(directory.path().to_path_buf()),
+                    execution_domain_id: ExecutionDomainId::new("test-domain").unwrap(),
+                },
+                ExternalMcpRevisionKey::new([3; 32]),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            )
+            .unwrap(),
+        );
+        router().register_live_candidate(
+            &workspace_key,
+            live.clone(),
+            "opencode-plugin",
+            "plugin-v1".to_string(),
+        );
+        let empty_ecosystems = BTreeSet::new();
+        let empty_strings = BTreeSet::new();
+        let empty_map = BTreeMap::new();
+
+        let unresolved = reconcile_external_tools(
+            Some(directory.path()),
+            "test-domain",
+            &control_plane,
+            ExternalToolDecisions {
+                active_ecosystems: &empty_ecosystems,
+                approved_targets: &empty_strings,
+                declined_decisions_by_approval: &empty_map,
+                conflict_choices: &empty_map,
+            },
+            &empty_strings,
+        )
+        .await;
+        assert_eq!(unresolved.conflicts.len(), 1);
+        assert!(unresolved.conflicts[0]
+            .candidates
+            .iter()
+            .any(|candidate| candidate.candidate_id == candidate_id));
+        let mux = router()
+            .muxes
+            .lock()
+            .expect("router lock")
+            .get(&tool_name)
+            .cloned()
+            .expect("installed mux");
+        assert!(Arc::ptr_eq(
+            &mux.selected_for_workspace(Some(directory.path())).unwrap(),
+            &original
+        ));
+
+        let choices =
+            BTreeMap::from([(unresolved.conflicts[0].conflict_key.clone(), candidate_id)]);
+        let selected = reconcile_external_tools(
+            Some(directory.path()),
+            "test-domain",
+            &control_plane,
+            ExternalToolDecisions {
+                active_ecosystems: &empty_ecosystems,
+                approved_targets: &empty_strings,
+                declined_decisions_by_approval: &empty_map,
+                conflict_choices: &choices,
+            },
+            &empty_strings,
+        )
+        .await;
+        assert_eq!(
+            selected.conflicts[0].selected_candidate_id,
+            Some(format!("external:live:opencode-plugin:{tool_name}"))
+        );
+        assert!(Arc::ptr_eq(
+            &mux.selected_for_workspace(Some(directory.path())).unwrap(),
+            &live
+        ));
+
+        router().unregister_live_candidate(&workspace_key, &tool_name, "opencode-plugin");
+        let withdrawn = reconcile_external_tools(
+            Some(directory.path()),
+            "test-domain",
+            &control_plane,
+            ExternalToolDecisions {
+                active_ecosystems: &empty_ecosystems,
+                approved_targets: &empty_strings,
+                declined_decisions_by_approval: &empty_map,
+                conflict_choices: &choices,
+            },
+            &empty_strings,
+        )
+        .await;
+        assert_eq!(withdrawn.conflicts.len(), 1);
+        assert_eq!(withdrawn.conflicts[0].selected_candidate_id, None);
+        assert!(mux.selected_for_workspace(Some(directory.path())).is_none());
+
+        router().apply_routes(&workspace_key, BTreeMap::new()).await;
+        router()
+            .muxes
+            .lock()
+            .expect("router lock")
+            .remove(&tool_name);
+        get_global_tool_registry()
+            .write()
+            .await
+            .unregister_tool(&tool_name);
+    }
+
+    #[tokio::test]
+    async fn late_local_registration_pauses_an_active_live_plugin_route() {
+        let router = ExternalToolRouter::default();
+        let tool_name = "late_local_plugin_conflict".to_string();
+        let live: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let mux = Arc::new(ExternalToolMux::new(tool_name.clone(), None));
+        mux.set_route(
+            "workspace".to_string(),
+            WorkspaceRoute::Live {
+                tool: live,
+                conflict: None,
+            },
+        );
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(tool_name.clone(), mux.clone());
+
+        let local: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let routed = router.intercept_registration(local.clone());
+
+        let expected_mux: Arc<dyn Tool> = mux;
+        assert!(Arc::ptr_eq(&routed, &expected_mux));
+        assert!(Arc::ptr_eq(
+            &router
+                .original_tool(&tool_name)
+                .await
+                .expect("local candidate"),
+            &local
+        ));
+        assert!(matches!(
+            router.workspace_routes("workspace").get(&tool_name),
+            Some(WorkspaceRoute::Original { conflict: None })
+        ));
+    }
+
+    #[tokio::test]
+    async fn late_live_registration_pauses_an_active_external_route() {
+        let router = ExternalToolRouter::default();
+        let tool_name = "late_plugin_external_conflict".to_string();
+        let external = Arc::new(LoadedExternalTool {
+            descriptor: ScriptToolDescriptor {
+                export_name: "run".to_string(),
+                name: tool_name.clone(),
+                description: "external".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            },
+            ecosystem_id: "test".to_string(),
+            provider_id: "test-provider".to_string(),
+            runtime_target_id: "target".to_string(),
+            load_generation: 1,
+            revision: "v1".to_string(),
+            approval_key: "approval".to_string(),
+            source_preference_key: "test:source".to_string(),
+            workspace_key: "workspace".to_string(),
+            target_tool_names: Arc::new(vec![tool_name.clone()]),
+            worktree_root: None,
+            runtime: Arc::new(NodeScriptToolRuntime::discover()),
+        });
+        let mux = Arc::new(ExternalToolMux::new(tool_name.clone(), None));
+        mux.set_route(
+            "workspace".to_string(),
+            WorkspaceRoute::External {
+                tool: external,
+                conflict: None,
+            },
+        );
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(tool_name.clone(), mux);
+
+        let live: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        router
+            .apply_initial_live_candidate_route("workspace", &tool_name, live)
+            .await;
+
+        assert!(matches!(
+            router.workspace_routes("workspace").get(&tool_name),
+            Some(WorkspaceRoute::Unavailable { conflict: None })
+        ));
     }
 
     #[tokio::test]

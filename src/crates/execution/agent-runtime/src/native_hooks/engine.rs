@@ -9,12 +9,18 @@
 //! - Exit code 2: the event is blocked; stderr provides the blocking reason.
 //! - Any other exit code, spawn failure, or timeout: a non-blocking warning.
 
+use super::call::{HookCall, HookCallPayload};
+use super::handler::{HookHandler, HookHandlerResult, PluginHookCall};
+use super::kind::RuntimeHookKind;
 use super::output::{non_empty, AgentHookOutcome, RawHookOutput};
 use super::payload::AgentHookPayload;
+use super::registry::RuntimeHookRegistry;
 use super::settings::{AgentHookEvent, AgentHookHandler, AgentHookSettings};
 use log::{debug, warn};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -27,55 +33,242 @@ pub const MAX_HOOK_MODEL_OUTPUT_BYTES: usize = 10_000;
 const MAX_CAPTURED_OUTPUT_BYTES: usize = 1024 * 1024;
 
 /// Executes configured hooks for agent lifecycle events.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AgentHookEngine {
-    settings: AgentHookSettings,
+    registry: RuntimeHookRegistry,
+    settings: Option<Arc<AgentHookSettings>>,
 }
 
 impl AgentHookEngine {
     pub fn new(settings: AgentHookSettings) -> Self {
-        Self { settings }
+        let registry = RuntimeHookRegistry::default();
+        registry
+            .register_batch(settings.registrations())
+            .expect("parsed hook settings must produce valid registrations");
+        Self {
+            registry,
+            settings: Some(Arc::new(settings)),
+        }
+    }
+
+    pub fn with_registry(registry: RuntimeHookRegistry) -> Self {
+        Self {
+            registry,
+            settings: None,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.settings.is_empty()
+        self.registry.plans().is_empty()
     }
 
     pub fn has_rules(&self, event: AgentHookEvent) -> bool {
-        self.settings.has_rules(event)
+        self.has_rules_for_workspace(event, None)
+    }
+
+    pub fn has_rules_for_workspace(
+        &self,
+        event: AgentHookEvent,
+        workspace_scope: Option<&str>,
+    ) -> bool {
+        !self
+            .registry
+            .registrations_for_workspace(RuntimeHookKind::Lifecycle(event), workspace_scope)
+            .is_empty()
     }
 
     pub fn settings(&self) -> &AgentHookSettings {
-        &self.settings
+        self.settings
+            .as_deref()
+            .expect("engine was constructed from a runtime hook registry")
+    }
+
+    pub fn registry(&self) -> &RuntimeHookRegistry {
+        &self.registry
     }
 
     /// Run every matching handler for the payload's event, sequentially in
     /// configuration order (user layers before project layers), and fold
     /// their results into one [`AgentHookOutcome`].
     pub async fn dispatch(&self, payload: &AgentHookPayload, cwd: &Path) -> AgentHookOutcome {
+        self.dispatch_for_workspace(payload, cwd, None).await
+    }
+
+    pub async fn dispatch_for_workspace(
+        &self,
+        payload: &AgentHookPayload,
+        cwd: &Path,
+        workspace_scope: Option<&str>,
+    ) -> AgentHookOutcome {
         let event = payload.event();
         let mut outcome = AgentHookOutcome::default();
-        let rules = self.settings.rules_for(event);
-        if rules.is_empty() {
+        let registrations = self
+            .registry
+            .registrations_for_workspace(RuntimeHookKind::Lifecycle(event), workspace_scope);
+        if registrations.is_empty() {
             return outcome;
         }
         let matcher_value = payload.event.matcher_value();
         let payload_json = payload.to_json().to_string();
-        'rules: for rule in rules {
-            if !rule.matcher.matches(matcher_value) {
+        let call = lifecycle_call(payload, cwd);
+        for registration in registrations.iter() {
+            if !registration.matcher.matches(matcher_value) {
                 continue;
             }
-            for handler in &rule.handlers {
-                outcome.executed_handlers += 1;
-                let finalized = self
-                    .run_and_apply(event, handler, &payload_json, cwd, &mut outcome)
-                    .await;
-                if finalized {
-                    break 'rules;
+            outcome.executed_handlers += 1;
+            let finalized = match &registration.handler {
+                HookHandler::Command(handler) => {
+                    self.run_and_apply(event, handler, &payload_json, cwd, &mut outcome)
+                        .await
                 }
+                HookHandler::Builtin { executor } => {
+                    apply_handler_result(executor.execute(&call).await, &mut outcome)
+                }
+                HookHandler::Plugin {
+                    executor,
+                    instance_id,
+                    hook_name,
+                    generation_key,
+                    revision,
+                    ..
+                } => {
+                    let result = tokio::time::timeout(
+                        Duration::from_millis(registration.plan.timeout_millis()),
+                        executor.execute(PluginHookCall {
+                            instance_id: instance_id.clone(),
+                            workspace_scope: registration
+                                .workspace_scope
+                                .clone()
+                                .unwrap_or_default(),
+                            generation_key: generation_key.clone(),
+                            revision: revision.clone(),
+                            hook_name: hook_name.clone(),
+                            input: payload.to_json(),
+                            output: Value::Object(Default::default()),
+                        }),
+                    )
+                    .await;
+                    if let Err(error) = result.unwrap_or_else(|_| Err("timed out".to_string())) {
+                        outcome.warnings.push(format!(
+                            "Plugin hook '{}' for {event} failed: {error}",
+                            registration.plan.id()
+                        ));
+                    }
+                    false
+                }
+            };
+            if finalized {
+                break;
             }
         }
         outcome
+    }
+
+    /// Execute one provider hook snapshot and carry input/output mutations
+    /// forward in registry order.
+    pub async fn dispatch_plugin_hook(
+        &self,
+        workspace_scope: Option<&str>,
+        hook_name: &str,
+        input: Value,
+        output: Value,
+    ) -> PluginHookDispatchResult {
+        self.dispatch_plugin_hook_for_generation(workspace_scope, None, hook_name, input, output)
+            .await
+    }
+
+    pub async fn dispatch_plugin_hook_for_generation(
+        &self,
+        workspace_scope: Option<&str>,
+        generation: Option<&super::handler::PluginHookGenerationIdentity>,
+        hook_name: &str,
+        mut input: Value,
+        mut output: Value,
+    ) -> PluginHookDispatchResult {
+        let kind = RuntimeHookKind::PluginHook(hook_name.to_string());
+        let registrations = match (workspace_scope, generation) {
+            (Some(workspace_scope), Some(generation)) => self
+                .registry
+                .registrations_for_plugin_generation(kind, workspace_scope, generation),
+            _ => self
+                .registry
+                .registrations_for_workspace(kind, workspace_scope),
+        };
+        let mut result = PluginHookDispatchResult::default();
+        for registration in registrations.iter() {
+            let HookHandler::Plugin {
+                executor,
+                instance_id,
+                hook_name,
+                generation_key,
+                revision,
+                ..
+            } = &registration.handler
+            else {
+                continue;
+            };
+            result.executed_handlers += 1;
+            let invocation = executor.execute(PluginHookCall {
+                instance_id: instance_id.clone(),
+                workspace_scope: registration.workspace_scope.clone().unwrap_or_default(),
+                generation_key: generation_key.clone(),
+                revision: revision.clone(),
+                hook_name: hook_name.clone(),
+                input: input.clone(),
+                output: output.clone(),
+            });
+            match tokio::time::timeout(
+                Duration::from_millis(registration.plan.timeout_millis()),
+                invocation,
+            )
+            .await
+            {
+                Ok(Ok(transformed)) => {
+                    if transformed.instance_id != *instance_id
+                        || transformed.generation_key != *generation_key
+                        || transformed.revision != *revision
+                        || transformed.hook_name != *hook_name
+                    {
+                        result.warnings.push(format!(
+                            "Plugin hook '{}' returned a mismatched generation lease",
+                            registration.plan.id()
+                        ));
+                        continue;
+                    }
+                    input = transformed.input;
+                    output = transformed.output;
+                }
+                Ok(Err(error)) => result.warnings.push(format!(
+                    "Plugin hook '{}' failed: {error}",
+                    registration.plan.id()
+                )),
+                Err(_) => result.warnings.push(format!(
+                    "Plugin hook '{}' timed out after {}ms",
+                    registration.plan.id(),
+                    registration.plan.timeout_millis()
+                )),
+            }
+        }
+        result.input = input;
+        result.output = output;
+        result
+    }
+
+    pub async fn dispatch_call(
+        &self,
+        workspace_scope: Option<&str>,
+        call: &HookCall,
+    ) -> HookHandlerResult {
+        let registrations = self
+            .registry
+            .registrations_for_workspace(call.kind.clone(), workspace_scope);
+        let mut result = HookHandlerResult::default();
+        for registration in registrations.iter() {
+            if let HookHandler::Builtin { executor } = &registration.handler {
+                merge_handler_result(executor.execute(call).await, &mut result);
+            }
+        }
+        result
     }
 
     /// Run one handler and fold its result into `outcome`. Returns `true`
@@ -150,6 +343,59 @@ impl AgentHookEngine {
                 }
             },
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PluginHookDispatchResult {
+    pub input: Value,
+    pub output: Value,
+    pub warnings: Vec<String>,
+    pub executed_handlers: usize,
+}
+
+impl Default for PluginHookDispatchResult {
+    fn default() -> Self {
+        Self {
+            input: Value::Null,
+            output: Value::Null,
+            warnings: Vec::new(),
+            executed_handlers: 0,
+        }
+    }
+}
+
+fn lifecycle_call(payload: &AgentHookPayload, cwd: &Path) -> HookCall {
+    HookCall {
+        kind: RuntimeHookKind::Lifecycle(payload.event()),
+        cwd: cwd.to_path_buf(),
+        session_id: Some(payload.common.session_id.clone()),
+        turn_id: payload.common.turn_id.clone(),
+        workspace_root: Some(cwd.to_path_buf()),
+        is_remote: false,
+        model: Some(payload.common.model.clone()),
+        bypass_permissions: matches!(
+            payload.common.permission_mode,
+            super::payload::AgentHookPermissionMode::BypassPermissions
+        ),
+        payload: HookCallPayload::Lifecycle(payload.event.clone()),
+    }
+}
+
+fn apply_handler_result(result: HookHandlerResult, outcome: &mut AgentHookOutcome) -> bool {
+    outcome.warnings.extend(result.warnings);
+    outcome.additional_context.extend(result.additional_context);
+    if outcome.block_reason.is_none() {
+        outcome.block_reason = result.block_reason;
+    }
+    outcome.is_blocked()
+}
+
+fn merge_handler_result(result: HookHandlerResult, outcome: &mut HookHandlerResult) {
+    outcome.warnings.extend(result.warnings);
+    outcome.additional_context.extend(result.additional_context);
+    if outcome.block_reason.is_none() {
+        outcome.block_reason = result.block_reason;
     }
 }
 

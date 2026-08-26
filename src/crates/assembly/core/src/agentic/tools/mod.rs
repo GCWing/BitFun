@@ -24,6 +24,9 @@ pub mod page_deploy_host;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_publish_host;
 pub mod pipeline;
+#[cfg(feature = "plugin-runtime")]
+#[cfg(feature = "opencode-plugin-host")]
+pub mod plugin_host_tool;
 pub(crate) mod post_call_hooks;
 #[doc(hidden)]
 pub mod product_runtime;

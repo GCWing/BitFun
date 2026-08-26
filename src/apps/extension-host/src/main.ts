@@ -8,6 +8,7 @@ import { prepareBunPlugins } from "./bun-loader"
 import {
   BackendMethodSchemas,
   DEFAULT_MAX_FRAME_BYTES,
+  HOST_CAPABILITIES,
   OPENCODE_VERSION,
   PROTOCOL_VERSION,
   type BackendMethod,
@@ -78,6 +79,7 @@ async function main() {
         protocolVersion: PROTOCOL_VERSION,
         opencodeVersion: OPENCODE_VERSION,
         maxFrameBytes: DEFAULT_MAX_FRAME_BYTES,
+        capabilities: [...HOST_CAPABILITIES],
       }),
     )
     if (!path.isAbsolute(handshake.cacheDirectory)) {

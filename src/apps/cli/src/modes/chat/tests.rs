@@ -84,7 +84,7 @@ mod tests {
             .expect("agent selection boundary")
             .0;
 
-        assert!(selection.contains(".update_session_mode(&task_session_id, &task_mode_id)"));
+        assert!(selection.contains(".update_session_mode_with_route("));
         assert!(!selection.contains("selected.id == self.agent_type"));
     }
 

@@ -2,7 +2,11 @@ import { z } from "zod"
 
 export const PROTOCOL_VERSION = 1
 export const OPENCODE_VERSION = "1.17.18"
-export const MIN_NEGOTIATED_FRAME_BYTES = 64 * 1024
+export const HOST_CAPABILITIES = [
+  "config-contributors-v1",
+  "config-contributions-v2",
+  "generation-fencing-v1",
+] as const
 export const DEFAULT_MAX_FRAME_BYTES = 16 * 1024 * 1024
 export const MAX_MAX_FRAME_BYTES = 64 * 1024 * 1024
 export const MAX_STREAM_CHUNK_BYTES = 64 * 1024
@@ -145,6 +149,19 @@ export const WorkspaceRegistrationSchema = z.object({
   name: z.string(),
   description: z.string(),
 })
+export const PluginMetaSchema = z.object({
+  id: z.string().optional(),
+  spec: z.string().min(1),
+  entry: z.string().min(1),
+  index: z.number().int().nonnegative(),
+})
+export const ConfigContributorSchema = z.object({
+  plugin: PluginMetaSchema,
+  outcome: z.enum(["applied", "failed"]),
+})
+export const ConfigContributionSchema = ConfigContributorSchema.extend({
+  config: JsonObjectSchema,
+})
 export const AuthSuccessSchema = z.union([
   z.object({
     type: z.literal("success"),
@@ -203,6 +220,8 @@ export const HostMethodSchemas = {
   "host.instance.open": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       project: JsonValueSchema,
       config: JsonObjectSchema,
       directory: z.string(),
@@ -212,7 +231,11 @@ export const HostMethodSchemas = {
     }),
     result: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       config: JsonObjectSchema,
+      configContributors: z.array(ConfigContributorSchema),
+      configContributions: z.array(ConfigContributionSchema),
       diagnostics: z.array(DiagnosticSchema),
       hooks: z.array(z.string()),
       tools: z.array(ToolRegistrationSchema),
@@ -228,11 +251,20 @@ export const HostMethodSchemas = {
   "host.hook.call": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       hook: z.string().min(1),
       input: JsonValueSchema,
       output: JsonValueSchema,
     }),
-    result: z.object({ input: JsonValueSchema, output: JsonValueSchema }),
+    result: z.object({
+      instanceID: z.string().min(1).optional(),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
+      hook: z.string().min(1),
+      input: JsonValueSchema,
+      output: JsonValueSchema,
+    }),
   },
   "host.event.emit": {
     params: z.object({ instanceID: z.string().min(1), event: JsonValueSchema }),
@@ -241,6 +273,8 @@ export const HostMethodSchemas = {
   "host.tool.execute": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       executionID: z.string().min(1),
       registrationID: z.string().min(1),
       args: JsonValueSchema,
@@ -251,11 +285,19 @@ export const HostMethodSchemas = {
         callID: z.string().optional(),
       }),
     }),
-    result: ToolResultSchema,
+    result: z.object({
+      instanceID: z.string().min(1).optional(),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
+      executionID: z.string().min(1),
+      result: ToolResultSchema,
+    }),
   },
   "host.tool.cancel": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       executionID: z.string().min(1),
       reason: z.string().optional(),
     }),
@@ -373,12 +415,14 @@ export const BackendMethodSchemas = {
       token: z.string().min(1),
       protocolVersion: z.literal(PROTOCOL_VERSION),
       opencodeVersion: z.literal(OPENCODE_VERSION),
-      maxFrameBytes: z.number().int().min(MIN_NEGOTIATED_FRAME_BYTES).max(MAX_MAX_FRAME_BYTES),
+      maxFrameBytes: z.number().int().positive().max(MAX_MAX_FRAME_BYTES),
+      capabilities: z.array(z.string().min(1)).optional(),
     }),
     result: z.object({
       protocolVersion: z.literal(PROTOCOL_VERSION),
-      maxFrameBytes: z.number().int().min(MIN_NEGOTIATED_FRAME_BYTES).max(MAX_MAX_FRAME_BYTES),
+      maxFrameBytes: z.number().int().positive().max(MAX_MAX_FRAME_BYTES),
       cacheDirectory: z.string(),
+      capabilities: z.array(z.string().min(1)).optional(),
     }),
   },
   "backend.http.request": {
@@ -399,6 +443,8 @@ export const BackendMethodSchemas = {
   "backend.tool.ask": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       executionID: z.string().min(1),
       permission: z.string(),
       patterns: z.array(z.string()),
@@ -410,6 +456,8 @@ export const BackendMethodSchemas = {
   "backend.tool.metadata": {
     params: z.object({
       instanceID: z.string().min(1),
+      generationKey: z.string().min(1).optional(),
+      revision: z.string().min(1).optional(),
       executionID: z.string().min(1),
       title: z.string().optional(),
       metadata: JsonObjectSchema.optional(),

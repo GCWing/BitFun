@@ -530,7 +530,7 @@ fn inline_complete_text(canonical: &str, tool_state: &ToolDisplayState) -> Strin
             format!("WebFetch {}", truncate_str(&url, 60))
         }
         "Skill" => {
-            let name = param_str(&tool_state.parameters, &["name", "skill_name"]);
+            let name = skill_display_name(&tool_state.parameters);
             format!("Skill \"{}\"", name)
         }
         "Git" => {
@@ -2056,6 +2056,11 @@ fn param_str(params: &serde_json::Value, keys: &[&str]) -> String {
     "unknown".to_string()
 }
 
+/// Extract the Skill tool's command, retaining legacy parameter aliases.
+fn skill_display_name(params: &serde_json::Value) -> String {
+    param_str(params, &["command", "name", "skill_name"])
+}
+
 /// Extract an optional string parameter
 fn param_str_opt(params: &serde_json::Value, keys: &[&str]) -> Option<String> {
     for key in keys {
@@ -2106,5 +2111,17 @@ fn capitalize_first(s: &str) -> String {
     match chars.next() {
         None => String::new(),
         Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::skill_display_name;
+
+    #[test]
+    fn skill_name_is_read_from_command_parameter() {
+        let params = serde_json::json!({"command": "arkts-error-fixes"});
+
+        assert_eq!(skill_display_name(&params), "arkts-error-fixes");
     }
 }

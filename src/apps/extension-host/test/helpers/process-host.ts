@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import { DEFAULT_MAX_FRAME_BYTES, OPENCODE_VERSION, PROTOCOL_VERSION } from "../../src/protocol"
+import { DEFAULT_MAX_FRAME_BYTES, HOST_CAPABILITIES, OPENCODE_VERSION, PROTOCOL_VERSION } from "../../src/protocol"
 import { RpcPeer } from "../../src/rpc"
 
 type Handshake = {
@@ -9,6 +9,7 @@ type Handshake = {
   protocolVersion: number
   opencodeVersion: string
   maxFrameBytes: number
+  capabilities: string[]
 }
 
 export async function launchExtensionHost(
@@ -139,6 +140,7 @@ export function expectedHandshake(token = "test-rpc-token") {
     protocolVersion: PROTOCOL_VERSION,
     opencodeVersion: OPENCODE_VERSION,
     maxFrameBytes: DEFAULT_MAX_FRAME_BYTES,
+    capabilities: [...HOST_CAPABILITIES],
   }
 }
 

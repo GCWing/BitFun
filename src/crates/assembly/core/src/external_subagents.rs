@@ -1328,6 +1328,7 @@ fn install_active_candidate(
         candidate.definition.prompt.expose().to_string(),
         tools,
         candidate.definition.permission_constraints.clone(),
+        None,
         candidate.readonly,
         candidate.definition.behavior_version.as_str().to_string(),
     ));
@@ -1342,6 +1343,11 @@ fn install_active_candidate(
     state.registrations.push(ExternalSubagentRegistration {
         runtime_key: runtime_key.clone(),
         logical_id: candidate.definition.logical_id.clone(),
+        route_key: format!(
+            "{}:{}",
+            ecosystem_id.as_str(),
+            candidate.definition.candidate_id.as_str()
+        ),
         ecosystem_id,
         provider_label: candidate.provider_label.clone(),
         model_binding,

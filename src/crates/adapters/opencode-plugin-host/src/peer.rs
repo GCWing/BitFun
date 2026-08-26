@@ -1,5 +1,8 @@
 use crate::peer_runtime::{run_reader, run_writer};
-use crate::{PluginHostError, PluginInstanceOpenRequest, PluginPrepareRequest};
+use crate::{
+    PluginGenerationLease, PluginHostCapabilities, PluginHostError, PluginInstanceOpenRequest,
+    PluginPrepareRequest, GENERATION_FENCING_V1,
+};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::future::Future;
@@ -49,6 +52,10 @@ impl PluginHostClient {
 
     pub fn is_closed(&self) -> bool {
         self.state.closed.load(Ordering::Acquire)
+    }
+
+    pub fn capabilities(&self) -> &PluginHostCapabilities {
+        &self.state.capabilities
     }
 
     pub async fn set_log_level(&self, level: &str) -> Result<(), PluginHostError> {
@@ -107,6 +114,91 @@ impl PluginHostClient {
                     "host.instance.close returned an invalid result".to_string(),
                 )
             })
+    }
+
+    pub async fn call_hook(
+        &self,
+        lease: &PluginGenerationLease,
+        hook: &str,
+        input: Value,
+        output: Value,
+        deadline: Duration,
+    ) -> Result<Value, PluginHostError> {
+        self.require_generation_fencing()?;
+        let result = self
+            .request(
+                "host.hook.call",
+                json!({
+                    "instanceID": lease.instance_id,
+                    "generationKey": lease.generation_key,
+                    "revision": lease.revision,
+                    "hook": hook,
+                    "input": input,
+                    "output": output,
+                }),
+                deadline,
+            )
+            .await?;
+        validate_fenced_response(&result, lease, None)?;
+        if result.get("hook").and_then(Value::as_str) != Some(hook) {
+            return Err(PluginHostError::Protocol(
+                "host.hook.call response returned a mismatched hook name".to_string(),
+            ));
+        }
+        Ok(result)
+    }
+
+    pub async fn execute_tool(
+        &self,
+        lease: &PluginGenerationLease,
+        execution_id: &str,
+        registration_id: &str,
+        args: Value,
+        context: Value,
+        deadline: Duration,
+    ) -> Result<Value, PluginHostError> {
+        self.require_generation_fencing()?;
+        let result = self
+            .request(
+                "host.tool.execute",
+                json!({
+                    "instanceID": lease.instance_id,
+                    "generationKey": lease.generation_key,
+                    "revision": lease.revision,
+                    "executionID": execution_id,
+                    "registrationID": registration_id,
+                    "args": args,
+                    "context": context,
+                }),
+                deadline,
+            )
+            .await?;
+        validate_fenced_response(&result, lease, Some(execution_id))?;
+        result.get("result").cloned().ok_or_else(|| {
+            PluginHostError::Protocol("host.tool.execute response is missing result".to_string())
+        })
+    }
+
+    pub async fn cancel_tool(
+        &self,
+        lease: &PluginGenerationLease,
+        execution_id: &str,
+        reason: Option<&str>,
+        deadline: Duration,
+    ) -> Result<Value, PluginHostError> {
+        self.require_generation_fencing()?;
+        self.request(
+            "host.tool.cancel",
+            json!({
+                "instanceID": lease.instance_id,
+                "generationKey": lease.generation_key,
+                "revision": lease.revision,
+                "executionID": execution_id,
+                "reason": reason,
+            }),
+            deadline,
+        )
+        .await
     }
 
     pub async fn request(
@@ -258,6 +350,36 @@ impl PluginHostClient {
         );
         Ok(())
     }
+
+    fn require_generation_fencing(&self) -> Result<(), PluginHostError> {
+        if self.capabilities().supports(GENERATION_FENCING_V1) {
+            Ok(())
+        } else {
+            Err(PluginHostError::Protocol(
+                "plugin host did not negotiate generation-fencing-v1".to_string(),
+            ))
+        }
+    }
+}
+
+fn validate_fenced_response(
+    result: &Value,
+    lease: &PluginGenerationLease,
+    execution_id: Option<&str>,
+) -> Result<(), PluginHostError> {
+    let identity_matches = result.get("instanceID").and_then(Value::as_str)
+        == Some(lease.instance_id.as_str())
+        && result.get("generationKey").and_then(Value::as_str)
+            == Some(lease.generation_key.as_str())
+        && result.get("revision").and_then(Value::as_str) == Some(lease.revision.as_str());
+    let execution_matches = execution_id
+        .is_none_or(|expected| result.get("executionID").and_then(Value::as_str) == Some(expected));
+    if identity_matches && execution_matches {
+        return Ok(());
+    }
+    Err(PluginHostError::Protocol(
+        "plugin host response generation lease does not match the request".to_string(),
+    ))
 }
 
 pub struct JsonRpcPeer {
@@ -266,9 +388,24 @@ pub struct JsonRpcPeer {
 
 impl JsonRpcPeer {
     pub fn start(stream: TcpStream, generation: u64, max_frame_bytes: usize) -> Self {
+        Self::start_with_capabilities(
+            stream,
+            generation,
+            max_frame_bytes,
+            PluginHostCapabilities::default(),
+        )
+    }
+
+    pub fn start_with_capabilities(
+        stream: TcpStream,
+        generation: u64,
+        max_frame_bytes: usize,
+        capabilities: PluginHostCapabilities,
+    ) -> Self {
         let (outbound, receiver) = mpsc::channel(OUTBOUND_CAPACITY);
         let state = Arc::new(PeerState {
             generation,
+            capabilities,
             max_frame_bytes,
             sequence: AtomicU64::new(0),
             admission: Mutex::new(()),
@@ -296,6 +433,7 @@ impl JsonRpcPeer {
 
 pub(super) struct PeerState {
     pub(super) generation: u64,
+    pub(super) capabilities: PluginHostCapabilities,
     pub(super) max_frame_bytes: usize,
     pub(super) sequence: AtomicU64,
     pub(super) admission: Mutex<()>,

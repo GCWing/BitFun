@@ -29,5 +29,8 @@ pub use reference_source::{
 pub use skill_source::{
     OpenCodeConfiguredSkillRoot, OpenCodeSkillRootProvider, OpenCodeSkillRootProviderOptions,
 };
-pub use source_adapter::load_opencode_package_adapter;
+pub use source_adapter::{
+    load_opencode_config_snapshot, load_opencode_package_adapter, OpenCodeConfigSnapshot,
+    OpenCodeConfigSnapshotError,
+};
 pub use tool_source::{OpenCodeToolProvider, OpenCodeToolProviderOptions};

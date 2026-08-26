@@ -27,6 +27,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "opencode-plugin-host")]
+pub(crate) fn opencode_config_snapshot(
+    workspace: &Path,
+) -> Result<bitfun_opencode_adapter::OpenCodeConfigSnapshot, String> {
+    bitfun_opencode_adapter::load_opencode_config_snapshot(workspace)
+        .map_err(|error| error.to_string())
+}
+
 const PREVIEW_PROJECT_ID: &str = "managed-plugin-preview";
 const PREVIEW_WORKSPACE_ID: &str = "managed-plugin-preview";
 const DSH_MANIFEST_ADAPTER_ID: &str = "dsh_compatible";

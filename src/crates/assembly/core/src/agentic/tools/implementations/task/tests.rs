@@ -1,5 +1,6 @@
 use super::{
-    AgentInterruptTool, AgentSendInputTool, AgentSpawnTool, LaunchReviewAgentTool, TaskTool,
+    execution::resolved_subagent_is_available, AgentInterruptTool, AgentSendInputTool,
+    AgentSpawnTool, LaunchReviewAgentTool, TaskTool,
 };
 use crate::agentic::agents::CustomSubagentConfig;
 use crate::agentic::agents::{
@@ -22,6 +23,17 @@ use std::sync::Arc;
 
 struct PromptOrderTestAgent {
     id: String,
+}
+
+#[test]
+fn external_subagent_validation_accepts_model_emitted_casing() {
+    let available = vec!["FileFinder".to_string(), "explore".to_string()];
+
+    assert!(resolved_subagent_is_available(
+        &available,
+        "Explore",
+        "external_subagent_runtime:opencode-plugin:explore"
+    ));
 }
 
 #[async_trait]
