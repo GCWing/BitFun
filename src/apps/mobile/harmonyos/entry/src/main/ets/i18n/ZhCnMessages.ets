@@ -445,6 +445,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['chat.showLess', '收起'],
   ['chat.processing', '正在处理'],
   ['chat.sendFailed', '发送失败，请检查连接后重试'],
+  ['chat.responseFailed', '本次回复失败'],
   ['chat.error', '错误'],
   ['chat.output', '输出'],
   ['chat.approve', '批准'],

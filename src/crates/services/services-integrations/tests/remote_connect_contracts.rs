@@ -473,7 +473,25 @@ fn remote_chat_history_assembly_preserves_in_progress_assistant_history() {
     assert_eq!(messages[0].role, "user");
     assert_eq!(messages[1].role, "assistant");
     assert_eq!(messages[1].content, "visible text");
+    assert_eq!(messages[1].status.as_deref(), Some("active"));
     assert_eq!(messages[1].tools.as_ref().unwrap()[0].status, "running");
+}
+
+#[test]
+fn remote_chat_history_assembly_preserves_failed_turn_error() {
+    let mut turn = remote_history_contract_turn(false);
+    turn.status = "failed".to_string();
+    turn.error = Some("Model request could not reach the configured proxy".to_string());
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1].turn_id.as_deref(), Some("turn-1"));
+    assert_eq!(messages[1].status.as_deref(), Some("failed"));
+    assert_eq!(
+        messages[1].error.as_deref(),
+        Some("Model request could not reach the configured proxy")
+    );
 }
 
 #[test]
@@ -519,6 +537,8 @@ fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
             data_url: "data:image/png;base64,abcd".to_string(),
         }],
         is_in_progress,
+        status: if is_in_progress { "active" } else { "done" }.to_string(),
+        error: None,
         start_time_ms: 1_000,
         rounds: vec![RemoteChatHistoryRound {
             start_time_ms: 1_100,
@@ -1919,6 +1939,9 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
         content: "done".to_string(),
         timestamp: "1".to_string(),
         metadata: None,
+        turn_id: Some("turn-1".to_string()),
+        status: Some("done".to_string()),
+        error: None,
         tools: Some(vec![RemoteToolStatus {
             id: "tool-1".to_string(),
             name: "bash".to_string(),
@@ -1944,6 +1967,9 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
     let json = serde_json::to_value(chat).expect("serialize chat message");
 
     assert_eq!(json["id"], "msg-1");
+    assert_eq!(json["turn_id"], "turn-1");
+    assert_eq!(json["status"], "done");
+    assert!(json.get("error").is_none());
     assert_eq!(json["tools"][0]["start_ms"], 42);
     assert_eq!(json["items"][0]["type"], "tool");
     assert_eq!(json["images"][0]["data_url"], "data:image/png;base64,abc");
@@ -2094,6 +2120,7 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     let active_turn = ActiveTurnSnapshot {
         turn_id: "turn-1".to_string(),
         status: "active".to_string(),
+        error: None,
         text: String::new(),
         thinking: String::new(),
         tools: vec![RemoteToolStatus {
@@ -2749,6 +2776,9 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         content: "answer".to_string(),
         timestamp: "2".to_string(),
         metadata: None,
+        turn_id: Some("turn-1".to_string()),
+        status: Some("done".to_string()),
+        error: None,
         tools: None,
         thinking: None,
         items: None,

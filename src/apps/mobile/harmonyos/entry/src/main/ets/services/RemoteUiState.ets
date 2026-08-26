@@ -142,6 +142,7 @@ export class RemoteUiState {
         text: item.text,
         status: 'failed',
         detail: item.detail,
+        error: item.error,
         timestamp: item.timestamp,
         thinking: item.thinking,
         tools: item.tools,
@@ -237,6 +238,7 @@ export class RemoteUiState {
       text: hasIncomingText ? incoming.text : previous.text,
       status: incoming.status || previous.status,
       detail: incoming.detail || previous.detail,
+      error: incoming.error || previous.error,
       timestamp: incoming.timestamp || previous.timestamp,
       // Final text without a thinking field still clears streamed thinking.
       // An empty stub must not wipe a body the previous snapshot already had.

@@ -356,6 +356,14 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
         user_timestamp_ms: turn.user_message.timestamp,
         user_images: user_projection.images,
         is_in_progress: turn.status == TurnStatus::InProgress,
+        status: match &turn.status {
+            TurnStatus::InProgress => "active",
+            TurnStatus::Completed => "done",
+            TurnStatus::Error => "failed",
+            TurnStatus::Cancelled => "cancelled",
+        }
+        .to_string(),
+        error: turn.error.clone(),
         start_time_ms: turn.start_time,
         rounds,
     }
@@ -2970,6 +2978,7 @@ mod tests {
 
         assert_eq!(messages[1].role, "assistant");
         assert_eq!(messages[1].content, "visible text");
+        assert_eq!(messages[1].status.as_deref(), Some("done"));
         assert_eq!(messages[1].thinking.as_deref(), Some("visible thought"));
         let items = messages[1].items.as_ref().expect("assistant items");
         assert_eq!(items.len(), 3);
@@ -2992,7 +3001,24 @@ mod tests {
         assert_eq!(messages[0].role, "user");
         assert_eq!(messages[1].role, "assistant");
         assert_eq!(messages[1].content, "visible text");
+        assert_eq!(messages[1].status.as_deref(), Some("active"));
         assert_eq!(messages[1].tools.as_ref().unwrap()[0].status, "running");
+    }
+
+    #[test]
+    fn core_service_agent_runtime_owner_preserves_failed_remote_turn_error() {
+        let mut turn = remote_history_test_turn(TurnStatus::Error, None);
+        turn.error = Some("AI client could not reach the configured proxy".to_string());
+
+        let messages = remote_chat_messages_from_turns(&[turn]);
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1].turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(messages[1].status.as_deref(), Some("failed"));
+        assert_eq!(
+            messages[1].error.as_deref(),
+            Some("AI client could not reach the configured proxy")
+        );
     }
 
     #[test]

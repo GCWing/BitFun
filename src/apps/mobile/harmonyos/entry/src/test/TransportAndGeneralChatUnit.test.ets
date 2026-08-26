@@ -1694,6 +1694,32 @@ export default function transportAndGeneralChatUnitTest() {
       expect(message.tools ? message.tools.length : 0).assertEqual(2);
     });
 
+    it('maps persisted remote turn failures', 0, () => {
+      const message = RemoteResponseMapper.chatMessage({
+        id: 'turn-failed-1_assistant',
+        turn_id: 'turn-failed-1',
+        role: 'assistant',
+        content: '',
+        status: 'failed',
+        error: 'AI client could not reach the configured proxy'
+      });
+
+      expect(message.turnId || '').assertEqual('turn-failed-1');
+      expect(message.status).assertEqual('failed');
+      expect(message.error || '').assertEqual('AI client could not reach the configured proxy');
+    });
+
+    it('maps live remote turn failures before history persistence', 0, () => {
+      const message = RemoteResponseMapper.activeTurnToMessage({
+        turn_id: 'turn-failed-live',
+        status: 'failed',
+        error: 'AI client could not reach the configured proxy'
+      });
+
+      expect(message.status).assertEqual('failed');
+      expect(message.error || '').assertEqual('AI client could not reach the configured proxy');
+    });
+
     it('uses fallback ids for message rendering keys', 0, () => {
       const fromMessageId = RemoteResponseMapper.chatMessage({
         message_id: 'desktop-message-1',

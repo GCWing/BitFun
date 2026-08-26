@@ -1,9 +1,10 @@
 import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ActivityGroupPolicy, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
 import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
-import { LINE } from './Theme';
+import { ACCENT, INK, LINE, RED } from './Theme';
 import { MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
 import { ChatMessageRetryAction, ChatTypingDots, ChatUserMessageBubble } from './ChatMessageChrome';
 import { SubagentTaskCard } from './SubagentTaskCard';
@@ -82,7 +83,12 @@ export struct ChatMessageBubble {
         if (this.item.images && this.item.images.length > 0) {
           this.MessageImages(this.item.images)
         }
-        if (this.item.status === 'failed' && this.showRetryAction &&
+        if (this.isFailedAssistant(this.item) && (this.item.error || '').trim().length > 0) {
+          this.AssistantFailure(
+            this.item.error || '',
+            this.showRetryAction ? (this.item.detail || '') : ''
+          )
+        } else if (this.item.status === 'failed' && this.showRetryAction &&
           (this.item.detail || '').trim().length > 0) {
           ChatMessageRetryAction({
             assistant: true,
@@ -98,6 +104,33 @@ export struct ChatMessageBubble {
     .width('100%')
     .alignItems(VerticalAlign.Top)
     .padding({ top: 2, bottom: 10 })
+  }
+
+  @Builder
+  AssistantFailure(errorText: string, retryText: string) {
+    Column({ space: 6 }) {
+      Text(RemoteI18n.t('chat.responseFailed'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(RED)
+      Text(errorText.trim())
+        .fontSize(13)
+        .lineHeight(19)
+        .fontColor(INK)
+      if (retryText.trim().length > 0) {
+        Text(RemoteI18n.t('common.retry'))
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(ACCENT)
+          .height(28)
+          .padding({ right: 10 })
+          .onClick(() => this.onRetryMessage(retryText))
+      }
+    }
+    .width('100%')
+    .padding({ left: 12, top: 2, bottom: 2 })
+    .border({ width: { left: 2 }, color: RED })
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -476,6 +509,10 @@ export struct ChatMessageBubble {
       status === 'success' ||
       status === 'sent' ||
       status.length === 0;
+  }
+
+  private isFailedAssistant(item: ConversationUiMessage): boolean {
+    return item.role !== 'user' && (item.status || '').toLowerCase() === 'failed';
   }
 
   private finalMessageText(item: ConversationUiMessage): string {

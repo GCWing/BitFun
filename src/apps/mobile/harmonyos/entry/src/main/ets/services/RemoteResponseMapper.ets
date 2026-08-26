@@ -118,10 +118,12 @@ export class RemoteResponseMapper {
     const tools = RemoteResponseMapper.toolsFromExplicitOrItems(item.tools || [], item.items || []);
     const message: ChatMessage = {
       id: RemoteResponseMapper.messageId(item, text),
+      turnId: item.turn_id,
       role: item.role,
       text: text || item.content || '',
-      status: item.role === 'assistant' ? 'done' : 'sent',
+      status: item.status || (item.role === 'assistant' ? 'done' : 'sent'),
       detail: RemoteResponseMapper.messageDetail(tools),
+      error: item.error,
       timestamp: item.timestamp,
       thinking: item.thinking,
       tools,
@@ -142,6 +144,7 @@ export class RemoteResponseMapper {
       status: turn.status || 'active',
       renderVersion,
       detail: RemoteResponseMapper.messageDetail(tools),
+      error: turn.error,
       thinking: turn.thinking,
       tools,
       items: turn.items || []

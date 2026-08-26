@@ -445,6 +445,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['chat.showLess', 'Show less'],
   ['chat.processing', 'Processing'],
   ['chat.sendFailed', 'Send failed. Check the connection and retry.'],
+  ['chat.responseFailed', 'This response failed'],
   ['chat.error', 'Error'],
   ['chat.output', 'Output'],
   ['chat.approve', 'Approve'],

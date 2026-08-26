@@ -611,6 +611,7 @@ mod tests {
         let active_turn = ActiveTurnSnapshot {
             turn_id: "turn-1".to_string(),
             status: "active".to_string(),
+            error: None,
             text: String::new(),
             thinking: String::new(),
             tools: vec![RemoteToolStatus {
