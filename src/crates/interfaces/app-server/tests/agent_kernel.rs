@@ -527,9 +527,13 @@ impl ports::AgentTurnSettlementPort for Phase2Provider {
     async fn wait_for_turn_settlement(
         &self,
         request: ports::AgentTurnSettlementRequest,
-    ) -> PortResult<()> {
+    ) -> PortResult<ports::AgentTurnSettlementResult> {
         self.settlements.lock().unwrap().push(request);
-        Ok(())
+        Ok(ports::AgentTurnSettlementResult {
+            status: ports::AgentTurnSettlementStatus::Completed,
+            final_response: Some("fixture result".to_string()),
+            finish_reason: Some("stop".to_string()),
+        })
     }
 }
 

@@ -704,6 +704,8 @@ mod tests {
                 "persisted child result".to_string(),
                 &[],
                 TurnStats::default(),
+                Some("complete".to_string()),
+                Some(true),
             )
             .await
             .expect("complete child turn");

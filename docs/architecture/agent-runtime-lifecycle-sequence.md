@@ -239,7 +239,8 @@
 
 5. **结算同步点（[runtime.rs:1038-1051](../../src/crates/execution/agent-runtime/src/runtime.rs#L1038-L1051)）**：
    `wait_for_turn_settlement()` 是阻塞调用，调用方用它等 turn 进入
-   `TurnOutcome::{Completed, Cancelled, Failed}`，之后才读 transcript / 算 usage。
+   `TurnOutcome::{Completed, Cancelled, Failed}`，并取得 Runtime 确认的终态、最终回答和结束原因；
+   transcript 与 usage 仍按需通过各自的只读接口获取。
 
 6. **post-call hooks（[post_call_hooks.rs:156-172](../../src/crates/execution/agent-runtime/src/post_call_hooks.rs#L156-L172)）**：
    仅在「成功工具调用后」（`SuccessfulToolPostCall`）触发，当前唯一具体钩子是

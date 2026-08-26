@@ -55,7 +55,9 @@ use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 use bitfun_core_types::SessionExecutionTarget;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
-use bitfun_runtime_ports::{PermissionMode, SessionStoragePathRequest, SessionStorePort};
+use bitfun_runtime_ports::{
+    AgentTurnSettlementResult, PermissionMode, SessionStoragePathRequest, SessionStorePort,
+};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
@@ -66,9 +68,9 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -311,6 +313,12 @@ pub struct SessionManager {
     /// removed with that Session; they are never serialized into public config.
     transient_session_ids: Arc<DashMap<String, ()>>,
 
+    /// Recent authoritative terminal results for live Turn settlement callers.
+    /// The bounded cache preserves the exact execution result; persisted Turns
+    /// remain the fallback, while transient Sessions depend on this copy.
+    turn_settlement_results: Arc<DashMap<(String, String), AgentTurnSettlementResult>>,
+    turn_settlement_result_order: Arc<Mutex<VecDeque<(String, String)>>>,
+
     /// Exact admission accounting for loaded sessions. A permit is acquired
     /// before create/restore publishes runtime state and released on unload/delete/eviction.
     active_session_capacity: Arc<Semaphore>,
@@ -467,6 +475,7 @@ impl SessionManager {
     pub(crate) fn evict_loaded_session_for_test(&self, session_id: &str) {
         self.sessions.remove(session_id);
         self.transient_session_ids.remove(session_id);
+        self.clear_turn_settlement_results(session_id);
         self.release_active_session_reservation(session_id);
         self.release_session_write_lock(session_id);
     }
@@ -2020,6 +2029,8 @@ impl SessionManager {
             sessions: Arc::new(DashMap::new()),
             active_turn_permission_modes: Arc::new(DashMap::new()),
             transient_session_ids: Arc::new(DashMap::new()),
+            turn_settlement_results: Arc::new(DashMap::new()),
+            turn_settlement_result_order: Arc::new(Mutex::new(VecDeque::new())),
             active_session_capacity: Arc::new(Semaphore::new(config.max_active_sessions)),
             active_session_permits: Arc::new(DashMap::new()),
             session_storage_path_index: Arc::new(DashMap::new()),
@@ -2052,6 +2063,62 @@ impl SessionManager {
 
     pub(crate) fn persistence_manager(&self) -> Arc<PersistenceManager> {
         self.persistence_manager.clone()
+    }
+
+    pub(crate) fn record_turn_settlement_result(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        result: AgentTurnSettlementResult,
+    ) {
+        const MAX_RECENT_TURN_SETTLEMENT_RESULTS: usize = 1_024;
+        let key = (session_id.to_string(), turn_id.to_string());
+        let mut order = self
+            .turn_settlement_result_order
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        order.retain(|existing| existing != &key);
+        self.turn_settlement_results.insert(key.clone(), result);
+        order.push_back(key);
+        while order.len() > MAX_RECENT_TURN_SETTLEMENT_RESULTS {
+            if let Some(oldest) = order.pop_front() {
+                self.turn_settlement_results.remove(&oldest);
+            }
+        }
+    }
+
+    pub(crate) fn turn_settlement_result(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Option<AgentTurnSettlementResult> {
+        self.turn_settlement_results
+            .get(&(session_id.to_string(), turn_id.to_string()))
+            .map(|entry| entry.value().clone())
+    }
+
+    fn clear_turn_settlement_results(&self, session_id: &str) {
+        let mut order = self
+            .turn_settlement_result_order
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        order.retain(|key| {
+            if key.0 != session_id {
+                return true;
+            }
+            self.turn_settlement_results.remove(key);
+            false
+        });
+    }
+
+    fn clear_turn_settlement_result(&self, session_id: &str, turn_id: &str) {
+        let key = (session_id.to_string(), turn_id.to_string());
+        let mut order = self
+            .turn_settlement_result_order
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        order.retain(|existing| existing != &key);
+        self.turn_settlement_results.remove(&key);
     }
 
     pub async fn append_evidence_event(
@@ -2470,6 +2537,8 @@ impl SessionManager {
         let sessions = self.sessions.clone();
         let active_turn_permission_modes = self.active_turn_permission_modes.clone();
         let transient_session_ids = self.transient_session_ids.clone();
+        let turn_settlement_results = self.turn_settlement_results.clone();
+        let turn_settlement_result_order = self.turn_settlement_result_order.clone();
         let active_session_capacity = self.active_session_capacity.clone();
         let active_session_permits = self.active_session_permits.clone();
         let session_storage_path_index = self.session_storage_path_index.clone();
@@ -2505,6 +2574,8 @@ impl SessionManager {
                 sessions,
                 active_turn_permission_modes,
                 transient_session_ids,
+                turn_settlement_results,
+                turn_settlement_result_order,
                 active_session_capacity,
                 active_session_permits,
                 session_storage_path_index,
@@ -4869,6 +4940,7 @@ impl SessionManager {
         .await?;
         self.sessions.remove(session_id);
         self.transient_session_ids.remove(session_id);
+        self.clear_turn_settlement_results(session_id);
         self.release_active_session_reservation(session_id);
         self.session_storage_path_index.remove(session_id);
         Ok(true)
@@ -4913,6 +4985,7 @@ impl SessionManager {
         if self.sessions.remove(session_id).is_none() {
             return Ok(false);
         }
+        self.clear_turn_settlement_results(session_id);
         self.release_active_session_reservation(session_id);
         self.active_turn_permission_modes.remove(session_id);
         clear_session_runtime_stores(
@@ -5087,6 +5160,7 @@ impl SessionManager {
         );
         self.sessions.remove(session_id);
         self.transient_session_ids.remove(session_id);
+        self.clear_turn_settlement_results(session_id);
         self.release_active_session_reservation(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=in_memory_remove, duration_ms={}",
@@ -6489,6 +6563,7 @@ impl SessionManager {
             None
         };
         // RefMut guard released here -- DashMap shard lock is free.
+        self.clear_turn_settlement_results(session_id);
 
         if let Some(session) = session_snapshot {
             self.persistence_manager
@@ -7619,6 +7694,8 @@ impl SessionManager {
         final_response: String,
         new_messages: &[Message],
         stats: TurnStats,
+        finish_reason: Option<String>,
+        has_final_response: Option<bool>,
     ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
             debug!(
@@ -7762,6 +7839,8 @@ impl SessionManager {
         }
         turn.status = TurnStatus::Completed;
         turn.recovery = None;
+        turn.finish_reason = finish_reason;
+        turn.has_final_response = has_final_response;
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
 
@@ -7922,6 +8001,8 @@ impl SessionManager {
         final_response: String,
         new_messages: &[Message],
         stats: TurnStats,
+        finish_reason: Option<String>,
+        has_final_response: Option<bool>,
     ) -> BitFunResult<()> {
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         let workspace_path = self
@@ -8004,6 +8085,8 @@ impl SessionManager {
         turn.status = TurnStatus::Completed;
         turn.recovery_epoch = Some(execution_generation);
         turn.recovery = None;
+        turn.finish_reason = finish_reason;
+        turn.has_final_response = has_final_response;
         turn.duration_ms = Some(stats.duration_ms);
         turn.end_time = Some(completion_timestamp);
 
@@ -8082,6 +8165,8 @@ impl SessionManager {
         Self::append_generation_rounds(&mut turn, turn_id, generation_messages, now);
         turn.status = TurnStatus::Error;
         turn.recovery = None;
+        turn.finish_reason = Some("failed".to_string());
+        turn.has_final_response = Some(false);
         turn.end_time = Some(now);
 
         if recovered_generation {
@@ -8651,6 +8736,7 @@ impl SessionManager {
             .insert(session_id.to_string(), updated_session);
         self.context_store
             .replace_context(session_id, messages.clone());
+        self.clear_turn_settlement_result(session_id, turn_id);
 
         Ok(InterruptedTurnRecoveryPlan {
             session_id: session_id.to_string(),
@@ -8931,6 +9017,8 @@ impl SessionManager {
         turn.model_rounds = model_rounds;
         turn.status = TurnStatus::Error;
         turn.error = Some(error.clone());
+        turn.finish_reason = Some("failed".to_string());
+        turn.has_final_response = Some(false);
         turn.duration_ms = Some(completion_timestamp.saturating_sub(turn.start_time));
         turn.end_time = Some(completion_timestamp);
 
@@ -8985,7 +9073,7 @@ impl SessionManager {
         &self,
         session_id: &str,
     ) -> BitFunResult<Option<Vec<DialogTurnData>>> {
-        if !self.config.enable_persistence {
+        if !self.should_persist_session_id(session_id) {
             return Ok(None);
         }
         let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
@@ -9593,7 +9681,9 @@ mod tests {
         ReasoningCatalogBinding, ReasoningConfig, ReasoningPreset, ReasoningPresetAction,
         SessionExecutionTarget,
     };
-    use bitfun_runtime_ports::SessionStoragePathRequest;
+    use bitfun_runtime_ports::{
+        AgentTurnSettlementResult, AgentTurnSettlementStatus, SessionStoragePathRequest,
+    };
     use bitfun_services_core::session::SessionBranchBoundary;
     use dashmap::{try_result::TryResult, DashMap};
     use serde_json::json;
@@ -9815,6 +9905,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn refreshed_turn_settlement_results_remain_bounded_and_clear_with_the_session() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let result = |status| AgentTurnSettlementResult {
+            status,
+            final_response: None,
+            finish_reason: None,
+        };
+
+        manager.record_turn_settlement_result(
+            "session-refresh",
+            "turn-refresh",
+            result(AgentTurnSettlementStatus::Cancelled),
+        );
+        for index in 0..1_023 {
+            manager.record_turn_settlement_result(
+                "other-session",
+                &format!("turn-{index}"),
+                result(AgentTurnSettlementStatus::Completed),
+            );
+        }
+        manager.record_turn_settlement_result(
+            "session-refresh",
+            "turn-refresh",
+            result(AgentTurnSettlementStatus::Completed),
+        );
+        manager.record_turn_settlement_result(
+            "other-session",
+            "turn-overflow",
+            result(AgentTurnSettlementStatus::Completed),
+        );
+
+        assert_eq!(
+            manager
+                .turn_settlement_result("session-refresh", "turn-refresh")
+                .map(|result| result.status),
+            Some(AgentTurnSettlementStatus::Completed)
+        );
+        manager.clear_turn_settlement_results("session-refresh");
+        assert!(manager
+            .turn_settlement_result("session-refresh", "turn-refresh")
+            .is_none());
+    }
+
+    #[tokio::test]
     async fn completion_replaces_a_projected_text_prefix_with_runtime_generation_content() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
@@ -9888,6 +10026,8 @@ mod tests {
                     total_tokens: 0,
                     duration_ms: 1,
                 },
+                Some("complete".to_string()),
+                Some(true),
             )
             .await
             .expect("completion should persist");
@@ -9898,6 +10038,8 @@ mod tests {
             .expect("turn should load")
             .expect("turn should exist");
         assert_eq!(completed.status, TurnStatus::Completed);
+        assert_eq!(completed.finish_reason.as_deref(), Some("complete"));
+        assert_eq!(completed.has_final_response, Some(true));
         assert_eq!(completed.model_rounds.len(), 1);
         assert_eq!(completed.model_rounds[0].id, "round-final");
         assert_eq!(
@@ -10543,6 +10685,8 @@ mod tests {
                     total_tokens: 0,
                     duration_ms: 1,
                 },
+                Some("complete".to_string()),
+                Some(true),
             )
             .await
             .expect_err("injected recovered completion write must fail");
@@ -10636,6 +10780,15 @@ mod tests {
             .mark_dialog_turn_interrupted(&session.session_id, &turn_id)
             .await
             .expect("turn should become interrupted");
+        manager.record_turn_settlement_result(
+            &session.session_id,
+            &turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Cancelled,
+                final_response: None,
+                finish_reason: Some("interrupted".to_string()),
+            },
+        );
         manager
             .update_session_state_for_turn_if_processing(
                 &session.session_id,
@@ -10647,6 +10800,9 @@ mod tests {
         let plan = reopen_interrupted_turn_for_test(&manager, &session.session_id, &turn_id, 0)
             .await
             .expect("turn should reopen");
+        assert!(manager
+            .turn_settlement_result(&session.session_id, &turn_id)
+            .is_none());
 
         manager
             .complete_recovered_dialog_turn(
@@ -10663,6 +10819,8 @@ mod tests {
                     total_tokens: 0,
                     duration_ms: 1,
                 },
+                Some("complete".to_string()),
+                Some(true),
             )
             .await
             .expect("recovered completion should persist");
@@ -10681,6 +10839,8 @@ mod tests {
         );
         assert!(completed.recovery.is_none());
         assert_eq!(completed.recovery_epoch, Some(plan.execution_generation));
+        assert_eq!(completed.finish_reason.as_deref(), Some("complete"));
+        assert_eq!(completed.has_final_response, Some(true));
     }
 
     #[tokio::test]
@@ -14405,6 +14565,8 @@ mod tests {
             .expect("persistence should be enabled");
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].status, TurnStatus::Error);
+        assert_eq!(turns[0].finish_reason.as_deref(), Some("failed"));
+        assert_eq!(turns[0].has_final_response, Some(false));
         assert_eq!(
             turns[0].error.as_deref(),
             Some("terminal persistence failed")

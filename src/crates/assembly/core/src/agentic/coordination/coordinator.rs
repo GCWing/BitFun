@@ -107,7 +107,8 @@ use bitfun_runtime_ports::{
     agent_workspace_references_from_metadata, resolve_permission_mode,
     AgentMessageWorkspaceReferencesRequest, AgentSessionComposerUpdate,
     AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSearchEntry,
+    AgentTurnSettlementResult, AgentTurnSettlementStatus, AgentWorkspaceReference,
+    AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSearchEntry,
     AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DelegationPolicy,
     PermissionDelegationContext, PermissionMode, PermissionModeLayers, PermissionRuntimeCeiling,
     RemoteExecPort, ResolvedPermissionMode, SessionStoragePathRequest,
@@ -2939,6 +2940,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         final_response.clone(),
                         &execution_result.new_messages,
                         stats,
+                        Some(execution_result.effective_finish_reason.clone()),
+                        Some(execution_result.has_final_response),
                     )
                     .await
             }
@@ -2950,6 +2953,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         final_response.clone(),
                         &execution_result.new_messages,
                         stats,
+                        Some(execution_result.effective_finish_reason.clone()),
+                        Some(execution_result.has_final_response),
                     )
                     .await
             }
@@ -2977,6 +2982,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await;
                 return (status, String::new());
             }
+        }
+
+        if persistence_succeeded {
+            let status = if execution_result.success && execution_result.has_final_response {
+                AgentTurnSettlementStatus::Completed
+            } else {
+                AgentTurnSettlementStatus::Failed
+            };
+            session_manager.record_turn_settlement_result(
+                session_id,
+                turn_id,
+                AgentTurnSettlementResult {
+                    status,
+                    final_response: (status == AgentTurnSettlementStatus::Completed)
+                        .then_some(final_response.clone()),
+                    finish_reason: Some(execution_result.effective_finish_reason.clone()),
+                },
+            );
         }
 
         if recovery_generation.is_some() {
@@ -3249,6 +3272,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Cancelled,
+                final_response: None,
+                finish_reason: Some("cancelled".to_string()),
+            },
+        );
+
         match session_manager
             .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
             .await
@@ -3320,6 +3353,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await;
             }
         };
+
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Cancelled,
+                final_response: None,
+                finish_reason: Some("interrupted".to_string()),
+            },
+        );
 
         match session_manager
             .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
@@ -3492,6 +3535,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 );
             }
         }
+
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Failed,
+                final_response: None,
+                finish_reason: Some("failed".to_string()),
+            },
+        );
 
         match session_manager
             .update_session_state_for_turn_if_processing(
@@ -7287,7 +7340,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         "Dialog turn not found: {turn_id}"
                     )));
                 }
-                return Err(BitFunError::Service(format!(
+                return Err(BitFunError::OutcomeUnknown(format!(
                     "Turn settlement evidence is unavailable: session_id={session_id}, turn_id={turn_id}"
                 )));
             }
@@ -13767,6 +13820,23 @@ impl ConversationCoordinator {
         }
 
         let duration_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let cancelled = cancellation_token.is_cancelled()
+            || results.iter().any(|result| {
+                result
+                    .result
+                    .result
+                    .get("category")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("cancelled")
+            });
+        let success = results.iter().all(user_shell_tool_result_succeeded);
+        let finish_reason = if cancelled {
+            "cancelled"
+        } else if success {
+            "complete"
+        } else {
+            "tool_error"
+        };
         if let Err(error) = session_manager
             .complete_dialog_turn(
                 &session_id,
@@ -13779,6 +13849,8 @@ impl ConversationCoordinator {
                     total_tokens: 0,
                     duration_ms,
                 },
+                Some(finish_reason.to_string()),
+                Some(false),
             )
             .await
         {
@@ -13796,15 +13868,6 @@ impl ConversationCoordinator {
             return;
         }
 
-        let cancelled = cancellation_token.is_cancelled()
-            || results.iter().any(|result| {
-                result
-                    .result
-                    .result
-                    .get("category")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("cancelled")
-            });
         if cancelled {
             Self::persist_cancelled_dialog_turn(
                 event_queue.as_ref(),
@@ -13816,7 +13879,6 @@ impl ConversationCoordinator {
             )
             .await;
         } else {
-            let success = results.iter().all(user_shell_tool_result_succeeded);
             let _ = session_manager
                 .update_session_state_for_turn_if_processing(
                     &session_id,
@@ -14646,7 +14708,9 @@ mod tests {
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
+    use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::permission::PermissionRequestManager;
+    use bitfun_runtime_ports::AgentTurnSettlementStatus;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 
@@ -16249,6 +16313,13 @@ mod tests {
         )
         .await;
 
+        assert_eq!(
+            session_manager
+                .turn_settlement_result(&session.session_id, &turn_id)
+                .and_then(|result| result.final_response),
+            Some("complete response".to_string())
+        );
+
         let events = coordinator.event_queue.dequeue_batch(10).await;
         assert!(events.iter().any(|envelope| matches!(
             &envelope.event,
@@ -16261,6 +16332,130 @@ mod tests {
             .delete_session_by_id(&session.session_id)
             .await
             .expect("clean up persisted test session");
+    }
+
+    #[tokio::test]
+    async fn transient_turns_keep_authoritative_terminal_results() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let session = session_manager
+            .create_transient_session_with_id_and_details(
+                Some("transient-session".to_string()),
+                "Transient completion".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create transient session");
+        let turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish".to_string(),
+                Some("turn-transient-result".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start turn");
+        let intermediate = Message::assistant("intermediate tool-round text".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-tool".to_string());
+        let final_message = Message::assistant("authoritative final answer".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-final".to_string());
+
+        ConversationCoordinator::persist_completed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &turn_id,
+            &ExecutionResult {
+                final_message: final_message.clone(),
+                total_rounds: 2,
+                success: true,
+                new_messages: vec![intermediate, final_message],
+                finish_reason: FinishReason::Complete,
+                total_tools: 1,
+                duration_ms: 1,
+                partial_recovery_reason: None,
+                effective_finish_reason: "complete".to_string(),
+                has_final_response: true,
+            },
+            None,
+        )
+        .await;
+
+        let settlement = session_manager
+            .turn_settlement_result(&session.session_id, &turn_id)
+            .expect("transient turn settlement result");
+        assert_eq!(settlement.status, AgentTurnSettlementStatus::Completed);
+        assert_eq!(
+            settlement.final_response.as_deref(),
+            Some("authoritative final answer")
+        );
+        assert_eq!(settlement.finish_reason.as_deref(), Some("complete"));
+
+        let cancelled_turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "cancel".to_string(),
+                Some("turn-transient-cancelled".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start cancelled turn");
+        ConversationCoordinator::persist_cancelled_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &cancelled_turn_id,
+            true,
+        )
+        .await;
+        let cancelled = session_manager
+            .turn_settlement_result(&session.session_id, &cancelled_turn_id)
+            .expect("cancelled turn settlement result");
+        assert_eq!(cancelled.status, AgentTurnSettlementStatus::Cancelled);
+        assert_eq!(cancelled.final_response, None);
+        assert_eq!(cancelled.finish_reason.as_deref(), Some("cancelled"));
+
+        let failed_turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "fail".to_string(),
+                Some("turn-transient-failed".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start failed turn");
+        ConversationCoordinator::persist_failed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &failed_turn_id,
+            &BitFunError::AIClient("provider failed".to_string()),
+            true,
+        )
+        .await;
+        let failed = session_manager
+            .turn_settlement_result(&session.session_id, &failed_turn_id)
+            .expect("failed turn settlement result");
+        assert_eq!(failed.status, AgentTurnSettlementStatus::Failed);
+        assert_eq!(failed.final_response, None);
+        assert_eq!(failed.finish_reason.as_deref(), Some("failed"));
     }
 
     async fn create_two_turn_session(
@@ -16299,6 +16494,8 @@ mod tests {
                     format!("reply to {prompt}"),
                     &[],
                     TurnStats::default(),
+                    Some("complete".to_string()),
+                    Some(true),
                 )
                 .await
                 .expect("complete persisted turn");

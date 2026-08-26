@@ -11,9 +11,10 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionModelUpdateRequest,
     AgentSessionReleaseRequest, AgentSessionRestoreRequest, AgentSessionWorkspaceRequest,
     AgentSubmissionSource, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
-    DialogSubmissionPolicy, DialogSubmitOutcome, PermissionReply, PermissionReplySource,
-    PermissionRequest, PermissionRequestEvent, PermissionRequestSourceKind, PortError,
-    PortErrorKind, RuntimeError, TurnTokenUsage, AUTO_APPROVE_ASK_CONTEXT_KEY,
+    AgentTurnSettlementResult, AgentTurnSettlementStatus, DialogSubmissionPolicy,
+    DialogSubmitOutcome, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent, PermissionRequestSourceKind, PortError, PortErrorKind, RuntimeError,
+    TurnTokenUsage, AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_core_types::ErrorCategory;
@@ -235,7 +236,7 @@ struct QueryLease {
     session_id: String,
     turn_id: String,
     operation_id: String,
-    output: StdMutex<QueryOutputBuffer>,
+    event_budget: StdMutex<QueryEventBudget>,
     structured_output_requested: bool,
     usage: StdMutex<Option<TurnTokenUsage>>,
     terminal: AtomicBool,
@@ -246,8 +247,7 @@ struct QueryLease {
 }
 
 #[derive(Default)]
-struct QueryOutputBuffer {
-    text: String,
+struct QueryEventBudget {
     wire_bytes: usize,
     structured_attempt: Option<QueryOutputAttempt>,
 }
@@ -259,11 +259,10 @@ struct QueryOutputAttempt {
     attempt_index: Option<u32>,
 }
 
-impl QueryOutputBuffer {
-    fn append(&mut self, text: &str, structured_attempt: Option<QueryOutputAttempt>) -> bool {
+impl QueryEventBudget {
+    fn observe(&mut self, text: &str, structured_attempt: Option<QueryOutputAttempt>) -> bool {
         if let Some(attempt) = structured_attempt {
             if self.structured_attempt.as_ref() != Some(&attempt) {
-                self.text.clear();
                 self.wire_bytes = 0;
                 self.structured_attempt = Some(attempt);
             }
@@ -273,7 +272,6 @@ impl QueryOutputBuffer {
         if encoded_bytes > MAX_QUERY_OUTPUT_WIRE_BYTES.saturating_sub(self.wire_bytes) {
             return false;
         }
-        self.text.push_str(text);
         self.wire_bytes += encoded_bytes;
         true
     }
@@ -1409,7 +1407,7 @@ impl SdkHostConnection {
             session_id: submitted_session_id.clone(),
             turn_id: turn_id.clone(),
             operation_id: operation_id.clone(),
-            output: StdMutex::new(QueryOutputBuffer::default()),
+            event_budget: StdMutex::new(QueryEventBudget::default()),
             structured_output_requested: params.output_schema.is_some(),
             usage: StdMutex::new(None),
             terminal: AtomicBool::new(false),
@@ -1618,10 +1616,10 @@ impl SdkHostConnection {
                     if let Some(projected) = project_query_event(&envelope.event) {
                         if let QueryEvent::AssistantTextDelta { text } = &projected {
                             let output_exceeded = {
-                                let mut output = lease
-                                    .output
+                                let mut event_budget = lease
+                                    .event_budget
                                     .lock()
-                                    .expect("SDK Host Query output lock poisoned");
+                                    .expect("SDK Host Query event budget lock poisoned");
                                 let structured_attempt =
                                     lease.structured_output_requested.then(|| {
                                         match &envelope.event {
@@ -1640,7 +1638,7 @@ impl SdkHostConnection {
                                             ),
                                         }
                                     });
-                                !output.append(text, structured_attempt)
+                                !event_budget.observe(text, structured_attempt)
                             };
                             if output_exceeded {
                                 connection
@@ -1692,7 +1690,9 @@ impl SdkHostConnection {
                     }
                 }
                 if let Some((status, error)) = terminal {
-                    connection.finish_query(&lease, status, error, true).await;
+                    connection
+                        .finish_query(&lease, status, error, true, false)
+                        .await;
                     return;
                 }
             }
@@ -2077,7 +2077,7 @@ impl SdkHostConnection {
                 };
                 for query in queries {
                     query.stop_forwarding.cancel();
-                    self.finish_query(&query, QueryTerminalStatus::Cancelled, None, true)
+                    self.finish_query(&query, QueryTerminalStatus::Cancelled, None, true, false)
                         .await;
                 }
                 self.send_success(
@@ -2604,6 +2604,7 @@ impl SdkHostConnection {
         status: QueryTerminalStatus,
         error: Option<QueryResultError>,
         emit_result: bool,
+        preserve_host_failure: bool,
     ) {
         if !lease.finish_once() {
             return;
@@ -2628,7 +2629,11 @@ impl SdkHostConnection {
                 }),
         )
         .await;
-        let settlement_confirmed = matches!(settlement, Ok(Ok(())));
+        let settlement_result = match settlement {
+            Ok(Ok(result)) => Some(result),
+            Ok(Err(_)) | Err(_) => None,
+        };
+        let settlement_confirmed = settlement_result.is_some();
         {
             let mut state = self.inner.state.lock().await;
             state.queries.remove(&lease.query_id);
@@ -2646,7 +2651,14 @@ impl SdkHostConnection {
             return;
         }
         if emit_result {
-            self.send_query_result(lease, status, error).await;
+            self.send_query_result(
+                lease,
+                status,
+                error,
+                settlement_result.expect("confirmed settlement result"),
+                preserve_host_failure,
+            )
+            .await;
         }
     }
 
@@ -2655,16 +2667,52 @@ impl SdkHostConnection {
         lease: &QueryLease,
         mut status: QueryTerminalStatus,
         mut error: Option<QueryResultError>,
+        settlement: AgentTurnSettlementResult,
+        preserve_host_failure: bool,
     ) -> bool {
         if !lease.emit_output {
             return true;
         }
-        let output_text = lease
-            .output
-            .lock()
-            .expect("SDK Host Query output lock poisoned")
-            .text
-            .clone();
+        let mut output_text = settlement.final_response.unwrap_or_default();
+        match settlement.status {
+            AgentTurnSettlementStatus::Completed if !preserve_host_failure => {
+                status = QueryTerminalStatus::Completed;
+                error = None;
+            }
+            AgentTurnSettlementStatus::Completed => {}
+            AgentTurnSettlementStatus::Failed => {
+                status = QueryTerminalStatus::Failed;
+                if error.is_none() {
+                    error = Some(QueryResultError::new(
+                        ErrorCode::Internal,
+                        false,
+                        None,
+                        &lease.query_id,
+                        format!(
+                            "Query completed unsuccessfully: {}",
+                            settlement.finish_reason.as_deref().unwrap_or("failed")
+                        ),
+                    ));
+                }
+            }
+            AgentTurnSettlementStatus::Cancelled => {
+                if !preserve_host_failure {
+                    status = QueryTerminalStatus::Cancelled;
+                    error = None;
+                }
+            }
+        }
+        if json_string_content_bytes(&output_text) > MAX_QUERY_OUTPUT_WIRE_BYTES {
+            output_text.clear();
+            status = QueryTerminalStatus::Failed;
+            error = Some(QueryResultError::new(
+                ErrorCode::Overloaded,
+                false,
+                None,
+                &lease.query_id,
+                "SDK Host Query output exceeded the protocol size limit",
+            ));
+        }
         let structured =
             if lease.structured_output_requested && status == QueryTerminalStatus::Completed {
                 match serde_json::from_str(&output_text) {
@@ -2757,8 +2805,14 @@ impl SdkHostConnection {
                 );
             }
         }
-        self.finish_query(lease, QueryTerminalStatus::Failed, Some(error), emit_result)
-            .await;
+        self.finish_query(
+            lease,
+            QueryTerminalStatus::Failed,
+            Some(error),
+            emit_result,
+            true,
+        )
+        .await;
     }
 
     async fn reject_permission_and_finish(
@@ -3409,8 +3463,8 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
 #[cfg(test)]
 mod runtime_error_tests {
     use super::{
-        is_local_image_path, runtime_error_facts, runtime_error_kind, QueryOutputAttempt,
-        QueryOutputBuffer,
+        is_local_image_path, runtime_error_facts, runtime_error_kind, QueryEventBudget,
+        QueryOutputAttempt,
     };
     use crate::protocol::{ErrorCode, RecoveryAction};
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
@@ -3424,28 +3478,30 @@ mod runtime_error_tests {
     }
 
     #[test]
-    fn structured_output_keeps_only_the_last_model_attempt() {
+    fn structured_event_budget_keeps_only_the_last_model_attempt() {
         let attempt = |round_id: &str| QueryOutputAttempt {
             round_id: round_id.to_string(),
             attempt_id: Some(format!("{round_id}-attempt")),
             attempt_index: Some(0),
         };
-        let mut output = QueryOutputBuffer::default();
+        let mut budget = QueryEventBudget::default();
 
-        assert!(output.append(r#"{"draft":true}"#, Some(attempt("round-1"))));
-        assert!(output.append(r#"{"final":true}"#, Some(attempt("round-2"))));
+        assert!(budget.observe(r#"{"draft":true}"#, Some(attempt("round-1"))));
+        let first_attempt_bytes = budget.wire_bytes;
+        assert!(budget.observe(r#"{"final":true}"#, Some(attempt("round-2"))));
 
-        assert_eq!(output.text, r#"{"final":true}"#);
+        assert_eq!(budget.wire_bytes, first_attempt_bytes);
     }
 
     #[test]
-    fn plain_output_still_aggregates_model_rounds() {
-        let mut output = QueryOutputBuffer::default();
+    fn plain_event_budget_still_aggregates_model_rounds() {
+        let mut budget = QueryEventBudget::default();
 
-        assert!(output.append("first", None));
-        assert!(output.append("second", None));
+        assert!(budget.observe("first", None));
+        let first_bytes = budget.wire_bytes;
+        assert!(budget.observe("second", None));
 
-        assert_eq!(output.text, "firstsecond");
+        assert!(budget.wire_bytes > first_bytes);
     }
 
     #[test]
