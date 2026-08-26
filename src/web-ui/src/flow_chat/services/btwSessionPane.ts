@@ -4,6 +4,7 @@ import type { PanelContent } from '@/app/components/panels/base/types';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import type { CanvasTab } from '@/app/components/panels/content-canvas/types';
 import { flowChatStore } from '../store/FlowChatStore';
+import type { Session } from '../types/flow-chat';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 import { flowChatManager } from './FlowChatManager';
 
@@ -163,7 +164,23 @@ export async function loadBtwSessionHistory(params: LoadBtwSessionHistoryParams)
   }
 }
 
-export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
+interface EnsureBtwSessionAvailableResult {
+  historyLoadRequested: boolean;
+}
+
+const isSessionHistoryComplete = (session: Session | undefined): boolean =>
+  Boolean(
+    session &&
+    session.historyState === 'ready' &&
+    session.isPartial !== true &&
+    typeof session.loadedTurnCount === 'number' &&
+    typeof session.totalTurnCount === 'number' &&
+    session.loadedTurnCount >= session.totalTurnCount
+  );
+
+function ensureBtwSessionAvailableInternal(
+  params: EnsureBtwSessionAvailableParams,
+): EnsureBtwSessionAvailableResult {
   const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
   const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
   const resolvedWorkspacePath = params.workspacePath || parentSession?.workspacePath;
@@ -220,7 +237,7 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
 
   const workspacePath = resolvedWorkspacePath || sessionToHydrate?.workspacePath;
   if (!shouldHydrate || !workspacePath) {
-    return;
+    return { historyLoadRequested: false };
   }
 
   void loadBtwSessionHistory({
@@ -233,6 +250,11 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
         }
       : {}),
   }).catch(() => undefined);
+  return { historyLoadRequested: true };
+}
+
+export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
+  ensureBtwSessionAvailableInternal(params);
 }
 
 export function openBtwSessionInAuxPane(params: {
@@ -250,7 +272,35 @@ export function openBtwSessionInAuxPane(params: {
   includeInternal?: boolean;
   viewKind?: BtwSessionViewKind;
 }): void {
-  ensureBtwSessionAvailable(params);
+  const ensureResult = ensureBtwSessionAvailableInternal(params);
+  const childSession = flowChatStore.getState().sessions.get(params.childSessionId);
+  const isSubagentSession =
+    params.sessionKind === 'subagent' || childSession?.sessionKind === 'subagent';
+  if (
+    isSubagentSession &&
+    !ensureResult.historyLoadRequested &&
+    !isSessionHistoryComplete(childSession)
+  ) {
+    const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
+    const workspacePath =
+      params.workspacePath || childSession?.workspacePath || parentSession?.workspacePath;
+    if (workspacePath) {
+      void loadBtwSessionHistory({
+        childSessionId: params.childSessionId,
+        ...(!childSession?.workspacePath
+          ? {
+              workspacePath,
+              remoteConnectionId:
+                params.remoteConnectionId ||
+                childSession?.remoteConnectionId ||
+                parentSession?.remoteConnectionId,
+              remoteSshHost:
+                params.remoteSshHost || childSession?.remoteSshHost || parentSession?.remoteSshHost,
+            }
+          : {}),
+      }).catch(() => undefined);
+    }
+  }
 
   const content = buildBtwSessionPanelContent(
     params.childSessionId,

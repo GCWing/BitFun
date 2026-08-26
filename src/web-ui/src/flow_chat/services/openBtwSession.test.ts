@@ -259,6 +259,70 @@ describe('openBtwSessionInAuxPane', () => {
     );
   });
 
+  it('hydrates incomplete live subagent history when explicitly opening the aux pane', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: false,
+      historyState: 'ready',
+      config: { agentType: 'Explore' },
+      workspacePath: 'D:\\workspace\\repo',
+      dialogTurns: [
+        {
+          id: 'post-restart-turn',
+          status: 'processing',
+          modelRounds: [],
+          userMessage: { id: 'user-1', type: 'user', content: 'continue', timestamp: 1 },
+          timestamp: 1,
+        },
+      ],
+    });
+
+    openBtwSessionInAuxPane({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      expand: false,
+    });
+
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.hydrateSessionHistoryForDetail).toHaveBeenCalledWith('subagent-child');
+  });
+
+  it('does not rehydrate a subagent whose complete history is proven by counts', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: false,
+      historyState: 'ready',
+      isPartial: false,
+      loadedTurnCount: 2,
+      totalTurnCount: 2,
+      config: { agentType: 'Explore', modelName: 'model-1' },
+      workspacePath: 'D:\\workspace\\repo',
+      dialogTurns: [{ id: 'turn-1' }, { id: 'turn-2' }],
+    });
+
+    openBtwSessionInAuxPane({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      expand: false,
+    });
+
+    expect(mocks.hydrateSessionHistoryForDetail).not.toHaveBeenCalled();
+  });
+
   it('creates an on-demand subagent shell and hydrates it when the child session is missing', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
