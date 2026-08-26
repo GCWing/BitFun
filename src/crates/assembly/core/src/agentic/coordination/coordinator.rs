@@ -10619,7 +10619,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(turn_id)
     }
 
-    async fn ensure_subagent_session_loaded_for_reuse(
+    pub(crate) async fn ensure_subagent_session_loaded_for_reuse(
         &self,
         target_session_id: &str,
         parent_session_id: &str,
@@ -19211,7 +19211,7 @@ mod tests {
 
     #[tokio::test]
     async fn reused_subagent_send_input_updates_requested_and_inherited_model() {
-        let (coordinator, session_manager) = test_coordinator();
+        let (coordinator, session_manager) = test_persistent_coordinator();
         let workspace_path = std::env::temp_dir().join(format!(
             "bitfun-reused-subagent-model-test-{}",
             uuid::Uuid::new_v4()
@@ -19253,6 +19253,20 @@ mod tests {
             )
             .await
             .expect("subagent session should be created");
+
+        assert!(
+            session_manager
+                .unload_session_from_memory(&subagent_session.session_id)
+                .await
+                .expect("persisted subagent session should unload"),
+            "the restart regression requires the target subagent to be absent from memory"
+        );
+        assert!(
+            session_manager
+                .get_session(&subagent_session.session_id)
+                .is_none(),
+            "the send_input preparation must restore the persisted subagent on demand"
+        );
 
         let request = SubagentExecutionRequest {
             task_description: "Continue the investigation".to_string(),
