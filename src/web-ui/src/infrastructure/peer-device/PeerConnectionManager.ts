@@ -186,6 +186,7 @@ class PeerConnectionDisposedError extends Error {
 
 export class PeerConnectionManager {
   private readonly entries = new Map<string, ConnectionEntry>();
+  private readonly legacyHostKinds = new Map<string, PeerHostKind>();
   private readonly attaching = new Map<string, Promise<PeerConnection>>();
   private readonly listeners = new Set<PeerConnectionListener>();
   private readonly deviceRpc: PeerDeviceRpc;
@@ -277,6 +278,7 @@ export class PeerConnectionManager {
     }
     entry.disposed = true;
     this.entries.delete(deviceId);
+    this.legacyHostKinds.delete(deviceId);
     this.cancelTimer(entry);
     this.publish();
 
@@ -330,6 +332,7 @@ export class PeerConnectionManager {
       // the dead entry so the next switch attaches a fresh one.
       if (entry.health === 'lost' && entry.lostReason === 'presence') {
         this.entries.delete(entry.deviceId);
+        this.legacyHostKinds.delete(entry.deviceId);
         entry.adapter.disconnect().catch(() => undefined);
         log.info('Peer device is reachable again; cleared its lost attachment', {
           deviceId: entry.deviceId,
@@ -378,7 +381,7 @@ export class PeerConnectionManager {
     try {
       await adapter.connect();
       this.assertEntryActive(entry);
-      entry.capabilities = await this.probeCapabilities(deviceId);
+      entry.capabilities = await this.probeCapabilities(entry);
       this.assertEntryActive(entry);
       await this.sendAttach(deviceId);
       this.assertEntryActive(entry);
@@ -386,6 +389,7 @@ export class PeerConnectionManager {
       if (this.entries.get(deviceId) === entry) {
         this.entries.delete(deviceId);
       }
+      this.legacyHostKinds.delete(deviceId);
       await adapter.disconnect().catch(() => undefined);
       this.publish();
       throw error;
@@ -404,8 +408,11 @@ export class PeerConnectionManager {
     return entry.handle;
   }
 
-  private async probeCapabilities(deviceId: string): Promise<PeerHostCapabilities> {
-    const result = await this.hostInvoke<PeerModePingResult>(deviceId, 'peer_mode_ping', {});
+  private async probeCapabilities(entry: ConnectionEntry): Promise<PeerHostCapabilities> {
+    this.assertEntryActive(entry);
+    const result = await this.hostInvoke<PeerModePingResult>(entry.deviceId, 'peer_mode_ping', {});
+    this.assertEntryActive(entry);
+    const deviceId = entry.deviceId;
     // For the new fields (cancel_tool / tool_catalog) preserve `undefined` as
     // `null` (unknown) rather than coercing to `false`: an older Desktop that
     // does not advertise the field but does implement the command would
@@ -413,7 +420,53 @@ export class PeerConnectionManager {
     // stay optimistic; an older CLI that truly lacks the command is resolved
     // via `hostKind` (cli → unsupported) instead of failing on invoke. See
     // PR #2428 #4 + round 5 #1.
+    // A legacy host with all three new fields absent is classified by the
+    // read-only tool catalog probe below; transport failures remain unknown.
     const caps = result?.capabilities;
+    let cancelTool = caps?.cancel_tool === undefined ? null : caps.cancel_tool === true;
+    let toolCatalog = caps?.tool_catalog === undefined ? null : caps.tool_catalog === true;
+    let hostKind = parseHostKind(result?.host_type);
+
+    if (hostKind !== null) {
+      this.legacyHostKinds.set(deviceId, hostKind);
+      cancelTool ??= hostKind === 'desktop';
+      toolCatalog ??= hostKind === 'desktop';
+    } else {
+      const cachedHostKind = this.legacyHostKinds.get(deviceId);
+      if (cachedHostKind !== undefined) {
+        hostKind = cachedHostKind;
+        cancelTool ??= cachedHostKind === 'desktop';
+        toolCatalog ??= cachedHostKind === 'desktop';
+      }
+    }
+
+    if (hostKind === null && cancelTool === null && toolCatalog === null) {
+      this.assertEntryActive(entry);
+      try {
+        const value = await this.hostInvoke<unknown>(deviceId, 'get_all_tools_info', {});
+        this.assertEntryActive(entry);
+        if (Array.isArray(value)) {
+          hostKind = 'desktop';
+          cancelTool = true;
+          toolCatalog = true;
+          this.legacyHostKinds.set(deviceId, hostKind);
+        }
+      } catch (error) {
+        if (error instanceof PeerConnectionDisposedError) {
+          throw error;
+        }
+        if (isUnsupportedPeerCommandError(error, 'get_all_tools_info')) {
+          this.assertEntryActive(entry);
+          hostKind = 'cli';
+          cancelTool = false;
+          toolCatalog = false;
+          this.legacyHostKinds.set(deviceId, hostKind);
+        } else {
+          log.warn('Could not classify legacy peer host', { deviceId, error });
+        }
+      }
+    }
+
     return {
       idempotentDialogSubmit: caps?.idempotent_dialog_submit === true,
       targetedSessionRollback: caps?.targeted_session_rollback === true,
@@ -422,9 +475,9 @@ export class PeerConnectionManager {
       productControlNativeV1: caps?.product_control_native_v1 === true,
       productControlPresentationV1:
         caps?.product_control_presentation_v1 === true,
-      cancelTool: caps?.cancel_tool === undefined ? null : caps.cancel_tool === true,
-      toolCatalog: caps?.tool_catalog === undefined ? null : caps.tool_catalog === true,
-      hostKind: parseHostKind(result?.host_type),
+      cancelTool,
+      toolCatalog,
+      hostKind,
     };
   }
 
@@ -470,7 +523,7 @@ export class PeerConnectionManager {
     }
     const reconnecting = entry.health === 'degraded';
     try {
-      const capabilities = await this.probeCapabilities(entry.deviceId);
+      const capabilities = await this.probeCapabilities(entry);
       if (reconnecting) {
         await this.sendAttach(entry.deviceId);
       }
@@ -560,6 +613,7 @@ export class PeerConnectionManager {
       return;
     }
     this.cancelTimer(entry);
+    this.legacyHostKinds.delete(entry.deviceId);
     entry.health = 'lost';
     entry.lostReason = reason;
     log.warn('Peer connection lost', { deviceId: entry.deviceId, reason });
@@ -656,6 +710,11 @@ function capabilitiesEqual(
     a.cancelTool === b.cancelTool &&
     a.toolCatalog === b.toolCatalog &&
     a.hostKind === b.hostKind;
+}
+
+function isUnsupportedPeerCommandError(error: unknown, command: string): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return message.includes(`command '${command}' is not supported on CLI peer host`);
 }
 
 /** Window-wide instance; peer links outlive any component that renders them. */

@@ -36,18 +36,41 @@ describe('PeerConnectionManager attach', () => {
     expect(manager.get('peer-1')).toBe(connection);
   });
 
-  it('reports new capability fields as null (unknown) when the host omits them', async () => {
-    // An older host's peer_mode_ping does not advertise cancel_tool /
-    // tool_catalog; coercing those to `false` would hide a working capability
-    // on an older Desktop (Interrupt button / tool list). They must parse to
-    // `null` so consumers stay optimistic. See PR #2428 #4.
-    const rpc = createRpc();
+  it('classifies a truly old Desktop from its supported tool catalog probe', async () => {
+    const rpc = createLegacyRpc('desktop');
     const manager = createManager(rpc.deviceRpc);
 
     const connection = await manager.connect('peer-1', 'Studio');
-    const caps = connection.getState().capabilities;
-    expect(caps.cancelTool).toBeNull();
-    expect(caps.toolCatalog).toBeNull();
+    expect(connection.getState().capabilities).toMatchObject({
+      cancelTool: true,
+      toolCatalog: true,
+      hostKind: 'desktop',
+    });
+    expect(rpc.commands()).toEqual([
+      'peer_mode_ping',
+      'get_all_tools_info',
+      'peer_control_attach',
+    ]);
+
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+    expect(rpc.commands().filter(command => command === 'get_all_tools_info')).toHaveLength(1);
+  });
+
+  it('classifies a truly old CLI from an unsupported tool catalog probe', async () => {
+    const rpc = createLegacyRpc('cli');
+    const manager = createManager(rpc.deviceRpc);
+
+    const connection = await manager.connect('peer-1', 'CLI');
+    expect(connection.getState().capabilities).toMatchObject({
+      cancelTool: false,
+      toolCatalog: false,
+      hostKind: 'cli',
+    });
+    expect(rpc.commands()).toEqual([
+      'peer_mode_ping',
+      'get_all_tools_info',
+      'peer_control_attach',
+    ]);
   });
 
   it('parses advertised new capability fields as true', async () => {
@@ -420,6 +443,70 @@ describe('PeerConnectionManager disposal', () => {
     // A snapshot was published for the capability change while staying ready.
     expect(snapshots.length).toBeGreaterThan(0);
   });
+
+  it('does not let a stale health probe classify a replacement connection', async () => {
+    const healthCatalog = deferred<string>();
+    const commands: string[] = [];
+    let catalogCallCount = 0;
+    const deviceRpc = vi.fn(async (_target: string, commandJson: string): Promise<string> => {
+      const command = (JSON.parse(commandJson) as { command?: string }).command ?? 'unknown';
+      commands.push(command);
+
+      if (command === 'peer_mode_ping') {
+        return JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: true,
+          value: { capabilities: {} },
+        });
+      }
+      if (command === 'get_all_tools_info') {
+        catalogCallCount += 1;
+        if (catalogCallCount === 1) {
+          throw new Error('relay unavailable');
+        }
+        if (catalogCallCount === 2) {
+          return healthCatalog.promise;
+        }
+        throw new Error('relay unavailable');
+      }
+      return JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null });
+    });
+    const manager = createManager(deviceRpc);
+
+    const first = await manager.connect('peer-1', 'Studio');
+    expect(first.getState().capabilities).toMatchObject({
+      cancelTool: null,
+      toolCatalog: null,
+      hostKind: null,
+    });
+
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+    await vi.waitFor(() => expect(commands.filter(command => command === 'get_all_tools_info')).toHaveLength(2));
+
+    await manager.dispose('peer-1', { notifyPeer: false });
+    const replacement = await manager.connect('peer-1', 'Studio');
+    expect(replacement.getState().capabilities).toMatchObject({
+      cancelTool: null,
+      toolCatalog: null,
+      hostKind: null,
+    });
+
+    expect(catalogCallCount).toBe(3);
+    healthCatalog.resolve(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: [],
+    }));
+    await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+    expect(catalogCallCount).toBe(4);
+    expect(replacement.getState().capabilities).toMatchObject({
+      cancelTool: null,
+      toolCatalog: null,
+      hostKind: null,
+    });
+  });
 });
 
 function createManager(
@@ -472,10 +559,13 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
         resp: 'host_invoke_result',
         ok: true,
         value: {
+          host_type: 'desktop',
           capabilities: {
             idempotent_dialog_submit: true,
             token_usage_statistics: true,
             product_control_v1: true,
+            cancel_tool: true,
+            tool_catalog: true,
           },
         },
       });
@@ -496,6 +586,52 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
     hangNext: () => {
       hangNext = true;
     },
+  };
+}
+
+function createLegacyRpc(kind: 'desktop' | 'cli') {
+  const calls: RpcCall[] = [];
+  const deviceRpc = vi.fn(async (_target: string, commandJson: string): Promise<string> => {
+    const parsed = JSON.parse(commandJson) as { command?: string; args?: Record<string, unknown> };
+    const command = parsed.command ?? 'unknown';
+    calls.push({ command, args: parsed.args ?? {} });
+
+    if (command === 'peer_mode_ping') {
+      return JSON.stringify({
+        resp: 'host_invoke_result',
+        ok: true,
+        value: {
+          ok: true,
+          peer: true,
+          device_id: 'legacy-peer',
+          capabilities: {
+            idempotent_dialog_submit: true,
+            targeted_session_rollback: true,
+            token_usage_statistics: true,
+          },
+        },
+      });
+    }
+    if (command === 'get_all_tools_info') {
+      if (kind === 'cli') {
+        return JSON.stringify({
+          resp: 'host_invoke_result',
+          ok: false,
+          error: "command 'get_all_tools_info' is not supported on CLI peer host",
+        });
+      }
+      return JSON.stringify({
+        resp: 'host_invoke_result',
+        ok: true,
+        value: [],
+      });
+    }
+    return JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null });
+  });
+
+  return {
+    deviceRpc,
+    commands: () => calls.map(call => call.command),
   };
 }
 
