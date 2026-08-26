@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   Button,
+  Field,
   IconButton,
   Input,
   KeyHint,
@@ -45,10 +46,12 @@ type InspectorTab = "properties" | "styles" | "tokens";
 type PreviewIcon = "chevron" | "none";
 type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
+type FieldOrientation = "horizontal" | "vertical";
 
 const buttonVariants = ["outline", "fill", "primary", "text"] as const;
 const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
+const fieldOrientations = ["vertical", "horizontal"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
@@ -58,6 +61,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
+  horizontal: "detail.option.horizontal",
   invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
@@ -74,6 +78,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   sm: "detail.option.sm",
   text: "detail.option.text",
   unselected: "detail.option.unselected",
+  vertical: "detail.option.vertical",
 };
 
 function InspectorSelect({
@@ -137,6 +142,7 @@ export function ComponentDetailPage({
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [size, setSize] = useState<PreviewSize>("md");
+  const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
       ? "off"
@@ -159,6 +165,7 @@ export function ComponentDetailPage({
       case "Input":
       case "SearchField":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+      case "Field":
       case "KeyHint":
         return ["default"] as const;
       case "TabGroup":
@@ -185,6 +192,9 @@ export function ComponentDetailPage({
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
+    }
+    if (component.name === "Field") {
+      return `import { Field, Switch } from "@bitfun/ui";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.notifications")}"\n  orientation="${fieldOrientation}"\n  required\n>\n  <Switch />\n</Field>`;
     }
     if (component.name === "Input") {
       const stateProps = previewState === "disabled"
@@ -217,6 +227,7 @@ export function ComponentDetailPage({
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
     component.name,
+    fieldOrientation,
     iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
@@ -303,6 +314,19 @@ export function ComponentDetailPage({
           placeholder={t("components.preview.inputPlaceholder")}
           trailing={<Eye aria-hidden="true" />}
         />
+      );
+    }
+
+    if (component.name === "Field") {
+      return (
+        <Field
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          orientation={fieldOrientation}
+          required
+        >
+          <Switch />
+        </Field>
       );
     }
 
@@ -465,11 +489,13 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
+              ) : component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
-                  data-component={component.name === "Input"
-                    ? "input"
+                  data-component={component.name === "Field"
+                    ? "field"
+                    : component.name === "Input"
+                      ? "input"
                     : component.name === "KeyHint"
                       ? "key-hint"
                       : "search-field"}
@@ -594,6 +620,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setIconButtonVariant(value as (typeof iconButtonVariants)[number])}
                       options={iconButtonVariants}
                       value={iconButtonVariant}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorSelect
+                      label={t("detail.orientation")}
+                      onChange={(value) => setFieldOrientation(value as FieldOrientation)}
+                      options={fieldOrientations}
+                      value={fieldOrientation}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

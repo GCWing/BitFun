@@ -5,6 +5,7 @@ import {
   Eye,
   Keyboard,
   List,
+  Rows3,
   MessageCircle,
   MousePointerClick,
   PanelTop,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   Button,
+  Field,
   IconButton,
   Input,
   KeyHint,
@@ -44,6 +46,7 @@ interface ComponentsPageProps {
 
 const componentIcons = {
   Button: MousePointerClick,
+  Field: Rows3,
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
@@ -62,6 +65,16 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           <Button variant="fill">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
         </Stack>
+      );
+    case "Field":
+      return (
+        <Field
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          orientation="horizontal"
+        >
+          <Switch tabIndex={-1} />
+        </Field>
       );
     case "IconButton":
       return (

@@ -78,6 +78,15 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   assert.match(source, /shortcut=\{<KeyHint icon=\{<Command aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
 });
 
+test("Field preview exposes label content independently from layout orientation", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /const fieldOrientations = \["vertical", "horizontal"\] as const/);
+  assert.match(source, /description=\{t\("components\.preview\.fieldDescription"\)\}/);
+  assert.match(source, /orientation=\{fieldOrientation\}/);
+  assert.match(source, /component\.name === "Field"/);
+});
+
 test("TabGroup preview carries the selected and outline reference composition", async () => {
   const source = await readFile(detailSource, "utf8");
   const declaration = /case "TabGroup":\s*return \[([^\]]+)\] as const;/.exec(source);
