@@ -1,5 +1,5 @@
 import { Button, Switch } from '@bitfun/ui';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -140,6 +140,7 @@ const AssistantDefaultsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
+  const loadRequestIdRef = useRef(0);
 
   // Distinguish "host doesn't expose a catalog" / "read failed" / "really no
   // tools" so the UI doesn't collapse all three into an empty list. See #2428 #5.
@@ -168,32 +169,44 @@ const AssistantDefaultsPage: React.FC = () => {
   // writes enabled because there is nothing to toggle anyway. See PR #2428
   // round 5 #2.
   const toolCatalogWritable = toolCatalogStatus === 'available' || toolCatalogStatus === 'empty';
+  const toolCatalogUnavailable = toolCatalogStatus === 'unsupported' || toolCatalogStatus === 'failed';
 
   const loadDefaults = useCallback(async () => {
+    // Stale-load guard: a peer switch or capability change can trigger a second
+    // load before the first resolves. Only the latest request may commit state;
+    // an earlier result that lands after would overwrite it with stale data.
+    // See PR #2428 round 6.
+    const requestId = ++loadRequestIdRef.current;
     setLoading(true);
     setLoadWarning(false);
     try {
       // Skip the tool catalog invoke when the peer host cannot answer it,
       // instead of swallowing the unsupported error as an empty list. The
       // empty list then means "this host doesn't expose a catalog", not
-      // "the runtime has no tools".
-      let toolsPromise: Promise<ToolInfo[]>;
+      // "the runtime has no tools". The status is carried alongside the
+      // tools and applied once, after the guard, so a partial state (tools
+      // set, status still pending) can't flash through the UI.
+      let toolsPromise: Promise<{
+        tools: ToolInfo[];
+        status: 'available' | 'unsupported' | 'failed' | 'empty';
+      }>;
       if (canQueryToolCatalog) {
         toolsPromise = toolAPI.getAllToolsInfo()
-          .then((tools) => {
-            setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
-            return tools;
-          })
+          .then((tools) => ({
+            tools,
+            status: tools.length > 0 ? 'available' as const : 'empty' as const,
+          }))
           .catch((error) => {
             log.error('Failed to load assistant tools', error);
-            setToolCatalogStatus('failed');
-            return [] as ToolInfo[];
+            return { tools: [] as ToolInfo[], status: 'failed' as const };
           });
       } else {
-        setToolCatalogStatus('unsupported');
-        toolsPromise = Promise.resolve([] as ToolInfo[]);
+        toolsPromise = Promise.resolve({
+          tools: [] as ToolInfo[],
+          status: 'unsupported' as const,
+        });
       }
-      const [modeConf, tools, skillList, servers] = await Promise.all([
+      const [modeConf, toolCatalog, skillList, servers] = await Promise.all([
         configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch((error) => {
           log.error('Failed to load assistant profile config', error);
           return null;
@@ -208,18 +221,24 @@ const AssistantDefaultsPage: React.FC = () => {
           return [];
         }),
       ]);
+      if (requestId !== loadRequestIdRef.current) return;
       setAssistantModeConfig(modeConf);
-      setAvailableTools(tools);
+      setAvailableTools(toolCatalog.tools);
+      setToolCatalogStatus(toolCatalog.status);
       setModeSkills(skillList ?? []);
       setMcpServers(servers ?? []);
       setLoadWarning(modeConf === null);
       setSaveState(modeConf === null ? 'error' : 'saved');
     } catch (error) {
       log.error('Failed to load assistant defaults', error);
-      setLoadWarning(true);
-      setSaveState('error');
+      if (requestId === loadRequestIdRef.current) {
+        setLoadWarning(true);
+        setSaveState('error');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [canQueryToolCatalog]);
 
@@ -697,7 +716,20 @@ const AssistantDefaultsPage: React.FC = () => {
   );
 
   const renderMcpGroups = () => {
-    if (mcpGroups.length === 0) return renderEmptyState(t('nursery.template.mcpEmptyHint'));
+    if (mcpGroups.length === 0) {
+      // The MCP catalog comes from the same get_all_tools_info read as built-in
+      // tools, so an unsupported/failed host affects it the same way: surface
+      // the host state instead of masking it as "no MCP servers". See PR #2428
+      // round 6.
+      if (toolCatalogUnavailable) {
+        return renderEmptyState(
+          toolCatalogStatus === 'unsupported'
+            ? t('empty.toolsUnsupported')
+            : t('empty.toolsFailed'),
+        );
+      }
+      return renderEmptyState(t('nursery.template.mcpEmptyHint'));
+    }
     if (visibleMcpGroups.length === 0) return renderEmptyState(t('nursery.template.noFilterResults'));
 
     return (
