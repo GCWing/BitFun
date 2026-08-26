@@ -76,7 +76,8 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       workspace: this.workspace,
       sessions: RemoteResponseMapper.sessions(initialSync.sessions || []),
       hasMoreSessions: initialSync.has_more_sessions || false,
-      authenticatedUserId: initialSync.authenticated_user_id || ''
+      authenticatedUserId: initialSync.authenticated_user_id || '',
+      capabilities: initialSync.capabilities || []
     };
   }
 
@@ -150,7 +151,8 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       workspace: this.workspace,
       sessions: sessions.sessions,
       hasMoreSessions: sessions.hasMore,
-      authenticatedUserId: session.userId
+      authenticatedUserId: session.userId,
+      capabilities: workspaceResponse.capabilities || []
     };
   }
 

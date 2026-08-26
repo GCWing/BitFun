@@ -82,7 +82,7 @@ import { ConversationIntentDispatcher } from '../actions/ConversationIntentDispa
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
-import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
+import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 import { WatchProvisionState } from '../state/WatchProvisionState';
 import {
   WatchProvisionController,
@@ -893,6 +893,7 @@ export abstract class AppRootRuntimeComposition {
       draftChanged: (value: string): void => this.remoteCreateState.setDraft(value),
       voiceInput: async (): Promise<void> => { await this.toggleVoiceInput(); },
       selectModel: (modelId: string): void => this.remoteCreateState.setSelectedModelId(modelId),
+      selectHarness: (profile: RemoteHarnessProfile): void => this.remoteCreateState.setSelectedHarnessProfile(profile),
       send: (): void => { this.conversationController.submitRemoteCreateSession(); }
     },
     onSidebar: {

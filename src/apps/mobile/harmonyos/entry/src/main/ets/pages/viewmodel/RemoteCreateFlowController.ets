@@ -4,7 +4,10 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppRoute } from '../navigation/AppRouteContract';
-import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
+import {
+  REMOTE_HARNESS_PROFILES_CAPABILITY,
+  RemoteCreateSessionState
+} from '../state/RemoteCreateSessionState';
 import { RemotePageState } from '../state/RemotePageState';
 import {
   RemoteConversationDependencies,
@@ -59,7 +62,12 @@ export class RemoteCreateFlowController {
     }
     const deviceId = this.remote.controlTargetDeviceId || this.remote.desktopId;
     const deviceName = this.remote.controlTargetDeviceName || this.remote.desktopName;
-    this.remoteCreate.prepare(deviceId, deviceName, this.remote.selectedModelId);
+    this.remoteCreate.prepare(
+      deviceId,
+      deviceName,
+      this.remote.selectedModelId,
+      this.remote.supportsHostCapability(REMOTE_HARNESS_PROFILES_CAPABILITY)
+    );
     if (deviceId.length > 0) {
       this.remoteCreate.setDevices([{
         deviceId,

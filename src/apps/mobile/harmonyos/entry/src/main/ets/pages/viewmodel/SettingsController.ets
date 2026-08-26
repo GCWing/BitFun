@@ -291,6 +291,7 @@ export class SettingsController {
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
     cloud.remoteState.clearControlTarget();
+    cloud.remoteState.setHostCapabilities([]);
     RemoteLogger.info('cloud account logout success');
   }
 
@@ -543,6 +544,7 @@ export class SettingsController {
       );
       cloud.hooks.onControlTargetChanged();
       cloud.remoteState.setAuthenticatedUserId(initialSync.authenticatedUserId);
+      cloud.remoteState.setHostCapabilities(initialSync.capabilities || []);
       cloud.remoteState.setConnectionState('connected');
       this.resyncAccountDevicePresence();
       cloud.remoteState.setStatusText(RemoteI18n.t('connection.connected'));
@@ -791,6 +793,7 @@ export class SettingsController {
     cloud.hooks.stopPolling();
     cloud.hooks.stopHeartbeat();
     cloud.sessionManager.reset();
+    cloud.remoteState.setHostCapabilities([]);
     cloud.remoteState.clearActiveSession();
     cloud.remoteState.setSessions([], false);
     if (clearWorkspace) {

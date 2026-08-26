@@ -64,6 +64,7 @@ export struct ConversationRouteSurface {
           onDraftChange: this.actions.onRemoteCreate.draftChanged,
           onVoiceInput: this.actions.onRemoteCreate.voiceInput,
           onSelectModel: this.actions.onRemoteCreate.selectModel,
+          onSelectHarness: this.actions.onRemoteCreate.selectHarness,
           onSend: this.actions.onRemoteCreate.send
         })
       } else {

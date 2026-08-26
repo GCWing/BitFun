@@ -525,6 +525,11 @@ where
 
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
+pub const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: &str = "harness_profiles_v1";
+
+fn remote_host_capabilities() -> Vec<String> {
+    vec![REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string()]
+}
 
 pub fn resolve_remote_file_chunk_range(
     file_len: usize,
@@ -899,6 +904,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: workspace.assistant_id,
             remote_connection_id: workspace.remote_connection_id,
             remote_ssh_host: workspace.remote_ssh_host,
+            capabilities: remote_host_capabilities(),
         },
         None => RemoteResponse::WorkspaceInfo {
             has_workspace: false,
@@ -909,6 +915,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: remote_host_capabilities(),
         },
     }
 }
@@ -1072,6 +1079,7 @@ pub fn remote_initial_sync_response(
         sessions,
         has_more_sessions,
         authenticated_user_id,
+        capabilities: remote_host_capabilities(),
     }
 }
 
@@ -1813,6 +1821,17 @@ pub struct RemoteModelCatalogPollDelta {
 
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
     match mobile_type {
+        Some(value) if value.eq_ignore_ascii_case("minimal") => "minimal",
+        Some(value)
+            if value.eq_ignore_ascii_case("ultra") || value.eq_ignore_ascii_case("ultimate") =>
+        {
+            "Ultra"
+        }
+        Some(value)
+            if value.eq_ignore_ascii_case("balanced") || value.eq_ignore_ascii_case("standard") =>
+        {
+            "agentic"
+        }
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
         Some("multitask") | Some("Multitask") => "Multitask",
         Some("cowork") | Some("Cowork") => "Cowork",
@@ -2357,6 +2376,8 @@ pub enum RemoteResponse {
         remote_connection_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_ssh_host: Option<String>,
+        #[serde(default)]
+        capabilities: Vec<String>,
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
@@ -2434,6 +2455,8 @@ pub enum RemoteResponse {
         has_more_sessions: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         authenticated_user_id: Option<String>,
+        #[serde(default)]
+        capabilities: Vec<String>,
     },
     SessionPoll {
         version: u64,
@@ -3696,6 +3719,7 @@ mod tests {
                 assistant_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                capabilities: remote_host_capabilities(),
             }
         );
 
