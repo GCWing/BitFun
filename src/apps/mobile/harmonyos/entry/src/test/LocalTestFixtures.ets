@@ -117,6 +117,7 @@ import {
   AssistantEntry,
   CreateSessionOptions,
   RemoteImageContext,
+  RemoteDirectoryListing,
   RemoteQuestionAnswerPayload,
   RemoteModelCatalog,
   ReadFileChunkResult,
@@ -168,6 +169,15 @@ export class FakeRemoteWorkspaceDataSource implements RemoteWorkspaceDataSource 
 
   async listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]> {
     return this.recent;
+  }
+
+  async listDirectories(path: string): Promise<RemoteDirectoryListing> {
+    return {
+      path: path || '/Users/test',
+      parentPath: path.length > 0 ? '/Users' : '/',
+      directories: [],
+      truncated: false
+    };
   }
 
   async setWorkspace(_path: string): Promise<WorkspaceInfo> {

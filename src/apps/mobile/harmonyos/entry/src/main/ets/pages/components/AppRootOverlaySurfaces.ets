@@ -90,7 +90,7 @@ export struct AppSidebarSurface {
       },
       onSelectDevice: this.actions.onRemoteHome.selectDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onAddWorkspace: this.actions.onRemoteHome.addDirectoryWorkspace
+      onBrowseDirectory: this.actions.onRemoteHome.browseDirectory
     })
   }
 

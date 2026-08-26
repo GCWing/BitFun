@@ -9,6 +9,14 @@ export class RemoteCommandFactory {
     return { cmd: 'list_recent_workspaces' };
   }
 
+  static listDirectories(path: string): RemoteCommand {
+    const command: RemoteCommand = { cmd: 'list_directories' };
+    if (path.trim().length > 0) {
+      command.path = path.trim();
+    }
+    return command;
+  }
+
   static setWorkspace(path: string): RemoteCommand {
     return {
       cmd: 'set_workspace',

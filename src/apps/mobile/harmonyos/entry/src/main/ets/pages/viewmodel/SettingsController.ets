@@ -543,6 +543,7 @@ export class SettingsController {
       );
       cloud.hooks.onControlTargetChanged();
       cloud.remoteState.setAuthenticatedUserId(initialSync.authenticatedUserId);
+      cloud.remoteState.setHostCapabilities(initialSync.capabilities || []);
       cloud.remoteState.setConnectionState('connected');
       this.resyncAccountDevicePresence();
       cloud.remoteState.setStatusText(RemoteI18n.t('connection.connected'));
@@ -776,6 +777,7 @@ export class SettingsController {
     cloud.remoteState.setConnectionState('reconnecting');
     cloud.remoteState.setLoadingHome(true);
     cloud.remoteState.clearControlTarget();
+    cloud.remoteState.setHostCapabilities([]);
     cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
     cloud.remoteState.setBusy(true);
     cloud.remoteState.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
@@ -798,6 +800,7 @@ export class SettingsController {
       cloud.remoteState.setAuthenticatedUserId('');
     }
     cloud.remoteState.clearControlTarget();
+    cloud.remoteState.setHostCapabilities([]);
     cloud.remoteState.setConnectionState('disconnected');
   }
 

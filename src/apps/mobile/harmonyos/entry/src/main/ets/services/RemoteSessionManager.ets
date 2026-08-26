@@ -1,4 +1,4 @@
-import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
+import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteDirectoryEntry, RemoteDirectoryEntryResponse, RemoteDirectoryListing, RemoteDirectoryListResponse, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountRequestError, CloudAccountSession } from './CloudAccountClient';
@@ -76,7 +76,8 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       workspace: this.workspace,
       sessions: RemoteResponseMapper.sessions(initialSync.sessions || []),
       hasMoreSessions: initialSync.has_more_sessions || false,
-      authenticatedUserId: initialSync.authenticated_user_id || ''
+      authenticatedUserId: initialSync.authenticated_user_id || '',
+      capabilities: initialSync.capabilities || []
     };
   }
 
@@ -150,7 +151,8 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       workspace: this.workspace,
       sessions: sessions.sessions,
       hasMoreSessions: sessions.hasMore,
-      authenticatedUserId: session.userId
+      authenticatedUserId: session.userId,
+      capabilities: workspaceResponse.capabilities || []
     };
   }
 
@@ -162,6 +164,23 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
   async listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]> {
     const response = await this.send<RecentWorkspaceListResponse>(RemoteCommandFactory.listRecentWorkspaces());
     return RemoteResponseMapper.recentWorkspaces(response.workspaces || []);
+  }
+
+  async listDirectories(path: string): Promise<RemoteDirectoryListing> {
+    const response = await this.send<RemoteDirectoryListResponse>(RemoteCommandFactory.listDirectories(path));
+    const directories = (response.directories || [])
+      .filter((entry: RemoteDirectoryEntryResponse): boolean =>
+        (entry.name || '').length > 0 && (entry.path || '').length > 0)
+      .map((entry: RemoteDirectoryEntryResponse): RemoteDirectoryEntry => ({
+        name: entry.name || '',
+        path: entry.path || ''
+      }));
+    return {
+      path: response.path || '',
+      parentPath: response.parent || '',
+      directories,
+      truncated: response.truncated || false
+    };
   }
 
   async setWorkspace(path: string): Promise<void> {

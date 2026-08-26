@@ -1,4 +1,4 @@
-import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
+import { RecentWorkspaceEntry, RemoteDirectoryListing, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   DeviceDirectoryEntry,
@@ -15,7 +15,7 @@ import {
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import { GREEN, INK, MUTED, PAGE_BG, SOFT, SUBTLE } from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
-import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
+import { SidebarRemoteDirectoryPicker } from './SidebarRemoteDirectoryPicker';
 
 /**
  * Flat device selector followed by the selected device's workspace tree.
@@ -49,7 +49,10 @@ export struct SidebarWorkspaceSection {
     (_deviceId: string, _path: string) => {};
   @Event onSelectDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
-  @Event onAddWorkspace: (deviceId: string) => void = (_deviceId: string) => {};
+  @Event onBrowseDirectory: (deviceId: string, path: string) => Promise<RemoteDirectoryListing> =
+    async (_deviceId: string, _path: string): Promise<RemoteDirectoryListing> => ({
+      path: '', parentPath: '', directories: [], truncated: false
+    });
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   @Local showWorkspacePicker: boolean = false;
   @Local workspacePickerDeviceId: string = '';
@@ -177,7 +180,7 @@ export struct SidebarWorkspaceSection {
         .accessibilityText(RemoteI18n.t('sidebar.addWorkspace'))
         .onClick(() => {
           if (this.canUseDevice(entry)) {
-            this.openWorkspacePicker(entry);
+            this.openDirectoryPicker(entry);
           }
         })
       }
@@ -254,16 +257,15 @@ export struct SidebarWorkspaceSection {
 
   @Builder
   private WorkspacePicker() {
-    SidebarWorkspacePicker({
+    SidebarRemoteDirectoryPicker({
       deviceName: this.workspacePickerDevice().deviceName,
-      workspaces: this.workspacesForDevice(this.workspacePickerDevice()),
-      selectedWorkspacePath: this.isActiveDevice(this.workspacePickerDevice().deviceId) ?
-        this.workspacePath : '',
-      loading: this.workspacePickerDevice().status === 'loading',
       onClose: () => {
         this.showWorkspacePicker = false;
       },
-      onSelectWorkspace: (path: string) => {
+      onLoadDirectories: async (path: string): Promise<RemoteDirectoryListing> => {
+        return await this.onBrowseDirectory(this.workspacePickerDeviceId, path);
+      },
+      onSelectDirectory: (path: string) => {
         const deviceId = this.workspacePickerDeviceId;
         this.showWorkspacePicker = false;
         this.onOpenWorkspace(deviceId, path);
@@ -271,10 +273,9 @@ export struct SidebarWorkspaceSection {
     })
   }
 
-  private openWorkspacePicker(entry: DeviceDirectoryEntry): void {
+  private openDirectoryPicker(entry: DeviceDirectoryEntry): void {
     this.workspacePickerDeviceId = entry.deviceId;
     this.showWorkspacePicker = true;
-    this.onAddWorkspace(entry.deviceId);
   }
 
   private workspacePickerDevice(): DeviceDirectoryEntry {

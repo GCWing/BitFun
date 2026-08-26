@@ -1,4 +1,4 @@
-import { RemotePermissionMode, RemoteSession } from '../../model/RemoteModels';
+import { RemoteDirectoryListing, RemotePermissionMode, RemoteSession } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { ConversationIntent } from './ConversationIntent';
@@ -62,7 +62,7 @@ export interface RemoteHomePresentationActions {
   readonly createInWorkspace: (path: string, agentType: string, deviceId?: string) => void;
   readonly createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string) => void;
   readonly selectDirectoryDevice: (deviceId: string) => void;
-  readonly addDirectoryWorkspace: (deviceId: string) => void;
+  readonly browseDirectory: (deviceId: string, path: string) => Promise<RemoteDirectoryListing>;
   readonly retryDirectoryDevice: (deviceId: string) => void;
   readonly openSession: (session: RemoteSession) => void;
   readonly openSessionInPlace: (session: RemoteSession) => void;
@@ -131,7 +131,9 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
       search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
       create: () => {}, createInPlace: () => {}, createAssistant: () => {}, createInWorkspace: () => {},
-      createInWorkspaceInPlace: () => {}, selectDirectoryDevice: () => {}, addDirectoryWorkspace: () => {},
+      createInWorkspaceInPlace: () => {}, selectDirectoryDevice: () => {}, browseDirectory: async () => ({
+        path: '', parentPath: '', directories: [], truncated: false
+      }),
       retryDirectoryDevice: () => {},
       openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
     },

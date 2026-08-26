@@ -33,6 +33,7 @@ export interface InitialSyncResult {
   sessions: RemoteSession[];
   hasMoreSessions: boolean;
   authenticatedUserId: string;
+  capabilities?: string[];
 }
 
 export interface RecentWorkspaceEntry {
@@ -40,6 +41,18 @@ export interface RecentWorkspaceEntry {
   name: string;
   lastOpened: string;
   workspaceKind: string;
+}
+
+export interface RemoteDirectoryEntry {
+  name: string;
+  path: string;
+}
+
+export interface RemoteDirectoryListing {
+  path: string;
+  parentPath: string;
+  directories: RemoteDirectoryEntry[];
+  truncated: boolean;
 }
 
 export interface RemoteSession {
@@ -162,6 +175,7 @@ export interface WorkspaceInfoResponse extends CommandStatusResponse {
   git_branch?: string;
   workspace_kind?: string;
   assistant_id?: string;
+  capabilities?: string[];
 }
 
 export interface RecentWorkspaceEntryResponse {
@@ -176,6 +190,18 @@ export interface RecentWorkspaceEntryResponse {
 
 export interface RecentWorkspaceListResponse extends CommandStatusResponse {
   workspaces?: RecentWorkspaceEntryResponse[];
+}
+
+export interface RemoteDirectoryEntryResponse {
+  name?: string;
+  path?: string;
+}
+
+export interface RemoteDirectoryListResponse extends CommandStatusResponse {
+  path?: string;
+  parent?: string;
+  directories?: RemoteDirectoryEntryResponse[];
+  truncated?: boolean;
 }
 
 export interface SetWorkspaceResponse extends CommandStatusResponse {
@@ -251,6 +277,7 @@ export interface InitialSyncResponse extends CommandStatusResponse {
   sessions?: SessionItemResponse[];
   has_more_sessions?: boolean;
   authenticated_user_id?: string;
+  capabilities?: string[];
 }
 
 export interface DelegatedIdentityResponse extends CommandStatusResponse {

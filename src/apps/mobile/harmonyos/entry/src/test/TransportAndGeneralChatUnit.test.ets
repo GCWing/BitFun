@@ -1542,6 +1542,9 @@ export default function transportAndGeneralChatUnitTest() {
     it('builds workspace and assistant commands', 0, () => {
       expectCommandJson(RemoteCommandFactory.getWorkspaceInfo(), '{"cmd":"get_workspace_info"}');
       expectCommandJson(RemoteCommandFactory.listRecentWorkspaces(), '{"cmd":"list_recent_workspaces"}');
+      expectCommandJson(RemoteCommandFactory.listDirectories(''), '{"cmd":"list_directories"}');
+      expectCommandJson(RemoteCommandFactory.listDirectories('/Users/user'),
+        '{"cmd":"list_directories","path":"/Users/user"}');
       expectCommandJson(RemoteCommandFactory.setWorkspace('/repo'), '{"cmd":"set_workspace","path":"/repo"}');
       expectCommandJson(RemoteCommandFactory.listAssistants(), '{"cmd":"list_assistants"}');
       expectCommandJson(RemoteCommandFactory.setAssistant('/assistant'), '{"cmd":"set_assistant","path":"/assistant"}');

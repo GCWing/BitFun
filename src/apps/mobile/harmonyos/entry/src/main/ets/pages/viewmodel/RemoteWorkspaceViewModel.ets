@@ -1,4 +1,4 @@
-import { RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../../model/RemoteModels';
+import { RecentWorkspaceEntry, RemoteDirectoryListing, RemoteSession, WorkspaceInfo } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteWorkspaceCoordinator } from '../../services/RemoteWorkspaceCoordinator';
@@ -14,6 +14,8 @@ export interface RemoteWorkspaceViewModelHooks {
   readonly onRefreshSessions: () => Promise<void>;
   readonly onConnectionFailure: (error: Object) => void;
 }
+
+const WORKSPACE_DIRECTORY_BROWSER_CAPABILITY: string = 'workspace_directory_browser_v1';
 
 /** Owns the workspace/assistant picker workflows and their presentation state. */
 export class RemoteWorkspaceViewModel {
@@ -57,6 +59,16 @@ export class RemoteWorkspaceViewModel {
 
   async selectAssistant(path: string): Promise<boolean> {
     return await this.select(path, true);
+  }
+
+  async listDirectories(path: string): Promise<RemoteDirectoryListing> {
+    if (!this.hooks.isRemoteAvailable()) {
+      throw new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
+    }
+    if (!this.pageState.supportsHostCapability(WORKSPACE_DIRECTORY_BROWSER_CAPABILITY)) {
+      throw new Error(RemoteI18n.t('sidebar.directoryBrowserUnsupported'));
+    }
+    return await this.coordinator.directories(path);
   }
 
   async loadRecentWorkspacesInBackground(): Promise<void> {

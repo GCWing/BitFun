@@ -1,4 +1,4 @@
-import { AssistantEntry, RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../model/RemoteModels';
+import { AssistantEntry, RecentWorkspaceEntry, RemoteDirectoryListing, RemoteSession, WorkspaceInfo } from '../model/RemoteModels';
 import {
   CONCURRENT_WORKSPACE_LISTINGS,
   mapInConcurrentBatches,
@@ -17,6 +17,10 @@ export class RemoteWorkspaceCoordinator {
 
   async recentWorkspaces(): Promise<RecentWorkspaceEntry[]> {
     return await this.repository.listRecentWorkspaces();
+  }
+
+  async directories(path: string): Promise<RemoteDirectoryListing> {
+    return await this.repository.listDirectories(path);
   }
 
   async assistants(): Promise<AssistantEntry[]> {

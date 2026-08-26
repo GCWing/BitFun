@@ -525,6 +525,95 @@ where
 
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
+pub const REMOTE_DIRECTORY_MAX_ENTRIES: usize = 500;
+pub const REMOTE_CAPABILITY_WORKSPACE_DIRECTORY_BROWSER_V1: &str = "workspace_directory_browser_v1";
+
+fn remote_host_capabilities() -> Vec<String> {
+    vec![REMOTE_CAPABILITY_WORKSPACE_DIRECTORY_BROWSER_V1.to_string()]
+}
+
+fn remote_directory_wire_path(path: &Path) -> String {
+    let path = path.to_string_lossy();
+    #[cfg(windows)]
+    let path = path
+        .strip_prefix(r"\\?\UNC\")
+        .map(|path| format!("//{path}"))
+        .or_else(|| path.strip_prefix(r"\\?\").map(ToOwned::to_owned))
+        .unwrap_or_else(|| path.into_owned());
+    #[cfg(not(windows))]
+    let path = path.into_owned();
+
+    path.replace('\\', "/")
+}
+
+fn remote_directory_list_response(path: Option<&str>) -> RemoteResponse {
+    let requested_path = path.filter(|path| !path.trim().is_empty());
+    let directory = match requested_path {
+        Some(path) => PathBuf::from(path),
+        None => match dirs::home_dir().or_else(|| std::env::current_dir().ok()) {
+            Some(path) => path,
+            None => {
+                return RemoteResponse::Error {
+                    message: "Unable to resolve the remote home directory".into(),
+                };
+            }
+        },
+    };
+    let directory = match directory.canonicalize() {
+        Ok(path) if path.is_dir() => path,
+        Ok(_) => {
+            return RemoteResponse::Error {
+                message: "The selected remote path is not a directory".into(),
+            };
+        }
+        Err(error) => {
+            return RemoteResponse::Error {
+                message: format!("Unable to open remote directory: {error}"),
+            };
+        }
+    };
+    let entries = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries,
+        Err(error) => {
+            return RemoteResponse::Error {
+                message: format!("Unable to read remote directory: {error}"),
+            };
+        }
+    };
+
+    let mut directories: Vec<RemoteDirectoryEntry> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_dir() {
+                return None;
+            }
+            Some(RemoteDirectoryEntry {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                path: remote_directory_wire_path(&entry.path()),
+            })
+        })
+        .take(REMOTE_DIRECTORY_MAX_ENTRIES + 1)
+        .collect();
+    directories.sort_by(|left, right| {
+        left.name
+            .to_lowercase()
+            .cmp(&right.name.to_lowercase())
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    let truncated = directories.len() > REMOTE_DIRECTORY_MAX_ENTRIES;
+    directories.truncate(REMOTE_DIRECTORY_MAX_ENTRIES);
+
+    RemoteResponse::DirectoryList {
+        path: remote_directory_wire_path(&directory),
+        parent: directory
+            .parent()
+            .map(remote_directory_wire_path)
+            .filter(|parent| parent != &remote_directory_wire_path(&directory)),
+        directories,
+        truncated,
+    }
+}
 
 pub fn resolve_remote_file_chunk_range(
     file_len: usize,
@@ -899,6 +988,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: workspace.assistant_id,
             remote_connection_id: workspace.remote_connection_id,
             remote_ssh_host: workspace.remote_ssh_host,
+            capabilities: remote_host_capabilities(),
         },
         None => RemoteResponse::WorkspaceInfo {
             has_workspace: false,
@@ -909,6 +999,7 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: remote_host_capabilities(),
         },
     }
 }
@@ -1072,6 +1163,7 @@ pub fn remote_initial_sync_response(
         sessions,
         has_more_sessions,
         authenticated_user_id,
+        capabilities: remote_host_capabilities(),
     }
 }
 
@@ -1086,6 +1178,7 @@ where
         RemoteCommand::ListRecentWorkspaces => {
             remote_recent_workspaces_response(host.recent_workspaces().await)
         }
+        RemoteCommand::ListDirectories { path } => remote_directory_list_response(path.as_deref()),
         RemoteCommand::SetWorkspace {
             path,
             remote_connection_id,
@@ -2117,6 +2210,12 @@ pub struct RecentWorkspaceEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteDirectoryEntry {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssistantEntry {
     pub path: String,
     pub name: String,
@@ -2166,6 +2265,10 @@ pub enum RemotePermissionMode {
 pub enum RemoteCommand {
     GetWorkspaceInfo,
     ListRecentWorkspaces,
+    ListDirectories {
+        #[serde(default)]
+        path: Option<String>,
+    },
     SetWorkspace {
         path: String,
         #[serde(default)]
@@ -2357,9 +2460,18 @@ pub enum RemoteResponse {
         remote_connection_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         remote_ssh_host: Option<String>,
+        #[serde(default)]
+        capabilities: Vec<String>,
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
+    },
+    DirectoryList {
+        path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parent: Option<String>,
+        directories: Vec<RemoteDirectoryEntry>,
+        truncated: bool,
     },
     WorkspaceUpdated {
         success: bool,
@@ -2434,6 +2546,8 @@ pub enum RemoteResponse {
         has_more_sessions: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         authenticated_user_id: Option<String>,
+        #[serde(default)]
+        capabilities: Vec<String>,
     },
     SessionPoll {
         version: u64,
@@ -2583,6 +2697,7 @@ where
 
         RemoteCommand::GetWorkspaceInfo
         | RemoteCommand::ListRecentWorkspaces
+        | RemoteCommand::ListDirectories { .. }
         | RemoteCommand::SetWorkspace { .. }
         | RemoteCommand::ListAssistants
         | RemoteCommand::SetAssistant { .. } => host.handle_workspace_command(command).await,
@@ -3696,6 +3811,7 @@ mod tests {
                 assistant_id: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
+                capabilities: remote_host_capabilities(),
             }
         );
 
@@ -3718,6 +3834,76 @@ mod tests {
                 error: None,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_handler_lists_only_remote_directories() {
+        let host = FakeWorkspaceHost;
+        let root = tempfile::tempdir().expect("create temp directory");
+        std::fs::create_dir(root.path().join("Beta")).expect("create Beta directory");
+        std::fs::create_dir(root.path().join("alpha")).expect("create alpha directory");
+        std::fs::write(root.path().join("notes.txt"), "not a directory")
+            .expect("create regular file");
+
+        let response = handle_remote_workspace_command(
+            &host,
+            &RemoteCommand::ListDirectories {
+                path: Some(root.path().to_string_lossy().into_owned()),
+            },
+        )
+        .await;
+
+        let RemoteResponse::DirectoryList {
+            path,
+            parent,
+            directories,
+            truncated,
+        } = response
+        else {
+            panic!("expected a directory list response");
+        };
+        let canonical_root = root
+            .path()
+            .canonicalize()
+            .expect("canonicalize temp directory");
+        assert_eq!(path, remote_directory_wire_path(&canonical_root));
+        assert_eq!(
+            parent,
+            canonical_root.parent().map(remote_directory_wire_path)
+        );
+        assert_eq!(
+            directories
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha", "Beta"]
+        );
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn directory_browser_wire_shapes_are_backward_compatible() {
+        let legacy_workspace_info: RemoteResponse = serde_json::from_value(serde_json::json!({
+            "resp": "workspace_info",
+            "has_workspace": false,
+            "path": null,
+            "project_name": null,
+            "git_branch": null
+        }))
+        .expect("deserialize response without capabilities");
+        assert!(matches!(
+            legacy_workspace_info,
+            RemoteResponse::WorkspaceInfo { capabilities, .. } if capabilities.is_empty()
+        ));
+
+        let command = RemoteCommand::ListDirectories { path: None };
+        assert_eq!(
+            serde_json::to_value(command).expect("serialize directory command"),
+            serde_json::json!({ "cmd": "list_directories", "path": null })
+        );
+        assert!(remote_host_capabilities()
+            .iter()
+            .any(|capability| capability == REMOTE_CAPABILITY_WORKSPACE_DIRECTORY_BROWSER_V1));
     }
 
     #[derive(Default)]

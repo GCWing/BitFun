@@ -877,6 +877,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: Vec::new(),
         }
     }
 

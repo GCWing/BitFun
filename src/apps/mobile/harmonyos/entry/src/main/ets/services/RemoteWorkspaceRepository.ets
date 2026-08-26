@@ -1,8 +1,9 @@
-import { AssistantEntry, RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../model/RemoteModels';
+import { AssistantEntry, RecentWorkspaceEntry, RemoteDirectoryListing, RemoteSession, WorkspaceInfo } from '../model/RemoteModels';
 import { RemoteSessionManager } from './RemoteSessionManager';
 
 export interface RemoteWorkspaceDataSource {
   listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]>;
+  listDirectories(path: string): Promise<RemoteDirectoryListing>;
   setWorkspace(path: string): Promise<WorkspaceInfo>;
   listAssistants(): Promise<AssistantEntry[]>;
   setAssistant(path: string): Promise<WorkspaceInfo>;
@@ -21,6 +22,10 @@ export class RemoteWorkspaceRepository implements RemoteWorkspaceDataSource {
 
   async listRecentWorkspaces(): Promise<RecentWorkspaceEntry[]> {
     return await this.sessionManager.listRecentWorkspaces();
+  }
+
+  async listDirectories(path: string): Promise<RemoteDirectoryListing> {
+    return await this.sessionManager.listDirectories(path);
   }
 
   async setWorkspace(path: string): Promise<WorkspaceInfo> {

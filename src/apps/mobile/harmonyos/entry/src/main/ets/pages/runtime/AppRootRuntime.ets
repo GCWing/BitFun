@@ -1,4 +1,4 @@
-import { RemoteSession, SessionSummary } from '../../model/RemoteModels';
+import { RemoteDirectoryListing, RemoteSession, SessionSummary } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
@@ -253,15 +253,14 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }
   }
 
-  async openWorkspacePickerOnDevice(deviceId: string): Promise<void> {
+  async listDirectoriesOnDevice(deviceId: string, path: string): Promise<RemoteDirectoryListing> {
     await this.deviceDirectoryViewModel.selectDevice(deviceId);
     const entry = this.deviceDirectoryState.find(deviceId);
     if (entry && !entry.online && !this.isConnectedDirectoryTarget(deviceId)) {
-      return;
+      throw new Error(RemoteI18n.t('remote.settings.deviceUnavailable'));
     }
-    if (this.isConnectedDirectoryTarget(deviceId)) {
-      await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
-    }
+    await this.conversationController.ensureRemoteControlTarget(deviceId);
+    return await this.remoteWorkspaceViewModel.listDirectories(path);
   }
 
   private isConnectedDirectoryTarget(deviceId: string): boolean {

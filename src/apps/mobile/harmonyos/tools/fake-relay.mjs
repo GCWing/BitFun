@@ -568,6 +568,7 @@ function responseFor(command) {
         git_branch: currentWorkspace.git_branch,
         workspace_kind: currentWorkspace.workspace_kind,
         assistant_id: currentWorkspace.assistant_id,
+        capabilities: ['workspace_directory_browser_v1'],
       };
     case 'list_recent_workspaces':
       return {
@@ -593,6 +594,25 @@ function responseFor(command) {
           },
         ],
       };
+    case 'list_directories': {
+      const path = String(command.path || '/workspace/demo');
+      const normalized = path.replace(/\\/g, '/').replace(/\/$/, '') || '/';
+      const parentIndex = normalized.lastIndexOf('/');
+      const parent = normalized === '/' ? undefined :
+        (parentIndex <= 0 ? '/' : normalized.slice(0, parentIndex));
+      const names = normalized === '/workspace/demo' ? ['BitFun', 'Documents', 'Projects'] :
+        normalized === '/workspace/demo/Projects' ? ['mobile-app', 'relay-service'] : [];
+      return {
+        resp: 'directory_list',
+        path: normalized,
+        parent,
+        directories: names.map((name) => ({
+          name,
+          path: normalized === '/' ? `/${name}` : `${normalized}/${name}`,
+        })),
+        truncated: false,
+      };
+    }
     case 'set_workspace':
       {
         const path = String(command.path || '').trim();
@@ -968,6 +988,7 @@ const server = http.createServer(async (req, res) => {
               git_branch: currentWorkspace.git_branch,
               workspace_kind: currentWorkspace.workspace_kind,
               assistant_id: currentWorkspace.assistant_id,
+              capabilities: ['workspace_directory_browser_v1'],
               authenticated_user_id: command.user_id,
               sessions: currentSessionItems().slice(0, 8),
               has_more_sessions: currentSessionItems().length > 8,

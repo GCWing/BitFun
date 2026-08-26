@@ -3,6 +3,7 @@ import {
   RemoteModelCatalog,
   RemotePermissionMode,
   RemoteQuestionAnswerPayload,
+  RemoteDirectoryListing,
   RemoteSession,
   SelectedImageAttachment,
   SessionSummary,
@@ -134,7 +135,7 @@ export abstract class AppRootRuntimeComposition {
   abstract openAddConnectionFromSettings(): void;
   abstract openAppSidebar(): void;
   abstract openRemoteControlSettings(): void;
-  abstract openWorkspacePickerOnDevice(deviceId: string): Promise<void>;
+  abstract listDirectoriesOnDevice(deviceId: string, path: string): Promise<RemoteDirectoryListing>;
   abstract pickImages(): Promise<void>;
   abstract publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void;
   abstract reconcileCreatedRemoteSession(session: SessionSummary): Promise<void>;
@@ -872,8 +873,8 @@ export abstract class AppRootRuntimeComposition {
       selectDirectoryDevice: (deviceId: string): void => {
         void this.selectDirectoryDevice(deviceId);
       },
-      addDirectoryWorkspace: (deviceId: string): void => {
-        void this.openWorkspacePickerOnDevice(deviceId);
+      browseDirectory: async (deviceId: string, path: string): Promise<RemoteDirectoryListing> => {
+        return await this.listDirectoriesOnDevice(deviceId, path);
       },
       retryDirectoryDevice: (deviceId: string): void => {
         void this.deviceDirectoryViewModel.retryDevice(deviceId);

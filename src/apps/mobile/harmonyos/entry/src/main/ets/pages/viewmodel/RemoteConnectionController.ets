@@ -168,6 +168,7 @@ export class RemoteConnectionController {
       this.lockUntil = 0;
       this.applyWorkspace(initialSync.workspace);
       this.pageState.setAuthenticatedUserId(initialSync.authenticatedUserId);
+      this.pageState.setHostCapabilities(initialSync.capabilities || []);
       this.pageState.setControlTarget('room', this.pageState.desktopId, this.pageState.desktopName);
       this.sessions.setSessions(initialSync.sessions, initialSync.hasMoreSessions);
       this.setState(RemoteConnectionState.Connected);
@@ -236,6 +237,7 @@ export class RemoteConnectionController {
     this.files.clear();
     this.pageState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
     this.pageState.setAuthenticatedUserId('');
+    this.pageState.setHostCapabilities([]);
     this.pageState.clearControlTarget();
     this.pageState.clearWorkspaceActions();
     this.setState(RemoteConnectionState.Disconnected);
