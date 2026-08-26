@@ -61,6 +61,7 @@ export interface SessionLineageEntry {
   parentSessionId?: string;
   parentToolCallId?: string;
   subagentType?: string;
+  agentId?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;

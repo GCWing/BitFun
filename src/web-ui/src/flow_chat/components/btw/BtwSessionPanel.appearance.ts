@@ -6,7 +6,6 @@ export const btwSessionPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'root' },
     { id: 'header' },
     { id: 'headerMain' },
-    { id: 'subagentName' },
     { id: 'badge' },
     { id: 'title' },
     { id: 'meta' },

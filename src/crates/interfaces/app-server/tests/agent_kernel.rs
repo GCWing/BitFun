@@ -588,6 +588,7 @@ impl ports::AgentSessionLineagePort for Phase2Provider {
                 parent_session_id: None,
                 parent_tool_call_id: None,
                 subagent_type: None,
+                agent_id: None,
                 workspace_path: Some("/authoritative/workspace".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,

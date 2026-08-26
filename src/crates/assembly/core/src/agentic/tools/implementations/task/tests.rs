@@ -9,7 +9,7 @@ use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
 use crate::agentic::deep_review_policy::{
     DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
 };
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolRenderOptions, ToolResult, ToolUseContext};
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::WorkspaceBinding;
 use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
@@ -137,20 +137,11 @@ fn split_agent_tools_expose_action_specific_schemas() {
     let spawn = AgentSpawnTool::new().input_schema();
     assert_eq!(
         spawn["required"],
-        json!(["description", "prompt", "agent_type"])
+        json!(["agent_id", "prompt", "agent_type"])
     );
-    assert!(spawn["properties"].get("action").is_none());
-    assert!(spawn["properties"].get("subagent_type").is_none());
-    assert!(spawn["properties"].get("run_in_background").is_none());
-    assert!(spawn["properties"].get("fork_context").is_none());
 
     let send_input = AgentSendInputTool::new().input_schema();
-    assert_eq!(
-        send_input["required"],
-        json!(["agent_id", "description", "prompt"])
-    );
-    assert!(send_input["properties"].get("action").is_none());
-    assert!(send_input["properties"].get("run_in_background").is_none());
+    assert_eq!(send_input["required"], json!(["agent_id", "prompt"]));
 
     let interrupt = AgentInterruptTool::new().input_schema();
     assert_eq!(interrupt["required"], json!(["agent_id"]));
@@ -163,7 +154,7 @@ async fn split_agent_tools_validate_their_public_inputs() {
     let spawn = AgentSpawnTool::new()
         .validate_input(
             &json!({
-                "description": "Inspect parser",
+                "agent_id": "parser-review",
                 "prompt": "Inspect the parser and report findings.",
                 "agent_type": "Explore"
             }),
@@ -176,7 +167,6 @@ async fn split_agent_tools_validate_their_public_inputs() {
         .validate_input(
             &json!({
                 "agent_id": "a1",
-                "description": "Continue parser review",
                 "prompt": "Focus next on error recovery."
             }),
             None,
@@ -191,11 +181,53 @@ async fn split_agent_tools_validate_their_public_inputs() {
 }
 
 #[tokio::test]
+async fn agent_spawn_rejects_invalid_or_missing_caller_ids() {
+    for agent_id in [
+        "ParserReview",
+        "parser review",
+        "1review",
+        "review!",
+        " parser-review",
+    ] {
+        let validation = AgentSpawnTool::new()
+            .validate_input(
+                &json!({
+                    "agent_id": agent_id,
+                    "prompt": "Inspect the parser.",
+                    "agent_type": "Explore"
+                }),
+                None,
+            )
+            .await;
+        assert!(!validation.result, "{agent_id} should be rejected");
+        assert!(validation
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("[a-z][a-z0-9_-]{0,31}")));
+    }
+
+    let missing = AgentSpawnTool::new()
+        .validate_input(
+            &json!({
+                "prompt": "Inspect the parser.",
+                "agent_type": "Explore"
+            }),
+            None,
+        )
+        .await;
+    assert!(!missing.result);
+    assert!(missing
+        .message
+        .as_deref()
+        .is_some_and(|message| message.contains("agent_id is required")));
+}
+
+#[tokio::test]
 async fn split_agent_tools_reject_fields_outside_their_contracts() {
     let spawn = AgentSpawnTool::new()
         .validate_input(
             &json!({
-                "description": "Inspect parser",
+                "agent_id": "parser-review",
                 "prompt": "Inspect the parser.",
                 "agent_type": "Explore",
                 "run_in_background": false
@@ -213,7 +245,6 @@ async fn split_agent_tools_reject_fields_outside_their_contracts() {
         .validate_input(
             &json!({
                 "agent_id": "a1",
-                "description": "Continue parser review",
                 "prompt": "Continue.",
                 "background": true
             }),
@@ -229,34 +260,34 @@ async fn split_agent_tools_reject_fields_outside_their_contracts() {
 }
 
 #[test]
-fn split_agent_tool_prompts_describe_only_their_current_interfaces() {
-    let spawn = AgentSpawnTool::new().render_agent_spawn_description();
-    assert!(spawn.contains("agent_type"));
-    assert!(!spawn.contains("subagent_type"));
-    assert!(!spawn.contains("fork_context"));
-    assert!(!spawn.contains("run_in_background"));
-
-    let send_input = AgentSendInputTool::new().render_agent_send_input_description();
-    assert!(send_input.contains("agent_id"));
-    assert!(!send_input.contains("run_in_background"));
-    assert!(!send_input.contains("fork_context"));
-
-    let interrupt = AgentInterruptTool::new().render_agent_interrupt_description();
-    assert!(interrupt.contains("agent_id"));
-    assert!(interrupt.contains("cascade"));
-}
-
-#[test]
 fn split_agent_send_input_runs_in_the_background() {
     let task_input = AgentSendInputTool::task_input(&json!({
         "agent_id": "a1",
-        "description": "Continue parser review",
         "prompt": "Focus next on error recovery."
     }))
     .expect("AgentSendInput input should translate to Task input");
 
     assert_eq!(task_input["action"], "send_input");
     assert_eq!(task_input["run_in_background"], true);
+}
+
+#[test]
+fn agent_send_input_tool_message_renders_the_target_agent_id() {
+    let input = json!({
+        "agent_id": "parser-review",
+        "prompt": "Focus next on error recovery."
+    });
+
+    assert_eq!(
+        AgentSendInputTool::new()
+            .render_tool_use_message(&input, &ToolRenderOptions { verbose: true }),
+        "Sending input to agent: parser-review"
+    );
+    assert_eq!(
+        AgentSendInputTool::new()
+            .render_tool_use_message(&input, &ToolRenderOptions { verbose: false }),
+        "Agent input: parser-review"
+    );
 }
 
 #[test]
@@ -271,65 +302,6 @@ fn agent_interrupt_defaults_to_non_cascading_and_can_request_cascade() {
     }))
     .expect("cascading interrupt input should translate");
     assert_eq!(cascading_input["cancel_descendants"], true);
-}
-
-#[test]
-fn split_agent_tools_render_results_with_agent_vocabulary() {
-    let spawn_results = AgentSpawnTool::render_results(vec![ToolResult::Result {
-        data: json!({
-            "context_mode": "fresh",
-            "run_in_background": true,
-            "status": "started",
-            "agent_id": "a1",
-            "bg_task_id": "bg1"
-        }),
-        result_for_assistant: Some("legacy presentation".to_string()),
-        image_attachments: None,
-    }]);
-    let ToolResult::Result {
-        data,
-        result_for_assistant,
-        ..
-    } = &spawn_results[0]
-    else {
-        panic!("expected spawn result");
-    };
-    assert!(data.get("context_mode").is_none());
-    assert!(data.get("run_in_background").is_none());
-    let result_for_assistant = result_for_assistant.as_deref().unwrap();
-    assert!(result_for_assistant.contains("Agent started successfully"));
-    assert!(!result_for_assistant.contains("subagent"));
-    assert!(!result_for_assistant.contains("Task"));
-
-    let send_results = AgentSendInputTool::render_results(vec![ToolResult::Result {
-        data: json!({
-            "context_mode": "fresh",
-            "run_in_background": true,
-            "status": "started",
-            "agent_id": "a1",
-            "bg_task_id": "bg2"
-        }),
-        result_for_assistant: Some("legacy presentation".to_string()),
-        image_attachments: None,
-    }]);
-    let ToolResult::Result {
-        data,
-        result_for_assistant,
-        ..
-    } = &send_results[0]
-    else {
-        panic!("expected send-input result");
-    };
-    assert!(data.get("context_mode").is_none());
-    assert!(data.get("run_in_background").is_none());
-    assert_eq!(data["status"], "started");
-    assert_eq!(data["agent_id"], "a1");
-    assert_eq!(data["bg_task_id"], "bg2");
-    let result_for_assistant = result_for_assistant.as_deref().unwrap();
-    assert!(result_for_assistant.contains("working in the background"));
-    assert!(result_for_assistant.contains("AgentWait"));
-    assert!(!result_for_assistant.contains("subagent"));
-    assert!(!result_for_assistant.contains("Task"));
 }
 
 #[test]

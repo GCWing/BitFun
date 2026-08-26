@@ -2,7 +2,7 @@ import {
   SUBAGENT_AVATAR_COLOR_CATALOG,
   SUBAGENT_AVATAR_COLOR_CATALOG_VERSION,
   SUBAGENT_AVATAR_IDS,
-  SUBAGENT_IDENTITY_CATALOG_VERSION,
+  SUBAGENT_AVATAR_CATALOG_VERSION,
   type SubagentAvatarColorId,
   type SubagentAvatarId,
 } from './catalog';
@@ -38,7 +38,7 @@ export function resolveSubagentAvatarId(sessionId: string): SubagentAvatarId {
   }
 
   const hash = hashString(
-    `${SUBAGENT_IDENTITY_CATALOG_VERSION}:avatar:${normalizedSessionId}`,
+    `${SUBAGENT_AVATAR_CATALOG_VERSION}:avatar:${normalizedSessionId}`,
   );
   return SUBAGENT_AVATAR_IDS[hash % SUBAGENT_AVATAR_IDS.length];
 }

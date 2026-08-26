@@ -39,9 +39,7 @@ import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import { deriveSubagentExecutionStatus } from '../utils/subagentProjection';
 import { sessionLineageLifecycleForSession } from '../utils/sessionLineage';
 import {
-  getSubagentNameDefinition,
   SubagentAvatar,
-  useSubagentIdentity,
 } from '../subagent-identity';
 import { deriveReviewTaskOutcome } from '../utils/reviewTaskOutcome';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -111,6 +109,13 @@ function readTaskSessionId(input: unknown, toolResult: FlowToolItem['toolResult'
   }
 
   return '';
+}
+
+function readTaskAgentId(toolResult: FlowToolItem['toolResult'] | undefined): string {
+  const result = toolResult?.result;
+  if (!result || typeof result !== 'object') return '';
+  return readStringValue((result as Record<string, unknown>).agent_id)
+    || readStringValue((result as Record<string, unknown>).agentId);
 }
 
 function readTaskSubagentType(input: unknown): string {
@@ -397,12 +402,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
-  const subagentIdentity = useSubagentIdentity(linkedSubagentSessionId);
-  const subagentIdentityName = useMemo(() => {
-    if (!subagentIdentity) return undefined;
-    const definition = getSubagentNameDefinition(subagentIdentity.nameId);
-    return t(definition.labelKey, { defaultValue: definition.fallback });
-  }, [subagentIdentity, t]);
+  const subagentDisplayId = readTaskAgentId(toolResult);
   const subagentAvatarStatus = linkedSubagentSession
     ? sessionLineageLifecycleForSession(linkedSubagentSession)
     : 'idle';
@@ -766,8 +766,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     return linkedSubagentSessionId ? (
       <SubagentAvatar
         sessionId={linkedSubagentSessionId}
-        identity={subagentIdentity}
-        name={subagentIdentityName}
+        name={subagentDisplayId || taskAgentTypeLabel}
         size={22}
         status={subagentAvatarStatus}
       />
@@ -790,14 +789,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           <div className="task-body-main" data-bf-component="task-tool-display" data-bf-part="main">
             <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
               <span className="task-action" data-bf-component="task-tool-display" data-bf-part="action">
-                {subagentIdentityName ? (
+                {subagentDisplayId ? (
                   <>
                     <span
                       className="task-action__subagent-name"
                       data-bf-component="task-tool-display"
                       data-bf-part="subagentName"
                     >
-                      {subagentIdentityName}
+                      {subagentDisplayId}
                     </span>
                     <span className="task-action__identity-separator" aria-hidden="true"> · </span>
                   </>

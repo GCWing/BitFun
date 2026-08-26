@@ -23,17 +23,12 @@ describe('SubagentAvatar', () => {
     container.remove();
   });
 
-  it('renders the allocated raster avatar and lifecycle state', () => {
+  it('renders the session-mapped raster avatar and lifecycle state', () => {
     act(() => {
       root.render(
         <SubagentAvatar
-          identity={{
-            rootSessionId: 'root',
-            sessionId: 'child',
-            avatarId: 'robot-08',
-            nameId: 'name-18',
-          }}
-          name="Berry"
+          sessionId="child"
+          name="parser-review"
           size={28}
           status="running"
         />,
@@ -41,12 +36,12 @@ describe('SubagentAvatar', () => {
     });
 
     const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
-    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe('robot-08');
-    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe('cyan');
-    expect(avatar?.getAttribute('data-bf-name-id')).toBe('name-18');
+    const presentation = resolveSubagentAvatarPresentation('child');
+    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe(presentation.avatarId);
+    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe(presentation.colorId);
     expect(avatar?.getAttribute('data-bf-state')).toBe('running');
     expect(avatar?.getAttribute('style')).toContain('28px');
-    expect(container.querySelector('img')?.getAttribute('src')).toContain('robot-08');
+    expect(container.querySelector('img')?.getAttribute('src')).toContain(presentation.avatarId);
   });
 
   it('renders a stable avatar from the session ID before a name is assigned', () => {

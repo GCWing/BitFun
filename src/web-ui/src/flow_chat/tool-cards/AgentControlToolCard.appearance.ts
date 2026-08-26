@@ -8,6 +8,7 @@ export const agentControlToolCardAppearanceDescriptor: AppearanceSurfaceDescript
     { id: 'agentPill' },
     { id: 'avatar' },
     { id: 'name' },
+    { id: 'type' },
     { id: 'status' },
     { id: 'expandIndicator' },
     { id: 'prompt' },

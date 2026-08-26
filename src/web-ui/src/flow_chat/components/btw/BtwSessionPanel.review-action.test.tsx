@@ -6,10 +6,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { BtwSessionPanel } from './BtwSessionPanel';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { loadPersistedReviewState } from '../../services/ReviewActionBarPersistenceService';
-import {
-  getSubagentNameDefinition,
-  useSubagentIdentityStore,
-} from '../../subagent-identity';
 import type { FlowChatState, Session } from '../../types/flow-chat';
 
 const panelMocks = vi.hoisted(() => ({
@@ -450,7 +446,6 @@ describe('BtwSessionPanel review action bar integration', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useReviewActionBarStore.getState().reset();
-    useSubagentIdentityStore.getState().clear();
     panelMocks.cancelSession.mockReset();
     panelMocks.hydrateSessionHistoryForDetail.mockReset();
     panelMocks.hydrateSessionHistoryForDetail.mockResolvedValue(undefined);
@@ -489,11 +484,10 @@ describe('BtwSessionPanel review action bar integration', () => {
     });
     container.remove();
     useReviewActionBarStore.getState().reset();
-    useSubagentIdentityStore.getState().clear();
     vi.useRealTimers();
   });
 
-  it('shows the assigned subagent avatar and localized name in the side-thread header', async () => {
+  it('shows the session-mapped subagent avatar in the side-thread header', async () => {
     flowChatState = {
       ...flowChatState,
       sessions: new Map([
@@ -501,12 +495,6 @@ describe('BtwSessionPanel review action bar integration', () => {
         ['parent-session', flowChatState.sessions.get('parent-session')!],
       ]),
     } as FlowChatState;
-    useSubagentIdentityStore.getState().reconcileRoot('parent-session', [{
-      sessionId: 'review-check-child',
-      createdAt: 1,
-      active: true,
-    }]);
-
     await act(async () => {
       root.render(
         <BtwSessionPanel
@@ -521,10 +509,8 @@ describe('BtwSessionPanel review action bar integration', () => {
       '[data-bf-component="subagent-avatar"][data-bf-avatar-id]',
     );
     expect(avatar).toBeTruthy();
-    expect(avatar?.getAttribute('data-bf-name-id')).toMatch(/^name-\d{2}$/);
-    const assignment = useSubagentIdentityStore.getState().assignments['review-check-child'];
-    expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
-      .toBe(getSubagentNameDefinition(assignment!.nameId).fallback);
+    expect(avatar?.hasAttribute('data-bf-name-id')).toBe(false);
+    expect(container.querySelector('[data-bf-part="subagentName"]')).toBeNull();
     expect(container.querySelector('[data-bf-part="badge"]')?.textContent).toBe('Agent');
   });
 

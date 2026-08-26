@@ -468,7 +468,7 @@ impl ChatMode {
             refresh_retry_delay: LINEAGE_SETTLEMENT_RETRY_MIN,
         });
         self.retain_lineage_events(&entry.session_id, active_turn_id.as_deref());
-        chat_view.set_lineage_inspection(Some(entry.session_name));
+        chat_view.set_lineage_inspection(Some(entry.agent_id.unwrap_or(entry.session_name)));
         chat_view.invalidate_lines_cache();
         chat_view.set_status(Some(
             "Read-only subagent transcript; root input remains preserved".to_string(),
@@ -591,7 +591,12 @@ impl ChatMode {
             refresh_deadline: Some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW),
             refresh_retry_delay: LINEAGE_SETTLEMENT_RETRY_MIN,
         });
-        chat_view.set_lineage_inspection(Some(entry.session_name.clone()));
+        chat_view.set_lineage_inspection(Some(
+            entry
+                .agent_id
+                .clone()
+                .unwrap_or_else(|| entry.session_name.clone()),
+        ));
         chat_view.invalidate_lines_cache();
         chat_view.set_status(Some(
             "Waiting for the subagent transcript to settle".to_string(),
@@ -919,7 +924,10 @@ fn build_provisional_lineage_chat_state(
     };
     let mut state = ChatState::from_session_transcript(
         entry.session_id.clone(),
-        entry.session_name.clone(),
+        entry
+            .agent_id
+            .clone()
+            .unwrap_or_else(|| entry.session_name.clone()),
         entry.agent_type.clone(),
         entry.workspace_path.clone(),
         &transcript,
@@ -955,7 +963,10 @@ fn build_lineage_chat_state(
     }
     let mut state = ChatState::from_session_transcript(
         entry.session_id.clone(),
-        entry.session_name.clone(),
+        entry
+            .agent_id
+            .clone()
+            .unwrap_or_else(|| entry.session_name.clone()),
         entry.agent_type.clone(),
         entry.workspace_path.clone(),
         &inspection.transcript,
@@ -1082,6 +1093,7 @@ mod session_lineage_tests {
             parent_session_id: parent.map(str::to_string),
             parent_tool_call_id: None,
             subagent_type: Some("explore".to_string()),
+            agent_id: Some(id.to_string()),
             workspace_path: None,
             remote_connection_id: None,
             remote_ssh_host: None,
