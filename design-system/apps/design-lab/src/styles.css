@@ -3178,6 +3178,15 @@ input.lab-force-focus {
   grid-template-rows: 48px repeat(3, 102px);
 }
 
+.component-preview-matrix[data-component="action-item"] {
+  grid-template-columns: 96px repeat(4, minmax(280px, 1fr));
+  min-width: 1216px;
+}
+
+.component-preview-matrix[data-component="action-item"] [data-bf-component="action-item"] {
+  inline-size: 100%;
+}
+
 .component-preview-matrix[data-component="switch"] {
   grid-template-columns: 88px repeat(4, minmax(112px, 1fr));
   grid-template-rows: 50px minmax(250px, 1fr);

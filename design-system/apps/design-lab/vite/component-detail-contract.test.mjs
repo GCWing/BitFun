@@ -105,6 +105,19 @@ test("ActionItem preview keeps its trigger and end actions as separate contracts
   assert.match(source, /id: "more"/);
 });
 
+test("ActionItem preview reserves a full-width column for its complete anatomy", async () => {
+  const source = await readFile(stylesSource, "utf8");
+
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-component="action-item"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(280px, 1fr\)\)/s,
+  );
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-component="action-item"\]\s+\[data-bf-component="action-item"\]\s*\{[^}]*inline-size:\s*100%/s,
+  );
+});
+
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
