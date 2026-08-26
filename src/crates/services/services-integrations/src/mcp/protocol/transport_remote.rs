@@ -420,7 +420,7 @@ impl RemoteMCPTransport {
             None
         };
 
-        let http_client = reqwest::Client::builder()
+        let http_client = crate::reqwest_client_builder()
             .connect_timeout(Duration::from_secs(10))
             .danger_accept_invalid_certs(false)
             .tls_backend_rustls()
@@ -428,7 +428,7 @@ impl RemoteMCPTransport {
             .build()
             .unwrap_or_else(|e| {
                 warn!("Failed to create HTTP client, using default config: {}", e);
-                reqwest::Client::new()
+                crate::reqwest_client()
             });
 
         let transport = StreamableHttpClientTransport::with_client(

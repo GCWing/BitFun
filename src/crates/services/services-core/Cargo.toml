@@ -36,6 +36,7 @@ which = { workspace = true, optional = true }
 similar = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+rustls = { workspace = true, features = ["ring", "std", "tls12"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true, optional = true }
@@ -46,6 +47,7 @@ libc = { workspace = true, optional = true }
 
 [features]
 default = []
+tls-provider = ["dep:rustls"]
 diagnostics = ["dep:regex"]
 diff = ["dep:similar", "dep:tokio", "tokio/rt", "tokio/time"]
 filesystem = [

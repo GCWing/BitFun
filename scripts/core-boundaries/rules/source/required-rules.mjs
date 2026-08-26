@@ -10090,4 +10090,119 @@ export const requiredContentRules = [
       },
     ],
   },
+  {
+    path: 'src/apps/server/src/bootstrap.rs',
+    reason:
+      'Server must remain on the canonical Core Agent Runtime and product event-queue owners',
+    patterns: [
+      {
+        regex: /init_agentic_system_for_profile_with_runtime_ownership\s*\(/,
+        message: 'Server bootstrap must use the canonical Core Agent Runtime initializer',
+      },
+      {
+        regex: /CoreProductEventQueueOwner::new\s*\(/,
+        message: 'Server bootstrap must retain the product event-queue owner',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/server/src/main.rs',
+    reason:
+      'Server App Server event projection must consume the product-owned runtime source',
+    patterns: [
+      {
+        regex: /agent_event_queue_owner\.runtime_source\s*\(\s*\)/,
+        message: 'Server must consume events through CoreProductEventQueueOwner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/system.rs',
+    reason:
+      'the canonical Core Agent Runtime initializer must publish its token usage service for every embedded host',
+    patterns: [
+      {
+        regex: /set_global_token_usage_service\s*\(\s*token_usage_service\.clone\s*\(\s*\)\s*\)/,
+        message: 'canonical Agent Runtime initialization must publish token usage globally',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/tls_provider.rs',
+    reason:
+      'provider-neutral TLS clients must share the services-owned process-level ring selection',
+    patterns: [
+      {
+        regex: /rustls::crypto::ring::default_provider\s*\(\s*\)\.install_default\s*\(\s*\)/,
+        message: 'services-core TLS owner must install the workspace-owned ring provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/Cargo.toml',
+    reason:
+      'services-core must own the exact Rustls provider and protocol feature selection',
+    patterns: [
+      {
+        regex: /rustls = \{ workspace = true, features = \["ring", "std", "tls12"\], optional = true \}/,
+        message: 'services-core TLS owner must select only ring, std, and TLS 1.2 support',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/lib.rs',
+    reason:
+      'integration clients must initialize the reviewed TLS provider through centralized constructors',
+    patterns: [
+      {
+        regex: /fn reqwest_client_builder[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)/,
+        message: 'integration Reqwest builder must initialize the ring provider',
+      },
+      {
+        regex: /fn reqwest_client\s*\([^)]*\)[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)/,
+        message: 'integration default Reqwest client must initialize the ring provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/ai-adapters/src/client/http.rs',
+    reason: 'AI transport clients must initialize the reviewed TLS provider before Reqwest',
+    patterns: [
+      {
+        regex: /fn create_http_client[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)[\s\S]*?Client::builder\s*\(/,
+        message: 'AI client construction must initialize the ring provider first',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/ai-adapters/src/subscription_auth/mod.rs',
+    reason:
+      'subscription authentication clients must initialize the same reviewed TLS provider as normal AI transport',
+    patterns: [
+      {
+        regex: /fn build_http_client[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)[\s\S]*?reqwest::Client::builder\s*\(/,
+        message: 'subscription HTTP client construction must initialize the ring provider first',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/miniapp-market-service/src/auth.rs',
+    reason: 'MiniApp market HTTP clients must initialize the reviewed TLS provider',
+    patterns: [
+      {
+        regex: /fn new\s*\([^)]*MarketConfig[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)[\s\S]*?reqwest::Client::builder\s*\(/,
+        message: 'MiniApp market AuthService must initialize the ring provider first',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/skin-market-service/src/auth.rs',
+    reason: 'appearance market HTTP clients must initialize the reviewed TLS provider',
+    patterns: [
+      {
+        regex: /fn new\s*\([^)]*Url[\s\S]*?ensure_ring_crypto_provider\s*\(\s*\)[\s\S]*?Client::builder\s*\(/,
+        message: 'appearance market IdentityVerifier must initialize the ring provider first',
+      },
+    ],
+  },
 ];

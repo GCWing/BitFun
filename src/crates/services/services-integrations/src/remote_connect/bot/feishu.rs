@@ -76,7 +76,7 @@ impl FeishuBotApi {
             }
         }
 
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
             .json(&serde_json::json!({
@@ -112,7 +112,7 @@ impl FeishuBotApi {
     pub async fn send_message(&self, chat_id: &str, content: &str) -> Result<()> {
         let token = self.get_access_token().await?;
         let card = build_markdown_card(content);
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post("https://open.feishu.cn/open-apis/im/v1/messages")
             .query(&[("receive_id_type", "chat_id")])
@@ -156,7 +156,7 @@ impl FeishuBotApi {
         actions: &[BotAction],
     ) -> Result<()> {
         let token = self.get_access_token().await?;
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let card = build_action_card(chat_id, language, content, actions);
         let resp = client
             .post("https://open.feishu.cn/open-apis/im/v1/messages")
@@ -185,7 +185,7 @@ impl FeishuBotApi {
         file_key: &str,
     ) -> Result<FeishuDownloadedImage> {
         let token = self.get_access_token().await?;
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let url = format!(
             "https://open.feishu.cn/open-apis/im/v1/messages/{}/resources/{}?type=image",
             message_id, file_key
@@ -224,7 +224,7 @@ impl FeishuBotApi {
         let file_key = self.upload_file(file_path).await?;
         let token = self.get_access_token().await?;
 
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post("https://open.feishu.cn/open-apis/im/v1/messages")
             .query(&[("receive_id_type", "chat_id")])
@@ -272,7 +272,7 @@ impl FeishuBotApi {
             .text("file_name", content.name)
             .part("file", part);
 
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post("https://open.feishu.cn/open-apis/im/v1/files")
             .bearer_auth(&token)
@@ -294,7 +294,7 @@ impl FeishuBotApi {
 
     /// Obtain a WebSocket URL from Feishu for long-connection event delivery.
     pub async fn get_ws_endpoint(&self) -> Result<FeishuWsEndpoint> {
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post("https://open.feishu.cn/callback/ws/endpoint")
             .json(&serde_json::json!({

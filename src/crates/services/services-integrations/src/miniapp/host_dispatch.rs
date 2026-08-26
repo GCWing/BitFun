@@ -547,7 +547,7 @@ async fn dispatch_net(
             .host_str()
             .ok_or_else(|| MiniAppHostDispatchError::parse("URL has no host"))?;
         let pinned_address = resolve_public_address(&current_url).await?;
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .resolve(host, pinned_address)
             .build()

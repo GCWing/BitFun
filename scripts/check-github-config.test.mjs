@@ -250,6 +250,11 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     'build-impact',
     'Rust validation must not wait for the frontend build',
   );
+  assert.deepEqual(
+    rustJob.strategy.matrix.os,
+    ['ubuntu-latest', 'macos-15', 'windows-latest'],
+    'Rust validation must retain the reviewed Linux, macOS, and Windows matrix',
+  );
   assert.equal(
     rustJob.steps.some((step) => step.uses?.startsWith('actions/download-artifact@')),
     false,
@@ -376,6 +381,12 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   const coreLibraryTests = rustJob.steps.find(
     (step) => step.name === 'Run core library tests',
   );
+  const linuxFullCoreLibraryTests = rustJob.steps.find(
+    (step) => step.name === 'Run full core library tests on Linux',
+  );
+  const coreLibraryTestSteps = rustJob.steps.filter(
+    (step) => /^cargo test --locked -p bitfun-core\b.*\s--lib$/.test(step.run ?? ''),
+  );
   const desktopLibraryTests = rustJob.steps.find(
     (step) => step.name === 'Run desktop library tests',
   );
@@ -386,8 +397,34 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
     (step) => step.name === 'Run product-control domain and delivery-profile contracts',
   );
   assert.equal(
+    coreLibraryTests?.if,
+    "runner.os != 'Linux'",
+  );
+  assert.equal(
     coreLibraryTests?.run,
     'cargo test --locked -p bitfun-core --lib',
+  );
+  assert.equal(
+    linuxFullCoreLibraryTests?.if,
+    "runner.os == 'Linux'",
+  );
+  assert.equal(
+    linuxFullCoreLibraryTests?.run,
+    'cargo test --locked -p bitfun-core --features product-full --lib',
+  );
+  assert.deepEqual(
+    coreLibraryTestSteps.map((step) => ({ if: step.if, run: step.run })),
+    [
+      {
+        if: "runner.os != 'Linux'",
+        run: 'cargo test --locked -p bitfun-core --lib',
+      },
+      {
+        if: "runner.os == 'Linux'",
+        run: 'cargo test --locked -p bitfun-core --features product-full --lib',
+      },
+    ],
+    'Core library validation must contain exactly the reviewed complementary steps',
   );
   assert.equal(desktopLibraryTests?.if, "runner.os != 'Windows'");
   assert.equal(

@@ -75,7 +75,7 @@ impl BufferedRelayResponse {
 pub(crate) fn relay_http_client() -> reqwest::Client {
     RELAY_HTTP_CLIENT
         .get_or_init(|| {
-            reqwest::Client::builder()
+            crate::reqwest_client_builder()
                 .timeout(RELAY_HTTP_TIMEOUT)
                 .connect_timeout(RELAY_HTTP_CONNECT_TIMEOUT)
                 .read_timeout(RELAY_HTTP_READ_TIMEOUT)
@@ -85,7 +85,7 @@ pub(crate) fn relay_http_client() -> reqwest::Client {
                     warn!(
                         "Failed to build shared relay HTTP client; using reqwest defaults: {error}"
                     );
-                    reqwest::Client::new()
+                    crate::reqwest_client()
                 })
         })
         .clone()
@@ -318,7 +318,7 @@ mod tests {
                 stream.write_all(response.as_bytes()).await.unwrap();
             }
         });
-        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let client = crate::reqwest_client_builder().no_proxy().build().unwrap();
 
         let response = send_with_retry(
             "test-safe-read",
@@ -353,7 +353,7 @@ mod tests {
                 stream.write_all(response.as_bytes()).await.unwrap();
             }
         });
-        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let client = crate::reqwest_client_builder().no_proxy().build().unwrap();
 
         let response = send_with_retry(
             "test-truncated-body",
@@ -386,7 +386,7 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let client = crate::reqwest_client_builder().no_proxy().build().unwrap();
 
         let response = send_with_retry(
             "test-truncated-error-body",

@@ -1,4 +1,4 @@
-//! Narrow detached-dispatch capability for the lightweight Server Host.
+//! Narrow detached-dispatch capability for the loopback Server Host.
 //!
 //! This route owns no Agent Runtime and no target session. It only exposes the
 //! same platform-neutral controller used by Desktop, backed by saved SSH

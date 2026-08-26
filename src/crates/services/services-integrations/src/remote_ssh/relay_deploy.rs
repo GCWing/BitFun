@@ -1400,7 +1400,7 @@ async fn verified_latest_relay_image_descriptor() -> Result<RelayImageDescriptor
     let pubkey = release_pubkey().ok_or_else(|| {
         anyhow!("this build has no Relay release trust root; refusing image deployment")
     })?;
-    let client = reqwest::Client::builder()
+    let client = crate::reqwest_client_builder()
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(30))
         .build()?;

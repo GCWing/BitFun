@@ -65,7 +65,7 @@ dark-light = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
-reqwest = { workspace = true, features = ["http2", "json", "query", "rustls", "stream"] }
+reqwest = { workspace = true, features = ["http2", "json", "query", "rustls-no-provider", "stream"] }
 semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }

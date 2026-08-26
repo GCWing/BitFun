@@ -158,6 +158,7 @@ pub async fn relay_deploy_verify(relay_url: String) -> Result<RelayVerifyResult,
     if base.is_empty() {
         return Err("empty relay url".to_string());
     }
+    crate::ensure_rustls_crypto_provider();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .build()

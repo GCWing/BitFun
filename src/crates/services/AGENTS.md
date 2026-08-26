@@ -11,7 +11,7 @@ OS/network capabilities.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `services-core` | Reusable local service primitives, managed process-tree lifecycle, filesystem helpers, session storage layout/indexing/deletion, metadata store CRUD/index rebuild, metadata construction/counter/index/field mutation/lineage rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
+| `services-core` | Reusable local service primitives, process-wide TLS provider selection, managed process-tree lifecycle, filesystem helpers, session storage layout/indexing/deletion, metadata store CRUD/index rebuild, metadata construction/counter/index/field mutation/lineage rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
 | `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, review-platform provider service, product-domain port implementations, and platform-neutral Remote Connect primitives | [AGENTS.md](services-integrations/AGENTS.md) |
 | `miniapp-market-service` | Concrete SQLite, artifact storage, GitHub OAuth, package validation, and HTTP behavior for the MiniApp market | [README.md](miniapp-market-service/README.md) |
 | `skin-market-service` | Concrete SQLite, artifact storage, Appearance package validation, review, and HTTP behavior for the Skin market | [README.md](skin-market-service/README.md) |
@@ -21,7 +21,7 @@ OS/network capabilities.
 
 ## Placement Rules
 
-- Put concrete OS, process, filesystem, git, terminal, MCP, remote SSH,
+- Put concrete OS, process-wide TLS provider, process, filesystem, git, terminal, MCP, remote SSH,
   file-watch, MiniApp runtime IO, and network service implementations here.
 - Implement `contracts`, `execution`, or `contracts/product-domains` ports here
   when the implementation needs concrete dependencies.

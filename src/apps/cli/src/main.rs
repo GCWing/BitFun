@@ -1677,9 +1677,9 @@ async fn run_interactive_with_session(
 }
 
 fn main() {
-    // Install rustls CryptoProvider before any TLS-capable work (relay WS,
-    // reqwest rustls paths, Feishu wss). Required when both ring and aws-lc-rs
-    // are linked: rustls cannot auto-select a provider.
+    // Install the workspace-owned ring CryptoProvider before any TLS-capable
+    // work (relay WS, reqwest rustls paths, Feishu wss) so every client uses
+    // the same explicit process-level provider.
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 
     let worker = std::thread::Builder::new()

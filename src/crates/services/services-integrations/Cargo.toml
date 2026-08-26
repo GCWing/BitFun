@@ -97,10 +97,11 @@ default = []
 # feature group (e.g. `git`) only derive `TS` when that group is also enabled;
 # app-server's `ts` feature enables `product-full` which pulls `git`.
 ts = ["dep:ts-rs"]
-announcement = ["reqwest", "reqwest/json", "reqwest/rustls", "tokio/fs", "tokio/sync"]
+announcement = ["bitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "tokio/fs", "tokio/sync"]
 models-dev = [
+    "bitfun-services-core/tls-provider",
     "reqwest",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/system-proxy",
     "sha2",
     "tokio/fs",
@@ -108,7 +109,7 @@ models-dev = [
     "tokio/time",
     "windows",
 ]
-browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/json", "reqwest/rustls", "thiserror", "tokio/time"]
+browser-control = ["anyhow", "bitfun-services-core/process-runtime", "bitfun-services-core/tls-provider", "dirs", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
@@ -149,12 +150,13 @@ mcp = [
     "base64",
     "bitfun-agent-tools/mcp-bridge",
     "bitfun-services-core/process-runtime",
+    "bitfun-services-core/tls-provider",
     "futures",
     "hex",
     "rand",
     "reqwest",
     "reqwest/json",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
@@ -174,10 +176,11 @@ miniapp-runtime = [
     "base64",
     "bitfun-product-domains/miniapp",
     "bitfun-services-core/process-runtime",
+    "bitfun-services-core/tls-provider",
     "dep:bitfun-product-domains",
     "dirs",
     "reqwest",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "tokio/fs",
     "tokio/io-util",
@@ -190,6 +193,7 @@ miniapp-runtime = [
     "which",
 ]
 miniapp-market = [
+    "bitfun-services-core/tls-provider",
     "bitfun-product-domains/appearance-market",
     "chrono",
     "dep:apple-native-keyring-store",
@@ -206,7 +210,7 @@ miniapp-market = [
     "reqwest",
     "reqwest/json",
     "reqwest/query",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "semver",
     "sha2",
@@ -254,6 +258,7 @@ remote-connect = [
     "dep:bitfun-core-types",
     "bitfun-services-core/local-storage",
     "bitfun-services-core/process-runtime",
+    "bitfun-services-core/tls-provider",
     "bitfun-runtime-ports/agent-api",
     "bitfun-runtime-ports/remote-workspace-ports",
     "chrono",
@@ -276,7 +281,7 @@ remote-connect = [
     "reqwest/json",
     "reqwest/multipart",
     "reqwest/query",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "rustls",
     "rustls-native-certs",
     "schannel",
@@ -324,13 +329,14 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
+    "bitfun-services-core/tls-provider",
     "dep:bitfun-runtime-ports",
     "chrono",
     "dirs",
     "minisign-verify",
     "rand",
     "reqwest",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "russh",
     "russh-sftp",
@@ -345,12 +351,13 @@ remote-ssh-concrete = [
 review-platform = [
     "async-trait",
     "bitfun-services-core/process-runtime",
+    "bitfun-services-core/tls-provider",
     "chrono",
     "futures",
     "reqwest",
     "reqwest/json",
     "reqwest/query",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "sha2",
     "thiserror",
@@ -363,12 +370,13 @@ review-platform = [
 speech = [
     "async-trait",
     "base64",
+    "bitfun-services-core/tls-provider",
     "bzip2",
     "chrono",
     "dep:bitfun-core-types",
     "futures-util",
     "reqwest",
-    "reqwest/rustls",
+    "reqwest/rustls-no-provider",
     "reqwest/stream",
     "sha2",
     "sherpa-onnx",
@@ -406,7 +414,7 @@ script-tool-runtime = [
     "tokio/time",
     "which",
 ]
-web-tools = ["reqwest", "reqwest/json", "reqwest/rustls", "thiserror"]
+web-tools = ["bitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "thiserror"]
 product-full = [
     "announcement",
     "models-dev",

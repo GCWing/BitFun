@@ -303,28 +303,32 @@ const REQWEST_PACKAGE_PROFILES = new Map([
     servicesOwners: true,
   }],
   ['bitfun-ai-adapters', {
-    dependencyFeatures: ['http2', 'json', 'rustls', 'socks', 'stream'],
+    dependencyFeatures: ['http2', 'json', 'rustls-no-provider', 'socks', 'stream'],
     optional: false,
     allowedPackageFeatureRefs: new Set(['reqwest/form']),
     requiredPackageFeatureRefs: new Map([
       ['subscription-auth', new Set(['reqwest/form'])],
     ]),
+    tlsProviderDependency: 'bitfun-services-core',
   }],
   ['bitfun-cli', {
-    dependencyFeatures: ['http2', 'rustls', 'stream'],
+    dependencyFeatures: ['http2', 'rustls-no-provider', 'stream'],
     optional: false,
+    tlsProviderDependency: 'bitfun-services-core',
   }],
   ['bitfun-desktop', {
-    dependencyFeatures: ['http2', 'json', 'query', 'rustls', 'stream'],
+    dependencyFeatures: ['http2', 'json', 'query', 'rustls-no-provider', 'stream'],
     optional: false,
   }],
   ['bitfun-miniapp-market-service', {
-    dependencyFeatures: ['form', 'http2', 'json', 'rustls'],
+    dependencyFeatures: ['form', 'http2', 'json', 'rustls-no-provider'],
     optional: false,
+    tlsProviderDependency: 'bitfun-services-core',
   }],
   ['bitfun-skin-market-service', {
-    dependencyFeatures: ['http2', 'json', 'rustls'],
+    dependencyFeatures: ['http2', 'json', 'rustls-no-provider'],
     optional: false,
+    tlsProviderDependency: 'bitfun-services-core',
   }],
 ]);
 
@@ -420,6 +424,26 @@ function findReqwestPackageProfileViolations(pkg, profile) {
           });
         }
       }
+    }
+  }
+
+  if (profile.tlsProviderDependency) {
+    const providerDependencies = (pkg.dependencies ?? []).filter(
+      (candidate) => candidate.name === profile.tlsProviderDependency
+        && (candidate.kind ?? null) === null
+        && (candidate.target ?? null) === null,
+    );
+    if (
+      providerDependencies.length !== 1
+      || !(providerDependencies[0].features ?? []).includes('tls-provider')
+    ) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          `${pkg.name} must select ${profile.tlsProviderDependency}/tls-provider `
+          + 'for its provider-neutral Reqwest client',
+      });
     }
   }
 
@@ -930,7 +954,7 @@ export function findResolvedReqwestNativeTlsViolations(records, { root }) {
     }];
   }
 
-  return reqwestRecords.flatMap((record) => {
+  const reqwestViolations = reqwestRecords.flatMap((record) => {
     const nativeTlsFeatures = (record.features ?? []).filter(
       (feature) =>
         feature === 'default-tls'
@@ -939,7 +963,12 @@ export function findResolvedReqwestNativeTlsViolations(records, { root }) {
         || feature === 'native-tls'
         || feature.startsWith('native-tls-'),
     );
-    if (nativeTlsFeatures.length === 0) {
+    const providerSelectingFeatures = record.version.startsWith('0.13.')
+      && (record.features ?? []).includes('rustls')
+      ? ['rustls (selects AWS-LC)']
+      : [];
+    const unreviewedTlsFeatures = [...nativeTlsFeatures, ...providerSelectingFeatures];
+    if (unreviewedTlsFeatures.length === 0) {
       return [];
     }
     return [{
@@ -947,9 +976,35 @@ export function findResolvedReqwestNativeTlsViolations(records, { root }) {
       line: 1,
       message:
         `resolved reqwest ${record.version} feature union enables an unreviewed TLS backend: `
-        + nativeTlsFeatures.join(', '),
+        + unreviewedTlsFeatures.join(', '),
     }];
   });
+
+  const rustlsRecords = records.filter((record) => record.name === 'rustls');
+  const selectedRustlsProviders = new Set(rustlsRecords
+    .flatMap((record) => (record.features ?? [])
+        .filter((feature) => feature === 'ring' || feature === 'aws_lc_rs' || feature === 'aws-lc-rs')
+        .map((feature) => feature === 'ring' ? feature : 'aws_lc_rs')));
+  if (records.some((record) => record.name === 'aws-lc-rs' || record.name === 'aws-lc-sys')) {
+    selectedRustlsProviders.add('aws_lc_rs');
+  }
+  const sortedRustlsProviders = [...selectedRustlsProviders].sort();
+  const rustlsVersions = [...new Set(rustlsRecords.map((record) => record.version))].sort();
+  const reqwestUsesRustls = reqwestRecords.some((record) =>
+    (record.features ?? []).some((feature) => feature.includes('rustls')));
+  const rustlsProviderViolations = !reqwestUsesRustls
+    || (sortedRustlsProviders.length === 1 && sortedRustlsProviders[0] === 'ring')
+    ? []
+    : [{
+        path: join(root, 'Cargo.toml'),
+        line: 1,
+        message:
+          `resolved Reqwest/Rustls closure must select only the ring crypto provider; `
+          + `rustls ${rustlsVersions.join(', ') || '(missing)'} selects `
+          + (sortedRustlsProviders.join(', ') || '(no provider)'),
+      }];
+
+  return [...reqwestViolations, ...rustlsProviderViolations];
 }
 
 export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
@@ -987,11 +1042,18 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
         message: `${pkg.name}:${featureName} must explicitly enable reqwest`,
       });
     }
-    if (!references.includes('reqwest/rustls')) {
+    if (!references.includes('reqwest/rustls-no-provider')) {
       violations.push({
         path: pkg.manifest_path,
         line: 1,
-        message: `${pkg.name}:${featureName} is missing reqwest/rustls`,
+        message: `${pkg.name}:${featureName} is missing reqwest/rustls-no-provider`,
+      });
+    }
+    if (!references.includes('bitfun-services-core/tls-provider')) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} is missing bitfun-services-core/tls-provider`,
       });
     }
     for (const reference of ownerFeatureReferences.get(featureName) ?? []) {
@@ -1026,7 +1088,7 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
     const allowedReferences = new Set([
       'reqwest',
       'dep:reqwest',
-      'reqwest/rustls',
+      'reqwest/rustls-no-provider',
       ...(ownerFeatureReferences.get(featureName) ?? []),
     ]);
     for (const reference of reqwestReferences) {

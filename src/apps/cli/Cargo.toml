@@ -60,7 +60,7 @@ bitfun-agent-runtime-ipc = { path = "../../crates/adapters/agent-runtime-ipc" }
 bitfun-app-server = { path = "../../crates/interfaces/app-server" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "git-port", "permission", "plugin-runtime", "workspace-ports"] }
 bitfun-runtime-services = { path = "../../crates/execution/runtime-services" }
-bitfun-services-core = { path = "../../crates/services/services-core", features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership"] }
+bitfun-services-core = { path = "../../crates/services/services-core", features = ["dispatch-workspace", "local-storage", "process-runtime", "runtime-ownership", "tls-provider"] }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["external-sources"] }
 
@@ -120,7 +120,7 @@ fs2 = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 minisign-verify = "0.2"
-reqwest = { workspace = true, features = ["http2", "rustls", "stream"] }
+reqwest = { workspace = true, features = ["http2", "rustls-no-provider", "stream"] }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = "3"

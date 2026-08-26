@@ -76,7 +76,7 @@ impl RemoteAnnouncementFetcher {
             request.endpoint_url
         );
 
-        match reqwest::get(&request_url).await {
+        match crate::reqwest_client().get(&request_url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 match resp.json::<Vec<AnnouncementCard>>().await {
                     Ok(cards) => {

@@ -47,6 +47,8 @@ pub mod session_usage;
 pub mod storage_cleanup;
 #[cfg(feature = "process-runtime")]
 pub mod system;
+#[cfg(feature = "tls-provider")]
+pub mod tls_provider;
 #[cfg(feature = "local-storage")]
 pub mod token_usage;
 #[cfg(feature = "workspace-runtime")]

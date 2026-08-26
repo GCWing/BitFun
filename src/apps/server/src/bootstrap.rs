@@ -2,9 +2,13 @@
 //!
 //! Mirrors the Desktop app's init sequence without any Tauri dependency.
 
-use bitfun_core::agentic::*;
+use bitfun_core::agentic::{agents, coordination, system, tools};
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
+use bitfun_core::product_runtime::{
+    ensure_product_dialog_scheduler, CoreProductEventQueueOwner, CoreRuntimeServicesProvider,
+};
+use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_core::service::{config, filesystem, mcp, token_usage, workspace};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -26,8 +30,7 @@ pub(crate) struct ServerAppState {
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
     pub coordinator: Arc<coordination::ConversationCoordinator>,
     pub scheduler: Arc<coordination::DialogScheduler>,
-    pub event_queue: Arc<events::EventQueue>,
-    pub event_router: Arc<events::EventRouter>,
+    pub agent_event_queue_owner: CoreProductEventQueueOwner,
     pub tool_registry_snapshot: Arc<Vec<Arc<dyn tools::framework::Tool>>>,
     pub start_time: std::time::Instant,
 }
@@ -38,9 +41,7 @@ pub(crate) struct ServerAppState {
 pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
     log::info!("Initializing BitFun server core services");
 
-    bitfun_core::agentic::system::select_agentic_system_profile(
-        bitfun_core::agentic::system::DeliveryProfile::ProductFull,
-    )?;
+    system::select_agentic_system_profile(system::DeliveryProfile::ProductFull)?;
 
     // 1. Global config
     config::initialize_global_config().await?;
@@ -64,87 +65,27 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
 
     // 3. Agentic system
     let path_manager = try_get_path_manager_arc()?;
-    let runtime_ownership = Arc::new(
-        bitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(
-            path_manager.as_ref(),
-            "server",
-        ),
-    );
-
-    let event_queue = Arc::new(events::EventQueue::new(Default::default()));
-    let event_router = Arc::new(events::EventRouter::new());
-
-    let persistence_manager = Arc::new(persistence::PersistenceManager::new(path_manager.clone())?);
-
-    let context_store = Arc::new(session::SessionContextStore::new());
-    let context_compressor = Arc::new(session::ContextCompressor::new(Default::default()));
-
-    let session_manager = Arc::new(session::SessionManager::new(
-        context_store,
-        persistence_manager,
-        Default::default(),
+    let runtime_ownership = Arc::new(CoreRuntimeOwnership::embedded(
+        path_manager.as_ref(),
+        "server",
     ));
-
-    let tool_registry = tools::registry::get_global_tool_registry();
-    let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
-
-    let tool_pipeline = Arc::new(tools::pipeline::ToolPipeline::new(
-        tool_registry.clone(),
-        tool_state_manager,
-        None,
-    ));
-
-    let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));
-    let round_executor = Arc::new(execution::RoundExecutor::new(
-        stream_processor,
-        event_queue.clone(),
-        tool_pipeline.clone(),
-    ));
-
-    let execution_config = execution::execution_engine_config_from_global_config().await;
-    let execution_engine = Arc::new(execution::ExecutionEngine::new(
-        round_executor,
-        event_queue.clone(),
-        session_manager.clone(),
-        context_compressor,
-        execution_config,
-    ));
-
-    let coordinator = Arc::new(coordination::ConversationCoordinator::new(
-        session_manager.clone(),
-        execution_engine,
-        tool_pipeline,
-        event_queue.clone(),
-        event_router.clone(),
+    let agentic_system = system::init_agentic_system_for_profile_with_runtime_ownership(
+        system::DeliveryProfile::ProductFull,
         runtime_ownership,
-    ));
-    coordinator.set_terminal_port(
-        bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
-    );
-    coordinator.set_remote_exec_port(
-        bitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
-    );
+    )
+    .await?;
+    agentic_system
+        .coordinator
+        .set_terminal_port(CoreRuntimeServicesProvider::terminal_port());
+    agentic_system
+        .coordinator
+        .set_remote_exec_port(CoreRuntimeServicesProvider::remote_exec_port());
 
-    coordination::ConversationCoordinator::set_global(coordinator.clone());
-
-    // Token usage
-    let token_usage_service =
-        Arc::new(token_usage::TokenUsageService::new(path_manager.clone()).await?);
-    let token_usage_subscriber = Arc::new(token_usage::TokenUsageSubscriber::new(
-        token_usage_service.clone(),
-    ));
-    event_router.subscribe_internal("token_usage".to_string(), token_usage_subscriber);
-    event_router.subscribe_internal(
-        "thread_goal_tokens".to_string(),
-        Arc::new(bitfun_core::agentic::goal_mode::ThreadGoalTokenSubscriber),
-    );
-
-    // Dialog scheduler
-    let scheduler =
-        coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
-    coordinator.set_scheduler_notifier(scheduler.outcome_sender());
-    coordinator.set_round_injection_source(scheduler.round_injection_monitor());
-    coordination::set_global_scheduler(scheduler.clone());
+    let scheduler = ensure_product_dialog_scheduler(&agentic_system);
+    let coordinator = agentic_system.coordinator.clone();
+    let event_queue = agentic_system.event_queue.clone();
+    let agent_event_queue_owner = CoreProductEventQueueOwner::new(event_queue);
+    let token_usage_service = agentic_system.token_usage_service.clone();
 
     // Cron service
     let cron_service = bitfun_core::service::cron::CronService::new(
@@ -154,10 +95,10 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     )
     .await?;
     bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
-    let cron_subscriber = Arc::new(bitfun_core::service::cron::CronEventSubscriber::new(
-        cron_service.clone(),
-    ));
-    event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
+    coordinator.subscribe_internal(
+        "cron_jobs".to_string(),
+        bitfun_core::service::cron::CronEventSubscriber::new(cron_service.clone()),
+    );
     cron_service.start();
 
     // Function agents
@@ -170,9 +111,14 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
 
     let agent_registry = agents::get_agent_registry();
+    let tool_registry = tools::registry::get_global_tool_registry();
 
     let mcp_service = match mcp::MCPService::new(config_service.clone()) {
-        Ok(service) => Some(Arc::new(service)),
+        Ok(service) => {
+            let service = Arc::new(service);
+            mcp::set_global_mcp_service(service.clone());
+            Some(service)
+        }
         Err(e) => {
             log::warn!("Failed to initialize MCP service: {}", e);
             None
@@ -188,7 +134,7 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     // 5. Open workspace if specified
     let initial_workspace_path = if let Some(ws_path) = workspace {
         let path = std::path::PathBuf::from(&ws_path);
-        match coordinator
+        let info = coordinator
             .open_workspace_with_runtime_ownership(
                 workspace_service.as_ref(),
                 path,
@@ -197,20 +143,15 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
                 "server bootstrap",
             )
             .await
-        {
-            Ok(info) => {
-                log::info!(
-                    "Workspace opened: name={}, path={}",
-                    info.name,
-                    info.root_path.display()
-                );
-                Some(info.root_path)
-            }
-            Err(e) => {
-                log::error!("Failed to open workspace '{}': {}", ws_path, e);
-                None
-            }
-        }
+            .map_err(|error| {
+                anyhow::anyhow!("Failed to open workspace '{}': {}", ws_path, error)
+            })?;
+        log::info!(
+            "Workspace opened: name={}, path={}",
+            info.name,
+            info.root_path.display()
+        );
+        Some(info.root_path)
     } else {
         // Try to restore last workspace
         workspace_service
@@ -230,8 +171,7 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         token_usage_service,
         coordinator,
         scheduler,
-        event_queue,
-        event_router,
+        agent_event_queue_owner,
         tool_registry_snapshot,
         start_time: std::time::Instant::now(),
     });

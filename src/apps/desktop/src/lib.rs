@@ -94,6 +94,10 @@ use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
     bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
 
+pub(crate) fn ensure_rustls_crypto_provider() {
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+}
+
 /// Agentic Coordinator state
 #[derive(Clone)]
 pub struct CoordinatorState {
@@ -589,7 +593,7 @@ pub async fn run() {
     // Install the rustls ring CryptoProvider as the process-level default early,
     // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
     // reuse the same provider instead of each attempting their own install_default().
-    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+    ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
 

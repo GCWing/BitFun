@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true, optional = true }
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
 bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-services-core = { path = "../../services/services-core", optional = true }
+bitfun-services-core = { path = "../../services/services-core", features = ["tls-provider"] }
 chrono = { workspace = true }
 dirs = { workspace = true, optional = true }
 keyring-core = { workspace = true, optional = true }
@@ -33,7 +33,7 @@ futures = { workspace = true }
 fs2 = { workspace = true, optional = true }
 libc = { workspace = true, optional = true }
 log = { workspace = true }
-reqwest = { workspace = true, features = ["http2", "json", "rustls", "socks", "stream"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls-no-provider", "socks", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

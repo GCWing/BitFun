@@ -73,7 +73,7 @@ impl TelegramBotApi {
     }
 
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<()> {
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         for chunk in chunk_text_for_telegram(text) {
             let resp = client
                 .post(self.api_url("sendMessage"))
@@ -110,7 +110,7 @@ impl TelegramBotApi {
             })
             .collect();
 
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post(self.api_url("sendMessage"))
             .json(&serde_json::json!({
@@ -143,7 +143,7 @@ impl TelegramBotApi {
             .text("chat_id", chat_id.to_string())
             .part("document", part);
 
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let resp = client
             .post(self.api_url("sendDocument"))
             .multipart(form)
@@ -160,7 +160,7 @@ impl TelegramBotApi {
 
     /// Acknowledge a callback query so Telegram removes the button loading state.
     pub async fn answer_callback_query(&self, callback_query_id: &str) {
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let _ = client
             .post(self.api_url("answerCallbackQuery"))
             .json(&serde_json::json!({ "callback_query_id": callback_query_id }))
@@ -170,7 +170,7 @@ impl TelegramBotApi {
 
     /// Register the bot command menu visible in Telegram's "/" menu.
     pub async fn set_bot_commands(&self) -> Result<()> {
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
         let commands = serde_json::json!({
             "commands": [
                 { "command": "menu", "description": "Show the main menu" },
@@ -199,7 +199,7 @@ impl TelegramBotApi {
 
     /// Download a Telegram photo by file_id and return it as an ImageAttachment.
     async fn download_photo(&self, file_id: &str) -> Result<ImageAttachment> {
-        let client = reqwest::Client::new();
+        let client = crate::reqwest_client();
 
         let resp = client
             .post(self.api_url("getFile"))
@@ -251,7 +251,7 @@ impl TelegramBotApi {
         &self,
         last_update_id: i64,
     ) -> Result<(i64, Vec<TelegramIncomingMessage>)> {
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .timeout(std::time::Duration::from_secs(35))
             .build()?;
 

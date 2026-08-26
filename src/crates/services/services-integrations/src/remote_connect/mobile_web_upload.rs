@@ -56,7 +56,7 @@ pub async fn upload_mobile_web_to_relay(
             .sum::<usize>()
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::reqwest_client();
     let relay_base = relay_url.trim_end_matches('/');
 
     let manifest = mobile_web_upload_manifest(&all_files);

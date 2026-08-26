@@ -7,7 +7,8 @@ without the full product runtime. This includes generic filesystem/search/JSON
 IO helpers, bounded local Instruction file reads, session metadata storage
 helpers, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
-providers, managed process-tree lifecycle, process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
+providers, process-wide TLS provider selection, managed process-tree lifecycle,
+process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
 capability selection, event emission, or legacy error mapping outside this
 crate.
 
@@ -24,7 +25,7 @@ crate.
   (JSON/session/usage persistence), `process-runtime` (command
   lookup and supervised child lifecycle), and `workspace-instructions`
   (declarative instruction discovery). Consumers enable those or the narrower
-  `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
+  `workspace-runtime`, `workspace-identity`, `runtime-ownership`, `tls-provider`,
   `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
   `workspace-text-runtime` extensions only for behavior they use. Products
   needing IANA time-zone ranges and dashboard aggregation additionally select
@@ -34,6 +35,10 @@ crate.
   carries no Tokio dependency, `workspace-runtime` explicitly composes
   `process-runtime`, and Windows storage/process bindings
   must not be enabled from one shared dependency feature union.
+- `tls-provider` is the single owner of the process-wide Rustls provider. It
+  selects only `ring`, `std`, and `tls12`; provider-neutral Reqwest consumers
+  call `tls_provider::ensure_ring_crypto_provider` before client construction.
+  Do not install a Rustls provider from another crate.
 - Runtime call sites that touch agent execution, scheduler state, workspace
   managers, filesystem orchestration, or product behavior stay outside this
   crate. `workspace-runtime` may implement local `bitfun-runtime-ports`
@@ -75,6 +80,7 @@ cargo test -p bitfun-services-core --no-default-features --features local-storag
 cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p bitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::
 cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+cargo test --locked -p bitfun-services-core --no-default-features --features tls-provider --lib tls_provider::tests
 pnpm run check:core-boundaries
 ```
 

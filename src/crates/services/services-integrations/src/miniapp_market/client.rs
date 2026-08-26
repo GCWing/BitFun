@@ -140,7 +140,7 @@ impl MarketClient {
                 "The MiniApp market API must use HTTPS.",
             ));
         }
-        let client = reqwest::Client::builder()
+        let client = crate::reqwest_client_builder()
             .user_agent(format!("BitFun-Desktop/{}", env!("CARGO_PKG_VERSION")))
             .redirect(reqwest::redirect::Policy::none())
             .build()

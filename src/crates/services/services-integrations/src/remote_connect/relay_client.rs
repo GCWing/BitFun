@@ -25,11 +25,10 @@ use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 /// `install_default()` returns `Err` only when a provider is already installed,
 /// which is harmless — we silently ignore it.
 ///
-/// This is safe to call multiple times and from any thread. Required on all
-/// platforms: rustls 0.23 does not auto-select a provider when multiple TLS
-/// stacks are linked into the process.
+/// This is safe to call multiple times and from any thread. Installing it
+/// explicitly keeps provider choice deterministic for every product client.
 pub fn ensure_rustls_crypto_provider() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 }
 
 type WsStream =
@@ -696,11 +695,7 @@ mod tests {
 
 #[cfg(windows)]
 fn build_windows_rustls_connector() -> Result<Connector> {
-    // Install the ring CryptoProvider as the process-level default.
-    // Required by rustls 0.23+ when `default-features = false`.
-    // `install_default()` returns Err only when a provider is already installed,
-    // which is fine — subsequent reconnects reuse the same process-level provider.
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 
     let mut root_store = rustls::RootCertStore::empty();
 
