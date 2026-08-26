@@ -2,6 +2,8 @@ import "./styles/layers.css";
 
 export { Button, type ButtonProps } from "./components/Button";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
+export { Input, type InputProps } from "./components/Input";
+export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

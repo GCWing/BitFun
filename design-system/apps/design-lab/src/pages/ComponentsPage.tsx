@@ -1,15 +1,19 @@
 import {
   ArrowRight,
   Check,
+  Eye,
   List,
   MessageCircle,
   MousePointerClick,
   PanelTop,
+  Search as SearchIcon,
   ToggleLeft,
 } from "lucide-react";
 import {
   Button,
   IconButton,
+  Input,
+  SearchField,
   Stack,
   Switch,
   TabGroup,
@@ -38,6 +42,8 @@ interface ComponentsPageProps {
 const componentIcons = {
   Button: MousePointerClick,
   IconButton: List,
+  Input: Eye,
+  SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 } as const;
@@ -68,6 +74,23 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             variant="fill"
           />
         </Stack>
+      );
+    case "Input":
+      return (
+        <Input
+          aria-label={t("components.preview.inputLabel")}
+          placeholder={t("components.preview.inputPlaceholder")}
+          trailing={<Eye aria-hidden="true" />}
+        />
+      );
+    case "SearchField":
+      return (
+        <SearchField
+          aria-label={t("components.preview.searchLabel")}
+          leadingIcon={<SearchIcon aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+          shortcut="⌘K"
+        />
       );
     case "Switch":
       return (

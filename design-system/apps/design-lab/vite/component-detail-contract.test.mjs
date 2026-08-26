@@ -68,6 +68,16 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
 });
 
+test("Input and SearchField previews expose slot and state contracts", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /data-component=\{component\.name === "Input" \? "input" : "search-field"\}/);
+  assert.match(source, /trailing=\{<Eye aria-hidden="true" \/>\}/);
+  assert.match(source, /leadingIcon=\{<SearchIcon aria-hidden="true" \/>\}/);
+  assert.match(source, /shortcut="⌘K"/);
+});
+
 test("TabGroup preview carries the selected and outline reference composition", async () => {
   const source = await readFile(detailSource, "utf8");
   const declaration = /case "TabGroup":\s*return \[([^\]]+)\] as const;/.exec(source);

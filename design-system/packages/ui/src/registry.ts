@@ -1,5 +1,7 @@
 import { buttonMeta } from "./components/Button/Button.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
+import { inputMeta } from "./components/Input/Input.meta";
+import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import type { ComponentMeta } from "./registry.types";
@@ -13,6 +15,8 @@ export type {
 export const componentRegistry = [
   buttonMeta,
   iconButtonMeta,
+  inputMeta,
+  searchFieldMeta,
   switchMeta,
   tabGroupMeta,
 ] as const satisfies readonly ComponentMeta[];

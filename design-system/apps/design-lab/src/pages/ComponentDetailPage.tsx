@@ -3,12 +3,16 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Eye,
   List,
   MessageCircle,
+  Search as SearchIcon,
 } from "lucide-react";
 import {
   Button,
   IconButton,
+  Input,
+  SearchField,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -52,6 +56,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
+  invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
@@ -149,6 +154,9 @@ export function ComponentDetailPage({
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
+      case "Input":
+      case "SearchField":
+        return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       default:
@@ -173,6 +181,22 @@ export function ComponentDetailPage({
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
+    }
+    if (component.name === "Input") {
+      const stateProps = previewState === "disabled"
+        ? " disabled"
+        : previewState === "invalid"
+          ? " invalid"
+          : "";
+      return `import { Input } from "@bitfun/ui";\nimport { Eye } from "lucide-react";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Eye />}${stateProps}\n/>`;
+    }
+    if (component.name === "SearchField") {
+      const stateProps = previewState === "disabled"
+        ? " disabled"
+        : previewState === "invalid"
+          ? " invalid"
+          : "";
+      return `import { SearchField } from "@bitfun/ui";\nimport { Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut="⌘K"${stateProps}\n/>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -254,6 +278,43 @@ export function ComponentDetailPage({
         >
           {t("components.preview.session")}
         </Button>
+      );
+    }
+
+    if (component.name === "Input") {
+      const previewClassName = state === "hover"
+        ? "lab-force-hover"
+        : state === "focus-visible"
+          ? "lab-force-focus"
+          : undefined;
+      return (
+        <Input
+          aria-label={t("components.preview.inputLabel")}
+          className={previewClassName}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          placeholder={t("components.preview.inputPlaceholder")}
+          trailing={<Eye aria-hidden="true" />}
+        />
+      );
+    }
+
+    if (component.name === "SearchField") {
+      const previewClassName = state === "hover"
+        ? "lab-force-hover"
+        : state === "focus-visible"
+          ? "lab-force-focus"
+          : undefined;
+      return (
+        <SearchField
+          aria-label={t("components.preview.searchLabel")}
+          className={previewClassName}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          leadingIcon={<SearchIcon aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+          shortcut="⌘K"
+        />
       );
     }
 
@@ -391,6 +452,29 @@ export function ComponentDetailPage({
                         </div>
                       ))}
                     </Fragment>
+                  ))}
+                </div>
+              ) : component.name === "Input" || component.name === "SearchField" ? (
+                <div className="component-preview-matrix" data-component={component.name === "Input" ? "input" : "search-field"}>
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">{component.name}</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
                   ))}
                 </div>
               ) : component.name === "TabGroup" ? (

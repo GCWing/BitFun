@@ -1,0 +1,29 @@
+@layer bf.components {
+  .root {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+
+  .field {
+    inline-size: 100%;
+    border-radius: var(--bf-radius-pill);
+  }
+
+  .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .shortcut {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-caption);
+    line-height: var(--bf-line-height-tight);
+    white-space: nowrap;
+  }
+}

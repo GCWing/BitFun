@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { Input } from "../dist/index.js";
+
+test("Input keeps native input semantics and independent content slots", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Input, {
+      "aria-label": "Project name",
+      leading: createElement("svg", { "data-icon": "project" }),
+      placeholder: "Name",
+      trailing: createElement("button", { type: "button" }, "Clear"),
+    }),
+  );
+
+  assert.match(markup, /data-bf-component="input"/);
+  assert.match(markup, /data-bf-part="leading"/);
+  assert.match(markup, /data-bf-part="trailing"/);
+  assert.match(markup, /aria-label="Project name"/);
+  assert.match(markup, /placeholder="Name"/);
+  assert.match(markup, /type="text"/);
+  assert.match(markup, /data-icon="project"/);
+  assert.match(markup, /<button type="button">Clear<\/button>/);
+});
+
+test("Input exposes invalid, disabled, and size independently", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Input, { disabled: true, invalid: true, size: "lg" }),
+  );
+
+  assert.match(markup, /data-disabled="true"/);
+  assert.match(markup, /data-invalid="true"/);
+  assert.match(markup, /data-size="lg"/);
+  assert.match(markup, /aria-invalid="true"/);
+  assert.match(markup, /disabled=""/);
+});
+
+test("Input styles consume semantic field and status tokens", async () => {
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /--bf-color-field-background/);
+  assert.match(styles, /--bf-color-field-border-focus/);
+  assert.match(styles, /--bf-color-content-muted/);
+  assert.match(styles, /--bf-color-status-danger-border/);
+  assert.match(styles, /--bf-control-height-sm/);
+});
