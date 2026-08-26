@@ -228,26 +228,10 @@
     font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     color: var(--bf-appearance-token-color-text-muted);
     
-    span {
+    > span {
       display: flex;
       align-items: center;
       gap: 0.18rem;
-      opacity: 0.7;
-    }
-    
-    kbd {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 3px;
-      background: var(--bf-appearance-token-color-overlay-white-08);
-      border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-      border-radius: 3px;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-      font-family: $font-family-mono;
-      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -303,11 +287,6 @@
         );
         opacity: 0.92;
       }
-    }
-
-    &__footer kbd {
-      background: var(--bf-appearance-token-color-overlay-slate-04);
-      border-color: var(--bf-appearance-token-color-overlay-slate-08);
     }
   }
 }

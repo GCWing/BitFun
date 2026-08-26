@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, KeyHint } from '@bitfun/ui';
 import { X, Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
@@ -291,7 +291,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         <div data-bf-component="mission-control" data-bf-part="footer" className="canvas-mission-control__footer">
           <span>{t('canvas.clickToSwitch')}</span>
           <div data-bf-component="mission-control" data-bf-part="separator" className="canvas-mission-control__separator" />
-          <span><kbd>Esc</kbd> {t('canvas.exit')}</span>
+          <span><KeyHint>Esc</KeyHint> {t('canvas.exit')}</span>
         </div>
       </div>
     </div>

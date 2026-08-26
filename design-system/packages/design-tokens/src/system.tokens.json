@@ -35,6 +35,7 @@
     },
     "size": {
       "$type": "dimension",
+      "micro": { "$value": "10px" },
       "xs": { "$value": "12px" },
       "sm": { "$value": "13px" },
       "base": { "$value": "14px" },
@@ -108,6 +109,7 @@
   },
   "radius": {
     "$type": "dimension",
+    "xs": { "$value": "4px" },
     "sm": { "$value": "6px" },
     "base": { "$value": "8px" },
     "md": { "$value": "{radius.base}" },

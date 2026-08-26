@@ -8,6 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { KeyHint } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -208,7 +209,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
               >
                 <LayoutGrid size={14} />
                 <span>{t('tabs.missionControl')}</span>
-                <kbd>⌘.</kbd>
+                <KeyHint>⌘.</KeyHint>
               </div>
 
               {/* Divider */}

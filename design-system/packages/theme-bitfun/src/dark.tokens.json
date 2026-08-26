@@ -7,6 +7,9 @@
       "raised": { "$type": "color", "$value": "{ref.color.neutral.900}" },
       "subtle": { "$type": "color", "$value": "rgba(255, 255, 255, 0.06)" }
     },
+    "keyHint": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "content": {
       "primary": { "$type": "color", "$value": "{ref.color.neutral.200}" },
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.350}" },

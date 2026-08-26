@@ -12,10 +12,10 @@ export const keyHintMeta = {
   states: ["default"],
   tokens: [
     "color.content.muted",
-    "color.surface.subtle",
+    "color.keyHint.background",
     "font.family.control",
-    "font.size.caption",
+    "font.size.micro",
     "font.weight.regular",
-    "radius.sm",
+    "radius.xs",
   ],
 } as const satisfies ComponentMeta;

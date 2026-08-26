@@ -128,27 +128,6 @@
     }
   }
 
-  &__shortcut,
-  &__footer kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-element-bg-subtle);
-    color: var(--bf-appearance-token-color-text-muted);
-    font-family: inherit;
-    font-weight: 500;
-    line-height: 1;
-  }
-
-  &__shortcut {
-    min-width: 40px;
-    min-height: 22px;
-    padding: 0 6px;
-    border-radius: 6px;
-    font-size: 10px;
-  }
-
   &__scope-bar {
     display: flex;
     align-items: center;
@@ -507,13 +486,6 @@
     white-space: nowrap;
   }
 
-  &__footer kbd {
-    min-width: 26px;
-    min-height: 22px;
-    padding: 0 5px;
-    border-radius: 6px;
-    font-size: 10px;
-  }
 }
 
 .global-search--embedded {
