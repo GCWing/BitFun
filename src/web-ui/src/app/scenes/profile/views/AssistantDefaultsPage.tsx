@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
@@ -106,6 +106,7 @@ const AssistantDefaultsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
+  const loadRequestIdRef = useRef(0);
 
   // Whether the current host advertises the `tool_catalog` capability. Local
   // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
@@ -128,6 +129,7 @@ const AssistantDefaultsPage: React.FC = () => {
   // writes enabled because there is nothing to toggle anyway. See PR #2428
   // round 5 #2.
   const toolCatalogWritable = toolCatalogStatus === 'available' || toolCatalogStatus === 'empty';
+  const toolCatalogUnavailable = toolCatalogStatus === 'unsupported' || toolCatalogStatus === 'failed';
 
   const skillsEnabled = useMemo(
     () => modeSkills.filter((skill) => skill.effectiveEnabled),
@@ -217,6 +219,8 @@ const AssistantDefaultsPage: React.FC = () => {
   }, [mcpToolsByServer, mcpServers]);
 
   useEffect(() => {
+    const requestId = ++loadRequestIdRef.current;
+
     (async () => {
       setLoading(true);
       try {
@@ -224,36 +228,45 @@ const AssistantDefaultsPage: React.FC = () => {
         // instead of swallowing the unsupported error as an empty list. The
         // empty list then means "this host doesn't expose a catalog", not
         // "the runtime has no tools".
-        let toolsPromise: Promise<ToolInfo[]>;
+        let toolsPromise: Promise<{
+          tools: ToolInfo[];
+          status: 'available' | 'unsupported' | 'failed' | 'empty';
+        }>;
         if (canQueryToolCatalog) {
           toolsPromise = api.invoke<ToolInfo[]>('get_all_tools_info')
-            .then((tools) => {
-              setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
-              return tools;
-            })
+            .then((tools) => ({
+              tools,
+              status: tools.length > 0 ? 'available' as const : 'empty' as const,
+            }))
             .catch((error) => {
               log.error('Failed to load tool catalog', { error });
-              setToolCatalogStatus('failed');
-              return [] as ToolInfo[];
+              return { tools: [] as ToolInfo[], status: 'failed' as const };
             });
         } else {
-          setToolCatalogStatus('unsupported');
-          toolsPromise = Promise.resolve([] as ToolInfo[]);
+          toolsPromise = Promise.resolve({
+            tools: [] as ToolInfo[],
+            status: 'unsupported' as const,
+          });
         }
-        const [modeConf, tools, skillList, servers] = await Promise.all([
+        const [modeConf, toolCatalog, skillList, servers] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
           toolsPromise,
           configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
         ]);
+        if (requestId !== loadRequestIdRef.current) return;
+
         setAssistantModeConfig(modeConf);
-        setAvailableTools(tools);
+        setAvailableTools(toolCatalog.tools);
+        setToolCatalogStatus(toolCatalog.status);
         setModeSkills(skillList ?? []);
         setMcpServers(servers ?? []);
       } catch (e) {
         log.error('Failed to load assistant defaults config', e);
       } finally {
-        setLoading(false);
+        if (requestId === loadRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     })();
   }, [canQueryToolCatalog, renderedPeerDeviceId]);
@@ -790,22 +803,22 @@ const AssistantDefaultsPage: React.FC = () => {
             <GalleryZone
               title={t('nursery.template.mcpToolsSection')}
             >
-              {mcpServerIds.size === 0 ? (
+              {toolCatalogUnavailable ? (
                 <div className="tc-mcp-empty">
                   <Plug2 size={20} className="tc-mcp-empty__icon" />
-                  {/* The MCP catalog comes from the same get_all_tools_info read
-                      as built-in tools, so an unsupported/failed host affects it
-                      the same way: don't mask it as "no MCP servers". */}
                   <span className="tc-mcp-empty__text">
                     {toolCatalogStatus === 'unsupported'
                       ? t('empty.toolsUnsupported')
-                      : toolCatalogStatus === 'failed'
-                        ? t('empty.toolsFailed')
-                        : t('nursery.template.mcpEmptyTitle')}
+                      : t('empty.toolsFailed')}
                   </span>
-                  {toolCatalogStatus !== 'unsupported' && toolCatalogStatus !== 'failed' ? (
-                    <span className="tc-mcp-empty__hint">{t('nursery.template.mcpEmptyHint')}</span>
-                  ) : null}
+                </div>
+              ) : mcpServerIds.size === 0 ? (
+                <div className="tc-mcp-empty">
+                  <Plug2 size={20} className="tc-mcp-empty__icon" />
+                  <span className="tc-mcp-empty__text">
+                    {t('nursery.template.mcpEmptyTitle')}
+                  </span>
+                  <span className="tc-mcp-empty__hint">{t('nursery.template.mcpEmptyHint')}</span>
                 </div>
               ) : (
                 <div className="tc-tool-groups">

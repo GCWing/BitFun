@@ -50,6 +50,11 @@ export interface ToolInfo {
   dynamic_info?: DynamicToolInfo;
 }
 
+interface ToolCatalogLoadResult {
+  tools: ToolInfo[];
+  status: ToolCatalogStatus;
+}
+
 interface UseAgentsListOptions {
   searchQuery: string;
   filterLevel: FilterLevel;
@@ -225,25 +230,25 @@ export function useAgentsList({
     // See PR #2428 #3.
     const surfaceTag = renderedPeerDeviceId ?? 'controller';
 
-    const fetchTools = async (): Promise<ToolInfo[]> => {
+    const fetchTools = async (): Promise<ToolCatalogLoadResult> => {
       if (!canQueryToolCatalog) {
         toolLog.info('Tool catalog unsupported on the current peer host; leaving the list empty', { surface: surfaceTag });
-        setToolCatalogStatus('unsupported');
-        return [];
+        return { tools: [], status: 'unsupported' };
       }
       try {
         const tools = await api.invoke<ToolInfo[]>('get_all_tools_info');
-        setToolCatalogStatus(tools.length > 0 ? 'available' : 'empty');
-        return tools;
+        return {
+          tools,
+          status: tools.length > 0 ? 'available' : 'empty',
+        };
       } catch (error) {
         toolLog.error('Failed to load tool catalog', { error });
-        setToolCatalogStatus('failed');
-        return [];
+        return { tools: [], status: 'failed' };
       }
     };
 
     try {
-      const [modes, subagents, tools, configs, reviewTeamDefinition, modelConfigs] = await Promise.all([
+      const [modes, subagents, toolCatalog, configs, reviewTeamDefinition, modelConfigs] = await Promise.all([
         agentAPI.getAvailableModes().catch(() => []),
         SubagentAPI.listSubagents({ workspacePath: workspacePath || undefined }).catch(() => []),
         fetchTools(),
@@ -341,7 +346,8 @@ export function useAgentsList({
       });
 
       setAllAgents([...modeAgents, ...subAgents]);
-      setAvailableTools(tools);
+      setAvailableTools(toolCatalog.tools);
+      setToolCatalogStatus(toolCatalog.status);
       setConfiguredModels(models);
       setModeProfiles(profileMap);
       setAgentSkills(Object.fromEntries(skillEntries));
