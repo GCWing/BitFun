@@ -13,6 +13,7 @@ import {
   ToggleLeft,
 } from "lucide-react";
 import {
+  ActionItem,
   Button,
   Field,
   IconButton,
@@ -45,6 +46,7 @@ interface ComponentsPageProps {
 }
 
 const componentIcons = {
+  ActionItem: List,
   Button: MousePointerClick,
   Field: Rows3,
   IconButton: List,
@@ -59,6 +61,15 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
 
   switch (component.name) {
+    case "ActionItem":
+      return (
+        <ActionItem
+          leading={<MessageCircle aria-hidden="true" />}
+          shortcut={<KeyHint>K</KeyHint>}
+        >
+          {t("components.preview.assistant")}
+        </ActionItem>
+      );
     case "Button":
       return (
         <Stack align="center" direction="horizontal" gap="2" wrap>

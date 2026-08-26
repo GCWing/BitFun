@@ -1,5 +1,10 @@
 import "./styles/layers.css";
 
+export {
+  ActionItem,
+  type ActionItemAction,
+  type ActionItemProps,
+} from "./components/ActionItem";
 export { Button, type ButtonProps } from "./components/Button";
 export { Field, type FieldProps } from "./components/Field";
 export { IconButton, type IconButtonProps } from "./components/IconButton";

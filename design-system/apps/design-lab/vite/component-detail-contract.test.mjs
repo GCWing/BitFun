@@ -68,6 +68,16 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
 });
 
+test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /component\.name === "ActionItem"/);
+  assert.match(source, /leading=\{<MessageCircle aria-hidden="true" \/>\}/);
+  assert.match(source, /shortcut=\{<KeyHint>K<\/KeyHint>\}/);
+  assert.match(source, /id: "add"/);
+  assert.match(source, /id: "more"/);
+});
+
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 

@@ -7,9 +7,12 @@ import {
   Eye,
   List,
   MessageCircle,
+  MoreHorizontal,
+  Plus,
   Search as SearchIcon,
 } from "lucide-react";
 import {
+  ActionItem,
   Button,
   Field,
   IconButton,
@@ -159,6 +162,8 @@ export function ComponentDetailPage({
 
   const states = useMemo(() => {
     switch (component.name) {
+      case "ActionItem":
+        return ["default", "hover", "active", "disabled"] as const;
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
@@ -179,6 +184,9 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "ActionItem") {
+      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+    }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       const iconImport = previewIcon === "chevron"
@@ -273,6 +281,31 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "ActionItem") {
+      return (
+        <ActionItem
+          actions={[
+            {
+              icon: <Plus aria-hidden="true" />,
+              id: "add",
+              label: t("components.preview.add"),
+            },
+            {
+              icon: <MoreHorizontal aria-hidden="true" />,
+              id: "more",
+              label: t("components.preview.more"),
+            },
+          ]}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled"}
+          leading={<MessageCircle aria-hidden="true" />}
+          shortcut={<KeyHint>K</KeyHint>}
+        >
+          {t("components.preview.assistant")}
+        </ActionItem>
+      );
+    }
+
     if (component.name === "Button") {
       const inspectorIcon = applyInspectorControls && previewIcon === "chevron"
         ? <ChevronRight aria-hidden="true" size={14} />
@@ -489,11 +522,13 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
-                  data-component={component.name === "Field"
-                    ? "field"
+                  data-component={component.name === "ActionItem"
+                    ? "action-item"
+                    : component.name === "Field"
+                      ? "field"
                     : component.name === "Input"
                       ? "input"
                     : component.name === "KeyHint"
