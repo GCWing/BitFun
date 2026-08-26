@@ -2,12 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const inputMeta = {
   category: "form",
-  description: "A pill-shaped single-line text field matching the Figma normal input scene.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["133:6776"],
-    sourceNames: ["input/normal"],
-  },
+  description: "A pill-shaped single-line text field with optional leading and trailing content.",
   maturity: "stable",
   name: "Input",
   props: [

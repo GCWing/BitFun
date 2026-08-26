@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 import { IconButton } from "../dist/index.js";
 
-test("IconButton exposes the Figma neutral small contract by default", () => {
+test("IconButton exposes the neutral small contract by default", () => {
   const markup = renderToStaticMarkup(
     createElement(
       IconButton,

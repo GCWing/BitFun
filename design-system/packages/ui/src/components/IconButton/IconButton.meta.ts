@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const iconButtonMeta = {
   category: "action",
   description: "A compact, accessible icon-only action with semantic tones and density-aware sizes.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["149:13825"],
-    sourceNames: ["button.icon"],
-  },
   maturity: "stable",
   name: "IconButton",
   props: [

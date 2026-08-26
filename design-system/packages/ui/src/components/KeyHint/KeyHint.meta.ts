@@ -2,12 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const keyHintMeta = {
   category: "feedback",
-  description: "A compact keyboard shortcut label matching the Figma label component.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["2:130"],
-    sourceNames: ["label"],
-  },
+  description: "A compact keyboard shortcut label with optional leading content.",
   maturity: "stable",
   name: "KeyHint",
   props: [

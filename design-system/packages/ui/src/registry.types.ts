@@ -9,11 +9,6 @@ export interface ComponentPropMeta {
 export interface ComponentMeta {
   category: "primitive" | "action" | "form" | "feedback" | "media" | "navigation";
   description: string;
-  figma: {
-    fileKey: string;
-    nodeIds: readonly string[];
-    sourceNames: readonly string[];
-  };
   maturity: ComponentMaturity;
   name: string;
   props: readonly ComponentPropMeta[];

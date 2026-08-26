@@ -2,12 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const searchMeta = {
   category: "form",
-  description: "A compact search field matching the Figma search scene, with an intrinsic search icon and optional trailing content.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["2:66"],
-    sourceNames: ["input/scene3 (search)"],
-  },
+  description: "A compact search field with an intrinsic search icon and optional trailing content.",
   maturity: "stable",
   name: "Search",
   props: [

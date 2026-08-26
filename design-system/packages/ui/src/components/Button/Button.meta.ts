@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const buttonMeta = {
   category: "action",
   description: "A compact action with outline, filled, primary, and text presentations.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["4:5332", "61:741", "142:12284", "142:11871"],
-    sourceNames: ["button.outline", "button.fill", "button.main", "button.text"],
-  },
   maturity: "stable",
   name: "Button",
   props: [

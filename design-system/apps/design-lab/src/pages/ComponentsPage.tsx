@@ -36,7 +36,7 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import { componentRegistry, type ComponentMeta } from "@bitfun/ui/registry";
-import figmaHomepageImage from "../assets/figma-homepage.png";
+import homepagePreviewImage from "../assets/homepage-preview.png";
 import { useI18n } from "../i18n";
 import {
   getComponentCategoryLabel,
@@ -121,7 +121,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <MediaThumbnail
           alt="BitFun homepage"
           presentation="stacked"
-          src={figmaHomepageImage}
+          src={homepagePreviewImage}
         />
       );
     case "NavigationList":

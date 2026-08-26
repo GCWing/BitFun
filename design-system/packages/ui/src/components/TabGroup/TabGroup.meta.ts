@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const tabGroupMeta = {
   category: "navigation",
   description: "A compact single-selection tab list with optional leading icons, end actions, and automatic keyboard activation.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["4:5355"],
-    sourceNames: ["tab group"],
-  },
   maturity: "stable",
   name: "TabGroup",
   props: [

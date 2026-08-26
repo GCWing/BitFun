@@ -39,7 +39,7 @@ test("Switch geometry preserves the compact reference contract", () => {
   assert.equal(tokens["control.switch.thumbTravelReverse"], "-12px");
 });
 
-test("IconButton geometry preserves the Figma reference and density modes", () => {
+test("IconButton geometry preserves its compact contract across density modes", () => {
   const valuesFor = (name) => tokenCatalog.find((token) => token.name === name)?.values;
 
   assert.equal(tokens["control.iconButton.size.sm"], "22px");

@@ -2,12 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const promptComposerMeta = {
   category: "form",
-  description: "A multiline prompt field with start and end control areas matching the Figma chat input composition.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["4:5420"],
-    sourceNames: ["input/chat"],
-  },
+  description: "A multiline prompt field with start and end control areas.",
   maturity: "stable",
   name: "PromptComposer",
   props: [

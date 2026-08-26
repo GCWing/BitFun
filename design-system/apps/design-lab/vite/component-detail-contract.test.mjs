@@ -16,7 +16,7 @@ test("Button preview exposes the three API variants", async () => {
   );
 });
 
-test("Button matrix maps the four Figma presentations onto variant and tone", async () => {
+test("Button matrix maps the four supported presentations onto variant and tone", async () => {
   const source = await readFile(detailSource, "utf8");
   const styles = await readFile(stylesSource, "utf8");
 
@@ -67,7 +67,7 @@ test("Button inspector wires the real disabled, loading, and icon controls", asy
   assert.match(source, /renderPreview\(previewState, variant, tone, true\)/);
 });
 
-test("IconButton preview exposes Figma states and accessible sample code", async () => {
+test("IconButton preview exposes interaction states and accessible sample code", async () => {
   const source = await readFile(detailSource, "utf8");
   const styles = await readFile(stylesSource, "utf8");
 
@@ -94,7 +94,7 @@ test("TabGroup preview carries the selected and outline reference composition", 
   assert.match(source, /<TabGroup/);
 });
 
-test("new Figma foundations remain visible as state matrices in Design Lab", async () => {
+test("component foundations remain visible as state matrices in Design Lab", async () => {
   const source = await readFile(detailSource, "utf8");
   const styles = await readFile(stylesSource, "utf8");
 
@@ -112,13 +112,13 @@ test("new Figma foundations remain visible as state matrices in Design Lab", asy
     assert.match(styles, new RegExp(`data-component="${component}"`));
   }
 
-  assert.match(source, /figmaHomepageImage/);
-  assert.match(source, /figmaMacbookAirImage/);
-  assert.match(source, /figmaPlaceholderDevice/);
-  assert.match(source, /figmaPlaceholderServer/);
+  assert.match(source, /homepagePreviewImage/);
+  assert.match(source, /macbookAirPreviewImage/);
+  assert.match(source, /placeholderDeviceImage/);
+  assert.match(source, /placeholderServerImage/);
 });
 
-test("Figma chat input maps to PromptComposer instead of overloading native Input", async () => {
+test("chat input maps to PromptComposer instead of overloading native Input", async () => {
   const source = await readFile(detailSource, "utf8");
 
   assert.match(source, /component\.name === "PromptComposer"/);
@@ -128,7 +128,7 @@ test("Figma chat input maps to PromptComposer instead of overloading native Inpu
   assert.match(source, /How can I help you/);
 });
 
-test("Figma normal, search, and chat input scenes have separate public previews", async () => {
+test("normal, search, and chat input scenes have separate public previews", async () => {
   const source = await readFile(detailSource, "utf8");
 
   assert.match(source, /component\.name === "Input"/);

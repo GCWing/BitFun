@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const headingMeta = {
   category: "primitive",
   description: "A semantic title and description composition for page, section, subsection, and centered hero contexts.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["61:568"],
-    sourceNames: ["title"],
-  },
   maturity: "stable",
   name: "Heading",
   props: [

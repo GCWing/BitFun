@@ -15,7 +15,7 @@ import {
   Search,
 } from "../dist/index.js";
 
-test("Input preserves native input semantics for the Figma normal scene", () => {
+test("Input preserves native input semantics for the normal scene", () => {
   const markup = renderToStaticMarkup(createElement(Input, {
     "aria-label": "Description",
     defaultValue: "BitFun is an AI-driven programming environment.",
@@ -26,7 +26,7 @@ test("Input preserves native input semantics for the Figma normal scene", () => 
   assert.doesNotMatch(markup, /data-variant="search"/);
 });
 
-test("Search owns the Figma search scene and composes its shortcut label", () => {
+test("Search owns search semantics and composes its shortcut label", () => {
   const markup = renderToStaticMarkup(createElement(Search, {
     "aria-label": "Search",
     placeholder: "Search",
@@ -52,7 +52,7 @@ test("ListItem keeps end actions beside the main button", () => {
   assert.match(markup, /<\/button><span[^>]+data-bf-part="actions"><button/);
 });
 
-test("Heading uses the requested semantic level and Figma presentation", () => {
+test("Heading uses the requested semantic level and presentation", () => {
   const markup = renderToStaticMarkup(createElement(Heading, {
     description: "Interface language and visual appearance",
     level: 1,
@@ -109,7 +109,7 @@ test("PromptComposer preserves native textarea semantics and sibling control slo
   assert.match(markup, /data-bf-part="end-controls"><button/);
 });
 
-test("new Figma foundations consume generated semantic tokens", async () => {
+test("component foundations consume generated semantic tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   for (const token of [

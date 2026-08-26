@@ -36,10 +36,10 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
-import figmaHomepageImage from "../assets/figma-homepage.png";
-import figmaMacbookAirImage from "../assets/figma-macbook-air.png";
-import figmaPlaceholderDevice from "../assets/figma-placeholder-device.svg";
-import figmaPlaceholderServer from "../assets/figma-placeholder-server.svg";
+import homepagePreviewImage from "../assets/homepage-preview.png";
+import macbookAirPreviewImage from "../assets/macbook-air-preview.png";
+import placeholderDeviceImage from "../assets/placeholder-device.svg";
+import placeholderServerImage from "../assets/placeholder-server.svg";
 import { useI18n, type MessageKey } from "../i18n";
 import {
   getComponentCategoryLabel,
@@ -391,12 +391,12 @@ export function ComponentDetailPage({
 
     if (component.name === "MediaThumbnail") {
       const media = state === "stacked"
-        ? { alt: "BitFun homepage", presentation: "stacked" as const, src: figmaHomepageImage }
+        ? { alt: "BitFun homepage", presentation: "stacked" as const, src: homepagePreviewImage }
         : state === "contain"
-          ? { alt: "MacBook Air", presentation: "contain" as const, src: figmaMacbookAirImage }
+          ? { alt: "MacBook Air", presentation: "contain" as const, src: macbookAirPreviewImage }
           : state === "placeholder-server"
-            ? { alt: "", presentation: "placeholder" as const, src: figmaPlaceholderServer }
-            : { alt: "", presentation: "placeholder" as const, src: figmaPlaceholderDevice };
+            ? { alt: "", presentation: "placeholder" as const, src: placeholderServerImage }
+            : { alt: "", presentation: "placeholder" as const, src: placeholderDeviceImage };
       return <MediaThumbnail {...media} />;
     }
 

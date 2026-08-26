@@ -30,7 +30,7 @@ test("danger tone preserves destructive semantics independently from presentatio
   assert.match(styles, /--bf-color-status-danger-border/);
 });
 
-test("primary filled presentation maps the Figma main button to semantic action tokens", async () => {
+test("primary filled presentation maps to semantic action tokens", async () => {
   const markup = renderToStaticMarkup(
     createElement(Button, { tone: "primary", variant: "fill" }, "Continue"),
   );

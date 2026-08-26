@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const switchMeta = {
   category: "form",
   description: "Toggles a single setting between on and off with native checkbox semantics.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["66:2171"],
-    sourceNames: ["switch"],
-  },
   maturity: "stable",
   name: "Switch",
   props: [

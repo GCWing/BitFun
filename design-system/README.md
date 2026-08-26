@@ -20,10 +20,10 @@ Design Lab exposes an Overview, a searchable component catalog with interactive 
 
 ## Web UI migration
 
-Figma is the design source for new public components. Components are implemented
-fresh in `@bitfun/ui`; code and styles from `src/web-ui/src/component-library`
-are not copied into this package. The legacy implementation may be inspected only
-to preserve required product behavior while its call sites are migrated.
+New public components are implemented fresh in `@bitfun/ui`; code and styles
+from `src/web-ui/src/component-library` are not copied into this package. The
+legacy implementation may be inspected only to preserve required product
+behavior while its call sites are migrated.
 
 Generic anatomy, interaction, and accessibility belong in `@bitfun/ui`.
 Product-specific composition, localization, overlay hosts, routes, stores, and

@@ -3,11 +3,6 @@ import type { ComponentMeta } from "../../registry.types";
 export const listItemMeta = {
   category: "navigation",
   description: "A compact option row with a leading icon, selected state, sibling actions, and shortcut content.",
-  figma: {
-    fileKey: "5k2waflRzrRdd8yLYEOam8",
-    nodeIds: ["98:1062"],
-    sourceNames: ["option"],
-  },
   maturity: "stable",
   name: "ListItem",
   props: [
