@@ -35,6 +35,7 @@ export class ChatTimelineRevisionTracker {
     return `${item.type}:${item.id}:${item.isStreaming}:${item.isFinalizing}:` +
       `${message ? message.status : ''}:${message ? message.renderVersion || 0 : 0}:` +
       `${message ? ChatTimelineRevisionTracker.textSignature(message.text) : ''}:` +
+      `${message && message.error ? ChatTimelineRevisionTracker.textSignature(message.error) : ''}:` +
       `${message && message.thinking ? ChatTimelineRevisionTracker.textSignature(message.thinking) : ''}:` +
       `${message && message.items ? message.items.length : 0}:${message && message.tools ? message.tools.length : 0}`;
   }
@@ -163,9 +164,40 @@ export class ChatTimelineProjector {
       if (!message) {
         continue;
       }
-      items[index].showRetryAction = (message.status || '').toLowerCase() === 'failed';
+      const failed = (message.status || '').toLowerCase() === 'failed';
+      items[index].showRetryAction = failed;
+      if (failed && message.role === 'assistant') {
+        const retryText = ChatTimelineProjector.nearestUserText(items, index);
+        if (retryText.length > 0) {
+          items[index].message = {
+            id: message.id,
+            role: message.role,
+            text: message.text,
+            status: message.status,
+            renderVersion: message.renderVersion,
+            turnId: message.turnId,
+            detail: retryText,
+            error: message.error,
+            timestamp: message.timestamp,
+            thinking: message.thinking,
+            tools: message.tools,
+            items: message.items,
+            images: message.images
+          };
+        }
+      }
       return;
     }
+  }
+
+  private static nearestUserText(items: ChatTimelineItem[], beforeIndex: number): string {
+    for (let index = beforeIndex - 1; index >= 0; index--) {
+      const message = items[index].message;
+      if (message && message.role === 'user' && (message.text || '').trim().length > 0) {
+        return message.text;
+      }
+    }
+    return '';
   }
 
   static pendingMessagesNotPersisted(pendingMessages: ChatMessage[], messages: ChatMessage[]): ChatMessage[] {
@@ -252,6 +284,7 @@ export class ChatTimelineProjector {
       activeTurn.status || '',
       `${activeTurn.renderVersion || 0}`,
       `${(activeTurn.text || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.text || '')}`,
+      `${(activeTurn.error || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.error || '')}`,
       `${(activeTurn.thinking || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.thinking || '')}`,
       ChatTimelineProjector.itemSignature(activeTurn.items || []),
       ChatTimelineProjector.toolSignature(activeTurn.tools || [])

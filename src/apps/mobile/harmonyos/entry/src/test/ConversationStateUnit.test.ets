@@ -272,7 +272,7 @@ export default function conversationStateUnitTest() {
 
     it('offers retry only for the latest unresolved failed message', 0, () => {
       const interrupted = chatMessage('assistant-failed-1', 'assistant', 'Partial reply', 'failed');
-      interrupted.detail = 'Retry prompt';
+      interrupted.error = 'Model request failed';
       const unresolved = ChatTimelineProjector.project([
         chatMessage('user-1', 'user', 'Retry prompt'),
         interrupted
@@ -284,6 +284,8 @@ export default function conversationStateUnitTest() {
       ], [], chatMessage('', 'assistant', ''), false);
 
       expect(unresolved[1].showRetryAction).assertTrue();
+      expect(unresolved[1].message ? unresolved[1].message!.detail : '').assertEqual('Retry prompt');
+      expect(unresolved[1].message ? unresolved[1].message!.error : '').assertEqual('Model request failed');
       expect(continued[1].showRetryAction).assertFalse();
       expect(continued[2].showRetryAction).assertFalse();
     });

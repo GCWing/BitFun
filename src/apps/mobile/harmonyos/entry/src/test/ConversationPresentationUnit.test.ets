@@ -204,6 +204,17 @@ export default function conversationPresentationUnitTest() {
       };
       expect(ConversationMessageRenderPolicy.shouldRender(item)).assertFalse();
     });
+
+    it('keeps an empty failed assistant row for its error UI', 0, () => {
+      const item: ConversationUiMessage = {
+        id: 'a3',
+        role: 'assistant',
+        text: '',
+        status: 'failed',
+        error: 'Model request failed'
+      };
+      expect(ConversationMessageRenderPolicy.shouldRender(item)).assertTrue();
+    });
   });
 
   describe('AssistantProcessLayoutPolicy', () => {

@@ -66,6 +66,7 @@ export interface ChatMessage {
   renderVersion?: number;
   turnId?: string;
   detail?: string;
+  error?: string;
   timestamp?: string;
   thinking?: string;
   tools?: RemoteToolStatusResponse[];
@@ -400,8 +401,11 @@ export interface RemoteImageContext {
 export interface ChatMessageResponse {
   id?: string;
   message_id?: string;
+  turn_id?: string;
   role: string;
   content: string;
+  status?: string;
+  error?: string;
   timestamp?: string;
   metadata?: Object;
   thinking?: string;
@@ -413,6 +417,7 @@ export interface ChatMessageResponse {
 export interface ActiveTurnSnapshotResponse {
   turn_id: string;
   status: string;
+  error?: string;
   text?: string;
   thinking?: string;
   tools?: RemoteToolStatusResponse[];

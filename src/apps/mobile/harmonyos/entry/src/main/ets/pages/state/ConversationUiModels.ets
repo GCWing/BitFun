@@ -92,6 +92,7 @@ export interface ConversationUiMessage {
   renderVersion?: number;
   turnId?: string;
   detail?: string;
+  error?: string;
   timestamp?: string;
   thinking?: string;
   tools?: ConversationUiToolStatus[];
@@ -199,6 +200,7 @@ export function toConversationUiMessage(source: ChatMessage): ConversationUiMess
     renderVersion: source.renderVersion,
     turnId: source.turnId,
     detail: source.detail,
+    error: source.error,
     timestamp: source.timestamp,
     thinking: source.thinking,
     tools: source.tools ? source.tools.map((tool: RemoteToolStatusResponse) => toConversationUiToolStatus(tool)) : undefined,

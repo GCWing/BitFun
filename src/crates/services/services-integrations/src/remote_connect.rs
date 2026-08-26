@@ -1856,6 +1856,12 @@ pub struct ChatMessage {
     pub content: String,
     pub timestamp: String,
     pub metadata: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<RemoteToolStatus>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1886,6 +1892,8 @@ pub struct RemoteChatHistoryTurn {
     pub user_timestamp_ms: u64,
     pub user_images: Vec<ChatImageAttachment>,
     pub is_in_progress: bool,
+    pub status: String,
+    pub error: Option<String>,
     pub start_time_ms: u64,
     pub rounds: Vec<RemoteChatHistoryRound>,
 }
@@ -1942,6 +1950,9 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
             content: turn.user_display_content,
             timestamp: (turn.user_timestamp_ms / 1000).to_string(),
             metadata: None,
+            turn_id: Some(turn.turn_id.clone()),
+            status: None,
+            error: None,
             tools: None,
             thinking: None,
             items: None,
@@ -2071,6 +2082,9 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
             content: text_parts.join("\n\n"),
             timestamp: (assistant_ts / 1000).to_string(),
             metadata: None,
+            turn_id: Some(turn.turn_id),
+            status: Some(turn.status),
+            error: turn.error,
             tools: if tools_flat.is_empty() {
                 None
             } else {
@@ -2113,6 +2127,8 @@ pub struct AssistantEntry {
 pub struct ActiveTurnSnapshot {
     pub turn_id: String,
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub text: String,
     pub thinking: String,
     pub tools: Vec<RemoteToolStatus>,
@@ -2689,6 +2705,7 @@ struct TrackerState {
     title: String,
     turn_id: Option<String>,
     turn_status: String,
+    turn_error: Option<String>,
     accumulated_text: String,
     accumulated_thinking: String,
     active_tools: Vec<RemoteToolStatus>,
@@ -2747,6 +2764,7 @@ impl RemoteSessionStateTracker {
                 title: String::new(),
                 turn_id: None,
                 turn_status: String::new(),
+                turn_error: None,
                 accumulated_text: String::new(),
                 accumulated_thinking: String::new(),
                 active_tools: Vec::new(),
@@ -2778,6 +2796,7 @@ impl RemoteSessionStateTracker {
         state.turn_id.as_ref().map(|turn_id| ActiveTurnSnapshot {
             turn_id: turn_id.clone(),
             status: state.turn_status.clone(),
+            error: state.turn_error.clone(),
             text: if has_items {
                 String::new()
             } else {
@@ -2832,6 +2851,7 @@ impl RemoteSessionStateTracker {
         if state.turn_id.is_none() {
             state.turn_id = Some(turn_id);
             state.turn_status = "active".to_string();
+            state.turn_error = None;
             state.session_state = "running".to_string();
         }
         drop(state);
@@ -2878,6 +2898,7 @@ impl RemoteSessionStateTracker {
             "completed" | "failed" | "cancelled"
         ) {
             state.turn_id = None;
+            state.turn_error = None;
             state.accumulated_text.clear();
             state.accumulated_thinking.clear();
             state.active_tools.clear();
@@ -2913,6 +2934,7 @@ impl RemoteSessionStateTracker {
         let mut state = self.state.write().unwrap();
         state.turn_id = None;
         state.turn_status.clear();
+        state.turn_error = None;
         state.accumulated_text.clear();
         state.accumulated_thinking.clear();
         state.active_tools.clear();
@@ -2934,6 +2956,7 @@ impl RemoteSessionStateTracker {
             // The tracker missed this Turn's terminal event (fences exist
             // because terminal chunks can be lost); settle it from the fence.
             state.turn_status = "completed".to_string();
+            state.turn_error = None;
             state.session_state = "idle".to_string();
         }
         state.persistence_dirty = true;
@@ -3328,6 +3351,7 @@ impl RemoteSessionStateTracker {
                 let mut state = self.state.write().unwrap();
                 state.turn_id = Some(turn_id.clone());
                 state.turn_status = "active".to_string();
+                state.turn_error = None;
                 state.accumulated_text.clear();
                 state.accumulated_thinking.clear();
                 state.active_tools.clear();
@@ -3340,6 +3364,7 @@ impl RemoteSessionStateTracker {
             AE::DialogTurnCompleted { turn_id, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();
                 state.turn_status = "completed".to_string();
+                state.turn_error = None;
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
                 self.bump_version();
@@ -3350,6 +3375,7 @@ impl RemoteSessionStateTracker {
             AE::DialogTurnFailed { turn_id, error, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();
                 state.turn_status = "failed".to_string();
+                state.turn_error = Some(error.clone());
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
                 self.bump_version();
@@ -3361,6 +3387,7 @@ impl RemoteSessionStateTracker {
             AE::DialogTurnCancelled { turn_id, .. } if is_direct => {
                 let mut state = self.state.write().unwrap();
                 state.turn_status = "cancelled".to_string();
+                state.turn_error = None;
                 state.session_state = "idle".to_string();
                 state.persistence_dirty = true;
                 self.bump_version();
@@ -3809,6 +3836,9 @@ mod tests {
                     content: "hello".to_string(),
                     timestamp: "1".to_string(),
                     metadata: None,
+                    turn_id: None,
+                    status: None,
+                    error: None,
                     images: None,
                     thinking: None,
                     tools: None,
@@ -4055,6 +4085,9 @@ mod tests {
             content: "visible".to_string(),
             timestamp: "1".to_string(),
             metadata: None,
+            turn_id: None,
+            status: None,
+            error: None,
             tools: None,
             thinking: None,
             items: None,
@@ -4117,6 +4150,9 @@ mod tests {
                 content: "visible".to_string(),
                 timestamp: "1".to_string(),
                 metadata: None,
+                turn_id: None,
+                status: None,
+                error: None,
                 tools: None,
                 thinking: None,
                 items: None,
@@ -4163,6 +4199,9 @@ mod tests {
                     content: "visible".to_string(),
                     timestamp: "1".to_string(),
                     metadata: None,
+                    turn_id: None,
+                    status: None,
+                    error: None,
                     tools: None,
                     thinking: None,
                     items: None,
@@ -4174,6 +4213,35 @@ mod tests {
         );
         assert!(!tracker.is_persistence_dirty());
         assert!(!tracker.is_history_snapshot_required());
+    }
+
+    #[test]
+    fn failed_active_turn_snapshot_preserves_the_runtime_error() {
+        let tracker = RemoteSessionStateTracker::new("session-a".to_string());
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-failed".to_string(),
+            turn_index: 1,
+            user_input: "hello".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnFailed {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-failed".to_string(),
+            error: "AI client could not reach the configured proxy".to_string(),
+            error_category: None,
+            error_detail: None,
+        });
+
+        let active_turn = tracker
+            .snapshot_active_turn()
+            .expect("failed turn must remain visible until persistence catches up");
+        assert_eq!(active_turn.status, "failed");
+        assert_eq!(
+            active_turn.error.as_deref(),
+            Some("AI client could not reach the configured proxy")
+        );
     }
 
     #[tokio::test]
