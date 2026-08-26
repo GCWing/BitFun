@@ -4010,6 +4010,7 @@ impl SessionManager {
         session_id: &str,
         agent_type: &str,
         route_owner: SessionAgentRouteOwner,
+        route_key: Option<String>,
     ) -> BitFunResult<()> {
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         let original_session = self
@@ -4019,6 +4020,7 @@ impl SessionManager {
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
         if original_session.agent_type == agent_type
             && original_session.config.agent_route_owner == route_owner
+            && original_session.config.agent_route_key == route_key
         {
             return Ok(());
         }
@@ -4027,6 +4029,7 @@ impl SessionManager {
         let now = SystemTime::now();
         updated_session.agent_type = agent_type.to_string();
         updated_session.config.agent_route_owner = route_owner;
+        updated_session.config.agent_route_key = route_key.clone();
         updated_session.updated_at = now;
         updated_session.last_activity_at = now;
 
@@ -4058,11 +4061,12 @@ impl SessionManager {
         };
         active_session.agent_type = updated_session.agent_type;
         active_session.config.agent_route_owner = route_owner;
+        active_session.config.agent_route_key = route_key.clone();
         active_session.updated_at = now;
         active_session.last_activity_at = now;
         debug!(
-            "Session agent binding updated: session_id={}, agent_type={}, route_owner={:?}",
-            session_id, agent_type, route_owner
+            "Session agent binding updated: session_id={}, agent_type={}, route_owner={:?}, route_key={:?}",
+            session_id, agent_type, route_owner, route_key
         );
 
         Ok(())
@@ -5909,15 +5913,19 @@ impl SessionManager {
             let available_modes = agent_registry
                 .get_modes_info_for_workspace(external_workspace_root, external_sources_supported)
                 .await;
-            let persisted_binding = agent_registry.resolve_primary_agent_for_turn(
+            let persisted_binding = agent_registry.resolve_primary_agent_for_turn_with_route(
                 &session.agent_type,
                 external_workspace_root,
                 external_sources_supported,
                 Some(session.config.agent_route_owner),
+                session.config.agent_route_key.as_deref(),
             );
             if let Some(binding) = persisted_binding {
-                if session.config.agent_route_owner != binding.route_owner {
+                if session.config.agent_route_owner != binding.route_owner
+                    || session.config.agent_route_key != binding.route_key
+                {
                     session.config.agent_route_owner = binding.route_owner;
+                    session.config.agent_route_key = binding.route_key;
                     should_persist_restored_session = true;
                 }
             } else if session.config.agent_route_owner == SessionAgentRouteOwner::External {
@@ -5943,6 +5951,7 @@ impl SessionManager {
                 );
                 session.agent_type = fallback_mode;
                 session.config.agent_route_owner = SessionAgentRouteOwner::Local;
+                session.config.agent_route_key = None;
                 should_persist_restored_session = true;
             }
         }
@@ -13148,6 +13157,7 @@ mod tests {
                 &session.session_id,
                 "agentic",
                 SessionAgentRouteOwner::External,
+                Some("test:external:agentic".to_string()),
             )
             .await
             .expect("same-id local-to-external rebind should persist");
@@ -13164,6 +13174,7 @@ mod tests {
                 &session.session_id,
                 "agentic",
                 SessionAgentRouteOwner::Local,
+                Some("local:agentic".to_string()),
             )
             .await
             .expect("same-id external-to-local rebind should persist");
@@ -13181,6 +13192,7 @@ mod tests {
                 &session.session_id,
                 "Cowork",
                 SessionAgentRouteOwner::External,
+                Some("test:external:plan".to_string()),
             )
             .await
             .expect("external route update should persist without a turn");

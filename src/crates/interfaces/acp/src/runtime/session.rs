@@ -57,6 +57,7 @@ impl BitfunAcpRuntime {
                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
             ),
             agent_type: "agentic".to_string(),
+            agent_route_key: None,
             workspace_path: Some(cwd.clone()),
             project_workspace_path: None,
             execution_target: None,
@@ -510,6 +511,7 @@ impl BitfunAcpRuntime {
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: session.bitfun_session_id.clone(),
                 mode_id: mode_id.to_string(),
+                agent_route_key: None,
             })
             .await
             .map_err(|error| Self::session_runtime_error(&session.acp_session_id, error))?;

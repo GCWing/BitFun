@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, mkdir, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import type { RpcConnection, StreamBridge, StreamDescriptor } from "../src/backend"
 import { ExtensionHost } from "../src/host"
@@ -72,6 +73,18 @@ describe("ExtensionHost lifecycle and hooks", () => {
     })
 
     expect(opened.config).toMatchObject({ order: ["a", "b"] })
+    expect(opened.configContributors).toHaveLength(2)
+    expect(opened.configContributions).toHaveLength(2)
+    expect(opened.configContributions[0]).toMatchObject({
+      plugin: expect.objectContaining({ id: "fixture.sequence-a" }),
+      outcome: "failed",
+      config: { order: ["a"] },
+    })
+    expect(opened.configContributions[1]).toMatchObject({
+      plugin: expect.objectContaining({ id: "fixture.sequence-b" }),
+      outcome: "applied",
+      config: { order: ["a", "b"] },
+    })
     expect(opened.diagnostics).toHaveLength(1)
     expect(opened.diagnostics[0]).toMatchObject({ code: "runtime", method: "runtime" })
     expect(opened.hooks).toContain("chat.message")
@@ -82,7 +95,14 @@ describe("ExtensionHost lifecycle and hooks", () => {
       input: { order: [] },
       output: { order: [] },
     })
-    expect(called).toEqual({ input: { order: ["a", "b"] }, output: { order: ["a", "b"] } })
+    expect(called).toEqual({
+      instanceID: "lifecycle",
+      generationKey: undefined,
+      revision: undefined,
+      hook: "chat.message",
+      input: { order: ["a", "b"] },
+      output: { order: ["a", "b"] },
+    })
 
     expect(await harness.host.close({ instanceID: "lifecycle" })).toEqual({ closed: true })
     expect(await Bun.file(disposeMarker).text()).toBe("a\nb\n")
@@ -167,10 +187,16 @@ describe("ExtensionHost tools", () => {
       context: { sessionID: "session", messageID: "message", agent: "agent", callID: "call" },
     })
     expect(result).toEqual({
-      title: "echo:hello",
-      output: `hello:${directory}:${directory}`,
-      metadata: { sessionID: "session", callID: "call" },
-      attachments: [{ type: "file", mime: "text/plain", url: "data:text/plain,fixture", filename: "fixture.txt" }],
+      instanceID: "tools",
+      generationKey: undefined,
+      revision: undefined,
+      executionID: "execute-1",
+      result: {
+        title: "echo:hello",
+        output: `hello:${directory}:${directory}`,
+        metadata: { sessionID: "session", callID: "call" },
+        attachments: [{ type: "file", mime: "text/plain", url: "data:text/plain,fixture", filename: "fixture.txt" }],
+      },
     })
     expect(harness.rpc.notifications).toContainEqual({
       method: "backend.tool.metadata",
@@ -441,21 +467,9 @@ describe("ExtensionHost instance isolation", () => {
     const harness = await createHarness()
     const firstDirectory = await projectDirectory(harness.root, "first-race")
     const secondDirectory = await projectDirectory(harness.root, "second-race")
-    const plugin = path.join(harness.root, "opening-plugin.ts")
+    const plugin = path.join(fixtures, "opening.js")
     const started = path.join(harness.root, "started.txt")
     const disposed = path.join(harness.root, "disposed.txt")
-    await Bun.write(
-      plugin,
-      `export default {
-        id: "fixture.opening",
-        server: async (_input, options) => {
-          await Bun.write(options.started, "started")
-          await Bun.sleep(30)
-          return { async dispose() { await Bun.write(options.disposed, "disposed") } }
-        },
-      }\n`,
-    )
-
     const cancelledBeforeReady = harness.host.open({
       instanceID: "cancel-before-ready",
       project: {},
@@ -641,7 +655,7 @@ async function projectDirectory(root: string, name: string) {
 }
 
 async function temporaryDirectory() {
-  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", "opencode-extension-host-runtime-"))
+  const directory = await mkdtemp(path.join(tmpdir(), "opencode-extension-host-runtime-"))
   temporaryDirectories.push(directory)
   return directory
 }

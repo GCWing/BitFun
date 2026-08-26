@@ -87,6 +87,7 @@ fn protocol_round_trips_read_only_main_agent_catalog() {
     let result = RuntimeIpcOperationResult::AgentModes {
         modes: vec![RuntimeAgentModeSummary {
             id: "review".to_string(),
+            route_key: "opencode:review".to_string(),
             description: "Review the current workspace".to_string(),
             model_id: Some("provider/model".to_string()),
             is_external: true,
@@ -330,6 +331,7 @@ fn protocol_round_trips_the_reviewed_session_mode_operation() {
         request: AgentSessionModeUpdateRequest {
             session_id: "session-1".to_string(),
             mode_id: "ask".to_string(),
+            agent_route_key: None,
         },
     };
 

@@ -562,8 +562,16 @@ mod tests {
             project_id: project_id.to_string(),
             created_at_ms: 1,
             instance_id: instance_id.to_string(),
+            generation_key: "generation-test".to_string(),
+            revision: "revision-test".to_string(),
             open_result: json!({}),
             ready: true,
+            hook_commit_token: None,
+            transformed_config_health_snapshot: None,
+            diagnostic_health_snapshot: Vec::new(),
+            tool_names: Vec::new(),
+            agent_runtime_keys: Vec::new(),
+            retirement_scheduled: false,
         }
     }
 

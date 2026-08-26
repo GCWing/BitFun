@@ -17,6 +17,7 @@ pub(crate) struct ExternalProvidedAgent {
     prompt: String,
     tools: Vec<String>,
     permission_constraints: PermissionConstraintLayer,
+    temperature: Option<f64>,
     readonly: bool,
     behavior_version: String,
 }
@@ -29,6 +30,7 @@ impl ExternalProvidedAgent {
         prompt: String,
         tools: Vec<String>,
         permission_constraints: PermissionConstraintLayer,
+        temperature: Option<f64>,
         readonly: bool,
         behavior_version: String,
     ) -> Self {
@@ -39,6 +41,7 @@ impl ExternalProvidedAgent {
             prompt,
             tools,
             permission_constraints,
+            temperature,
             readonly,
             behavior_version,
         }
@@ -83,6 +86,10 @@ impl Agent for ExternalProvidedAgent {
 
     fn permission_constraints(&self) -> &PermissionConstraintLayer {
         &self.permission_constraints
+    }
+
+    fn model_temperature_override(&self) -> Option<f64> {
+        self.temperature
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {

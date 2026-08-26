@@ -1760,54 +1760,24 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
-    reason:
-      'agent-runtime must own portable hook registry and post-call routing decisions while concrete hook execution stays in the owning runtime',
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/kind.rs',
+    reason: 'agent-runtime must own portable hook kind contracts',
     patterns: [
-      {
-        regex: /\bpub enum RuntimeHookKind\b/,
-        message: 'missing runtime hook kind contract',
-      },
-      {
-        regex: /\bpub enum RuntimeHookErrorPolicy\b/,
-        message: 'missing runtime hook error policy contract',
-      },
-      {
-        regex: /\bpub struct RuntimeHookPlan\b/,
-        message: 'missing runtime hook plan contract',
-      },
-      {
-        regex: /\bpub struct RuntimeHookRegistry\b/,
-        message: 'missing runtime hook registry contract',
-      },
-      {
-        regex: /\btimeout_millis\b/,
-        message: 'missing runtime hook timeout contract',
-      },
-      {
-        regex: /\bDuplicateHookId\b/,
-        message: 'missing runtime hook duplicate-id guard',
-      },
-      {
-        regex: /\bEmptyHookId\b/,
-        message: 'missing runtime hook empty-id guard',
-      },
-      {
-        regex: /\bInvalidTimeoutMillis\b/,
-        message: 'missing runtime hook non-zero-timeout guard',
-      },
-      {
-        regex: /\bpub const fn successful_tool_post_call_hooks\b/,
-        message: 'missing successful tool post-call hook routing decision',
-      },
-      {
-        regex: /\bpub trait SuccessfulToolPostCallHookExecutor\b/,
-        message: 'missing successful tool post-call hook executor contract',
-      },
-      {
-        regex: /\bpub fn run_successful_tool_post_call_hooks\b/,
-        message: 'missing successful tool post-call hook executor runner',
-      },
+      { regex: /\bpub enum RuntimeHookKind\b/, message: 'missing runtime hook kind contract' },
+      { regex: /\bSuccessfulToolPostCall\b/, message: 'missing successful tool post-call hook kind' },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/registry.rs',
+    reason: 'agent-runtime must own portable hook registry and validation contracts',
+    patterns: [
+      { regex: /\bpub enum RuntimeHookErrorPolicy\b/, message: 'missing runtime hook error policy contract' },
+      { regex: /\bpub struct RuntimeHookPlan\b/, message: 'missing runtime hook plan contract' },
+      { regex: /\bpub struct RuntimeHookRegistry\b/, message: 'missing runtime hook registry contract' },
+      { regex: /\btimeout_millis\b/, message: 'missing runtime hook timeout contract' },
+      { regex: /\bDuplicateHookId\b/, message: 'missing runtime hook duplicate-id guard' },
+      { regex: /\bEmptyHookId\b/, message: 'missing runtime hook empty-id guard' },
+      { regex: /\bInvalidTimeoutMillis\b/, message: 'missing runtime hook non-zero-timeout guard' },
     ],
   },
   {
@@ -1816,11 +1786,11 @@ export const requiredContentRules = [
       'agent-runtime post-call hook owner must keep behavior-equivalence contracts for successful tool-call hook routing',
     patterns: [
       {
-        regex: /\bsuccessful_tool_call_routes_to_shared_context_measurement_hook\b/,
+        regex: /\bsuccessful_tool_call_uses_stable_builtin_registration_id\b/,
         message: 'missing successful tool post-call hook routing regression',
       },
       {
-        regex: /\bruntime_hook_registry_preserves_order_timeout_and_error_policy\b/,
+        regex: /\bruntime_hook_registry_preserves_source_order_timeout_and_error_policy\b/,
         message: 'missing runtime hook order/timeout/error-policy regression',
       },
       {
@@ -2702,14 +2672,7 @@ export const requiredContentRules = [
     reason:
       'core post-call hooks must delegate portable hook routing to agent-runtime while retaining concrete hook execution',
     patterns: [
-      {
-        regex: /\brun_successful_tool_post_call_hooks\b/,
-        message: 'missing post-call hook executor runner delegation',
-      },
-      {
-        regex: /\bSuccessfulToolPostCallHookExecutor\b/,
-        message: 'missing post-call hook executor implementation',
-      },
+      { regex: /\bdispatch_successful_tool_post_call\b/, message: 'missing post-call hook dispatch delegation' },
     ],
   },
   {

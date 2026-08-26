@@ -38,9 +38,13 @@ use oxc_parse::{
     parser::Parser,
     span::SourceType,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 const OPENCODE_ADAPTER_ID: &str = "opencode-compatible";
 const OPENCODE_CONFIG_SCHEMA: &str = "https://opencode.ai/config.json";
@@ -1696,6 +1700,53 @@ impl OpenCodeSourceProjection {
     }
 }
 
+/// Typed snapshot of the OpenCode base configuration (`opencode.json`) passed
+/// to the extension host when a workspace plugin instance opens.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenCodeConfigSnapshot {
+    /// URI of the `opencode.json` document the snapshot was read from.
+    pub config_uri: String,
+    /// Ordered, de-duplicated npm plugin package names from `opencode.json`.
+    pub npm_plugins: Vec<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OpenCodeConfigSnapshotError {
+    #[error("failed to read OpenCode config {path}: {source}")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("invalid OpenCode config {path}: {message}")]
+    Invalid { path: PathBuf, message: String },
+}
+
+/// Load the typed base config for one local workspace. A missing
+/// `opencode.json` is a valid empty snapshot; unreadable or invalid files fail
+/// activation instead of silently sending a different configuration.
+pub fn load_opencode_config_snapshot(
+    workspace: &Path,
+) -> Result<OpenCodeConfigSnapshot, OpenCodeConfigSnapshotError> {
+    let path = workspace.join("opencode.json");
+    let config_uri = source_file_uri(&path.to_string_lossy());
+    let source = match std::fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(OpenCodeConfig::empty(config_uri).snapshot());
+        }
+        Err(source) => {
+            return Err(OpenCodeConfigSnapshotError::Read { path, source });
+        }
+    };
+    parse_opencode_config(&source, &config_uri)
+        .map(|config| config.snapshot())
+        .map_err(|error| OpenCodeConfigSnapshotError::Invalid {
+            path,
+            message: error.to_string(),
+        })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OpenCodeConfig {
     config_uri: String,
@@ -1767,6 +1818,13 @@ impl OpenCodeConfig {
             config_uri: "opencode.json".to_string(),
             npm_plugins,
         })
+    }
+
+    fn snapshot(&self) -> OpenCodeConfigSnapshot {
+        OpenCodeConfigSnapshot {
+            config_uri: self.config_uri.clone(),
+            npm_plugins: self.npm_plugins.clone(),
+        }
     }
 }
 
@@ -2458,6 +2516,45 @@ mod opencode_projection_contracts {
 
     const CONFIG: &str = include_str!("../tests/fixtures/opencode-example/opencode.json");
     const LOCAL_PLUGIN_PATH: &str = ".opencode/plugins/workspace-tools.ts";
+
+    #[test]
+    fn config_snapshot_loader_reads_workspace_config_and_deduplicates_plugins() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            serde_json::json!({
+                "$schema": OPENCODE_CONFIG_SCHEMA,
+                "plugin": ["alpha", "alpha", "beta"]
+            })
+            .to_string(),
+        )
+        .expect("config");
+
+        let snapshot = load_opencode_config_snapshot(workspace.path()).expect("snapshot");
+        assert_eq!(snapshot.npm_plugins, vec!["alpha", "beta"]);
+        assert!(snapshot.config_uri.starts_with("file://"));
+    }
+
+    #[test]
+    fn config_snapshot_loader_accepts_missing_workspace_config_as_empty() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let snapshot = load_opencode_config_snapshot(workspace.path()).expect("snapshot");
+        assert!(snapshot.npm_plugins.is_empty());
+    }
+
+    #[test]
+    fn config_snapshot_loader_rejects_invalid_workspace_config() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            "{\"plugin\":[\"alpha\"]}",
+        )
+        .expect("config");
+        assert!(matches!(
+            load_opencode_config_snapshot(workspace.path()),
+            Err(OpenCodeConfigSnapshotError::Invalid { .. })
+        ));
+    }
     const LOCAL_PLUGIN_SOURCE: &str =
         include_str!("../tests/fixtures/opencode-example/.opencode/plugins/workspace-tools.ts");
 

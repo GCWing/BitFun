@@ -1,8 +1,11 @@
+use bitfun_agent_runtime::native_hooks::RuntimeHookCommitToken;
 use bitfun_opencode_plugin_host::{
     PluginDeclaration, PluginHost, PluginHostConfig, PluginHostShutdownPolicy,
-    PluginHostShutdownReport, PluginInstanceOpenRequest, PluginPrepareRequest,
+    PluginHostShutdownReport, PluginInstanceOpenRequest, PluginPrepareRequest, RpcHandlerError,
+    CONFIG_CONTRIBUTIONS_V2, CONFIG_CONTRIBUTORS_V1, GENERATION_FENCING_V1,
 };
-use serde_json::{Map, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -29,6 +32,7 @@ static PLUGIN_HOST_INSTANCES: OnceCell<Mutex<HashMap<String, PluginHostInstance>
     OnceCell::const_new();
 static PLUGIN_HOST_PTY_OWNERS: OnceCell<Mutex<HashMap<String, String>>> = OnceCell::const_new();
 static NEXT_INSTANCE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+const MAX_PLUGIN_HOST_DIAGNOSTICS: usize = 100;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PluginHostInstance {
@@ -38,8 +42,38 @@ pub(crate) struct PluginHostInstance {
     pub(crate) project_id: String,
     pub(crate) created_at_ms: i64,
     pub(crate) instance_id: String,
+    pub(crate) generation_key: String,
+    pub(crate) revision: String,
     pub(crate) open_result: Value,
     pub(crate) ready: bool,
+    pub(crate) hook_commit_token: Option<RuntimeHookCommitToken>,
+    pub(crate) transformed_config_health_snapshot: Option<Value>,
+    pub(crate) diagnostic_health_snapshot: Vec<Value>,
+    pub(crate) tool_names: Vec<String>,
+    pub(crate) agent_runtime_keys: Vec<String>,
+    pub(crate) retirement_scheduled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PluginHostDiagnostic {
+    severity: String,
+    code: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    plugin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PluginHostDiagnosticPublishParams {
+    #[serde(rename = "instanceID")]
+    instance_id: Option<String>,
+    diagnostic: PluginHostDiagnostic,
 }
 
 impl PluginHostInstance {
@@ -80,6 +114,14 @@ pub enum PluginHostStartup {
 pub enum PluginHostLaunchPolicy {
     Enabled,
     Disabled,
+}
+
+pub async fn configured_plugins_present() -> crate::BitFunResult<bool> {
+    use crate::service::config::{get_global_config_service, GlobalConfig};
+
+    let config_service = get_global_config_service().await?;
+    let config: GlobalConfig = config_service.get_config(None).await?;
+    Ok(config.has_configured_plugins())
 }
 
 pub async fn initialize_configured_plugin_host(
@@ -140,21 +182,11 @@ pub async fn initialize_configured_plugin_host_with_log_file(
         log_level: config.app.logging.level.trim().to_lowercase(),
     })
     .await
-    .map_err(|error| match error {
-        bitfun_opencode_plugin_host::PluginHostError::RuntimeNotFound(command) => {
-            crate::BitFunError::ProcessError(format!(
-                "{} executable was not found at {}. Install Bun or set {} to a valid Bun executable.",
-                launch_spec.runtime_name,
-                command.display(),
-                BUN_COMMAND_ENV
-            ))
-        }
-        error => crate::BitFunError::ProcessError(format!(
+    .map_err(|error| crate::BitFunError::ProcessError(format!(
             "Failed to initialize {} plugin host from {}: {error}",
             launch_spec.runtime_name,
             entry.display()
-        )),
-    })?;
+        )))?;
     let client = host.client();
     crate::plugin_host_http::register_plugin_host_backend_handlers(client.clone()).await?;
     let plugins = config
@@ -231,16 +263,17 @@ pub async fn ensure_configured_plugin_instance(
     directory: PathBuf,
     worktree: PathBuf,
     project_id: Option<String>,
-    config: Map<String, Value>,
 ) -> crate::BitFunResult<Option<Value>> {
     use crate::service::config::{get_global_config_service, GlobalConfig};
 
     if launch_policy == PluginHostLaunchPolicy::Disabled {
+        withdraw_configured_plugin_workspace(&directory).await;
         return Ok(None);
     }
     let config_service = get_global_config_service().await?;
     let global_config: GlobalConfig = config_service.get_config(None).await?;
     if !global_config.has_configured_plugins() {
+        withdraw_configured_plugin_workspace(&directory).await;
         return Ok(None);
     }
     if directory.as_os_str().is_empty() || !directory.is_dir() {
@@ -258,6 +291,23 @@ pub async fn ensure_configured_plugin_instance(
     })?;
     let canonical_directory_string = canonical_directory.to_string_lossy().into_owned();
     let comparable_directory = comparable_instance_directory(&canonical_directory_string);
+    let config = serde_json::to_value(
+        crate::plugin_runtime::opencode_config_snapshot(&canonical_directory).map_err(|error| {
+            crate::BitFunError::Validation(format!(
+                "Failed to load OpenCode config for plugin activation: {error}"
+            ))
+        })?,
+    )
+    .and_then(|value| match value {
+        Value::Object(config) => Ok(config),
+        _ => unreachable!("OpenCodeConfigSnapshot must serialize as an object"),
+    })
+    .map_err(|error| {
+        crate::BitFunError::Validation(format!(
+            "Failed to serialize OpenCode plugin config snapshot: {error}"
+        ))
+    })?;
+    let initial_config = config.clone();
     let config_fingerprint = plugin_config_fingerprint(&global_config)?;
     let client = {
         let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
@@ -272,44 +322,62 @@ pub async fn ensure_configured_plugin_instance(
                 )
             })?
     };
+    if !client.capabilities().supports(GENERATION_FENCING_V1) {
+        return Err(crate::BitFunError::ProcessError(
+            "Configured plugin host does not support generation-fencing-v1".to_string(),
+        ));
+    }
     let instances = PLUGIN_HOST_INSTANCES
         .get_or_init(|| async { Mutex::new(HashMap::new()) })
         .await;
     let instance_key = format!("{comparable_directory}\n{config_fingerprint}");
-    if let Some(instance) = instances.lock().await.get(&instance_key).cloned() {
+    let reusable_instance = {
+        let mut state = instances.lock().await;
+        state.get_mut(&instance_key).map(|instance| {
+            instance.retirement_scheduled = false;
+            instance.clone()
+        })
+    };
+    if let Some(instance) = reusable_instance {
+        if crate::plugin_config_projection::active_generation_key(&canonical_directory).as_deref()
+            != Some(instance.generation_key.as_str())
+        {
+            let projection = crate::plugin_config_projection::prepare(
+                &canonical_directory,
+                &instance.generation_key,
+                &initial_config,
+                &instance.open_result,
+            )?;
+            crate::plugin_hook_bridge::commit_plugin_generation(
+                &crate::native_hooks::plugin_hook_registry(&comparable_directory),
+                &comparable_directory,
+                instance.hook_commit_token.as_ref(),
+            );
+            projection.commit();
+        }
         log::debug!(
             "Configured plugin host instance reused: generation={}, instance_id={}",
             client.generation(),
             instance.instance_id
         );
+        retire_superseded_plugin_instances(
+            &client,
+            instances,
+            &instance_key,
+            &comparable_directory,
+        )
+        .await;
         return Ok(Some(instance.open_result.clone()));
-    }
-
-    let previous_keys = instances
-        .lock()
-        .await
-        .iter()
-        .filter(|(_, instance)| instance.canonical_directory == comparable_directory)
-        .map(|(key, instance)| (key.clone(), instance.instance_id.clone()))
-        .collect::<Vec<_>>();
-    for (key, instance_id) in previous_keys {
-        if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
-            bridge.cancel_instance_streams(&instance_id).await;
-        }
-        client
-            .close_instance(&instance_id, std::time::Duration::from_secs(10))
-            .await
-            .map_err(|error| {
-                crate::BitFunError::ProcessError(format!(
-                    "Failed to close stale plugin host instance {instance_id}: {error}"
-                ))
-            })?;
-        close_plugin_host_ptys(&instance_id).await;
-        instances.lock().await.remove(&key);
     }
 
     let sequence = NEXT_INSTANCE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let instance_id = format!("bitfun:host:{}:{sequence}", client.generation());
+    let revision = format!("revision-{sequence}");
+    let generation_key = format!(
+        "host-{}:instance-{sequence}:sha256-{}",
+        client.generation(),
+        config_fingerprint
+    );
     let project_id = project_id
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| {
@@ -326,8 +394,16 @@ pub async fn ensure_configured_plugin_instance(
         project_id: project_id.clone(),
         created_at_ms: now_ms,
         instance_id: instance_id.clone(),
+        generation_key: generation_key.clone(),
+        revision: revision.clone(),
         open_result: Value::Null,
         ready: false,
+        hook_commit_token: None,
+        transformed_config_health_snapshot: None,
+        diagnostic_health_snapshot: Vec::new(),
+        tool_names: Vec::new(),
+        agent_runtime_keys: Vec::new(),
+        retirement_scheduled: false,
     };
     instances
         .lock()
@@ -337,6 +413,8 @@ pub async fn ensure_configured_plugin_instance(
         .open_instance(
             PluginInstanceOpenRequest {
                 instance_id: instance_id.clone(),
+                generation_key: generation_key.clone(),
+                revision: revision.clone(),
                 project: serde_json::json!({
                     "id": project_id,
                     "worktree": canonical_directory_string,
@@ -358,25 +436,334 @@ pub async fn ensure_configured_plugin_instance(
     {
         Ok(result) => result,
         Err(error) => {
-            close_plugin_host_ptys(&instance_id).await;
-            instances.lock().await.remove(&instance_key);
+            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
             return Err(crate::BitFunError::ProcessError(format!(
                 "Failed to activate plugins for workspace {}: {error}",
                 canonical_directory.display()
             )));
         }
     };
+    if let Err(error) =
+        validate_open_generation_lease(&open_result, &instance_id, &generation_key, &revision)
+    {
+        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+        return Err(error);
+    }
+    if client.capabilities().supports(CONFIG_CONTRIBUTORS_V1)
+        && !open_result
+            .get("configContributors")
+            .is_some_and(Value::is_array)
+    {
+        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+        return Err(crate::BitFunError::Validation(
+            "Plugin host open result is missing configContributors".to_string(),
+        ));
+    }
+    if client.capabilities().supports(CONFIG_CONTRIBUTIONS_V2)
+        && !open_result
+            .get("configContributions")
+            .is_some_and(Value::is_array)
+    {
+        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+        return Err(crate::BitFunError::Validation(
+            "Plugin host open result is missing configContributions".to_string(),
+        ));
+    }
+    let config_projection = match crate::plugin_config_projection::prepare(
+        &canonical_directory,
+        &generation_key,
+        &initial_config,
+        &open_result,
+    ) {
+        Ok(projection) => projection,
+        Err(error) => {
+            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            return Err(error);
+        }
+    };
+    let plugin_agent_runtime_keys = config_projection.agent_runtime_keys();
     log::info!(
-        "Configured plugin host instance activated: generation={}, instance_id={}, plugin_count={}",
+        "Configured plugin host instance prepared: generation={}, instance_id={}, plugin_count={}",
         client.generation(),
         instance_id,
         global_config.plugin.len()
     );
-    if let Some(instance) = instances.lock().await.get_mut(&instance_key) {
+    let hook_commit_token = match crate::plugin_hook_bridge::register_plugin_hooks(
+        &crate::native_hooks::plugin_hook_registry(&comparable_directory),
+        &comparable_directory,
+        client.clone(),
+        &instance_id,
+        &generation_key,
+        &revision,
+        &crate::plugin_hook_bridge::hook_names(&open_result),
+    ) {
+        Ok(token) => token,
+        Err(error) => {
+            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            return Err(crate::BitFunError::ProcessError(format!(
+                "Failed to register plugin hooks for workspace {}: {error}",
+                canonical_directory.display()
+            )));
+        }
+    };
+    let tool_names = match register_plugin_tools(
+        &client,
+        &instance_id,
+        &comparable_directory,
+        &canonical_directory,
+        &generation_key,
+        &revision,
+        &config_fingerprint,
+        &open_result,
+        &config_projection,
+    )
+    .await
+    {
+        Ok(names) => names,
+        Err(error) => {
+            if let Some(token) = hook_commit_token.clone() {
+                crate::plugin_hook_bridge::unregister_plugin_hooks(
+                    &crate::native_hooks::plugin_hook_registry(&comparable_directory),
+                    &comparable_directory,
+                    token,
+                );
+            }
+            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            return Err(error);
+        }
+    };
+    // Publish readiness, Hooks, and Config routes while holding the instance
+    // table lock. Hook dispatch cannot observe ready=true before its Registry
+    // generation is active, and Agent routing is published last, after the
+    // instance identity is available to generation-fenced dispatch.
+    {
+        let mut state = instances.lock().await;
+        let instance = state.get_mut(&instance_key).ok_or_else(|| {
+            crate::BitFunError::ProcessError(
+                "Plugin instance disappeared before generation publication".to_string(),
+            )
+        })?;
         instance.open_result = open_result.clone();
         instance.ready = true;
+        instance.hook_commit_token = hook_commit_token.clone();
+        instance.transformed_config_health_snapshot = open_result.get("config").cloned();
+        instance.tool_names = tool_names;
+        instance.agent_runtime_keys = plugin_agent_runtime_keys.into_iter().collect();
+        crate::plugin_hook_bridge::commit_plugin_generation(
+            &crate::native_hooks::plugin_hook_registry(&comparable_directory),
+            &comparable_directory,
+            hook_commit_token.as_ref(),
+        );
+        config_projection.commit();
     }
+    retire_superseded_plugin_instances(&client, instances, &instance_key, &comparable_directory)
+        .await;
     Ok(Some(open_result))
+}
+
+async fn discard_opening_plugin_instance(
+    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    instances: &Mutex<HashMap<String, PluginHostInstance>>,
+    instance_key: &str,
+    instance_id: &str,
+) {
+    if let Err(error) = client
+        .close_instance(instance_id, std::time::Duration::from_secs(10))
+        .await
+    {
+        log::debug!(
+            "Plugin instance cleanup after failed prepare was incomplete: instance_id={}, error={}",
+            instance_id,
+            error
+        );
+    }
+    close_plugin_host_ptys(instance_id).await;
+    instances.lock().await.remove(instance_key);
+}
+
+async fn withdraw_configured_plugin_workspace(directory: &Path) {
+    let Ok(canonical) = dunce::canonicalize(directory) else {
+        return;
+    };
+    let workspace_scope = comparable_instance_directory(&canonical.to_string_lossy());
+    let registry = crate::native_hooks::plugin_hook_registry(&workspace_scope);
+    crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
+    crate::plugin_config_projection::release_workspace(&canonical);
+    let Some(instances) = PLUGIN_HOST_INSTANCES.get() else {
+        crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
+        return;
+    };
+    let owned = instances
+        .lock()
+        .await
+        .iter()
+        .filter(|(_, instance)| instance.canonical_directory == workspace_scope)
+        .map(|(key, instance)| (key.clone(), instance.clone()))
+        .collect::<Vec<_>>();
+    let client = PLUGIN_HOST
+        .get()
+        .and_then(|state| state.try_lock().ok())
+        .and_then(|host| host.as_ref().map(PluginHost::client));
+    for (key, instance) in owned {
+        if let Some(token) = instance.hook_commit_token.clone() {
+            crate::plugin_hook_bridge::unregister_plugin_hooks(&registry, &workspace_scope, token);
+        }
+        crate::agentic::tools::plugin_host_tool::unregister_workspace_tools(
+            &workspace_scope,
+            &instance.directory,
+            &instance.tool_names,
+            &instance.generation_key,
+        )
+        .await;
+        if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
+            bridge.cancel_instance_streams(&instance.instance_id).await;
+        }
+        if let Some(client) = client.as_ref() {
+            let _ = client
+                .close_instance(&instance.instance_id, std::time::Duration::from_secs(10))
+                .await;
+        }
+        close_plugin_host_ptys(&instance.instance_id).await;
+        instances.lock().await.remove(&key);
+    }
+    crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
+}
+
+async fn retire_superseded_plugin_instances(
+    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    instances: &Mutex<HashMap<String, PluginHostInstance>>,
+    active_key: &str,
+    workspace_scope: &str,
+) {
+    let stale = instances
+        .lock()
+        .await
+        .iter()
+        .filter(|(key, instance)| {
+            key.as_str() != active_key && instance.canonical_directory == workspace_scope
+        })
+        .map(|(key, instance)| (key.clone(), instance.clone()))
+        .collect::<Vec<_>>();
+    for (key, instance) in stale {
+        if instance.agent_runtime_keys.iter().any(|runtime_key| {
+            crate::agentic::agents::get_agent_registry().check_agent_exists(runtime_key)
+        }) {
+            let should_schedule = {
+                let mut state = instances.lock().await;
+                state.get_mut(&key).is_some_and(|current| {
+                    if current.retirement_scheduled {
+                        false
+                    } else {
+                        current.retirement_scheduled = true;
+                        true
+                    }
+                })
+            };
+            if should_schedule {
+                schedule_plugin_instance_retirement(client.clone(), key.clone());
+            }
+            continue;
+        }
+        let removed = {
+            let mut state = instances.lock().await;
+            state
+                .get(&key)
+                .filter(|current| current.instance_id == instance.instance_id)
+                .is_some()
+                .then(|| state.remove(&key))
+                .flatten()
+        };
+        if let Some(removed) = removed {
+            retire_plugin_instance(client, removed, workspace_scope).await;
+        }
+    }
+}
+
+fn schedule_plugin_instance_retirement(
+    client: bitfun_opencode_plugin_host::PluginHostClient,
+    instance_key: String,
+) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            let Some(instances) = PLUGIN_HOST_INSTANCES.get() else {
+                return;
+            };
+            let snapshot = {
+                let state = instances.lock().await;
+                let Some(instance) = state.get(&instance_key) else {
+                    return;
+                };
+                if !instance.retirement_scheduled {
+                    return;
+                }
+                instance.clone()
+            };
+            if crate::plugin_config_projection::active_generation_key(&snapshot.directory)
+                .as_deref()
+                == Some(snapshot.generation_key.as_str())
+            {
+                if let Some(instance) = instances.lock().await.get_mut(&instance_key) {
+                    instance.retirement_scheduled = false;
+                }
+                return;
+            }
+            if snapshot.agent_runtime_keys.iter().any(|runtime_key| {
+                crate::agentic::agents::get_agent_registry().check_agent_exists(runtime_key)
+            }) {
+                continue;
+            }
+            let removed = {
+                let mut state = instances.lock().await;
+                let matches = state.get(&instance_key).is_some_and(|current| {
+                    current.retirement_scheduled
+                        && current.instance_id == snapshot.instance_id
+                        && current.generation_key == snapshot.generation_key
+                });
+                matches.then(|| state.remove(&instance_key)).flatten()
+            };
+            if let Some(instance) = removed {
+                let workspace_scope = instance.canonical_directory.clone();
+                retire_plugin_instance(&client, instance, &workspace_scope).await;
+            }
+            return;
+        }
+    });
+}
+
+async fn retire_plugin_instance(
+    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    instance: PluginHostInstance,
+    workspace_scope: &str,
+) {
+    if let Some(token) = instance.hook_commit_token.clone() {
+        crate::plugin_hook_bridge::unregister_plugin_hooks(
+            &crate::native_hooks::plugin_hook_registry(workspace_scope),
+            workspace_scope,
+            token,
+        );
+    }
+    crate::agentic::tools::plugin_host_tool::unregister_workspace_tools(
+        workspace_scope,
+        &instance.directory,
+        &instance.tool_names,
+        &instance.generation_key,
+    )
+    .await;
+    if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
+        bridge.cancel_instance_streams(&instance.instance_id).await;
+    }
+    if let Err(error) = client
+        .close_instance(&instance.instance_id, std::time::Duration::from_secs(10))
+        .await
+    {
+        log::warn!(
+            "Superseded plugin instance close failed: instance_id={}, error={}",
+            instance.instance_id,
+            error
+        );
+    }
+    close_plugin_host_ptys(&instance.instance_id).await;
 }
 
 pub(crate) async fn plugin_host_instance_by_id(instance_id: &str) -> Option<PluginHostInstance> {
@@ -387,6 +774,92 @@ pub(crate) async fn plugin_host_instance_by_id(instance_id: &str) -> Option<Plug
         .values()
         .find(|instance| instance.instance_id == instance_id)
         .cloned()
+}
+
+pub(crate) async fn plugin_hook_generation_for_agent(
+    workspace_scope: &str,
+    runtime_agent_key: &str,
+) -> Option<bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity> {
+    let instances = PLUGIN_HOST_INSTANCES.get()?;
+    instances
+        .lock()
+        .await
+        .values()
+        .find(|instance| {
+            instance.ready
+                && instance.canonical_directory == workspace_scope
+                && instance
+                    .agent_runtime_keys
+                    .iter()
+                    .any(|key| key == runtime_agent_key)
+        })
+        .map(
+            |instance| bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity {
+                instance_id: instance.instance_id.clone(),
+                generation_key: instance.generation_key.clone(),
+                revision: instance.revision.clone(),
+            },
+        )
+}
+
+pub(crate) async fn publish_plugin_host_diagnostic(
+    params: Value,
+) -> Result<Value, RpcHandlerError> {
+    let params: PluginHostDiagnosticPublishParams =
+        serde_json::from_value(params).map_err(|error| {
+            RpcHandlerError::new(
+                -32602,
+                format!("invalid backend.diagnostic.publish params: {error}"),
+            )
+        })?;
+    if !matches!(
+        params.diagnostic.severity.as_str(),
+        "debug" | "info" | "warning" | "error"
+    ) {
+        return Err(RpcHandlerError::new(
+            -32602,
+            "backend.diagnostic.publish severity is invalid",
+        ));
+    }
+    let diagnostic = serde_json::to_value(params.diagnostic)
+        .map_err(|error| RpcHandlerError::new(-32603, error.to_string()))?;
+    if let Some(instance_id) = params.instance_id.as_deref() {
+        let instances = PLUGIN_HOST_INSTANCES
+            .get()
+            .ok_or_else(|| RpcHandlerError::new(-32004, "plugin instance is unavailable"))?;
+        let mut instances = instances.lock().await;
+        let instance = instances
+            .values_mut()
+            .find(|instance| instance.instance_id == instance_id)
+            .ok_or_else(|| RpcHandlerError::new(-32004, "plugin instance is unavailable"))?;
+        push_plugin_host_diagnostic(&mut instance.diagnostic_health_snapshot, diagnostic.clone());
+    }
+    crate::infrastructure::events::emit_global_event(
+        crate::infrastructure::events::BackendEvent::Custom {
+            event_name: "plugin-host-diagnostic".to_string(),
+            payload: serde_json::json!({
+                "instance_id": params.instance_id,
+                "diagnostic": diagnostic,
+                "timestamp": chrono::Utc::now().timestamp_millis(),
+            }),
+        },
+    )
+    .await
+    .map_err(|error| {
+        RpcHandlerError::new(
+            -32603,
+            format!("failed to publish plugin host diagnostic: {error}"),
+        )
+    })?;
+    Ok(serde_json::json!({}))
+}
+
+fn push_plugin_host_diagnostic(snapshot: &mut Vec<Value>, diagnostic: Value) {
+    snapshot.push(diagnostic);
+    let overflow = snapshot.len().saturating_sub(MAX_PLUGIN_HOST_DIAGNOSTICS);
+    if overflow > 0 {
+        snapshot.drain(..overflow);
+    }
 }
 
 pub(crate) async fn register_plugin_host_pty(pty_id: &str, instance_id: &str) {
@@ -543,7 +1016,34 @@ pub async fn shutdown_configured_plugin_host(
     let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
     let host = host_state.lock().await.take();
     if let Some(instances) = PLUGIN_HOST_INSTANCES.get() {
-        instances.lock().await.clear();
+        let mut instances = instances.lock().await;
+        for instance in instances.values() {
+            if let Some(token) = instance.hook_commit_token.clone() {
+                crate::plugin_hook_bridge::unregister_plugin_hooks(
+                    &crate::native_hooks::plugin_hook_registry(&instance.canonical_directory),
+                    &instance.canonical_directory,
+                    token,
+                );
+            }
+            crate::agentic::tools::plugin_host_tool::unregister_workspace_tools(
+                &instance.canonical_directory,
+                &instance.directory,
+                &instance.tool_names,
+                &instance.generation_key,
+            )
+            .await;
+            crate::plugin_config_projection::release_workspace(&instance.directory);
+        }
+        let workspaces = instances
+            .values()
+            .map(|instance| instance.canonical_directory.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        for workspace in workspaces {
+            let registry = crate::native_hooks::plugin_hook_registry(&workspace);
+            crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace);
+            crate::native_hooks::clear_plugin_hook_workspace(&workspace);
+        }
+        instances.clear();
     }
     let report = match host {
         Some(host) => {
@@ -563,6 +1063,126 @@ pub async fn shutdown_configured_plugin_host(
     PLUGIN_HOST_SHUTDOWN_COMPLETE.store(true, Ordering::Release);
     shutdown_notify.notify_waiters();
     Ok(report)
+}
+
+async fn register_plugin_tools(
+    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    instance_id: &str,
+    workspace_scope: &str,
+    workspace_root: &Path,
+    generation_key: &str,
+    revision: &str,
+    config_fingerprint: &str,
+    open_result: &Value,
+    projection: &crate::plugin_config_projection::PluginConfigProjectionPlan,
+) -> crate::BitFunResult<Vec<String>> {
+    let Some(tools) = open_result.get("tools").and_then(Value::as_array) else {
+        log::debug!(
+            "Plugin tool registration completed with no tools: workspace={}, instance_id={}",
+            workspace_scope,
+            instance_id
+        );
+        return Ok(Vec::new());
+    };
+    log::debug!(
+        "Plugin tool registration preparing: workspace={}, instance_id={}, tool_count={}",
+        workspace_scope,
+        instance_id,
+        tools.len()
+    );
+    let mut prepared = Vec::new();
+    let mut seen_ids = std::collections::BTreeSet::new();
+    for tool in tools {
+        let allowed_runtime_agent_keys = projection.allowed_runtime_agent_keys_for_tool(tool)?;
+        if allowed_runtime_agent_keys.is_empty() {
+            continue;
+        }
+        let registration_id = tool
+            .get("registrationID")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                crate::BitFunError::Validation("Plugin tool registrationID is missing".to_string())
+            })?;
+        let id = tool.get("id").and_then(Value::as_str).ok_or_else(|| {
+            crate::BitFunError::Validation("Plugin tool id is missing".to_string())
+        })?;
+        if !seen_ids.insert(id.to_string()) {
+            return Err(crate::BitFunError::Validation(format!(
+                "Plugin tool id is duplicated in the open result: {id}"
+            )));
+        }
+        let description = tool
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let parameters = tool
+            .get("parameters")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({"type":"object"}));
+        prepared.push((
+            registration_id.to_string(),
+            id.to_string(),
+            description.to_string(),
+            parameters,
+            allowed_runtime_agent_keys,
+        ));
+    }
+
+    // Validate the complete generation before mutating the Tool mux. Once
+    // registration starts, all remaining operations are infallible local
+    // publication steps, so a malformed later entry cannot leave a partial
+    // generation installed.
+    let mut names = Vec::with_capacity(prepared.len());
+    for (registration_id, id, description, parameters, allowed_runtime_agent_keys) in prepared {
+        crate::agentic::tools::plugin_host_tool::register_workspace_tool(
+            workspace_scope,
+            workspace_root,
+            client.clone(),
+            instance_id,
+            generation_key,
+            revision,
+            &registration_id,
+            &id,
+            &description,
+            parameters,
+            config_fingerprint,
+            allowed_runtime_agent_keys,
+        )
+        .await;
+        log::debug!(
+            "Plugin tool registration committed to Rust registry: workspace={}, instance_id={}, tool_id={}, registration_id={}",
+            workspace_scope,
+            instance_id,
+            id,
+            registration_id
+        );
+        names.push(id);
+    }
+    log::info!(
+        "Plugin tool registration completed: workspace={}, instance_id={}, tool_count={}",
+        workspace_scope,
+        instance_id,
+        names.len()
+    );
+    Ok(names)
+}
+
+fn validate_open_generation_lease(
+    result: &Value,
+    instance_id: &str,
+    generation_key: &str,
+    revision: &str,
+) -> crate::BitFunResult<()> {
+    let valid = result.get("instanceID").and_then(Value::as_str) == Some(instance_id)
+        && result.get("generationKey").and_then(Value::as_str) == Some(generation_key)
+        && result.get("revision").and_then(Value::as_str) == Some(revision);
+    if valid {
+        Ok(())
+    } else {
+        Err(crate::BitFunError::Validation(
+            "Plugin host open result generation lease does not match the request".to_string(),
+        ))
+    }
 }
 
 fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf> {
@@ -652,6 +1272,12 @@ fn comparable_instance_directory(directory: &str) -> String {
     comparable
 }
 
+pub(crate) fn canonical_plugin_workspace_scope(path: &Path) -> Option<String> {
+    dunce::canonicalize(path)
+        .ok()
+        .map(|path| comparable_instance_directory(&path.to_string_lossy()))
+}
+
 fn absolutize_existing_entry(
     entry: PathBuf,
     spec: PluginHostLaunchSpec,
@@ -678,9 +1304,9 @@ fn absolutize_existing_entry(
 mod tests {
     use super::{
         development_host_entry, initialize_configured_plugin_host, instance_directories_equal,
-        plugin_host_pty_ids_for_instance, plugin_host_pty_owned_by, register_plugin_host_pty,
-        unregister_plugin_host_pty, PluginHostLaunchPolicy, PluginHostLaunchSpec,
-        PluginHostStartup,
+        plugin_host_pty_ids_for_instance, plugin_host_pty_owned_by, push_plugin_host_diagnostic,
+        register_plugin_host_pty, unregister_plugin_host_pty, PluginHostLaunchPolicy,
+        PluginHostLaunchSpec, PluginHostStartup, MAX_PLUGIN_HOST_DIAGNOSTICS,
     };
     use std::path::Path;
 
@@ -747,5 +1373,20 @@ mod tests {
             vec![pty_id.clone()]
         );
         assert!(unregister_plugin_host_pty(&pty_id, &first).await);
+    }
+
+    #[test]
+    fn diagnostic_health_snapshot_retains_the_newest_entries() {
+        let mut snapshot = Vec::new();
+        for index in 0..=MAX_PLUGIN_HOST_DIAGNOSTICS {
+            push_plugin_host_diagnostic(&mut snapshot, serde_json::json!({"index": index}));
+        }
+
+        assert_eq!(snapshot.len(), MAX_PLUGIN_HOST_DIAGNOSTICS);
+        assert_eq!(snapshot.first().unwrap()["index"], 1);
+        assert_eq!(
+            snapshot.last().unwrap()["index"],
+            MAX_PLUGIN_HOST_DIAGNOSTICS
+        );
     }
 }

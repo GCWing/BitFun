@@ -150,6 +150,34 @@ impl AgentRegistry {
             .map(|entry| entry.agent)
     }
 
+    /// Resolve the effective non-external definition that an external route
+    /// displaces. Plugin generations use this immutable baseline instead of
+    /// accidentally inheriting a previous external generation.
+    pub(crate) fn get_local_agent(
+        &self,
+        agent_type: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<Arc<dyn Agent>> {
+        if let Some(entry) = self.read_agents().values().find(|entry| {
+            entry.source != types::AgentSource::External
+                && entry.agent.id().eq_ignore_ascii_case(agent_type)
+        }) {
+            return Some(entry.agent.clone());
+        }
+        workspace_root
+            .and_then(|root| {
+                self.read_project_subagents()
+                    .get(root)?
+                    .values()
+                    .find(|entry| {
+                        entry.source != types::AgentSource::External
+                            && entry.agent.id().eq_ignore_ascii_case(agent_type)
+                    })
+                    .cloned()
+            })
+            .map(|entry| entry.agent)
+    }
+
     /// Check if an agent exists
     pub fn check_agent_exists(&self, agent_type: &str) -> bool {
         self.external_subagents.has_generation(agent_type)

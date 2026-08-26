@@ -367,6 +367,7 @@ enum CliAgentRuntimeBackend {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliAgentMode {
     pub(crate) id: String,
+    pub(crate) route_key: String,
     pub(crate) description: String,
     pub(crate) model_id: Option<String>,
     pub(crate) is_external: bool,
@@ -444,24 +445,38 @@ impl CliAgentRuntimeClient {
     /// consults the controller process's local registry.
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<CliAgentMode>> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(runtime) => runtime
-                .list_agent_modes(AgentModeCatalogQuery {
-                    workspace_root: Some(self.workspace_path_string()),
-                    include_external: true,
-                })
-                .await
-                .map(|modes| {
-                    modes
-                        .into_iter()
-                        .map(|mode| CliAgentMode {
-                            id: mode.id,
-                            description: mode.description,
-                            model_id: mode.model_id,
-                            is_external: mode.is_external,
-                        })
-                        .collect()
-                })
-                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Embedded(_) => {
+                let binding = self.current_workspace_binding();
+                if let Err(error) = self.ensure_embedded_plugin_workspace_ready(&binding).await {
+                    tracing::warn!(
+                        "Configured plugin activation failed while loading agent modes; continuing with native agents: {}",
+                        error
+                    );
+                }
+                let workspace = PathBuf::from(&binding.workspace_path);
+                if let Err(error) =
+                    bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
+                        &workspace,
+                    ))
+                    .await
+                {
+                    tracing::warn!("Failed to initialize external agent sources: {error}");
+                }
+                let registry = bitfun_core::agentic::agents::get_agent_registry();
+                Ok(registry
+                    .get_modes_info_for_workspace(Some(&workspace), true)
+                    .await
+                    .into_iter()
+                    .map(|mode| CliAgentMode {
+                        id: mode.id,
+                        route_key: mode.key,
+                        description: mode.description,
+                        model_id: mode.model,
+                        is_external: mode.source
+                            == bitfun_core::agentic::agents::AgentSource::External,
+                    })
+                    .collect())
+            }
             CliAgentRuntimeBackend::Shared(client) => {
                 let session_id = self.session_id.lock().await.clone();
                 match client
@@ -472,6 +487,7 @@ impl CliAgentRuntimeClient {
                         .into_iter()
                         .map(|mode| CliAgentMode {
                             id: mode.id,
+                            route_key: mode.route_key,
                             description: mode.description,
                             model_id: mode.model_id,
                             is_external: mode.is_external,
@@ -602,15 +618,33 @@ impl CliAgentRuntimeClient {
             .apply_binding(binding);
     }
 
+    fn current_workspace_binding(&self) -> AgentSessionWorkspaceBinding {
+        let paths = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let execution = paths.execution();
+        let project = paths.project();
+        AgentSessionWorkspaceBinding {
+            workspace_id: None,
+            workspace_path: execution.to_string_lossy().to_string(),
+            project_workspace_path: Some(project.to_string_lossy().to_string()),
+            execution_target: paths.execution_target.clone().or_else(|| {
+                Some(SessionExecutionTarget::local(
+                    execution.to_string_lossy().to_string(),
+                ))
+            }),
+            remote_connection_id: paths.remote_connection_id.clone(),
+            remote_ssh_host: paths.remote_ssh_host.clone(),
+        }
+    }
+
     pub(crate) fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
         let paths = self
             .workspace_paths
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        (
-            paths.remote_connection_id.clone(),
-            paths.remote_ssh_host.clone(),
-        )
+        (paths.remote_connection_id.clone(), paths.remote_ssh_host.clone())
     }
 
     pub(crate) fn is_remote_workspace(&self) -> bool {
@@ -1066,9 +1100,20 @@ impl CliAgentRuntimeClient {
         session_id: &str,
         mode_id: &str,
     ) -> std::result::Result<(), SessionOperationError> {
+        self.update_session_mode_with_route(session_id, mode_id, None)
+            .await
+    }
+
+    pub(crate) async fn update_session_mode_with_route(
+        &self,
+        session_id: &str,
+        mode_id: &str,
+        route_key: Option<&str>,
+    ) -> std::result::Result<(), SessionOperationError> {
         let request = AgentSessionModeUpdateRequest {
             session_id: session_id.to_string(),
             mode_id: mode_id.to_string(),
+            agent_route_key: route_key.map(str::to_string),
         };
         match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => runtime
@@ -1351,6 +1396,7 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name,
                     agent_type: effective_agent_type,
+                    agent_route_key: None,
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     project_workspace_path: Some(project_workspace.to_string_lossy().to_string()),
                     execution_target: self.execution_target(),
@@ -1424,6 +1470,7 @@ impl CliAgentRuntimeClient {
                 AgentSessionCreateRequest {
                     session_name: Self::build_default_session_name(),
                     agent_type: agent_type.to_string(),
+                    agent_route_key: None,
                     workspace_path: Some(workspace_path),
                     project_workspace_path: Some(project_workspace_path),
                     execution_target: self.execution_target(),
@@ -1468,6 +1515,7 @@ impl CliAgentRuntimeClient {
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
+            agent_route_key: None,
             workspace_path: Some(self.workspace_path_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -1915,6 +1963,7 @@ impl CliAgentRuntimeClient {
         let request = AgentSessionCreateRequest {
             session_name: Self::build_default_session_name(),
             agent_type: agent_type.to_string(),
+            agent_route_key: None,
             workspace_path: Some(project_workspace_path.clone()),
             project_workspace_path: Some(project_workspace_path.clone()),
             execution_target: Some(SessionExecutionTarget::local(project_workspace_path)),
@@ -2853,12 +2902,14 @@ mod dual_backend_behavior_tests {
         vec![
             AgentModeCatalogEntry {
                 id: "agentic".to_string(),
+                route_key: "agentic".to_string(),
                 description: "Primary workspace agent".to_string(),
                 model_id: Some("primary-model".to_string()),
                 is_external: false,
             },
             AgentModeCatalogEntry {
                 id: "workspace-plan".to_string(),
+                route_key: "external::workspace-plan".to_string(),
                 description: "Workspace plan agent".to_string(),
                 model_id: Some("plan-model".to_string()),
                 is_external: true,
@@ -3611,6 +3662,7 @@ mod dual_backend_behavior_tests {
         let create_request = AgentSessionCreateRequest {
             session_name: "remote-unsupported-session".to_string(),
             agent_type: "agentic".to_string(),
+            agent_route_key: None,
             workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             project_workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             execution_target: Some(SessionExecutionTarget::local(

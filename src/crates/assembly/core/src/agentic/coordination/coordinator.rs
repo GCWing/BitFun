@@ -1259,6 +1259,7 @@ pub struct ConversationCoordinator {
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
+    hook_registry: bitfun_agent_runtime::native_hooks::RuntimeHookRegistry,
 }
 
 impl ConversationCoordinator {
@@ -1622,16 +1623,18 @@ impl ConversationCoordinator {
         workspace_root: Option<&Path>,
         external_sources_supported: bool,
         expected_owner: Option<SessionAgentRouteOwner>,
+        expected_route_key: Option<&str>,
     ) -> BitFunResult<crate::agentic::agents::ExternalPrimaryAgentTurnBinding> {
         let external_sources_supported =
             cfg!(feature = "external-sources") && external_sources_supported;
         let registry = get_agent_registry();
         registry.load_custom_agents(workspace_root).await;
-        let local_binding = registry.resolve_primary_agent_for_turn(
+        let local_binding = registry.resolve_primary_agent_for_turn_with_route(
             agent_type,
             workspace_root,
             false,
             expected_owner,
+            expected_route_key,
         );
 
         if !external_sources_supported {
@@ -1644,11 +1647,12 @@ impl ConversationCoordinator {
         if let Err(error) =
             crate::external_sources::ensure_external_source_workspace_snapshot(workspace_root).await
         {
-            if let Some(external_binding) = registry.resolve_primary_agent_for_turn(
+            if let Some(external_binding) = registry.resolve_primary_agent_for_turn_with_route(
                 agent_type,
                 workspace_root,
                 true,
                 expected_owner,
+                expected_route_key,
             ) {
                 warn!(
                     "External agent source discovery failed; continuing with the existing resolved route: agent_type={}, route_owner={:?}, error_category={}",
@@ -1679,11 +1683,12 @@ impl ConversationCoordinator {
         }
 
         registry
-            .resolve_primary_agent_for_turn(
+            .resolve_primary_agent_for_turn_with_route(
                 agent_type,
                 workspace_root,
                 true,
                 expected_owner,
+                expected_route_key,
             )
             .ok_or_else(|| {
                 if expected_owner == Some(SessionAgentRouteOwner::External)
@@ -1711,11 +1716,16 @@ impl ConversationCoordinator {
         let expected_owner = agent_type
             .eq_ignore_ascii_case(&session.agent_type)
             .then_some(session.config.agent_route_owner);
+        let expected_route_key = agent_type
+            .eq_ignore_ascii_case(&session.agent_type)
+            .then(|| session.config.agent_route_key.as_deref())
+            .flatten();
         Self::resolve_primary_agent_for_workspace(
             agent_type,
             workspace_root,
             external_sources_supported,
             expected_owner,
+            expected_route_key,
         )
         .await
     }
@@ -2313,7 +2323,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
+            hook_registry: crate::native_hooks::new_runtime_hook_registry(),
         }
+    }
+
+    pub(crate) fn hook_registry(&self) -> &bitfun_agent_runtime::native_hooks::RuntimeHookRegistry {
+        &self.hook_registry
     }
 
     fn ensure_runtime_ownership(
@@ -2671,6 +2686,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )?;
         config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
         let agent_type = Self::normalize_agent_type(&agent_type);
+        let expected_route_key = config.agent_route_key.clone();
         let workspace_binding = Self::build_workspace_binding(&config).await;
         let external_workspace_root =
             crate::agentic::workspace::session_execution_workspace_root(&config);
@@ -2682,9 +2698,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             external_workspace_root,
             external_sources_supported,
             None,
+            expected_route_key.as_deref(),
         )
         .await?;
         config.agent_route_owner = primary_agent_binding.route_owner;
+        config.agent_route_key = primary_agent_binding.route_key.clone();
         apply_primary_agent_model_default(
             &mut config,
             primary_agent_binding.model_binding.as_ref(),
@@ -4158,6 +4176,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
             let primary_runtime_agent_key = primary_agent_binding.runtime_agent_key.clone();
             let primary_route_owner = primary_agent_binding.route_owner;
+            let primary_route_key = primary_agent_binding.route_key.clone();
             let primary_agent_generation_lease = primary_agent_binding.lease;
 
             let binding = get_agent_registry()
@@ -4186,12 +4205,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await?;
             if session.agent_type != effective_agent_type
                 || session.config.agent_route_owner != primary_route_owner
+                || session.config.agent_route_key != primary_route_key
             {
                 self.session_manager
                     .update_session_agent_binding(
                         &session_id,
                         &effective_agent_type,
                         primary_route_owner,
+                        primary_route_key,
                     )
                     .await?;
             }
@@ -5834,6 +5855,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )
         .await?;
         let runtime_agent_type = primary_agent_binding.runtime_agent_key.clone();
+        let primary_route_key = primary_agent_binding.route_key.clone();
         let external_agent_generation_lease = primary_agent_binding.lease;
 
         // Resolve Swarm lineage before creating or mutating any turn state. A
@@ -5876,12 +5898,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         if session.agent_type != effective_agent_type
             || session.config.agent_route_owner != primary_agent_binding.route_owner
+            || session.config.agent_route_key != primary_route_key
         {
             self.session_manager
                 .update_session_agent_binding(
                     &session_id,
                     &effective_agent_type,
                     primary_agent_binding.route_owner,
+                    primary_route_key,
                 )
                 .await?;
         }
@@ -12522,6 +12546,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     pub async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> BitFunResult<()> {
+        self.update_session_mode_with_route(session_id, mode_id, None)
+            .await
+    }
+
+    async fn update_session_mode_with_route(
+        &self,
+        session_id: &str,
+        mode_id: &str,
+        expected_route_key: Option<&str>,
+    ) -> BitFunResult<()> {
         self.ensure_session_runtime_ownership(session_id, None)?;
         let mode_id = mode_id.trim();
         if mode_id.is_empty() {
@@ -12545,11 +12579,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_root,
             external_sources_supported,
             None,
+            expected_route_key,
         )
         .await?;
 
         self.session_manager
-            .update_session_agent_binding(session_id, mode_id, binding.route_owner)
+            .update_session_agent_binding(
+                session_id,
+                mode_id,
+                binding.route_owner,
+                binding.route_key,
+            )
             .await
     }
 
@@ -12711,6 +12751,7 @@ async fn create_agent_session_from_runtime_request(
             request.session_name,
             request.agent_type,
             SessionConfig {
+                agent_route_key: request.agent_route_key,
                 workspace_path: Some(workspace_path.clone()),
                 project_workspace_path: request.project_workspace_path,
                 execution_target: request.execution_target,
@@ -13569,9 +13610,13 @@ impl bitfun_runtime_ports::AgentSessionModePort for ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::AgentSessionModeUpdateRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
-        self.update_session_mode(&request.session_id, &request.mode_id)
-            .await
-            .map_err(runtime_port_error_preserving_message)
+        self.update_session_mode_with_route(
+            &request.session_id,
+            &request.mode_id,
+            request.agent_route_key.as_deref(),
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)
     }
 }
 
@@ -15279,6 +15324,7 @@ mod tests {
                 &session_id,
                 &external_agent_id,
                 SessionAgentRouteOwner::External,
+                Some("test:external".to_string()),
             )
             .await
             .expect("persist external route owner");
@@ -15323,6 +15369,7 @@ mod tests {
                 &session_id,
                 &external_agent_id,
                 SessionAgentRouteOwner::External,
+                Some("test:external".to_string()),
             )
             .await
             .expect("persist external route owner");
@@ -15342,7 +15389,12 @@ mod tests {
         assert_eq!(binding.route_owner, SessionAgentRouteOwner::Local);
 
         session_manager
-            .update_session_agent_binding(&session_id, "AGENTIC", SessionAgentRouteOwner::External)
+            .update_session_agent_binding(
+                &session_id,
+                "AGENTIC",
+                SessionAgentRouteOwner::External,
+                Some("test:external".to_string()),
+            )
             .await
             .expect("persist case-variant external route owner");
         let case_variant_session = session_manager
@@ -15919,6 +15971,7 @@ mod tests {
             AgentSessionModeUpdateRequest {
                 session_id: "missing-session".to_string(),
                 mode_id: "agentic".to_string(),
+                agent_route_key: None,
             },
         )
         .await
@@ -15961,6 +16014,7 @@ mod tests {
             AgentSessionModeUpdateRequest {
                 session_id: session.session_id,
                 mode_id: "   ".to_string(),
+                agent_route_key: None,
             },
         )
         .await
@@ -16006,6 +16060,7 @@ mod tests {
             AgentSessionModeUpdateRequest {
                 session_id: session.session_id,
                 mode_id: "__missing_runtime_mode__".to_string(),
+                agent_route_key: None,
             },
         )
         .await
@@ -16056,6 +16111,7 @@ mod tests {
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: session.session_id.clone(),
                 mode_id: " Cowork ".to_string(),
+                agent_route_key: None,
             })
             .await
             .expect("runtime mode port should update the Core owner");
@@ -18410,6 +18466,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18449,6 +18506,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Original".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(workspace.clone()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18555,6 +18613,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Over capacity".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18586,6 +18645,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Fixed worker".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -18620,6 +18680,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Duplicate worker".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,
@@ -19034,6 +19095,7 @@ mod tests {
         let request = |name: &str| AgentSessionCreateRequest {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
+            agent_route_key: None,
             workspace_path: Some(workspace.clone()),
             project_workspace_path: None,
             execution_target: None,
@@ -19167,6 +19229,7 @@ mod tests {
             AgentSessionCreateRequest {
                 session_name: "Invalid worker".to_string(),
                 agent_type: "agentic".to_string(),
+                agent_route_key: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
                 execution_target: None,

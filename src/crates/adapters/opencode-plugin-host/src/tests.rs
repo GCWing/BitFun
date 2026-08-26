@@ -50,7 +50,8 @@ async fn handshake_accepts_matching_token_and_returns_cache_directory() {
                     "token": "test-token",
                     "protocolVersion": 1,
                     "opencodeVersion": "1.17.18",
-                    "maxFrameBytes": DEFAULT_MAX_FRAME_BYTES
+                    "maxFrameBytes": DEFAULT_MAX_FRAME_BYTES,
+                    "capabilities": ["config-contributors-v1", "config-contributions-v2", "generation-fencing-v1", "unknown-v1"]
                 }
             }),
             DEFAULT_MAX_FRAME_BYTES,
@@ -71,7 +72,11 @@ async fn handshake_accepts_matching_token_and_returns_cache_directory() {
         .expect("matching handshake should succeed");
     let response = host.await.expect("fake host task should finish");
 
-    assert_eq!(negotiated, DEFAULT_MAX_FRAME_BYTES);
+    assert_eq!(negotiated.max_frame_bytes, DEFAULT_MAX_FRAME_BYTES);
+    assert!(negotiated.capabilities.supports("config-contributors-v1"));
+    assert!(negotiated.capabilities.supports("config-contributions-v2"));
+    assert!(negotiated.capabilities.supports("generation-fencing-v1"));
+    assert!(!negotiated.capabilities.supports("unknown-v1"));
     assert_eq!(
         response["result"]["cacheDirectory"],
         expected_cache_directory

@@ -39,7 +39,14 @@ export function registerHostMethods(input: {
   register("host.hook.call", async (params) =>
     (await host()).callHook(
       (() => {
-        const value = params as { instanceID: string; hook: string; input: WireValue; output: WireValue }
+        const value = params as {
+          instanceID: string
+          generationKey?: string
+          revision?: string
+          hook: string
+          input: WireValue
+          output: WireValue
+        }
         return { ...value, name: value.hook }
       })(),
     ),

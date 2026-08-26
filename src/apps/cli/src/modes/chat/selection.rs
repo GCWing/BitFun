@@ -455,6 +455,7 @@ impl ChatMode {
 
         let selected = AgentItem {
             id: next.id.clone(),
+            route_key: (!next.route_key.is_empty()).then(|| next.route_key.clone()),
             description: next.description.clone(),
         };
         self.apply_agent_selection(&selected, chat_view, chat_state, rt_handle);
@@ -624,6 +625,7 @@ impl ChatMode {
             .into_iter()
             .map(|m| AgentItem {
                 id: m.id,
+                route_key: (!m.route_key.is_empty()).then_some(m.route_key),
                 description: m.description,
             })
             .collect();
@@ -689,13 +691,18 @@ impl ChatMode {
 
         let session_id = chat_state.core_session_id.clone();
         let mode_id = selected.id.clone();
+        let route_key = selected.route_key.clone();
         let task_mode_id = mode_id.clone();
         let agent = self.agent.clone();
         chat_view.set_status(Some(format!("Switching agent mode to {mode_id}...")));
         let task_session_id = session_id.clone();
         let handle = rt_handle.spawn(async move {
             agent
-                .update_session_mode(&task_session_id, &task_mode_id)
+                .update_session_mode_with_route(
+                    &task_session_id,
+                    &task_mode_id,
+                    route_key.as_deref(),
+                )
                 .await
         });
         self.pending_session_operation = Some(PendingSessionOperation {

@@ -202,9 +202,9 @@ BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 
 
 ### Agent Hooks
 
-- BitFun 实现的是 Codex Hook 契约，因此 <https://learn.chatgpt.com/docs/hooks> 是事件、载荷字段与决策结构的参考来源，不要另起炉灶。[`docs/features/agent-hooks.zh-CN.md`](docs/features/agent-hooks.zh-CN.md)（[English](docs/features/agent-hooks.md)）只覆盖 BitFun 特有部分 —— 文件位置、`app.hooks` 开关和差异表 —— 新增或消除差异时必须同步更新。
+- BitFun 的原生用户 Hooks 实现 Codex Hook 契约，因此 <https://learn.chatgpt.com/docs/hooks> 是其事件、载荷字段与决策结构的参考来源，不要另起炉灶。[`docs/features/agent-hooks.zh-CN.md`](docs/features/agent-hooks.zh-CN.md)（[English](docs/features/agent-hooks.md)）只覆盖 BitFun 特有部分 —— 文件位置、`app.hooks` 开关和差异表 —— 新增或消除差异时必须同步更新。
 - 可移植引擎（配置解析、载荷构造、进程执行、决策合并）位于 `bitfun-agent-runtime::native_hooks`。`bitfun-core::native_hooks` 负责配置发现、开关门控和按事件的分发辅助函数；各分发点调用这些辅助函数，不要就地执行 Hook。
-- 有三类不同的东西共用 "hook" 一词：本文所述的原生用户 Hooks、内部编译期 `post_call_hooks`，以及其他 AI 应用的只读外部 Hook 目录（`external_hooks`）。三者必须保持区分。
+- 可执行 Hooks 可以来自原生用户配置、生态插件或 BitFun 内置实现（包括当前编译期 `post_call_hooks`）。这些来源保持各自的信任、配置、契约和执行策略语义，但可以统一注册到共享的 `HookRegistry`，并由 `AgentHookEngine` 调度。其他 AI 应用的外部 Hook 目录（`external_hooks`）仍只用于只读发现，不得进入可执行 Registry。
 
 ## 架构
 

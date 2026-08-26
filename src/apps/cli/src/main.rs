@@ -52,7 +52,7 @@ use modes::chat::ChatMode;
 use modes::exec::{ExecApprovalMode, ExecOutputFormat};
 
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
 
 // ======================== Global MCP Service ========================
 
@@ -1909,8 +1909,8 @@ mod bootstrap_profile_tests {
     #[test]
     fn profiles_start_only_their_requested_background_services() {
         let cases = [
-            (BootstrapProfile::Interactive, true, true, false),
-            (BootstrapProfile::Execution, false, true, false),
+            (BootstrapProfile::Interactive, true, true, true),
+            (BootstrapProfile::Execution, false, true, true),
             (BootstrapProfile::Management, false, false, false),
         ];
 

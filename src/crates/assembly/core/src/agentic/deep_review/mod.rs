@@ -14,4 +14,3 @@ pub mod capabilities;
 pub mod report;
 pub mod scope;
 pub mod task_adapter;
-pub mod tool_measurement;

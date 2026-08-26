@@ -504,6 +504,14 @@
           "type": "string",
           "minLength": 1
         },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
         "project": {
           "$ref": "#/$defs/HostInstanceOpenParams/$defs/__schema0"
         },
@@ -605,6 +613,14 @@
           "type": "string",
           "minLength": 1
         },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
         "config": {
           "type": "object",
           "propertyNames": {
@@ -612,6 +628,110 @@
           },
           "additionalProperties": {
             "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+          }
+        },
+        "configContributors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "spec": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entry": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "spec",
+                  "entry",
+                  "index"
+                ],
+                "additionalProperties": false
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "applied",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "plugin",
+              "outcome"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "configContributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "spec": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entry": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "spec",
+                  "entry",
+                  "index"
+                ],
+                "additionalProperties": false
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "applied",
+                  "failed"
+                ]
+              },
+              "config": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/HostInstanceOpenResult/$defs/__schema0"
+                }
+              }
+            },
+            "required": [
+              "plugin",
+              "outcome",
+              "config"
+            ],
+            "additionalProperties": false
           }
         },
         "diagnostics": {
@@ -925,6 +1045,8 @@
       "required": [
         "instanceID",
         "config",
+        "configContributors",
+        "configContributions",
         "diagnostics",
         "hooks",
         "tools",
@@ -1057,6 +1179,14 @@
           "type": "string",
           "minLength": 1
         },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
         "hook": {
           "type": "string",
           "minLength": 1
@@ -1112,6 +1242,22 @@
     "HostHookCallResult": {
       "type": "object",
       "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hook": {
+          "type": "string",
+          "minLength": 1
+        },
         "input": {
           "$ref": "#/$defs/HostHookCallResult/$defs/__schema0"
         },
@@ -1120,6 +1266,7 @@
         }
       },
       "required": [
+        "hook",
         "input",
         "output"
       ],
@@ -1228,6 +1375,14 @@
           "type": "string",
           "minLength": 1
         },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
         "executionID": {
           "type": "string",
           "minLength": 1
@@ -1306,62 +1461,88 @@
       }
     },
     "HostToolExecuteResult": {
-      "anyOf": [
-        {
-          "type": "string"
+      "type": "object",
+      "properties": {
+        "instanceID": {
+          "type": "string",
+          "minLength": 1
         },
-        {
-          "type": "object",
-          "properties": {
-            "title": {
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executionID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "anyOf": [
+            {
               "type": "string"
             },
-            "output": {
-              "type": "string"
-            },
-            "metadata": {
+            {
               "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/HostToolExecuteResult/$defs/__schema0"
-              }
-            },
-            "attachments": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "const": "file"
-                  },
-                  "mime": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "output": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "propertyNames": {
                     "type": "string"
                   },
-                  "url": {
-                    "type": "string"
-                  },
-                  "filename": {
-                    "type": "string"
+                  "additionalProperties": {
+                    "$ref": "#/$defs/HostToolExecuteResult/$defs/__schema0"
                   }
                 },
-                "required": [
-                  "type",
-                  "mime",
-                  "url"
-                ],
-                "additionalProperties": false
-              }
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "file"
+                      },
+                      "mime": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "filename": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "mime",
+                      "url"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "output"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "output"
-          ],
-          "additionalProperties": false
+          ]
         }
+      },
+      "required": [
+        "executionID",
+        "result"
       ],
+      "additionalProperties": false,
       "$defs": {
         "__schema0": {
           "anyOf": [
@@ -1400,6 +1581,14 @@
       "type": "object",
       "properties": {
         "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
           "type": "string",
           "minLength": 1
         },
@@ -2669,6 +2858,13 @@
           "type": "integer",
           "minimum": 65536,
           "maximum": 67108864
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "required": [
@@ -2693,6 +2889,13 @@
         },
         "cacheDirectory": {
           "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "required": [
@@ -2883,6 +3086,14 @@
           "type": "string",
           "minLength": 1
         },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
         "executionID": {
           "type": "string",
           "minLength": 1
@@ -2964,6 +3175,14 @@
       "type": "object",
       "properties": {
         "instanceID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
           "type": "string",
           "minLength": 1
         },

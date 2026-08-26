@@ -1814,6 +1814,7 @@ impl AgentRuntime {
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
+                        agent_route_key: None,
                         workspace_path,
                         project_workspace_path: None,
                         execution_target: None,

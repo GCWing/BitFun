@@ -16,21 +16,30 @@
 //! - the external hook catalog (`bitfun-product-domains`): read-only
 //!   inspection of other AI applications' hook configuration.
 
-#[cfg(feature = "native-hook-runtime")]
+mod call;
 mod engine;
-#[cfg(feature = "native-hook-runtime")]
+mod handler;
+mod kind;
 mod output;
-#[cfg(feature = "native-hook-runtime")]
 mod payload;
+mod registry;
 mod settings;
 
-#[cfg(feature = "native-hook-runtime")]
-pub use engine::{AgentHookEngine, MAX_HOOK_MODEL_OUTPUT_BYTES};
-#[cfg(feature = "native-hook-runtime")]
+pub use call::{HookCall, HookCallPayload};
+pub use engine::{AgentHookEngine, PluginHookDispatchResult, MAX_HOOK_MODEL_OUTPUT_BYTES};
+pub use handler::{
+    BuiltinHookExecutor, HookHandler, HookHandlerResult, PluginHookCall, PluginHookExecutor,
+    PluginHookGenerationIdentity, PluginHookResult, RuntimeHookRegistration,
+};
+pub use kind::{RuntimeHookKind, RuntimeHookSource};
 pub use output::{AgentHookOutcome, AgentHookPermissionOutcome};
-#[cfg(feature = "native-hook-runtime")]
 pub use payload::{
     AgentHookEventPayload, AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode,
+};
+pub use registry::{
+    RuntimeHookActivation, RuntimeHookCommitToken, RuntimeHookErrorPolicy, RuntimeHookPlan,
+    RuntimeHookRegistry, RuntimeHookRegistryBuildError, RuntimeHookRegistryBuilder,
+    RuntimeHookRegistryError,
 };
 pub use settings::{
     AgentHookEvent, AgentHookHandler, AgentHookMatcher, AgentHookRule, AgentHookScope,

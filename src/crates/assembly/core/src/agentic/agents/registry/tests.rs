@@ -1363,6 +1363,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_v1.to_string(),
             logical_id: "Explore".to_string(),
+            route_key: "opencode:test:explore".to_string(),
             ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::Fixed {
@@ -1486,6 +1487,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_v2.to_string(),
             logical_id: "Explore".to_string(),
+            route_key: "opencode:test:explore".to_string(),
             ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::Fixed {
@@ -1549,6 +1551,7 @@ async fn external_routes_use_one_canonical_workspace_identity_for_all_operations
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_key.to_string(),
             logical_id: "canonical-profile".to_string(),
+            route_key: "opencode:test:canonical-profile".to_string(),
             ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::InheritParent,
@@ -1572,6 +1575,17 @@ async fn external_routes_use_one_canonical_workspace_identity_for_all_operations
         .expect("alias path should resolve the installed external generation");
     assert_eq!(binding.runtime_agent_key, runtime_key);
     drop(binding);
+    let routed_entry = registry
+        .find_external_route_entry("canonical-profile", &workspace_alias)
+        .expect("model lookup should resolve the logical id through the external route");
+    assert_eq!(routed_entry.agent.id(), runtime_key);
+    assert_eq!(
+        registry
+            .get_model_id_for_agent("canonical-profile", Some(&workspace_alias))
+            .await
+            .expect("external logical id should resolve a model fallback"),
+        default_model_id_for_builtin_agent("canonical-profile").to_string()
+    );
     assert!(registry
         .get_modes_info_for_workspace(Some(&workspace_alias), true)
         .await
@@ -1616,6 +1630,7 @@ async fn external_agent_role_controls_main_and_task_projection() {
     let registration = |runtime_key: &str, mode| ExternalSubagentRegistration {
         runtime_key: runtime_key.to_string(),
         logical_id: logical_id.to_string(),
+        route_key: format!("opencode:test:{logical_id}"),
         ecosystem_id: EcosystemId::new("opencode").unwrap(),
         provider_label: "OpenCode".to_string(),
         model_binding: super::ExternalSubagentModelBinding::InheritParent,
@@ -1701,6 +1716,7 @@ fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_key.to_string(),
             logical_id: logical_id.to_string(),
+            route_key: format!("opencode:test:{logical_id}"),
             ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::InheritParent,
@@ -1745,6 +1761,240 @@ fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
 }
 
 #[test]
+fn validated_generation_replacement_restores_same_name_local_agent() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/plugin-agent-removed");
+    let logical_id = "agentic";
+    let runtime_key = "external::agentic::generation-1";
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![ExternalSubagentRegistration {
+            runtime_key: runtime_key.to_string(),
+            logical_id: logical_id.to_string(),
+            route_key: format!("opencode:test:{logical_id}"),
+            ecosystem_id: EcosystemId::new("opencode").unwrap(),
+            provider_label: "OpenCode".to_string(),
+            model_binding: super::ExternalSubagentModelBinding::InheritParent,
+            hidden: false,
+            mode: ExternalSubagentMode::Primary,
+            agent: Arc::new(TestAgent {
+                id: runtime_key.to_string(),
+            }),
+        }],
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let old_turn = registry
+        .resolve_primary_agent_for_turn(logical_id, Some(&workspace), true, None)
+        .expect("external generation");
+    assert_eq!(old_turn.runtime_agent_key, runtime_key);
+
+    registry.replace_external_subagent_routes(&workspace, Vec::new(), BTreeMap::new());
+
+    let fresh_turn = registry
+        .resolve_primary_agent_for_turn(logical_id, Some(&workspace), true, None)
+        .expect("same-name local agent");
+    assert_eq!(
+        fresh_turn.route_owner,
+        bitfun_core_types::SessionAgentRouteOwner::Local
+    );
+    assert_eq!(fresh_turn.runtime_agent_key, logical_id);
+    assert_eq!(old_turn.runtime_agent_key, runtime_key);
+}
+
+#[test]
+fn route_overlay_overrides_without_replacing_base_external_routes() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/plugin-agent-overlay");
+    let registration = |runtime_key: &str,
+                        logical_id: &str,
+                        provider: &str,
+                        ecosystem: &str|
+     -> ExternalSubagentRegistration {
+        ExternalSubagentRegistration {
+            runtime_key: runtime_key.to_string(),
+            logical_id: logical_id.to_string(),
+            route_key: format!("{ecosystem}:{provider}:{logical_id}"),
+            ecosystem_id: EcosystemId::new(ecosystem).unwrap(),
+            provider_label: provider.to_string(),
+            model_binding: super::ExternalSubagentModelBinding::InheritParent,
+            hidden: false,
+            mode: ExternalSubagentMode::Primary,
+            agent: Arc::new(TestAgent {
+                id: runtime_key.to_string(),
+            }),
+        }
+    };
+    let route = |logical_id: &str, runtime_key: &str| {
+        (
+            logical_id.to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )
+    };
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![
+            registration("external::base-agentic", "agentic", "Base", "claude-code"),
+            registration("external::base-only", "base-only", "Base", "claude-code"),
+        ],
+        [
+            route("agentic", "external::base-agentic"),
+            route("base-only", "external::base-only"),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    registry.replace_external_subagent_route_overlay(
+        &workspace,
+        "opencode-plugin-config",
+        vec![
+            registration("external::plugin-agentic", "agentic", "Plugin", "opencode"),
+            registration("external::plugin-only", "plugin-only", "Plugin", "opencode"),
+        ],
+        [
+            route("agentic", "external::plugin-agentic"),
+            route("plugin-only", "external::plugin-only"),
+        ]
+        .into_iter()
+        .collect(),
+    );
+
+    let plugin_turn = registry
+        .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+        .expect("overlay route");
+    assert_eq!(plugin_turn.runtime_agent_key, "external::plugin-agentic");
+    assert_eq!(
+        registry
+            .resolve_primary_agent_for_turn("base-only", Some(&workspace), true, None)
+            .expect("unrelated base route")
+            .runtime_agent_key,
+        "external::base-only"
+    );
+    assert_eq!(
+        registry
+            .resolve_primary_agent_for_turn("plugin-only", Some(&workspace), true, None)
+            .expect("plugin-only overlay route")
+            .runtime_agent_key,
+        "external::plugin-only"
+    );
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![
+            registration(
+                "external::base-agentic-v2",
+                "agentic",
+                "Base v2",
+                "claude-code",
+            ),
+            registration("external::base-only", "base-only", "Base", "claude-code"),
+        ],
+        [
+            route("agentic", "external::base-agentic-v2"),
+            route("base-only", "external::base-only"),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    assert_eq!(
+        registry
+            .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+            .expect("overlay still wins after base refresh")
+            .runtime_agent_key,
+        "external::plugin-agentic"
+    );
+
+    registry.release_external_subagent_route_overlay(&workspace, "opencode-plugin-config");
+
+    assert_eq!(
+        registry
+            .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+            .expect("latest base route restored")
+            .runtime_agent_key,
+        "external::base-agentic-v2"
+    );
+    assert_eq!(
+        registry
+            .resolve_primary_agent_for_turn("base-only", Some(&workspace), true, None)
+            .expect("base route retained")
+            .runtime_agent_key,
+        "external::base-only"
+    );
+    assert!(registry
+        .resolve_primary_agent_for_turn("plugin-only", Some(&workspace), true, None)
+        .is_none());
+    assert!(registry.check_agent_exists("external::plugin-agentic"));
+    drop(plugin_turn);
+    assert!(!registry.check_agent_exists("external::plugin-agentic"));
+}
+
+#[test]
+fn persisted_route_key_rejects_same_name_external_provider_takeover() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/plugin-agent-takeover");
+    let logical_id = "agentic";
+    let registration = |runtime_key: &str, route_key: &str| ExternalSubagentRegistration {
+        runtime_key: runtime_key.to_string(),
+        logical_id: logical_id.to_string(),
+        route_key: route_key.to_string(),
+        ecosystem_id: EcosystemId::new("opencode").unwrap(),
+        provider_label: "OpenCode".to_string(),
+        model_binding: super::ExternalSubagentModelBinding::InheritParent,
+        hidden: false,
+        mode: ExternalSubagentMode::Primary,
+        agent: Arc::new(TestAgent {
+            id: runtime_key.to_string(),
+        }),
+    };
+    registry.replace_external_subagent_routes(
+        &workspace,
+        vec![registration("external::one", "opencode:plugin-one:agentic")],
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External("external::one".to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let binding = registry
+        .resolve_primary_agent_for_turn_with_route(
+            logical_id,
+            Some(&workspace),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+            Some("opencode:plugin-one:agentic"),
+        )
+        .expect("original route");
+    drop(binding);
+
+    registry.replace_external_subagent_routes(
+        &workspace,
+        vec![registration("external::two", "opencode:plugin-two:agentic")],
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External("external::two".to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    assert!(registry
+        .resolve_primary_agent_for_turn_with_route(
+            logical_id,
+            Some(&workspace),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+            Some("opencode:plugin-one:agentic"),
+        )
+        .is_none());
+}
+
+#[test]
 fn external_primary_route_follows_the_session_execution_worktree() {
     let registry = AgentRegistry::new();
     let project = PathBuf::from("D:/workspace/project");
@@ -1753,6 +2003,7 @@ fn external_primary_route_follows_the_session_execution_worktree() {
     let registration = |runtime_key: &str| ExternalSubagentRegistration {
         runtime_key: runtime_key.to_string(),
         logical_id: logical_id.to_string(),
+        route_key: format!("opencode:test:{logical_id}"),
         ecosystem_id: EcosystemId::new("opencode").unwrap(),
         provider_label: "OpenCode".to_string(),
         model_binding: super::ExternalSubagentModelBinding::InheritParent,

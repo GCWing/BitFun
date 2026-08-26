@@ -40,7 +40,7 @@ Rust backend <====== framed bidirectional JSON-RPC ==+
 
 Control traffic uses JSON-RPC 2.0 messages framed by a four-byte big-endian length. Requests can travel in either direction and may be reentrant; plugin stdout and stderr are never used as protocol channels. HTTP and fetch bodies use pull-based stream handles so the receiver controls backpressure instead of embedding unbounded bodies in JSON.
 
-Each `host.instance.open` call creates one logical plugin instance and one HTTP gateway. The host resolves and imports retained plugin declarations concurrently, executes successful entrypoints in declaration order, runs their config hooks, and returns the resulting registrations. Operational hook calls are ordered within one invocation, but unrelated invocations and unrelated instances may overlap.
+Each `host.instance.open` call creates one logical plugin instance and one HTTP gateway. The host resolves and imports retained plugin declarations concurrently, executes successful entrypoints in declaration order, runs their config hooks, and returns the resulting registrations. The open result includes ordered cumulative Config snapshots so Rust can attribute Agent, permission, and Skill changes across multiple Config hooks without re-executing plugin code. Operational hook calls are ordered within one invocation, but unrelated invocations and unrelated instances may overlap.
 
 Closing an instance rejects new work, cancels active tools and fetches, closes its gateway, and invokes every registered disposer once. Losing the RPC connection applies the same cleanup to all instances and terminates the host. Rust is responsible for restarting the process and deciding whether any application work should be retried.
 

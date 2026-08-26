@@ -123,6 +123,8 @@ type ActiveAuthFetch = {
 
 type Instance = {
   id: string
+  generationKey?: string
+  revision?: string
   canonicalDirectory: string
   directory: string
   worktree: string
@@ -146,6 +148,8 @@ type Instance = {
 
 export type InstanceOpenInput = {
   instanceID: string
+  generationKey?: string
+  revision?: string
   project: WireValue
   directory: string
   worktree: string
@@ -260,6 +264,8 @@ export class ExtensionHost {
       const opened = Promise.withResolvers<void>()
       const instance: Instance = {
         id: input.instanceID,
+        generationKey: input.generationKey,
+        revision: input.revision,
         canonicalDirectory,
         directory: input.directory,
         worktree: input.worktree,
@@ -315,14 +321,41 @@ export class ExtensionHost {
           diagnostic_count: diagnostics.length,
         })
 
+        const configContributions: Array<{
+          plugin: PluginMeta
+          outcome: "applied" | "failed"
+          config: WireValue
+        }> = []
         for (const retained of instance.hooks) {
           this.#assertOpening(instance)
           if (!retained.hooks.config) continue
+          logEvent("plugin.activation.config_hook.begin", {
+            instance_id: instance.id,
+            plugin: retained.plugin.spec,
+          }, "debug")
           try {
             await Promise.resolve(retained.hooks.config(config as never))
+            configContributions.push({
+              plugin: retained.plugin,
+              outcome: "applied",
+              config: cloneWireValue(config, "configContribution.config"),
+            })
+            logEvent("plugin.activation.config_hook.complete", {
+              instance_id: instance.id,
+              plugin: retained.plugin.spec,
+            }, "debug")
           } catch (error) {
             const diagnostic = runtimeDiagnostic(retained.plugin, "config", error)
             diagnostics.push(diagnostic)
+            configContributions.push({
+              plugin: retained.plugin,
+              outcome: "failed",
+              config: cloneWireValue(config, "configContribution.config"),
+            })
+            logError("plugin.activation.config_hook.failed", error, {
+              instance_id: instance.id,
+              plugin: retained.plugin.spec,
+            })
             await publishDiagnostic(this.#rpc, toPublishedDiagnostic(instance.id, diagnostic)).catch(() => {})
           }
           this.#assertOpening(instance)
@@ -331,7 +364,16 @@ export class ExtensionHost {
         this.#assertOpening(instance)
         this.#indexRegistrations(instance, diagnostics)
         this.#assertOpening(instance)
-        const result = HostMethodSchemas["host.instance.open"].result.parse(openResult(instance, config, diagnostics))
+        const result = HostMethodSchemas["host.instance.open"].result.parse(
+          openResult(instance, config, diagnostics, configContributions),
+        )
+        logEvent("plugin.activation.registrations", {
+          instance_id: instance.id,
+          hook_count: result.hooks.length,
+          config_hook_count: instance.hooks.filter(({ hooks }) => typeof hooks.config === "function").length,
+          tool_count: result.tools.length,
+          diagnostic_count: result.diagnostics.length,
+        })
         instance.status = "open"
         return result
       } catch (error) {
@@ -446,8 +488,16 @@ export class ExtensionHost {
     return operation
   }
 
-  async callHook(input: { instanceID: string; name: string; input: WireValue; output: WireValue }) {
+  async callHook(input: {
+    instanceID: string
+    generationKey?: string
+    revision?: string
+    name: string
+    input: WireValue
+    output: WireValue
+  }) {
     const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
     const hookInput = cloneWireValue(input.input, "input")
     const hookOutput = cloneWireValue(input.output, "output")
 
@@ -462,6 +512,10 @@ export class ExtensionHost {
     }
 
     return {
+      instanceID: instance.id,
+      generationKey: instance.generationKey,
+      revision: instance.revision,
+      hook: input.name,
       input: cloneWireValue(hookInput, "input"),
       output: cloneWireValue(hookOutput, "output"),
     }
@@ -492,6 +546,8 @@ export class ExtensionHost {
 
   async executeTool(input: {
     instanceID: string
+    generationKey?: string
+    revision?: string
     registrationID: string
     executionID: string
     args: WireValue
@@ -503,6 +559,7 @@ export class ExtensionHost {
     }
   }) {
     const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
     const registration = findRegistration(instance.tools, input.registrationID)
     if (!registration) throw missingHandle("tool", input.registrationID)
     if (instance.activeTools.has(input.executionID)) {
@@ -521,6 +578,8 @@ export class ExtensionHost {
         metadata: (metadata) => {
           const pending = this.#rpc.notify("backend.tool.metadata", {
             instanceID: instance.id,
+            generationKey: instance.generationKey,
+            revision: instance.revision,
             executionID: input.executionID,
             ...(cloneWireValue(metadata, "metadata") as Record<string, WireValue>),
           })
@@ -531,6 +590,8 @@ export class ExtensionHost {
             "backend.tool.ask",
             {
               instanceID: instance.id,
+              generationKey: instance.generationKey,
+              revision: instance.revision,
               executionID: input.executionID,
               ...(cloneWireValue(request, "request") as Record<string, WireValue>),
             },
@@ -538,7 +599,13 @@ export class ExtensionHost {
           )
         },
       })
-      return cloneWireValue(result, "result")
+      return {
+        instanceID: instance.id,
+        generationKey: instance.generationKey,
+        revision: instance.revision,
+        executionID: input.executionID,
+        result: cloneWireValue(result, "result"),
+      }
     } catch (error) {
       throw pluginError(registration.plugin, `tool:${registration.id}`, error)
     } finally {
@@ -546,8 +613,10 @@ export class ExtensionHost {
     }
   }
 
-  cancelTool(input: { instanceID: string; executionID: string; reason?: string }) {
-    const controller = this.#instance(input.instanceID).activeTools.get(input.executionID)
+  cancelTool(input: { instanceID: string; generationKey?: string; revision?: string; executionID: string; reason?: string }) {
+    const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
+    const controller = instance.activeTools.get(input.executionID)
     if (!controller) return { cancelled: false }
     controller.abort(input.reason)
     return { cancelled: true }
@@ -823,7 +892,10 @@ export class ExtensionHost {
   #beginClose(instance: Instance) {
     if (instance.closePromise) return instance.closePromise
     instance.status = "closing"
-    instance.closePromise = this.#disposeInstance(instance)
+    instance.closePromise = (async () => {
+      await instance.openDone
+      await this.#disposeInstance(instance)
+    })()
     return instance.closePromise
   }
 
@@ -850,7 +922,6 @@ export class ExtensionHost {
       }).catch(() => {})
     } finally {
       await instance.gateway.close().catch(() => {})
-      await instance.openDone
       instance.flows.clear()
       instance.fetches.clear()
 
@@ -980,10 +1051,23 @@ export class ExtensionHost {
   }
 }
 
-function openResult(instance: Instance, config: WireValue, diagnostics: HostDiagnostic[]) {
+function openResult(
+  instance: Instance,
+  config: WireValue,
+  diagnostics: HostDiagnostic[],
+  configContributions: Array<{
+    plugin: PluginMeta
+    outcome: "applied" | "failed"
+    config: WireValue
+  }>,
+) {
   return {
     instanceID: instance.id,
+    generationKey: instance.generationKey,
+    revision: instance.revision,
     config: cloneWireValue(config, "config"),
+    configContributors: configContributions.map(({ plugin, outcome }) => ({ plugin, outcome })),
+    configContributions,
     diagnostics: diagnostics.map(protocolDiagnostic),
     gatewayURL: instance.gateway.url.toString(),
     hooks: GENERIC_HOOKS.filter((name) =>
@@ -1010,6 +1094,14 @@ function openResult(instance: Instance, config: WireValue, diagnostics: HostDiag
       description: adapter.description,
     })),
   }
+}
+
+function assertGeneration(instance: Instance, generationKey?: string, revision?: string) {
+  if (instance.generationKey === generationKey && instance.revision === revision) return
+  throw new ExtensionHostError(-32002, `Generation lease does not match instance ${instance.id}`, {
+    kind: "generation_mismatch",
+    instanceID: instance.id,
+  })
 }
 
 function authDescriptor(provider: string, registration: AuthRegistration) {

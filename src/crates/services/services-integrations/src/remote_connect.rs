@@ -126,6 +126,7 @@ pub fn build_remote_session_create_request(
     AgentSessionCreateRequest {
         session_name: session_name.into(),
         agent_type: agent_type.into(),
+        agent_route_key: None,
         workspace_path: workspace_path.map(Into::into),
         project_workspace_path: None,
         execution_target: None,

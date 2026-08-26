@@ -1243,10 +1243,41 @@ impl SkillRegistry {
 
     async fn apply_mode_filters_for_workspace(
         &self,
-        candidates: Vec<SkillCandidate>,
+        mut candidates: Vec<SkillCandidate>,
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        #[cfg(feature = "opencode-plugin-host")]
+        {
+            let plugin_roots =
+                crate::plugin_config_projection::skill_roots_for_agent(workspace_root, agent_type)
+                    .into_iter()
+                    .map(|root| {
+                        LocalConfiguredSkillRootContribution {
+                path: root.path,
+                scope:
+                    bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal,
+                precedence: root.precedence,
+            }
+                    })
+                    .collect::<Vec<_>>();
+            if !plugin_roots.is_empty() {
+                let existing_paths = candidates
+                    .iter()
+                    .map(canonical_candidate_path)
+                    .collect::<HashSet<_>>();
+                let mut plugin_candidates =
+                    Self::scan_configured_opencode_candidates(plugin_roots).await;
+                plugin_candidates.retain(|candidate| {
+                    !existing_paths.contains(&canonical_candidate_path(candidate))
+                });
+                candidates = Self::merge_configured_opencode_candidates(
+                    candidates,
+                    plugin_candidates,
+                    workspace_root.is_some(),
+                );
+            }
+        }
         let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
         let candidates =
             Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);

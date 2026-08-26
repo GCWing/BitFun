@@ -660,6 +660,7 @@ Allowed agent types when creating a session:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
+                        agent_route_key: None,
                         workspace_path: Some(workspace_target.workspace_path.clone()),
                         project_workspace_path: Some(
                             workspace_target.project_workspace_path.clone(),

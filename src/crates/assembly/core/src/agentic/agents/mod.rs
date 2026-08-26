@@ -276,6 +276,13 @@ pub trait Agent: Send + Sync + 'static {
         true
     }
 
+    /// Optional model sampling temperature supplied by an external Agent
+    /// definition. The execution owner applies this to a per-turn client
+    /// clone; built-in Agents inherit the configured model temperature.
+    fn model_temperature_override(&self) -> Option<f64> {
+        None
+    }
+
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {
         false
