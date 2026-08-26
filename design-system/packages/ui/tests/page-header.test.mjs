@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Button, PageHeader } from "../dist/index.js";
+
+test("PageHeader decouples heading semantics from visual size", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PageHeader, {
+      description: "Interface language and visual appearance",
+      level: 2,
+      size: "display",
+      title: "Appearance",
+    }),
+  );
+
+  assert.match(markup, /data-bf-component="page-header"/);
+  assert.match(markup, /data-level="2"/);
+  assert.match(markup, /data-size="display"/);
+  assert.match(markup, /<h2[^>]*data-bf-part="heading"[^>]*>Appearance<\/h2>/);
+  assert.match(markup, /data-bf-part="description">Interface language and visual appearance<\/span>/);
+});
+
+test("PageHeader exposes alignment and action content independently", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PageHeader, {
+      action: createElement(Button, null, "Close"),
+      align: "center",
+      title: "Good morning, coding partner",
+    }),
+  );
+
+  assert.match(markup, /data-align="center"/);
+  assert.match(markup, /data-bf-part="action"/);
+  assert.match(markup, /<button/);
+  assert.match(markup, /data-bf-part="action"[^]*>Close<\/span>/);
+});
+
+test("PageHeader styles use shared typography and content tokens", async () => {
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /--bf-font-size-title/);
+  assert.match(styles, /--bf-font-size-display/);
+  assert.match(styles, /--bf-font-family-sans/);
+  assert.match(styles, /--bf-color-content-primary/);
+  assert.match(styles, /--bf-color-content-muted/);
+});

@@ -82,7 +82,9 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   const source = await readFile(detailSource, "utf8");
 
   assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
-  assert.match(source, /component\.name === "Input" \|\| component\.name === "KeyHint" \|\| component\.name === "SearchField"/);
+  assert.match(source, /component\.name === "Input"/);
+  assert.match(source, /component\.name === "KeyHint"/);
+  assert.match(source, /component\.name === "SearchField"/);
   assert.match(source, /trailing=\{<Eye aria-hidden="true" \/>\}/);
   assert.match(source, /leadingIcon=\{<SearchIcon aria-hidden="true" \/>\}/);
   assert.match(source, /shortcut=\{<KeyHint icon=\{<Command aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
@@ -95,6 +97,17 @@ test("Field preview exposes label content independently from layout orientation"
   assert.match(source, /description=\{t\("components\.preview\.fieldDescription"\)\}/);
   assert.match(source, /orientation=\{fieldOrientation\}/);
   assert.match(source, /component\.name === "Field"/);
+});
+
+test("PageHeader preview decouples semantic level from visual size and alignment", async () => {
+  const source = await readFile(detailSource, "utf8");
+
+  assert.match(source, /const pageHeaderAlignments = \["start", "center"\] as const/);
+  assert.match(source, /const pageHeaderSizes = \["sm", "md", "lg", "display"\] as const/);
+  assert.match(source, /level=\{2\}/);
+  assert.match(source, /size=\{pageHeaderSize\}/);
+  assert.match(source, /align=\{pageHeaderAlign\}/);
+  assert.match(source, /action=\{\(/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {

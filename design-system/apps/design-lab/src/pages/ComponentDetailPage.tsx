@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Plus,
   Search as SearchIcon,
+  X,
 } from "lucide-react";
 import {
   ActionItem,
@@ -18,6 +19,7 @@ import {
   IconButton,
   Input,
   KeyHint,
+  PageHeader,
   SearchField,
   Switch,
   TabGroup,
@@ -50,17 +52,23 @@ type PreviewIcon = "chevron" | "none";
 type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
 type FieldOrientation = "horizontal" | "vertical";
+type PageHeaderAlign = "center" | "start";
+type PageHeaderSize = "display" | "lg" | "md" | "sm";
 
 const buttonVariants = ["outline", "fill", "primary", "text"] as const;
 const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
+const pageHeaderAlignments = ["start", "center"] as const;
+const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
   chevron: "detail.option.chevron",
+  center: "detail.option.center",
   default: "detail.option.default",
   disabled: "detail.option.disabled",
+  display: "detail.option.display",
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
@@ -79,6 +87,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
+  start: "detail.option.start",
   text: "detail.option.text",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
@@ -146,6 +155,8 @@ export function ComponentDetailPage({
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [size, setSize] = useState<PreviewSize>("md");
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
+  const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
       ? "off"
@@ -172,6 +183,7 @@ export function ComponentDetailPage({
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
       case "Field":
       case "KeyHint":
+      case "PageHeader":
         return ["default"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
@@ -215,6 +227,9 @@ export function ComponentDetailPage({
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
+    if (component.name === "PageHeader") {
+      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
+    }
     if (component.name === "SearchField") {
       const stateProps = previewState === "disabled"
         ? " disabled"
@@ -239,6 +254,8 @@ export function ComponentDetailPage({
     iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
+    pageHeaderAlign,
+    pageHeaderSize,
     previewIcon,
     previewIconPosition,
     previewState,
@@ -365,6 +382,24 @@ export function ComponentDetailPage({
 
     if (component.name === "KeyHint") {
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "PageHeader") {
+      return (
+        <PageHeader
+          action={(
+            <IconButton
+              aria-label={t("components.preview.close")}
+              icon={<X aria-hidden="true" />}
+            />
+          )}
+          align={pageHeaderAlign}
+          description={t("components.preview.appearanceDescription")}
+          level={2}
+          size={pageHeaderSize}
+          title={t("components.preview.appearance")}
+        />
+      );
     }
 
     if (component.name === "SearchField") {
@@ -522,7 +557,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "SearchField" ? (
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionItem"
@@ -533,6 +568,8 @@ export function ComponentDetailPage({
                       ? "input"
                     : component.name === "KeyHint"
                       ? "key-hint"
+                      : component.name === "PageHeader"
+                        ? "page-header"
                       : "search-field"}
                 >
                   <span className="component-preview-matrix__corner" />
@@ -663,6 +700,22 @@ export function ComponentDetailPage({
                       onChange={(value) => setFieldOrientation(value as FieldOrientation)}
                       options={fieldOrientations}
                       value={fieldOrientation}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setPageHeaderSize(value as PageHeaderSize)}
+                      options={pageHeaderSizes}
+                      value={pageHeaderSize}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorSelect
+                      label={t("detail.alignment")}
+                      onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
+                      options={pageHeaderAlignments}
+                      value={pageHeaderAlign}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

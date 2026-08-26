@@ -3,6 +3,7 @@ import {
   Check,
   Command,
   Eye,
+  Heading,
   Keyboard,
   List,
   Rows3,
@@ -19,6 +20,7 @@ import {
   IconButton,
   Input,
   KeyHint,
+  PageHeader,
   SearchField,
   Stack,
   Switch,
@@ -52,6 +54,7 @@ const componentIcons = {
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
+  PageHeader: Heading,
   SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
@@ -113,6 +116,15 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "KeyHint":
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    case "PageHeader":
+      return (
+        <PageHeader
+          description={t("components.preview.appearanceDescription")}
+          level={2}
+          size="sm"
+          title={t("components.preview.appearance")}
+        />
+      );
     case "SearchField":
       return (
         <SearchField
