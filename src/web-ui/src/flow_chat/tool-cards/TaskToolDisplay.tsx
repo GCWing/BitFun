@@ -111,7 +111,15 @@ function readTaskSessionId(input: unknown, toolResult: FlowToolItem['toolResult'
   return '';
 }
 
-function readTaskAgentId(toolResult: FlowToolItem['toolResult'] | undefined): string {
+function readTaskAgentId(
+  input: unknown,
+  toolResult: FlowToolItem['toolResult'] | undefined,
+): string {
+  if (input && typeof input === 'object') {
+    const data = input as Record<string, unknown>;
+    const inputAgentId = readStringValue(data.agent_id) || readStringValue(data.agentId);
+    if (inputAgentId) return inputAgentId;
+  }
   const result = toolResult?.result;
   if (!result || typeof result !== 'object') return '';
   return readStringValue((result as Record<string, unknown>).agent_id)
@@ -402,7 +410,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
-  const subagentDisplayId = readTaskAgentId(toolResult);
+  const subagentDisplayId = readTaskAgentId(toolCall?.input, toolResult);
   const subagentAvatarStatus = linkedSubagentSession
     ? sessionLineageLifecycleForSession(linkedSubagentSession)
     : 'idle';

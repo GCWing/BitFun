@@ -596,6 +596,51 @@ fn logical_subagent_type_or_runtime(
     logical_subagent_type.unwrap_or(runtime_type).to_string()
 }
 
+fn external_delegation_agent_id(logical_id: &str, invocation_id: &uuid::Uuid) -> String {
+    const AGENT_ID_MAX_LEN: usize = 32;
+    const SUFFIX_LEN: usize = 8;
+    const PREFIX_MAX_LEN: usize = AGENT_ID_MAX_LEN - SUFFIX_LEN - 1;
+
+    let mut prefix = String::new();
+    for character in logical_id.chars() {
+        let character = if character.is_ascii_alphanumeric() {
+            character.to_ascii_lowercase()
+        } else if matches!(character, '_' | '-') {
+            character
+        } else {
+            '-'
+        };
+        if matches!(character, '_' | '-')
+            && prefix
+                .chars()
+                .last()
+                .is_some_and(|last| matches!(last, '_' | '-'))
+        {
+            continue;
+        }
+        prefix.push(character);
+    }
+    let prefix = prefix.trim_matches(|character| matches!(character, '_' | '-'));
+    let mut prefix = if prefix
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_lowercase)
+    {
+        prefix.to_string()
+    } else if prefix.is_empty() {
+        "agent".to_string()
+    } else {
+        format!("agent-{prefix}")
+    };
+    prefix.truncate(PREFIX_MAX_LEN);
+    while prefix.ends_with('_') || prefix.ends_with('-') {
+        prefix.pop();
+    }
+
+    let suffix = invocation_id.simple().to_string();
+    format!("{prefix}-{}", &suffix[..SUFFIX_LEN])
+}
+
 fn fork_subagent_system_reminder() -> String {
     "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
 }
@@ -4207,10 +4252,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 );
             }
             let round_id = format!("{}-round-0", turn_id);
-            let tool_call_id = format!("task_{}", uuid::Uuid::new_v4());
+            let invocation_id = uuid::Uuid::new_v4();
+            let tool_call_id = format!("task_{invocation_id}");
+            let agent_id = external_delegation_agent_id(&logical_id, &invocation_id);
             let tool_params = serde_json::json!({
                 "action": "spawn",
-                "description": format!("Run external command with {logical_id}"),
+                "agent_id": agent_id.clone(),
                 "prompt": prompt,
                 "subagent_type": logical_id,
             });
@@ -4275,7 +4322,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
-                requested_agent_id: None,
+                requested_agent_id: Some(agent_id),
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some(binding.runtime_agent_key),
@@ -11580,6 +11627,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub(crate) async fn agent_id_for_subagent_session_with_requested_id(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+        requested_agent_id: Option<&str>,
+    ) -> BitFunResult<String> {
+        self.background_subagent_outcomes
+            .agent_id_for_session_with_requested_id(
+                parent_session_id,
+                subagent_session_id,
+                requested_agent_id,
+            )
+            .await
+    }
+
     pub(crate) async fn existing_agent_id_for_subagent_session(
         &self,
         parent_session_id: &str,
@@ -14701,7 +14763,8 @@ mod tests {
         append_skill_agent_listing_diff_reminders, apply_primary_agent_model_default,
         btw_session_memory_mode, build_subagent_session_relationship,
         commit_interrupted_turn_intent, delegation_policy_for_agent_turn,
-        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
+        external_delegation_agent_id, lineage_active_turn_after_transcript,
+        lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         permission_mode_from_metadata, resolve_agent_session_create_created_by,
@@ -18115,6 +18178,24 @@ mod tests {
             relationship.continuation_policy,
             Some(SessionContinuationPolicy::FreshOnly)
         );
+    }
+
+    #[test]
+    fn external_delegation_agent_ids_are_semantic_unique_and_valid() {
+        let first = external_delegation_agent_id(
+            "Review Security / Auth",
+            &uuid::Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap(),
+        );
+        let second = external_delegation_agent_id(
+            "Review Security / Auth",
+            &uuid::Uuid::parse_str("87654321-1234-5678-1234-567812345678").unwrap(),
+        );
+
+        assert_eq!(first, "review-security-auth-12345678");
+        assert_eq!(second, "review-security-auth-87654321");
+        assert_ne!(first, second);
+        crate::agentic::coordination::validate_agent_id(&first).unwrap();
+        crate::agentic::coordination::validate_agent_id(&second).unwrap();
     }
 
     #[tokio::test]
