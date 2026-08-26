@@ -3,6 +3,33 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const detailSource = new URL("../src/pages/ComponentDetailPage.tsx", import.meta.url);
+const stylesSource = new URL("../src/styles.css", import.meta.url);
+
+test("every preview matrix declares its state-column count", async () => {
+  const source = await readFile(detailSource, "utf8");
+  const matrices = source.match(/className="component-preview-matrix"/g) ?? [];
+  const stateCounts = source.match(/data-state-count=\{states\.length\}/g) ?? [];
+
+  assert.ok(matrices.length > 0);
+  assert.equal(stateCounts.length, matrices.length);
+});
+
+test("preview matrices define horizontal columns for every registered state count", async () => {
+  const source = await readFile(stylesSource, "utf8");
+
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-state-count="1"\]\s*\{[^}]*grid-template-columns:\s*96px\s+minmax\(240px, 1fr\)/s,
+  );
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-state-count="4"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(124px, 1fr\)\)/s,
+  );
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-state-count="5"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(5, minmax\(144px, 1fr\)\)/s,
+  );
+});
 
 test("Button preview exposes the public presentation variants", async () => {
   const source = await readFile(detailSource, "utf8");

@@ -500,7 +500,11 @@ export function ComponentDetailPage({
               tokenOverrides={tokenOverrides}
             >
               {component.name === "Button" ? (
-                <div className="component-preview-matrix" data-component="button">
+                <div
+                  className="component-preview-matrix"
+                  data-component="button"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -529,7 +533,11 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "IconButton" ? (
-                <div className="component-preview-matrix" data-component="icon-button">
+                <div
+                  className="component-preview-matrix"
+                  data-component="icon-button"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -571,6 +579,7 @@ export function ComponentDetailPage({
                       : component.name === "PageHeader"
                         ? "page-header"
                       : "search-field"}
+                  data-state-count={states.length}
                 >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
@@ -594,7 +603,11 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "TabGroup" ? (
-                <div className="component-preview-matrix" data-component="tab-group">
+                <div
+                  className="component-preview-matrix"
+                  data-component="tab-group"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -617,7 +630,11 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : (
-                <div className="component-preview-matrix" data-component="switch">
+                <div
+                  className="component-preview-matrix"
+                  data-component="switch"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span

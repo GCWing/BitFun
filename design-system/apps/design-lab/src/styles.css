@@ -3150,10 +3150,32 @@ input.lab-force-focus {
   padding: 14px 24px 24px;
 }
 
+.component-preview-matrix[data-state-count="1"] {
+  grid-template-columns: 96px minmax(240px, 1fr);
+  grid-template-rows: 50px minmax(190px, 1fr);
+  min-width: 420px;
+}
+
+.component-preview-matrix[data-state-count="4"] {
+  grid-template-columns: 96px repeat(4, minmax(124px, 1fr));
+  grid-template-rows: 50px minmax(190px, 1fr);
+  min-width: 640px;
+}
+
+.component-preview-matrix[data-state-count="5"] {
+  grid-template-columns: 96px repeat(5, minmax(144px, 1fr));
+  grid-template-rows: 50px minmax(190px, 1fr);
+  min-width: 816px;
+}
+
 .component-preview-matrix[data-component="button"] {
   grid-template-columns: 96px repeat(4, minmax(124px, 1fr));
-  grid-template-rows: 48px repeat(2, 102px);
+  grid-template-rows: 48px repeat(4, 102px);
   min-width: 640px;
+}
+
+.component-preview-matrix[data-component="icon-button"] {
+  grid-template-rows: 48px repeat(3, 102px);
 }
 
 .component-preview-matrix[data-component="switch"] {
