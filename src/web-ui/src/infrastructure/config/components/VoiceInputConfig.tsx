@@ -1,13 +1,11 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Select, Switch, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CloudOff, Download, HardDrive, PhoneCall } from 'lucide-react';
 import {
   Badge,
   Input,
-  Select,
   type BadgeVariant,
-  type SelectOption,
 } from '@/component-library';
 import {
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
@@ -39,9 +37,6 @@ import './VoiceInputConfig.scss';
 
 const log = createLogger('VoiceInputConfig');
 const DEFAULT_LOCAL_VOICE_MODEL_ID = LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID;
-
-const normalizeSelectValue = (value: string | number | (string | number)[]): string =>
-  String(Array.isArray(value) ? (value[0] ?? '') : value);
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -424,9 +419,9 @@ const VoiceInputConfig: React.FC = () => {
           >
             <Select
               value={voiceInput.default_language}
-              onChange={(value) => void updateVoiceInput({ default_language: normalizeSelectValue(value) })}
+              onValueChange={(value) => void updateVoiceInput({ default_language: String(value) })}
               options={languageOptions}
-              size="small"
+              size="sm"
               className="voice-input-config__select"
             />
           </ConfigPageRow>

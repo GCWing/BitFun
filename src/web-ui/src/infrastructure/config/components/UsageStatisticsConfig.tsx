@@ -4,7 +4,6 @@ import {
   ConfigPageLoading,
   ConfigPageMessage,
   ConfigPageRefreshButton,
-  Select,
   Tooltip,
 } from '@/component-library';
 import {
@@ -25,7 +24,7 @@ import {
   ConfigPageSectionStack,
 } from './common';
 import './UsageStatisticsConfig.scss';
-import { IconButton, Input } from '@bitfun/ui';
+import { IconButton, Input, Select } from '@bitfun/ui';
 
 // ---------------------------------------------------------------------------
 // Chart palette — appearance tokens only (literal vars so the theme color
@@ -880,14 +879,14 @@ const UsageStatisticsConfig: React.FC = () => {
                 <span className="bitfun-usage-stats__filter-label">{t('timeRange.label')}</span>
                 <Select
                   className="bitfun-usage-stats__filter-select"
-                  size="small"
+                  size="sm"
                   value={timeRange}
                   options={TIME_RANGE_OPTIONS.map((option) => ({
                     value: option.value,
                     label: t(option.key),
                   }))}
-                  onChange={(value) => setTimeRange(value as UsageTimeRange)}
-                  triggerAriaLabel={t('timeRange.label')}
+                  onValueChange={(value) => setTimeRange(value as UsageTimeRange)}
+                  aria-label={t('timeRange.label')}
                   disabled={loading}
                 />
               </div>
@@ -895,14 +894,14 @@ const UsageStatisticsConfig: React.FC = () => {
                 <span className="bitfun-usage-stats__filter-label">{t('granularity.label')}</span>
                 <Select
                   className="bitfun-usage-stats__filter-select"
-                  size="small"
+                  size="sm"
                   value={granularity}
                   options={GRANULARITY_OPTIONS.map((option) => ({
                     value: option.value,
                     label: t(option.key),
                   }))}
-                  onChange={(value) => setGranularity(value as UsageGranularity)}
-                  triggerAriaLabel={t('granularity.label')}
+                  onValueChange={(value) => setGranularity(value as UsageGranularity)}
+                  aria-label={t('granularity.label')}
                   disabled={loading}
                 />
               </div>
@@ -911,14 +910,14 @@ const UsageStatisticsConfig: React.FC = () => {
                 <div className="bitfun-usage-stats__filter-query">
                   <Select
                     className="bitfun-usage-stats__filter-kind"
-                    size="small"
+                    size="sm"
                     value={filterKind}
                     options={FILTER_KIND_OPTIONS.map((option) => ({
                       value: option.value,
                       label: t(option.key),
                     }))}
-                    onChange={(value) => setFilterKind(value as UsageStatisticsFilterKind)}
-                    triggerAriaLabel={t('filter.kind.label')}
+                    onValueChange={(value) => setFilterKind(value as UsageStatisticsFilterKind)}
+                    aria-label={t('filter.kind.label')}
                     disabled={loading}
                   />
                   <Input
