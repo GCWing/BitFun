@@ -9,13 +9,17 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type HTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { IconButton } from "../IconButton";
+import { IconButton, type IconButtonProps } from "../IconButton";
 import { classNames } from "../../internal/classNames";
+import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Modal.module.css";
 
 const MODAL_EXIT_DURATION_MS = 180;
@@ -30,11 +34,12 @@ const FOCUSABLE_SELECTOR = [
 
 export type ModalBackdropBlur = "none" | "subtle" | "base";
 export type ModalBorder = "none" | "subtle" | "default";
-export type ModalContentLayout = "scroll" | "flex";
+export type ModalCloseReason = "close-button" | "escape-key" | "overlay";
+export type ModalContentLayout = "scroll" | "flex" | "fill";
 export type ModalContentPadding = "none" | "sm" | "md" | "lg" | "xl";
 export type ModalElevation = "none" | "raised" | "overlay";
 export type ModalPlacement = "center" | "bottom-left" | "bottom-right";
-export type ModalRadius = "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
+export type ModalRadius = "reference" | "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
 export type ModalSize = "small" | "medium" | "large" | "xlarge" | "xxlarge" | "wide";
 export type ModalPortalContainer = Element | DocumentFragment;
 export type ModalPortalTarget = ModalPortalContainer | (() => ModalPortalContainer | null) | null;
@@ -68,35 +73,49 @@ export function ModalProvider({
 }
 
 export interface ModalProps {
+  ariaDescribedBy?: string;
   ariaLabel?: string;
   ariaLabelledBy?: string;
+  autoFocus?: boolean;
   backdropBlur?: ModalBackdropBlur;
   border?: ModalBorder;
   children: ReactNode;
+  closeButtonProps?: Omit<IconButtonProps, "aria-label" | "icon" | "onClick">;
   closeButtonLabel?: string;
   closeButtonTestId?: string;
+  closeIcon?: ReactNode;
   closeOnEscape?: boolean;
   closeOnOverlayClick?: boolean;
   contentClassName?: string;
   contentLayout?: ModalContentLayout;
   contentPadding?: ModalContentPadding;
+  description?: ReactNode;
   dialogClassName?: string;
   draggable?: boolean;
   elevation?: ModalElevation;
+  footer?: ReactNode;
+  footerClassName?: string;
+  headerActions?: ReactNode;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (reason: ModalCloseReason) => void;
   overlayClassName?: string;
   placement?: ModalPlacement;
   portalContainer?: ModalPortalTarget;
+  portalled?: boolean;
+  preventScroll?: boolean;
   radius?: ModalRadius;
   resizable?: boolean;
   role?: "dialog" | "alertdialog";
   showCloseButton?: boolean;
+  showScrollbar?: boolean;
   size?: ModalSize;
   testId?: string;
   title?: ReactNode;
   titleExtra?: ReactNode;
+  titleProps?: Omit<HTMLAttributes<HTMLHeadingElement>, "children" | "className" | "id">;
   titleTestId?: string;
+  trapFocus?: boolean;
 }
 
 interface Point {
@@ -169,36 +188,55 @@ function isTopModal(ownerDocument: Document, identity: symbol): boolean {
   return stack?.[stack.length - 1] === identity;
 }
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((element) => element.getAttribute("aria-hidden") !== "true");
+}
+
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
+  ariaDescribedBy,
   ariaLabel,
   ariaLabelledBy,
-  backdropBlur = "none",
+  autoFocus = true,
+  backdropBlur = "base",
   border = "subtle",
   children,
+  closeButtonProps,
   closeButtonLabel,
   closeButtonTestId,
+  closeIcon,
   closeOnEscape = true,
   closeOnOverlayClick = true,
   contentClassName,
   contentLayout = "scroll",
   contentPadding = "none",
+  description,
   dialogClassName,
   draggable = false,
   elevation = "overlay",
+  footer,
+  footerClassName,
+  headerActions,
+  initialFocusRef,
   isOpen,
   onClose,
   overlayClassName,
   placement = "center",
   portalContainer,
-  radius = "xl",
+  portalled = true,
+  preventScroll = true,
+  radius = "reference",
   resizable = false,
   role = "dialog",
   showCloseButton = true,
+  showScrollbar = true,
   size = "medium",
   testId,
   title,
   titleExtra,
+  titleProps,
   titleTestId,
+  trapFocus = true,
 }, forwardedRef) {
   const context = useContext(ModalContext);
   const resolvedPortalContainer = resolvePortalContainer(
@@ -210,10 +248,12 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   const modalRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pointerStartedOnOverlayRef = useRef(false);
   const dragStartRef = useRef<DragStart | null>(null);
   const resizeStartRef = useRef<ResizeStart | null>(null);
   const resizeDirectionRef = useRef<string>("");
   const generatedTitleId = useId();
+  const generatedDescriptionId = useId();
   const [isPresent, setIsPresent] = useState(isOpen);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -247,9 +287,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   }, [isOpen, isPresent, ownerDocument]);
 
   useEffect(() => {
-    if ((!isOpen && !isPresent) || !ownerDocument) return;
+    if ((!isOpen && !isPresent) || !ownerDocument || !preventScroll) return;
     return lockDocumentScroll(ownerDocument);
-  }, [isOpen, isPresent, ownerDocument]);
+  }, [isOpen, isPresent, ownerDocument, preventScroll]);
 
   useEffect(() => {
     if (!isOpen || !ownerDocument) return;
@@ -261,13 +301,14 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     const handleEscape = (event: KeyboardEvent) => {
       if (
         event.key !== "Escape"
+        || isImeOwnedKeyboardEvent(event)
         || !closeOnEscape
         || !isTopModal(ownerDocument, identityRef.current)
       ) {
         return;
       }
       event.preventDefault();
-      onClose();
+      onClose("escape-key");
     };
     ownerDocument.addEventListener("keydown", handleEscape);
     return () => ownerDocument.removeEventListener("keydown", handleEscape);
@@ -281,10 +322,14 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       ? ownerDocument.activeElement
       : null;
     const dialog = modalRef.current;
-    const focusable = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-    (focusable ?? dialog)?.focus();
+    if (autoFocus) {
+      const focusTarget = initialFocusRef?.current
+        ?? (dialog ? getFocusableElements(dialog)[0] : null)
+        ?? dialog;
+      focusTarget?.focus();
+    }
 
-    const trapFocus = (event: KeyboardEvent) => {
+    const handleFocusTrap = (event: KeyboardEvent) => {
       if (
         event.key !== "Tab"
         || !dialog
@@ -292,7 +337,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       ) {
         return;
       }
-      const elements = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const elements = getFocusableElements(dialog);
       if (elements.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -310,13 +355,32 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       }
     };
 
-    ownerDocument.addEventListener("keydown", trapFocus);
+    if (trapFocus) ownerDocument.addEventListener("keydown", handleFocusTrap);
     return () => {
-      ownerDocument.removeEventListener("keydown", trapFocus);
+      if (trapFocus) ownerDocument.removeEventListener("keydown", handleFocusTrap);
       if (previousFocusRef.current?.isConnected) previousFocusRef.current.focus();
       previousFocusRef.current = null;
     };
-  }, [isOpen, ownerDocument]);
+  }, [autoFocus, initialFocusRef, isOpen, ownerDocument, trapFocus]);
+
+  const requestClose = useCallback((reason: ModalCloseReason) => {
+    if (!isOpen) return;
+    onClose(reason);
+  }, [isOpen, onClose]);
+
+  const handleOverlayPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    pointerStartedOnOverlayRef.current = event.currentTarget === event.target;
+  }, []);
+
+  const handleOverlayClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const shouldClose = closeOnOverlayClick
+      && pointerStartedOnOverlayRef.current
+      && event.currentTarget === event.target
+      && ownerDocument
+      && isTopModal(ownerDocument, identityRef.current);
+    pointerStartedOnOverlayRef.current = false;
+    if (shouldClose) requestClose("overlay");
+  }, [closeOnOverlayClick, ownerDocument, requestClose]);
 
   useEffect(() => {
     const view = ownerDocument?.defaultView;
@@ -452,7 +516,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     event.stopPropagation();
   }, [resizable]);
 
-  if (!isPresent || !resolvedPortalContainer) return null;
+  if (!isPresent || (portalled && !resolvedPortalContainer)) return null;
 
   const positionedStyle: CSSProperties | undefined = (draggable || resizable) && position
     ? {
@@ -473,9 +537,13 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     isResizing && "resizing",
     isExiting && "exiting",
   ].filter(Boolean).join(" ");
-  const hasHeader = Boolean(title || showCloseButton);
+  const hasHeader = Boolean(title || description || headerActions || showCloseButton || draggable);
+  const resolvedDescribedBy = [
+    ariaDescribedBy,
+    description !== undefined && description !== null ? generatedDescriptionId : undefined,
+  ].filter(Boolean).join(" ") || undefined;
 
-  return createPortal(
+  const modal = (
     <div
       className={classNames(styles.overlay, overlayClassName)}
       data-bf-backdrop-blur={backdropBlur}
@@ -486,18 +554,11 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       onAnimationEnd={(event) => {
         if (isExiting && event.currentTarget === event.target) setIsPresent(false);
       }}
-      onClick={(event) => {
-        if (
-          closeOnOverlayClick
-          && event.currentTarget === event.target
-          && ownerDocument
-          && isTopModal(ownerDocument, identityRef.current)
-        ) {
-          onClose();
-        }
-      }}
+      onClick={handleOverlayClick}
+      onPointerDown={handleOverlayPointerDown}
     >
       <div
+        aria-describedby={resolvedDescribedBy}
         aria-hidden={isExiting || undefined}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy ?? (title ? generatedTitleId : undefined)}
@@ -506,6 +567,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
         data-bf-border={border}
         data-bf-component="modal"
         data-bf-elevation={elevation}
+        data-bf-has-footer={footer !== undefined && footer !== null ? "true" : "false"}
         data-bf-part="dialog"
         data-bf-placement={placement}
         data-bf-radius={radius}
@@ -522,10 +584,10 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           <div
             className={styles.headerShell}
             data-bf-component="modal"
-            data-bf-has-title={title ? "true" : "false"}
+            data-bf-has-title={title || description ? "true" : "false"}
             data-bf-part="headerShell"
           >
-            {(title || draggable) && (
+            {(title || description || draggable) && (
               <div
                 className={styles.header}
                 data-bf-component="modal"
@@ -534,34 +596,55 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
                 onPointerDown={handleDragStart}
                 ref={headerRef}
               >
-                {title && (
-                  <div className={styles.titleGroup} data-bf-component="modal" data-bf-part="titleGroup">
-                    <h2
-                      className={styles.title}
-                      data-bf-component="modal"
-                      data-bf-part="title"
-                      data-testid={titleTestId}
-                      id={generatedTitleId}
-                    >
-                      {title}
-                    </h2>
-                    {titleExtra && (
-                      <span className={styles.titleExtra} data-bf-component="modal" data-bf-part="titleExtra">
-                        {titleExtra}
-                      </span>
+                {(title || description) && (
+                  <div className={styles.heading} data-bf-component="modal" data-bf-part="heading">
+                    {title && (
+                      <div className={styles.titleGroup} data-bf-component="modal" data-bf-part="titleGroup">
+                        <h2
+                          {...titleProps}
+                          className={styles.title}
+                          data-bf-component="modal"
+                          data-bf-part="title"
+                          data-testid={titleTestId}
+                          id={generatedTitleId}
+                        >
+                          {title}
+                        </h2>
+                        {titleExtra && (
+                          <span className={styles.titleExtra} data-bf-component="modal" data-bf-part="titleExtra">
+                            {titleExtra}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {description !== undefined && description !== null && (
+                      <p
+                        className={styles.description}
+                        data-bf-component="modal"
+                        data-bf-part="description"
+                        id={generatedDescriptionId}
+                      >
+                        {description}
+                      </p>
                     )}
                   </div>
                 )}
               </div>
             )}
+            {headerActions !== undefined && headerActions !== null && (
+              <div className={styles.headerActions} data-bf-component="modal" data-bf-part="headerActions">
+                {headerActions}
+              </div>
+            )}
             {showCloseButton && (
               <IconButton
+                {...closeButtonProps}
                 aria-label={resolvedCloseLabel}
-                className={styles.close}
+                className={classNames(styles.close, closeButtonProps?.className)}
                 data-bf-part="close"
                 data-testid={closeButtonTestId}
-                icon={<X aria-hidden="true" />}
-                onClick={onClose}
+                icon={closeIcon ?? <X aria-hidden="true" />}
+                onClick={() => requestClose("close-button")}
                 size="sm"
                 variant="quiet"
               />
@@ -575,9 +658,20 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           data-bf-layout={contentLayout}
           data-bf-part="content"
           data-bf-padding={contentPadding}
+          data-bf-show-scrollbar={showScrollbar ? "true" : "false"}
         >
           {children}
         </div>
+
+        {footer !== undefined && footer !== null && (
+          <footer
+            className={classNames(styles.footer, footerClassName)}
+            data-bf-component="modal"
+            data-bf-part="footer"
+          >
+            {footer}
+          </footer>
+        )}
 
         {resizable && (["n", "s", "w", "e", "nw", "ne", "sw", "se"] as const).map((direction) => (
           <div
@@ -591,7 +685,10 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           />
         ))}
       </div>
-    </div>,
-    resolvedPortalContainer,
+    </div>
   );
+
+  return portalled && resolvedPortalContainer
+    ? createPortal(modal, resolvedPortalContainer)
+    : modal;
 });

@@ -2960,10 +2960,6 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageSection>
           </div>
 
-          <div className="bitfun-model-settings__form-actions bitfun-model-settings__form-actions--sticky" data-bf-component="model-settings" data-bf-part="formActions">
-            <Button variant="outline" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
-            <Button data-testid="settings-model-save-btn" variant="fill" onClick={handleSave}>{t('actions.save')}</Button>
-          </div>
         </div>
       </>
     );
@@ -3719,6 +3715,25 @@ const ModelSettingsPage: React.FC = () => {
         title={t('subscriptionAuth.logoutConfirmTitle')}
         size="small"
         closeOnOverlayClick={false}
+        footer={(
+          <>
+            <Button
+              size="sm"
+              variant="fill"
+              onClick={() => setSubscriptionLogoutRequest(null)}
+            >
+              {t('subscriptionAuth.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="fill"
+              tone="danger"
+              onClick={() => void confirmSubscriptionLogout()}
+            >
+              {t('subscriptionAuth.confirmLogout')}
+            </Button>
+          </>
+        )}
       >
         <div className="bitfun-model-settings__subscription-logout-confirm" data-bf-component="model-settings" data-bf-part="logoutConfirm">
           <p>
@@ -3736,23 +3751,6 @@ const ModelSettingsPage: React.FC = () => {
             </ul>
           )}
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
-          <div className="bitfun-model-settings__subscription-logout-actions" data-bf-component="model-settings" data-bf-part="logoutActions">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSubscriptionLogoutRequest(null)}
-            >
-              {t('subscriptionAuth.cancel')}
-            </Button>
-            <Button
-              size="sm"
-              variant="fill"
-              tone="danger"
-              onClick={() => void confirmSubscriptionLogout()}
-            >
-              {t('subscriptionAuth.confirmLogout')}
-            </Button>
-          </div>
         </div>
       </Modal>
 
@@ -3772,9 +3770,16 @@ const ModelSettingsPage: React.FC = () => {
             : (getProviderInstanceId(editingConfig)
               ? t('editProvider')
               : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
-        size="xlarge"
+        size="xxlarge"
         contentLayout="flex"
-        contentClassName="bitfun-model-settings__form--modal"
+        footer={reasoningPanelDraft ? undefined : (
+          <>
+            <Button variant="fill" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
+            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>
+              {t('actions.save')}
+            </Button>
+          </>
+        )}
       >
         {reasoningPanelDraft ? (
           <ReasoningConfigPanel

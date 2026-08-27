@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -172,7 +172,7 @@ export function ComponentDetailPage({
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [modalOpen, setModalOpen] = useState(false);
-  const modalPreviewHostRef = useRef<HTMLDivElement | null>(null);
+  const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
 
   const states = useMemo(() => {
     switch (component.name) {
@@ -232,7 +232,7 @@ export function ComponentDetailPage({
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
     if (component.name === "Modal") {
-      return `import { Button, Modal } from "@bitfun/ui";\nimport { useState } from "react";\n\nconst [open, setOpen] = useState(false);\n\n<Button onClick={() => setOpen(true)}>\n  ${t("components.preview.openModal")}\n</Button>\n<Modal\n  backdropBlur="subtle"\n  contentPadding="lg"\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  radius="2xl"\n  size="small"\n  title="${t("components.preview.modalTitle")}"\n>\n  <p>${t("components.preview.modalBody")}</p>\n</Modal>`;
+      return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
     }
     if (component.name === "PageHeader") {
       return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
@@ -261,6 +261,7 @@ export function ComponentDetailPage({
     iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
+    modalShowScrollbar,
     pageHeaderAlign,
     pageHeaderSize,
     previewIcon,
@@ -279,6 +280,145 @@ export function ComponentDetailPage({
     } catch {
       setCopyStatus("unavailable");
     }
+  }
+
+  function renderModalConfigurationContent() {
+    return (
+      <section className="component-modal-example" aria-label={t("components.preview.modalSectionTitle")}>
+        <h3>{t("components.preview.modalSectionTitle")}</h3>
+        <div className="component-modal-example__panel">
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalProviderName")}
+              orientation="horizontal"
+              required
+            >
+              <Input className="component-modal-example__control" defaultValue="OpenBitFun" />
+            </Field>
+          </div>
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalAuthentication")}
+              orientation="horizontal"
+              required
+            >
+              <Input
+                className="component-modal-example__control"
+                defaultValue="API Key"
+                readOnly
+                trailing={<ChevronDown aria-hidden="true" />}
+              />
+            </Field>
+          </div>
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalApiKey")}
+              orientation="horizontal"
+              required
+            >
+              <Input
+                className="component-modal-example__control"
+                defaultValue="bitfun-provider-api-key"
+                readOnly
+                trailing={<Eye aria-hidden="true" />}
+                type="password"
+              />
+            </Field>
+          </div>
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalApiUrl")}
+              orientation="horizontal"
+            >
+              <Input
+                className="component-modal-example__control"
+                defaultValue="https://api.openbitfun.com"
+              />
+            </Field>
+          </div>
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalRequestFormat")}
+              orientation="horizontal"
+            >
+              <Input
+                className="component-modal-example__control"
+                defaultValue="Anthropic (messages)"
+                readOnly
+                trailing={<ChevronDown aria-hidden="true" />}
+              />
+            </Field>
+          </div>
+          <div className="component-modal-example__row">
+            <Field
+              className="component-modal-example__field"
+              controlClassName="component-modal-example__field-control"
+              label={t("components.preview.modalSelectModels")}
+              orientation="horizontal"
+              required
+            >
+              <Input
+                className="component-modal-example__control"
+                defaultValue="k3-256k"
+                trailing={<Plus aria-hidden="true" />}
+              />
+            </Field>
+          </div>
+        </div>
+        <p className="component-modal-example__hint">{t("components.preview.modalPresetModels")}</p>
+        <div className="component-modal-example__model-card">
+          <strong>k3-256k</strong>
+          <span>{t("components.preview.modalModelSummary")}</span>
+        </div>
+      </section>
+    );
+  }
+
+  function renderModalExample(interactive: boolean) {
+    const closePreview = () => {
+      if (interactive) setModalOpen(false);
+    };
+
+    return (
+      <Modal
+        autoFocus={interactive}
+        closeOnEscape={interactive}
+        closeOnOverlayClick={interactive}
+        contentPadding="lg"
+        dialogClassName={interactive ? undefined : "component-modal-preview-dialog"}
+        footer={(
+          <>
+            <Button onClick={closePreview} variant="fill">
+              {t("components.preview.modalCancel")}
+            </Button>
+            <Button onClick={closePreview} variant="primary">
+              {t("components.preview.modalSave")}
+            </Button>
+          </>
+        )}
+        isOpen={interactive ? modalOpen : true}
+        onClose={closePreview}
+        overlayClassName={interactive ? undefined : "component-modal-preview-overlay"}
+        portalled={interactive}
+        preventScroll={interactive}
+        showScrollbar={modalShowScrollbar}
+        size="xxlarge"
+        title={t("components.preview.modalTitle")}
+        trapFocus={interactive}
+      >
+        {renderModalConfigurationContent()}
+      </Modal>
+    );
   }
 
   function renderIconButtonPreview(
@@ -393,8 +533,8 @@ export function ComponentDetailPage({
 
     if (component.name === "Modal") {
       return (
-        <Button onClick={() => setModalOpen(true)}>
-          {t("components.preview.openModal")}
+        <Button onClick={() => setModalOpen(true)} variant="fill">
+          {t("components.preview.modalInteractionDemo")}
         </Button>
       );
     }
@@ -515,27 +655,14 @@ export function ComponentDetailPage({
               tokenOverrides={tokenOverrides}
             >
               {component.name === "Modal" ? (
-                <div className="component-modal-preview-host" ref={modalPreviewHostRef}>
-                  {renderPreview()}
-                  <Modal
-                    backdropBlur="subtle"
-                    contentPadding="lg"
-                    isOpen={modalOpen}
-                    onClose={() => setModalOpen(false)}
-                    portalContainer={() => modalPreviewHostRef.current}
-                    radius="2xl"
-                    size="small"
-                    title={t("components.preview.modalTitle")}
-                  >
-                    <div className="component-modal-preview-body">
-                      <p>{t("components.preview.modalBody")}</p>
-                      <div className="component-modal-preview-actions">
-                        <Button onClick={() => setModalOpen(false)} variant="fill">
-                          {t("components.preview.close")}
-                        </Button>
-                      </div>
-                    </div>
-                  </Modal>
+                <div className="component-modal-preview-stage">
+                  {renderModalExample(false)}
+                  <div className="component-modal-preview-stage__actions">
+                    <Button onClick={() => setModalOpen(true)} variant="fill">
+                      {t("components.preview.modalInteractionDemo")}
+                    </Button>
+                  </div>
+                  {renderModalExample(true)}
                 </div>
               ) : component.name === "Button" ? (
                 <div
@@ -787,6 +914,13 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
+                  {component.name === "Modal" && (
+                    <InspectorToggle
+                      checked={modalShowScrollbar}
+                      label={t("detail.showScrollbar")}
+                      onCheckedChange={setModalShowScrollbar}
+                    />
+                  )}
                   {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorDisabled}

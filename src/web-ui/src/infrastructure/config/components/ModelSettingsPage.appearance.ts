@@ -20,7 +20,6 @@ export const modelSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'selectionActions' },
     { id: 'form' },
     { id: 'formBody' },
-    { id: 'formActions' },
     { id: 'subscriptionArea' },
     { id: 'subscriptionNotice' },
     { id: 'subscriptionPanel' },
@@ -39,7 +38,6 @@ export const modelSettingsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'modelActions' },
     { id: 'modelDetails' },
     { id: 'logoutConfirm' },
-    { id: 'logoutActions' },
   ],
   facets: [
     { id: 'view', attribute: 'data-bf-view', values: ['selection', 'settings'] },

@@ -944,12 +944,11 @@
       max-width: 100%;
       border: none;
       border-radius: 0;
-      /* No horizontal padding here — footer bar must span full modal content width; inset lives on scrollable only. */
-      padding: $size-gap-5 0 0;
+      padding: 0;
       margin: 0;
       display: flex;
       flex-direction: column;
-      gap: $size-gap-6;
+      gap: 0;
 
       /* Modal: same fr ratio on every two-column row (uniform). Controls a bit wider than native wide 2/8. */
       .bitfun-model-settings__edit-section {
@@ -1641,19 +1640,11 @@
     overflow-x: hidden;
     padding-left: $size-gap-6;
     padding-right: calc(#{$size-gap-6} + 4px);
+    padding-bottom: var(--bf-overlay-modal-footer-content-inset);
+    scroll-padding-bottom: var(--bf-overlay-modal-footer-content-inset);
     display: flex;
     flex-direction: column;
     gap: $size-gap-6;
-  }
-
-  &__form-actions--sticky {
-    flex-shrink: 0;
-    background: var(--bf-appearance-token-color-bg-scene);
-    padding: $size-gap-3 $size-gap-6;
-    border-top: 1px solid var(--bf-appearance-token-border-medium);
-    display: flex;
-    justify-content: flex-end;
-    gap: $size-gap-3;
   }
 
   
@@ -2232,7 +2223,7 @@
     }
 
     &__form--modal {
-      padding: $size-gap-4 0 0;
+      padding: 0;
     }
 
     &__form-field {
@@ -2399,8 +2390,7 @@
     }
   }
 
-  &__subscription-login-actions,
-  &__subscription-logout-actions {
+  &__subscription-login-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;

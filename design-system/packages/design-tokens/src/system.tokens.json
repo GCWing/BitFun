@@ -118,10 +118,65 @@
         "$description": "Inset shared by modal header chrome and the close action.",
         "$value": "8px"
       },
+      "backdropBlur": {
+        "$description": "Background blur applied by the reference modal scrim.",
+        "$type": "filter",
+        "$value": "blur(40px)"
+      },
+      "surfaceRadius": {
+        "$description": "Reference corner radius for the modal surface.",
+        "$value": "28px"
+      },
+      "headerGap": {
+        "$value": "{space.5}"
+      },
+      "headerPaddingBlockStart": {
+        "$value": "{space.6}"
+      },
+      "headerPaddingBlockEnd": {
+        "$value": "{space.5}"
+      },
+      "headerPaddingInline": {
+        "$value": "{space.6}"
+      },
+      "titleFontSize": {
+        "$value": "24px"
+      },
+      "titleFontWeight": {
+        "$type": "fontWeight",
+        "$value": 700
+      },
+      "scrollbarWidth": {
+        "$value": "6px"
+      },
       "contentPaddingSm": { "$value": "{space.3}" },
       "contentPaddingMd": { "$value": "{space.4}" },
       "contentPaddingLg": { "$value": "{space.6}" },
       "contentPaddingXl": { "$value": "{space.8}" },
+      "descriptionGap": { "$value": "{space.2}" },
+      "headerActionsGap": { "$value": "{space.2}" },
+      "footerGap": { "$value": "{space.2}" },
+      "footerPaddingBlockStart": { "$value": "{space.2}" },
+      "footerPaddingBlockEnd": { "$value": "{space.5}" },
+      "footerPaddingInline": { "$value": "{space.6}" },
+      "footerHeight": {
+        "$description": "Total visual height of the floating modal action bar.",
+        "$value": "68px"
+      },
+      "footerFadeExtent": {
+        "$description": "Distance the frosted footer treatment extends upward over scrolling content.",
+        "$value": "{space.6}"
+      },
+      "footerContentInset": {
+        "$description": "Trailing scroll space that keeps content reachable beneath the floating modal action bar.",
+        "$value": "104px"
+      },
+      "footerBlur": {
+        "$description": "Backdrop blur applied to content passing beneath the floating modal action bar.",
+        "$type": "filter",
+        "$value": "blur(20px)"
+      },
+      "footerActionMinWidth": { "$value": "100px" },
       "maxInlineSizeSmall": { "$value": "420px" },
       "maxInlineSizeMedium": { "$value": "560px" },
       "maxInlineSizeLarge": { "$value": "600px" },
