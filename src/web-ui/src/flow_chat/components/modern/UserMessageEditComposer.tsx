@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
-import { Textarea } from '@/component-library';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Check, X } from 'lucide-react';
+import { Composer, ComposerToolbar, IconButton } from '@bitfun/ui';
 import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
 import { FileMentionPicker } from '../FileMentionPicker';
@@ -118,7 +118,43 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   }, []);
 
   return (
-    <div className="user-message-edit-composer" data-bf-component="user-message-edit-composer" data-bf-part="root" data-bf-mode="rich" data-bf-state={isSubmitting ? 'submitting' : undefined}>
+    <Composer
+      className="user-message-edit-composer"
+      data-bf-part="root"
+      data-bf-product-component="user-message-edit-composer"
+      data-bf-mode="rich"
+      data-bf-state={isSubmitting ? 'submitting' : undefined}
+      disabled={isSubmitting}
+      toolbar={(
+        <ComposerToolbar
+          className="user-message-edit-composer__actions"
+          trailing={(
+            <>
+              <IconButton
+                aria-label={cancelLabel}
+                data-bf-action="cancel"
+                icon={<X size={14} />}
+                onClick={onCancel}
+                size="xs"
+                title={cancelLabel}
+                variant="quiet"
+              />
+              <IconButton
+                aria-label={submitLabel}
+                data-bf-action="submit"
+                disabled={!canSubmit}
+                icon={<Check size={14} />}
+                loading={isSubmitting}
+                onClick={handleSubmit}
+                size="xs"
+                title={submitLabel}
+                variant="primary"
+              />
+            </>
+          )}
+        />
+      )}
+    >
       <div ref={mentionAnchorRef} className="user-message-edit-composer__rich-input" data-bf-component="user-message-edit-composer" data-bf-part="input">
         <RichTextInput
           ref={editorRef}
@@ -143,35 +179,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           onClose={() => editorRef.current?.closeMention?.()}
         />
       </div>
-      <div className="user-message-edit-composer__actions" data-bf-component="user-message-edit-composer" data-bf-part="actions">
-        <button
-          data-bf-component="user-message-edit-composer"
-          data-bf-part="action"
-          data-bf-action="cancel"
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="user-message-edit-composer__icon-button"
-          title={cancelLabel}
-          aria-label={cancelLabel}
-        >
-          <X size={14} />
-        </button>
-        <button
-          data-bf-component="user-message-edit-composer"
-          data-bf-part="action"
-          data-bf-action="submit"
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="user-message-edit-composer__icon-button user-message-edit-composer__icon-button--confirm"
-          title={submitLabel}
-          aria-label={submitLabel}
-        >
-          {isSubmitting ? <Loader2 size={14} className="user-message-edit-composer__spinner" data-bf-component="user-message-edit-composer" data-bf-part="spinner" /> : <Check size={14} />}
-        </button>
-      </div>
-    </div>
+    </Composer>
   );
 };
 
@@ -195,6 +203,12 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   const trimmedValue = value.trim();
   const canSubmit = trimmedValue.length > 0 && !isSubmitting;
 
+  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement | null) => {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, []);
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -202,6 +216,10 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
+
+  useLayoutEffect(() => {
+    resizeTextarea(textareaRef.current);
+  }, [resizeTextarea, value]);
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
@@ -246,9 +264,45 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
   }
 
   return (
-    <div className="user-message-edit-composer" data-bf-component="user-message-edit-composer" data-bf-part="root" data-bf-mode="plain" data-bf-state={isSubmitting ? 'submitting' : undefined}>
-      <Textarea
-        data-bf-component="user-message-edit-composer"
+    <Composer
+      className="user-message-edit-composer"
+      data-bf-part="root"
+      data-bf-product-component="user-message-edit-composer"
+      data-bf-mode="plain"
+      data-bf-state={isSubmitting ? 'submitting' : undefined}
+      disabled={isSubmitting}
+      toolbar={(
+        <ComposerToolbar
+          className="user-message-edit-composer__actions"
+          trailing={(
+            <>
+              <IconButton
+                aria-label={cancelLabel}
+                data-bf-action="cancel"
+                icon={<X size={14} />}
+                onClick={onCancel}
+                size="xs"
+                title={cancelLabel}
+                variant="quiet"
+              />
+              <IconButton
+                aria-label={submitLabel}
+                data-bf-action="submit"
+                disabled={!canSubmit}
+                icon={<Check size={14} />}
+                loading={isSubmitting}
+                onClick={handleSubmit}
+                size="xs"
+                title={submitLabel}
+                variant="primary"
+              />
+            </>
+          )}
+        />
+      )}
+    >
+      <textarea
+        data-bf-product-component="user-message-edit-composer"
         data-bf-part="input"
         ref={textareaRef}
         value={value}
@@ -257,39 +311,10 @@ export const UserMessageEditComposer: React.FC<UserMessageEditComposerProps> = (
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
-        autoResize
         disabled={isSubmitting}
         className="user-message-edit-composer__textarea"
       />
-      <div className="user-message-edit-composer__actions" data-bf-component="user-message-edit-composer" data-bf-part="actions">
-        <button
-          data-bf-component="user-message-edit-composer"
-          data-bf-part="action"
-          data-bf-action="cancel"
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="user-message-edit-composer__icon-button"
-          title={cancelLabel}
-          aria-label={cancelLabel}
-        >
-          <X size={14} />
-        </button>
-        <button
-          data-bf-component="user-message-edit-composer"
-          data-bf-part="action"
-          data-bf-action="submit"
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className="user-message-edit-composer__icon-button user-message-edit-composer__icon-button--confirm"
-          title={submitLabel}
-          aria-label={submitLabel}
-        >
-          {isSubmitting ? <Loader2 size={14} className="user-message-edit-composer__spinner" data-bf-component="user-message-edit-composer" data-bf-part="spinner" /> : <Check size={14} />}
-        </button>
-      </div>
-    </div>
+    </Composer>
   );
 };
 
