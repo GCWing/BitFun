@@ -17,7 +17,7 @@ describe('VoiceInputDiagnostics responsive layout', () => {
     const buttonRule = styles.match(/&__diagnostic-button\s*{([^}]*)}/)?.[1] ?? '';
 
     expect(source.match(/className="voice-input-config__diagnostic-row"/g)).toHaveLength(2);
-    expect(source).toContain("import { Button } from '@bitfun/ui';");
+    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
     expect(source).toContain('className="voice-input-config__diagnostic-button"');
     expect(rowRule).toContain('--row-grid-cols: minmax(0, 2fr) minmax(0, 3fr)');
     expect(buttonRule).toContain('flex: 0 0 auto');
