@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Card, CardBody, CardFooter, CardHeader } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import {
   Cloud,
@@ -225,14 +225,18 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             onMouseDown={() => onOpenChange(false)}
             data-testid="nav-device-status-backdrop"
           />
-          <div
+          <Card
             ref={popoverRef}
+            appearance="raised"
             className="bitfun-device-overview"
+            gap="sm"
+            padding="md"
+            radius="md"
             role="dialog"
             aria-label={t('deviceOverview.title')}
             data-testid="nav-device-status-popover"
-            data-bf-component="device-overview"
             data-bf-part="root"
+            data-bf-product-component="device-overview"
             data-bf-state={overview.mode}
             data-bf-placement={popoverLayout?.placement ?? 'top'}
             style={{
@@ -241,82 +245,87 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
               visibility: popoverLayout ? 'visible' : 'hidden',
             }}
           >
-            <div className="bitfun-device-overview__header">
-              <h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>
-            </div>
-            {overview.mode === 'local' ? (
-              <div
-                className="bitfun-device-overview__local-device"
-                data-testid="nav-device-status-summary"
-              >
-                <DeviceIcon kind={overview.primaryDevice.kind} size={19} />
-                <strong>{overview.currentWorkDeviceName}</strong>
-              </div>
-            ) : (
-              <>
-                <section className="bitfun-device-overview__device-group is-primary">
-                  <h3>{t('deviceOverview.currentUse')}</h3>
-                  <div className="bitfun-device-overview__device-row">
-                    <DeviceIcon kind={overview.primaryDevice.kind} />
-                    <strong>{overview.primaryDevice.name}</strong>
-                    {overview.primaryDevice.activities.includes('background-execution') && (
-                      <span>{deviceActivity(overview.primaryDevice)}</span>
-                    )}
-                  </div>
-                </section>
-                <section
-                  className="bitfun-device-overview__device-group"
-                  data-testid="nav-device-status-connected-devices"
+            <CardHeader
+              align="center"
+              className="bitfun-device-overview__header"
+              contentAlign="center"
+              title={<h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
+            />
+            <CardBody className="bitfun-device-overview__body">
+              {overview.mode === 'local' ? (
+                <div
+                  className="bitfun-device-overview__local-device"
+                  data-testid="nav-device-status-summary"
                 >
-                  <h3>{t('deviceOverview.connectedDevices')}</h3>
-                  <div className="bitfun-device-overview__device-rows">
-                    {overview.connectedDevices.map(device => (
-                      <div
-                        className="bitfun-device-overview__device-row"
-                        key={device.id}
-                        data-bf-device-kind={device.kind}
-                        data-bf-activities={device.activities.join(' ')}
-                      >
-                        <DeviceIcon kind={device.kind} />
-                        <strong>{device.name}</strong>
-                        <span>{deviceActivity(device)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </>
-            )}
+                  <DeviceIcon kind={overview.primaryDevice.kind} size={19} />
+                  <strong>{overview.currentWorkDeviceName}</strong>
+                </div>
+              ) : (
+                <>
+                  <section className="bitfun-device-overview__device-group is-primary">
+                    <h3>{t('deviceOverview.currentUse')}</h3>
+                    <div className="bitfun-device-overview__device-row">
+                      <DeviceIcon kind={overview.primaryDevice.kind} />
+                      <strong>{overview.primaryDevice.name}</strong>
+                      {overview.primaryDevice.activities.includes('background-execution') && (
+                        <span>{deviceActivity(overview.primaryDevice)}</span>
+                      )}
+                    </div>
+                  </section>
+                  <section
+                    className="bitfun-device-overview__device-group"
+                    data-testid="nav-device-status-connected-devices"
+                  >
+                    <h3>{t('deviceOverview.connectedDevices')}</h3>
+                    <div className="bitfun-device-overview__device-rows">
+                      {overview.connectedDevices.map(device => (
+                        <div
+                          className="bitfun-device-overview__device-row"
+                          key={device.id}
+                          data-bf-device-kind={device.kind}
+                          data-bf-activities={device.activities.join(' ')}
+                        >
+                          <DeviceIcon kind={device.kind} />
+                          <strong>{device.name}</strong>
+                          <span>{deviceActivity(device)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
 
-            {overview.mode === 'connected' && overview.connectionService && serviceContent && (
-              <div
-                className="bitfun-device-overview__service"
-                data-testid="nav-device-connection-service"
-                data-bf-service-kind={overview.connectionService.kind}
-              >
-                <ConnectionServiceIcon service={overview.connectionService} />
-                <span>
-                  {t(overview.connectionService === accountService
-                    ? 'deviceOverview.accountService'
-                    : 'deviceOverview.connectionService')}
-                </span>
-                <strong>{serviceContent.label}</strong>
-                {serviceContent.detail && <small>{serviceContent.detail}</small>}
-              </div>
-            )}
+              {overview.mode === 'connected' && overview.connectionService && serviceContent && (
+                <div
+                  className="bitfun-device-overview__service"
+                  data-testid="nav-device-connection-service"
+                  data-bf-service-kind={overview.connectionService.kind}
+                >
+                  <ConnectionServiceIcon service={overview.connectionService} />
+                  <span>
+                    {t(overview.connectionService === accountService
+                      ? 'deviceOverview.accountService'
+                      : 'deviceOverview.connectionService')}
+                  </span>
+                  <strong>{serviceContent.label}</strong>
+                  {serviceContent.detail && <small>{serviceContent.detail}</small>}
+                </div>
+              )}
 
-            {overview.topologyUnavailable && (
-              <Button
-                variant="outline"
-                size="sm"
-                leadingIcon={<RefreshCw />}
-                className="bitfun-device-overview__notice"
-                onClick={() => { void refresh(); }}
-              >
-                {t('deviceOverview.statusUnavailable')}
-              </Button>
-            )}
+              {overview.topologyUnavailable && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leadingIcon={<RefreshCw />}
+                  className="bitfun-device-overview__notice"
+                  onClick={() => { void refresh(); }}
+                >
+                  {t('deviceOverview.statusUnavailable')}
+                </Button>
+              )}
+            </CardBody>
 
-            <div className="bitfun-device-overview__actions">
+            <CardFooter align="center" className="bitfun-device-overview__actions">
               <Button
                 variant="fill"
                 size="sm"
@@ -340,8 +349,8 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                     : t('deviceOverview.backToThisDevice')}
                 </Button>
               )}
-            </div>
-          </div>
+            </CardFooter>
+          </Card>
         </>,
         getAppearanceOverlayHost(),
       )}
