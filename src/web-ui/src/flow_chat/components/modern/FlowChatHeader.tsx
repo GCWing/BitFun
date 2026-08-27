@@ -20,7 +20,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { Tooltip, IconButton, Input } from '@/component-library';
+import { Tooltip, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -34,6 +34,7 @@ import {
   createReviewPlatformTab,
 } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
+import { IconButton } from '@bitfun/ui';
 
 const PULL_REQUEST_OVERVIEW_LIMIT = 3;
 
@@ -518,18 +519,17 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         data-bf-component="flow-chat-header"
         data-bf-part="backgroundActivity"
       >
-        <IconButton
-          className="flowchat-header__background-command-menu-button"
-          variant="ghost"
-          size="xs"
-          onClick={(event) => handleCommandMenuToggle(event, command)}
-          tooltip={t('flowChatHeader.backgroundCommandActions')}
-          aria-label={t('flowChatHeader.backgroundCommandActions')}
-          aria-haspopup="menu"
-          aria-expanded={openBackgroundCommandMenuId === command.execSessionKey}
-        >
-          <MoreHorizontal size={13} aria-hidden="true" />
-        </IconButton>
+        <Tooltip content={t('flowChatHeader.backgroundCommandActions')}>
+          <IconButton
+            className="flowchat-header__background-command-menu-button"
+            size="sm"
+            onClick={(event) => handleCommandMenuToggle(event, command)}
+            aria-label={t('flowChatHeader.backgroundCommandActions')}
+            aria-haspopup="menu"
+            aria-expanded={openBackgroundCommandMenuId === command.execSessionKey}
+            icon={<MoreHorizontal size={13} aria-hidden="true" />}
+          />
+        </Tooltip>
         {openBackgroundCommandMenuId === command.execSessionKey && backgroundCommandMenuPosition ? createPortal(
           <div
             ref={backgroundCommandMenuRef}
@@ -747,29 +747,27 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               aria-label={t('flowChatHeader.searchPlaceholder')}
               error={hasNoResults}
             />
-            <IconButton
-              className="flowchat-header__search-close"
-              variant="ghost"
-              size="xs"
-              onClick={handleCloseSearch}
-              tooltip={t('flowChatHeader.searchClose')}
-              aria-label={t('flowChatHeader.searchClose')}
-            >
-              <X size={14} />
-            </IconButton>
+            <Tooltip content={t('flowChatHeader.searchClose')}>
+              <IconButton
+                className="flowchat-header__search-close"
+                size="sm"
+                onClick={handleCloseSearch}
+                aria-label={t('flowChatHeader.searchClose')}
+                icon={<X size={14} />}
+              />
+            </Tooltip>
           </div>
         ) : (
-          <IconButton
-            className="flowchat-header__search-btn"
-            variant="ghost"
-            size="xs"
-            onClick={handleOpenSearch}
-            tooltip={t('flowChatHeader.searchOpen')}
-            aria-label={t('flowChatHeader.searchOpen')}
-            data-testid="flowchat-header-search"
-          >
-            <Search size={14} />
-          </IconButton>
+          <Tooltip content={t('flowChatHeader.searchOpen')}>
+            <IconButton
+              className="flowchat-header__search-btn"
+              size="sm"
+              onClick={handleOpenSearch}
+              aria-label={t('flowChatHeader.searchOpen')}
+              data-testid="flowchat-header-search"
+              icon={<Search size={14} />}
+            />
+          </Tooltip>
         )}
         <div
           className="flowchat-header__session-overview"
@@ -777,38 +775,37 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           data-bf-component="flow-chat-header"
           data-bf-part="sessionOverview"
         >
-          <IconButton
-            ref={sessionOverviewTriggerRef}
-            className={[
-              'flowchat-header__session-overview-trigger',
-              isSessionOverviewOpen && 'flowchat-header__session-overview-trigger--active',
-              hasSessionActivity && 'flowchat-header__session-overview-trigger--has-activity',
-            ].filter(Boolean).join(' ')}
-            data-bf-component="flow-chat-header"
-            data-bf-part="sessionOverviewTrigger"
-            data-bf-state={[
-              isSessionOverviewOpen ? 'open' : null,
-              hasSessionActivity ? 'active' : null,
-            ].filter(Boolean).join(' ') || undefined}
-            variant="ghost"
-            size="xs"
-            onClick={handleToggleSessionOverview}
-            tooltip={sessionOverviewLabel}
-            aria-label={sessionOverviewLabel}
-            aria-expanded={isSessionOverviewOpen}
-            aria-haspopup="dialog"
-            data-testid="flowchat-header-session-overview"
-          >
-            <span className="flowchat-header__session-overview-trigger-inner">
-              <SlidersHorizontal size={14} aria-hidden="true" />
-              {hasSessionActivity ? (
-                <span
-                  className="flowchat-header__session-overview-status-dot"
-                  aria-hidden="true"
-                />
-              ) : null}
-            </span>
-          </IconButton>
+          <Tooltip content={sessionOverviewLabel}>
+            <IconButton
+              ref={sessionOverviewTriggerRef}
+              className={[
+                'flowchat-header__session-overview-trigger',
+                isSessionOverviewOpen && 'flowchat-header__session-overview-trigger--active',
+                hasSessionActivity && 'flowchat-header__session-overview-trigger--has-activity',
+              ].filter(Boolean).join(' ')}
+              data-bf-component="flow-chat-header"
+              data-bf-part="sessionOverviewTrigger"
+              data-bf-state={[
+                isSessionOverviewOpen ? 'open' : null,
+                hasSessionActivity ? 'active' : null,
+              ].filter(Boolean).join(' ') || undefined}
+              size="sm"
+              onClick={handleToggleSessionOverview}
+              aria-label={sessionOverviewLabel}
+              aria-expanded={isSessionOverviewOpen}
+              aria-haspopup="dialog"
+              data-testid="flowchat-header-session-overview"
+              icon={<span className="flowchat-header__session-overview-trigger-inner">
+                <SlidersHorizontal size={14} aria-hidden="true" />
+                {hasSessionActivity ? (
+                  <span
+                    className="flowchat-header__session-overview-status-dot"
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </span>}
+            />
+          </Tooltip>
 
           {isSessionOverviewOpen && createPortal(
             <div
@@ -899,21 +896,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                     </span>
                     <div className="flowchat-header__session-overview-section-actions">
                       {hasBackgroundCommands && onStopAllBackgroundCommands ? (
-                        <IconButton
-                          className="flowchat-header__background-command-menu-button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={handleCommandSectionMenuToggle}
-                          tooltip={t('flowChatHeader.backgroundCommandActions')}
-                          aria-label={t('flowChatHeader.backgroundCommandActions')}
-                          aria-haspopup="menu"
-                          aria-expanded={isBackgroundCommandSectionMenuOpen}
-                          disabled={displayBackgroundCommands.every(command => (
-                            command.status !== 'running' || command.isStopping === true
-                          ))}
-                        >
-                          <MoreHorizontal size={13} aria-hidden="true" />
-                        </IconButton>
+                        <Tooltip content={t('flowChatHeader.backgroundCommandActions')}>
+                          <IconButton
+                            className="flowchat-header__background-command-menu-button"
+                            size="sm"
+                            onClick={handleCommandSectionMenuToggle}
+                            aria-label={t('flowChatHeader.backgroundCommandActions')}
+                            aria-haspopup="menu"
+                            aria-expanded={isBackgroundCommandSectionMenuOpen}
+                            disabled={displayBackgroundCommands.every(command => (
+                              command.status !== 'running' || command.isStopping === true
+                            ))}
+                            icon={<MoreHorizontal size={13} aria-hidden="true" />}
+                          />
+                        </Tooltip>
                       ) : null}
                       {isBackgroundCommandSectionMenuOpen && backgroundCommandMenuPosition ? createPortal(
                         <div
@@ -1077,28 +1073,27 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           )}
         </div>
         {onToggleRightPanel ? (
-          <IconButton
-            className={[
-              'flowchat-header__right-panel-trigger',
-              isRightPanelOpen && 'flowchat-header__right-panel-trigger--active',
-            ].filter(Boolean).join(' ')}
-            data-bf-component="flow-chat-header"
-            data-bf-part="rightPanelTrigger"
-            data-bf-state={isRightPanelOpen ? 'open' : 'collapsed'}
-            variant="ghost"
-            size="xs"
-            onClick={onToggleRightPanel}
-            tooltip={rightPanelLabel}
-            aria-label={rightPanelLabel}
-            aria-pressed={isRightPanelOpen}
-            data-testid="flowchat-header-right-panel"
-          >
-            {isRightPanelOpen ? (
-              <PanelRightClose size={14} aria-hidden="true" />
-            ) : (
-              <PanelRightOpen size={14} aria-hidden="true" />
-            )}
-          </IconButton>
+          <Tooltip content={rightPanelLabel}>
+            <IconButton
+              className={[
+                'flowchat-header__right-panel-trigger',
+                isRightPanelOpen && 'flowchat-header__right-panel-trigger--active',
+              ].filter(Boolean).join(' ')}
+              data-bf-component="flow-chat-header"
+              data-bf-part="rightPanelTrigger"
+              data-bf-state={isRightPanelOpen ? 'open' : 'collapsed'}
+              size="sm"
+              onClick={onToggleRightPanel}
+              aria-label={rightPanelLabel}
+              aria-pressed={isRightPanelOpen}
+              data-testid="flowchat-header-right-panel"
+              icon={isRightPanelOpen ? (
+                <PanelRightClose size={14} aria-hidden="true" />
+              ) : (
+                <PanelRightOpen size={14} aria-hidden="true" />
+              )}
+            />
+          </Tooltip>
         ) : null}
       </div>
     </div>

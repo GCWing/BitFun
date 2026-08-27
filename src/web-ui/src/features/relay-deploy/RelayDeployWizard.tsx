@@ -10,10 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal, Input, Select, Alert, IconButton } from '@/component-library';
+import { Modal, Input, Select, Alert, Tooltip } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -876,13 +876,16 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 placeholder="~/.ssh/id_rsa" prefix={<Key size={16} />} size="medium"
                 disabled={connecting}
                 suffix={
-                  <IconButton type="button" variant="ghost" size="small"
-                    tooltip={t('ssh.remote.browsePrivateKey')}
-                    aria-label={t('ssh.remote.browsePrivateKey')}
-                    disabled={connecting}
-                    onClick={() => void handleBrowsePrivateKey()}>
-                    <FolderOpen size={16} />
-                  </IconButton>
+                  <Tooltip content={t('ssh.remote.browsePrivateKey')}>
+                    <IconButton
+                      type="button"
+                      size="sm"
+                      aria-label={t('ssh.remote.browsePrivateKey')}
+                      disabled={connecting}
+                      onClick={() => void handleBrowsePrivateKey()}
+                      icon={<FolderOpen size={16} />}
+                    />
+                  </Tooltip>
                 } />
             </div>
             <div className="relay-deploy-wizard__field">

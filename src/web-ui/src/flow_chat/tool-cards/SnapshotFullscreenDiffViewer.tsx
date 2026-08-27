@@ -3,12 +3,12 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { DiffEditor } from '../../tools/editor';
 import type { SnapshotFile } from '../../tools/snapshot_system/core/SnapshotStateManager';
 import { createLogger } from '@/shared/utils/logger';
@@ -193,30 +193,30 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
 
             <div className="header-divider" />
 
-            <IconButton
-              type="button"
-              size="small"
-              onClick={onClose}
-              tooltip={t('toolCards.snapshot.close')}
-              aria-label={t('toolCards.snapshot.close')}
-            >
-              <X size={16} />
-            </IconButton>
+            <Tooltip content={t('toolCards.snapshot.close')}>
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={onClose}
+                aria-label={t('toolCards.snapshot.close')}
+                icon={<X size={16} />}
+              />
+            </Tooltip>
           </div>
         </div>
 
         {files.length > 1 && (
           <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="navigation" className="file-navigation">
-            <IconButton
-              type="button"
-              size="small"
-              onClick={() => setSelectedFileIndex(prev => prev > 0 ? prev - 1 : files.length - 1)}
-              disabled={loading}
-              tooltip={t('toolCards.snapshot.prevFile')}
-              aria-label={t('toolCards.snapshot.prevFile')}
-            >
-              <ChevronLeft size={16} />
-            </IconButton>
+            <Tooltip content={t('toolCards.snapshot.prevFile')}>
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={() => setSelectedFileIndex(prev => prev > 0 ? prev - 1 : files.length - 1)}
+                disabled={loading}
+                aria-label={t('toolCards.snapshot.prevFile')}
+                icon={<ChevronLeft size={16} />}
+              />
+            </Tooltip>
 
             <div data-bf-component="snapshot-fullscreen-diff-viewer" data-bf-part="tabs" className="file-tabs">
               {files.map((file, index) => {
@@ -239,16 +239,16 @@ export const SnapshotFullscreenDiffViewer: React.FC<SnapshotFullscreenDiffViewer
               })}
             </div>
 
-            <IconButton
-              type="button"
-              size="small"
-              onClick={() => setSelectedFileIndex(prev => prev < files.length - 1 ? prev + 1 : 0)}
-              disabled={loading}
-              tooltip={t('toolCards.snapshot.nextFile')}
-              aria-label={t('toolCards.snapshot.nextFile')}
-            >
-              <ChevronRight size={16} />
-            </IconButton>
+            <Tooltip content={t('toolCards.snapshot.nextFile')}>
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={() => setSelectedFileIndex(prev => prev < files.length - 1 ? prev + 1 : 0)}
+                disabled={loading}
+                aria-label={t('toolCards.snapshot.nextFile')}
+                icon={<ChevronRight size={16} />}
+              />
+            </Tooltip>
           </div>
         )}
 

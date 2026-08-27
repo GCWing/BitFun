@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -16,7 +16,7 @@ import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import yaml from 'yaml';
-import { IconButton, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -433,28 +433,26 @@ ${JSON.stringify(simpleTodos, null, 2)}
             <span className="create-plan-header-folder-btn-wrapper">
               <IconButton
                 type="button"
-                size="small"
-                variant={hasSavedToProject ? 'success' : 'default'}
-                isLoading={isSavingToProject}
+                size="sm"
+                variant={hasSavedToProject ? 'fill' : 'quiet'}
+                loading={isSavingToProject}
                 onClick={handleSavePlanToProject}
                 disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
                 aria-label={savePlanTooltip}
-              >
-                {hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
-              </IconButton>
+                icon={hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
+              />
             </span>
           </Tooltip>
           <Tooltip content={revealPlanTooltip}>
             <span className="create-plan-header-folder-btn-wrapper">
               <IconButton
                 type="button"
-                size="small"
+                size="sm"
                 onClick={handleRevealPlanInExplorer}
                 disabled={isRevealPlanDisabled}
                 aria-label={revealPlanTooltip}
-              >
-                <FolderOpen size={14} />
-              </IconButton>
+                icon={<FolderOpen size={14} />}
+              />
             </span>
           </Tooltip>
         </div>
@@ -466,15 +464,15 @@ ${JSON.stringify(simpleTodos, null, 2)}
           <p className="plan-overview">{planData.overview}</p>
         </div>
         {planData.todos && planData.todos.length > 0 && (
-          <IconButton
-            type="button"
-            size="small"
-            onClick={handleToggleTodos}
-            tooltip={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
-            aria-label={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
-          >
-            {isTodosExpanded ? <ChevronsDownUp size={22} /> : <ChevronsUpDown size={22} />}
-          </IconButton>
+          <Tooltip content={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}>
+            <IconButton
+              type="button"
+              size="sm"
+              onClick={handleToggleTodos}
+              aria-label={t(isTodosExpanded ? 'toolCards.common.collapse' : 'toolCards.common.expand')}
+              icon={isTodosExpanded ? <ChevronsDownUp size={22} /> : <ChevronsUpDown size={22} />}
+            />
+          </Tooltip>
         )}
       </div>
 

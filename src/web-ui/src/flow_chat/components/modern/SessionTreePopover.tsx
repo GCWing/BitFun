@@ -9,7 +9,7 @@ import {
   RefreshCw,
   Square,
 } from 'lucide-react';
-import { DotMatrixLoader, IconButton } from '@/component-library';
+import { DotMatrixLoader, Tooltip } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
@@ -27,6 +27,7 @@ import {
   SubagentAvatar,
 } from '../../subagent-identity';
 import './SessionTreePopover.scss';
+import { IconButton } from '@bitfun/ui';
 
 export interface SessionTreeSelection {
   sessionId: string;
@@ -469,19 +470,18 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           </button>
           {canCancel ? (
             <div className="session-tree-popover__node-actions">
-              <IconButton
-                className="session-tree-popover__action-menu-button"
-                variant="ghost"
-                size="xs"
-                onClick={(event) => handleActionMenuToggle(event, node)}
-                tooltip={t('flowChatHeader.agentTreeActions')}
-                aria-label={t('flowChatHeader.agentTreeActions')}
-                aria-haspopup="menu"
-                aria-expanded={openActionSessionId === node.sessionId}
-                disabled={isCancelling}
-              >
-                <MoreHorizontal size={13} aria-hidden="true" />
-              </IconButton>
+              <Tooltip content={t('flowChatHeader.agentTreeActions')}>
+                <IconButton
+                  className="session-tree-popover__action-menu-button"
+                  size="sm"
+                  onClick={(event) => handleActionMenuToggle(event, node)}
+                  aria-label={t('flowChatHeader.agentTreeActions')}
+                  aria-haspopup="menu"
+                  aria-expanded={openActionSessionId === node.sessionId}
+                  disabled={isCancelling}
+                  icon={<MoreHorizontal size={13} aria-hidden="true" />}
+                />
+              </Tooltip>
               {openActionSessionId === node.sessionId && actionMenuPosition ? createPortal(
                 <div
                   ref={actionMenuRef}
@@ -569,15 +569,14 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           data-bf-state="error"
         >
           <span>{t('flowChatHeader.agentTreeLoadFailed')}</span>
-          <IconButton
-            variant="ghost"
-            size="xs"
-            onClick={() => void refreshSnapshot()}
-            tooltip={t('flowChatHeader.agentTreeRetry')}
-            aria-label={t('flowChatHeader.agentTreeRetry')}
-          >
-            <RefreshCw size={13} />
-          </IconButton>
+          <Tooltip content={t('flowChatHeader.agentTreeRetry')}>
+            <IconButton
+              size="sm"
+              onClick={() => void refreshSnapshot()}
+              aria-label={t('flowChatHeader.agentTreeRetry')}
+              icon={<RefreshCw size={13} />}
+            />
+          </Tooltip>
         </div>
       ) : null}
     </div>
@@ -604,47 +603,46 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       data-bf-component="flow-chat-header"
       data-bf-part="sessionTree"
     >
-      <IconButton
-        ref={triggerRef}
-        className={[
-          'session-tree-popover__trigger',
-          isOpen && 'session-tree-popover__trigger--active',
-          hasActiveDescendants && 'session-tree-popover__trigger--has-activity',
-        ].filter(Boolean).join(' ')}
-        data-bf-component="flow-chat-header"
-        data-bf-part="sessionTreeTrigger"
-        data-bf-state={[
-          isOpen ? 'open' : null,
-          hasActiveDescendants ? 'active' : null,
-        ].filter(Boolean).join(' ') || undefined}
-        variant="ghost"
-        size="xs"
-        onClick={(event) => {
-          const nextOpen = !isOpen;
-          if (nextOpen) {
-            setKeyboardNavigationOpen(event.detail === 0);
-            setInternalIsOpen(true);
-          } else {
-            if (event.detail !== 0) {
-              setKeyboardNavigationOpen(false);
+      <Tooltip content={panelLabel}>
+        <IconButton
+          ref={triggerRef}
+          className={[
+            'session-tree-popover__trigger',
+            isOpen && 'session-tree-popover__trigger--active',
+            hasActiveDescendants && 'session-tree-popover__trigger--has-activity',
+          ].filter(Boolean).join(' ')}
+          data-bf-component="flow-chat-header"
+          data-bf-part="sessionTreeTrigger"
+          data-bf-state={[
+            isOpen ? 'open' : null,
+            hasActiveDescendants ? 'active' : null,
+          ].filter(Boolean).join(' ') || undefined}
+          size="sm"
+          onClick={(event) => {
+            const nextOpen = !isOpen;
+            if (nextOpen) {
+              setKeyboardNavigationOpen(event.detail === 0);
+              setInternalIsOpen(true);
+            } else {
+              if (event.detail !== 0) {
+                setKeyboardNavigationOpen(false);
+              }
+              closePopover(event.detail === 0 ? 'keyboard' : 'pointer');
             }
-            closePopover(event.detail === 0 ? 'keyboard' : 'pointer');
-          }
-        }}
-        tooltip={panelLabel}
-        aria-label={panelLabel}
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        disabled={!sessionId}
-        data-testid="flowchat-header-session-tree"
-      >
-        <span className="session-tree-popover__trigger-inner">
-          <Bot size={14} />
-          {hasActiveDescendants ? (
-            <span className="session-tree-popover__status-dot" aria-hidden="true" />
-          ) : null}
-        </span>
-      </IconButton>
+          }}
+          aria-label={panelLabel}
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          disabled={!sessionId}
+          data-testid="flowchat-header-session-tree"
+          icon={<span className="session-tree-popover__trigger-inner">
+            <Bot size={14} />
+            {hasActiveDescendants ? (
+              <span className="session-tree-popover__status-dot" aria-hidden="true" />
+            ) : null}
+          </span>}
+        />
+      </Tooltip>
 
       <PresenceBoundary active={isOpen}>
         {createPortal(

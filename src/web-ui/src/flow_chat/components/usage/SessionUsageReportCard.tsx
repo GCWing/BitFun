@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -17,7 +17,7 @@ import {
   Terminal,
   Wrench,
 } from 'lucide-react';
-import { IconButton, MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
+import { MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import {
@@ -161,13 +161,11 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         <div className="session-usage-report-card__fallback-actions" data-bf-component="session-usage-report-card" data-bf-part="actions">
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={handleCopy}
               aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </IconButton>
+              icon={copied ? <Check size={14} /> : <Copy size={14} />}
+            />
           </Tooltip>
         </div>
         <MarkdownRenderer content={markdown} />
@@ -261,14 +259,12 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
               <IconButton
                 className="session-usage-report-card__copy-action"
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={handleCopy}
                 data-testid="session-usage-copy"
                 aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-              >
-                {copied ? <Check size={17} /> : <Copy size={17} />}
-              </IconButton>
+                icon={copied ? <Check size={17} /> : <Copy size={17} />}
+              />
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
               <Button
@@ -472,13 +468,11 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
               <IconButton
                 className="session-usage-report-card__copy-action"
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={handleCopy}
                 aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </IconButton>
+                icon={copied ? <Check size={14} /> : <Copy size={14} />}
+              />
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
               <Button

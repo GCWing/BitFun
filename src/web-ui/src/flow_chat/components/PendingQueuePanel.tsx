@@ -23,7 +23,7 @@ import {
   Inbox,
   Loader2,
 } from 'lucide-react';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
@@ -36,6 +36,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { QueuedMessage, SteeringImage } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
 import './PendingQueuePanel.scss';
+import { IconButton } from '@bitfun/ui';
 
 const log = createLogger('PendingQueuePanel');
 
@@ -325,25 +326,23 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="sm"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
                         onClick={() => handleEditSave(item)}
                         aria-label={t('pendingQueue.actions.saveEdit')}
-                      >
-                        <Check size={12} strokeWidth={2.25} />
-                      </IconButton>
+                        icon={<Check size={12} strokeWidth={2.25} />}
+                      />
                     </Tooltip>
                     <Tooltip content={t('pendingQueue.actions.cancelEdit')}>
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="sm"
                         className="bitfun-pending-queue-panel__btn"
                         onClick={handleEditCancel}
                         aria-label={t('pendingQueue.actions.cancelEdit')}
-                      >
-                        <XIcon size={12} strokeWidth={2.25} />
-                      </IconButton>
+                        icon={<XIcon size={12} strokeWidth={2.25} />}
+                      />
                     </Tooltip>
                   </>
                 ) : (
@@ -352,46 +351,43 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="sm"
                         className="bitfun-pending-queue-panel__btn"
                         disabled={isSending}
                         onClick={() => handleEditStart(item)}
                         aria-label={t('pendingQueue.actions.edit')}
-                      >
-                        <Pencil size={12} strokeWidth={2.25} />
-                      </IconButton>
+                        icon={<Pencil size={12} strokeWidth={2.25} />}
+                      />
                     </Tooltip>
                     <Tooltip content={t('pendingQueue.tooltip.sendNow')}>
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="sm"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--primary"
                         disabled={isSending || recoveryInFlight}
                         onClick={() => {
                           void handleSendNow(item);
                         }}
                         aria-label={t('pendingQueue.actions.sendNow')}
-                      >
-                        {isSendingNow ? (
+                        icon={isSendingNow ? (
                           <Loader2 size={12} strokeWidth={2.5} className="bitfun-pending-queue-panel__spin" />
                         ) : (
                           <ArrowUp size={12} strokeWidth={2.5} />
                         )}
-                      </IconButton>
+                      />
                     </Tooltip>
                     <Tooltip content={t('pendingQueue.actions.delete')}>
                       <IconButton
                         data-bf-component="pending-queue-panel"
                         data-bf-part="action"
-                        size="small"
+                        size="sm"
                         className="bitfun-pending-queue-panel__btn bitfun-pending-queue-panel__btn--danger"
                         disabled={isSending}
                         onClick={() => handleDelete(item)}
                         aria-label={t('pendingQueue.actions.delete')}
-                      >
-                        <Trash2 size={12} strokeWidth={2.25} />
-                      </IconButton>
+                        icon={<Trash2 size={12} strokeWidth={2.25} />}
+                      />
                     </Tooltip>
                   </>
                 )}
