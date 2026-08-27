@@ -20,6 +20,11 @@ pub struct TokenUsageRecord {
     /// Whether cached token count was explicitly reported by the provider/event.
     #[serde(default)]
     pub cached_tokens_available: bool,
+    /// Cache WRITE tokens (Anthropic only: `cache_creation_input_tokens`).
+    /// These are tokens written into the cache this call (billed at write price).
+    /// Extracted from `token_details.cacheCreationTokenCount` when present.
+    #[serde(default)]
+    pub cache_write_tokens: u32,
     pub total_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_details: Option<serde_json::Value>,
@@ -36,6 +41,9 @@ pub struct ModelTokenStats {
     pub total_output: u64,
     /// Cumulative cache HIT tokens (served from cache, charged at cache-read price).
     pub total_cached: u64,
+    /// Cumulative cache WRITE tokens (Anthropic only; charged at cache-write price).
+    #[serde(default)]
+    pub total_cache_write: u64,
     /// Prompt input tokens from requests where the provider explicitly reported
     /// cache hit telemetry. Used as the cache hit ratio denominator.
     #[serde(default)]
@@ -82,6 +90,9 @@ pub struct SessionTokenStats {
     pub total_output: u32,
     /// Cumulative cache HIT tokens for this session.
     pub total_cached: u32,
+    /// Cumulative cache WRITE tokens for this session (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u32,
     /// Prompt input tokens from requests where the provider explicitly reported
     /// cache hit telemetry. Used as the cache hit ratio denominator.
     #[serde(default)]
@@ -145,6 +156,9 @@ pub struct TokenUsageSummary {
     pub total_output: u64,
     /// Aggregate cache HIT tokens across all records in the query.
     pub total_cached: u64,
+    /// Aggregate cache WRITE tokens across all records in the query (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u64,
     /// Aggregate prompt input tokens from requests where cache hit telemetry was reported.
     #[serde(default)]
     pub cache_reported_input_tokens: u64,
