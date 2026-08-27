@@ -55,7 +55,7 @@ describe('BitFun Canvas control adapters', () => {
 
     expect(markup).toContain('bitfun-input-wrapper');
     expect(markup).toContain('bitfun-textarea');
-    expect(markup).toContain('icon-btn');
+    expect(markup).toContain('data-bf-component="icon-button"');
     expect(markup).toContain('Refresh');
   });
 });
