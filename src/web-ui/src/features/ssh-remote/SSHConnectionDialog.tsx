@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
@@ -745,13 +745,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 <h3 className="ssh-connection-dialog__section-title">
                   {t('ssh.remote.savedConnections')}
                 </h3>
-                <Input
+                <DesignInput
                   className="ssh-connection-dialog__search"
                   value={savedSearch}
                   onChange={(e) => setSavedSearch(e.target.value)}
                   placeholder={t('actions.search')}
-                  prefix={<Search size={14} />}
-                  size="small"
+                  leading={<Search size={14} />}
+                  size="sm"
                 />
               </div>
               <div className="ssh-connection-dialog__saved-list" data-bf-component="ssh-remote" data-bf-part="connectionList">
@@ -822,13 +822,13 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 <h3 className="ssh-connection-dialog__section-title">
                   {t('ssh.remote.sshConfigHosts') || 'SSH Config'}
                 </h3>
-                <Input
+                <DesignInput
                   className="ssh-connection-dialog__search"
                   value={configSearch}
                   onChange={(e) => setConfigSearch(e.target.value)}
                   placeholder={t('actions.search')}
-                  prefix={<Search size={14} />}
-                  size="small"
+                  leading={<Search size={14} />}
+                  size="sm"
                 />
               </div>
               <div className="ssh-connection-dialog__saved-list">
@@ -976,11 +976,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       dropdownClassName="ssh-connection-dialog__select-dropdown"
                     />
                   ) : (
-                    <Input
+                    <DesignInput
                       value={formData.containerName}
                       onChange={(e) => handleInputChange('containerName', e.target.value)}
                       placeholder={t('ssh.remote.containerNamePlaceholder')}
-                      size="medium"
+                      size="md"
                     />
                   )}
                 </div>

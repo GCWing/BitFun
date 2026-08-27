@@ -10,7 +10,7 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal, Input, Select, Alert, Tooltip } from '@/component-library';
@@ -735,13 +735,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.savedConnections')}</h3>
-            <Input
+            <DesignInput
               className="relay-deploy-wizard__search"
               value={savedSearch}
               onChange={(e) => setSavedSearch(e.target.value)}
               placeholder={t('actions.search')}
-              prefix={<Search size={14} />}
-              size="small"
+              leading={<Search size={14} />}
+              size="sm"
             />
           </div>
           <div className="relay-deploy-wizard__server-list">
@@ -779,13 +779,13 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__section">
           <div className="relay-deploy-wizard__section-header">
             <h3 className="relay-deploy-wizard__section-title">{t('ssh.remote.sshConfigHosts')}</h3>
-            <Input
+            <DesignInput
               className="relay-deploy-wizard__search"
               value={configSearch}
               onChange={(e) => setConfigSearch(e.target.value)}
               placeholder={t('actions.search')}
-              prefix={<Search size={14} />}
-              size="small"
+              leading={<Search size={14} />}
+              size="sm"
             />
           </div>
           <div className="relay-deploy-wizard__server-list">

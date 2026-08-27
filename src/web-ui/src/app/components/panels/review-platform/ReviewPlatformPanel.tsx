@@ -1,4 +1,4 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -1951,19 +1951,19 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         {!detailOnly && (
         <aside className="review-platform__list" data-bf-component="review-platform" data-bf-part="listPane" aria-label="Pull request list">
           <div className="review-platform__list-toolbar" data-bf-component="review-platform" data-bf-part="listToolbar">
-            <Input
-              inputSize="small"
+            <DesignInput
               value={query}
               onChange={event => setQuery(event.target.value)}
               placeholder="Search pull requests"
-              prefix={<Search size={14} />}
-              suffix={query ? <IconButton
+              leading={<Search size={14} />}
+              trailing={query ? <IconButton
                 aria-label="Clear search"
                 className="review-platform__icon-button"
                 size="sm"
                 onClick={() => setQuery('')}
                 icon={<XCircle size={14} />}
               /> : undefined}
+              size="sm"
             />
             {!isGithubUserList && (
               <div className="review-platform__state-filters" data-bf-component="review-platform" data-bf-part="filters">
