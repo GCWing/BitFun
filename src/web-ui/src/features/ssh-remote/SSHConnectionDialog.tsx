@@ -3,12 +3,12 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { Alert, Input, Select, Tooltip } from '@/component-library';
+import { Alert, Input, Tooltip } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,
@@ -896,9 +896,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               <Select
                 options={targetOptions}
                 value={formData.targetType}
-                onChange={(value) => handleInputChange('targetType', String(value))}
-                size="medium"
-                dropdownClassName="ssh-connection-dialog__select-dropdown"
+                onValueChange={(value) => handleInputChange('targetType', String(value))}
+                size="md"
               />
             </div>
 
@@ -969,9 +968,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         value: container.name,
                       }))}
                       value={formData.containerName}
-                      onChange={(value) => handleInputChange('containerName', String(value))}
-                      size="medium"
-                      dropdownClassName="ssh-connection-dialog__select-dropdown"
+                      onValueChange={(value) => handleInputChange('containerName', String(value))}
+                      size="md"
                     />
                   ) : (
                     <DesignInput
@@ -991,9 +989,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       <Select
                         options={containerAccessOptions}
                         value={formData.containerAccess}
-                        onChange={(value) => handleInputChange('containerAccess', String(value))}
-                        size="medium"
-                        dropdownClassName="ssh-connection-dialog__select-dropdown"
+                        onValueChange={(value) => handleInputChange('containerAccess', String(value))}
+                        size="md"
                       />
                       <div className="ssh-connection-dialog__hint">
                         {t('ssh.remote.containerAccessHint')}
@@ -1050,9 +1047,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               <Select
                 options={authOptions}
                 value={formData.authType}
-                onChange={(value) => handleInputChange('authType', String(value))}
-                size="medium"
-                dropdownClassName="ssh-connection-dialog__select-dropdown"
+                onValueChange={(value) => handleInputChange('authType', String(value))}
+                size="md"
               />
             </div>
 
