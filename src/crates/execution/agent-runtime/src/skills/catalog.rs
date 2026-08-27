@@ -3,6 +3,7 @@ pub(super) enum BuiltinSkillGroup {
     Office,
     Meta,
     MiniApp,
+    Creation,
     ComputerUse,
     Canvas,
     Debugging,
@@ -15,6 +16,7 @@ impl BuiltinSkillGroup {
             Self::Office => "office",
             Self::Meta => "meta",
             Self::MiniApp => "miniapp",
+            Self::Creation => "creation",
             Self::ComputerUse => "computer-use",
             Self::Canvas => "canvas",
             Self::Debugging => "debugging",
@@ -61,6 +63,10 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "miniapp-dev",
         group: BuiltinSkillGroup::MiniApp,
+    },
+    BuiltinSkillSpec {
+        dir_name: "bitfun-frontend-dev",
+        group: BuiltinSkillGroup::Creation,
     },
     BuiltinSkillSpec {
         dir_name: "gstack-autoplan",

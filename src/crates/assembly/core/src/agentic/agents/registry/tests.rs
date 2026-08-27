@@ -236,6 +236,7 @@ fn top_level_modes_default_to_auto() {
         "agentic",
         "Multitask",
         "Cowork",
+        "Creative",
         "Plan",
         "Claw",
         "DeepResearch",
@@ -337,6 +338,32 @@ fn every_builtin_standard_mode_defaults_to_the_thread_goal_lifecycle() {
                 "builtin primary mode {} is missing {}",
                 mode.id(),
                 tool_name
+            );
+        }
+    }
+}
+
+#[test]
+fn creation_tools_default_only_to_creative_mode() {
+    const CREATION_TOOLS: &[&str] = &[
+        "InitMiniApp",
+        "FinalizeMiniApp",
+        "PublishMiniApp",
+        "FrontendWorkbench",
+    ];
+
+    for spec in builtin_agent_specs()
+        .iter()
+        .filter(|spec| spec.category == AgentCategory::Mode)
+    {
+        let mode = (spec.factory)();
+        let default_tools = mode.default_tools();
+        for tool_name in CREATION_TOOLS {
+            assert_eq!(
+                default_tools.iter().any(|tool| tool == tool_name),
+                mode.id() == "Creative",
+                "creation tool {tool_name} has unexpected default exposure in {}",
+                mode.id()
             );
         }
     }

@@ -142,6 +142,7 @@ fn default_capability_registry_preserves_product_tool_provider_order() {
             "core.computer-use",
             "core.review",
             "core.miniapp",
+            "core.creation",
             "core.canvas",
         ]
     );
@@ -163,6 +164,7 @@ fn capability_packs_describe_service_and_tool_requirements() {
             "deep-review",
             "deep-research",
             "miniapp",
+            "creation",
             "canvas",
             "voice-input"
         ]
@@ -181,6 +183,7 @@ fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_pro
         "deep-review",
         "deep-research",
         "miniapp",
+        "creation",
         "canvas",
     ];
     let full_tool_groups = vec![
@@ -193,6 +196,7 @@ fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_pro
         "core.computer-use",
         "core.review",
         "core.miniapp",
+        "core.creation",
         "core.canvas",
     ];
 
@@ -457,6 +461,7 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
             ProductFeatureGroup::Mcp,
             ProductFeatureGroup::ComputerUse,
             ProductFeatureGroup::MiniApp,
+            ProductFeatureGroup::Creation,
             ProductFeatureGroup::Canvas,
         ]
     );
@@ -471,6 +476,7 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
             "mcp",
             "computer-use",
             "miniapp",
+            "creation",
             "canvas",
         ]
     );
@@ -768,6 +774,7 @@ fn default_capability_assembly_keeps_service_and_tool_facts_together() {
             "deep-review",
             "deep-research",
             "miniapp",
+            "creation",
             "canvas",
             "voice-input"
         ]
@@ -805,6 +812,7 @@ fn default_capability_assembly_keeps_service_and_tool_facts_together() {
             "core.computer-use",
             "core.review",
             "core.miniapp",
+            "core.creation",
             "core.canvas",
         ]
     );

@@ -1,8 +1,6 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .miniapp-market-native {
-  --miniapp-market-card-max-inline-size: 360px;
-
   &__header-actions {
     display: flex;
     align-items: center;
@@ -29,13 +27,13 @@
 
   &__card-grid.gallery-grid--skeleton .gallery-skeleton-card {
     width: 100%;
-    max-width: var(--miniapp-market-card-max-inline-size);
+    max-width: 360px;
   }
 }
 
 .miniapp-market-card {
   width: 100%;
-  max-width: var(--miniapp-market-card-max-inline-size, 360px);
+  max-width: 360px;
   min-width: 0;
   overflow: hidden;
   padding: 0;

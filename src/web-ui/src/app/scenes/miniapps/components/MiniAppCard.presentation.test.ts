@@ -16,8 +16,8 @@ describe('Mini App card presentation', () => {
     const rootEnd = stylesheet.indexOf('&:hover {', rootStart);
     const rootGeometry = stylesheet.slice(rootStart, rootEnd);
 
-    expect(rootGeometry).toContain('max-width: var(--miniapp-card-max-inline-size, 400px);');
-    expect(rootGeometry).toContain('min-height: var(--miniapp-card-min-block-size, 152px);');
+    expect(rootGeometry).toContain('max-width: 400px;');
+    expect(rootGeometry).toContain('min-height: 152px;');
     expect(rootGeometry).not.toContain('aspect-ratio:');
     expect(stylesheet).toContain('grid-template-columns: clamp(60px, 18%, 72px) minmax(0, 1fr);');
     expect(stylesheet).toMatch(/&__footer \{[\s\S]*?margin-top: auto;/);
@@ -29,11 +29,12 @@ describe('Mini App card presentation', () => {
 
     expect(source).toContain('const MINIAPP_CARD_MIN_WIDTH = 280;');
     expect(source.match(/minCardWidth=\{MINIAPP_CARD_MIN_WIDTH\}/g)).toHaveLength(3);
-    expect(stylesheet).toContain('--miniapp-card-max-inline-size: 400px;');
-    expect(stylesheet).toContain('--miniapp-card-min-block-size: 152px;');
     expect(stylesheet).toMatch(/&__card-grid \{\s+justify-items: start;/);
     expect(stylesheet).toMatch(
-      /&__card-grid\.gallery-grid--skeleton \.gallery-skeleton-card \{[\s\S]*?max-width: var\(--miniapp-card-max-inline-size\);[\s\S]*?height: var\(--miniapp-card-min-block-size\);/,
+      /&__card-grid\.gallery-grid--skeleton \.gallery-skeleton-card \{[\s\S]*?max-width: 400px;[\s\S]*?height: 152px;/,
+    );
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 480px\) \{[\s\S]*?\.miniapp-card,[\s\S]*?\.gallery-skeleton-card \{\s+max-width: 100%;/,
     );
     expect(stylesheet).not.toContain('aspect-ratio: 12 / 5;');
   });
@@ -43,8 +44,7 @@ describe('Mini App card presentation', () => {
     const stylesheet = readRelative('../views/MiniAppMarketView.scss');
 
     expect(source.match(/className="miniapp-market-native__card-grid"/g)).toHaveLength(2);
-    expect(stylesheet).toContain('--miniapp-market-card-max-inline-size: 360px;');
-    expect(stylesheet).toContain('max-width: var(--miniapp-market-card-max-inline-size, 360px);');
+    expect(stylesheet).toContain('max-width: 360px;');
     expect(stylesheet).toMatch(/&__card-grid \{\s+justify-items: center;/);
     expect(stylesheet).toMatch(/&__visual \{[\s\S]*?aspect-ratio: 16 \/ 9;/);
   });

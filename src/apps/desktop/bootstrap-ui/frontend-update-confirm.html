@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Confirm frontend update</title>
+    <style>
+      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; background: #17171a; color: #f3f3f5; }
+      main { padding: 28px; }
+      h1 { margin: 0 0 9px; font-size: 20px; }
+      p { margin: 0 0 22px; color: #aaaab3; line-height: 1.5; }
+      strong { color: #fff; font-variant-numeric: tabular-nums; }
+      .actions { display: flex; gap: 10px; justify-content: flex-end; }
+      button { border: 1px solid #3c3c43; border-radius: 9px; padding: 9px 15px; background: #26262b; color: inherit; cursor: pointer; font: inherit; }
+      button.primary { border-color: #7657ff; background: #6547e8; }
+      button:disabled { opacity: .55; cursor: wait; }
+      #error { min-height: 20px; margin-top: 14px; color: #ff8585; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Keep this frontend?</h1>
+      <p id="message">Confirm within <strong id="countdown">15</strong> seconds or BitFun will restore the previous version automatically.</p>
+      <div class="actions">
+        <button id="rollback" type="button">Roll back</button>
+        <button id="confirm" class="primary" type="button">Keep changes</button>
+      </div>
+      <div id="error" role="alert"></div>
+    </main>
+    <script>
+      (function () {
+        var zh = /^zh/i.test(navigator.language || '');
+        if (zh) {
+          document.documentElement.lang = 'zh-CN';
+          document.getElementById('title').textContent = '保留这次前端修改吗？';
+          document.getElementById('message').innerHTML = '请在 <strong id="countdown">15</strong> 秒内确认，否则 BitFun 会自动恢复上一版本。';
+          document.getElementById('rollback').textContent = '回滚';
+          document.getElementById('confirm').textContent = '保留修改';
+        }
+        var params = new URLSearchParams(location.search);
+        var transactionId = params.get('transactionId');
+        var remaining = 15;
+        var countdown = document.getElementById('countdown');
+        var buttons = Array.from(document.querySelectorAll('button'));
+        var error = document.getElementById('error');
+        function invoke(command) {
+          if (!transactionId || !window.__TAURI__ || !window.__TAURI__.core) {
+            return Promise.reject(new Error('BitFun host bridge is unavailable'));
+          }
+          buttons.forEach(function (button) { button.disabled = true; });
+          return window.__TAURI__.core.invoke(command, { request: { transactionId: transactionId } })
+            .catch(function (reason) {
+              error.textContent = String(reason);
+              buttons.forEach(function (button) { button.disabled = false; });
+            });
+        }
+        document.getElementById('confirm').addEventListener('click', function () { invoke('confirm_frontend_update'); });
+        document.getElementById('rollback').addEventListener('click', function () { invoke('rollback_frontend_update'); });
+        window.setInterval(function () {
+          remaining = Math.max(0, remaining - 1);
+          countdown.textContent = String(remaining);
+          if (remaining === 0) buttons.forEach(function (button) { button.disabled = true; });
+        }, 1000);
+      })();
+    </script>
+  </body>
+</html>

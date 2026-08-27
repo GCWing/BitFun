@@ -1259,6 +1259,7 @@ test('Core product-full explicitly assembles service and tool capability owners'
     'tools-mcp',
     'tools-browser-web',
     'tools-computer-use',
+    'tools-creation',
     'tools-image-analysis',
     'tools-miniapp',
     'tools-canvas',

@@ -234,6 +234,7 @@ export function prepareTauriConfig(
   // packaging injects it here; frontend:build-all (beforeBuildCommand)
   // compiles the profile before Tauri copies resources.
   injectDshProfileResource(config);
+  injectExternalFrontendResource(config);
 
   const release = releaseChannel
     ?? resolveReleaseChannel(process.env.BITFUN_RELEASE_CHANNEL);
@@ -296,10 +297,21 @@ export function prepareTauriConfig(
 
 const DSH_PROFILE_RESOURCE_SOURCE = '../../../packages/dsh-acp/dist-profile';
 const DSH_PROFILE_RESOURCE_TARGET = 'resources/dsh-profile';
+const EXTERNAL_FRONTEND_RESOURCE_SOURCE = '../../../dist';
+const EXTERNAL_FRONTEND_RESOURCE_TARGET = 'frontend/dist';
 
 function injectDshProfileResource(config) {
   const resources = { ...(config.bundle?.resources || {}) };
   resources[DSH_PROFILE_RESOURCE_SOURCE] = DSH_PROFILE_RESOURCE_TARGET;
+  config.bundle = {
+    ...(config.bundle || {}),
+    resources,
+  };
+}
+
+function injectExternalFrontendResource(config) {
+  const resources = { ...(config.bundle?.resources || {}) };
+  resources[EXTERNAL_FRONTEND_RESOURCE_SOURCE] = EXTERNAL_FRONTEND_RESOURCE_TARGET;
   config.bundle = {
     ...(config.bundle || {}),
     resources,

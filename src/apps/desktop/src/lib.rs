@@ -27,6 +27,7 @@ mod builtin_browser_host;
 pub mod computer_use;
 pub mod crash_diagnostics;
 mod embedded_relay_host;
+pub mod frontend_workbench;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
@@ -49,6 +50,7 @@ use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_events::AgenticEvent;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, OnceLock,
@@ -810,8 +812,16 @@ pub async fn run() {
     let terminal_state = api::terminal_api::TerminalState::new();
 
     let path_manager = get_path_manager_arc();
+    let frontend_workbench = Arc::new(frontend_workbench::FrontendWorkbenchManager::new(
+        &path_manager.user_data_dir(),
+    ));
 
     let mut builder = tauri::Builder::default();
+    let frontend_protocol_manager = Arc::clone(&frontend_workbench);
+    builder = builder.register_uri_scheme_protocol(
+        frontend_workbench::FRONTEND_PROTOCOL_SCHEME,
+        move |_context, request| frontend_protocol_manager.protocol_response(request),
+    );
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
@@ -864,6 +874,7 @@ pub async fn run() {
         .manage(coordinator)
         .manage(scheduler)
         .manage(terminal_state)
+        .manage(Arc::clone(&frontend_workbench))
         .manage(startup_trace.clone())
         .on_page_load(|webview, payload| {
             let label = webview.label();
@@ -916,6 +927,36 @@ pub async fn run() {
                 step_started,
             );
             startup_trace.record_logging_ready_and_stop_persistence();
+
+            let bundled_frontend = if cfg!(debug_assertions) {
+                let development_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../..")
+                    .join("dist");
+                development_dist
+                    .join("index.html")
+                    .is_file()
+                    .then_some(development_dist)
+            } else {
+                app.path()
+                    .resolve("frontend/dist", tauri::path::BaseDirectory::Resource)
+                    .ok()
+                    .filter(|path| path.join("index.html").is_file())
+            };
+            if let Some(bundled_frontend) = bundled_frontend {
+                if let Err(error) =
+                    frontend_workbench.initialize(app.handle(), &bundled_frontend)
+                {
+                    log::error!(
+                        "Failed to initialize the external frontend workbench: path={}, error={}",
+                        bundled_frontend.display(),
+                        error
+                    );
+                }
+            } else {
+                log::warn!(
+                    "External frontend bundle is unavailable; Creative frontend editing will remain disabled"
+                );
+            }
 
             // Ensure the Tauri NSIS registry install-location key points to the
             // actual install directory, so that auto-updates respect the custom
@@ -1353,6 +1394,8 @@ pub async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             appearance::show_main_window,
+            frontend_workbench::confirm_frontend_update,
+            frontend_workbench::rollback_frontend_update,
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_mode,

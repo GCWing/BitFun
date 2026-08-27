@@ -63,8 +63,7 @@ vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
   gitAPI: { resolveRevision: mocks.resolveRevision },
 }));
 
-vi.mock('@/component-library', () => ({
-  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
+vi.mock('@bitfun/ui', () => ({
   Button: ({
     children,
     disabled,
@@ -76,27 +75,6 @@ vi.mock('@/component-library', () => ({
     <button type="button" disabled={disabled} onClick={onClick}>
       {children}
     </button>
-  ),
-  Input: ({
-    disabled,
-    onChange,
-    onKeyDown,
-    placeholder,
-    value,
-  }: {
-    disabled?: boolean;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
-    placeholder?: string;
-    value?: string;
-  }) => (
-    <input
-      disabled={disabled}
-      onChange={onChange}
-      onKeyDown={onKeyDown}
-      placeholder={placeholder}
-      value={value}
-    />
   ),
   Modal: ({
     children,
@@ -117,6 +95,10 @@ vi.mock('@/component-library', () => ({
     };
     return isOpen ? <div>{children}</div> : null;
   },
+}));
+
+vi.mock('@/component-library', () => ({
+  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
 }));
 
 function createDeferred<T>() {

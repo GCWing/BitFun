@@ -50,6 +50,7 @@ pub fn mode_presentation_rank(mode_id: &str) -> u8 {
         "Multitask" => 3,
         "DeepResearch" => 4,
         "Ultra" => 5,
+        "Creative" => 6,
         _ => 99,
     }
 }
@@ -84,6 +85,12 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
         builtin_agent_spec("minimal", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("agentic", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("Cowork", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "Creative",
+            Mode,
+            "auto",
+            SubagentVisibilityPolicy::default(),
+        ),
         builtin_agent_spec(
             "Multitask",
             Mode,
@@ -188,8 +195,8 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
 
 pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "minimal" | "agentic" | "Cowork" | "ComputerUse" | "Plan" | "Claw" | "DeepResearch"
-        | "Multitask" | "Ultra" => "auto",
+        "minimal" | "agentic" | "Cowork" | "Creative" | "ComputerUse" | "Plan" | "Claw"
+        | "DeepResearch" | "Multitask" | "Ultra" => "auto",
         "Explore" | "CodeReview" | "GeneralPurpose" | "MemoryPhase2" | "SwarmPlanner"
         | "SwarmWorker" => "primary",
         "GenerateDoc"

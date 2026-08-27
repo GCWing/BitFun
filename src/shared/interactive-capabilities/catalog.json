@@ -251,7 +251,9 @@
         "新建会话",
         "继续任务",
         "权限",
-        "目标"
+        "目标",
+        "创造模式",
+        "前端定制"
       ],
       "keywordsEn": [
         "chat",
@@ -260,17 +262,21 @@
         "new session",
         "continue task",
         "permission",
-        "goal"
+        "goal",
+        "Creative mode",
+        "frontend customization"
       ],
       "highlightsZh": [
         "创建、归档、恢复和分叉会话",
         "暂停、继续或引导正在运行的任务",
-        "查看工具调用、权限请求和用量"
+        "查看工具调用、权限请求和用量",
+        "用创造模式安全定制正在运行的 BitFun 前端"
       ],
       "highlightsEn": [
         "Create, archive, restore, and fork sessions",
         "Pause, continue, or steer running work",
-        "Inspect tool calls, permission requests, and usage"
+        "Inspect tool calls, permission requests, and usage",
+        "Safely customize the running BitFun frontend in Creative mode"
       ],
       "items": [
         {
@@ -327,6 +333,34 @@
             "command:get_available_modes",
             "command:get_session_permission_mode",
             "command:update_active_turn_permission_mode"
+          ]
+        },
+        {
+          "id": "creative-frontend-authoring",
+          "titleZh": "让创造模式安全修改正在运行的 BitFun 前端",
+          "titleEn": "Let Creative mode safely customize the running BitFun frontend",
+          "control": {
+            "kind": "delegate",
+            "tools": [
+              "FrontendWorkbench",
+              "Read",
+              "Write",
+              "Edit"
+            ],
+            "workflowZh": [
+              "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
+              "用原草稿 ID 调用 apply 后，告知用户必须在 15 秒内通过不可变确认窗口保留修改；再次查询 status，只有不再 pending 才算完成"
+            ],
+            "workflowEn": [
+              "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
+              "Apply with the original draft ID, tell the user to keep the change through the immutable confirmation window within 15 seconds, and treat it as complete only after status is no longer pending"
+            ]
+          },
+          "evidence": [
+            "source:src/crates/assembly/core/src/agentic/tools/implementations/frontend_workbench_tool.rs#FrontendWorkbench",
+            "source:src/apps/desktop/src/frontend_workbench.rs#FrontendWorkbenchManager",
+            "command:confirm_frontend_update",
+            "command:rollback_frontend_update"
           ]
         },
         {
@@ -8852,6 +8886,9 @@
       "capabilityId": "feature.projects"
     },
     "agentic": {
+      "capabilityId": "feature.ai-assistant"
+    },
+    "frontend_workbench": {
       "capabilityId": "feature.ai-assistant"
     },
     "remote_connect": {

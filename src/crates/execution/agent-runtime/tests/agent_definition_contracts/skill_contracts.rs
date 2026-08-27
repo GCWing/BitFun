@@ -288,6 +288,10 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
     assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
     assert_eq!(
+        builtin_skill_group_key("bitfun-frontend-dev"),
+        Some("creation")
+    );
+    assert_eq!(
         builtin_skill_group_key("agent-browser"),
         Some("computer-use")
     );
@@ -316,7 +320,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     );
     assert_eq!(
         resolve_builtin_default_enabled("miniapp-dev", "agentic"),
-        Some(true)
+        Some(false)
     );
     assert_eq!(
         resolve_builtin_default_enabled("miniapp-dev", "Cowork"),
@@ -324,6 +328,18 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     );
     assert_eq!(
         resolve_builtin_default_enabled("miniapp-dev", "DeepResearch"),
+        Some(false)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("miniapp-dev", "Creative"),
+        Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("bitfun-frontend-dev", "Creative"),
+        Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("bitfun-frontend-dev", "agentic"),
         Some(false)
     );
     assert_eq!(

@@ -1446,6 +1446,7 @@ export function findProductEntrypointCoreFeatureViolations(
     'tools-browser-web',
     'tools-canvas',
     'tools-computer-use',
+    'tools-creation',
     'tools-git',
     'tools-image-analysis',
     'tools-mcp',

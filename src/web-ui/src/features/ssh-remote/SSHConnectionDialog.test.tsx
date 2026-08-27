@@ -53,8 +53,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
   SSHAuthPromptDialog: () => null,
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+vi.mock('@bitfun/ui', () => ({
   Modal: ({
     isOpen,
     children,
@@ -100,6 +99,31 @@ vi.mock('@/component-library', () => ({
       {children}
     </button>
   ),
+  Input: ({
+    label,
+    value,
+    onChange,
+    className,
+    placeholder,
+    suffix,
+  }: {
+    label?: string;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+    className?: string;
+    placeholder?: string;
+    suffix?: React.ReactNode;
+  }) => (
+    <label className={className}>
+      {label}
+      <input aria-label={label} value={value} onChange={onChange} placeholder={placeholder} />
+      {suffix}
+    </label>
+  ),
+}));
+
+vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Input: ({
     label,
     value,

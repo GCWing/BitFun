@@ -47,6 +47,7 @@ Notes:
 | `InitMiniApp` | Direct | None | - |
 | `FinalizeMiniApp` | Direct | None | - |
 | `PublishMiniApp` | Direct | None | - |
+| `FrontendWorkbench` | Direct | None | - |
 | `PublishAppearance` | Direct | None | - |
 | `ControlHub` | Deferred | `ComputerUse` | Direct |
 | `ComputerUse` | Deferred | `ComputerUse` | Direct |

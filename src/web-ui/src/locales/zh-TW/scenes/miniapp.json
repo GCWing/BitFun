@@ -7,9 +7,10 @@
   "importMenuLabel": "選擇匯入方式",
   "creationMode": {
     "action": "使用創造模式建立",
-    "unavailableTitle": "創造模式暫未開放",
-    "unavailableMessage": "創造模式仍在開發中，目前還不能用它建立小應用。",
-    "acknowledge": "知道了"
+    "started": "創造模式已就緒，可以描述你想建立的 MiniApp。",
+    "startFailed": "無法啟動創造模式。",
+    "noWorkspace": "請先開啟一個本機工作區再啟動創造模式。",
+    "remoteUnsupported": "MiniApp 建立僅支援本機環境，遠端工作區暫不可用。"
   },
   "running": "已啟動",
   "allApps": "全部應用",

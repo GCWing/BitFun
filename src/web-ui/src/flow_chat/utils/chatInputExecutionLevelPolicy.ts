@@ -1,4 +1,4 @@
-export type SelectableComposerExecutionLevel = 'minimal' | 'balanced' | 'ultimate';
+export type SelectableComposerExecutionLevel = 'minimal' | 'balanced' | 'ultimate' | 'creative';
 export type ComposerExecutionLevel = SelectableComposerExecutionLevel | 'other';
 
 export interface ComposerExecutionLevelSelection {
@@ -17,6 +17,7 @@ export function resolveComposerExecutionLevelSelection(
 ): ComposerExecutionLevelSelection {
   if (level === 'minimal') return { modeId: 'minimal' };
   if (level === 'ultimate') return { modeId: 'Ultra' };
+  if (level === 'creative') return { modeId: 'Creative' };
   return { modeId: 'agentic' };
 }
 
@@ -25,6 +26,7 @@ export function resolveSelectedComposerExecutionLevel(params: {
 }): ComposerExecutionLevel {
   if (params.currentMode.trim().toLowerCase() === 'minimal') return 'minimal';
   if (isUltraAgentType(params.currentMode)) return 'ultimate';
+  if (params.currentMode.trim().toLowerCase() === 'creative') return 'creative';
   return params.currentMode.trim().toLowerCase() === 'agentic' ? 'balanced' : 'other';
 }
 

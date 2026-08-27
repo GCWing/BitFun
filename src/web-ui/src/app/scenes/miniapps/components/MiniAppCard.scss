@@ -3,9 +3,9 @@
 
 .miniapp-card {
   width: 100%;
-  max-width: var(--miniapp-card-max-inline-size, 400px);
+  max-width: 400px;
   min-width: 0;
-  min-height: var(--miniapp-card-min-block-size, 152px);
+  min-height: 152px;
   box-sizing: border-box;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;

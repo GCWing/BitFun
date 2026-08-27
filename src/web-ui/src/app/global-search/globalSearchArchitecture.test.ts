@@ -45,12 +45,12 @@ describe('global search ownership', () => {
     expect(globalSearchStyles).toMatch(
       /\.global-search--modal\s*\{[\s\S]*\.global-search__action-icon\s*\{/,
     );
-    expect(globalSearchStyles).toContain('--_global-search-command-red: #ec221f');
-    expect(globalSearchStyles).toContain('--_global-search-command-orange: #ff8c00');
-    expect(globalSearchStyles).toContain('--_global-search-command-green: #009951');
-    expect(globalSearchStyles).toContain('--_global-search-command-cyan: #059cb0');
-    expect(globalSearchStyles).toContain('--_global-search-command-blue: #3271d7');
-    expect(globalSearchStyles).toContain('--_global-search-command-purple: #9e54ff');
+    expect(globalSearchStyles).toContain('--_global-search-command-red: var(--bf-appearance-token-color-error)');
+    expect(globalSearchStyles).toContain('--_global-search-command-orange: var(--bf-appearance-token-color-warning)');
+    expect(globalSearchStyles).toContain('--_global-search-command-green: var(--bf-appearance-token-color-success)');
+    expect(globalSearchStyles).toContain('--_global-search-command-cyan: var(--bf-appearance-token-color-cyan-500)');
+    expect(globalSearchStyles).toContain('--_global-search-command-blue: var(--bf-appearance-token-color-accent-500)');
+    expect(globalSearchStyles).toContain('--_global-search-command-purple: var(--bf-appearance-token-color-purple-500)');
     expect(globalSearchStyles).toContain("&[data-icon-tone='red']");
     expect(globalSearchStyles).toContain("&[data-icon-tone='orange']");
     expect(globalSearchStyles).toContain("&[data-icon-tone='green']");

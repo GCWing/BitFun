@@ -611,6 +611,7 @@ mod tests {
             "InitMiniApp",
             "FinalizeMiniApp",
             "PublishMiniApp",
+            "FrontendWorkbench",
             "PublishAppearance",
             "PageDeploy",
             "PagePublish",
@@ -677,6 +678,7 @@ mod tests {
                 "core.computer-use",
                 "core.review",
                 "core.miniapp",
+                "core.creation",
                 "core.canvas",
             ],
             "provider groups must preserve the reviewed atomic ownership order"

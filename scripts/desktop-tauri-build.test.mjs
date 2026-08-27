@@ -345,11 +345,25 @@ test('official packaging injects the DeepSeek profile resource', () => {
       'resources/dsh-profile',
     );
     assert.equal(
+      config.bundle.resources['../../../dist'],
+      'frontend/dist',
+    );
+    assert.equal(
       config.bundle.resources['resources/worker_host.js'],
       'resources/worker_host.js',
     );
   } finally {
     rmSync(fixture, { force: true, recursive: true });
+  }
+});
+
+test('static desktop configs keep the full frontend outside Tauri embedded assets', () => {
+  for (const name of ['tauri.conf.json', 'tauri.dev.conf.json']) {
+    const config = JSON.parse(
+      readFileSync(join(ROOT, 'src', 'apps', 'desktop', name), 'utf8')
+    );
+    assert.equal(config.build.frontendDist, 'bootstrap-ui');
+    assert.equal(config.bundle.resources['../../../dist'], undefined);
   }
 });
 

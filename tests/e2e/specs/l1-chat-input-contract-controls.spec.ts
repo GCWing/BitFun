@@ -140,7 +140,7 @@ describe('L1 Chat Input Contract Controls', () => {
     }
   });
 
-  it('shows Creative Harness as in development with the BitFun-owned icon', async function () {
+  it('activates Creative Harness with the BitFun-owned icon', async function () {
     if (!hasWorkspace) {
       this.skip();
       return;
@@ -148,12 +148,11 @@ describe('L1 Chat Input Contract Controls', () => {
 
     const harnessTrigger = await $('[data-testid="harness-profile-selector"]');
     await harnessTrigger.waitForDisplayed({ timeout: 10000 });
-    const selectedLabel = await harnessTrigger.getText();
     await harnessTrigger.click();
 
     const creativeProfile = await $('[data-testid="harness-profile-creative"]');
     await creativeProfile.waitForDisplayed({ timeout: 10000 });
-    expect(await creativeProfile.getAttribute('data-bf-state')).toBe('coming-soon');
+    expect(await creativeProfile.getAttribute('data-bf-state')).toBe('available');
 
     const creativeIcon = await creativeProfile.$('[data-bf-icon="harness-creative"]');
     expect(await creativeIcon.isDisplayed()).toBe(true);
@@ -162,7 +161,7 @@ describe('L1 Chat Input Contract Controls', () => {
 
     await creativeProfile.click();
     await creativeProfile.waitForExist({ timeout: 10000, reverse: true });
-    expect(await harnessTrigger.getText()).toBe(selectedLabel);
+    expect(await harnessTrigger.getText()).toContain('Creative');
   });
 
   it('does not expose Harness configuration in an Assistant composer', async function () {
