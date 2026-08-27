@@ -10,10 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input, Select, Alert, Tooltip } from '@/component-library';
+import { Input, Alert, Tooltip } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -852,8 +852,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         <div className="relay-deploy-wizard__field">
           <label className="relay-deploy-wizard__label">{t('ssh.remote.authMethod')}</label>
           <Select options={authOptions} value={formData.authType}
-            onChange={(v) => setFormData((p) => ({ ...p, authType: String(v) as 'password' | 'privateKey' }))}
-            size="medium" disabled={connecting} />
+            onValueChange={(v) => setFormData((p) => ({ ...p, authType: String(v) as 'password' | 'privateKey' }))}
+            size="md" disabled={connecting} />
         </div>
         {formData.authType === 'password' && (
           <div className="relay-deploy-wizard__field">
@@ -990,8 +990,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 <Select
                   options={mirrorModeOptions}
                   value={mirrorMode}
-                  onChange={(value) => setMirrorMode(String(value) as RelayMirrorMode)}
-                  size="medium"
+                  onValueChange={(value) => setMirrorMode(String(value) as RelayMirrorMode)}
+                  size="md"
                   disabled={taskRunning || preflightLoading}
                 />
               </div>

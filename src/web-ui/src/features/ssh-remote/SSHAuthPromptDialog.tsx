@@ -2,10 +2,10 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button, IconButton, Modal } from '@bitfun/ui';
+import { Button, IconButton, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input, Select, Tooltip } from '@/component-library';
+import { Input, Tooltip } from '@/component-library';
 import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import {
@@ -184,10 +184,10 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
           <Select
             options={authOptions}
             value={authMethod}
-            onChange={(value) => setAuthMethod(
+            onValueChange={(value) => setAuthMethod(
               value as 'password' | 'privateKey' | 'agent' | 'keyboardInteractive',
             )}
-            size="medium"
+            size="md"
             disabled={isConnecting}
           />
         </div>
