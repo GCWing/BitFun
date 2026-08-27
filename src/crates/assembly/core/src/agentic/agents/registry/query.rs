@@ -11,10 +11,28 @@ use crate::agentic::agents::{
 };
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use crate::agentic::tools::get_all_registered_tool_names;
-use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
+use crate::service::config::mode_config_canonicalizer::{
+    apply_implicit_thread_goal_policy, resolve_effective_tools,
+};
 use bitfun_agent_runtime::agents::subagent_source_presentation_rank;
 use std::collections::HashSet;
 use std::path::Path;
+
+fn apply_mode_tool_augmentation(
+    agent: &dyn crate::agentic::agents::Agent,
+    mut resolved_tools: Vec<String>,
+    registered_tool_names: &[String],
+) -> Vec<String> {
+    resolved_tools = apply_implicit_thread_goal_policy(
+        resolved_tools,
+        agent.include_implicit_thread_goal_tools(),
+    );
+    if agent.include_dynamic_mcp_tools() {
+        merge_dynamic_mcp_tools(resolved_tools, registered_tool_names)
+    } else {
+        resolved_tools
+    }
+}
 
 impl AgentRegistry {
     /// Return every effective local agent definition that can participate in
@@ -95,7 +113,11 @@ impl AgentRegistry {
                 let default_tools = entry.agent.default_tools();
                 let config = mode_configs.get(profile_id.as_ref());
                 let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
-                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
+                let allowed_tools = apply_mode_tool_augmentation(
+                    entry.agent.as_ref(),
+                    resolved_tools,
+                    &registered_tool_names,
+                );
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
@@ -428,6 +450,29 @@ impl AgentRegistry {
                     &user_overrides,
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_mode_tool_augmentation;
+    use crate::agentic::agents::{Agent, MinimalMode};
+
+    #[test]
+    fn minimal_mode_rejects_implicit_goal_and_dynamic_mcp_tools() {
+        let mode = MinimalMode::new();
+        let mut resolved = mode.default_tools();
+        resolved.extend(
+            ["get_goal", "create_goal", "update_goal"]
+                .into_iter()
+                .map(str::to_string),
+        );
+        let registered = vec!["Read".to_string(), "mcp__example__search".to_string()];
+
+        assert_eq!(
+            apply_mode_tool_augmentation(&mode, resolved, &registered),
+            mode.default_tools()
+        );
     }
 }
 

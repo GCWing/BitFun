@@ -1009,6 +1009,7 @@ const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
 const CODE_AGENT_IDS: &[&str] = &[
     "agentic",
+    "minimal",
     "Cowork",
     "debug",
     "Multitask",

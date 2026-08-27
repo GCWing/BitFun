@@ -90,7 +90,7 @@ fn headless_agent_hosts_do_not_register_product_workflow_agents() {
             );
         }
 
-        for code_agent in ["agentic", "Plan", "Explore", "GeneralPurpose"] {
+        for code_agent in ["agentic", "minimal", "Plan", "Explore", "GeneralPurpose"] {
             assert!(
                 agent_ids.contains(&code_agent),
                 "{profile} must keep the core agent {code_agent}"

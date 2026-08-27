@@ -28,6 +28,11 @@ pub struct AgentProfileConfigCanonicalizationReport {
     pub updated_profiles: Vec<AgentProfileConfigUpdateInfo>,
 }
 
+struct AgentProfileDefaults {
+    tools: Vec<String>,
+    include_implicit_thread_goal_tools: bool,
+}
+
 /// Agent-profile config update information.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AgentProfileConfigUpdateInfo {
@@ -140,6 +145,16 @@ pub fn resolve_effective_tools(
     effective
 }
 
+pub(crate) fn apply_implicit_thread_goal_policy(
+    mut tools: Vec<String>,
+    include_implicit_thread_goal_tools: bool,
+) -> Vec<String> {
+    if !include_implicit_thread_goal_tools {
+        tools.retain(|tool| !THREAD_GOAL_TOOL_NAMES.contains(&tool.as_str()));
+    }
+    tools
+}
+
 fn stored_agent_profile_from_tool_selection(
     agent_id: &str,
     enabled_tools: Vec<String>,
@@ -250,11 +265,15 @@ fn stored_agent_profile_from_overrides(
 fn build_agent_profile_view(
     agent_id: &str,
     default_tools: Vec<String>,
+    include_implicit_thread_goal_tools: bool,
     mode_config: Option<&AgentProfileConfig>,
     valid_tools: &HashSet<String>,
 ) -> AgentProfileView {
     let default_tools = normalize_tools(default_tools, valid_tools);
-    let enabled_tools = resolve_effective_tools(&default_tools, mode_config, valid_tools);
+    let enabled_tools = apply_implicit_thread_goal_policy(
+        resolve_effective_tools(&default_tools, mode_config, valid_tools),
+        include_implicit_thread_goal_tools,
+    );
     let (disabled_user_skills, enabled_user_skills) = mode_config
         .map(|config| {
             normalize_skill_override_lists(
@@ -277,6 +296,7 @@ fn canonicalize_agent_profile(
     profile_id: &str,
     raw_mode: Option<&Value>,
     default_tools: &[String],
+    include_implicit_thread_goal_tools: bool,
     valid_tools: &HashSet<String>,
 ) -> BitFunResult<Option<AgentProfileConfig>> {
     let Some(raw_mode) = raw_mode else {
@@ -296,6 +316,8 @@ fn canonicalize_agent_profile(
     if stored.profile_id.trim().is_empty() {
         stored.profile_id = profile_id.to_string();
     }
+    stored.added_tools =
+        apply_implicit_thread_goal_policy(stored.added_tools, include_implicit_thread_goal_tools);
 
     Ok(stored_agent_profile_from_overrides(
         StoredAgentProfileOverrides {
@@ -320,12 +342,24 @@ async fn get_valid_tool_names() -> HashSet<String> {
         .collect()
 }
 
-async fn get_mode_defaults() -> HashMap<String, Vec<String>> {
-    get_agent_registry()
+async fn get_mode_defaults() -> HashMap<String, AgentProfileDefaults> {
+    let registry = get_agent_registry();
+    registry
         .get_modes_info()
         .await
         .into_iter()
-        .map(|mode| (mode.id, mode.default_tools))
+        .map(|mode| {
+            let include_implicit_thread_goal_tools = registry
+                .get_agent(&mode.id, None)
+                .is_none_or(|agent| agent.include_implicit_thread_goal_tools());
+            (
+                mode.id,
+                AgentProfileDefaults {
+                    tools: mode.default_tools,
+                    include_implicit_thread_goal_tools,
+                },
+            )
+        })
         .collect()
 }
 
@@ -334,22 +368,27 @@ async fn get_mode_defaults() -> HashMap<String, Vec<String>> {
 /// Profiles are not a mode-only concept: sub-agents carry their own skill
 /// selection, so a mode-only lookup rejects writes for agents the UI already
 /// lets users configure (`ComputerUse` being the built-in case).
-async fn get_agent_defaults() -> HashMap<String, Vec<String>> {
+async fn get_agent_defaults() -> HashMap<String, AgentProfileDefaults> {
+    let registry = get_agent_registry();
     let mut defaults = get_mode_defaults().await;
-    for subagent in get_agent_registry().get_subagents_info(None).await {
-        defaults
-            .entry(subagent.id)
-            .or_insert(subagent.default_tools);
+    for subagent in registry.get_subagents_info(None).await {
+        let include_implicit_thread_goal_tools = registry
+            .get_agent(&subagent.id, None)
+            .is_none_or(|agent| agent.include_implicit_thread_goal_tools());
+        defaults.entry(subagent.id).or_insert(AgentProfileDefaults {
+            tools: subagent.default_tools,
+            include_implicit_thread_goal_tools,
+        });
     }
     defaults
 }
 
-async fn get_profile_defaults() -> HashMap<String, Vec<String>> {
+async fn get_profile_defaults() -> HashMap<String, AgentProfileDefaults> {
     let mut defaults = HashMap::new();
-    for (agent_id, default_tools) in get_agent_defaults().await {
+    for (agent_id, profile_defaults) in get_agent_defaults().await {
         defaults
             .entry(resolve_profile_id(&agent_id))
-            .or_insert(default_tools);
+            .or_insert(profile_defaults);
     }
     defaults
 }
@@ -368,11 +407,12 @@ pub async fn get_agent_profile_views() -> BitFunResult<HashMap<String, AgentProf
     let valid_tools = get_valid_tool_names().await;
 
     let mut views = HashMap::new();
-    for (mode_id, default_tools) in mode_defaults {
+    for (mode_id, defaults) in mode_defaults {
         let profile_id = resolve_profile_id(&mode_id);
         let view = build_agent_profile_view(
             &mode_id,
-            default_tools,
+            defaults.tools,
+            defaults.include_implicit_thread_goal_tools,
             stored_configs.get(&profile_id),
             &valid_tools,
         );
@@ -394,7 +434,7 @@ pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> 
     let config_service = GlobalConfigManager::get_service().await?;
     let mut stored_configs = get_agent_profile_configs().await?;
     let agent_defaults = get_agent_defaults().await;
-    let default_tools = agent_defaults
+    let defaults = agent_defaults
         .get(agent_id)
         .ok_or_else(|| BitFunError::config(format!("Agent does not exist: {}", agent_id)))?;
     let valid_tools = get_valid_tool_names().await;
@@ -409,8 +449,12 @@ pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> 
             ))
         })?
     } else {
-        resolve_effective_tools(default_tools, current, &valid_tools)
+        resolve_effective_tools(&defaults.tools, current, &valid_tools)
     };
+    let enabled_tools = apply_implicit_thread_goal_policy(
+        enabled_tools,
+        defaults.include_implicit_thread_goal_tools,
+    );
 
     let disabled_user_skills = if config
         .as_object()
@@ -506,7 +550,7 @@ pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> 
         enabled_user_skills,
         subagent_overrides,
         tool_permission_rules,
-        default_tools,
+        &defaults.tools,
         &valid_tools,
     ) {
         stored_configs.insert(profile_id, canonical);
@@ -564,10 +608,15 @@ pub async fn canonicalize_agent_profile_configs(
     let mut updated_profiles = Vec::new();
     let mut removed_profile_configs = Vec::new();
 
-    for (profile_id, default_tools) in &profile_defaults {
+    for (profile_id, defaults) in &profile_defaults {
         let raw_profile = raw_agent_profiles.get(profile_id);
-        let canonical =
-            canonicalize_agent_profile(profile_id, raw_profile, default_tools, &valid_tools)?;
+        let canonical = canonicalize_agent_profile(
+            profile_id,
+            raw_profile,
+            &defaults.tools,
+            defaults.include_implicit_thread_goal_tools,
+            &valid_tools,
+        )?;
         if let Some(config) = canonical {
             if raw_profile.is_some() {
                 updated_profiles.push(AgentProfileConfigUpdateInfo {
@@ -811,9 +860,10 @@ mod tests {
                 "effect": "allow"
             }]
         });
-        let canonical = canonicalize_agent_profile("agentic", Some(&raw), &[], &HashSet::new())
-            .expect("profile should canonicalize")
-            .expect("permission-only profile should be present");
+        let canonical =
+            canonicalize_agent_profile("agentic", Some(&raw), &[], true, &HashSet::new())
+                .expect("profile should canonicalize")
+                .expect("permission-only profile should be present");
 
         assert_eq!(canonical.tool_permission_rules.len(), 1);
         assert_eq!(canonical.tool_permission_rules[0].action, "edit");
@@ -822,7 +872,7 @@ mod tests {
     #[test]
     fn canonicalize_agent_profile_treats_null_as_missing() {
         let canonical =
-            canonicalize_agent_profile("Claw", Some(&Value::Null), &[], &HashSet::new())
+            canonicalize_agent_profile("Claw", Some(&Value::Null), &[], true, &HashSet::new())
                 .expect("null mode config should be ignored");
 
         assert!(canonical.is_none());
@@ -838,6 +888,7 @@ mod tests {
             "coding_shared",
             Some(&raw),
             &["Read".to_string()],
+            true,
             &HashSet::from(["Read".to_string()]),
         )
         .expect("profile should canonicalize")
@@ -847,6 +898,40 @@ mod tests {
             canonical.added_tools,
             vec!["mcp__github__list_issues".to_string()]
         );
+    }
+
+    #[test]
+    fn minimal_profile_drops_implicit_goal_tools_from_views_and_stored_overrides() {
+        let default_tools = vec!["Read".to_string(), "ExecCommand".to_string()];
+        let valid_tools = HashSet::from([
+            "Read".to_string(),
+            "ExecCommand".to_string(),
+            "get_goal".to_string(),
+            "create_goal".to_string(),
+            "update_goal".to_string(),
+        ]);
+        let view = super::build_agent_profile_view(
+            "minimal",
+            default_tools.clone(),
+            false,
+            None,
+            &valid_tools,
+        );
+        assert_eq!(view.enabled_tools, default_tools);
+
+        let raw = serde_json::json!({
+            "profile_id": "minimal",
+            "added_tools": ["get_goal", "update_goal"]
+        });
+        let canonical = canonicalize_agent_profile(
+            "minimal",
+            Some(&raw),
+            &view.default_tools,
+            false,
+            &valid_tools,
+        )
+        .expect("minimal profile should canonicalize");
+        assert!(canonical.is_none());
     }
 
     #[test]

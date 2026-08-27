@@ -37,12 +37,13 @@ pub fn mode_config_profile_label(profile_id: &str) -> Option<&'static str> {
 pub fn mode_presentation_rank(mode_id: &str) -> u8 {
     match mode_id {
         "agentic" => 0,
-        "Cowork" => 1,
-        "Plan" => 2,
-        "debug" => 3,
-        "Multitask" => 4,
-        "DeepResearch" => 5,
-        "Team" => 6,
+        "minimal" => 1,
+        "Cowork" => 2,
+        "Plan" => 3,
+        "debug" => 4,
+        "Multitask" => 5,
+        "DeepResearch" => 6,
+        "Team" => 7,
         _ => 99,
     }
 }
@@ -75,6 +76,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
 
     vec![
         builtin_agent_spec("agentic", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("minimal", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("Cowork", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec("debug", Mode, "auto", SubagentVisibilityPolicy::default()),
         builtin_agent_spec(
@@ -176,8 +178,8 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
 
 pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
-        | "Team" | "Multitask" => "auto",
+        "agentic" | "minimal" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw"
+        | "DeepResearch" | "Team" | "Multitask" => "auto",
         "Explore" | "FileFinder" | "CodeReview" | "GeneralPurpose" | "MemoryPhase2" => "primary",
         "GenerateDoc"
         | "ResearchSpecialist"
