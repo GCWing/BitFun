@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { Puzzle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
@@ -456,25 +456,23 @@ const ExternalMcpOverview: React.FC = () => {
       extra={(
         <>
           {loadFailed ? (
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={() => void loadSnapshot()}
-              tooltip={t('external.retry')}
-              aria-label={t('external.retry')}
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-            </IconButton>
+            <Tooltip content={t('external.retry')}>
+              <IconButton
+                size="sm"
+                onClick={() => void loadSnapshot()}
+                aria-label={t('external.retry')}
+                icon={<RefreshCw />}
+              />
+            </Tooltip>
           ) : null}
-          <IconButton
-            variant="ghost"
-            size="small"
-            onClick={() => openEcosystemCompatibility({ ownerSurface: 'external-sources' })}
-            tooltip={t('external.manage')}
-            aria-label={t('external.manage')}
-          >
-            <Puzzle size={16} aria-hidden="true" />
-          </IconButton>
+          <Tooltip content={t('external.manage')}>
+            <IconButton
+              size="sm"
+              onClick={() => openEcosystemCompatibility({ ownerSurface: 'external-sources' })}
+              aria-label={t('external.manage')}
+              icon={<Puzzle />}
+            />
+          </Tooltip>
         </>
       )}
     >
