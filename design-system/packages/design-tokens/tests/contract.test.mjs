@@ -126,6 +126,20 @@ test("NavigationPanel tokens preserve the grouped sidebar composition contract",
   assert.equal(systemDocument.layout.navigationPanel.itemRadius.$value, "{radius.base}");
 });
 
+test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.button.xsHeight"], "24px");
+  assert.equal(tokens["control.button.xsPaddingInline"], "6px");
+  assert.equal(tokens["layout.toolbar.smHeight"], "33px");
+  assert.equal(tokens["layout.toolbar.mdHeight"], "45px");
+  assert.equal(tokens["layout.toolbar.badgeSize"], "24px");
+  assert.equal(tokens["layout.toolbar.separatorBlockSize"], "16px");
+  assert.equal(tokens["layout.toolbar.overflowFadeExtent"], "16px");
+  assert.equal(systemDocument.layout.toolbar.smPaddingBlock.$value, "{space.1}");
+  assert.equal(systemDocument.layout.toolbar.groupGapMd.$value, "{space.2}");
+});
+
 test("Modal tokens preserve the reference surface and chrome contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

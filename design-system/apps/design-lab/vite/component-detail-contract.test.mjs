@@ -280,3 +280,21 @@ test("TabGroup preview carries the selected and outline reference composition", 
   assert.match(source, /data-component="tab-group"/);
   assert.match(source, /<TabGroup/);
 });
+
+test("Toolbar preview keeps leading, centered, trailing, and overflow compositions independent", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Toolbar"/);
+  assert.match(detail, /ToolbarBadge/);
+  assert.match(detail, /ToolbarGroup/);
+  assert.match(detail, /ToolbarSeparator/);
+  assert.match(detail, /case "Toolbar":\s*return \["default", "with-center", "overflow"\] as const/);
+  assert.match(detail, /leadingOverflow=\{state === "overflow" \? "scroll" : "visible"\}/);
+  assert.match(detail, /center=\{state === "with-center"/);
+  assert.match(detail, /setToolbarSize/);
+  assert.match(styles, /\.component-toolbar-example\s*\{[^}]*max-inline-size:\s*760px/s);
+});

@@ -42,6 +42,10 @@ import {
   Switch,
   TabGroup,
   ThemeRoot,
+  Toolbar,
+  ToolbarBadge,
+  ToolbarGroup,
+  ToolbarSeparator,
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
@@ -80,6 +84,7 @@ const componentIcons = {
   SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
+  Toolbar: PanelTop,
 } as const;
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
@@ -288,6 +293,35 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
               value: "settings",
             },
           ]}
+        />
+      );
+    case "Toolbar":
+      return (
+        <Toolbar
+          aria-label={t("components.preview.tabGroupLabel")}
+          center={(
+            <ToolbarGroup>
+              <ToolbarBadge>18</ToolbarBadge>
+              <strong>{t("components.preview.session")}</strong>
+            </ToolbarGroup>
+          )}
+          className="component-toolbar-card-preview"
+          leading={(
+            <Button size="xs" tabIndex={-1} trailingIcon={<ArrowRight aria-hidden="true" />} variant="text">
+              {t("components.preview.welcome")}
+            </Button>
+          )}
+          trailing={(
+            <ToolbarGroup>
+              <ToolbarSeparator />
+              <IconButton
+                aria-label={t("components.preview.searchLabel")}
+                icon={<SearchIcon aria-hidden="true" />}
+                size="xs"
+                tabIndex={-1}
+              />
+            </ToolbarGroup>
+          )}
         />
       );
     default:

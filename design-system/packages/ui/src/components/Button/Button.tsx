@@ -10,7 +10,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   leadingIcon?: ReactNode;
   loading?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   tone?: "danger" | "neutral";
   trailingIcon?: ReactNode;
   variant?: "fill" | "outline" | "primary" | "text";

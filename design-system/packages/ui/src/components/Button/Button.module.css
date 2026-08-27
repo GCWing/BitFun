@@ -136,6 +136,15 @@
     background: var(--bf-color-status-danger-surface);
   }
 
+  .button[data-size="xs"] {
+    --_button-font-size: var(--bf-control-button-xs-font-size);
+    --_button-height: var(--bf-control-button-xs-height);
+    --_button-leading-icon-size: var(--bf-control-button-xs-leading-icon-size);
+    --_button-padding-block: var(--bf-space-1);
+    --_button-padding-inline: var(--bf-control-button-xs-padding-inline);
+    --_button-trailing-icon-size: var(--bf-control-button-xs-trailing-icon-size);
+  }
+
   .button[data-size="sm"] {
     --_button-font-size: var(--bf-font-size-caption);
     --_button-height: var(--bf-control-height-sm);

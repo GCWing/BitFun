@@ -878,6 +878,11 @@ body,
   max-inline-size: 240px;
 }
 
+.component-toolbar-card-preview {
+  inline-size: 100%;
+  max-inline-size: 280px;
+}
+
 .component-composer-card-preview [data-bf-part="surface"] {
   min-block-size: 104px;
 }
@@ -3219,6 +3224,26 @@ input.lab-force-focus {
   gap: var(--bf-space-3);
   padding: var(--bf-space-8);
   background: var(--bf-color-action-neutral-surface);
+}
+
+.component-toolbar-preview-stage {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--bf-space-3);
+  padding: var(--bf-space-8);
+  background: var(--bf-color-action-neutral-surface);
+}
+
+.component-toolbar-preview-stage__label {
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-small);
+  font-weight: var(--bf-font-weight-medium);
+}
+
+.component-toolbar-example {
+  max-inline-size: 760px;
+  margin-inline: auto;
+  box-shadow: inset 0 0 0 var(--bf-border-width-default) var(--bf-color-border-subtle);
 }
 
 .component-composer-preview-stage__label {

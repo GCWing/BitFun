@@ -49,12 +49,17 @@ import {
   Switch,
   TabGroup,
   ThemeRoot,
+  Toolbar,
+  ToolbarBadge,
+  ToolbarGroup,
+  ToolbarSeparator,
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
   type ActivityItemAppearance,
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
+  type ToolbarSize,
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
@@ -111,6 +116,8 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   scrolling: "detail.option.scrolling",
   "focus-within": "detail.option.focus-within",
   "with-context": "detail.option.with-context",
+  "with-center": "detail.option.with-center",
+  overflow: "detail.option.overflow",
   "disabled-item": "detail.option.disabled-item",
   "selected-item": "detail.option.selected-item",
   "checked-item": "detail.option.checked-item",
@@ -201,11 +208,14 @@ export function ComponentDetailPage({
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
+  const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Composer"
       ? "with-context"
       : component.name === "Switch"
         ? "off"
+      : component.name === "Toolbar"
+        ? "with-center"
       : component.name === "TabGroup"
         ? "selected"
         : component.name === "ScrollArea"
@@ -252,6 +262,8 @@ export function ComponentDetailPage({
         return ["auto", "always", "hidden"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
+      case "Toolbar":
+        return ["default", "with-center", "overflow"] as const;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
@@ -335,6 +347,9 @@ export function ComponentDetailPage({
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
       return `import { TabGroup } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\nconst items = [\n  { icon: <MessageCircle />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <MessageCircle />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
     }
+    if (component.name === "Toolbar") {
+      return `import { ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\nimport { MoreHorizontal, Search } from "lucide-react";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Search />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />\n  </ToolbarGroup>}\n/>`;
+    }
     const stateProps = previewState === "on"
       ? " defaultChecked"
       : previewState === "disabled"
@@ -361,6 +376,7 @@ export function ComponentDetailPage({
     scrollAreaOrientation,
     size,
     t,
+    toolbarSize,
     variant,
   ]);
 
@@ -937,6 +953,63 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "Toolbar") {
+      const tabItems = Array.from({ length: state === "overflow" ? 9 : 2 }, (_, index) => ({
+        icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+        label: index === 0
+          ? t("components.preview.welcome")
+          : index === 1
+            ? t("components.preview.settings")
+            : t("components.preview.menuItem", { index: index + 1 }),
+        value: `tab-${index + 1}`,
+      }));
+
+      return (
+        <Toolbar
+          aria-label={t("components.preview.tabGroupLabel")}
+          center={state === "with-center" ? (
+            <ToolbarGroup>
+              <ToolbarBadge>18</ToolbarBadge>
+              <strong>{t("components.preview.session")}</strong>
+            </ToolbarGroup>
+          ) : undefined}
+          className="component-toolbar-example"
+          leading={state === "with-center" ? (
+            <ToolbarGroup>
+              <Button size="xs" trailingIcon={<ChevronDown aria-hidden="true" />} variant="text">
+                {t("components.preview.welcome")}
+              </Button>
+              <ChangeCount additions={6} deletions={0} />
+            </ToolbarGroup>
+          ) : (
+            <TabGroup
+              aria-label={t("components.preview.tabGroupLabel")}
+              defaultValue="tab-1"
+              items={tabItems}
+            />
+          )}
+          leadingOverflow={state === "overflow" ? "scroll" : "visible"}
+          size={toolbarSize}
+          trailing={(
+            <ToolbarGroup>
+              {state !== "with-center" && <ChangeCount additions={6} deletions={2} />}
+              <ToolbarSeparator />
+              <IconButton
+                aria-label={t("components.preview.searchLabel")}
+                icon={<SearchIcon aria-hidden="true" />}
+                size="xs"
+              />
+              <IconButton
+                aria-label={t("components.preview.more")}
+                icon={<MoreHorizontal aria-hidden="true" />}
+                size="xs"
+              />
+            </ToolbarGroup>
+          )}
+        />
+      );
+    }
+
     return (
       <Switch
         aria-label={t("components.preview.notifications")}
@@ -1010,6 +1083,13 @@ export function ComponentDetailPage({
               ) : component.name === "Composer" ? (
                 <div className="component-composer-preview-stage">
                   <span className="component-composer-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Toolbar" ? (
+                <div className="component-toolbar-preview-stage">
+                  <span className="component-toolbar-preview-stage__label">
                     {t(optionLabelKeys[previewState] ?? "detail.option.default")}
                   </span>
                   {renderPreview(previewState)}
@@ -1284,6 +1364,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setActivityItemAppearance(value as ActivityItemAppearance)}
                       options={activityItemAppearances}
                       value={activityItemAppearance}
+                    />
+                  )}
+                  {component.name === "Toolbar" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setToolbarSize(value as ToolbarSize)}
+                      options={["sm", "md"]}
+                      value={toolbarSize}
                     />
                   )}
                   {component.name === "Composer" && (

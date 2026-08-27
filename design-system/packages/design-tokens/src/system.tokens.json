@@ -139,10 +139,35 @@
       "$type": "dimension",
       "xsSize": { "$value": "22px" },
       "xsIconSize": { "$value": "14px" }
+    },
+    "button": {
+      "$type": "dimension",
+      "xsHeight": { "$value": "24px" },
+      "xsPaddingInline": { "$value": "6px" },
+      "xsLeadingIconSize": { "$value": "12px" },
+      "xsTrailingIconSize": { "$value": "10px" },
+      "xsFontSize": { "$value": "11px" }
     }
   },
   "layout": {
     "$type": "dimension",
+    "toolbar": {
+      "smHeight": { "$value": "33px" },
+      "mdHeight": { "$value": "45px" },
+      "contentGap": { "$value": "40px" },
+      "smPaddingBlock": { "$value": "{space.1}" },
+      "smPaddingInline": { "$value": "{space.2}" },
+      "mdPaddingBlockStart": { "$value": "{space.2}" },
+      "mdPaddingBlockEnd": { "$value": "6px" },
+      "mdPaddingInlineStart": { "$value": "{space.2}" },
+      "mdPaddingInlineEnd": { "$value": "11px" },
+      "groupGapSm": { "$value": "{space.1}" },
+      "groupGapMd": { "$value": "{space.2}" },
+      "badgeSize": { "$value": "24px" },
+      "badgeFontSize": { "$value": "11px" },
+      "separatorBlockSize": { "$value": "16px" },
+      "overflowFadeExtent": { "$value": "16px" }
+    },
     "navigationPanel": {
       "inlineSize": { "$value": "216px" },
       "surfacePadding": { "$value": "{space.2}" },

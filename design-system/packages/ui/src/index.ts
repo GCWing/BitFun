@@ -80,6 +80,19 @@ export {
   type TabGroupItem,
   type TabGroupProps,
 } from "./components/TabGroup";
+export {
+  Toolbar,
+  ToolbarBadge,
+  ToolbarGroup,
+  ToolbarSeparator,
+  type ToolbarBadgeProps,
+  type ToolbarGroupGap,
+  type ToolbarGroupProps,
+  type ToolbarLeadingOverflow,
+  type ToolbarProps,
+  type ToolbarSeparatorProps,
+  type ToolbarSize,
+} from "./components/Toolbar";
 export { SessionIcon, type SessionIconProps } from "./icons";
 export { Stack, type StackProps } from "./primitives/Stack";
 export {

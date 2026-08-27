@@ -14,6 +14,7 @@ import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
+import { toolbarMeta } from "./components/Toolbar/Toolbar.meta";
 import type { ComponentMeta } from "./registry.types";
 
 export type {
@@ -39,4 +40,5 @@ export const componentRegistry = [
   searchFieldMeta,
   switchMeta,
   tabGroupMeta,
+  toolbarMeta,
 ] as const satisfies readonly ComponentMeta[];

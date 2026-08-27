@@ -27,6 +27,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   SearchField: "component.SearchField.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
+  Toolbar: "component.Toolbar.description",
 };
 
 export function getComponentCategoryLabel(category: string, t: Translate): string {

@@ -102,6 +102,14 @@ test("Button owns the reference pill geometry and typography", async () => {
   assert.match(styles, /--_button-padding-inline:\s*var\(--bf-space-5\)/);
   assert.match(
     styles,
+    /\[data-size=xs\]\{[^}]*--_button-height:\s*var\(--bf-control-button-xs-height\)/,
+  );
+  assert.match(
+    styles,
+    /\[data-size=xs\]\{[^}]*--_button-padding-inline:\s*var\(--bf-control-button-xs-padding-inline\)/,
+  );
+  assert.match(
+    styles,
     /\[data-size=sm\]\{[^}]*--_button-padding-inline:\s*var\(--bf-space-4\)/,
   );
   assert.match(
