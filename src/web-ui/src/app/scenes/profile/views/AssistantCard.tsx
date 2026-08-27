@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import {
   ChevronRight,
   MessageSquarePlus,
@@ -9,7 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, IconButton } from '@/component-library';
+import { Badge, Tooltip } from '@/component-library';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
 
@@ -139,35 +139,34 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
 
           <span className="assistant-card__footer-actions">
             {onSetPrimary ? (
-              <IconButton
-                data-bf-component="assistant-card"
-                data-bf-part="setPrimary"
-                variant="ghost"
-                size="small"
-                onClick={onSetPrimary}
-                aria-label={t('nursery.card.setPrimary')}
-                isLoading={isSettingPrimary}
-                disabled={isDeleting || isStartingSession || isSettingPrimary}
-                tooltip={t('nursery.card.setPrimary')}
-              >
-                <Pin size={14} strokeWidth={1.8} aria-hidden="true" />
-              </IconButton>
+              <Tooltip content={t('nursery.card.setPrimary')}>
+                <IconButton
+                  data-bf-component="assistant-card"
+                  data-bf-part="setPrimary"
+                  size="sm"
+                  onClick={onSetPrimary}
+                  aria-label={t('nursery.card.setPrimary')}
+                  loading={isSettingPrimary}
+                  disabled={isDeleting || isStartingSession || isSettingPrimary}
+                  icon={<Pin size={14} strokeWidth={1.8} aria-hidden="true" />}
+                />
+              </Tooltip>
             ) : null}
 
             {onDelete ? (
-              <IconButton
-                data-bf-component="assistant-card"
-                data-bf-part="delete"
-                variant="danger"
-                size="small"
-                onClick={onDelete}
-                aria-label={t('nursery.card.delete')}
-                isLoading={isDeleting}
-                disabled={isDeleting || isStartingSession || isSettingPrimary}
-                tooltip={t('nursery.card.delete')}
-              >
-                <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />
-              </IconButton>
+              <Tooltip content={t('nursery.card.delete')}>
+                <IconButton
+                  data-bf-component="assistant-card"
+                  data-bf-part="delete"
+                  tone="danger"
+                  size="sm"
+                  onClick={onDelete}
+                  aria-label={t('nursery.card.delete')}
+                  loading={isDeleting}
+                  disabled={isDeleting || isStartingSession || isSettingPrimary}
+                  icon={<Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />}
+                />
+              </Tooltip>
             ) : null}
           </span>
         </span>

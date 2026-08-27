@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { IconButton, Input, Modal, Select, confirmDanger, type SelectOption } from '@/component-library';
+import { Input, Modal, Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -275,17 +275,16 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     <code title={grant.resource}>{grant.resource}</code>
                     <span>{formatDate(grant.createdAtMs, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </div>
-                  <IconButton
-                    type="button"
-                    size="small"
-                    variant="ghost"
-                    aria-label={t('projectPermissions.removeGrant')}
-                    tooltip={t('projectPermissions.removeGrant')}
-                    disabled={isBusy}
-                    onClick={() => void handleRemovePermissionGrant(grant)}
-                  >
-                    <Trash2 size={14} />
-                  </IconButton>
+                  <Tooltip content={t('projectPermissions.removeGrant')}>
+                    <IconButton
+                      type="button"
+                      size="sm"
+                      aria-label={t('projectPermissions.removeGrant')}
+                      disabled={isBusy}
+                      onClick={() => void handleRemovePermissionGrant(grant)}
+                      icon={<Trash2 size={14} />}
+                    />
+                  </Tooltip>
                 </div>
               );
             })}
@@ -349,39 +348,36 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
                   />
                   <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="ruleActions" className="workspace-project-permissions-dialog__rule-actions">
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('projectPermissions.moveRuleUp')}
-                      tooltip={t('projectPermissions.moveRuleUp')}
-                      disabled={isBusy || index === 0}
-                      onClick={() => moveDraftRule(index, -1)}
-                    >
-                      <ArrowUp size={14} />
-                    </IconButton>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('projectPermissions.moveRuleDown')}
-                      tooltip={t('projectPermissions.moveRuleDown')}
-                      disabled={isBusy || index === draftRules.length - 1}
-                      onClick={() => moveDraftRule(index, 1)}
-                    >
-                      <ArrowDown size={14} />
-                    </IconButton>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('projectPermissions.removeRule')}
-                      tooltip={t('projectPermissions.removeRule')}
-                      disabled={isBusy}
-                      onClick={() => setDraftRules((rules) => rules.filter(({ localId }) => localId !== rule.localId))}
-                    >
-                      <Trash2 size={14} />
-                    </IconButton>
+                    <Tooltip content={t('projectPermissions.moveRuleUp')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('projectPermissions.moveRuleUp')}
+                        disabled={isBusy || index === 0}
+                        onClick={() => moveDraftRule(index, -1)}
+                        icon={<ArrowUp size={14} />}
+                      />
+                    </Tooltip>
+                    <Tooltip content={t('projectPermissions.moveRuleDown')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('projectPermissions.moveRuleDown')}
+                        disabled={isBusy || index === draftRules.length - 1}
+                        onClick={() => moveDraftRule(index, 1)}
+                        icon={<ArrowDown size={14} />}
+                      />
+                    </Tooltip>
+                    <Tooltip content={t('projectPermissions.removeRule')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('projectPermissions.removeRule')}
+                        disabled={isBusy}
+                        onClick={() => setDraftRules((rules) => rules.filter(({ localId }) => localId !== rule.localId))}
+                        icon={<Trash2 size={14} />}
+                      />
+                    </Tooltip>
                   </div>
                 </div>
               ))}

@@ -17,7 +17,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Search, ConfirmDialog, IconButton } from '@/component-library';
+import { Search, ConfirmDialog } from '@/component-library';
 import {
   GalleryEmpty,
   GalleryGrid,
@@ -38,6 +38,7 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { getMiniAppSceneId, stopMiniAppActivity } from '../miniAppActivity';
 import { useMiniAppActivity } from '../hooks/useMiniAppActivity';
 import './MiniAppGalleryView.scss';
+import { IconButton } from '@bitfun/ui';
 
 const log = createLogger('MiniAppGalleryView');
 
@@ -374,7 +375,7 @@ const MiniAppGalleryView: React.FC = () => {
             <span className="miniapp-gallery__import-anchor">
               <IconButton
                 ref={importTriggerRef}
-                size="medium"
+                size="md"
                 onClick={() => setImportMenuOpen(open => !open)}
                 disabled={loading}
                 title={t('importAction')}
@@ -382,9 +383,8 @@ const MiniAppGalleryView: React.FC = () => {
                 aria-haspopup="menu"
                 aria-expanded={importMenuOpen}
                 data-testid="miniapp-import-action"
-              >
-                <FolderPlus size={15} />
-              </IconButton>
+                icon={<FolderPlus size={15} />}
+              />
               {importMenuOpen ? createPortal(
                 <div
                   ref={importMenuRef}
@@ -430,7 +430,7 @@ const MiniAppGalleryView: React.FC = () => {
               ) : null}
             </span>
             <IconButton
-              size="medium"
+              size="md"
               variant="primary"
               onClick={() => {
                 closeImportMenu();
@@ -439,9 +439,8 @@ const MiniAppGalleryView: React.FC = () => {
               title={t('creationMode.action')}
               aria-label={t('creationMode.action')}
               data-testid="miniapp-create-action"
-            >
-              <PackagePlus size={15} />
-            </IconButton>
+              icon={<PackagePlus size={15} />}
+            />
           </>
         )}
       />

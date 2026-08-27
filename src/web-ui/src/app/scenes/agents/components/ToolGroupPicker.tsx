@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,12 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import {
-  IconButton,
-  Input,
-  Modal,
-  confirmDanger,
-} from '@/component-library';
+import { Input, Modal, confirmDanger, Tooltip } from '@/component-library';
 import type { UserToolGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -360,50 +355,46 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                         </span>
                       </div>
                       <div className="tool-group-manager__group-actions" data-bf-component="tool-group-picker" data-bf-part="groupActions">
-                        <IconButton
-                          type="button"
-                          size="small"
-                          variant="ghost"
-                          aria-label={t('agentsOverview.toolGroups.moveUp')}
-                          tooltip={t('agentsOverview.toolGroups.moveUp')}
-                          onClick={() => void moveGroup(index, -1)}
-                          disabled={saving || index === 0}
-                        >
-                          <ArrowUp size={13} />
-                        </IconButton>
-                        <IconButton
-                          type="button"
-                          size="small"
-                          variant="ghost"
-                          aria-label={t('agentsOverview.toolGroups.moveDown')}
-                          tooltip={t('agentsOverview.toolGroups.moveDown')}
-                          onClick={() => void moveGroup(index, 1)}
-                          disabled={saving || index === groups.length - 1}
-                        >
-                          <ArrowDown size={13} />
-                        </IconButton>
-                        <IconButton
-                          type="button"
-                          size="small"
-                          variant="ghost"
-                          aria-label={t('agentsOverview.toolGroups.editGroup')}
-                          tooltip={t('agentsOverview.toolGroups.editGroup')}
-                          onClick={() => startEdit(group)}
-                          disabled={saving}
-                        >
-                          <Pencil size={13} />
-                        </IconButton>
-                        <IconButton
-                          type="button"
-                          size="small"
-                          variant="ghost"
-                          aria-label={t('agentsOverview.toolGroups.deleteGroup')}
-                          tooltip={t('agentsOverview.toolGroups.deleteGroup')}
-                          onClick={() => void deleteGroup(group)}
-                          disabled={saving}
-                        >
-                          <Trash2 size={13} />
-                        </IconButton>
+                        <Tooltip content={t('agentsOverview.toolGroups.moveUp')}>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            aria-label={t('agentsOverview.toolGroups.moveUp')}
+                            onClick={() => void moveGroup(index, -1)}
+                            disabled={saving || index === 0}
+                            icon={<ArrowUp size={13} />}
+                          />
+                        </Tooltip>
+                        <Tooltip content={t('agentsOverview.toolGroups.moveDown')}>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            aria-label={t('agentsOverview.toolGroups.moveDown')}
+                            onClick={() => void moveGroup(index, 1)}
+                            disabled={saving || index === groups.length - 1}
+                            icon={<ArrowDown size={13} />}
+                          />
+                        </Tooltip>
+                        <Tooltip content={t('agentsOverview.toolGroups.editGroup')}>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            aria-label={t('agentsOverview.toolGroups.editGroup')}
+                            onClick={() => startEdit(group)}
+                            disabled={saving}
+                            icon={<Pencil size={13} />}
+                          />
+                        </Tooltip>
+                        <Tooltip content={t('agentsOverview.toolGroups.deleteGroup')}>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            aria-label={t('agentsOverview.toolGroups.deleteGroup')}
+                            onClick={() => void deleteGroup(group)}
+                            disabled={saving}
+                            icon={<Trash2 size={13} />}
+                          />
+                        </Tooltip>
                       </div>
                     </div>
                   );

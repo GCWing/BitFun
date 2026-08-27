@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import {
   ExternalLink, Copy, Check, ArrowLeft, Loader2, AlertTriangle,
   BarChart3, MessageSquare, Calendar, Clock, X, Target, Zap, Trophy,
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
-import { IconButton, Select, type SelectOption } from '@/component-library';
+import { Select, type SelectOption } from '@/component-library';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import type { AIModelConfig } from '@/infrastructure/config/types';
@@ -311,13 +311,11 @@ const InsightsScene: React.FC = () => {
           <AlertTriangle size={14} />
           <span>{error}</span>
           <IconButton
-            variant="ghost"
-            size="xs"
+            size="sm"
             onClick={clearError}
             aria-label={t('insights.dismissError')}
-          >
-            <X size={14} />
-          </IconButton>
+            icon={<X size={14} />}
+          />
         </div>
       )}
 

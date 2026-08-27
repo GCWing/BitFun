@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -15,7 +15,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, IconButton, Search, Select, confirmDanger } from '@/component-library';
+import { Badge, Search, Select, confirmDanger, Tooltip } from '@/component-library';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
@@ -929,15 +929,15 @@ const AgentsHomeView: React.FC = () => {
             >
               {t('agentsOverview.editAgent')}
             </Button>
-            <IconButton
-              size="small"
-              variant="ghost"
-              tooltip={t('agentsOverview.deleteAgent')}
-              isLoading={deletingAgent}
-              onClick={() => void handleDeleteCustomAgent()}
-            >
-              <Trash2 size={14} />
-            </IconButton>
+            <Tooltip content={t('agentsOverview.deleteAgent')}>
+              <IconButton
+                aria-label={t('agentsOverview.deleteAgent')}
+                size="sm"
+                loading={deletingAgent}
+                onClick={() => void handleDeleteCustomAgent()}
+                icon={<Trash2 size={14} />}
+              />
+            </Tooltip>
           </>
         ) : selectedAgent && selectedAgentIsExternal ? (
           <Button
@@ -1114,58 +1114,64 @@ const AgentsHomeView: React.FC = () => {
                     <div className="agent-card__section-actions">
                       {isCurrentTabEditing ? (
                         <>
-                          <IconButton
-                            size="small"
-                            variant="ghost"
-                            tooltip={
+                          <Tooltip content={
                               currentCapabilityTab === 'tools'
                                 ? t('agentsOverview.toolsReset')
                                 : currentCapabilityTab === 'skills'
                                   ? t('agentsOverview.reset')
                                   : t('agentsOverview.reset')
-                            }
-                            onClick={async () => {
-                              if (currentCapabilityTab === 'tools') {
-                                await handleResetTools(selectedAgent.id);
-                                setToolsEditing(false);
-                                setPendingTools(null);
-                                return;
+                            }>
+                            <IconButton
+                              aria-label={
+                                currentCapabilityTab === 'tools'
+                                  ? t('agentsOverview.toolsReset')
+                                  : currentCapabilityTab === 'skills'
+                                    ? t('agentsOverview.reset')
+                                    : t('agentsOverview.reset')
                               }
-                              if (currentCapabilityTab === 'skills') {
-                                await handleResetSkills(selectedAgent.id);
-                                setSkillsEditing(false);
-                                setPendingSkills(null);
-                                return;
-                              }
-                              setSavingSubagents(true);
-                              try {
-                                const currentEnabledIds = new Set(selectedAgentEnabledSubagentIds);
-                                const defaultEnabledIds = new Set(selectedAgentDefaultEnabledSubagentIds);
-                                const changedSubagents = selectedAgentEditableSubagents.filter((subagent) =>
-                                  currentEnabledIds.has(subagent.id) !== defaultEnabledIds.has(subagent.id));
-
-                                if (changedSubagents.length === 0) {
-                                  setSubagentsEditing(false);
-                                  setPendingSubagentIds(null);
+                              size="sm"
+                              onClick={async () => {
+                                if (currentCapabilityTab === 'tools') {
+                                  await handleResetTools(selectedAgent.id);
+                                  setToolsEditing(false);
+                                  setPendingTools(null);
                                   return;
                                 }
-
-                                for (const subagent of changedSubagents) {
-                                  await handleSetSubagentEnabled(
-                                    selectedAgent.id,
-                                    subagent.id,
-                                    defaultEnabledIds.has(subagent.id),
-                                  );
+                                if (currentCapabilityTab === 'skills') {
+                                  await handleResetSkills(selectedAgent.id);
+                                  setSkillsEditing(false);
+                                  setPendingSkills(null);
+                                  return;
                                 }
-                              } finally {
-                                setSavingSubagents(false);
-                                setSubagentsEditing(false);
-                                setPendingSubagentIds(null);
-                              }
-                            }}
-                          >
-                            <RotateCcw size={12} />
-                          </IconButton>
+                                setSavingSubagents(true);
+                                try {
+                                  const currentEnabledIds = new Set(selectedAgentEnabledSubagentIds);
+                                  const defaultEnabledIds = new Set(selectedAgentDefaultEnabledSubagentIds);
+                                  const changedSubagents = selectedAgentEditableSubagents.filter((subagent) =>
+                                    currentEnabledIds.has(subagent.id) !== defaultEnabledIds.has(subagent.id));
+
+                                  if (changedSubagents.length === 0) {
+                                    setSubagentsEditing(false);
+                                    setPendingSubagentIds(null);
+                                    return;
+                                  }
+
+                                  for (const subagent of changedSubagents) {
+                                    await handleSetSubagentEnabled(
+                                      selectedAgent.id,
+                                      subagent.id,
+                                      defaultEnabledIds.has(subagent.id),
+                                    );
+                                  }
+                                } finally {
+                                  setSavingSubagents(false);
+                                  setSubagentsEditing(false);
+                                  setPendingSubagentIds(null);
+                                }
+                              }}
+                              icon={<RotateCcw size={12} />}
+                            />
+                          </Tooltip>
                           <Button
                             variant="outline"
                             size="sm"
