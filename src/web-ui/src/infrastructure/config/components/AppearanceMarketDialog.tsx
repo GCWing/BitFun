@@ -1,4 +1,4 @@
-import { Button, Modal, SearchField } from '@bitfun/ui';
+import { Button, Modal, SearchField, Select } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -12,7 +12,6 @@ import {
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@/component-library';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { MarketAccountControls } from '@/features/market-account';
 import {
@@ -521,24 +520,24 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               />
               <Select
                 value={mode}
-                onChange={value => setMode(value as AppearanceMarketMode | 'all')}
+                onValueChange={value => setMode(value as AppearanceMarketMode | 'all')}
                 options={[
                   { value: 'all', label: t('package.market.mode.all') },
                   { value: 'dark', label: t('package.market.mode.dark') },
                   { value: 'light', label: t('package.market.mode.light') },
                 ]}
-                size="small"
-                triggerAriaLabel={t('package.market.modeFilter')}
+                size="sm"
+                aria-label={t('package.market.modeFilter')}
               />
               <Select
                 value={sort}
-                onChange={value => setSort(value as AppearanceMarketSort)}
+                onValueChange={value => setSort(value as AppearanceMarketSort)}
                 options={[
                   { value: 'newest', label: t('package.market.sort.newest') },
                   { value: 'downloads', label: t('package.market.sort.downloads') },
                 ]}
-                size="small"
-                triggerAriaLabel={t('package.market.sortLabel')}
+                size="sm"
+                aria-label={t('package.market.sortLabel')}
               />
             </div>
 

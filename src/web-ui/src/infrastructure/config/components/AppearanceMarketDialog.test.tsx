@@ -53,6 +53,13 @@ vi.mock('@bitfun/ui', () => ({
       onKeyDown={event => event.key === 'Enter' && onSearch(event.currentTarget.value)}
     />
   ),
+  Select: ({ options, onValueChange, ...props }: any) => (
+    <select {...props} onChange={event => onValueChange?.(event.target.value)}>
+      {options.map((option: any) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  ),
 }));
 
 vi.mock('@/component-library', () => ({
