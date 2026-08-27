@@ -20,7 +20,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { Tooltip, Input } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -34,7 +34,7 @@ import {
   createReviewPlatformTab,
 } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Input } from '@bitfun/ui';
 
 const PULL_REQUEST_OVERVIEW_LIMIT = 3;
 
@@ -696,10 +696,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <Input
               ref={searchInputRef}
               className="flowchat-header__search-field"
-              variant="filled"
-              inputSize="small"
-              prefix={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
-              suffix={
+              leading={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
+              trailing={
                 <span
                   className="flowchat-header__search-inline-controls"
                   data-bf-component="flow-chat-header"
@@ -745,7 +743,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               onKeyDown={handleSearchKeyDown}
               placeholder={t('flowChatHeader.searchPlaceholder')}
               aria-label={t('flowChatHeader.searchPlaceholder')}
-              error={hasNoResults}
+              invalid={hasNoResults}
+              size="sm"
             />
             <Tooltip content={t('flowChatHeader.searchClose')}>
               <IconButton

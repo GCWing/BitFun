@@ -15,9 +15,9 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Input, Checkbox, Tooltip } from '@/component-library';
+import { Modal, Checkbox, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
@@ -442,43 +442,43 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                 <span>{t('ssh.portForward.remotePortLabel')}</span>
                 <Input
                   ref={remotePortInputRef}
-                  inputSize="small"
                   value={remotePort}
                   placeholder="3000"
-                  error={!remotePortParsed.valid}
+                  invalid={!remotePortParsed.valid}
                   onChange={(event) => setRemotePort(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && canSubmit) void handleAdd();
                   }}
                   data-testid="ssh-port-forward-remote-port"
+                  size="sm"
                 />
               </label>
 
               <label className="port-forward-dialog__field">
                 <span>{t('ssh.portForward.localPortLabel')}</span>
                 <Input
-                  inputSize="small"
                   value={localPort}
                   placeholder={t('ssh.portForward.localPortPlaceholder')}
-                  error={!localPortParsed.valid}
+                  invalid={!localPortParsed.valid}
                   onChange={(event) => setLocalPort(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && canSubmit) void handleAdd();
                   }}
                   data-testid="ssh-port-forward-local-port"
+                  size="sm"
                 />
               </label>
 
               <label className="port-forward-dialog__field port-forward-dialog__field--grow">
                 <span>{t('ssh.portForward.labelLabel')}</span>
                 <Input
-                  inputSize="small"
                   value={label}
                   placeholder={t('ssh.portForward.labelPlaceholder')}
                   onChange={(event) => setLabel(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && canSubmit) void handleAdd();
                   }}
+                  size="sm"
                 />
               </label>
 
