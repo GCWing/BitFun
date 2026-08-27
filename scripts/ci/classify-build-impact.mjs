@@ -81,6 +81,7 @@ const DESKTOP_PACKAGE_PREFIXES = [
 // the Rust/CLI matrices on their own. Native mobile is intentionally filtered
 // as neutral below because it has no supported CI toolchain or producer here.
 const FRONTEND_ONLY_PREFIXES = [
+  'design-system/',
   'src/web-ui/',
   'src/mobile-web/',
 ];
