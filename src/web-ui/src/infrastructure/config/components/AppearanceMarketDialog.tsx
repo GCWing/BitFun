@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, SearchField } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -11,7 +11,7 @@ import {
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { confirmDialog, Modal, Search, Select } from '@/component-library';
+import { confirmDialog, Modal, Select } from '@/component-library';
 import { MarketAccountControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
@@ -507,13 +507,13 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               data-bf-component="appearance-settings"
               data-bf-part="marketToolbar"
             >
-              <Search
+              <SearchField
                 value={query}
-                onChange={setQuery}
+                onValueChange={setQuery}
                 onSearch={value => setSubmittedQuery(value.trim())}
                 placeholder={t('package.market.search')}
-                inputAriaLabel={t('package.market.search')}
-                size="small"
+                aria-label={t('package.market.search')}
+                size="sm"
               />
               <Select
                 value={mode}

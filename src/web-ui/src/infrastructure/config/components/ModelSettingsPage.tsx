@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, SearchField } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
-import { Select, NumberInput, Card, Modal, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select, NumberInput, Card, Modal, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -1961,16 +1961,16 @@ const ModelSettingsPage: React.FC = () => {
             </div>
 
 
-            <Search
-              size="small"
+            <SearchField
+              size="sm"
               className="bitfun-model-settings__provider-search"
               data-testid="settings-model-provider-search"
               data-bf-component="model-settings"
               data-bf-part="providerSearch"
               value={providerQuery}
               placeholder={t('providerSelection.searchProviders')}
-              inputAriaLabel={t('providerSelection.searchProviders')}
-              onChange={setProviderQuery}
+              aria-label={t('providerSelection.searchProviders')}
+              onValueChange={setProviderQuery}
               onSearch={() => {
                 const firstMatch = visibleProviders[0];
                 if (normalizedProviderQuery && firstMatch) handleSelectProvider(firstMatch.id);
