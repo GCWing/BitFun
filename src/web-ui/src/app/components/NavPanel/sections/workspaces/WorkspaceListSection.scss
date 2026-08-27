@@ -257,6 +257,17 @@
     }
   }
 
+  /**
+   * Remote metadata makes the row taller than its primary title line. Keep the
+   * 30px collapse hit target, but pin it to the top and align its 16px icon with
+   * the remote title's 16px line instead of centring it across both text rows.
+   */
+  &__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn {
+    align-self: flex-start;
+    align-items: flex-start;
+    padding-top: 2px;
+  }
+
   &__workspace-item-name-cluster {
     display: inline-flex;
     align-items: stretch;
