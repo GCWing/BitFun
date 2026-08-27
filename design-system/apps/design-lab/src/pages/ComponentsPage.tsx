@@ -11,6 +11,7 @@ import {
   MessageCircle,
   MousePointerClick,
   PanelTop,
+  PanelLeft,
   Search as SearchIcon,
   ToggleLeft,
 } from "lucide-react";
@@ -24,6 +25,9 @@ import {
   Menu,
   MenuItem,
   MenuSection,
+  NavigationPanel,
+  NavigationPanelItem,
+  NavigationPanelSection,
   PageHeader,
   ScrollArea,
   SearchField,
@@ -61,6 +65,7 @@ const componentIcons = {
   KeyHint: Keyboard,
   Menu: List,
   Modal: AppWindow,
+  NavigationPanel: PanelLeft,
   PageHeader: Heading,
   ScrollArea: Rows3,
   SearchField: SearchIcon,
@@ -155,6 +160,24 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           size="sm"
           title={t("components.preview.appearance")}
         />
+      );
+    case "NavigationPanel":
+      return (
+        <NavigationPanel
+          aria-label={t("components.preview.navigationPanelLabel")}
+          className="component-navigation-panel-card-preview"
+          footer={<span>{t("components.preview.navigationPanelDevice")}</span>}
+          scrollbarVisibility="hidden"
+        >
+          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+            <NavigationPanelItem leading={<MessageCircle aria-hidden="true" />} selected tabIndex={-1}>
+              {t("components.preview.menuItemOne")}
+            </NavigationPanelItem>
+            <NavigationPanelItem reserveLeadingSpace tabIndex={-1}>
+              {t("components.preview.menuItemTwo")}
+            </NavigationPanelItem>
+          </NavigationPanelSection>
+        </NavigationPanel>
       );
     case "ScrollArea":
       return (

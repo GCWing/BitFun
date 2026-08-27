@@ -100,6 +100,25 @@
   },
   "layout": {
     "$type": "dimension",
+    "navigationPanel": {
+      "inlineSize": { "$value": "216px" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "contentGap": { "$value": "{space.4}" },
+      "sectionGap": { "$value": "{space.1}" },
+      "headingHeight": { "$value": "22px" },
+      "headingPaddingInline": { "$value": "{space.2}" },
+      "headingGap": { "$value": "{space.5}" },
+      "headingFontSize": { "$value": "11px" },
+      "headingActionSize": { "$value": "22px" },
+      "itemHeight": { "$value": "30px" },
+      "itemPaddingInline": { "$value": "{space.2}" },
+      "itemGap": { "$value": "{space.2}" },
+      "itemRadius": { "$value": "{radius.base}" },
+      "itemIconSize": { "$value": "14px" },
+      "scrollbarGap": { "$value": "2px" },
+      "footerHeight": { "$value": "40px" },
+      "footerPadding": { "$value": "{space.2}" }
+    },
     "splitView": {
       "contentPanelRadius": {
         "$description": "Corner radius for the content panel where it meets a companion navigation panel.",

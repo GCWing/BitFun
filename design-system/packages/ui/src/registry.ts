@@ -6,6 +6,7 @@ import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
 import { menuMeta } from "./components/Menu/Menu.meta";
 import { modalMeta } from "./components/Modal/Modal.meta";
+import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
@@ -28,6 +29,7 @@ export const componentRegistry = [
   keyHintMeta,
   menuMeta,
   modalMeta,
+  navigationPanelMeta,
   pageHeaderMeta,
   scrollAreaMeta,
   searchFieldMeta,

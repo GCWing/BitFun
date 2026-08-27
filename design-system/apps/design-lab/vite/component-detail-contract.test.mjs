@@ -187,6 +187,24 @@ test("Menu preview exposes grouped anatomy, item states, and scrollbar control",
   assert.match(styles, /\[data-bf-component="action-item"\]\.lab-force-focus/);
 });
 
+test("NavigationPanel preview exposes header, grouped navigation, selected items, scrolling, and footer", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "NavigationPanel"/);
+  assert.match(detail, /NavigationPanelSection/);
+  assert.match(detail, /NavigationPanelSeparator/);
+  assert.match(detail, /"default", "selected-item", "disabled-item", "scrolling"/);
+  assert.match(detail, /footer=\{\(/);
+  assert.match(detail, /header=\{\(/);
+  assert.match(detail, /selected=\{state === "selected-item"/);
+  assert.match(detail, /scrollbarVisibility=\{navigationPanelShowScrollbar \? "auto" : "hidden"\}/);
+  assert.match(styles, /\.component-navigation-panel-example\s*\{[^}]*block-size:\s*520px/s);
+});
+
 test("Field preview exposes label content independently from layout orientation", async () => {
   const source = await readFile(detailSource, "utf8");
 

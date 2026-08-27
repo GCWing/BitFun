@@ -10,7 +10,7 @@ test("component names remain unique", () => {
 test("registry exposes only the formal stable components", () => {
   assert.deepEqual(
     componentRegistry.map((component) => component.name),
-    ["ActionItem", "Button", "Field", "IconButton", "Input", "KeyHint", "Menu", "Modal", "PageHeader", "ScrollArea", "SearchField", "Switch", "TabGroup"],
+    ["ActionItem", "Button", "Field", "IconButton", "Input", "KeyHint", "Menu", "Modal", "NavigationPanel", "PageHeader", "ScrollArea", "SearchField", "Switch", "TabGroup"],
   );
   assert.equal(
     componentRegistry.every((component) => component.maturity === "stable"),
@@ -28,6 +28,7 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("color.") ||
           token.startsWith("control.") ||
           token.startsWith("font.") ||
+          token.startsWith("layout.") ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||

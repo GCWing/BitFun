@@ -38,6 +38,17 @@ export {
   type ModalRadius,
   type ModalSize,
 } from "./components/Modal";
+export {
+  NavigationPanel,
+  NavigationPanelItem,
+  NavigationPanelSection,
+  NavigationPanelSeparator,
+  type NavigationPanelItemProps,
+  type NavigationPanelProps,
+  type NavigationPanelSectionAction,
+  type NavigationPanelSectionProps,
+  type NavigationPanelSeparatorProps,
+} from "./components/NavigationPanel";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
 export {
   ScrollArea,

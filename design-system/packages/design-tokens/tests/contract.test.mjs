@@ -85,6 +85,18 @@ test("Menu tokens preserve the compact grouped surface contract", async () => {
   assert.equal(systemDocument.overlay.menu.itemRadius.$value, "{radius.base}");
 });
 
+test("NavigationPanel tokens preserve the grouped sidebar composition contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.navigationPanel.inlineSize"], "216px");
+  assert.equal(tokens["layout.navigationPanel.headingHeight"], "22px");
+  assert.equal(tokens["layout.navigationPanel.itemHeight"], "30px");
+  assert.equal(tokens["layout.navigationPanel.itemIconSize"], "14px");
+  assert.equal(tokens["layout.navigationPanel.footerHeight"], "40px");
+  assert.equal(systemDocument.layout.navigationPanel.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.layout.navigationPanel.itemRadius.$value, "{radius.base}");
+});
+
 test("Modal tokens preserve the reference surface and chrome contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

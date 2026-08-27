@@ -20,6 +20,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   KeyHint: "component.KeyHint.description",
   Menu: "component.Menu.description",
   Modal: "component.Modal.description",
+  NavigationPanel: "component.NavigationPanel.description",
   PageHeader: "component.PageHeader.description",
   SearchField: "component.SearchField.description",
   Switch: "component.Switch.description",

@@ -7,9 +7,11 @@ import {
   Eye,
   List,
   MessageCircle,
+  Monitor,
   MoreHorizontal,
   Plus,
   Search as SearchIcon,
+  Settings,
   X,
 } from "lucide-react";
 import {
@@ -24,6 +26,10 @@ import {
   MenuSection,
   MenuSeparator,
   Modal,
+  NavigationPanel,
+  NavigationPanelItem,
+  NavigationPanelSection,
+  NavigationPanelSeparator,
   PageHeader,
   ScrollArea,
   SearchField,
@@ -89,6 +95,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   scrolling: "detail.option.scrolling",
   "focus-within": "detail.option.focus-within",
   "disabled-item": "detail.option.disabled-item",
+  "selected-item": "detail.option.selected-item",
   "checked-item": "detail.option.checked-item",
   invalid: "detail.option.invalid",
   left: "detail.option.left",
@@ -193,6 +200,7 @@ export function ComponentDetailPage({
   const [modalOpen, setModalOpen] = useState(false);
   const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
   const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
+  const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
 
   const states = useMemo(() => {
     switch (component.name) {
@@ -211,6 +219,8 @@ export function ComponentDetailPage({
         return ["default"] as const;
       case "Menu":
         return ["default", "scrolling", "focus-within", "disabled-item", "checked-item"] as const;
+      case "NavigationPanel":
+        return ["default", "selected-item", "disabled-item", "scrolling"] as const;
       case "ScrollArea":
         return ["auto", "always", "hidden"] as const;
       case "TabGroup":
@@ -272,6 +282,9 @@ export function ComponentDetailPage({
           : "";
       return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
     }
+    if (component.name === "NavigationPanel") {
+      return `import { IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\nimport { Monitor, Search, Settings } from "lucide-react";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Monitor />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Settings />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Search />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
+    }
     if (component.name === "ScrollArea") {
       return `import { ScrollArea } from "@bitfun/ui";\n\n<ScrollArea\n  aria-label="${t("components.preview.scrollAreaLabel")}"\n  className="activity-scroll-area"\n  orientation="${scrollAreaOrientation}"\n  scrollbarVisibility="${previewState}"\n>\n  {items.map((item) => <div key={item.id}>{item.label}</div>)}\n</ScrollArea>`;
     }
@@ -293,6 +306,7 @@ export function ComponentDetailPage({
     inspectorLoading,
     menuShowScrollbar,
     modalShowScrollbar,
+    navigationPanelShowScrollbar,
     pageHeaderAlign,
     pageHeaderSize,
     previewIcon,
@@ -648,6 +662,64 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "NavigationPanel") {
+      const itemCount = state === "scrolling" ? 14 : 5;
+      return (
+        <NavigationPanel
+          aria-label={t("components.preview.navigationPanelLabel")}
+          className="component-navigation-panel-example"
+          footer={(
+            <>
+              <NavigationPanelItem
+                className="component-navigation-panel-example__device"
+                leading={<Monitor aria-hidden="true" />}
+              >
+                {t("components.preview.navigationPanelDevice")}
+              </NavigationPanelItem>
+              <IconButton
+                aria-label={t("components.preview.settings")}
+                icon={<Settings aria-hidden="true" />}
+                size="sm"
+                variant="quiet"
+              />
+            </>
+          )}
+          header={(
+            <SearchField
+              aria-label={t("components.preview.searchLabel")}
+              leadingIcon={<SearchIcon aria-hidden="true" />}
+              placeholder={t("components.preview.searchPlaceholder")}
+            />
+          )}
+          scrollbarVisibility={navigationPanelShowScrollbar ? "auto" : "hidden"}
+        >
+          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+            {Array.from({ length: itemCount }, (_, index) => (
+              <NavigationPanelItem
+                disabled={state === "disabled-item" && index === 1}
+                key={index}
+                leading={index % 3 === 0 ? <MessageCircle aria-hidden="true" /> : undefined}
+                reserveLeadingSpace
+                selected={state === "selected-item" && index === 0}
+              >
+                {index === 0
+                  ? t("components.preview.menuItemOne")
+                  : index === 1
+                    ? t("components.preview.menuItemTwo")
+                    : t("components.preview.menuItem", { index: index + 1 })}
+              </NavigationPanelItem>
+            ))}
+          </NavigationPanelSection>
+          <NavigationPanelSeparator />
+          <NavigationPanelSection title={t("components.preview.navigationPanelMoreSection")}>
+            <NavigationPanelItem reserveLeadingSpace>
+              {t("components.preview.navigationPanelMoreItem")}
+            </NavigationPanelItem>
+          </NavigationPanelSection>
+        </NavigationPanel>
+      );
+    }
+
     if (component.name === "ScrollArea") {
       return (
         <ScrollArea
@@ -821,7 +893,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionItem"
@@ -836,6 +908,8 @@ export function ComponentDetailPage({
                         ? "page-header"
                       : component.name === "Menu"
                         ? "menu"
+                      : component.name === "NavigationPanel"
+                        ? "navigation-panel"
                       : component.name === "ScrollArea"
                         ? "scroll-area"
                       : "search-field"}
@@ -1029,6 +1103,13 @@ export function ComponentDetailPage({
                       checked={menuShowScrollbar}
                       label={t("detail.showScrollbar")}
                       onCheckedChange={setMenuShowScrollbar}
+                    />
+                  )}
+                  {component.name === "NavigationPanel" && (
+                    <InspectorToggle
+                      checked={navigationPanelShowScrollbar}
+                      label={t("detail.showScrollbar")}
+                      onCheckedChange={setNavigationPanelShowScrollbar}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

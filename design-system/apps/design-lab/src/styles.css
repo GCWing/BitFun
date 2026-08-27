@@ -857,6 +857,17 @@ body,
   background: var(--bf-color-surface-panel);
 }
 
+.component-navigation-panel-card-preview {
+  block-size: 156px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+}
+
+.component-navigation-panel-card-preview [data-bf-part="footer"] {
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-micro);
+}
+
 .component-card__body {
   display: grid;
   align-content: start;
@@ -3163,6 +3174,17 @@ input.lab-force-focus {
 
 [data-bf-component="action-item"].lab-force-focus {
   box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+}
+
+.component-navigation-panel-example {
+  block-size: 520px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+}
+
+.component-navigation-panel-example__device {
+  flex: 1 1 auto;
+  min-inline-size: 0;
 }
 
 .component-modal-preview-overlay {

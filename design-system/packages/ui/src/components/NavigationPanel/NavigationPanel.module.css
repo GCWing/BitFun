@@ -1,0 +1,162 @@
+@layer bf.components {
+  .root,
+  .header,
+  .body,
+  .content,
+  .section,
+  .heading,
+  .items,
+  .separator,
+  .footer {
+    box-sizing: border-box;
+  }
+
+  .root {
+    display: flex;
+    overflow: hidden;
+    inline-size: var(--bf-layout-navigation-panel-inline-size);
+    max-inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    flex-direction: column;
+    color: var(--bf-color-action-neutral-content);
+    background: var(--bf-color-surface-subtle);
+  }
+
+  .header {
+    flex: 0 0 auto;
+    min-inline-size: 0;
+    padding: var(--bf-layout-navigation-panel-surface-padding);
+    padding-block-end: 0;
+  }
+
+  .body {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding-inline-end: var(--bf-layout-navigation-panel-scrollbar-gap);
+    scrollbar-gutter: stable;
+  }
+
+  .body[data-bf-scrollbar-visibility="hidden"] {
+    padding-inline-end: 0;
+    scrollbar-gutter: auto;
+  }
+
+  .content {
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: 100%;
+    flex-direction: column;
+    gap: var(--bf-layout-navigation-panel-content-gap);
+    padding: var(--bf-layout-navigation-panel-surface-padding);
+  }
+
+  .root:has(> .header) .content {
+    padding-block-start: var(--bf-layout-navigation-panel-content-gap);
+  }
+
+  .section,
+  .items {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    flex-direction: column;
+  }
+
+  .section {
+    gap: var(--bf-layout-navigation-panel-section-gap);
+  }
+
+  .heading {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--bf-layout-navigation-panel-heading-height);
+    gap: var(--bf-layout-navigation-panel-heading-gap);
+    padding-inline: var(--bf-layout-navigation-panel-heading-padding-inline);
+  }
+
+  .headingLabel {
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-layout-navigation-panel-heading-font-size);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .headingActions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .headingAction.headingAction {
+    inline-size: var(--bf-layout-navigation-panel-heading-action-size);
+    block-size: var(--bf-layout-navigation-panel-heading-action-size);
+    border-radius: var(--bf-radius-xs);
+  }
+
+  .item {
+    inline-size: 100%;
+    min-block-size: var(--bf-layout-navigation-panel-item-height);
+    padding-inline: var(--bf-layout-navigation-panel-item-padding-inline);
+    border-radius: var(--bf-layout-navigation-panel-item-radius);
+  }
+
+  .item > [data-bf-part="trigger"] {
+    gap: var(--bf-layout-navigation-panel-item-gap);
+  }
+
+  .item [data-bf-part="leading"] {
+    inline-size: var(--bf-layout-navigation-panel-item-icon-size);
+    block-size: var(--bf-layout-navigation-panel-item-icon-size);
+  }
+
+  .item:has(> [data-bf-part="trigger"][aria-current]) {
+    background: var(--bf-color-action-neutral-surface-pressed);
+  }
+
+  .item:has(> [data-bf-part="trigger"][aria-current]) [data-bf-part="label"] {
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .separator {
+    flex: 0 0 auto;
+    inline-size: 100%;
+    block-size: var(--bf-border-width-default);
+    background: var(--bf-color-border-subtle);
+  }
+
+  .footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    min-inline-size: 0;
+    min-block-size: var(--bf-layout-navigation-panel-footer-height);
+    gap: var(--bf-space-2);
+    padding: var(--bf-layout-navigation-panel-footer-padding);
+    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
+  @media (forced-colors: active) {
+    .item:has(> [data-bf-part="trigger"][aria-current]) {
+      color: HighlightText;
+      background: Highlight;
+    }
+
+    .separator {
+      background: CanvasText;
+    }
+
+    .footer {
+      border-color: CanvasText;
+    }
+  }
+}
