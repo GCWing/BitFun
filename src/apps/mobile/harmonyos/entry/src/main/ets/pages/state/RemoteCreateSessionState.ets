@@ -1,6 +1,9 @@
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 
+export type RemoteHarnessProfile = 'minimal' | 'balanced' | 'ultimate';
+export const REMOTE_HARNESS_PROFILES_CAPABILITY: string = 'harness_profiles_v1';
+
 export class RemoteCreateSessionContext {
   readonly deviceId: string;
   readonly workspacePath: string;
@@ -28,9 +31,16 @@ export class RemoteCreateSessionState {
   @Trace isSubmitting: boolean = false;
   @Trace isVoiceListening: boolean = false;
   @Trace selectedModelId: string = '';
+  @Trace supportsHarnessProfiles: boolean = false;
+  @Trace selectedHarnessProfile: RemoteHarnessProfile = 'balanced';
   @Trace errorText: string = '';
 
-  prepare(deviceId: string, deviceName: string, selectedModelId: string = ''): void {
+  prepare(
+    deviceId: string,
+    deviceName: string,
+    selectedModelId: string = '',
+    supportsHarnessProfiles: boolean = false
+  ): void {
     this.draft = '';
     this.devices = [];
     this.workspaces = [];
@@ -44,6 +54,8 @@ export class RemoteCreateSessionState {
     this.isSubmitting = false;
     this.isVoiceListening = false;
     this.selectedModelId = selectedModelId;
+    this.supportsHarnessProfiles = supportsHarnessProfiles;
+    this.selectedHarnessProfile = 'balanced';
     this.errorText = '';
   }
 
@@ -54,6 +66,11 @@ export class RemoteCreateSessionState {
 
   setSelectedModelId(modelId: string): void {
     this.selectedModelId = modelId;
+    this.errorText = '';
+  }
+
+  setSelectedHarnessProfile(profile: RemoteHarnessProfile): void {
+    this.selectedHarnessProfile = profile;
     this.errorText = '';
   }
 
@@ -79,9 +96,11 @@ export class RemoteCreateSessionState {
     this.isLoadingWorkspaces = false;
   }
 
-  selectDevice(device: CloudAccountDevice): void {
+  selectDevice(device: CloudAccountDevice, supportsHarnessProfiles: boolean = false): void {
     this.selectedDeviceId = device.deviceId;
     this.selectedDeviceName = device.deviceName;
+    this.supportsHarnessProfiles = supportsHarnessProfiles;
+    this.selectedHarnessProfile = 'balanced';
     this.clearWorkspace();
     this.openMenu = 'none';
     this.errorText = '';
@@ -104,8 +123,18 @@ export class RemoteCreateSessionState {
     return new RemoteCreateSessionContext(
       this.selectedDeviceId,
       this.selectedWorkspacePath,
-      this.selectedWorkspacePath.length > 0 ? 'code' : 'Claw'
+      this.selectedWorkspacePath.length > 0 ? this.harnessAgentType() : 'Claw'
     );
+  }
+
+  private harnessAgentType(): string {
+    if (this.selectedHarnessProfile === 'minimal') {
+      return 'minimal';
+    }
+    if (this.selectedHarnessProfile === 'ultimate') {
+      return 'Ultra';
+    }
+    return 'agentic';
   }
 
   clearWorkspace(): void {

@@ -47,7 +47,8 @@ use bitfun_services_integrations::remote_connect::{
     RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity, RemoteTerminalPrewarmRequest,
     RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
     RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
+    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -877,6 +878,7 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             assistant_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            capabilities: vec![REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string()],
         }
     }
 
@@ -1704,6 +1706,20 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(info_json["assistant_id"], "assistant-1");
     assert_eq!(info_json["remote_connection_id"], "ssh-1");
     assert_eq!(info_json["remote_ssh_host"], "dev-host");
+    assert_eq!(
+        info_json["capabilities"],
+        serde_json::json!([REMOTE_CAPABILITY_HARNESS_PROFILES_V1])
+    );
+    let mut legacy_info_json = info_json.clone();
+    legacy_info_json
+        .as_object_mut()
+        .expect("workspace info is an object")
+        .remove("capabilities");
+    assert!(matches!(
+        serde_json::from_value::<RemoteResponse>(legacy_info_json)
+            .expect("legacy workspace info remains readable"),
+        RemoteResponse::WorkspaceInfo { capabilities, .. } if capabilities.is_empty()
+    ));
 
     let empty_json =
         serde_json::to_value(remote_workspace_info_response(None)).expect("serialize empty info");
@@ -1853,6 +1869,20 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(initial_json["has_more_sessions"], true);
     assert_eq!(initial_json["sessions"].as_array().unwrap().len(), 3);
     assert_eq!(initial_json["authenticated_user_id"], "user-1");
+    assert_eq!(
+        initial_json["capabilities"],
+        serde_json::json!([REMOTE_CAPABILITY_HARNESS_PROFILES_V1])
+    );
+    let mut legacy_initial_json = initial_json;
+    legacy_initial_json
+        .as_object_mut()
+        .expect("initial sync is an object")
+        .remove("capabilities");
+    assert!(matches!(
+        serde_json::from_value::<RemoteResponse>(legacy_initial_json)
+            .expect("legacy initial sync remains readable"),
+        RemoteResponse::InitialSync { capabilities, .. } if capabilities.is_empty()
+    ));
 
     assert_eq!(
         remote_session_created_response("session-new"),
@@ -1919,6 +1949,11 @@ fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
     assert_eq!(resolve_remote_agent_type(Some("code")), "agentic");
     assert_eq!(resolve_remote_agent_type(Some("agentic")), "agentic");
     assert_eq!(resolve_remote_agent_type(Some("Agentic")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("balanced")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("standard")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("minimal")), "minimal");
+    assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultra");
+    assert_eq!(resolve_remote_agent_type(Some("Ultra")), "Ultra");
     assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("plan")), "Plan");

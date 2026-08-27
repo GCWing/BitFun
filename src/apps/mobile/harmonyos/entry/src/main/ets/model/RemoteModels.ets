@@ -33,6 +33,7 @@ export interface InitialSyncResult {
   sessions: RemoteSession[];
   hasMoreSessions: boolean;
   authenticatedUserId: string;
+  capabilities?: string[];
 }
 
 export interface RecentWorkspaceEntry {
@@ -162,6 +163,7 @@ export interface WorkspaceInfoResponse extends CommandStatusResponse {
   git_branch?: string;
   workspace_kind?: string;
   assistant_id?: string;
+  capabilities?: string[];
 }
 
 export interface RecentWorkspaceEntryResponse {
@@ -251,6 +253,7 @@ export interface InitialSyncResponse extends CommandStatusResponse {
   sessions?: SessionItemResponse[];
   has_more_sessions?: boolean;
   authenticated_user_id?: string;
+  capabilities?: string[];
 }
 
 export interface DelegatedIdentityResponse extends CommandStatusResponse {

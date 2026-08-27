@@ -3,6 +3,7 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { ConversationIntent } from './ConversationIntent';
 import { AppRoute } from '../navigation/AppRouteContract';
+import { RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 
 export interface AppRootPresentationActions {
   readonly onNavigationBack: (route: AppRoute) => boolean;
@@ -35,6 +36,7 @@ export interface RemoteCreatePresentationActions {
   readonly draftChanged: (value: string) => void;
   readonly voiceInput: () => void;
   readonly selectModel: (modelId: string) => void;
+  readonly selectHarness: (profile: RemoteHarnessProfile) => void;
   readonly send: () => void;
 }
 
@@ -137,7 +139,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     },
     onRemoteCreate: {
       back: () => {}, toggleDevices: () => {}, toggleWorkspaces: () => {}, selectDevice: () => {},
-      selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {}, send: () => {}
+      selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {},
+      selectHarness: () => {}, send: () => {}
     },
     onSidebar: {
       close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},

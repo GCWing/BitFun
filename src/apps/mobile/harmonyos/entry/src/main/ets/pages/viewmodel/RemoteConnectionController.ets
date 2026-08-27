@@ -168,6 +168,7 @@ export class RemoteConnectionController {
       this.lockUntil = 0;
       this.applyWorkspace(initialSync.workspace);
       this.pageState.setAuthenticatedUserId(initialSync.authenticatedUserId);
+      this.pageState.setHostCapabilities(initialSync.capabilities || []);
       this.pageState.setControlTarget('room', this.pageState.desktopId, this.pageState.desktopName);
       this.sessions.setSessions(initialSync.sessions, initialSync.hasMoreSessions);
       this.setState(RemoteConnectionState.Connected);

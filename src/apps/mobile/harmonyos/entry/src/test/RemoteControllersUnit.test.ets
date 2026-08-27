@@ -841,9 +841,9 @@ export default function remoteControllersUnitTest() {
       expect(state.selectedWorkspaceName).assertEqual('BitFun');
     });
 
-    it('freezes the selected creation target and pairs a workspace with the code agent', 0, () => {
+    it('freezes the selected creation target and defaults workspace sessions to Standard Harness', 0, () => {
       const state = new RemoteCreateSessionState();
-      state.prepare('desktop-b', 'Desktop B');
+      state.prepare('desktop-b', 'Desktop B', '', true);
       state.setWorkspaces([{
         name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
       }]);
@@ -855,7 +855,36 @@ export default function remoteControllersUnitTest() {
 
       expect(context.deviceId).assertEqual('desktop-b');
       expect(context.workspacePath).assertEqual('/workspace/BitFun');
-      expect(context.agentType).assertEqual('code');
+      expect(context.agentType).assertEqual('agentic');
+      expect(state.supportsHarnessProfiles).assertTrue();
+      expect(state.selectedHarnessProfile).assertEqual('balanced');
+    });
+
+    it('maps Minimal and Ultimate Harness choices to their runtime agent modes', 0, () => {
+      const state = new RemoteCreateSessionState();
+      state.prepare('desktop-b', 'Desktop B', '', true);
+      state.selectWorkspace({
+        name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
+      });
+
+      state.setSelectedHarnessProfile('minimal');
+      expect(state.submissionContext().agentType).assertEqual('minimal');
+      state.setSelectedHarnessProfile('ultimate');
+      expect(state.submissionContext().agentType).assertEqual('Ultra');
+    });
+
+    it('refreshes Harness support and defaults to Standard when the creation target changes', 0, () => {
+      const state = new RemoteCreateSessionState();
+      state.prepare('desktop-a', 'Desktop A', '', true);
+      state.setSelectedHarnessProfile('ultimate');
+
+      state.selectDevice({ deviceId: 'desktop-b', deviceName: 'Desktop B', online: true }, false);
+      expect(state.supportsHarnessProfiles).assertFalse();
+      expect(state.selectedHarnessProfile).assertEqual('balanced');
+
+      state.selectDevice({ deviceId: 'desktop-c', deviceName: 'Desktop C', online: true }, true);
+      expect(state.supportsHarnessProfiles).assertTrue();
+      expect(state.selectedHarnessProfile).assertEqual('balanced');
     });
 
     it('keeps the chat option on the assistant agent so the desktop binds its assistant workspace', 0, () => {

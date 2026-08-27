@@ -1,8 +1,8 @@
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
-import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
-import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
+import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT } from './Theme';
 import { ComposerPresentation } from './ComposerBar';
 import { ConversationView } from './ConversationView';
 import { ConversationUiModelCatalog } from '../state/ConversationUiModels';
@@ -32,6 +32,7 @@ export struct RemoteCreateSessionView {
   @Event onSend: () => void = () => {};
   @Event onVoiceInput: () => void = () => {};
   @Event onSelectModel: (modelId: string) => void = (_modelId: string) => {};
+  @Event onSelectHarness: (profile: RemoteHarnessProfile) => void = (_profile: RemoteHarnessProfile) => {};
   @Local showSelectorSheet: boolean = false;
 
   aboutToAppear(): void {
@@ -93,6 +94,9 @@ export struct RemoteCreateSessionView {
         this.state.isLoadingWorkspaces,
         () => this.onToggleWorkspaceMenu()
       )
+      if (this.state.supportsHarnessProfiles && this.state.selectedWorkspacePath.length > 0) {
+        this.HarnessSelector()
+      }
     }
     .width('100%')
     .padding({
@@ -101,6 +105,61 @@ export struct RemoteCreateSessionView {
       top: this.presentation === ComposerPresentation.Floating ? 8 : 0,
       bottom: 4
     })
+  }
+
+  @Builder
+  HarnessSelector() {
+    Row({ space: 3 }) {
+      this.HarnessOption('minimal', 1)
+      this.HarnessOption('balanced', 2)
+      this.HarnessOption('ultimate', 3)
+    }
+    .width('100%')
+    .height(42)
+    .padding(3)
+    .borderRadius(12)
+    .backgroundColor(SOFT)
+  }
+
+  @Builder
+  HarnessOption(profile: RemoteHarnessProfile, density: number) {
+    Row({ space: 7 }) {
+      this.HarnessDensityMark(density, profile === this.state.selectedHarnessProfile)
+      Text(RemoteI18n.t(`remote.create.harness.${profile}`))
+        .fontSize(14)
+        .fontWeight(profile === this.state.selectedHarnessProfile ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(profile === this.state.selectedHarnessProfile ? INK : MUTED)
+    }
+    .layoutWeight(1)
+    .height(36)
+    .justifyContent(FlexAlign.Center)
+    .borderRadius(9)
+    .backgroundColor(profile === this.state.selectedHarnessProfile ? CARD : SOFT)
+    .accessibilityText(RemoteI18n.f(
+      'remote.create.harnessAccessibility',
+      RemoteI18n.t(`remote.create.harness.${profile}`)
+    ))
+    .onClick(() => {
+      this.onSelectHarness(profile);
+      this.keepComposerFocused();
+    })
+  }
+
+  @Builder
+  HarnessDensityMark(density: number, selected: boolean) {
+    Row({ space: 2 }) {
+      Stack().width(3).height(8).borderRadius(2).backgroundColor(selected ? INK : MUTED)
+      if (density >= 2) {
+        Stack().width(3).height(12).borderRadius(2).backgroundColor(selected ? INK : MUTED)
+      }
+      if (density >= 3) {
+        Stack().width(3).height(16).borderRadius(2).backgroundColor(selected ? INK : MUTED)
+      }
+    }
+    .width(17)
+    .height(18)
+    .alignItems(VerticalAlign.Bottom)
+    .justifyContent(FlexAlign.Center)
   }
 
   @Builder

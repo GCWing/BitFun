@@ -26,6 +26,7 @@ export class RemotePageState {
   @Trace accountUsername: string = '';
   @Trace accountUserId: string = '';
   @Trace authenticatedUserId: string = '';
+  @Trace hostCapabilities: string[] = [];
   @Trace controlTargetType: string = 'none';
   @Trace controlTargetDeviceId: string = '';
   @Trace controlTargetDeviceName: string = '';
@@ -130,6 +131,14 @@ export class RemotePageState {
 
   setAuthenticatedUserId(authenticatedUserId: string): void {
     this.authenticatedUserId = authenticatedUserId;
+  }
+
+  setHostCapabilities(capabilities: string[]): void {
+    this.hostCapabilities = capabilities.slice();
+  }
+
+  supportsHostCapability(capability: string): boolean {
+    return this.hostCapabilities.indexOf(capability) >= 0;
   }
 
   setStatusText(statusText: string): void {
@@ -307,6 +316,7 @@ export class RemotePageState {
     this.isConversationDismissed = false;
     this.isLoadingHome = false;
     this.sessionErrorText = '';
+    this.hostCapabilities = [];
   }
 
   clearWorkspaceActions(): void {

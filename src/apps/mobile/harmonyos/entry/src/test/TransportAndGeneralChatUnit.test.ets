@@ -1559,6 +1559,15 @@ export default function transportAndGeneralChatUnitTest() {
       }, '/repo');
       expectCommandJson(createCommand, '{"cmd":"create_session","agent_type":"cowork","session_name":"Remote Cowork Session","workspace_path":"/repo"}');
       expect(JSON.stringify(createCommand).indexOf('run_mode')).assertEqual(-1);
+
+      const minimal = RemoteCommandFactory.createSession({
+        agentType: 'minimal', title: '', instruction: 'lean'
+      }, '/repo');
+      const ultimate = RemoteCommandFactory.createSession({
+        agentType: 'Ultra', title: '', instruction: 'deep'
+      }, '/repo');
+      expect(minimal.agent_type || '').assertEqual('minimal');
+      expect(ultimate.agent_type || '').assertEqual('Ultra');
     });
 
     it('builds message and polling commands', 0, () => {
