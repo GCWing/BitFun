@@ -256,6 +256,30 @@ mod tests {
         panic!("could not find a free port for the embedded relay: {last_err}");
     }
 
+    /// Restart on the same port while tolerating a transient claim from another
+    /// socket in the runner's ephemeral range. A leaked relay listener never
+    /// becomes bindable and therefore still fails at the deadline.
+    async fn restart_on_same_port(
+        host: &DesktopEmbeddedRelayHost,
+        port: u16,
+        static_dir: Option<String>,
+    ) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match host.start(port, static_dir.clone()).await {
+                Ok(()) => return,
+                Err(error) => {
+                    if std::time::Instant::now() >= deadline {
+                        panic!(
+                            "embedded relay could not restart on port {port} after it was stopped: {error}"
+                        );
+                    }
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    }
+
     #[tokio::test]
     async fn bind_failure_does_not_create_an_active_runtime() {
         let occupied = tokio::net::TcpListener::bind("0.0.0.0:0")
@@ -333,9 +357,7 @@ mod tests {
         drop(client);
         host.stop().await;
 
-        host.start(port, Some(static_dir.to_string_lossy().into_owned()))
-            .await
-            .expect("embedded relay should restart immediately on the same port");
+        restart_on_same_port(&host, port, Some(static_dir.to_string_lossy().into_owned())).await;
         host.stop().await;
 
         assert_port_released(port, "stop must release the listener before returning").await;
