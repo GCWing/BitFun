@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useMemo, useRef } from 'react';
 import {
   AppWindow,
@@ -16,7 +16,6 @@ import {
   Terminal,
   Trash2,
 } from 'lucide-react';
-import { Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';

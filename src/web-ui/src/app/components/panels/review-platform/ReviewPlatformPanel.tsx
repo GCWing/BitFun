@@ -1,4 +1,4 @@
-import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { Input, MarkdownRenderer, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -2564,7 +2564,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         }}
         title={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : `${selectedRemote ? providerLabel(selectedRemote) : 'Provider'} token`}
         size="small"
-        contentInset
+        contentPadding="lg"
       >
         <form
           className="review-platform__auth-form"

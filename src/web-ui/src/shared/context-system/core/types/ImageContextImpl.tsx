@@ -1,10 +1,9 @@
  
 
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { Image as ImageIcon, Eye } from 'lucide-react';
-import { Modal } from '@/component-library';
 import type { ImageContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type { 
   ContextTransformer, 

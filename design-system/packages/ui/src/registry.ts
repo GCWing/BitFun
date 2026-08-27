@@ -4,6 +4,7 @@ import { fieldMeta } from "./components/Field/Field.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
 import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
+import { modalMeta } from "./components/Modal/Modal.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
@@ -23,6 +24,7 @@ export const componentRegistry = [
   iconButtonMeta,
   inputMeta,
   keyHintMeta,
+  modalMeta,
   pageHeaderMeta,
   searchFieldMeta,
   switchMeta,

@@ -11,7 +11,7 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Modal } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -27,7 +27,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react';
-import { Modal, PresenceBoundary, Tooltip, confirmDanger } from '@/component-library';
+import { PresenceBoundary, Tooltip, confirmDanger } from '@/component-library';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';

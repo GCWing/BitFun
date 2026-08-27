@@ -93,6 +93,8 @@
     "skipSession": "跳過整個會話"
   },
   "actions": {
+    "expandAdvanced": "展開進階設定",
+    "collapseAdvanced": "收合進階設定",
     "resetSettings": "重設記憶設定",
     "openDirectory": "開啟記憶目錄",
     "resetMemory": "重設記憶",

@@ -2,7 +2,16 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
 
-const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw', 'minimal', 'ultra']);
+const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
+  'agentic',
+  'claw',
+  'creative',
+  'minimal',
+  'multitask',
+  'ultra',
+]);
+
+export type ChatInputDirectiveId = 'Plan' | 'Multitask';
 
 export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
 
@@ -17,13 +26,13 @@ export function agentExecutionTier(agentType: string | null | undefined): AgentE
   }
 }
 
-export function canSwitchAgentExecutionTier(params: {
+export function canSwitchSessionMainAgent(params: {
   sessionStarted: boolean;
   currentAgentType: string | null | undefined;
   nextAgentType: string | null | undefined;
 }): boolean {
   return !params.sessionStarted
-    || agentExecutionTier(params.currentAgentType) === agentExecutionTier(params.nextAgentType);
+    || normalizeModeLookupId(params.currentAgentType) === normalizeModeLookupId(params.nextAgentType);
 }
 
 const THREAD_GOAL_TOOL_IDS = ['get_goal', 'create_goal', 'update_goal'] as const;
@@ -201,8 +210,6 @@ function normalizeModeLookupId(value: string | null | undefined): string | null 
 
 function canonicalFixedModeId(value: string | null | undefined): string | null {
   switch (normalizeModeLookupId(value)) {
-    case 'cowork':
-      return 'Cowork';
     case 'claw':
       return 'Claw';
     default:
@@ -257,12 +264,44 @@ export function resolveChatInputModePolicy(params: {
   };
 }
 
-export function resolveSwitchableChatInputModes<TMode extends { id: string }>(
+export function isChatInputDirectiveModeId(
+  modeId: string | null | undefined,
+): modeId is ChatInputDirectiveId {
+  const normalized = normalizeModeLookupId(modeId);
+  return normalized === 'plan' || normalized === 'multitask';
+}
+
+export function canonicalChatInputDirectiveId(
+  modeId: string | null | undefined,
+): ChatInputDirectiveId | null {
+  switch (normalizeModeLookupId(modeId)) {
+    case 'plan':
+      return 'Plan';
+    case 'multitask':
+      return 'Multitask';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Main Agents are selected with the Harness control before the first Turn.
+ * Standard, Minimal, and Ultra are already represented by Harness profiles;
+ * Claw belongs to Assistant workspaces; Multitask is a per-task directive.
+ */
+export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   availableModes: Iterable<TMode>,
 ): TMode[] {
   return Array.from(availableModes).filter(
-    mode => !FIXED_CHAT_INPUT_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
+    mode => !MAIN_AGENT_EXCLUDED_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
   );
+}
+
+/** Plan is intentionally dual-use: it is both a main Agent and a directive. */
+export function resolveChatInputDirectiveModes<TMode extends { id: string }>(
+  availableModes: Iterable<TMode>,
+): TMode[] {
+  return Array.from(availableModes).filter(mode => isChatInputDirectiveModeId(mode.id));
 }
 
 export function resolveChatInputSendAgentType(params: {
@@ -392,7 +431,9 @@ export function resolveAvailableChatInputMode(params: {
   const normalizedCurrentMode = params.currentMode.trim();
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
-    normalizedUserDefaultModeId && availableModeIds.has(normalizedUserDefaultModeId)
+    normalizedUserDefaultModeId
+      && normalizeModeLookupId(normalizedUserDefaultModeId) !== 'multitask'
+      && availableModeIds.has(normalizedUserDefaultModeId)
       ? normalizedUserDefaultModeId
       : null;
   const canUseUserDefaultMode =

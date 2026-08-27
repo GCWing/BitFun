@@ -107,6 +107,29 @@
       }
     }
   },
+  "overlay": {
+    "modal": {
+      "$type": "dimension",
+      "viewportGutter": {
+        "$description": "Minimum viewport inset reserved around a centered modal.",
+        "$value": "24px"
+      },
+      "edgeGutter": {
+        "$description": "Inset shared by modal header chrome and the close action.",
+        "$value": "8px"
+      },
+      "contentPaddingSm": { "$value": "{space.3}" },
+      "contentPaddingMd": { "$value": "{space.4}" },
+      "contentPaddingLg": { "$value": "{space.6}" },
+      "contentPaddingXl": { "$value": "{space.8}" },
+      "maxInlineSizeSmall": { "$value": "420px" },
+      "maxInlineSizeMedium": { "$value": "560px" },
+      "maxInlineSizeLarge": { "$value": "600px" },
+      "maxInlineSizeXlarge": { "$value": "720px" },
+      "maxInlineSizeXxlarge": { "$value": "960px" },
+      "maxInlineSizeWide": { "$value": "1200px" }
+    }
+  },
   "radius": {
     "$type": "dimension",
     "xs": { "$value": "4px" },
@@ -117,6 +140,7 @@
     "xl": { "$value": "16px" },
     "2xl": { "$value": "20px" },
     "3xl": { "$value": "24px" },
+    "4xl": { "$value": "32px" },
     "pill": { "$value": "9999px" }
   },
   "border": {

@@ -7,7 +7,7 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 const WEBVIEW_RESIZE_DEBOUNCE_MS = 160;
 const WEBVIEW_BOUNDS_EPSILON = 1;
 const WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS = 2000;
-const OVERLAY_SELECTOR = '.modal-overlay, .canvas-mission-control';
+const OVERLAY_SELECTOR = "[data-bf-component='modal'][data-bf-part='overlay'], .canvas-mission-control";
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
 

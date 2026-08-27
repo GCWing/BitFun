@@ -1,7 +1,7 @@
 export type ProductActionIcon =
+  | 'message-circle'
+  | 'folder'
   | 'plus'
-  | 'folder-open'
-  | 'folder-plus'
   | 'globe'
   | 'terminal'
   | 'files'
@@ -46,7 +46,7 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     labelKey: 'nav.search.actions.newSession',
     descriptionKey: 'nav.search.actionDescriptions.newSession',
     aliases: ['new session', 'new chat', 'create session', 'conversation'],
-    icon: 'plus',
+    icon: 'message-circle',
     defaultPriority: 100,
   },
   {
@@ -70,7 +70,7 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     labelKey: 'nav.search.actions.openProject',
     descriptionKey: 'nav.search.actionDescriptions.openProject',
     aliases: ['open project', 'open folder', 'workspace'],
-    icon: 'folder-open',
+    icon: 'folder',
     defaultPriority: 92,
   },
   {
@@ -78,7 +78,7 @@ export const PRODUCT_ACTION_CATALOG: readonly ProductActionDefinition[] = [
     labelKey: 'nav.search.actions.newProject',
     descriptionKey: 'nav.search.actionDescriptions.newProject',
     aliases: ['new project', 'create project'],
-    icon: 'folder-plus',
+    icon: 'plus',
     defaultPriority: 88,
   },
   {

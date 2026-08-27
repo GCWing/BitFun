@@ -1,7 +1,7 @@
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Modal, Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
+import { Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -234,7 +234,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
       }}
       title={workspace.name}
       size="xlarge"
-      contentInset
+      contentPadding="lg"
       contentClassName="workspace-project-permissions-dialog__modal"
       overlayClassName="workspace-project-permissions-dialog-overlay"
     >

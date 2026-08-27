@@ -107,6 +107,8 @@ const semanticThemes = {
 const requiredSemanticTokens = [
   "color.surface.canvas",
   "color.surface.panel",
+  "color.surface.raised",
+  "color.overlay.scrim",
   "color.content.primary",
   "color.content.secondary",
   "color.content.disabled",

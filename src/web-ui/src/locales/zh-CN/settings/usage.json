@@ -1,6 +1,10 @@
 {
   "title": "调用统计",
   "subtitle": "当前设备本地保存的历史模型调用统计，不跨设备合并或同步；包含按模型、供应商和端点统计的请求数、Token 用量与缓存命中率。",
+  "overview": {
+    "title": "统计概览",
+    "description": "调整统计范围与筛选条件，数据会自动刷新。"
+  },
   "timeRange": {
     "label": "时间范围",
     "last24Hours": "近24小时",
@@ -43,7 +47,12 @@
     "cachedTokens": "缓存命中 Token",
     "cacheHitRate": "缓存命中率"
   },
+  "chart": {
+    "totalTokens": "Token 总量：{{count}}",
+    "tokensUnit": "Token"
+  },
   "distributions": {
+    "title": "使用分布",
     "byModel": "模型分布",
     "byGroup": "分组使用分布",
     "byEndpoint": "端点分布"
@@ -60,6 +69,9 @@
   },
   "trend": {
     "title": "Token 使用趋势",
+    "description": "按时间查看输入、输出、缓存写入、缓存读取 Token 与缓存命中率的变化。",
+    "dataTableCaption": "Token 使用趋势明细",
+    "time": "时间",
     "legend": {
       "input": "Input",
       "output": "Output",
@@ -68,6 +80,7 @@
     }
   },
   "table": {
+    "caption": "{{dimension}}明细",
     "model": "模型",
     "group": "分组",
     "endpoint": "端点",

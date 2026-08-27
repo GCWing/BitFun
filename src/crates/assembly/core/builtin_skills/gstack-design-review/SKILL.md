@@ -14,15 +14,15 @@ description: |
 
 You are a senior product designer AND a frontend engineer. Review live sites with exacting visual standards — then fix what you find. You have strong opinions about typography, spacing, and visual hierarchy, and zero tolerance for generic or AI-generated-looking interfaces.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the live design-audit methodology. Use existing Task sub-agents for independent inspection tracks, then keep fix decisions explicit in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the live design-audit methodology. Use existing Task sub-agents for independent inspection tracks, then keep fix decisions explicit in the main session.
 
 - Do not assume a Designer sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom design/frontend/accessibility sub-agents if available; otherwise use agent-browser for browser inspection, `ComputerUse` only for native desktop UI, and `Explore` for component/style-system mapping and UI files.
 - Split independent tracks into parallel Task calls when useful: visual hierarchy, responsive behavior, accessibility/keyboard, empty/error states, and consistency with DESIGN.md.
 - Before asking a Task sub-agent to fix anything, confirm the selected sub-agent is intended for mutation and the workflow phase allows it. Otherwise request report-only output.
-- The main Team orchestrator consolidates findings, chooses fixes, and triggers re-review.
+- The main session consolidates findings, chooses fixes, and triggers re-review.
 
 ## Setup
 
@@ -760,7 +760,7 @@ Merge findings into the triage with `[codex]` / `[subagent]` / `[cross-model]` t
 
 **Log the result:**
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "codex-only", "subagent-only", or "unavailable".
 
@@ -928,7 +928,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

@@ -4,21 +4,30 @@ export const remoteConnectDialogAppearanceDescriptor: AppearanceSurfaceDescripto
   id: 'remote-connect-dialog',
   parts: [
     { id: 'root' },
-    { id: 'groups' },
-    { id: 'groupTab' },
+    { id: 'sidebar' },
+    { id: 'sidebarBrand' },
+    { id: 'main' },
+    { id: 'overview' },
+    { id: 'overviewSection' },
+    { id: 'overviewAction' },
+    { id: 'sectionMarker' },
+    { id: 'viewHeader' },
     { id: 'subtabs' },
-    { id: 'subtab' },
     { id: 'panel' },
     { id: 'body' },
+    { id: 'pairingCard' },
+    { id: 'botCard' },
     { id: 'status' },
     { id: 'error' },
   ],
   facets: [
+    { id: 'view', attribute: 'data-bf-view', values: ['overview', 'network', 'bot', 'account'] },
     { id: 'group', attribute: 'data-bf-group', values: ['network', 'bot', 'account'] },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
+    { id: 'authenticated', selector: { kind: 'self', suffix: '[data-bf-state~="authenticated"]' } },
     { id: 'connected', selector: { kind: 'self', suffix: '[data-bf-state~="connected"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
   ],
 };
 
@@ -39,8 +48,6 @@ export const remoteAccountPanelAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'progressFill' },
     { id: 'deviceList' },
     { id: 'deviceCard' },
-    { id: 'pages' },
-    { id: 'pagesEntry' },
   ],
   facets: [
     { id: 'view', attribute: 'data-bf-view', values: ['login', 'overwrite', 'devices'] },

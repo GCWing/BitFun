@@ -5,7 +5,6 @@ use crate::agents::{resolve_mode_config_profile_id, SHARED_CODING_MODE_CONFIG_PR
 enum SkillModeId {
     CodingShared,
     Cowork,
-    Team,
     Claw,
     ComputerUse,
     DeepResearch,
@@ -17,7 +16,6 @@ impl SkillModeId {
         match mode_id.trim() {
             SHARED_CODING_MODE_CONFIG_PROFILE_ID => Self::CodingShared,
             "Cowork" => Self::Cowork,
-            "Team" => Self::Team,
             "Claw" => Self::Claw,
             "ComputerUse" => Self::ComputerUse,
             "DeepResearch" => Self::DeepResearch,
@@ -65,16 +63,6 @@ const DISABLE_GSTACK: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
-const DISABLE_MINIAPP: SkillPolicyRule = SkillPolicyRule {
-    selector: SkillSelector::Group(BuiltinSkillGroup::MiniApp),
-    effect: PolicyEffect::Disable,
-};
-
-const DISABLE_DEBUGGING: SkillPolicyRule = SkillPolicyRule {
-    selector: SkillSelector::Group(BuiltinSkillGroup::Debugging),
-    effect: PolicyEffect::Disable,
-};
-
 // ControlHub's browser domain is the single default browser-automation path.
 // The computer-use skill group (agent-browser) stays opt-in in every mode so the
 // model never sees two parallel browser stacks; users can still enable it via
@@ -109,22 +97,11 @@ const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     rules: &[ENABLE_OFFICE, ENABLE_META],
 };
 
-const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
-    builtin_default: PolicyEffect::Enable,
-    rules: &[
-        DISABLE_OFFICE,
-        DISABLE_MINIAPP,
-        DISABLE_COMPUTER_USE,
-        DISABLE_DEBUGGING,
-    ],
-};
-
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
     let policy_scope = resolve_mode_config_profile_id(mode_id);
     match SkillModeId::parse(policy_scope.as_ref()) {
         SkillModeId::CodingShared | SkillModeId::Claw => AGENTIC_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
-        SkillModeId::Team => TEAM_POLICY,
         SkillModeId::ComputerUse | SkillModeId::DeepResearch | SkillModeId::Other => {
             OPEN_META_ONLY_POLICY
         }
@@ -170,7 +147,6 @@ mod tests {
             "coding_shared",
             "Claw",
             "Cowork",
-            "Team",
             "ComputerUse",
             "DeepResearch",
             "SomeUnknownMode",
@@ -209,13 +185,7 @@ mod tests {
             );
         }
 
-        for mode_id in [
-            "Cowork",
-            "Team",
-            "ComputerUse",
-            "DeepResearch",
-            "SomeUnknownMode",
-        ] {
+        for mode_id in ["Cowork", "ComputerUse", "DeepResearch", "SomeUnknownMode"] {
             assert_eq!(
                 resolve_builtin_default_enabled("evidence-debugging", mode_id),
                 Some(false),

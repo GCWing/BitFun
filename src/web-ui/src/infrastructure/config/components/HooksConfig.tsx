@@ -1,8 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, RefreshCw } from 'lucide-react';
-import { ConfigPageLoading, ConfirmDialog, Modal } from '@/component-library';
+import { ConfigPageLoading, ConfirmDialog} from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { useNotification } from '@/shared/notification-system';

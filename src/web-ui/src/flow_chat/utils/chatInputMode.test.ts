@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentExecutionTier,
-  canSwitchAgentExecutionTier,
+  canSwitchSessionMainAgent,
+  canonicalChatInputDirectiveId,
   hasCompleteThreadGoalTools,
   isChatInputActionVisibleForTarget,
   isPrimarySlashActionVisible,
@@ -11,8 +12,9 @@ import {
   resolveChatInputCanUseSkills,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
+  resolveChatInputDirectiveModes,
+  resolveChatInputMainAgentModes,
   resolveSessionAssistantWorkspace,
-  resolveSwitchableChatInputModes,
   resolveWorkspaceChatInputMode,
 } from './chatInputMode';
 import { WorkspaceKind, type WorkspaceInfo, WorkspaceType } from '@/shared/types';
@@ -163,17 +165,17 @@ describe('resolveChatInputModePolicy', () => {
     });
   });
 
-  it('fixes Cowork sessions from current or session mode', () => {
+  it('keeps Cowork selectable as a project main Agent', () => {
     expect(
       resolveChatInputModePolicy({
         currentMode: 'Cowork',
         isAssistantWorkspace: false,
         sessionMode: 'agentic',
       }),
-    ).toMatchObject({
-      canSwitchModes: false,
-      fixedModeId: 'Cowork',
-      fixedReason: 'current-mode',
+    ).toEqual({
+      canSwitchModes: true,
+      fixedModeId: null,
+      fixedReason: null,
     });
 
     expect(
@@ -182,10 +184,10 @@ describe('resolveChatInputModePolicy', () => {
         isAssistantWorkspace: false,
         sessionMode: 'cowork',
       }),
-    ).toMatchObject({
-      canSwitchModes: false,
-      fixedModeId: 'Cowork',
-      fixedReason: 'session-mode',
+    ).toEqual({
+      canSwitchModes: true,
+      fixedModeId: null,
+      fixedReason: null,
     });
   });
 
@@ -205,21 +207,36 @@ describe('resolveChatInputModePolicy', () => {
   });
 });
 
-describe('resolveSwitchableChatInputModes', () => {
-  it('removes fixed collaboration modes from boost selection', () => {
+describe('ChatInput Agent and directive projection', () => {
+  it('puts specialized and custom main Agents under Other without duplicating Harness profiles', () => {
     expect(
-      resolveSwitchableChatInputModes([
+      resolveChatInputMainAgentModes([
         { id: 'agentic' },
         { id: 'Cowork' },
+        { id: 'Multitask' },
+        { id: 'Plan' },
         { id: 'Claw' },
         { id: 'minimal' },
         { id: 'Ultra' },
         { id: 'PlannerPlus' },
       ]),
     ).toEqual([
-      { id: 'agentic' },
+      { id: 'Cowork' },
+      { id: 'Plan' },
       { id: 'PlannerPlus' },
     ]);
+  });
+
+  it('keeps Plan and Multitask as the only per-task directives', () => {
+    expect(resolveChatInputDirectiveModes([
+      { id: 'agentic' },
+      { id: 'Plan' },
+      { id: 'Cowork' },
+      { id: 'Multitask' },
+    ])).toEqual([{ id: 'Plan' }, { id: 'Multitask' }]);
+    expect(canonicalChatInputDirectiveId(' plan ')).toBe('Plan');
+    expect(canonicalChatInputDirectiveId('MULTITASK')).toBe('Multitask');
+    expect(canonicalChatInputDirectiveId('DeepResearch')).toBeNull();
   });
 });
 
@@ -230,18 +247,23 @@ describe('Agent execution tier locking', () => {
     expect(agentExecutionTier('Plan')).toBe('balanced');
   });
 
-  it('allows Balanced switches but blocks cross-tier changes after start', () => {
-    expect(canSwitchAgentExecutionTier({
+  it('locks every Harness or main-Agent change after the first turn', () => {
+    expect(canSwitchSessionMainAgent({
       sessionStarted: true,
       currentAgentType: 'Plan',
       nextAgentType: 'Multitask',
-    })).toBe(true);
-    expect(canSwitchAgentExecutionTier({
-      sessionStarted: true,
-      currentAgentType: 'minimal',
-      nextAgentType: 'agentic',
     })).toBe(false);
-    expect(canSwitchAgentExecutionTier({
+    expect(canSwitchSessionMainAgent({
+      sessionStarted: true,
+      currentAgentType: 'Plan',
+      nextAgentType: ' plan ',
+    })).toBe(true);
+    expect(canSwitchSessionMainAgent({
+      sessionStarted: true,
+      currentAgentType: 'agentic',
+      nextAgentType: 'Cowork',
+    })).toBe(false);
+    expect(canSwitchSessionMainAgent({
       sessionStarted: false,
       currentAgentType: 'minimal',
       nextAgentType: 'Ultra',
@@ -288,7 +310,7 @@ describe('resolveChatInputSendAgentType', () => {
         subagentType: 'Not provided',
         sessionMode: 'Explore',
         acpTargetAgentType: null,
-        composerMode: 'Team',
+        composerMode: 'Multitask',
       }),
     ).toBe('Explore');
   });
@@ -508,7 +530,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'agentic',
         isAssistantWorkspace: false,
         sessionMode: 'Plan',
-        availableModeIds: ['agentic', 'Plan', 'Team'],
+        availableModeIds: ['agentic', 'Plan', 'Multitask'],
       }),
     ).toBe('Plan');
   });
@@ -519,7 +541,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Team'],
+        availableModeIds: ['agentic', 'Multitask'],
       }),
     ).toBeNull();
   });
@@ -527,10 +549,10 @@ describe('resolveAvailableChatInputMode', () => {
   it('restores the persisted session mode even while its catalog entry is unavailable', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'Team',
+        currentMode: 'Multitask',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Team'],
+        availableModeIds: ['agentic', 'Multitask'],
       }),
     ).toBe('PlannerPlus');
   });
@@ -574,7 +596,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['Team', 'Plan'],
+        availableModeIds: ['Multitask', 'Plan'],
       }),
     ).toBeNull();
   });
@@ -594,11 +616,11 @@ describe('resolveAvailableChatInputMode', () => {
   it('does not let the user default override an existing session mode', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'Team',
+        currentMode: 'Multitask',
         isAssistantWorkspace: false,
-        sessionMode: 'Team',
+        sessionMode: 'Multitask',
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Team', 'PlannerPlus'],
+        availableModeIds: ['agentic', 'Multitask', 'PlannerPlus'],
       }),
     ).toBeNull();
   });
@@ -610,9 +632,21 @@ describe('resolveAvailableChatInputMode', () => {
         isAssistantWorkspace: false,
         sessionMode: undefined,
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Team'],
+        availableModeIds: ['agentic', 'Multitask'],
       }),
     ).toBe('agentic');
+  });
+
+  it('does not restore legacy Multitask as a new-session main Agent default', () => {
+    expect(
+      resolveAvailableChatInputMode({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: undefined,
+        userDefaultModeId: 'Multitask',
+        availableModeIds: ['agentic', 'Multitask'],
+      }),
+    ).toBeNull();
   });
 
   it('keeps assistant workspaces pinned to Claw even with a user default', () => {

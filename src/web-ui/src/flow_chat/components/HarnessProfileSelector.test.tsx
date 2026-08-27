@@ -57,14 +57,20 @@ describe('HarnessProfileSelector', () => {
 
   it('keeps the active Harness icon out of the ChatInput trigger', async () => {
     await act(async () => {
-      root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
+      root.render(
+        <HarnessProfileSelector
+          selectedProfile="balanced"
+          directiveLabel="Plan"
+          onSelectProfile={vi.fn()}
+        />,
+      );
     });
 
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
-    expect(trigger?.textContent).toContain('chatInput.harness.profiles.balanced.name');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -117,9 +123,19 @@ describe('HarnessProfileSelector', () => {
     ).toBe(true);
   });
 
-  it('offers three density gears plus the Creative profile with its BitFun icon', async () => {
+  it('offers three Harness gears, Creative, and the second-level Agents entry', async () => {
     await act(async () => {
-      root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={vi.fn()} />);
+      root.render(
+        <HarnessProfileSelector
+          selectedProfile="balanced"
+          otherAgents={[
+            { id: 'DeepResearch', name: 'Deep Research' },
+            { id: 'Cowork', name: 'Cowork' },
+            { id: 'Plan', name: 'Plan' },
+          ]}
+          onSelectProfile={vi.fn()}
+        />,
+      );
     });
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
@@ -134,18 +150,77 @@ describe('HarnessProfileSelector', () => {
       'balanced',
       'ultimate',
       'creative',
+      'other',
     ]);
-    expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0]);
+    expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0, 0]);
     for (const row of rows.slice(0, 3)) {
-      expect(row.querySelector('.bitfun-harness-selector__profile-promise')).not.toBeNull();
       expect(row.querySelector('.bitfun-harness-selector__density-core')).not.toBeNull();
     }
+    expect(menu?.querySelector('.bitfun-harness-selector__profile-promise')).toBeNull();
     const creative = rows[3];
-    expect(creative?.querySelector('.bitfun-harness-selector__profile-promise')).not.toBeNull();
     expect(creative?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
     expect(creative?.querySelector('[data-bf-icon="harness-creative"]')).not.toBeNull();
     expect(creative?.dataset.bfState).toBe('coming-soon');
+    const other = rows[4];
+    expect(other?.querySelector('.bitfun-harness-selector__density-core')).toBeNull();
+    expect(other?.querySelector('.lucide-bot')).not.toBeNull();
+    expect(other?.querySelector('.bitfun-harness-selector__agent-count')?.textContent).toBe('3');
     expect(rows[1]?.dataset.bfState).toBe('current');
+  });
+
+  it('opens Agents as a second level and selects a main Agent without a separate chip', async () => {
+    const onSelectAgent = vi.fn();
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          selectedProfile="balanced"
+          otherAgents={[
+            { id: 'DeepResearch', name: 'Deep Research' },
+            { id: 'Cowork', name: 'Cowork' },
+            { id: 'Plan', name: 'Plan' },
+          ]}
+          onSelectProfile={vi.fn()}
+          onSelectAgent={onSelectAgent}
+        />,
+      );
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    expect(menu?.dataset.bfPage).toBe('agents');
+    expect(Array.from(menu!.querySelectorAll<HTMLElement>('[data-bf-part="agent"]')).map(
+      row => row.dataset.bfAgentId,
+    )).toEqual(['DeepResearch', 'Cowork', 'Plan']);
+
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-agent-DeepResearch"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectAgent).toHaveBeenCalledWith('DeepResearch');
+    expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+
+    await act(async () => {
+      root.render(
+        <HarnessProfileSelector
+          selectedProfile="other"
+          selectedAgentId="DeepResearch"
+          directiveLabel="Multitask"
+          otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
+          onSelectProfile={vi.fn()}
+          onSelectAgent={onSelectAgent}
+        />,
+      );
+    });
+    expect(
+      container.querySelector('[data-testid="harness-profile-selector"]')?.textContent,
+    ).toBe('Deep Research · Multitask');
   });
 
   it('activates all implemented profiles while reporting Creative as unavailable', async () => {
@@ -189,14 +264,18 @@ describe('HarnessProfileSelector', () => {
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
-  it('keeps the menu inspectable after the Session starts but explains why another profile cannot be selected', async () => {
+  it('collapses a started Session into its signature before exposing new-Session choices', async () => {
     const onSelectProfile = vi.fn();
+    const onStartNewSession = vi.fn();
     await act(async () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
           selectedProfile="balanced"
+          directiveLabel="Plan"
+          otherAgents={[{ id: 'Plan', name: 'Plan' }]}
           onSelectProfile={onSelectProfile}
+          onStartNewSession={onStartNewSession}
         />,
       );
     });
@@ -205,78 +284,69 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.dataset.harnessLocked).toBe('true');
+    expect(trigger?.dataset.harnessFixed).toBe('true');
     expect(trigger?.disabled).toBe(false);
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const menu = document.querySelector('.bitfun-harness-selector__menu');
+    const menu = document.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
     expect(menu).not.toBeNull();
+    expect(menu?.dataset.bfPage).toBe('summary');
+    expect(menu?.querySelector('[data-bf-part="profile"]')).toBeNull();
     expect(
-      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
-        ?.dataset.bfState,
-    ).toBe('new-session-only');
-    expect(
-      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
-        ?.textContent,
-    ).toContain('chatInput.harness.newSessionOnly');
-    expect(
-      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-ultimate"]')
-        ?.dataset.bfState,
-    ).toBe('new-session-only');
+      menu?.querySelector('[data-testid="harness-session-summary"]')?.textContent,
+    ).toContain('chatInput.harness.profiles.balanced.name');
+    expect(menu?.querySelector('.bitfun-harness-selector__session-scope')).toBeNull();
+    expect(menu?.textContent).toContain('chatInput.harness.nextMessageDirective');
+    const startNewSession = menu?.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-start-new-session"]',
+    );
+    expect(startNewSession?.querySelector('.lucide-message-square-plus')).toBeNull();
+    expect(startNewSession?.querySelectorAll('svg')).toHaveLength(1);
 
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+      startNewSession?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(menu?.dataset.bfPage).toBe('profiles');
+    expect(
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+        ?.getAttribute('role'),
+    ).toBe('menuitem');
+    expect(
+      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
+        ?.dataset.bfState,
+    ).toBe('available');
+    expect(menu?.textContent).not.toContain('chatInput.harness.newSessionOnly');
+
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
-    expect(notify.info).toHaveBeenCalledWith(
-      'chatInput.harness.sessionStartedNotice',
-      { duration: 3800 },
+    expect(onStartNewSession).toHaveBeenCalledWith(
+      { kind: 'profile', id: 'minimal' },
     );
     expect(document.querySelector('.bitfun-harness-selector__menu')).toBeNull();
-
-    await act(async () => {
-      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-creative"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(notify.info).toHaveBeenLastCalledWith(
-      'chatInput.harness.comingSoonNotice',
-      { duration: 3200 },
-    );
   });
 
-  it('locks a started Session to its current execution tier', async () => {
-    const onSelectProfile = vi.fn();
+  it('creates a new Session from a different main Agent without mutating the current Agent', async () => {
+    const onSelectAgent = vi.fn();
+    const onStartNewSession = vi.fn();
     await act(async () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
-          selectedProfile="minimal"
-          onSelectProfile={onSelectProfile}
-        />,
-      );
-    });
-
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(onSelectProfile).not.toHaveBeenCalled();
-
-    await act(async () => {
-      root.render(
-        <HarnessProfileSelector
-          sessionStarted
-          selectedProfile="ultimate"
-          onSelectProfile={onSelectProfile}
+          selectedProfile="other"
+          selectedAgentId="Plan"
+          otherAgents={[
+            { id: 'Plan', name: 'Plan' },
+            { id: 'Cowork', name: 'Cowork' },
+          ]}
+          onSelectProfile={vi.fn()}
+          onSelectAgent={onSelectAgent}
+          onStartNewSession={onStartNewSession}
         />,
       );
     });
@@ -284,19 +354,32 @@ describe('HarnessProfileSelector', () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const minimal = document.querySelector<HTMLButtonElement>(
-      '[data-testid="harness-profile-minimal"]',
-    );
-    const balanced = document.querySelector<HTMLButtonElement>(
-      '[data-testid="harness-profile-balanced"]',
-    );
-    expect(minimal?.dataset.bfState).toBe('new-session-only');
-    expect(balanced?.dataset.bfState).toBe('new-session-only');
+    expect(
+      document.querySelector('[data-testid="harness-session-summary"]')?.textContent,
+    ).toContain('Plan');
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-start-new-session"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(
+      document.querySelector<HTMLElement>('[data-testid="harness-agent-Plan"]')?.dataset.bfState,
+    ).toBe('available');
+    expect(
+      document.querySelector<HTMLElement>('[data-testid="harness-agent-Cowork"]')?.dataset.bfState,
+    ).toBe('available');
 
     await act(async () => {
-      minimal?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-agent-Cowork"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onSelectProfile).not.toHaveBeenCalled();
+    expect(onSelectAgent).not.toHaveBeenCalled();
+    expect(onStartNewSession).toHaveBeenCalledWith(
+      { kind: 'agent', id: 'Cowork' },
+    );
   });
 
   it.each(['creative'] as const)(
@@ -318,11 +401,17 @@ describe('HarnessProfileSelector', () => {
     },
   );
 
-  it('keeps a legacy session on its own mode and explains why instead of switching', async () => {
+  it('keeps a legacy Session fixed while offering the same new-Session path', async () => {
     const onSelectProfile = vi.fn();
+    const onStartNewSession = vi.fn();
     await act(async () => {
       root.render(
-        <HarnessProfileSelector legacySession selectedProfile="balanced" onSelectProfile={onSelectProfile} />,
+        <HarnessProfileSelector
+          legacySession
+          selectedProfile="balanced"
+          onSelectProfile={onSelectProfile}
+          onStartNewSession={onStartNewSession}
+        />,
       );
     });
 
@@ -336,10 +425,17 @@ describe('HarnessProfileSelector', () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-start-new-session"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-balanced"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
-    expect(notify.info).toHaveBeenCalledTimes(1);
+    expect(onStartNewSession).toHaveBeenCalledWith(
+      { kind: 'profile', id: 'balanced' },
+    );
+    expect(notify.info).not.toHaveBeenCalled();
   });
 });

@@ -1014,7 +1014,6 @@ const CODE_AGENT_IDS: &[&str] = &[
     "Multitask",
     "Plan",
     "Claw",
-    "Team",
     "Ultra",
     "SwarmPlanner",
     "SwarmWorker",

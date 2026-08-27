@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Vertical breathing room; horizontal inset comes from Modal `contentInset` */
+  /* Vertical breathing room; horizontal inset comes from Modal `contentPadding="lg"`. */
   padding: 4px 0 22px;
   max-width: 100%;
 }

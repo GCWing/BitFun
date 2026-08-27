@@ -7960,7 +7960,7 @@ export const requiredContentRules = [
         message: 'missing GeneralPurpose runtime default model mapping',
       },
       {
-        regex: /SubagentVisibilityPolicy::restricted\(\["Claw",\s*"Team"\]\)/,
+        regex: /SubagentVisibilityPolicy::restricted\(\["Claw"\]\)/,
         message: 'missing ComputerUse restricted visibility mapping',
       },
     ],

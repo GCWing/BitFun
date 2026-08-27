@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const searchFieldMeta = {
   category: "form",
-  description: "A search input with optional leading icon, shortcut hint, and Enter submission.",
+  description: "A search input with optional leading icon, shortcut hint, clear action, and Enter submission.",
   maturity: "stable",
   name: "SearchField",
   props: [
@@ -11,10 +11,12 @@ export const searchFieldMeta = {
     { name: "placeholder", type: "string" },
     { name: "leadingIcon", type: "ReactNode" },
     { name: "shortcut", type: "ReactNode" },
+    { name: "clearLabel", type: "string" },
     { defaultValue: "sm", name: "size", type: "sm | md | lg" },
     { defaultValue: "false", name: "invalid", type: "boolean" },
     { defaultValue: "false", name: "disabled", type: "boolean" },
     { name: "onValueChange", type: "(value: string) => void" },
+    { name: "onClear", type: "MouseEventHandler<HTMLButtonElement>" },
     { name: "onSearch", type: "(value: string) => void" },
   ],
   states: ["default", "hover", "focus-visible", "invalid", "disabled"],

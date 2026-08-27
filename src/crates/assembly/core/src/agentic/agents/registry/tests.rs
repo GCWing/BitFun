@@ -239,7 +239,6 @@ fn top_level_modes_default_to_auto() {
         "Plan",
         "Claw",
         "DeepResearch",
-        "Team",
         "Ultra",
     ] {
         assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");

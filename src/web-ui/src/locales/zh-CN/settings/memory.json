@@ -93,6 +93,8 @@
     "skipSession": "跳过整个会话"
   },
   "actions": {
+    "expandAdvanced": "展开高级设置",
+    "collapseAdvanced": "收起高级设置",
     "resetSettings": "重置记忆设置",
     "openDirectory": "打开记忆目录",
     "resetMemory": "重置记忆",

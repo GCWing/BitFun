@@ -1,4 +1,5 @@
 export type SelectableComposerExecutionLevel = 'minimal' | 'balanced' | 'ultimate';
+export type ComposerExecutionLevel = SelectableComposerExecutionLevel | 'other';
 
 export interface ComposerExecutionLevelSelection {
   modeId: string;
@@ -13,20 +14,18 @@ export function isUltraAgentType(agentType: string | null | undefined): boolean 
  */
 export function resolveComposerExecutionLevelSelection(
   level: SelectableComposerExecutionLevel,
-  currentMode: string,
 ): ComposerExecutionLevelSelection {
   if (level === 'minimal') return { modeId: 'minimal' };
   if (level === 'ultimate') return { modeId: 'Ultra' };
-  return { modeId: currentMode === 'minimal' || isUltraAgentType(currentMode)
-    ? 'agentic'
-    : currentMode };
+  return { modeId: 'agentic' };
 }
 
 export function resolveSelectedComposerExecutionLevel(params: {
   currentMode: string;
-}): SelectableComposerExecutionLevel {
+}): ComposerExecutionLevel {
   if (params.currentMode.trim().toLowerCase() === 'minimal') return 'minimal';
-  return isUltraAgentType(params.currentMode) ? 'ultimate' : 'balanced';
+  if (isUltraAgentType(params.currentMode)) return 'ultimate';
+  return params.currentMode.trim().toLowerCase() === 'agentic' ? 'balanced' : 'other';
 }
 
 export type ChatInputExecutionLevelOwner =

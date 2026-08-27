@@ -30,15 +30,16 @@
   }
 }
 
-.modal--small {
+.input-dialog-overlay
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='small'] {
   max-width: 360px;
 
-  .modal__content {
+  [data-bf-component='modal'][data-bf-part='content'] {
     min-width: 0;
   }
 }
 
-.modal-overlay:has(.input-dialog) {
+.input-dialog-overlay[data-bf-component='modal'][data-bf-part='overlay'] {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }

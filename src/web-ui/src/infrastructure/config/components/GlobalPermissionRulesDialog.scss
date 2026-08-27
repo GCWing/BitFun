@@ -126,8 +126,8 @@
 
 .global-permission-rules-dialog-overlay {
   &:has(.select--open) {
-    .modal,
-    .modal__content,
+    [data-bf-component='modal'][data-bf-part='dialog'],
+    [data-bf-component='modal'][data-bf-part='content'],
     .global-permission-rules-dialog__section {
       overflow: visible;
     }

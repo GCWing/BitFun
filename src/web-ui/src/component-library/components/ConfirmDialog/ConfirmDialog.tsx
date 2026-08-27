@@ -4,9 +4,8 @@
  */
 
 import React, { useEffect, useId, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal } from '../Modal/Modal';
 import { AlertTriangle, Info, AlertCircle, CheckCircle } from 'lucide-react';
 import './ConfirmDialog.scss';
 

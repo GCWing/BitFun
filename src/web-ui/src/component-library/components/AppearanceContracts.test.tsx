@@ -4,9 +4,10 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Modal, ModalProvider } from '@bitfun/ui';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Card, CardBody, CardFooter, CardHeader } from './Card/Card';
 import { Input } from './Input/Input';
-import { Modal } from './Modal/Modal';
 
 vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
@@ -52,16 +53,18 @@ describe('component appearance contracts', () => {
   it('renders Modal through the shared overlay host with stable parts', async () => {
     await act(async () => {
       root.render(
-        <Modal isOpen onClose={vi.fn()} title="Contract" size="large" contentInset resizable>
-          Content
-        </Modal>,
+        <ModalProvider portalContainer={getAppearanceOverlayHost}>
+          <Modal isOpen onClose={vi.fn()} title="Contract" size="large" contentPadding="lg" resizable>
+            Content
+          </Modal>
+        </ModalProvider>,
       );
     });
     const host = document.getElementById('bitfun-appearance-overlay-host');
     expect(host).not.toBeNull();
     expect(host?.querySelector('[data-bf-component="modal"][data-bf-part="overlay"]')).not.toBeNull();
     expect(host?.querySelector('[data-bf-part="dialog"][data-bf-size="large"]')).not.toBeNull();
-    expect(host?.querySelector('[data-bf-part="content"][data-bf-state="contentInset"]')).not.toBeNull();
+    expect(host?.querySelector('[data-bf-part="content"][data-bf-padding="lg"]')).not.toBeNull();
     expect(host?.querySelectorAll('[data-bf-part="resizeHandle"]')).toHaveLength(8);
   });
 });

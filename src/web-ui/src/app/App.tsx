@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
+import { ModalProvider } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
@@ -31,6 +32,7 @@ import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/Toolba
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 import { shouldBlockBrowserShortcut } from './browserShortcutPolicy';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 
 const log = createLogger('App');
 
@@ -83,6 +85,7 @@ const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
 
 function App() {
   const { t } = useI18n('settings/application');
+  const { t: tComponents } = useI18n('components');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
@@ -904,47 +907,51 @@ function App() {
 
   // Unified layout via a single AppLayout
   return (
-    <ChatProvider>
-      <ViewModeProvider defaultMode="coder">
-        <SSHRemoteProvider>
-          <ToolbarModeProvider>
-            {/* One shell-owned command/search surface for every scene and nav mode. */}
-            <Suspense fallback={null}>
-              <LazyGlobalSearchRoot />
-            </Suspense>
+    <ModalProvider
+      closeLabel={tComponents('modal.close')}
+      portalContainer={getAppearanceOverlayHost}
+    >
+      <ChatProvider>
+        <ViewModeProvider defaultMode="coder">
+          <SSHRemoteProvider>
+            <ToolbarModeProvider>
+              {/* One shell-owned command/search surface for every scene and nav mode. */}
+              <Suspense fallback={null}>
+                <LazyGlobalSearchRoot />
+              </Suspense>
 
-            {/* Unified app layout with startup/workspace modes */}
-            <Suspense fallback={null}>
-              <LazyAppLayout onReady={handleAppLayoutReady} />
-            </Suspense>
+              {/* Unified app layout with startup/workspace modes */}
+              <Suspense fallback={null}>
+                <LazyAppLayout onReady={handleAppLayoutReady} />
+              </Suspense>
 
-            {/* Context menu renderer */}
-            <ContextMenuRenderer />
+              {/* Context menu renderer */}
+              <ContextMenuRenderer />
 
-            {/* Notification system */}
-            <NotificationContainer />
-            <NotificationCenter />
+              {/* Notification system */}
+              <NotificationContainer />
+              <NotificationCenter />
 
-            {/* Confirm dialog */}
-            <ConfirmDialogRenderer />
+              {/* Confirm dialog */}
+              <ConfirmDialogRenderer />
 
-            {/* Session usage report. Mounted here rather than in a chat view:
-                the request runs below any component, and the report outlives
-                whichever session view is on screen. */}
-            <SessionUsageModal />
+              {/* Session usage report. Mounted here rather than in a chat view:
+                  the request runs below any component, and the report outlives
+                  whichever session view is on screen. */}
+              <SessionUsageModal />
 
-            {/* Announcement / feature-demo / tips system */}
-            <AnnouncementProvider />
+              {/* Announcement / feature-demo / tips system */}
+              <AnnouncementProvider />
 
-            {/* AskUserQuestion waiting-state aria-live announcer.
-                Mounted here (inside ToolbarModeProvider, outside LazyAppLayout)
-                so it persists across both normal and Toolbar Mode. */}
-            <AskUserAnnouncer />
-
-          </ToolbarModeProvider>
-        </SSHRemoteProvider>
-      </ViewModeProvider>
-    </ChatProvider>
+              {/* AskUserQuestion waiting-state aria-live announcer.
+                  Mounted here (inside ToolbarModeProvider, outside LazyAppLayout)
+                  so it persists across both normal and Toolbar Mode. */}
+              <AskUserAnnouncer />
+            </ToolbarModeProvider>
+          </SSHRemoteProvider>
+        </ViewModeProvider>
+      </ChatProvider>
+    </ModalProvider>
   );
 }
 

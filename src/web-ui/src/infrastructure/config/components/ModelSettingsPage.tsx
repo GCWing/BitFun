@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input, SearchField } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, SearchField } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
-import { Select, NumberInput, Card, Modal, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select, NumberInput, Card, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -3789,7 +3789,8 @@ const ModelSettingsPage: React.FC = () => {
               ? t('editProvider')
               : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
         size="xlarge"
-        contentClassName="modal__content--fill-flex bitfun-model-settings__form--modal"
+        contentLayout="flex"
+        contentClassName="bitfun-model-settings__form--modal"
       >
         {reasoningPanelDraft ? (
           <ReasoningConfigPanel

@@ -650,9 +650,10 @@ describe('AppearanceCompiler', () => {
         },
         'remote-connect-dialog': {
           parts: {
-            groupTab: {
+            sidebar: { base: { borderColor: accent } },
+            overviewAction: {
               contexts: [{
-                when: { facets: { group: 'account' }, states: ['active'] },
+                when: { facets: { group: 'account' }, states: ['authenticated'] },
                 style: { backgroundColor: accent },
               }],
             },
@@ -924,7 +925,8 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="mcp-tools-config"][data-bf-part="authEditor"]');
     expect(snapshot.cssText).toContain('[data-bf-component="sessions-section"][data-bf-part="row"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="files-panel"][data-bf-part="search"][data-bf-search-mode="content"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="remote-connect-dialog"][data-bf-part="groupTab"][data-bf-group="account"][data-bf-state~="active"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="remote-connect-dialog"][data-bf-part="sidebar"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="remote-connect-dialog"][data-bf-part="overviewAction"][data-bf-group="account"][data-bf-state~="authenticated"]');
     expect(snapshot.cssText).toContain('[data-bf-scene="agents"][data-bf-part="catalogGrid"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-usage-panel"][data-bf-part="tab"][data-bf-tab="models"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="file-operation-tool-card"][data-bf-part="root"][data-bf-action="modify"][data-bf-state~="expanded"]');

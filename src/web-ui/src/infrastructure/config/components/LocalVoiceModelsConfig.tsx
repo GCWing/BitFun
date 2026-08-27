@@ -1,4 +1,4 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { Badge, Modal, confirmDanger, type BadgeVariant, Tooltip } from '@/component-library';
+import { Badge, confirmDanger, type BadgeVariant, Tooltip } from '@/component-library';
 import {
   speechAPI,
   workspaceAPI,

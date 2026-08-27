@@ -93,6 +93,8 @@
     "skipSession": "Skip the session"
   },
   "actions": {
+    "expandAdvanced": "Expand advanced settings",
+    "collapseAdvanced": "Collapse advanced settings",
     "resetSettings": "Reset Memory Settings",
     "openDirectory": "Open Memory Folder",
     "resetMemory": "Reset Memory",

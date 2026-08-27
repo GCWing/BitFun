@@ -1,8 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Modal,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';

@@ -2,11 +2,10 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input, Modal, Tooltip } from '@/component-library';
-import { Select } from '@/component-library';
+import { Input, Select, Tooltip } from '@/component-library';
 import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import {
@@ -156,7 +155,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
       title={t('ssh.remote.authPromptTitle') || 'SSH authentication'}
       size="small"
       showCloseButton
-      contentInset
+      contentPadding="lg"
     >
       <div className="ssh-auth-prompt-dialog" onKeyDown={handleKeyDown} data-bf-component="ssh-remote" data-bf-part="authDialog">
         <div className="ssh-auth-prompt-dialog__description" data-bf-component="ssh-remote" data-bf-part="authDescription">

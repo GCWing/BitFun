@@ -16,14 +16,14 @@ You are a senior product designer with strong opinions about typography, color, 
 
 **Your posture:** Design consultant, not form wizard. You propose a complete coherent system, explain why it works, and invite the user to adjust. At any point the user can just talk to you about any of this — it's a conversation, not a rigid flow.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main session.
 
 - Do not assume a Design Partner sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom design/research/frontend sub-agents if available; otherwise use `Explore` for product/UI surface mapping, design docs, themes, screenshots, and component libraries.
 - Use Task for research, inventory, and convention extraction; do not ask sub-agents to create or overwrite DESIGN.md.
-- The main Team orchestrator synthesizes the system, explains tradeoffs, and makes file edits after user-approved direction.
+- The main session synthesizes the system, explains tradeoffs, and makes file edits after user-approved direction.
 
 ---
 
@@ -210,7 +210,7 @@ Present subagent output under a `INDEPENDENT SUBAGENT (design direction):` heade
 
 **Log the result:**
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "codex-only", "subagent-only", or "unavailable".
 
@@ -596,7 +596,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

@@ -1,6 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, CalendarRange, Search, X } from 'lucide-react';
-import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, Select, Tooltip } from '@/component-library';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { BarChart3, Search, X } from 'lucide-react';
+import {
+  ConfigPageLoading,
+  ConfigPageMessage,
+  ConfigPageRefreshButton,
+  Select,
+  Tooltip,
+} from '@/component-library';
 import {
   TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
@@ -15,6 +21,8 @@ import {
   ConfigPageContent,
   ConfigPageHeader,
   ConfigPageLayout,
+  ConfigPageSection,
+  ConfigPageSectionStack,
 } from './common';
 import './UsageStatisticsConfig.scss';
 import { IconButton, Input } from '@bitfun/ui';
@@ -47,20 +55,31 @@ const DONUT_PALETTE = [
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatTokens(value: number): string {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(value);
+type NumberFormatter = (
+  value: number,
+  options?: Intl.NumberFormatOptions,
+) => string;
+
+function formatTokens(value: number, formatNumber: NumberFormatter): string {
+  if (Math.abs(value) < 1_000) return formatNumber(value);
+  return formatNumber(value, {
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: Math.abs(value) >= 1_000_000 ? 2 : 1,
+  });
 }
 
-function formatHitRate(value: number | null): string {
+function formatHitRate(value: number | null, formatNumber: NumberFormatter): string {
   if (value === null || !Number.isFinite(value)) return '–';
   // Only a true full hit (cached == reported input) shows as 100%.
-  if (value >= 1) return '100%';
+  if (value >= 1) return formatNumber(1, { style: 'percent', maximumFractionDigits: 0 });
   // Truncate to two decimals — never round up.
-  const truncated = Math.floor(value * 10_000) / 100;
-  return `${truncated.toFixed(2)}%`;
+  const truncated = Math.floor(value * 10_000) / 10_000;
+  return formatNumber(truncated, {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatBucketLabel(
@@ -79,10 +98,6 @@ function formatBucketLabel(
       ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const }
       : {}),
   });
-}
-
-function truncateName(name: string, max = 28): string {
-  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
 }
 
 type DistributionKind = 'model' | 'group' | 'endpoint';
@@ -147,15 +162,20 @@ const DonutChart: React.FC<{
   kind: DistributionKind;
   entries: UsageStatisticsEntry[];
 }> = ({ kind, entries }) => {
-  const { t } = useI18n('settings/usage');
+  const { t, formatNumber } = useI18n('settings/usage');
   const totalTokens = entries.reduce((sum, entry) => sum + entry.tokens, 0);
+  const formattedTotal = formatTokens(totalTokens, formatNumber);
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   let cumulative = 0;
 
   return (
     <div className="bitfun-usage-stats__donut">
-      <svg viewBox="0 0 140 140" role="img" aria-label={`${totalTokens} tokens`}>
+      <svg
+        viewBox="0 0 140 140"
+        role="img"
+        aria-label={t('chart.totalTokens', { count: formattedTotal })}
+      >
         <circle
           cx="70"
           cy="70"
@@ -181,7 +201,9 @@ const DonutChart: React.FC<{
               strokeDashoffset={-cumulative}
               transform="rotate(-90 70 70)"
             >
-              <title>{`${entryTitle(display)}: ${formatTokens(entry.tokens)}`}</title>
+              <title>
+                {`${entryTitle(display)}: ${formatTokens(entry.tokens, formatNumber)} ${t('chart.tokensUnit')}`}
+              </title>
             </circle>
           );
           cumulative += fraction * circumference;
@@ -203,7 +225,7 @@ const DonutChart: React.FC<{
           textAnchor="middle"
           className="bitfun-usage-stats__donut-total"
         >
-          {formatTokens(totalTokens)}
+          {formattedTotal}
         </text>
         <text
           x="70"
@@ -211,7 +233,7 @@ const DonutChart: React.FC<{
           textAnchor="middle"
           className="bitfun-usage-stats__donut-unit"
         >
-          Tokens
+          {t('chart.tokensUnit')}
         </text>
       </svg>
     </div>
@@ -235,115 +257,127 @@ const DistributionPanel: React.FC<{
   kind: DistributionKind;
   entries: UsageStatisticsEntry[];
 }> = ({ kind, entries }) => {
-  const { t } = useI18n('settings/usage');
+  const { t, formatNumber } = useI18n('settings/usage');
+  const titleId = useId();
   const titleKey = {
     model: 'distributions.byModel',
     group: 'distributions.byGroup',
     endpoint: 'distributions.byEndpoint',
   }[kind];
+  const title = t(titleKey);
 
   return (
-    <div className="bitfun-usage-stats__panel">
-      <div className="bitfun-usage-stats__panel-title">{t(titleKey)}</div>
+    <section
+      className="bitfun-usage-stats__distribution"
+      aria-labelledby={titleId}
+    >
+      <h4 id={titleId} className="bitfun-usage-stats__distribution-title">{title}</h4>
       <div className="bitfun-usage-stats__panel-body">
         <DonutChart kind={kind} entries={entries} />
-        <div className="bitfun-usage-stats__table">
-          <div className="bitfun-usage-stats__table-head">
-            <span>{t(DISTRIBUTION_HEADER_KEY[kind])}</span>
-            <span>{t('table.requests')}</span>
-            <span>{t('table.tokens')}</span>
-          </div>
-          <div className="bitfun-usage-stats__table-body">
-            {entries.map((entry, index) => {
-              const display = getEntryDisplay(entry, kind, t);
-              return (
-                <div
-                  className="bitfun-usage-stats__table-row"
-                  key={entry.key}
-                  title={entryTitle(display)}
-                >
-                  <span className="bitfun-usage-stats__table-name">
-                    <i
-                      className="bitfun-usage-stats__table-swatch"
-                      style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
-                    />
-                    <span className="bitfun-usage-stats__entry-copy">
-                      <span className="bitfun-usage-stats__entry-primary">
-                        {truncateName(display.primary)}
-                      </span>
-                      {display.secondary && (
-                        <span className="bitfun-usage-stats__entry-secondary">
-                          {truncateName(display.secondary)}
+        <div className="bitfun-usage-stats__table-scroll">
+          <table className="bitfun-usage-stats__table">
+            <caption className="bitfun-sr-only">
+              {t('table.caption', { dimension: title })}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{t(DISTRIBUTION_HEADER_KEY[kind])}</th>
+                <th scope="col">{t('table.requests')}</th>
+                <th scope="col">{t('table.tokens')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, index) => {
+                const display = getEntryDisplay(entry, kind, t);
+                return (
+                  <tr key={entry.key} title={entryTitle(display)}>
+                    <th scope="row">
+                      <span className="bitfun-usage-stats__table-name">
+                        <span
+                          aria-hidden="true"
+                          className="bitfun-usage-stats__table-swatch"
+                          style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
+                        />
+                        <span className="bitfun-usage-stats__entry-copy">
+                          <span className="bitfun-usage-stats__entry-primary">
+                            {display.primary}
+                          </span>
+                          {display.secondary && (
+                            <span className="bitfun-usage-stats__entry-secondary">
+                              {display.secondary}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </span>
-                  <span>{entry.requests}</span>
-                  <span>{formatTokens(entry.tokens)}</span>
-                </div>
-              );
-            })}
-          </div>
+                      </span>
+                    </th>
+                    <td>{formatNumber(entry.requests)}</td>
+                    <td>{formatTokens(entry.tokens, formatNumber)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 
 // ---------------------------------------------------------------------------
-// Per-model average cache hit rate panel
+// Per-model average cache hit rate list
 // ---------------------------------------------------------------------------
 
-const ModelCacheHitRatePanel: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) => {
-  const { t } = useI18n('settings/usage');
+const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ entries }) => {
+  const { t, formatNumber } = useI18n('settings/usage');
 
   return (
     <div
-      className="bitfun-usage-stats__panel"
-      data-bf-component="usage-statistics-config"
-      data-bf-part="modelHitRate"
+      className="bitfun-usage-stats__hit-rate-list"
+      role="list"
     >
-      <div className="bitfun-usage-stats__panel-title">{t('cacheHitRate.title')}</div>
-      <div className="bitfun-usage-stats__hit-rate-list">
-        {entries.map((entry, index) => {
-          const display = getEntryDisplay(entry, 'model', t);
-          const rate = entry.cacheHitRate;
-          const pct = rate === null || !Number.isFinite(rate)
-            ? 0
-            : Math.min(Math.max(rate * 100, 0), 100);
-          const color = DONUT_PALETTE[index % DONUT_PALETTE.length];
-          return (
-            <div
-              className="bitfun-usage-stats__hit-rate-row"
-              key={entry.key}
-              title={entryTitle(display)}
-            >
-              <span className="bitfun-usage-stats__hit-rate-name">
-                <i className="bitfun-usage-stats__table-swatch" style={{ background: color }} />
-                <span className="bitfun-usage-stats__entry-copy">
-                  <span className="bitfun-usage-stats__entry-primary">
-                    {truncateName(display.primary)}
-                  </span>
-                  {display.secondary && (
-                    <span className="bitfun-usage-stats__entry-secondary">
-                      {truncateName(display.secondary)}
-                    </span>
-                  )}
+      {entries.map((entry, index) => {
+        const display = getEntryDisplay(entry, 'model', t);
+        const rate = entry.cacheHitRate;
+        const pct = rate === null || !Number.isFinite(rate)
+          ? 0
+          : Math.min(Math.max(rate * 100, 0), 100);
+        const color = DONUT_PALETTE[index % DONUT_PALETTE.length];
+        return (
+          <div
+            className="bitfun-usage-stats__hit-rate-row"
+            key={entry.key}
+            title={entryTitle(display)}
+            role="listitem"
+          >
+            <span className="bitfun-usage-stats__hit-rate-name">
+              <span
+                aria-hidden="true"
+                className="bitfun-usage-stats__table-swatch"
+                style={{ background: color }}
+              />
+              <span className="bitfun-usage-stats__entry-copy">
+                <span className="bitfun-usage-stats__entry-primary">
+                  {display.primary}
                 </span>
+                {display.secondary && (
+                  <span className="bitfun-usage-stats__entry-secondary">
+                    {display.secondary}
+                  </span>
+                )}
               </span>
-              <div className="bitfun-usage-stats__hit-rate-track">
-                <div
-                  className="bitfun-usage-stats__hit-rate-fill"
-                  style={{ width: `${pct}%`, background: color }}
-                />
-              </div>
-              <span className="bitfun-usage-stats__hit-rate-value">
-                {formatHitRate(entry.cacheHitRate)}
-              </span>
+            </span>
+            <div className="bitfun-usage-stats__hit-rate-track" aria-hidden="true">
+              <div
+                className="bitfun-usage-stats__hit-rate-fill"
+                style={{ width: `${pct}%`, background: color }}
+              />
             </div>
-          );
-        })}
-      </div>
+            <span className="bitfun-usage-stats__hit-rate-value">
+              {formatHitRate(entry.cacheHitRate, formatNumber)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -396,7 +430,9 @@ function cacheHitRateForTrend(
 }
 
 const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }) => {
-  const { t, formatDate } = useI18n('settings/usage');
+  const { t, formatDate, formatNumber } = useI18n('settings/usage');
+  const titleId = useId();
+  const descriptionId = useId();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const plotWidth = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
@@ -454,14 +490,40 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
     });
     if (current.length > 0) hitRateSegments.push(current);
   }
+  const tooltipRows = hovered ? [
+    {
+      label: t('trend.legend.input'),
+      value: formatTokens(hovered.inputTokens, formatNumber),
+      color: SERIES_COLORS.input,
+    },
+    {
+      label: t('trend.legend.output'),
+      value: formatTokens(hovered.outputTokens, formatNumber),
+      color: SERIES_COLORS.output,
+    },
+    {
+      label: t('trend.legend.cacheRead'),
+      value: formatTokens(hovered.cacheReadTokens, formatNumber),
+      color: SERIES_COLORS.cacheRead,
+    },
+    {
+      label: t('trend.legend.cacheHitRate'),
+      value: formatHitRate(hoveredHitRate, formatNumber),
+      color: SERIES_COLORS.cacheHitRate,
+    },
+  ] : [];
 
   return (
     <div className="bitfun-usage-stats__trend">
       <svg
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
         className="bitfun-usage-stats__trend-svg"
-        onMouseLeave={() => setHoverIndex(null)}
+        role="img"
+        aria-labelledby={`${titleId} ${descriptionId}`}
+        onPointerLeave={() => setHoverIndex(null)}
       >
+        <title id={titleId}>{t('trend.title')}</title>
+        <desc id={descriptionId}>{t('trend.description')}</desc>
         {/* Horizontal grid + left (tokens) and right (hit rate) axis labels */}
         {Array.from({ length: yTicks + 1 }, (_, index) => {
           const value = (maxTokens / yTicks) * index;
@@ -477,7 +539,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                 className="bitfun-usage-stats__trend-grid"
               />
               <text x={PAD_LEFT - 8} y={y + 4} textAnchor="end" className="bitfun-usage-stats__trend-axis">
-                {formatTokens(value)}
+                {formatTokens(value, formatNumber)}
               </text>
               <text x={CHART_WIDTH - PAD_RIGHT + 8} y={y + 4} className="bitfun-usage-stats__trend-axis">
                 {rate}%
@@ -547,7 +609,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           width={plotWidth}
           height={plotHeight}
           fill="transparent"
-          onMouseMove={(event) => {
+          onPointerMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const ratio = (event.clientX - rect.left) / rect.width;
             const index = Math.round(ratio * (points.length - 1));
@@ -602,17 +664,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               >
                 {formatBucketLabel(hovered.bucket, granularity, timeZone, formatDate)}
               </text>
-              {[
-                { label: t('trend.legend.input'), value: hovered.inputTokens, color: SERIES_COLORS.input },
-                { label: t('trend.legend.output'), value: hovered.outputTokens, color: SERIES_COLORS.output },
-                { label: t('trend.legend.cacheRead'), value: hovered.cacheReadTokens, color: SERIES_COLORS.cacheRead },
-                {
-                  label: t('trend.legend.cacheHitRate'),
-                  value: hoveredHitRate,
-                  color: SERIES_COLORS.cacheHitRate,
-                  isRate: true,
-                },
-              ].map((row, index) => (
+              {tooltipRows.map((row, index) => (
                 <text
                   key={row.label}
                   x={Math.min(Math.max(xFor(hoverIndex) - 80, PAD_LEFT + 12), CHART_WIDTH - PAD_RIGHT - 172)}
@@ -620,12 +672,7 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                   className="bitfun-usage-stats__trend-tooltip-row"
                 >
                   <tspan fill={row.color}>● </tspan>
-                  {row.label}:{' '}
-                  {row.isRate
-                    ? formatHitRate(row.value as number | null)
-                    : row.value === null
-                      ? '–'
-                      : formatTokens(row.value as number)}
+                  {row.label}: {row.value}
                 </text>
               ))}
             </g>
@@ -643,7 +690,8 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           { label: t('trend.legend.cacheHitRate'), color: SERIES_COLORS.cacheHitRate, dashed: true },
         ].map((item) => (
           <span key={item.label} className="bitfun-usage-stats__trend-legend-item">
-            <i
+            <span
+              aria-hidden="true"
               className="bitfun-usage-stats__trend-legend-swatch"
               style={{
                 background: item.color,
@@ -656,6 +704,32 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           </span>
         ))}
       </div>
+
+      <table className="bitfun-sr-only">
+        <caption>{t('trend.dataTableCaption')}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t('trend.time')}</th>
+            {TREND_SERIES.map((series) => (
+              <th scope="col" key={series.key}>{t(series.legendKey)}</th>
+            ))}
+            <th scope="col">{t('trend.legend.cacheHitRate')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((point) => (
+            <tr key={point.bucket}>
+              <th scope="row">
+                {formatBucketLabel(point.bucket, granularity, timeZone, formatDate)}
+              </th>
+              {TREND_SERIES.map((series) => (
+                <td key={series.key}>{formatTokens(point[series.key], formatNumber)}</td>
+              ))}
+              <td>{formatHitRate(point.cacheHitRate, formatNumber)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -686,7 +760,7 @@ const FILTER_KIND_OPTIONS: { value: UsageStatisticsFilterKind; key: string }[] =
 const FILTER_DEBOUNCE_MS = 300;
 
 const UsageStatisticsConfig: React.FC = () => {
-  const { t, resolvedTimeZone: timeZone } = useI18n('settings/usage');
+  const { t, resolvedTimeZone: timeZone, formatNumber } = useI18n('settings/usage');
   const [timeRange, setTimeRange] = useState<UsageTimeRange>('last24Hours');
   const [granularity, setGranularity] = useState<UsageGranularity>('hour');
   const [filterKind, setFilterKind] = useState<UsageStatisticsFilterKind>('all');
@@ -760,12 +834,16 @@ const UsageStatisticsConfig: React.FC = () => {
       ? stats.totalCachedTokens / stats.totalCacheReportedInputTokens
       : null;
     return [
-      { key: 'summary.requests', value: String(stats.totalRequests) },
-      { key: 'summary.tokens', value: formatTokens(stats.totalTokens) },
-      { key: 'summary.cachedTokens', value: formatTokens(stats.totalCachedTokens) },
-      { key: 'summary.cacheHitRate', value: formatHitRate(overallHitRate), highlight: true },
+      { key: 'summary.requests', value: formatNumber(stats.totalRequests) },
+      { key: 'summary.tokens', value: formatTokens(stats.totalTokens, formatNumber) },
+      { key: 'summary.cachedTokens', value: formatTokens(stats.totalCachedTokens, formatNumber) },
+      {
+        key: 'summary.cacheHitRate',
+        value: formatHitRate(overallHitRate, formatNumber),
+        highlight: true,
+      },
     ];
-  }, [stats]);
+  }, [formatNumber, stats]);
 
   return (
     <ConfigPageLayout
@@ -774,148 +852,182 @@ const UsageStatisticsConfig: React.FC = () => {
       data-bf-part="root"
     >
       <ConfigPageHeader
-        icon={<BarChart3 size={20} aria-hidden />}
         title={t('title')}
         subtitle={t('subtitle')}
       />
       <ConfigPageContent>
-        <div
-          className="bitfun-usage-stats__filters-bar"
-          data-bf-component="usage-statistics-config"
-          data-bf-part="filters"
-        >
-          <label className="bitfun-usage-stats__filter">
-            <CalendarRange size={14} aria-hidden />
-            <Select
-              className="bitfun-usage-stats__filter-select"
-              size="small"
-              value={timeRange}
-              options={TIME_RANGE_OPTIONS.map((option) => ({
-                value: option.value,
-                label: t(option.key),
-              }))}
-              onChange={(value) => setTimeRange(value as UsageTimeRange)}
-              triggerAriaLabel={t('timeRange.label')}
-            />
-          </label>
-          <label className="bitfun-usage-stats__filter">
-            <Select
-              className="bitfun-usage-stats__filter-select"
-              size="small"
-              value={granularity}
-              options={GRANULARITY_OPTIONS.map((option) => ({
-                value: option.value,
-                label: t(option.key),
-              }))}
-              onChange={(value) => setGranularity(value as UsageGranularity)}
-              triggerAriaLabel={t('granularity.label')}
-            />
-          </label>
-          <div className="bitfun-usage-stats__filter-query">
-            <Select
-              className="bitfun-usage-stats__filter-select"
-              size="small"
-              value={filterKind}
-              options={FILTER_KIND_OPTIONS.map((option) => ({
-                value: option.value,
-                label: t(option.key),
-              }))}
-              onChange={(value) => setFilterKind(value as UsageStatisticsFilterKind)}
-              triggerAriaLabel={t('filter.kind.label')}
-            />
-            <Input
-              className="bitfun-usage-stats__filter-input"
-              value={filterInput}
-              onChange={(event) => setFilterInput(event.target.value)}
-              placeholder={t('filter.placeholder')}
-              aria-label={t('filter.inputLabel')}
-              data-testid="usage-filter-input"
-              maxLength={100}
-              leading={<Search size={14} aria-hidden />}
-              trailing={filterInput ? (
-                <Tooltip content={t('filter.clear')}>
-                  <IconButton
-                    type="button"
-                    size="sm"
-                    aria-label={t('filter.clear')}
-                    onClick={clearFilter}
-                    icon={<X size={12} aria-hidden />}
-                  />
-                </Tooltip>
-              ) : undefined}
-              size="sm"
-            />
-          </div>
-          <ConfigPageRefreshButton
-            tooltip={t('refresh')}
-            onClick={() => void load(true)}
-            loading={refreshing}
-            disabled={loading}
-          />
-        </div>
-
-        <ConfigPageMessage message={message} />
-
-        {loading ? (
-          <ConfigPageLoading text={t('loading')} />
-        ) : empty ? (
-          <div
-            className="bitfun-usage-stats__empty"
+        <ConfigPageSectionStack>
+          <ConfigPageSection
+            title={t('overview.title')}
+            description={t('overview.description')}
+            extra={(
+              <ConfigPageRefreshButton
+                tooltip={t('refresh')}
+                onClick={() => void load(true)}
+                loading={refreshing}
+                disabled={loading}
+              />
+            )}
             data-bf-component="usage-statistics-config"
-            data-bf-part="empty"
+            data-bf-part="overview"
           >
-            <BarChart3 size={26} aria-hidden />
-            <div>
-              <h4>{t(filteredEmpty ? 'filter.empty.title' : 'empty.title')}</h4>
-              <p>{t(filteredEmpty ? 'filter.empty.description' : 'empty.description')}</p>
-            </div>
-          </div>
-        ) : stats ? (
-          <>
             <div
-              className="bitfun-usage-stats__summary"
+              className="bitfun-usage-stats__filters"
               data-bf-component="usage-statistics-config"
-              data-bf-part="summary"
+              data-bf-part="filters"
             >
-              {summaryCards.map((card) => (
-                <div className="bitfun-usage-stats__summary-card" key={card.key}>
-                  <span className="bitfun-usage-stats__summary-label">{t(card.key)}</span>
-                  <span
-                    className={[
-                      'bitfun-usage-stats__summary-value',
-                      card.highlight && 'bitfun-usage-stats__summary-value--highlight',
-                    ].filter(Boolean).join(' ')}
-                  >
-                    {card.value}
-                  </span>
+              <div className="bitfun-usage-stats__filter-field">
+                <span className="bitfun-usage-stats__filter-label">{t('timeRange.label')}</span>
+                <Select
+                  className="bitfun-usage-stats__filter-select"
+                  size="small"
+                  value={timeRange}
+                  options={TIME_RANGE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: t(option.key),
+                  }))}
+                  onChange={(value) => setTimeRange(value as UsageTimeRange)}
+                  triggerAriaLabel={t('timeRange.label')}
+                  disabled={loading}
+                />
+              </div>
+              <div className="bitfun-usage-stats__filter-field">
+                <span className="bitfun-usage-stats__filter-label">{t('granularity.label')}</span>
+                <Select
+                  className="bitfun-usage-stats__filter-select"
+                  size="small"
+                  value={granularity}
+                  options={GRANULARITY_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: t(option.key),
+                  }))}
+                  onChange={(value) => setGranularity(value as UsageGranularity)}
+                  triggerAriaLabel={t('granularity.label')}
+                  disabled={loading}
+                />
+              </div>
+              <div className="bitfun-usage-stats__filter-field bitfun-usage-stats__filter-field--query">
+                <span className="bitfun-usage-stats__filter-label">{t('filter.inputLabel')}</span>
+                <div className="bitfun-usage-stats__filter-query">
+                  <Select
+                    className="bitfun-usage-stats__filter-kind"
+                    size="small"
+                    value={filterKind}
+                    options={FILTER_KIND_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: t(option.key),
+                    }))}
+                    onChange={(value) => setFilterKind(value as UsageStatisticsFilterKind)}
+                    triggerAriaLabel={t('filter.kind.label')}
+                    disabled={loading}
+                  />
+                  <Input
+                    className="bitfun-usage-stats__filter-input"
+                    value={filterInput}
+                    onChange={(event) => setFilterInput(event.target.value)}
+                    placeholder={t('filter.placeholder')}
+                    aria-label={t('filter.inputLabel')}
+                    data-testid="usage-filter-input"
+                    maxLength={100}
+                    disabled={loading}
+                    leading={<Search size={14} aria-hidden />}
+                    trailing={filterInput ? (
+                      <Tooltip content={t('filter.clear')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          aria-label={t('filter.clear')}
+                          onClick={clearFilter}
+                          disabled={loading}
+                          icon={<X size={12} aria-hidden />}
+                        />
+                      </Tooltip>
+                    ) : undefined}
+                    size="sm"
+                  />
                 </div>
-              ))}
+              </div>
             </div>
 
-            <div
-              className="bitfun-usage-stats__grid"
-              data-bf-component="usage-statistics-config"
-              data-bf-part="distributions"
-            >
-              <ModelCacheHitRatePanel entries={stats.byModel} />
-              <DistributionPanel kind="model" entries={stats.byModel} />
-              <DistributionPanel kind="group" entries={stats.byGroup} />
-              <DistributionPanel kind="endpoint" entries={stats.byEndpoint} />
+            <ConfigPageMessage
+              className="bitfun-usage-stats__message"
+              message={message}
+            />
+
+            {loading ? (
+              <ConfigPageLoading text={t('loading')} />
+            ) : empty ? (
               <div
-                className="bitfun-usage-stats__panel bitfun-usage-stats__panel--full"
+                className="bitfun-usage-stats__empty"
+                data-bf-component="usage-statistics-config"
+                data-bf-part="empty"
+              >
+                <BarChart3 size={26} aria-hidden />
+                <div>
+                  <h4>{t(filteredEmpty ? 'filter.empty.title' : 'empty.title')}</h4>
+                  <p>{t(filteredEmpty ? 'filter.empty.description' : 'empty.description')}</p>
+                </div>
+              </div>
+            ) : stats ? (
+              <div
+                className="bitfun-usage-stats__summary"
+                data-bf-component="usage-statistics-config"
+                data-bf-part="summary"
+              >
+                {summaryCards.map((card) => (
+                  <div className="bitfun-usage-stats__summary-card" key={card.key}>
+                    <span className="bitfun-usage-stats__summary-label">{t(card.key)}</span>
+                    <strong
+                      className={[
+                        'bitfun-usage-stats__summary-value',
+                        card.highlight && 'bitfun-usage-stats__summary-value--highlight',
+                      ].filter(Boolean).join(' ')}
+                    >
+                      {card.value}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </ConfigPageSection>
+
+          {!loading && !empty && stats ? (
+            <>
+              <ConfigPageSection
+                title={t('cacheHitRate.title')}
+                data-bf-component="usage-statistics-config"
+                data-bf-part="modelHitRate"
+              >
+                <ModelCacheHitRateList entries={stats.byModel} />
+              </ConfigPageSection>
+
+              <ConfigPageSection
+                title={t('distributions.title')}
+                data-bf-component="usage-statistics-config"
+                data-bf-part="distributions"
+              >
+                <div className="bitfun-usage-stats__distribution-list">
+                  <DistributionPanel kind="model" entries={stats.byModel} />
+                  <DistributionPanel kind="group" entries={stats.byGroup} />
+                  <DistributionPanel kind="endpoint" entries={stats.byEndpoint} />
+                </div>
+              </ConfigPageSection>
+
+              <ConfigPageSection
+                title={t('trend.title')}
+                description={t('trend.description')}
                 data-bf-component="usage-statistics-config"
                 data-bf-part="trendPanel"
               >
-                <div className="bitfun-usage-stats__panel-title">{t('trend.title')}</div>
                 <TrendChart
                   points={stats.trend}
                   granularity={stats.granularity}
                   timeZone={timeZone}
                 />
-              </div>
-            </div>
-          </>
-        ) : null}
+              </ConfigPageSection>
+            </>
+          ) : null}
+        </ConfigPageSectionStack>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

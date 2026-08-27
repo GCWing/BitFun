@@ -22,6 +22,57 @@ describe('global search ownership', () => {
     expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : collapsePanel}>');
   });
 
+  it('keeps reference-specific command icon colors local to the modal presentation', () => {
+    const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
+    const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
+    const actionCatalog = source('src/app/global-search/productActionCatalog.ts');
+
+    expect(globalSearch).toContain('const MODAL_ACTION_ICON_TONES: Partial<Record<ProductActionId');
+    expect(globalSearch).toContain("'session.new': 'red'");
+    expect(globalSearch).toContain("'surface.browser.open': 'orange'");
+    expect(globalSearch).toContain("'surface.terminal.open': 'green'");
+    expect(globalSearch).toContain("'project.open': 'cyan'");
+    expect(globalSearch).toContain("'project.new': 'blue'");
+    expect(globalSearch).toContain("'surface.files.open': 'purple'");
+    expect(globalSearch).toContain('variant === \'modal\' && itemVariant === \'action\'');
+    expect(globalSearch).toContain('className="global-search__action-icon"');
+    expect(globalSearch).toContain('data-icon-tone={modalActionIconTone}');
+    expect(actionCatalog).toMatch(/id: 'session\.new',[\s\S]*?icon: 'message-circle'/);
+    expect(actionCatalog).toMatch(/id: 'project\.open',[\s\S]*?icon: 'folder'/);
+    expect(actionCatalog).toMatch(/id: 'project\.new',[\s\S]*?icon: 'plus'/);
+    expect(actionCatalog).not.toMatch(/'folder-open'|'folder-plus'/);
+
+    expect(globalSearchStyles).toMatch(
+      /\.global-search--modal\s*\{[\s\S]*\.global-search__action-icon\s*\{/,
+    );
+    expect(globalSearchStyles).toContain('--_global-search-command-red: #ec221f');
+    expect(globalSearchStyles).toContain('--_global-search-command-orange: #ff8c00');
+    expect(globalSearchStyles).toContain('--_global-search-command-green: #009951');
+    expect(globalSearchStyles).toContain('--_global-search-command-cyan: #059cb0');
+    expect(globalSearchStyles).toContain('--_global-search-command-blue: #3271d7');
+    expect(globalSearchStyles).toContain('--_global-search-command-purple: #9e54ff');
+    expect(globalSearchStyles).toContain("&[data-icon-tone='red']");
+    expect(globalSearchStyles).toContain("&[data-icon-tone='orange']");
+    expect(globalSearchStyles).toContain("&[data-icon-tone='green']");
+    expect(globalSearchStyles).toContain("&[data-icon-tone='cyan']");
+    expect(globalSearchStyles).toContain("&[data-icon-tone='blue']");
+    expect(globalSearchStyles).toContain("&[data-icon-tone='purple']");
+    expect(actionCatalog).not.toMatch(/iconTone|iconColor|leadingTone/);
+  });
+
+  it('does not persist pointer hover as the keyboard-active result', () => {
+    const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
+    const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
+
+    expect(globalSearch).not.toContain('onMouseEnter={() => setActiveId(item.id)}');
+    expect(globalSearch).not.toContain('setActiveId(navigableItems[0].id)');
+    expect(globalSearch).toContain("if (event.key === 'ArrowDown')");
+    expect(globalSearch).toContain('setActiveId(navigableItems[nextIndex]?.id ?? null)');
+    expect(globalSearchStyles).toMatch(
+      /&:hover\s*\{\s*border-color: var\(--bf-color-border-default\)/,
+    );
+  });
+
   it('keeps browser and terminal capabilities on the shared product activator without footer shortcuts', () => {
     const footer = source('src/app/components/NavPanel/components/PersistentFooterActions.tsx');
     const activator = source('src/app/global-search/productActionActivator.ts');

@@ -696,25 +696,35 @@
       }
     },
     "harness": {
-      "selectorTooltip": "The Agent is using the {{name}} Harness execution framework",
+      "selectorTooltip": "Current execution: {{name}}",
+      "selectorTooltipWithDirective": "Current execution: {{name}}. The next message also uses the {{directive}} directive.",
+      "fixedTooltip": "This session uses {{name}} and is now fixed.",
+      "fixedTooltipWithDirective": "This session uses {{name}}. The next message also uses the {{directive}} directive.",
       "activateBalanced": "Switch to Standard Harness",
       "compatibilityShort": "Legacy",
       "comingSoon": "In development",
-      "newSessionOnly": "New sessions",
       "comingSoonNotice": "The {{name}} Harness execution framework is in development.",
       "legacySessionNotice": "This legacy session keeps its original Agent execution mode. Create a new session to use the Agent Harness execution framework.",
-      "sessionStartedNotice": "The Agent Harness execution framework is set before the first turn starts. Create a new session to use another profile.",
+      "sessionStartedNotice": "Harness and main Agent are set before the first turn starts. Create a new session to use another selection.",
       "unsupportedProfile": "Unsupported Harness ({{id}})",
       "unsupportedProfileNotice": "This session uses {{id}}, which this version cannot run. Select a supported Harness explicitly.",
       "profileChangeBusy": "Wait for the current turn to finish before changing Harness.",
       "profileChangeOutcomeUnknown": "BitFun cannot confirm whether the Harness changed. Refresh the session before trying again.",
       "profileUnavailable": "This Harness is not supported by the current BitFun Host.",
       "profileChangeFailed": "Failed to change Harness. Try again.",
+      "nextMessageDirective": "Next message · {{directive}}",
+      "startNewSession": "Start a new session another way",
+      "newSessionModesTitle": "New session setup",
+      "otherAgentsTitle": "Agents",
+      "otherAgentsEmpty": "No main Agents are available",
+      "unavailable": "Unavailable",
+      "agentUnavailable": "{{name}} is not available with the current Host or settings.",
       "profiles": {
-        "minimal": { "name": "Minimal", "promise": "Lean execution and capabilities that move work forward directly" },
-        "balanced": { "name": "Standard", "promise": "The everyday default, balancing speed, resource use, and quality" },
-        "ultimate": { "name": "Ultimate", "promise": "Decomposes complex work, collaborates deeply, and integrates results" },
-        "creative": { "name": "Creative", "promise": "Orchestrates Mini Apps, product customization, and changes to BitFun" }
+        "minimal": { "name": "Minimal" },
+        "balanced": { "name": "Standard" },
+        "ultimate": { "name": "Ultimate" },
+        "creative": { "name": "Creative" },
+        "other": { "name": "Agents" }
       }
     },
     "agents": {
@@ -727,7 +737,7 @@
       "cowork": { "name": "Cowork" },
       "computerUse": { "name": "Computer Use" }
     },
-    "addBoostTooltip": "Agents, context, images, or skills",
+    "addBoostTooltip": "Directives, context, images, or skills",
     "modeChangeFailed": "Failed to change the agent mode. Try again.",
     "reasoningStatus": {
       "levels": {
@@ -787,19 +797,22 @@
       "fullAccessWarningMessageActiveTurn": "Full access allows tools by default without asking each time. This applies to later model rounds in the current turn; project and enforced rules still apply.",
       "openDefaultSettings": "Open permission settings"
     },
-    "addModeTooltip": "Add Plan or Debug",
-    "boostSectionAgent": "Agent",
+    "addModeTooltip": "Add Plan or Multitask",
+    "boostSectionAgent": "Directives",
     "boostSectionContext": "Context",
     "boostStartBtw": "Start side question",
     "boostNewSession": "New session",
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
-    "modeSection": "Agents",
+    "modeSection": "Directives",
     "boostSkillsLoading": "Loading skills…",
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "addModeMenuTitle": "Choose Agent",
+    "addModeMenuTitle": "Choose directive",
+    "directive": {
+      "nextMessage": "Next message"
+    },
     "createCustomMode": "Custom Agent",
     "resetToAgentic": "Remove selected Agent",
     "noIncrementalModes": "No add-on modes available",
@@ -898,7 +911,6 @@
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
       "ComputerUse": "Dedicated desktop automation agent for perceiving and operating apps, browsers, and OS UI",
       "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports",
-      "Team": "Virtual engineering team: CEO, Eng Manager, Designer, QA Lead, Security Officer, Release Engineer — orchestrated through a full sprint workflow",
       "Ultra": "Swarm planning mode for complex work; it can issue many concurrent model requests, increasing API cost and provider rate-limit pressure"
     },
     "modeNames": {
@@ -909,7 +921,6 @@
       "Cowork": "Cowork",
       "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
-      "Team": "Team",
       "Ultra": "Ultra"
     },
     "openFolder": "Open folder…",

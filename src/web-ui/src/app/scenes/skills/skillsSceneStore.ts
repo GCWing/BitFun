@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type InstalledFilter = 'all' | 'builtin' | 'user' | 'project' | 'suite';
-export type SuiteModeId = 'agentic' | 'Cowork' | 'Claw' | 'Team';
+export type SuiteModeId = 'agentic' | 'Cowork' | 'Claw';
 
 interface SkillsSceneState {
   searchDraft: string;

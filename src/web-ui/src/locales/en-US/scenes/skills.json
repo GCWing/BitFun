@@ -128,14 +128,12 @@
     "manageGroups": "Manage Skill groups",
     "modes": {
       "agentic": "agentic",
-      "cowork": "Cowork",
-      "team": "Team"
+      "cowork": "Cowork"
     },
     "modeDescriptions": {
       "agentic": "Coding-first default profile",
       "cowork": "Office workflow profile",
-      "claw": "Assistant mode",
-      "team": "Team mode"
+      "claw": "Assistant mode"
     },
     "modeActions": {
       "reset": "Reset {{mode}}",

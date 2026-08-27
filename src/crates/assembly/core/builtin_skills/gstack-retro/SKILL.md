@@ -12,14 +12,14 @@ description: |
 
 Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics. Team-aware: identifies the user running the command, then analyzes every contributor with per-person praise and growth opportunities. Designed for a senior IC/CTO-level builder using BitFun as a force multiplier.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the retrospective methodology. Use existing Task sub-agents for independent read-only analysis tracks, then keep the final retro narrative in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the retrospective methodology. Use existing Task sub-agents for independent read-only analysis tracks, then keep the final retro narrative in the main session.
 
 - Do not assume a Retro sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom analytics/docs sub-agents if available; otherwise use `Explore` for repository history/work-pattern analysis and related reports or release notes.
 - Good parallel Task tracks: commit/theme analysis, quality-risk patterns, docs/release trace, and follow-up action extraction.
-- Do not ask Task sub-agents to edit files. The main Team orchestrator synthesizes the retro and action items.
+- Do not ask Task sub-agents to edit files. The main session synthesizes the retro and action items.
 
 ## User-invocable
 When the user types `/retro`, run this skill.
@@ -284,7 +284,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

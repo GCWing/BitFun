@@ -1,7 +1,7 @@
 /**
  * Remote port forwarding dialog
  *
- * Follows the workspace dialog conventions: `contentInset` on the modal,
+ * Follows the workspace dialog conventions: `contentPadding="lg"` on the modal,
  * bordered section cards with a tinted header, and rows separated by a rule
  * rather than a table.
  */

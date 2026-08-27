@@ -20,15 +20,15 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 
 **HARD GATE:** Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action. Your only output is a design document.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
+When this skill is invoked by BitFun, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
 
 - Do not assume role-named sub-agents exist. Choose only from the Task tool's available agents.
 - Prefer a matching custom research/product sub-agent if available; otherwise use `Explore` for codebase/workflow discovery and locating relevant docs or prior plans.
-- Keep all final problem framing, tradeoff decisions, and design-doc writing in the main Team session.
+- Keep all final problem framing, tradeoff decisions, and design-doc writing in the main session.
 - Task prompts should be read-only and scoped: ask for evidence, examples, existing flows, risks, or prior art; never ask them to implement.
-- If no useful sub-agent exists, continue in the main Team session and say `subagent: none suitable`.
+- If no useful sub-agent exists, continue in the main session and say `subagent: none suitable`.
 
 ---
 
@@ -1186,7 +1186,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

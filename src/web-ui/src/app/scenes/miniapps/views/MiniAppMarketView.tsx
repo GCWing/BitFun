@@ -329,7 +329,14 @@ const MiniAppMarketView: React.FC = () => {
               </button>
             ))}
           </div>
-          {loading ? <GallerySkeleton count={8} cardHeight={280} /> : null}
+          {loading ? (
+            <GallerySkeleton
+              count={8}
+              cardHeight={280}
+              minCardWidth={285}
+              className="miniapp-market-native__card-grid"
+            />
+          ) : null}
           {!loading && error ? (
             <GalleryEmpty
               icon={<AlertTriangle size={34} />}
@@ -348,7 +355,7 @@ const MiniAppMarketView: React.FC = () => {
           ) : null}
           {!loading && items.length > 0 ? (
             <>
-              <GalleryGrid minCardWidth={285}>
+              <GalleryGrid minCardWidth={285} className="miniapp-market-native__card-grid">
                 {items.map((item) => {
                   const name = pickLocalizedString(item, currentLanguage, 'name');
                   const description = pickLocalizedString(item, currentLanguage, 'description');

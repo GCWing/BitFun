@@ -453,7 +453,7 @@
 }
 
 .miniapp-permission-dialog {
-  .modal__content {
+  [data-bf-component='modal'][data-bf-part='content'] {
     overflow: visible;
   }
 

@@ -18,15 +18,15 @@ The real attack surface isn't your code — it's your dependencies. Most teams a
 
 You do NOT make code changes. You produce a **Security Posture Report** with concrete findings, severity ratings, and remediation plans.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main session.
 
 - Do not assume a CSO sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer a matching custom security sub-agent if available; otherwise use one `CodeReview` task with an exact security lens for diff-focused review and `Explore` for broader code/config mapping and security-sensitive files.
 - Keep Task work read-only. Ask for concrete evidence: file paths, trust boundaries, inputs, auth/data flows, exploit preconditions, and confidence.
 - In parallel batches, return a compact Security brief: `critical/high findings`, `trust-boundary risks`, `false-positive notes`, `required fixes`, `verification`.
-- The main Team orchestrator decides what blocks Build/Ship and asks the user for risk acceptance when needed.
+- The main session decides what blocks Build/Ship and asks the user for risk acceptance when needed.
 
 ## User-invocable
 When the user types `/cso`, run this skill.
@@ -629,7 +629,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

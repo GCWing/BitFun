@@ -641,30 +641,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
           message: { base: { color: colorRef('error'), fontSize: lengthRef('font-xs') } },
         },
       },
-      modal: {
-        parts: {
-          overlay: { base: { backgroundColor: { kind: 'rgb', r: 0, g: 0, b: 0, a: 0.55 }, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: { kind: 'px', value: 24 } } },
-          dialog: {
-            // Outer popup-card chrome is owned exclusively by dialog-surface.
-            // Appearance keeps only layout so it cannot fork border/radius/shadow.
-            base: { maxHeight: { kind: 'percent', value: 100 } },
-            facets: {
-              size: {
-                small: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 420 } },
-                medium: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 560 } },
-                large: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 600 } },
-                xlarge: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 720 } },
-                xxlarge: { width: { kind: 'percent', value: 100 }, maxWidth: { kind: 'px', value: 960 } },
-              },
-            },
-          },
-          header: { base: { display: 'flex', alignItems: 'center', gap: { kind: 'px', value: 6 }, padding: { kind: 'px', value: 8 }, borderWidth: { kind: 'zero' }, borderBottomColor: colorRef('border-subtle'), borderBottomWidth: lengthRef('border-one'), borderStyle: 'solid' } },
-          title: { base: { color: colorRef('text-secondary'), fontSize: { kind: 'px', value: 12 }, fontWeight: numberRef('weight-medium') } },
-          close: { base: { backgroundColor: { kind: 'transparent' }, color: colorRef('text-muted'), borderRadius: { kind: 'px', value: 6 }, cursor: 'pointer' }, states: { hover: { backgroundColor: colorRef('element-subtle'), color: colorRef('text-primary') }, focusVisible: { outlineColor: colorRef('accent'), outlineWidth: { kind: 'px', value: 2 }, outlineOffset: { kind: 'px', value: 2 } } } },
-          content: { base: { color: colorRef('text-secondary'), overflowY: 'auto', overflowX: 'hidden' }, states: { contentInset: { paddingInline: { kind: 'px', value: 28 } } } },
-          resizeHandle: { states: { hover: { backgroundColor: colorRef('element-subtle') } } },
-        },
-      },
     },
     renderers: {
       'css-tokens': {

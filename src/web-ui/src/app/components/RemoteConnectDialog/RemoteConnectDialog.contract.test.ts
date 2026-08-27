@@ -5,6 +5,10 @@ const dialogSource = readFileSync(
   new URL('./RemoteConnectDialog.tsx', import.meta.url),
   'utf8',
 );
+const dialogStyleSource = readFileSync(
+  new URL('./RemoteConnectDialog.scss', import.meta.url),
+  'utf8',
+);
 const accountPanelSource = readFileSync(
   new URL('./AccountPanel.tsx', import.meta.url),
   'utf8',
@@ -24,10 +28,74 @@ describe('Remote Connect safety contracts', () => {
     expect(dialogSource).toContain('isOpen={isOpen && (disclaimerIsGate || showDisclaimer)}');
   });
 
-  it('binds tabs to accessible tab panels', () => {
-    expect(dialogSource).toContain('aria-controls="remote-connect-panel-account"');
+  it('presents one overview with account and account-free destinations', () => {
+    const overview = dialogSource.slice(
+      dialogSource.indexOf('const renderOverview ='),
+      dialogSource.indexOf('const renderViewHeader'),
+    );
+
+    expect(overview).toContain('remote-connect-my-devices-title');
+    expect(overview).toContain('remote-connect-access-title');
+    expect(overview.match(/renderOverviewAction\(\{/g)).toHaveLength(3);
+    expect(overview).toContain("view: 'account'");
+    expect(overview).toContain("view: 'network'");
+    expect(overview).toContain("view: 'bot'");
+    expect(dialogSource).not.toContain('data-bf-part="groupTab"');
+    expect(dialogSource).not.toContain('remote-connect-group-');
+  });
+
+  it('keeps persistent connection context beside a single task surface', () => {
+    expect(dialogSource).toContain('size="xxlarge"');
+    expect(dialogSource).toContain('overlayClassName="bitfun-remote-connect-modal-overlay"');
+    expect(dialogSource).toContain('contentClassName="bitfun-remote-connect-modal-content"');
+    expect(dialogSource).toContain('data-bf-part="sidebar"');
+    expect(dialogSource).toContain('data-bf-part="sidebarBrand"');
+    expect(dialogSource).toContain('data-bf-part="main"');
+    expect(dialogSource).toContain("t('remoteConnect.overviewIntro')");
+  });
+
+  it('keeps the dialog height stable while selected content scrolls inside it', () => {
+    const desktopGeometry = dialogStyleSource.slice(
+      dialogStyleSource.indexOf('.bitfun-remote-connect-modal-overlay'),
+      dialogStyleSource.indexOf('.bitfun-remote-connect-modal-content'),
+    );
+
+    expect(desktopGeometry).toContain('height: min(620px, calc(100vh - 40px))');
+    expect(desktopGeometry).toContain('min-height: min(620px, calc(100vh - 40px))');
+    expect(desktopGeometry).toContain('max-height: min(620px, calc(100vh - 40px))');
+    expect(dialogStyleSource).toContain(".bitfun-remote-connect [data-bf-part='panel']");
+    expect(dialogStyleSource).toContain('overflow-y: auto');
+  });
+
+  it('delegates accessible method and provider tabs to the design system', () => {
     expect(dialogSource).toContain('id="remote-connect-network-tabpanel"');
     expect(dialogSource).toContain('id="remote-connect-bot-tabpanel"');
+    expect(dialogSource).toContain("panelId: 'remote-connect-network-tabpanel'");
+    expect(dialogSource).toContain("panelId: 'remote-connect-bot-tabpanel'");
+    expect(dialogSource.match(/<TabGroup/g)).toHaveLength(2);
+    expect(dialogSource).not.toContain('handleTabArrowKey');
+    expect(dialogSource).not.toContain('data-bf-part="subtab"');
+  });
+
+  it('preserves all network methods and chat providers', () => {
+    const methods = dialogSource.slice(
+      dialogSource.indexOf('const NETWORK_TABS'),
+      dialogSource.indexOf('const NGROK_SETUP_URL'),
+    );
+
+    expect(methods).toContain("id: 'lan'");
+    expect(methods).toContain("id: 'bitfun_server'");
+    expect(methods).toContain("id: 'ngrok'");
+    expect(methods).toContain("id: 'custom_server'");
+    expect(methods).toContain("id: 'telegram'");
+    expect(methods).toContain("id: 'feishu'");
+    expect(methods).toContain("id: 'weixin'");
+  });
+
+  it('keeps BitFun Page out of the account and device lifecycle', () => {
+    expect(accountPanelSource).not.toContain('pagesEntry');
+    expect(accountPanelSource).not.toContain("openScene('pages')");
+    expect(accountPanelSource).not.toContain('PanelsTopLeft');
   });
 
   it('does not issue an unconditional logout for a late 401 response', () => {
@@ -254,7 +322,7 @@ describe('Remote Connect safety contracts', () => {
   it('restores an existing relay pairing as cancellable in-progress UI', () => {
     const restoreFlow = dialogSource.slice(
       dialogSource.indexOf('// On dialog open: check if a connection'),
-      dialogSource.indexOf("activeGroup !== 'network'"),
+      dialogSource.indexOf("activeView !== 'network'"),
     );
     expect(restoreFlow).toContain("pendingOwnerRef.current = 'network'");
     expect(restoreFlow).toContain("setConnectionOwner('network')");
@@ -263,21 +331,24 @@ describe('Remote Connect safety contracts', () => {
     expect(restoreFlow).toContain("startPolling('relay')");
   });
 
-  it('restores relay and bot subtabs together before the bot-first early return', () => {
+  it('restores connected method status without hijacking the overview', () => {
     const applyStatus = dialogSource.slice(
       dialogSource.indexOf('const applyStatus'),
       dialogSource.indexOf('const startPolling'),
     );
     const restoreFlow = dialogSource.slice(
       dialogSource.indexOf('const checkExisting'),
-      dialogSource.indexOf("activeGroup !== 'network'"),
+      dialogSource.indexOf("activeView !== 'network'"),
+    );
+    const connectedRestore = restoreFlow.slice(
+      restoreFlow.indexOf('applyStatus(s)'),
+      restoreFlow.indexOf("if (['waiting_for_scan'"),
     );
 
     expect(applyStatus).toContain("remotePairingStateName(nextStatus.pairing_state) === 'connected'");
     expect(applyStatus).toContain('setNetworkTab(connectedTab)');
     expect(applyStatus).toContain('setBotTab(connectedBot)');
-    expect(restoreFlow.indexOf('applyStatus(s)')).toBeLessThan(
-      restoreFlow.indexOf('if (s.bot_connected)'),
-    );
+    expect(dialogSource).toContain("useState<ActiveView>(initialGroup ?? 'overview')");
+    expect(connectedRestore).not.toContain('setActiveView');
   });
 });

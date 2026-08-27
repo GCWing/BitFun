@@ -42,6 +42,24 @@
   }
 
   &__scroll-button {
+    --_scene-bar-scroll-button-control-zone: calc(
+      var(--bf-control-height-sm) + var(--bf-space-1)
+    );
+    --_scene-bar-scroll-button-fade-width: calc(
+      var(--bf-control-height-sm) + var(--bf-space-2)
+    );
+    --_scene-bar-scroll-button-effect-width: calc(
+      var(--_scene-bar-scroll-button-control-zone)
+      + var(--_scene-bar-scroll-button-fade-width)
+    );
+    --_scene-bar-scroll-button-surface: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-bg-scene) 76%,
+      transparent
+    );
+
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,6 +70,7 @@
     border: var(--bf-border-width-default) solid transparent;
     border-radius: var(--bf-radius-pill);
     outline: none;
+    overflow: visible;
     background: transparent;
     color: var(--bf-color-action-neutral-content);
     cursor: pointer;
@@ -59,6 +78,52 @@
       background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block-start: 50%;
+      z-index: -1;
+      width: var(--_scene-bar-scroll-button-effect-width);
+      height: var(--bf-control-tab-group-item-height);
+      background: var(--_scene-bar-scroll-button-surface);
+      backdrop-filter: var(--bf-effect-blur-subtle);
+      -webkit-backdrop-filter: var(--bf-effect-blur-subtle);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    &[data-bf-part='scrollPrevious']::before {
+      inset-inline-start: 0;
+      mask-image: linear-gradient(
+        to right,
+        var(--bf-appearance-token-color-static-black) 0
+          var(--_scene-bar-scroll-button-control-zone),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to right,
+        var(--bf-appearance-token-color-static-black) 0
+          var(--_scene-bar-scroll-button-control-zone),
+        transparent 100%
+      );
+    }
+
+    &[data-bf-part='scrollNext']::before {
+      inset-inline-end: 0;
+      mask-image: linear-gradient(
+        to left,
+        var(--bf-appearance-token-color-static-black) 0
+          var(--_scene-bar-scroll-button-control-zone),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to left,
+        var(--bf-appearance-token-color-static-black) 0
+          var(--_scene-bar-scroll-button-control-zone),
+        transparent 100%
+      );
+    }
 
     &:disabled {
       visibility: hidden;

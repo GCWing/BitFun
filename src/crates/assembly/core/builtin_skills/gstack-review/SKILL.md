@@ -11,15 +11,15 @@ description: |
 
 You are running the specialized pre-landing workflow. Analyze the current branch's diff against the base branch for structural issues that tests don't catch. Do not present this skill as the product `/review` command.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the pre-landing review lens. Use existing Task sub-agents for independent diff review tracks, then consolidate findings in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the pre-landing review lens. Use existing Task sub-agents for independent diff review tracks, then consolidate findings in the main session.
 
 - Do not assume a Staff Engineer sub-agent exists. Choose only from the Task tool's available agents.
 - Use at most one built-in `CodeReview` sub-agent for an independent pass, and put the exact correctness, performance, security, or architecture question in its prompt. Broader dynamic lens selection belongs to the unified `/review` path.
 - Prefer a matching custom review sub-agent when the user configured one. Use `Explore` only for broad read-only investigation when no review sub-agent fits.
 - Keep Task work read-only. Ask for tight findings with file paths, line references if possible, severity, confidence, and why tests might miss it.
-- The main Team orchestrator owns final severity ordering, AUTO-FIX vs ASK classification, and any code changes.
+- The main session owns final severity ordering, AUTO-FIX vs ASK classification, and any code changes.
 
 ---
 
@@ -199,7 +199,7 @@ IMPACT: {HIGH|MEDIUM|LOW} — {what breaks or degrades if this stays undelivered
 **Only for discrepancies sourced from plan files** (not commit messages or TODOS.md), log a learning so future sessions know this pattern occurred:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
   "type": "pitfall",
   "key": "plan-delivery-gap-KEBAB_SUMMARY",
   "insight": "Planned X but delivered Y because Z",
@@ -323,7 +323,7 @@ higher confidence.
 ### Detect stack and scope
 
 ```bash
-source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/null) || true
+source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null) || true
 # Detect stack for specialist context
 STACK=""
 [ -f Gemfile ] && STACK="${STACK}ruby "
@@ -349,7 +349,7 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
-true # BitFun Team Mode has no external specialist-stats helper 2>/dev/null || true
+true # BitFun has no external specialist-stats helper 2>/dev/null || true
 ```
 
 ### Select specialists
@@ -399,7 +399,7 @@ Construct the prompt for each specialist. The prompt includes:
 3. Past learnings for this domain (if any exist):
 
 ```bash
-true # BitFun Team Mode has no external learnings helper
+true # BitFun has no external learnings helper
 ```
 
 If learnings are found, include them: "Past learnings for this domain: {learnings}"
@@ -532,7 +532,7 @@ If the Red Team subagent fails or times out, skip silently and continue.
 Before classifying findings, check if any were previously skipped by the user in a prior review on this branch.
 
 ```bash
-true # BitFun Team Mode reads review context from the current session
+true # BitFun reads review context from the current session
 ```
 
 Parse the output: only lines BEFORE `---CONFIG---` are JSONL entries (the output also contains `---CONFIG---` and `---HEAD---` footer sections that are not JSONL — ignore those).
@@ -687,7 +687,7 @@ DIFF_DEL=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ deletion' 
 DIFF_TOTAL=$((DIFF_INS + DIFF_DEL))
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 # Legacy opt-out — only gates outside-voice sub-agent passes, BitFun always runs
-OLD_CFG="" # BitFun Team Mode has no external codex_reviews config
+OLD_CFG="" # BitFun has no external codex_reviews config
 echo "DIFF_SIZE: $DIFF_TOTAL"
 echo "OLD_CFG: ${OLD_CFG:-not_set}"
 ```
@@ -775,7 +775,7 @@ If `DIFF_TOTAL < 200`: skip this section silently. The BitFun + outside-voice su
 
 After all passes complete, persist:
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if outside-voice sub-agent ran, "task" if only independent subagent ran. GATE = the outside-voice sub-agent structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if outside-voice sub-agent was unavailable. If all passes failed, do NOT persist.
 
@@ -808,7 +808,7 @@ recognize that Eng Review was run on this branch.
 Run:
 
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 Substitute:
@@ -828,7 +828,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

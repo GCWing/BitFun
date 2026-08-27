@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { Search, Modal, PopupCloseButton } from '@/component-library';
+import { Modal } from '@bitfun/ui';
+import { Search, PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';

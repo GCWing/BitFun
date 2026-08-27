@@ -56,7 +56,7 @@
     align-items: center;
     min-height: 56px;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
     background: transparent;
 
     &:last-child {
@@ -250,16 +250,15 @@
   &__remote-list {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    overflow: hidden;
+    border-radius: inherit;
   }
 
   &__hidden-remote-list {
     display: flex;
     flex-direction: column;
-    margin-top: $size-gap-3;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
+    border-top: 1px solid var(--bf-appearance-token-config-page-divider);
   }
 
   &__hidden-remote-row {
@@ -269,7 +268,7 @@
     align-items: center;
     min-width: 0;
     padding: $size-gap-3;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
 
     &:last-child {
       border-bottom: 0;
@@ -280,9 +279,13 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--bf-appearance-token-border-subtle);
-    border-radius: $size-radius-base;
     background: transparent;
+
+    // The shared ConfigPageSection body owns the outer surface. Separate saved
+    // servers with the same divider used by other settings collections.
+    & + & {
+      border-top: 1px solid var(--bf-appearance-token-config-page-divider);
+    }
   }
 
   &__remote-head {
@@ -292,7 +295,7 @@
     align-items: center;
     padding: $size-gap-3;
     min-width: 0;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-config-page-divider);
     background: transparent;
   }
 
@@ -340,12 +343,6 @@
   &__remote-agent-list {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-2;
-
-    .bitfun-acp-agents__registry-row--remote {
-      padding: $size-gap-2 $size-gap-3;
-    }
   }
 
   @media (max-width: 860px) {

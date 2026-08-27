@@ -1,7 +1,7 @@
 @use '../../../component-library/styles/tokens' as *;
 
-// Modal body: contentInset only sets horizontal padding — add vertical breathing room.
-.modal__content.bitfun-thread-goal-modal__body {
+// Modal body: the shared large padding contract sets the inset; add vertical breathing room.
+.bitfun-thread-goal-modal__body[data-bf-component='modal'][data-bf-part='content'][data-bf-padding='lg'] {
   padding: $size-gap-5 $size-gap-6 $size-gap-6 !important;
 }
 

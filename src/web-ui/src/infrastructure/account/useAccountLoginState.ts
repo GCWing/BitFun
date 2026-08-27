@@ -1,5 +1,5 @@
 /**
- * Shared account login state for UI chrome (menu items, tab badges).
+ * Shared account login state for UI chrome (menu items and device overviews).
  *
  * Initial state comes from `account_status`; afterwards the backend pushes
  * `account://login-state` on login / logout / finalize. Token expiry clears

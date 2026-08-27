@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
-import { Avatar, Modal } from '@/component-library';
+import { Avatar} from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -238,7 +238,7 @@ export function MarketAccountControls({
         onClose={closeLogin}
         title={t('market.account.dialogTitle')}
         size="small"
-        contentInset
+        contentPadding="lg"
         closeOnOverlayClick={account.status !== 'authorizing'}
         testId="market-account-login-dialog"
       >

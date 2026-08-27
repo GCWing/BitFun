@@ -27,7 +27,6 @@ const SUITE_MODES = [
   { id: 'agentic', labelKey: 'suite.modes.agentic', descKey: 'suite.modeDescriptions.agentic' },
   { id: 'Cowork', labelKey: 'suite.modes.cowork', descKey: 'suite.modeDescriptions.cowork' },
   { id: 'Claw', labelKey: 'shared:agents.claw', descKey: 'suite.modeDescriptions.claw' },
-  { id: 'Team', labelKey: 'suite.modes.team', descKey: 'suite.modeDescriptions.team' },
 ] as const;
 
 type SuiteMode = typeof SUITE_MODES[number];

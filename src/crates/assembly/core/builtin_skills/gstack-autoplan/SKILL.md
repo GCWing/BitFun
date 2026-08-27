@@ -773,36 +773,36 @@ STATUS is "clean" if no unresolved issues, "issues_open" otherwise.
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope):
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope):
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 Dual voice logs (one per phase that ran):
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope), also log:
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope), also log:
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 SOURCE = "codex+subagent", "codex-only", "subagent-only", or "unavailable".

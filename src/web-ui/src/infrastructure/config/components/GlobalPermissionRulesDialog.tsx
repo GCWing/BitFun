@@ -1,4 +1,4 @@
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Select, type SelectOption, Tooltip } from '@/component-library';
+import { Select, type SelectOption, Tooltip } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -344,7 +344,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
       }}
       title={t('permissionPolicy.globalRulesDialogTitle')}
       size="xlarge"
-      contentInset
+      contentPadding="lg"
       contentClassName="global-permission-rules-dialog__modal"
       overlayClassName="global-permission-rules-dialog-overlay"
     >

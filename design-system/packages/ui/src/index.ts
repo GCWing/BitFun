@@ -10,6 +10,22 @@ export { Field, type FieldProps } from "./components/Field";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
+export {
+  Modal,
+  ModalProvider,
+  type ModalBackdropBlur,
+  type ModalBorder,
+  type ModalContentLayout,
+  type ModalContentPadding,
+  type ModalElevation,
+  type ModalPlacement,
+  type ModalPortalContainer,
+  type ModalPortalTarget,
+  type ModalProps,
+  type ModalProviderProps,
+  type ModalRadius,
+  type ModalSize,
+} from "./components/Modal";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export { Switch, type SwitchProps } from "./components/Switch";

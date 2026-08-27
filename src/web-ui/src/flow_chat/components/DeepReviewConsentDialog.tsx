@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useCallback, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Modal, PopupCloseButton } from '@/component-library';
+import { PopupCloseButton } from '@/component-library';
 import type {
   ReviewStrategyLevel,
   ReviewTeamRunManifest,

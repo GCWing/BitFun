@@ -696,25 +696,35 @@
       }
     },
     "harness": {
-      "selectorTooltip": "Agent 目前採用「{{name}}」Harness 執行框架",
+      "selectorTooltip": "目前執行：{{name}}",
+      "selectorTooltipWithDirective": "目前執行：{{name}}；下一則訊息同時附加 {{directive}} 指令。",
+      "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
+      "fixedTooltipWithDirective": "本工作階段使用 {{name}}；下一則訊息同時附加 {{directive}} 指令。",
       "activateBalanced": "切換到標準 Harness",
       "compatibilityShort": "相容模式",
       "comingSoon": "開發中",
-      "newSessionOnly": "僅新會話",
       "comingSoonNotice": "「{{name}}」Harness 執行框架正在開發中。",
       "legacySessionNotice": "該舊會話繼續使用原 Agent 執行模式；請新增會話使用 Agent Harness 執行框架。",
-      "sessionStartedNotice": "Agent Harness 的執行框架在首輪開始前確定；如需使用其他檔位，請新增會話。",
+      "sessionStartedNotice": "Harness 與主 Agent 在首輪開始前確定；如需切換，請新增會話。",
       "unsupportedProfile": "不支援的 Harness（{{id}}）",
       "unsupportedProfileNotice": "該工作階段使用目前版本無法執行的 {{id}}。請選擇受支援的 Harness。",
       "profileChangeBusy": "請等待目前回合結束後再切換 Harness。",
       "profileChangeOutcomeUnknown": "暫時無法確認 Harness 是否已切換，請重新整理工作階段後再重試。",
       "profileUnavailable": "目前 BitFun Host 不支援該 Harness。",
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
+      "nextMessageDirective": "下一則 · {{directive}}",
+      "startNewSession": "以其他方式開始新工作階段",
+      "newSessionModesTitle": "新工作階段方式",
+      "otherAgentsTitle": "智能體",
+      "otherAgentsEmpty": "目前沒有可用的主智能體",
+      "unavailable": "無法使用",
+      "agentUnavailable": "目前 Host 或設定不支援 {{name}}。",
       "profiles": {
-        "minimal": { "name": "極簡", "promise": "精簡執行流程與能力組合，直接推進任務" },
-        "balanced": { "name": "標準", "promise": "日常任務的常用預設選擇，均衡效率、投入與品質" },
-        "ultimate": { "name": "極致", "promise": "系統分解複雜任務，深度協作並整合結果" },
-        "creative": { "name": "創造", "promise": "組織 Mini App 開發、產品定製與自身改造" }
+        "minimal": { "name": "極簡" },
+        "balanced": { "name": "標準" },
+        "ultimate": { "name": "極致" },
+        "creative": { "name": "創造" },
+        "other": { "name": "智能體" }
       }
     },
     "agents": {
@@ -727,7 +737,7 @@
       "cowork": { "name": "Cowork" },
       "computerUse": { "name": "Computer Use" }
     },
-    "addBoostTooltip": "Agent、上下文、圖片或 Skill",
+    "addBoostTooltip": "指令、上下文、圖片或 Skill",
     "modeChangeFailed": "切換智能體模式失敗，請重試。",
     "reasoningStatus": {
       "levels": {
@@ -787,19 +797,22 @@
       "fullAccessWarningMessageActiveTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定從目前輪次的後續模型輪次生效，專案規則與強制規則仍然生效。",
       "openDefaultSettings": "開啟權限設定"
     },
-    "addModeTooltip": "附加 Plan 或 Debug",
-    "boostSectionAgent": "智能體",
+    "addModeTooltip": "附加 Plan 或 Multitask",
+    "boostSectionAgent": "指令",
     "boostSectionContext": "上下文",
     "boostStartBtw": "發起側問",
     "boostNewSession": "新建會話",
     "boostAddContext": "引用檔案或資料夾",
     "boostSkills": "Skills",
-    "modeSection": "Agent",
+    "modeSection": "指令",
     "boostSkillsLoading": "正在載入 Skills…",
     "boostSkillsEmpty": "暫無已啟用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "addModeMenuTitle": "選擇 Agent",
+    "addModeMenuTitle": "選擇指令",
+    "directive": {
+      "nextMessage": "下一則訊息"
+    },
     "createCustomMode": "自訂 Agent",
     "resetToAgentic": "移除目前 Agent",
     "noIncrementalModes": "暫無可附加模式",
@@ -892,7 +905,6 @@
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
       "ComputerUse": "獨立電腦操作智能體：感知本機環境，操作應用、瀏覽器與系統介面",
       "DeepResearch": "深度研究：並行派發多個子 Agent 同時調研不同章節，快速生成高質量研究報告",
-      "Team": "虛擬工程團隊：CEO、工程經理、設計師、QA 負責人、安全官、發佈工程師 — 按完整衝刺流程協同工作",
       "Ultra": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
     },
     "modeNames": {
@@ -903,7 +915,6 @@
       "Cowork": "Cowork",
       "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
-      "Team": "Team",
       "Ultra": "Ultra"
     },
     "openFolder": "開啟資料夾…",

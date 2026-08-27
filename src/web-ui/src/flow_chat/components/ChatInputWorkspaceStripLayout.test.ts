@@ -198,16 +198,27 @@ describe('status track layout', () => {
     expect(readLocalFile('ModelSelector.tsx')).not.toContain('reasoningControlHost');
   });
 
-  it('orders the add entry, Harness, and selected Agent/Mode in semantic DOM', () => {
+  it('projects one-turn directives into the single Harness/main-Agent control', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const harnessIndex = chatInput.indexOf('<HarnessProfileSelector');
     const agentBoostIndex = chatInput.indexOf('data-testid="chat-input-agent-boost"');
-    const agentModeChipIndex = chatInput.indexOf('data-testid="chat-input-agent-mode-chip"');
+    const directiveLabelIndex = chatInput.indexOf('directiveLabel={armedTurnDirective');
+    const newSessionHandlerIndex = chatInput.indexOf(
+      'onStartNewSession={requestHarnessNewSession}',
+    );
 
     expect(harnessIndex).toBeGreaterThan(-1);
     expect(agentBoostIndex).toBeGreaterThan(-1);
     expect(harnessIndex).toBeGreaterThan(agentBoostIndex);
-    expect(agentModeChipIndex).toBeGreaterThan(harnessIndex);
+    expect(directiveLabelIndex).toBeGreaterThan(harnessIndex);
+    expect(newSessionHandlerIndex).toBeGreaterThan(harnessIndex);
+    expect(chatInput).toContain(
+      'composer.setValue(newSessionId, transferredDraft.value)',
+    );
+    expect(chatInput).not.toContain('data-testid="chat-input-turn-directive-chip"');
+    expect(chatInput).not.toContain('bitfun-chat-input__directive-capsule');
+    expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
+    expect(chatInput).not.toContain("modeState.current !== 'agentic'");
     expect(chatInput).toContain('executionLevelPolicy.userConfigurable ? (');
   });
 
@@ -275,8 +286,8 @@ describe('status track layout', () => {
       'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
     );
     expect(component).toContain('className="bitfun-harness-selector__density-core"');
-    expect(component).toContain('<HarnessDensityMark profile={id} />');
-    expect(component).not.toContain('<HarnessDensityMark profile={knownSelectedProfile}');
+    expect(component).toContain('<HarnessProfileMark profile={id} />');
+    expect(component).not.toContain('<HarnessProfileMark profile={knownSelectedProfile}');
     expect(component).not.toContain('compact');
     expect(stylesheet).not.toMatch(/__trigger-value \{[\s\S]*?display: none;/);
   });

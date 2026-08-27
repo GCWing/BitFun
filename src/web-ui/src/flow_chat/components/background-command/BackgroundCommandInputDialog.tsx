@@ -1,6 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useEffect, useRef, useState } from 'react';
-import { Checkbox, Modal, Textarea } from '@/component-library';
+import { Checkbox, Textarea } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatHeaderCommandSummary } from '../modern/FlowChatHeader';
 import './BackgroundCommandInputDialog.scss';

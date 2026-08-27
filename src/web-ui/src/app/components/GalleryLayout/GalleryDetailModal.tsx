@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, type ModalProps } from '@/component-library';
+import { Modal, type ModalProps } from '@bitfun/ui';
 import './GalleryDetailModal.scss';
 
 interface GalleryDetailModalProps {
@@ -88,7 +88,7 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
       onClose={onClose}
       size={size}
       title={usesHeroTitle ? undefined : title}
-      contentInset
+      contentPadding="lg"
       overlayClassName={overlayClassName || undefined}
       testId={testId}
       titleTestId={usesHeroTitle ? undefined : titleTestId}
