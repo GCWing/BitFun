@@ -4,7 +4,7 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,13 +19,7 @@ import {
   KeyRound,
   Trash2,
 } from 'lucide-react';
-import {
-  Textarea,
-  IconButton,
-  Modal,
-  ToolProcessingDots,
-  confirmDanger,
-} from '@/component-library';
+import { Textarea, Modal, ToolProcessingDots, confirmDanger, Tooltip } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -1102,26 +1096,24 @@ const McpToolsConfig: React.FC = () => {
               {tMcp('external.status.stale')}
             </span>
           ) : null}
-          <IconButton
-            variant="ghost"
-            size="small"
-            onClick={() => void loadServers()}
-            tooltip={tMcp('actions.refresh')}
-            aria-label={tMcp('actions.refresh')}
-          >
-            <RefreshCw size={16} aria-hidden="true" />
-          </IconButton>
+          <Tooltip content={tMcp('actions.refresh')}>
+            <IconButton
+              size="sm"
+              onClick={() => void loadServers()}
+              aria-label={tMcp('actions.refresh')}
+              icon={<RefreshCw size={16} aria-hidden="true" />}
+            />
+          </Tooltip>
         </>
       ) : null}
-      <IconButton
-        variant="ghost"
-        size="small"
-        onClick={() => setShowJsonEditor(!showJsonEditor)}
-        tooltip={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
-        aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
-      >
-        {showJsonEditor ? <X size={16} /> : <FileJson size={16} />}
-      </IconButton>
+      <Tooltip content={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}>
+        <IconButton
+          size="sm"
+          onClick={() => setShowJsonEditor(!showJsonEditor)}
+          aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
+          icon={showJsonEditor ? <X size={16} /> : <FileJson size={16} />}
+        />
+      </Tooltip>
     </>
   );
 
@@ -1135,71 +1127,68 @@ const McpToolsConfig: React.FC = () => {
   const renderServerControl = (server: MCPServerInfo) => (
     <>
       {isRemoteServer(server) && (
-        <IconButton
-          size="small"
-          variant="ghost"
-          onClick={() => handleOpenAuthDialog(server)}
-          tooltip={tMcp('actions.remoteAuth')}
-          aria-label={tMcp('actions.remoteAuth')}
-        >
-          <KeyRound size={14} />
-        </IconButton>
+        <Tooltip content={tMcp('actions.remoteAuth')}>
+          <IconButton
+            size="sm"
+            onClick={() => handleOpenAuthDialog(server)}
+            aria-label={tMcp('actions.remoteAuth')}
+            icon={<KeyRound size={14} />}
+          />
+        </Tooltip>
       )}
-      <IconButton
-        size="small"
-        variant="ghost"
-        onClick={() => handleDeleteServer(server)}
-        tooltip={tMcp('actions.delete')}
-        aria-label={tMcp('actions.delete')}
-      >
-        <Trash2 size={14} />
-      </IconButton>
-      {isStopped(server.status) ? (
+      <Tooltip content={tMcp('actions.delete')}>
         <IconButton
-          size="small"
-          variant="success"
-          onClick={() => handleStartServer(server)}
-          tooltip={
+          size="sm"
+          onClick={() => handleDeleteServer(server)}
+          aria-label={tMcp('actions.delete')}
+          icon={<Trash2 size={14} />}
+        />
+      </Tooltip>
+      {isStopped(server.status) ? (
+        <Tooltip content={
             canStartServer(server)
               ? tMcp('actions.start')
               : tMcp('messages.commandUnavailable', { serverId: server.id })
-          }
+          }>
+          <IconButton
+            size="sm"
+            variant="primary"
+            onClick={() => handleStartServer(server)}
+            aria-label={
+              canStartServer(server)
+                ? tMcp('actions.start')
+                : tMcp('messages.commandUnavailable', { serverId: server.id })
+            }
+            icon={<Play size={14} />}
+          />
+        </Tooltip>
+      ) : (
+        <Tooltip content={tMcp('actions.stop')}>
+          <IconButton
+            size="sm"
+            tone="danger"
+            onClick={() => handleStopServer(server.id)}
+            aria-label={tMcp('actions.stop')}
+            icon={<Square size={14} />}
+          />
+        </Tooltip>
+      )}
+      <Tooltip content={
+          canStartServer(server)
+            ? tMcp('actions.restart')
+            : tMcp('messages.commandUnavailable', { serverId: server.id })
+        }>
+        <IconButton
+          size="sm"
+          onClick={() => handleRestartServer(server)}
           aria-label={
             canStartServer(server)
-              ? tMcp('actions.start')
+              ? tMcp('actions.restart')
               : tMcp('messages.commandUnavailable', { serverId: server.id })
           }
-        >
-          <Play size={14} />
-        </IconButton>
-      ) : (
-        <IconButton
-          size="small"
-          variant="warning"
-          onClick={() => handleStopServer(server.id)}
-          tooltip={tMcp('actions.stop')}
-          aria-label={tMcp('actions.stop')}
-        >
-          <Square size={14} />
-        </IconButton>
-      )}
-      <IconButton
-        size="small"
-        variant="ghost"
-        onClick={() => handleRestartServer(server)}
-        tooltip={
-          canStartServer(server)
-            ? tMcp('actions.restart')
-            : tMcp('messages.commandUnavailable', { serverId: server.id })
-        }
-        aria-label={
-          canStartServer(server)
-            ? tMcp('actions.restart')
-            : tMcp('messages.commandUnavailable', { serverId: server.id })
-        }
-      >
-        <RefreshCw size={14} />
-      </IconButton>
+          icon={<RefreshCw size={14} />}
+        />
+      </Tooltip>
     </>
   );
 
@@ -1327,15 +1316,14 @@ const McpToolsConfig: React.FC = () => {
           {desktopConfigAvailable && showJsonEditor && !jsonLoading && jsonLoadFailed && (
             <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty" role="status">
               <p>{tMcp('jsonEditor.loadFailed')}</p>
-              <IconButton
-                variant="ghost"
-                size="small"
-                onClick={() => void loadJsonConfig()}
-                tooltip={tMcp('actions.refresh')}
-                aria-label={tMcp('actions.refresh')}
-              >
-                <RefreshCw size={16} aria-hidden="true" />
-              </IconButton>
+              <Tooltip content={tMcp('actions.refresh')}>
+                <IconButton
+                  size="sm"
+                  onClick={() => void loadJsonConfig()}
+                  aria-label={tMcp('actions.refresh')}
+                  icon={<RefreshCw size={16} aria-hidden="true" />}
+                />
+              </Tooltip>
             </div>
           )}
 
