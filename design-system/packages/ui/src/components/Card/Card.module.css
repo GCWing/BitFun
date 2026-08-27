@@ -104,6 +104,21 @@
     gap: var(--bf-layout-card-title-description-gap);
   }
 
+  .headerContent[data-align="center"] {
+    align-items: center;
+    text-align: center;
+  }
+
+  .headerContent[data-align="start"] {
+    align-items: flex-start;
+    text-align: start;
+  }
+
+  .headerContent[data-align="end"] {
+    align-items: flex-end;
+    text-align: end;
+  }
+
   .title {
     min-inline-size: 0;
     overflow-wrap: anywhere;
@@ -122,6 +137,20 @@
     font-size: var(--bf-font-size-small);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-base);
+  }
+
+  .body[data-align="start"] {
+    align-items: flex-start;
+  }
+
+  .body[data-align="center"] {
+    align-items: center;
+    text-align: center;
+  }
+
+  .body[data-align="end"] {
+    align-items: flex-end;
+    text-align: end;
   }
 
   .actions {

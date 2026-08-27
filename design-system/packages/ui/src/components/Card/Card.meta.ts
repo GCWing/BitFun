@@ -11,6 +11,8 @@ export const cardMeta = {
     { defaultValue: "none", name: "gap", type: "none | sm | md | lg" },
     { defaultValue: "md", name: "radius", type: "sm | md | lg" },
     { defaultValue: "false", name: "clip", type: "boolean" },
+    { defaultValue: "start", name: "CardHeader.contentAlign", type: "start | center | end" },
+    { defaultValue: "stretch", name: "CardBody.align", type: "start | center | end | stretch" },
     { name: "children", type: "ReactNode" },
   ],
   states: ["raised", "subtle", "media"],

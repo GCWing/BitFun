@@ -23,12 +23,13 @@ test("Card keeps media, header, body, and footer regions independent", () => {
     createElement(CardMedia, null, createElement("img", { alt: "Preview", src: "/preview.png" })),
     createElement(CardHeader, {
       actions: createElement("button", null, "More"),
+      contentAlign: "center",
       description: "One item",
       leading: createElement("svg", { "data-icon": "folder" }),
       padding: "md",
       title: "Projects",
     }),
-    createElement(CardBody, { padding: "md" }, "Card content"),
+    createElement(CardBody, { align: "end", padding: "md" }, "Card content"),
     createElement(CardFooter, { align: "between", padding: "md" },
       createElement("span", null, "Status"),
       createElement("button", null, "Open"),
@@ -42,11 +43,14 @@ test("Card keeps media, header, body, and footer regions independent", () => {
   assert.match(markup, /data-radius="lg"/);
   assert.match(markup, /data-bf-part="media"/);
   assert.match(markup, /data-bf-part="header"/);
+  assert.match(markup, /data-content-align="center"/);
+  assert.match(markup, /data-bf-part="header-content"/);
   assert.match(markup, /data-bf-part="leading"/);
   assert.match(markup, /data-bf-part="title">Projects/);
   assert.match(markup, /data-bf-part="description">One item/);
   assert.match(markup, /data-bf-part="actions"/);
   assert.match(markup, /data-bf-part="body"/);
+  assert.match(markup, /data-align="end"[^>]+data-bf-part="body"/);
   assert.match(markup, /data-bf-part="footer"/);
   assert.match(markup, /data-align="between"/);
 });

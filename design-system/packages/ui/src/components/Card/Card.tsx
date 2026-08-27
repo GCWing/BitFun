@@ -11,6 +11,8 @@ export type CardGap = "none" | "sm" | "md" | "lg";
 export type CardPadding = "none" | "sm" | "md";
 export type CardRadius = "sm" | "md" | "lg";
 export type CardAlignment = "start" | "center";
+export type CardContentAlignment = "start" | "center" | "end";
+export type CardBodyAlignment = CardContentAlignment | "stretch";
 export type CardFooterAlignment = "start" | "center" | "end" | "between";
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -25,6 +27,7 @@ export interface CardHeaderProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   actions?: ReactNode;
   align?: CardAlignment;
+  contentAlign?: CardContentAlignment;
   description?: ReactNode;
   leading?: ReactNode;
   padding?: CardPadding;
@@ -32,6 +35,7 @@ export interface CardHeaderProps
 }
 
 export interface CardBodyProps extends HTMLAttributes<HTMLDivElement> {
+  align?: CardBodyAlignment;
   padding?: CardPadding;
 }
 
@@ -75,6 +79,7 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
     align = "start",
     children,
     className,
+    contentAlign = "start",
     description,
     leading,
     padding = "none",
@@ -87,13 +92,18 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
         className={classNames(styles.header, className)}
         data-align={align}
         data-bf-part="header"
+        data-content-align={contentAlign}
         data-padding={padding}
         ref={ref}
       >
         {leading !== undefined && leading !== null && (
           <div className={styles.leading} data-bf-part="leading">{leading}</div>
         )}
-        <div className={styles.headerContent} data-bf-part="header-content">
+        <div
+          className={styles.headerContent}
+          data-align={contentAlign}
+          data-bf-part="header-content"
+        >
           {title !== undefined && title !== null && (
             <div className={styles.title} data-bf-part="title">{title}</div>
           )}
@@ -113,11 +123,12 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
 );
 
 export const CardBody = forwardRef<HTMLDivElement, CardBodyProps>(
-  function CardBody({ children, className, padding = "none", ...props }, ref) {
+  function CardBody({ align = "stretch", children, className, padding = "none", ...props }, ref) {
     return (
       <div
         {...props}
         className={classNames(styles.body, className)}
+        data-align={align}
         data-bf-part="body"
         data-padding={padding}
         ref={ref}

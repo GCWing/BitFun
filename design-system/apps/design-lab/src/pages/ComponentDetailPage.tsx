@@ -65,6 +65,7 @@ import {
   type DensityMode,
   type ActivityItemAppearance,
   type ActionCardSize,
+  type CardContentAlignment,
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
   type ToolbarSize,
@@ -101,6 +102,7 @@ const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
+const cardContentAlignments = ["start", "center", "end"] as const;
 const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
 const activityItemAppearances = ["inline", "surface"] as const;
@@ -220,6 +222,7 @@ export function ComponentDetailPage({
   const [fieldShowControlLeading, setFieldShowControlLeading] = useState(false);
   const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
+  const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
@@ -319,9 +322,9 @@ export function ComponentDetailPage({
     }
     if (component.name === "Card") {
       if (previewState === "media") {
-        return `import { Card, CardBody, CardHeader, CardMedia } from "@bitfun/ui";\n\n<Card appearance="neutral" clip radius="md">\n  <CardMedia>\n    <ProductArtwork />\n  </CardMedia>\n  <CardBody padding="sm">\n    <CardHeader\n      title="${t("components.preview.cardMediaTitle")}"\n      description="${t("components.preview.cardMediaDescription")}"\n    />\n  </CardBody>\n</Card>`;
+        return `import { Card, CardBody, CardHeader, CardMedia } from "@bitfun/ui";\n\n<Card appearance="neutral" clip radius="md">\n  <CardMedia>\n    <ProductArtwork />\n  </CardMedia>\n  <CardBody align="center" padding="sm">\n    <CardHeader\n      contentAlign="center"\n      title="${t("components.preview.cardMediaTitle")}"\n      description="${t("components.preview.cardMediaDescription")}"\n    />\n  </CardBody>\n</Card>`;
       }
-      return `import { Card, CardBody, CardFooter, CardHeader } from "@bitfun/ui";\n\n<Card appearance="${previewState}" gap="md" padding="md" radius="lg">\n  <CardHeader\n    title="${t("components.preview.cardTitle")}"\n    description="${t("components.preview.cardDescription")}"\n  />\n  <CardBody>\n    <CommandGrid />\n  </CardBody>\n  <CardFooter align="end">\n    <Button>${t("components.preview.settings")}</Button>\n  </CardFooter>\n</Card>`;
+      return `import { Card, CardBody, CardFooter, CardHeader } from "@bitfun/ui";\n\n<Card appearance="${previewState}" gap="md" padding="md" radius="lg">\n  <CardHeader\n    contentAlign="${cardContentAlign}"\n    title="${t("components.preview.cardTitle")}"\n    description="${t("components.preview.cardDescription")}"\n  />\n  <CardBody>\n    <CommandGrid />\n  </CardBody>\n  <CardFooter align="end">\n    <Button>${t("components.preview.settings")}</Button>\n  </CardFooter>\n</Card>`;
     }
     if (component.name === "Composer") {
       const stateProps = `${previewState === "disabled" ? " disabled" : ""}${previewState === "invalid" ? " invalid" : ""}`;
@@ -784,8 +787,9 @@ export function ComponentDetailPage({
                 <Monitor aria-hidden="true" />
               </div>
             </CardMedia>
-            <CardBody padding="sm">
+            <CardBody align={cardContentAlign} padding="sm">
               <CardHeader
+                contentAlign={cardContentAlign}
                 description={t("components.preview.cardMediaDescription")}
                 title={t("components.preview.cardMediaTitle")}
               />
@@ -812,6 +816,7 @@ export function ComponentDetailPage({
                 />
               )}
               align="center"
+              contentAlign={cardContentAlign}
               description={t("components.preview.activityDescription")}
               leading={<Terminal aria-hidden="true" />}
               title={t("components.preview.session")}
@@ -829,6 +834,7 @@ export function ComponentDetailPage({
           radius="lg"
         >
           <CardHeader
+            contentAlign={cardContentAlign}
             description={t("components.preview.cardDescription")}
             title={t("components.preview.cardTitle")}
           />
@@ -1514,6 +1520,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
                       options={pageHeaderAlignments}
                       value={pageHeaderAlign}
+                    />
+                  )}
+                  {component.name === "Card" && (
+                    <InspectorSelect
+                      label={t("detail.alignment")}
+                      onChange={(value) => setCardContentAlign(value as CardContentAlignment)}
+                      options={cardContentAlignments}
+                      value={cardContentAlign}
                     />
                   )}
                   {component.name === "Field" && (
