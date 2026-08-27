@@ -168,7 +168,7 @@
   &__pet-select-option {
     min-width: 0;
     width: 100%;
-    min-height: 64px;
+    min-height: 54px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: center;
@@ -264,23 +264,11 @@
 
   &__pet-select-text {
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
   }
 
   &__pet-select-label,
   &__pet-select-value {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__pet-select-description {
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-tight;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

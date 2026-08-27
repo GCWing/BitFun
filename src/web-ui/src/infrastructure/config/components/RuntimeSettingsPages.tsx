@@ -509,19 +509,12 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
   };
 
   const companionPetOptions: SelectOption[] = companionPets.map(pet => {
-    const localizedCopy = pet.source === 'preset' && pet.id === 'blue-golden'
-      ? {
-        displayName: t('features.pet.presets.blueGolden.name'),
-        description: t('features.pet.presets.blueGolden.description'),
-      }
-      : {
-        displayName: pet.displayName,
-        description: pet.description,
-      };
+    const displayName = pet.source === 'preset' && pet.id === 'blue-golden'
+      ? t('features.pet.presets.blueGolden.name')
+      : pet.displayName;
     return {
       value: pet.packagePath,
-      label: localizedCopy.displayName,
-      description: localizedCopy.description ?? undefined,
+      label: displayName,
       group: pet.source === 'preset'
         ? t('features.pet.groupPreset')
         : t('features.pet.groupImported'),
@@ -1053,9 +1046,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                               </span>
                               <span className="bitfun-runtime-settings__pet-select-text">
                                 <span className="bitfun-runtime-settings__pet-select-label">{option.label}</span>
-                                {option.description && (
-                                  <span className="bitfun-runtime-settings__pet-select-description">{option.description}</span>
-                                )}
                               </span>
                             </div>
                             <div className={`bitfun-runtime-settings__pet-select-actions${isUserPet && IS_TAURI_DESKTOP && pet ? ' bitfun-runtime-settings__pet-select-actions--deletable' : ''}`} data-bf-component="runtime-settings" data-bf-part="petActions">

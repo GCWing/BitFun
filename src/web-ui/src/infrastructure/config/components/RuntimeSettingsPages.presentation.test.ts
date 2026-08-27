@@ -23,4 +23,13 @@ describe('RuntimeSettingsPages combined execution page', () => {
     expect(source).not.toContain('<TabPane');
     expect(appearance).toContain("'execution-control'");
   });
+
+  it('keeps pet picker cards compact without description rows', () => {
+    const source = readSource('./RuntimeSettingsPages.tsx');
+    const styles = readSource('./RuntimeSettingsPages.scss');
+
+    expect(source).toContain('bitfun-runtime-settings__pet-select-label');
+    expect(source).not.toContain('bitfun-runtime-settings__pet-select-description');
+    expect(styles).not.toContain('&__pet-select-description');
+  });
 });
