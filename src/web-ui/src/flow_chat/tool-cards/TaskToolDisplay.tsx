@@ -111,21 +111,6 @@ function readTaskSessionId(input: unknown, toolResult: FlowToolItem['toolResult'
   return '';
 }
 
-function readTaskAgentId(
-  input: unknown,
-  toolResult: FlowToolItem['toolResult'] | undefined,
-): string {
-  if (input && typeof input === 'object') {
-    const data = input as Record<string, unknown>;
-    const inputAgentId = readStringValue(data.agent_id) || readStringValue(data.agentId);
-    if (inputAgentId) return inputAgentId;
-  }
-  const result = toolResult?.result;
-  if (!result || typeof result !== 'object') return '';
-  return readStringValue((result as Record<string, unknown>).agent_id)
-    || readStringValue((result as Record<string, unknown>).agentId);
-}
-
 function readTaskSubagentType(input: unknown): string {
   if (!input || typeof input !== 'object') {
     return '';
@@ -410,7 +395,6 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const linkedSubagentSession = linkedSubagentSessionId
     ? flowChatStore.getState().sessions.get(linkedSubagentSessionId)
     : undefined;
-  const subagentDisplayId = readTaskAgentId(toolCall?.input, toolResult);
   const subagentAvatarStatus = linkedSubagentSession
     ? sessionLineageLifecycleForSession(linkedSubagentSession)
     : 'idle';
@@ -774,7 +758,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     return linkedSubagentSessionId ? (
       <SubagentAvatar
         sessionId={linkedSubagentSessionId}
-        name={subagentDisplayId || taskAgentTypeLabel}
+        name={taskAgentTypeLabel}
         size={22}
         status={subagentAvatarStatus}
       />
@@ -797,18 +781,6 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           <div className="task-body-main" data-bf-component="task-tool-display" data-bf-part="main">
             <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
               <span className="task-action" data-bf-component="task-tool-display" data-bf-part="action">
-                {subagentDisplayId ? (
-                  <>
-                    <span
-                      className="task-action__subagent-name"
-                      data-bf-component="task-tool-display"
-                      data-bf-part="subagentName"
-                    >
-                      {subagentDisplayId}
-                    </span>
-                    <span className="task-action__identity-separator" aria-hidden="true"> · </span>
-                  </>
-                ) : null}
                 {showSubagentExecModel && resolvedSubagentModel ? (
                   <>
                     {t('toolCards.taskTool.headerLinePrefix', { agentType: taskAgentTypeLabel })}

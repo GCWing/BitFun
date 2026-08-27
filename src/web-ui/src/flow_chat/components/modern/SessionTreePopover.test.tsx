@@ -142,7 +142,7 @@ describe('SessionTreePopover', () => {
     }));
   });
 
-  it('maps sibling avatars from session IDs and uses Runtime agent IDs as names', async () => {
+  it('maps sibling avatars from session IDs and formats Runtime agent IDs as names', async () => {
     mocks.sessions.set('child-2', createSession('child-2', 'subagent', 'root'));
     mocks.sessions.set('child-3', createSession('child-3', 'subagent', 'root'));
     mocks.getSessionLineage.mockResolvedValue({
@@ -186,7 +186,7 @@ describe('SessionTreePopover', () => {
 
     expect(subagentNodes).toHaveLength(3);
     expect(subagentNodes.map(node => node.querySelector('.session-tree-popover__node-title')?.textContent))
-      .toEqual(['parser-review', 'test-runner', 'docs-audit']);
+      .toEqual(['Parser review', 'Test runner', 'Docs audit']);
   });
 
   it('closes a sibling action-menu portal and restores focus with the parent', async () => {
@@ -273,6 +273,7 @@ describe('SessionTreePopover', () => {
     expect(onSelectSession).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'child',
       agentId: 'parser-review',
+      displayTitle: 'Parser review',
       isRoot: false,
     }));
     expect(onRequestClose).toHaveBeenCalledTimes(1);

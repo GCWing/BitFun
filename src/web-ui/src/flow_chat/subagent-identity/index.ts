@@ -1,4 +1,5 @@
 export { SubagentAvatar } from './SubagentAvatar';
+export { formatAgentIdForDisplay } from './agentIdDisplay';
 export {
   resolveSubagentAvatarColor,
   resolveSubagentAvatarId,
