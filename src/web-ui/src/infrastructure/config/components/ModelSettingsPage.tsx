@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input, Modal, SearchField } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
-import { Select, NumberInput, Card, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select as LegacySelect, NumberInput, Card, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2319,7 +2319,7 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="bitfun-model-settings__selected-model-grid">
                     <div className="bitfun-model-settings__selected-model-field">
                       <span>{t('category.label')}</span>
-                      <Select
+                      <LegacySelect
                         value={draft.category}
                         onChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
                         options={categoryOptions}
@@ -2429,7 +2429,7 @@ const ModelSettingsPage: React.FC = () => {
         <div className="bitfun-model-settings__control-stack">
           <Select
             value={authSelectValue}
-            onChange={(value) => {
+            onValueChange={(value) => {
               const next = String(value);
               if (next === 'api_key') {
                 setEditingConfig((prev) => ({ ...prev, auth: { type: 'api_key' } }));
@@ -2464,7 +2464,7 @@ const ModelSettingsPage: React.FC = () => {
               });
             }}
             options={authOptions}
-            size="small"
+            size="sm"
           />
           {authIsSubscription && (
             <small className={matchedSubscription?.connected
@@ -2526,7 +2526,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-model-settings__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
-                      <Select
+                      <LegacySelect
                         value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
                         onChange={(value) => {
                           const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
@@ -2577,7 +2577,7 @@ const ModelSettingsPage: React.FC = () => {
                   <Select
                     data-testid="settings-model-request-format-select"
                     value={editingConfig.provider || 'openai'}
-                    onChange={(value) => {
+                    onValueChange={(value) => {
                       const provider = value as string;
                       resetRemoteModelDiscovery();
                       setEditingConfig(prev => ({
@@ -2588,13 +2588,13 @@ const ModelSettingsPage: React.FC = () => {
                     }}
                     placeholder={t('form.providerPlaceholder')}
                     options={requestFormatOptions}
-                    size="small"
+                    size="sm"
                   />
                 </ConfigPageRow>
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <Select
+                      <LegacySelect
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
@@ -2692,7 +2692,7 @@ const ModelSettingsPage: React.FC = () => {
                       </div>
                     </ConfigPageRow>
                     <ConfigPageRow label={t('form.provider')} align="center" wide>
-                      <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onChange={(value) => {
+                      <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onValueChange={(value) => {
                         const provider = value as string;
                         resetRemoteModelDiscovery();
                         setEditingConfig(prev => ({
@@ -2700,7 +2700,7 @@ const ModelSettingsPage: React.FC = () => {
                           provider,
                           request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
                         }));
-                      }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="small" />
+                      }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="sm" />
                     </ConfigPageRow>
                   </>
                 )}
@@ -2712,7 +2712,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <Select
+                      <LegacySelect
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
