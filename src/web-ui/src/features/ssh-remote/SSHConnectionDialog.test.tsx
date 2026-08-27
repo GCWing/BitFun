@@ -54,6 +54,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Modal: ({
     isOpen,
     children,

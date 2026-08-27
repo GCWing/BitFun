@@ -3,15 +3,14 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { Input, Modal } from '@/component-library';
+import { Input, Modal, Tooltip } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
-import { IconButton } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,
@@ -779,28 +778,26 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <div className="ssh-connection-dialog__saved-actions">
                       <IconButton
                         type="button"
-                        size="small"
+                        size="sm"
                         onClick={(e) => handleEditConnection(e, conn)}
                         disabled={isConnecting}
                         title={t('actions.edit') || 'Edit'}
                         aria-label={t('actions.edit') || 'Edit'}
-                      >
-                        <Pencil size={13} />
-                      </IconButton>
+                        icon={<Pencil size={13} />}
+                      />
                       <IconButton
                         type="button"
-                        size="small"
-                        variant="danger"
+                        size="sm"
+                        tone="danger"
                         onClick={(e) => handleDeleteConnection(e, conn.id)}
                         disabled={isConnecting}
                         title={t('actions.delete') || 'Delete'}
                         aria-label={t('actions.delete') || 'Delete'}
-                      >
-                        <Trash2 size={13} />
-                      </IconButton>
+                        icon={<Trash2 size={13} />}
+                      />
                       <IconButton
                         type="button"
-                        size="small"
+                        size="sm"
                         variant="primary"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -809,9 +806,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                         disabled={isConnecting || status === 'connecting'}
                         title={t('ssh.remote.connect')}
                         aria-label={t('ssh.remote.connect')}
-                      >
-                        <Play size={12} />
-                      </IconButton>
+                        icon={<Play size={12} />}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1093,18 +1089,17 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     placeholder="~/.ssh/id_rsa"
                     prefix={<Key size={16} />}
                     suffix={
-                      <IconButton
-                        type="button"
-                        variant="ghost"
-                        size="small"
-                        className="ssh-connection-dialog__browse-key"
-                        tooltip={t('ssh.remote.browsePrivateKey')}
-                        aria-label={t('ssh.remote.browsePrivateKey')}
-                        disabled={isConnecting || status === 'connecting'}
-                        onClick={() => void handleBrowsePrivateKey()}
-                      >
-                        <FolderOpen size={16} />
-                      </IconButton>
+                      <Tooltip content={t('ssh.remote.browsePrivateKey')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          className="ssh-connection-dialog__browse-key"
+                          aria-label={t('ssh.remote.browsePrivateKey')}
+                          disabled={isConnecting || status === 'connecting'}
+                          onClick={() => void handleBrowsePrivateKey()}
+                          icon={<FolderOpen size={16} />}
+                        />
+                      </Tooltip>
                     }
                     size="medium"
                   />
@@ -1131,18 +1126,17 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     onChange={(e) => handleInputChange('certificatePath', e.target.value)}
                     placeholder={t('ssh.remote.certificatePathOptional')}
                     suffix={
-                      <IconButton
-                        type="button"
-                        variant="ghost"
-                        size="small"
-                        className="ssh-connection-dialog__browse-key"
-                        tooltip={t('ssh.remote.browseCertificate')}
-                        aria-label={t('ssh.remote.browseCertificate')}
-                        disabled={isConnecting || status === 'connecting'}
-                        onClick={() => void handleBrowseCertificate()}
-                      >
-                        <FolderOpen size={16} />
-                      </IconButton>
+                      <Tooltip content={t('ssh.remote.browseCertificate')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          className="ssh-connection-dialog__browse-key"
+                          aria-label={t('ssh.remote.browseCertificate')}
+                          disabled={isConnecting || status === 'connecting'}
+                          onClick={() => void handleBrowseCertificate()}
+                          icon={<FolderOpen size={16} />}
+                        />
+                      </Tooltip>
                     }
                     size="medium"
                   />
