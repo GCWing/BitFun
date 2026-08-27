@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useEmbeddedBrowserWebview } from './useEmbeddedBrowserWebview';
@@ -43,39 +43,34 @@ const BrowserScene: React.FC = () => {
       >
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={browser.goBack}
           aria-label={t('nav.back')}
+          icon={<ChevronLeft />}
           data-testid="browser-back-button"
-        >
-          <ChevronLeft size={14} />
-        </IconButton>
+        />
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={browser.goForward}
           aria-label={t('nav.forward')}
+          icon={<ChevronRight />}
           data-testid="browser-forward-button"
-        >
-          <ChevronRight size={14} />
-        </IconButton>
+        />
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={browser.reload}
           disabled={browser.isLoading}
           aria-label={t('actions.refresh')}
+          icon={(
+            <RefreshCw
+              className={browser.isLoading ? 'browser-scene__spinning' : undefined}
+              data-testid={browser.isLoading ? 'browser-loading-indicator' : undefined}
+            />
+          )}
           data-testid="browser-refresh-button"
-        >
-          <RefreshCw
-            size={14}
-            className={browser.isLoading ? 'browser-scene__spinning' : undefined}
-            data-testid={browser.isLoading ? 'browser-loading-indicator' : undefined}
-          />
-        </IconButton>
+        />
         <div className="browser-scene__address">
           <Globe size={16} />
           <input

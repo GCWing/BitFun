@@ -7,9 +7,9 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useContextStore } from '@/shared/context-system';
@@ -165,39 +165,34 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
       <form data-bf-component="browser-panel" data-bf-part="toolbar" className="browser-panel__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={goBack}
           aria-label={t('nav.back')}
+          icon={<ChevronLeft />}
           data-testid="browser-back-button"
-        >
-          <ChevronLeft size={14} />
-        </IconButton>
+        />
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={goForward}
           aria-label={t('nav.forward')}
+          icon={<ChevronRight />}
           data-testid="browser-forward-button"
-        >
-          <ChevronRight size={14} />
-        </IconButton>
+        />
         <IconButton
           type="button"
-          variant="ghost"
-          size="small"
+          size="sm"
           onClick={reload}
           disabled={isLoading}
           aria-label={t('actions.refresh')}
+          icon={(
+            <RefreshCw
+              className={isLoading ? 'browser-panel__spinning' : undefined}
+              data-testid={isLoading ? 'browser-loading-indicator' : undefined}
+            />
+          )}
           data-testid="browser-refresh-button"
-        >
-          <RefreshCw
-            size={14}
-            className={isLoading ? 'browser-panel__spinning' : undefined}
-            data-testid={isLoading ? 'browser-loading-indicator' : undefined}
-          />
-        </IconButton>
+        />
         <div data-bf-component="browser-panel" data-bf-part="address" className="browser-panel__address">
           <Globe size={16} />
           <input
@@ -212,14 +207,13 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
         {isTauri && (
           <IconButton
             type="button"
-            variant="ghost"
-            size="small"
+            size="sm"
             onClick={() => void handleInspector()}
             aria-label={isInspectorActive ? t('browserView.stopElementSelection') : t('browserView.startElementSelection')}
+            aria-pressed={isInspectorActive}
             className={isInspectorActive ? 'browser-panel__inspector-btn--active' : undefined}
-          >
-            <MousePointer2 size={14} />
-          </IconButton>
+            icon={<MousePointer2 />}
+          />
         )}
       </form>
 
