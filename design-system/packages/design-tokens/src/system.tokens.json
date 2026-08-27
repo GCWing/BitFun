@@ -118,6 +118,37 @@
         "$description": "Inset shared by modal header chrome and the close action.",
         "$value": "8px"
       },
+      "backdropBlur": {
+        "$description": "Background blur applied by the reference modal scrim.",
+        "$type": "filter",
+        "$value": "blur(40px)"
+      },
+      "surfaceRadius": {
+        "$description": "Reference corner radius for the modal surface.",
+        "$value": "28px"
+      },
+      "headerGap": {
+        "$value": "{space.5}"
+      },
+      "headerPaddingBlockStart": {
+        "$value": "{space.6}"
+      },
+      "headerPaddingBlockEnd": {
+        "$value": "{space.5}"
+      },
+      "headerPaddingInline": {
+        "$value": "{space.6}"
+      },
+      "titleFontSize": {
+        "$value": "24px"
+      },
+      "titleFontWeight": {
+        "$type": "fontWeight",
+        "$value": 700
+      },
+      "scrollbarWidth": {
+        "$value": "6px"
+      },
       "contentPaddingSm": { "$value": "{space.3}" },
       "contentPaddingMd": { "$value": "{space.4}" },
       "contentPaddingLg": { "$value": "{space.6}" },

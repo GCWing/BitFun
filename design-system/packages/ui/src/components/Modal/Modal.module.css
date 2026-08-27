@@ -25,7 +25,8 @@
   }
 
   .overlay[data-bf-backdrop-blur="base"] {
-    backdrop-filter: var(--bf-effect-blur-base);
+    -webkit-backdrop-filter: var(--bf-overlay-modal-backdrop-blur);
+    backdrop-filter: var(--bf-overlay-modal-backdrop-blur);
   }
 
   .overlay[data-bf-placement="bottom-left"] {
@@ -51,7 +52,7 @@
     inline-size: 100%;
     overflow: hidden;
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-xl);
+    border-radius: var(--bf-overlay-modal-surface-radius);
     color: var(--bf-color-content-secondary);
     background: var(--bf-color-surface-raised);
     box-shadow: var(--bf-shadow-overlay);
@@ -74,6 +75,7 @@
   .dialog[data-bf-size="xxlarge"] { max-inline-size: var(--bf-overlay-modal-max-inline-size-xxlarge); }
   .dialog[data-bf-size="wide"] { max-inline-size: var(--bf-overlay-modal-max-inline-size-wide); }
 
+  .dialog[data-bf-radius="reference"] { border-radius: var(--bf-overlay-modal-surface-radius); }
   .dialog[data-bf-radius="base"] { border-radius: var(--bf-radius-base); }
   .dialog[data-bf-radius="lg"] { border-radius: var(--bf-radius-lg); }
   .dialog[data-bf-radius="xl"] { border-radius: var(--bf-radius-xl); }
@@ -98,11 +100,8 @@
     align-items: stretch;
     min-inline-size: 0;
     min-block-size: var(--bf-control-height-sm);
-    padding-inline-end: var(--bf-overlay-modal-edge-gutter);
-  }
-
-  .headerShell[data-bf-has-title="true"] {
-    border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    gap: var(--bf-overlay-modal-header-gap);
+    padding-inline-end: var(--bf-overlay-modal-header-padding-inline);
   }
 
   .header {
@@ -110,7 +109,8 @@
     flex: 1 1 auto;
     align-items: center;
     min-inline-size: 0;
-    padding: var(--bf-overlay-modal-edge-gutter);
+    padding-block: var(--bf-overlay-modal-header-padding-block-start) var(--bf-overlay-modal-header-padding-block-end);
+    padding-inline: var(--bf-overlay-modal-header-padding-inline) 0;
     background: transparent;
   }
 
@@ -143,10 +143,10 @@
     overflow: hidden;
     min-inline-size: 0;
     margin: 0;
-    color: var(--bf-color-content-secondary);
+    color: var(--bf-color-content-primary);
     font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
-    font-weight: var(--bf-font-weight-medium);
+    font-size: var(--bf-overlay-modal-title-font-size);
+    font-weight: var(--bf-overlay-modal-title-font-weight);
     line-height: var(--bf-line-height-tight);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -179,7 +179,7 @@
   .close {
     z-index: var(--bf-layer-content);
     align-self: flex-start;
-    margin-block: var(--bf-overlay-modal-edge-gutter);
+    margin-block-start: var(--bf-overlay-modal-header-padding-block-start);
     margin-inline-start: auto;
   }
 
@@ -187,7 +187,24 @@
     flex: 1 1 auto;
     min-block-size: 0;
     overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--bf-color-action-neutral-surface-hover) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
     color: var(--bf-color-content-secondary);
+  }
+
+  .content::-webkit-scrollbar {
+    inline-size: var(--bf-overlay-modal-scrollbar-width);
+  }
+
+  .content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .content::-webkit-scrollbar-thumb {
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-action-neutral-surface-hover);
   }
 
   .content[data-bf-layout="flex"],
@@ -198,6 +215,7 @@
   }
 
   .content[data-bf-show-scrollbar="false"] {
+    scrollbar-gutter: auto;
     scrollbar-width: none;
   }
 
@@ -333,6 +351,25 @@
 
     .dialog {
       max-block-size: calc(100vh - var(--bf-space-8));
+      border-radius: var(--bf-radius-xl);
+    }
+
+    .headerShell {
+      gap: var(--bf-space-4);
+      padding-inline-end: var(--bf-space-5);
+    }
+
+    .header {
+      padding-block: var(--bf-space-5);
+      padding-inline-start: var(--bf-space-5);
+    }
+
+    .title {
+      font-size: var(--bf-font-size-title);
+    }
+
+    .close {
+      margin-block-start: var(--bf-space-5);
     }
 
     .footer {

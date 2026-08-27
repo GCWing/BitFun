@@ -119,7 +119,7 @@ test("ActionItem preview reserves a full-width column for its complete anatomy",
   );
 });
 
-test("Modal preview uses the published component inside a local themed portal host", async () => {
+test("Modal preview exposes a direct anatomy specimen and a separate interaction demo", async () => {
   const [catalog, detail, styles] = await Promise.all([
     readFile(catalogSource, "utf8"),
     readFile(detailSource, "utf8"),
@@ -128,13 +128,16 @@ test("Modal preview uses the published component inside a local themed portal ho
 
   assert.match(catalog, /case "Modal"/);
   assert.match(detail, /component\.name === "Modal"/);
-  assert.match(detail, /portalContainer=\{\(\) => modalPreviewHostRef\.current\}/);
-  assert.match(detail, /backdropBlur="subtle"/);
-  assert.match(detail, /contentPadding="lg"/);
+  assert.match(detail, /renderModalExample\(false\)/);
+  assert.match(detail, /renderModalExample\(true\)/);
+  assert.match(detail, /portalled=\{interactive\}/);
+  assert.match(detail, /preventScroll=\{interactive\}/);
   assert.match(detail, /description=\{t\("components\.preview\.modalDescription"\)\}/);
   assert.match(detail, /footer=\{\(/);
-  assert.match(detail, /radius="2xl"/);
-  assert.match(styles, /\.component-modal-preview-host\s*\{[^}]*transform:\s*translateZ\(0\)/s);
+  assert.match(detail, /size="xxlarge"/);
+  assert.match(detail, /showScrollbar=\{modalShowScrollbar\}/);
+  assert.match(styles, /\.component-modal-preview-overlay\s*\{[^}]*position:\s*relative/s);
+  assert.match(styles, /\.component-modal-preview-dialog\s*\{[^}]*block-size:\s*700px/s);
 });
 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {

@@ -39,7 +39,7 @@ export type ModalContentLayout = "scroll" | "flex" | "fill";
 export type ModalContentPadding = "none" | "sm" | "md" | "lg" | "xl";
 export type ModalElevation = "none" | "raised" | "overlay";
 export type ModalPlacement = "center" | "bottom-left" | "bottom-right";
-export type ModalRadius = "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
+export type ModalRadius = "reference" | "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
 export type ModalSize = "small" | "medium" | "large" | "xlarge" | "xxlarge" | "wide";
 export type ModalPortalContainer = Element | DocumentFragment;
 export type ModalPortalTarget = ModalPortalContainer | (() => ModalPortalContainer | null) | null;
@@ -102,6 +102,7 @@ export interface ModalProps {
   overlayClassName?: string;
   placement?: ModalPlacement;
   portalContainer?: ModalPortalTarget;
+  portalled?: boolean;
   preventScroll?: boolean;
   radius?: ModalRadius;
   resizable?: boolean;
@@ -114,6 +115,7 @@ export interface ModalProps {
   titleExtra?: ReactNode;
   titleProps?: Omit<HTMLAttributes<HTMLHeadingElement>, "children" | "className" | "id">;
   titleTestId?: string;
+  trapFocus?: boolean;
 }
 
 interface Point {
@@ -196,7 +198,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   ariaLabel,
   ariaLabelledBy,
   autoFocus = true,
-  backdropBlur = "none",
+  backdropBlur = "base",
   border = "subtle",
   children,
   closeButtonProps,
@@ -221,8 +223,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   overlayClassName,
   placement = "center",
   portalContainer,
+  portalled = true,
   preventScroll = true,
-  radius = "xl",
+  radius = "reference",
   resizable = false,
   role = "dialog",
   showCloseButton = true,
@@ -233,6 +236,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   titleExtra,
   titleProps,
   titleTestId,
+  trapFocus = true,
 }, forwardedRef) {
   const context = useContext(ModalContext);
   const resolvedPortalContainer = resolvePortalContainer(
@@ -325,7 +329,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       focusTarget?.focus();
     }
 
-    const trapFocus = (event: KeyboardEvent) => {
+    const handleFocusTrap = (event: KeyboardEvent) => {
       if (
         event.key !== "Tab"
         || !dialog
@@ -351,13 +355,13 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       }
     };
 
-    ownerDocument.addEventListener("keydown", trapFocus);
+    if (trapFocus) ownerDocument.addEventListener("keydown", handleFocusTrap);
     return () => {
-      ownerDocument.removeEventListener("keydown", trapFocus);
+      if (trapFocus) ownerDocument.removeEventListener("keydown", handleFocusTrap);
       if (previousFocusRef.current?.isConnected) previousFocusRef.current.focus();
       previousFocusRef.current = null;
     };
-  }, [autoFocus, initialFocusRef, isOpen, ownerDocument]);
+  }, [autoFocus, initialFocusRef, isOpen, ownerDocument, trapFocus]);
 
   const requestClose = useCallback((reason: ModalCloseReason) => {
     if (!isOpen) return;
@@ -512,7 +516,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     event.stopPropagation();
   }, [resizable]);
 
-  if (!isPresent || !resolvedPortalContainer) return null;
+  if (!isPresent || (portalled && !resolvedPortalContainer)) return null;
 
   const positionedStyle: CSSProperties | undefined = (draggable || resizable) && position
     ? {
@@ -539,7 +543,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     description !== undefined && description !== null ? generatedDescriptionId : undefined,
   ].filter(Boolean).join(" ") || undefined;
 
-  return createPortal(
+  const modal = (
     <div
       className={classNames(styles.overlay, overlayClassName)}
       data-bf-backdrop-blur={backdropBlur}
@@ -681,7 +685,10 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           />
         ))}
       </div>
-    </div>,
-    resolvedPortalContainer,
+    </div>
   );
+
+  return portalled && resolvedPortalContainer
+    ? createPortal(modal, resolvedPortalContainer)
+    : modal;
 });

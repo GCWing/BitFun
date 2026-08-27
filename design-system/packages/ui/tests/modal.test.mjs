@@ -9,6 +9,7 @@ test("Modal owns a portaled, stacked focus and dismissal contract", async () => 
   );
 
   assert.match(source, /createPortal\(/);
+  assert.match(source, /portalled && resolvedPortalContainer/);
   assert.match(source, /const modalStacks = new WeakMap<Document, symbol\[\]>/);
   assert.match(source, /isTopModal\(ownerDocument, identityRef\.current\)/);
   assert.match(source, /event\.key !== "Escape"/);
@@ -16,6 +17,7 @@ test("Modal owns a portaled, stacked focus and dismissal contract", async () => 
   assert.match(source, /event\.key !== "Tab"/);
   assert.match(source, /previousFocusRef\.current\?\.isConnected/);
   assert.match(source, /initialFocusRef\?\.current/);
+  assert.match(source, /if \(trapFocus\) ownerDocument\.addEventListener\("keydown", handleFocusTrap\)/);
   assert.match(source, /pointerStartedOnOverlayRef\.current/);
   assert.match(source, /requestClose\("overlay"\)/);
   assert.match(source, /requestClose\("close-button"\)/);
@@ -35,6 +37,11 @@ test("Modal geometry and surface styling use public design tokens", async () => 
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-overlay-modal-viewport-gutter/);
+  assert.match(styles, /--bf-overlay-modal-backdrop-blur/);
+  assert.match(styles, /--bf-overlay-modal-surface-radius/);
+  assert.match(styles, /--bf-overlay-modal-header-padding-inline/);
+  assert.match(styles, /--bf-overlay-modal-title-font-size/);
+  assert.match(styles, /--bf-overlay-modal-scrollbar-width/);
   assert.match(styles, /--bf-overlay-modal-max-inline-size-wide/);
   assert.match(styles, /--bf-color-overlay-scrim/);
   assert.match(styles, /--bf-color-surface-raised/);

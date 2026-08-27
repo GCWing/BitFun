@@ -64,6 +64,20 @@ test("split-view content panels preserve the elevated shell curvature contract",
   assert.equal(tokens["layout.splitView.contentPanelRadius"], "24px");
 });
 
+test("Modal tokens preserve the reference surface and chrome contract", () => {
+  assert.equal(tokens["overlay.modal.backdropBlur"], "blur(40px)");
+  assert.equal(tokens["overlay.modal.surfaceRadius"], "28px");
+  assert.equal(tokens["overlay.modal.headerGap"], "20px");
+  assert.equal(tokens["overlay.modal.headerPaddingBlockStart"], "24px");
+  assert.equal(tokens["overlay.modal.headerPaddingBlockEnd"], "20px");
+  assert.equal(tokens["overlay.modal.headerPaddingInline"], "24px");
+  assert.equal(tokens["overlay.modal.titleFontSize"], "24px");
+  assert.equal(tokens["overlay.modal.titleFontWeight"], 700);
+  assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
+  assert.equal(tokens["overlay.modal.footerBlur"], "blur(20px)");
+  assert.equal(tokens["overlay.modal.footerContentInset"], "80px");
+});
+
 test("control heights preserve an eight-pixel size step in every density mode", () => {
   const valuesFor = (name) => tokenCatalog.find((token) => token.name === name)?.values;
 
