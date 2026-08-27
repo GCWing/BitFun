@@ -29,6 +29,16 @@ vi.mock('@bitfun/ui', () => ({
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props}>{children}</button>
   ),
+  IconButton: ({
+    icon,
+    size: _size,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    icon: React.ReactNode;
+    size?: string;
+  }) => (
+    <button type="button" data-component="icon-button" {...props}>{icon}</button>
+  ),
 }));
 
 vi.mock('../meditor', () => ({

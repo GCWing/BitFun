@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
@@ -19,7 +19,7 @@ import type { Editor as TiptapEditorInstance, JSONContent } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Selection } from '@tiptap/pm/state';
 import { useI18n } from '@/infrastructure/i18n';
-import { IconButton, Input } from '@/component-library';
+import { Input, Tooltip } from '@/component-library';
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -1286,20 +1286,23 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                   suffix={(
                     <div className="m-editor-inline-ai__composer-actions">
                       <span className="m-editor-inline-ai__page-chip">{t('editor.meditor.inlineAi.currentPage')}</span>
-                      <IconButton
-                        type="button"
-                        variant="primary"
-                        size="xs"
-                        shape="circle"
-                        onClick={() => {
-                          void handleContinueWriting();
-                        }}
+                      <Tooltip
+                        content={t('editor.meditor.inlineAi.askSubmit')}
                         disabled={!canSubmitInlinePrompt}
-                        tooltip={t('editor.meditor.inlineAi.askSubmit')}
-                        aria-label={t('editor.meditor.inlineAi.askSubmit')}
                       >
-                        <ArrowUp size={13} strokeWidth={2.1} />
-                      </IconButton>
+                        <IconButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          shape="circle"
+                          onClick={() => {
+                            void handleContinueWriting();
+                          }}
+                          disabled={!canSubmitInlinePrompt}
+                          aria-label={t('editor.meditor.inlineAi.askSubmit')}
+                          icon={<ArrowUp strokeWidth={2.1} />}
+                        />
+                      </Tooltip>
                     </div>
                   )}
                 />

@@ -5,7 +5,7 @@
  * @module components/MarkdownEditor
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -20,7 +20,7 @@ import {
   isPeerDeviceModeActive,
   PEER_MODE_FILE_SYNC_POLL_MS,
 } from '@/infrastructure/peer-device/peerModeFlag';
-import { CubeLoading, IconButton } from '@/component-library';
+import { CubeLoading } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import CodeEditor from './CodeEditor';
 import {
@@ -675,17 +675,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
             <IconButton
               type="button"
-              size="small"
+              size="sm"
               onClick={() => void handleCopyMarkdown()}
               aria-label={copied
                 ? t('editor.markdownEditor.copiedMarkdown')
                 : t('editor.markdownEditor.copyMarkdown')}
+              icon={copied ? <Check /> : <Copy />}
               title={copied
                 ? t('editor.markdownEditor.copiedMarkdown')
                 : t('editor.markdownEditor.copyMarkdown')}
-            >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </IconButton>
+            />
           </div>
         </div>
         <div className="bitfun-markdown-editor__unsafe-body" data-bf-component="markdown-editor" data-bf-part="body">
@@ -767,17 +766,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
           <IconButton
             type="button"
-            size="small"
+            size="sm"
             onClick={() => void handleCopyMarkdown()}
             aria-label={copied
               ? t('editor.markdownEditor.copiedMarkdown')
               : t('editor.markdownEditor.copyMarkdown')}
+            icon={copied ? <Check /> : <Copy />}
             title={copied
               ? t('editor.markdownEditor.copiedMarkdown')
               : t('editor.markdownEditor.copyMarkdown')}
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-          </IconButton>
+          />
         </div>
       </div>
       <div className="bitfun-markdown-editor__body" data-bf-component="markdown-editor" data-bf-part="body">
