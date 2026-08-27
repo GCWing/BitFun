@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   ExternalLink,
+  Info,
   List,
   MessageCircle,
   Mic,
@@ -212,6 +213,9 @@ export function ComponentDetailPage({
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [size, setSize] = useState<PreviewSize>("md");
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
+  const [fieldShowLabelAction, setFieldShowLabelAction] = useState(false);
+  const [fieldShowControlLeading, setFieldShowControlLeading] = useState(false);
+  const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
@@ -325,7 +329,16 @@ export function ComponentDetailPage({
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
     }
     if (component.name === "Field") {
-      return `import { Field, Switch } from "@bitfun/ui";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.notifications")}"\n  orientation="${fieldOrientation}"\n  required\n>\n  <Switch />\n</Field>`;
+      const labelAction = fieldShowLabelAction
+        ? `\n  labelAction={<IconButton aria-label="${t("components.preview.fieldHelp")}" icon={<Info />} size="xs" />}`
+        : "";
+      const controlLeading = fieldShowControlLeading
+        ? `\n  controlLeading={<Switch aria-label="${t("components.preview.notifications")}" />}`
+        : "";
+      const controlTrailing = fieldShowControlTrailing
+        ? `\n  controlTrailing={<IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />}`
+        : "";
+      return `import { Field, IconButton, Input, Switch } from "@bitfun/ui";\nimport { ChevronDown, Info, MoreHorizontal } from "lucide-react";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.appearance")}"${labelAction}${controlLeading}${controlTrailing}\n  orientation="${fieldOrientation}"\n  required\n>\n  <Input defaultValue="${t("components.preview.fieldValue")}" trailing={<ChevronDown />} />\n</Field>`;
     }
     if (component.name === "Input") {
       const stateProps = previewState === "disabled"
@@ -380,6 +393,9 @@ export function ComponentDetailPage({
     composerShowContext,
     composerShowToolbar,
     fieldOrientation,
+    fieldShowControlLeading,
+    fieldShowControlTrailing,
+    fieldShowLabelAction,
     iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
@@ -685,12 +701,34 @@ export function ComponentDetailPage({
     if (component.name === "Field") {
       return (
         <Field
+          className="component-field-example"
+          controlLeading={fieldShowControlLeading ? (
+            <Switch aria-label={t("components.preview.notifications")} />
+          ) : undefined}
+          controlTrailing={fieldShowControlTrailing ? (
+            <IconButton
+              aria-label={t("components.preview.more")}
+              icon={<MoreHorizontal aria-hidden="true" />}
+              size="xs"
+            />
+          ) : undefined}
           description={t("components.preview.fieldDescription")}
-          label={t("components.preview.notifications")}
+          label={t("components.preview.appearance")}
+          labelAction={fieldShowLabelAction ? (
+            <IconButton
+              aria-label={t("components.preview.fieldHelp")}
+              icon={<Info aria-hidden="true" />}
+              size="xs"
+            />
+          ) : undefined}
           orientation={fieldOrientation}
           required
         >
-          <Switch />
+          <Input
+            aria-label={t("components.preview.appearance")}
+            defaultValue={t("components.preview.fieldValue")}
+            trailing={<ChevronDown aria-hidden="true" />}
+          />
         </Field>
       );
     }
@@ -1441,6 +1479,27 @@ export function ComponentDetailPage({
                       onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
                       options={pageHeaderAlignments}
                       value={pageHeaderAlign}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowLabelAction}
+                      label={t("detail.showLabelAction")}
+                      onCheckedChange={setFieldShowLabelAction}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowControlLeading}
+                      label={t("detail.showLeadingControl")}
+                      onCheckedChange={setFieldShowControlLeading}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowControlTrailing}
+                      label={t("detail.showTrailingAction")}
+                      onCheckedChange={setFieldShowControlTrailing}
                     />
                   )}
                   {component.name === "ScrollArea" && (

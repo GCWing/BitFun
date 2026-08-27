@@ -3299,6 +3299,28 @@ input.lab-force-focus {
   box-shadow: inset 0 0 0 var(--bf-border-width-default) var(--bf-color-border-subtle);
 }
 
+.component-field-example {
+  inline-size: 100%;
+  max-inline-size: 680px;
+}
+
+.component-field-example[data-orientation="horizontal"] [data-bf-part="content"] {
+  max-inline-size: 400px;
+}
+
+.component-field-example[data-orientation="horizontal"] [data-bf-part="control"] {
+  inline-size: 150px;
+}
+
+.component-field-example[data-orientation="vertical"] {
+  max-inline-size: 240px;
+}
+
+.component-field-example[data-orientation="vertical"] [data-bf-part="control"],
+.component-field-example [data-bf-component="input"] {
+  inline-size: 100%;
+}
+
 .component-composer-preview-stage__label {
   color: var(--bf-color-content-muted);
   font-size: var(--bf-font-size-small);

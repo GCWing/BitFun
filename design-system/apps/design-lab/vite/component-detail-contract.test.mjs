@@ -265,13 +265,23 @@ test("Composer preview exposes context, editor, and action regions independently
   assert.match(styles, /\[data-bf-component="composer"\]\.lab-force-focus/);
 });
 
-test("Field preview exposes label content independently from layout orientation", async () => {
-  const source = await readFile(detailSource, "utf8");
+test("Field preview exposes label and control composition independently from layout orientation", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
 
   assert.match(source, /const fieldOrientations = \["vertical", "horizontal"\] as const/);
   assert.match(source, /description=\{t\("components\.preview\.fieldDescription"\)\}/);
   assert.match(source, /orientation=\{fieldOrientation\}/);
   assert.match(source, /component\.name === "Field"/);
+  assert.match(source, /labelAction=\{fieldShowLabelAction \? \(/);
+  assert.match(source, /controlLeading=\{fieldShowControlLeading \? \(/);
+  assert.match(source, /controlTrailing=\{fieldShowControlTrailing \? \(/);
+  assert.match(source, /setFieldShowLabelAction/);
+  assert.match(source, /setFieldShowControlLeading/);
+  assert.match(source, /setFieldShowControlTrailing/);
+  assert.match(styles, /\.component-field-example\[data-orientation="horizontal"\] \[data-bf-part="control"\]\s*\{[^}]*inline-size:\s*150px/s);
 });
 
 test("PageHeader preview decouples semantic level from visual size and alignment", async () => {

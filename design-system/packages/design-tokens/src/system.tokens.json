@@ -151,6 +151,14 @@
   },
   "layout": {
     "$type": "dimension",
+    "field": {
+      "rootGap": { "$value": "{space.2}" },
+      "horizontalGap": { "$value": "{space.5}" },
+      "contentGap": { "$value": "{space.1}" },
+      "labelGap": { "$value": "2px" },
+      "labelActionGap": { "$value": "{space.2}" },
+      "controlGap": { "$value": "{space.2}" }
+    },
     "card": {
       "paddingSm": { "$value": "{space.3}" },
       "paddingMd": { "$value": "{space.5}" },

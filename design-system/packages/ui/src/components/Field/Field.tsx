@@ -19,8 +19,11 @@ export interface FieldProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: ReactElement<FieldControlProps>;
   controlClassName?: string;
+  controlLeading?: ReactNode;
+  controlTrailing?: ReactNode;
   description?: ReactNode;
   label: ReactNode;
+  labelAction?: ReactNode;
   labelClassName?: string;
   orientation?: "horizontal" | "vertical";
   required?: boolean;
@@ -30,8 +33,11 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   children,
   className,
   controlClassName,
+  controlLeading,
+  controlTrailing,
   description,
   label,
+  labelAction,
   labelClassName,
   orientation = "vertical",
   required = false,
@@ -62,14 +68,21 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       ref={ref}
     >
       <span className={classNames(styles.content, labelClassName)} data-bf-part="content">
-        <label className={styles.label} htmlFor={controlId}>
-          <span>{label}</span>
-          {isRequired && (
-            <span aria-hidden="true" className={styles.required} data-bf-part="required">
-              *
+        <span className={styles.labelRow} data-bf-part="label-row">
+          <label className={styles.label} htmlFor={controlId}>
+            <span>{label}</span>
+            {isRequired && (
+              <span aria-hidden="true" className={styles.required} data-bf-part="required">
+                *
+              </span>
+            )}
+          </label>
+          {labelAction !== undefined && labelAction !== null && (
+            <span className={styles.labelAction} data-bf-part="label-action">
+              {labelAction}
             </span>
           )}
-        </label>
+        </span>
         {descriptionId !== undefined && (
           <span className={styles.description} data-bf-part="description" id={descriptionId}>
             {description}
@@ -77,7 +90,17 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
         )}
       </span>
       <span className={classNames(styles.control, controlClassName)} data-bf-part="control">
+        {controlLeading !== undefined && controlLeading !== null && (
+          <span className={styles.controlAdornment} data-bf-part="control-leading">
+            {controlLeading}
+          </span>
+        )}
         {control}
+        {controlTrailing !== undefined && controlTrailing !== null && (
+          <span className={styles.controlAdornment} data-bf-part="control-trailing">
+            {controlTrailing}
+          </span>
+        )}
       </span>
     </div>
   );

@@ -2,14 +2,14 @@
   .root {
     display: grid;
     min-inline-size: 0;
-    gap: var(--bf-space-2);
+    gap: var(--bf-layout-field-root-gap);
     color: var(--bf-color-content-primary);
   }
 
   .root[data-orientation="horizontal"] {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: var(--bf-space-5);
+    column-gap: var(--bf-layout-field-horizontal-gap);
   }
 
   .content {
@@ -17,14 +17,22 @@
     min-inline-size: 0;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--bf-space-1);
+    gap: var(--bf-layout-field-content-gap);
+  }
+
+  .labelRow {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: var(--bf-layout-field-label-action-gap);
   }
 
   .label {
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: calc(var(--bf-space-1) / 2);
+    gap: var(--bf-layout-field-label-gap);
     color: var(--bf-color-content-primary);
     font-family: var(--bf-font-family-control);
     font-size: var(--bf-font-size-small);
@@ -34,6 +42,13 @@
 
   .required {
     color: var(--bf-color-accent-default);
+  }
+
+  .labelAction {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-inline-start: auto;
   }
 
   .description {
@@ -47,6 +62,17 @@
   .control {
     display: inline-flex;
     min-inline-size: 0;
+    align-items: center;
+    gap: var(--bf-layout-field-control-gap);
+  }
+
+  .control > :not(.controlAdornment) {
+    min-inline-size: 0;
+  }
+
+  .controlAdornment {
+    display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
   }
 

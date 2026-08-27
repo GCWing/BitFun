@@ -140,6 +140,19 @@ test("Card tokens preserve raised, compact, and media surface compositions", asy
   assert.equal(systemDocument.layout.card.radiusMd.$value, "{radius.lg}");
 });
 
+test("Field tokens preserve independent label, description, and control regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.field.rootGap"], "8px");
+  assert.equal(tokens["layout.field.horizontalGap"], "20px");
+  assert.equal(tokens["layout.field.contentGap"], "4px");
+  assert.equal(tokens["layout.field.labelGap"], "2px");
+  assert.equal(tokens["layout.field.labelActionGap"], "8px");
+  assert.equal(tokens["layout.field.controlGap"], "8px");
+  assert.equal(systemDocument.layout.field.rootGap.$value, "{space.2}");
+  assert.equal(systemDocument.layout.field.labelActionGap.$value, "{space.2}");
+});
+
 test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
