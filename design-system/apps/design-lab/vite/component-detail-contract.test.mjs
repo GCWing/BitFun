@@ -205,6 +205,27 @@ test("NavigationPanel preview exposes header, grouped navigation, selected items
   assert.match(styles, /\.component-navigation-panel-example\s*\{[^}]*block-size:\s*520px/s);
 });
 
+test("Composer preview exposes context, editor, and action regions independently", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Composer"/);
+  assert.match(detail, /ComposerContextBar/);
+  assert.match(detail, /ComposerDivider/);
+  assert.match(detail, /ComposerToolbar/);
+  assert.match(detail, /"default", "focus-within", "with-context", "invalid", "disabled"/);
+  assert.match(detail, /contextBar=\{showContext \? \(/);
+  assert.match(detail, /toolbar=\{composerShowToolbar \? \(/);
+  assert.match(detail, /<textarea/);
+  assert.match(detail, /setComposerShowContext/);
+  assert.match(detail, /setComposerShowToolbar/);
+  assert.match(styles, /\.component-composer-example\s*\{[^}]*max-inline-size:\s*680px/s);
+  assert.match(styles, /\[data-bf-component="composer"\]\.lab-force-focus/);
+});
+
 test("Field preview exposes label content independently from layout orientation", async () => {
   const source = await readFile(detailSource, "utf8");
 

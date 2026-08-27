@@ -1,5 +1,6 @@
 import { actionItemMeta } from "./components/ActionItem/ActionItem.meta";
 import { buttonMeta } from "./components/Button/Button.meta";
+import { composerMeta } from "./components/Composer/Composer.meta";
 import { fieldMeta } from "./components/Field/Field.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
 import { inputMeta } from "./components/Input/Input.meta";
@@ -23,6 +24,7 @@ export type {
 export const componentRegistry = [
   actionItemMeta,
   buttonMeta,
+  composerMeta,
   fieldMeta,
   iconButtonMeta,
   inputMeta,

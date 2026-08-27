@@ -868,6 +868,19 @@ body,
   font-size: var(--bf-font-size-micro);
 }
 
+.component-composer-card-preview {
+  inline-size: 100%;
+  max-inline-size: 240px;
+}
+
+.component-composer-card-preview [data-bf-part="surface"] {
+  min-block-size: 104px;
+}
+
+.component-composer-placeholder {
+  color: var(--bf-color-content-muted);
+}
+
 .component-card__body {
   display: grid;
   align-content: start;
@@ -3170,6 +3183,55 @@ input.lab-force-focus {
   padding: 24px;
   overflow: auto;
   background: var(--bf-color-action-neutral-surface);
+}
+
+.component-composer-preview-stage {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--bf-space-3);
+  padding: var(--bf-space-8);
+  background: var(--bf-color-action-neutral-surface);
+}
+
+.component-composer-preview-stage__label {
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-small);
+  font-weight: var(--bf-font-weight-medium);
+}
+
+.component-composer-example {
+  max-inline-size: 680px;
+  margin-inline: auto;
+}
+
+[data-bf-component="composer"].lab-force-focus > [data-bf-part="surface"] {
+  border-color: var(--bf-color-field-border-focus);
+  box-shadow:
+    var(--bf-shadow-raised),
+    0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+}
+
+.component-composer-context-label,
+.component-composer-mode {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  gap: var(--bf-space-1);
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-font-size-xs);
+  white-space: nowrap;
+}
+
+.component-composer-context-label > svg {
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+.component-composer-mode {
+  padding: 3px 6px;
+  border-radius: var(--bf-radius-pill);
+  color: var(--bf-color-status-success-content);
+  background: var(--bf-color-status-success-surface);
 }
 
 [data-bf-component="action-item"].lab-force-focus {

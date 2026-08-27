@@ -96,6 +96,20 @@
       "itemActionSize": { "$value": "{space.5}" },
       "itemActionInset": { "$value": "{space.2}" },
       "itemRadius": { "$value": "{radius.pill}" }
+    },
+    "composer": {
+      "$type": "dimension",
+      "minBlockSize": { "$value": "120px" },
+      "contextOffset": { "$value": "32px" },
+      "contextPaddingBlock": { "$value": "6px" },
+      "contextPaddingInline": { "$value": "{space.2}" },
+      "contextGap": { "$value": "{space.2}" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "surfaceGap": { "$value": "{space.3}" },
+      "surfaceRadius": { "$value": "{radius.xl}" },
+      "editorPadding": { "$value": "{space.1}" },
+      "toolbarGap": { "$value": "{space.2}" },
+      "dividerBlockSize": { "$value": "16px" }
     }
   },
   "layout": {

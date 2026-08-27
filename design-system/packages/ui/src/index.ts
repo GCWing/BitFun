@@ -6,6 +6,15 @@ export {
   type ActionItemProps,
 } from "./components/ActionItem";
 export { Button, type ButtonProps } from "./components/Button";
+export {
+  Composer,
+  ComposerContextBar,
+  ComposerDivider,
+  ComposerToolbar,
+  type ComposerBarProps,
+  type ComposerDividerProps,
+  type ComposerProps,
+} from "./components/Composer";
 export { Field, type FieldProps } from "./components/Field";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";

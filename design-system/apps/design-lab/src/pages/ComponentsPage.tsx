@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  ArrowUp,
   ArrowRight,
   Check,
   Command,
@@ -12,12 +13,15 @@ import {
   MousePointerClick,
   PanelTop,
   PanelLeft,
+  Plus,
   Search as SearchIcon,
   ToggleLeft,
 } from "lucide-react";
 import {
   ActionItem,
   Button,
+  Composer,
+  ComposerToolbar,
   Field,
   IconButton,
   Input,
@@ -59,6 +63,7 @@ interface ComponentsPageProps {
 const componentIcons = {
   ActionItem: List,
   Button: MousePointerClick,
+  Composer: ArrowUp,
   Field: Rows3,
   IconButton: List,
   Input: Eye,
@@ -141,6 +146,39 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             </MenuItem>
           </MenuSection>
         </Menu>
+      );
+    case "Composer":
+      return (
+        <Composer
+          aria-label={t("components.preview.composerLabel")}
+          className="component-composer-card-preview"
+          toolbar={(
+            <ComposerToolbar
+              leading={(
+                <IconButton
+                  aria-label={t("components.preview.composerAdd")}
+                  icon={<Plus aria-hidden="true" />}
+                  size="sm"
+                  tabIndex={-1}
+                  variant="fill"
+                />
+              )}
+              trailing={(
+                <IconButton
+                  aria-label={t("components.preview.composerSend")}
+                  icon={<ArrowUp aria-hidden="true" />}
+                  size="sm"
+                  tabIndex={-1}
+                  variant="primary"
+                />
+              )}
+            />
+          )}
+        >
+          <span className="component-composer-placeholder">
+            {t("components.preview.composerPlaceholder")}
+          </span>
+        </Composer>
       );
     case "Modal":
       return (

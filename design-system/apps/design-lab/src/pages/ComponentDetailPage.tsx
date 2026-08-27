@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import {
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   Clipboard,
@@ -7,6 +8,7 @@ import {
   Eye,
   List,
   MessageCircle,
+  Mic,
   Monitor,
   MoreHorizontal,
   Plus,
@@ -17,6 +19,10 @@ import {
 import {
   ActionItem,
   Button,
+  Composer,
+  ComposerContextBar,
+  ComposerDivider,
+  ComposerToolbar,
   Field,
   IconButton,
   Input,
@@ -94,6 +100,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   hidden: "detail.option.hidden",
   scrolling: "detail.option.scrolling",
   "focus-within": "detail.option.focus-within",
+  "with-context": "detail.option.with-context",
   "disabled-item": "detail.option.disabled-item",
   "selected-item": "detail.option.selected-item",
   "checked-item": "detail.option.checked-item",
@@ -183,8 +190,10 @@ export function ComponentDetailPage({
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [previewState, setPreviewState] = useState(
-    component.name === "Switch"
-      ? "off"
+    component.name === "Composer"
+      ? "with-context"
+      : component.name === "Switch"
+        ? "off"
       : component.name === "TabGroup"
         ? "selected"
         : component.name === "ScrollArea"
@@ -201,6 +210,8 @@ export function ComponentDetailPage({
   const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
   const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
   const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
+  const [composerShowContext, setComposerShowContext] = useState(false);
+  const [composerShowToolbar, setComposerShowToolbar] = useState(true);
 
   const states = useMemo(() => {
     switch (component.name) {
@@ -209,6 +220,8 @@ export function ComponentDetailPage({
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
+      case "Composer":
+        return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
       case "Input":
       case "SearchField":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
@@ -246,6 +259,16 @@ export function ComponentDetailPage({
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "Composer") {
+      const stateProps = `${previewState === "disabled" ? " disabled" : ""}${previewState === "invalid" ? " invalid" : ""}`;
+      const contextProp = composerShowContext || previewState === "with-context"
+        ? `\n  contextBar={<ComposerContextBar\n    leading={<><span>${t("components.preview.composerDevice")}</span><ComposerDivider /><span>${t("components.preview.composerWorkspace")}</span></>}\n    trailing={<span>${t("components.preview.composerMode")}</span>}\n  />}`
+        : "";
+      const toolbarProp = composerShowToolbar
+        ? `\n  toolbar={<ComposerToolbar\n    leading={<IconButton aria-label="${t("components.preview.composerAdd")}" icon={<Plus />} />}\n    trailing={<><Button variant="text">${t("components.preview.composerModel")}</Button><IconButton aria-label="${t("components.preview.composerSend")}" icon={<ArrowUp />} variant="primary" /></>}\n  />}`
+        : "";
+      return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\nimport { ArrowUp, Plus } from "lucide-react";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
     }
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -300,6 +323,8 @@ export function ComponentDetailPage({
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
     component.name,
+    composerShowContext,
+    composerShowToolbar,
     fieldOrientation,
     iconButtonVariant,
     inspectorDisabled,
@@ -617,6 +642,91 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "Composer") {
+      const showContext = composerShowContext || state === "with-context";
+      return (
+        <Composer
+          aria-label={t("components.preview.composerLabel")}
+          className={state === "focus-within" ? "component-composer-example lab-force-focus" : "component-composer-example"}
+          contextBar={showContext ? (
+            <ComposerContextBar
+              leading={(
+                <>
+                  <span className="component-composer-context-label">
+                    <Monitor aria-hidden="true" />
+                    {t("components.preview.composerDevice")}
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                  <ComposerDivider />
+                  <span className="component-composer-context-label">
+                    {t("components.preview.composerWorkspace")}
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                </>
+              )}
+              trailing={(
+                <span className="component-composer-mode">
+                  {t("components.preview.composerMode")}
+                </span>
+              )}
+            />
+          ) : undefined}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          toolbar={composerShowToolbar ? (
+            <ComposerToolbar
+              leading={(
+                <>
+                  <IconButton
+                    aria-label={t("components.preview.composerAdd")}
+                    icon={<Plus aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="fill"
+                  />
+                  <Button size="sm" variant="text">
+                    {t("components.preview.composerStandard")}
+                  </Button>
+                </>
+              )}
+              trailing={(
+                <>
+                  <Button
+                    size="sm"
+                    trailingIcon={<ChevronDown aria-hidden="true" />}
+                    variant="text"
+                  >
+                    {t("components.preview.composerModel")}
+                  </Button>
+                  <IconButton
+                    aria-label={t("components.preview.composerVoice")}
+                    icon={<Mic aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="quiet"
+                  />
+                  <IconButton
+                    aria-label={t("components.preview.composerSend")}
+                    icon={<ArrowUp aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="primary"
+                  />
+                </>
+              )}
+            />
+          ) : undefined}
+        >
+          <textarea
+            aria-label={t("components.preview.composerEditorLabel")}
+            disabled={state === "disabled"}
+            placeholder={t("components.preview.composerPlaceholder")}
+            readOnly
+          />
+        </Composer>
+      );
+    }
+
     if (component.name === "Modal") {
       return (
         <Button onClick={() => setModalOpen(true)} variant="fill">
@@ -826,6 +936,13 @@ export function ComponentDetailPage({
                     </Button>
                   </div>
                   {renderModalExample(true)}
+                </div>
+              ) : component.name === "Composer" ? (
+                <div className="component-composer-preview-stage">
+                  <span className="component-composer-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
                 </div>
               ) : component.name === "Button" ? (
                 <div
@@ -1091,6 +1208,20 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
+                  {component.name === "Composer" && (
+                    <InspectorToggle
+                      checked={composerShowContext}
+                      label={t("detail.showContextBar")}
+                      onCheckedChange={setComposerShowContext}
+                    />
+                  )}
+                  {component.name === "Composer" && (
+                    <InspectorToggle
+                      checked={composerShowToolbar}
+                      label={t("detail.showToolbar")}
+                      onCheckedChange={setComposerShowToolbar}
+                    />
+                  )}
                   {component.name === "Modal" && (
                     <InspectorToggle
                       checked={modalShowScrollbar}

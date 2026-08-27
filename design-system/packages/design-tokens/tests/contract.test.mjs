@@ -53,6 +53,19 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.itemRadius"], "9999px");
 });
 
+test("Composer geometry preserves independent context, editor, and action regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.composer.minBlockSize"], "120px");
+  assert.equal(tokens["control.composer.contextOffset"], "32px");
+  assert.equal(tokens["control.composer.contextPaddingBlock"], "6px");
+  assert.equal(tokens["control.composer.dividerBlockSize"], "16px");
+  assert.equal(systemDocument.control.composer.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.control.composer.surfaceGap.$value, "{space.3}");
+  assert.equal(systemDocument.control.composer.surfaceRadius.$value, "{radius.xl}");
+  assert.equal(systemDocument.control.composer.editorPadding.$value, "{space.1}");
+});
+
 test("split-view content panels preserve the elevated shell curvature contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
