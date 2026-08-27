@@ -1,4 +1,4 @@
-import { Button, IconButton, Input, Modal } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Select, type SelectOption, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -403,22 +403,22 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                     className="global-permission-rules-dialog__rule-row"
                   >
                     <Select
-                      size="small"
+                      size="sm"
                       value={rule.effect}
                       options={effectOptions}
                       aria-label={t('permissionPolicy.globalRulesEffect')}
                       disabled={isSaving || exiting}
-                      onChange={(value) => updateDraftRule(rule.localId, { effect: value as PermissionEffect })}
+                      onValueChange={(value) => updateDraftRule(rule.localId, { effect: value as PermissionEffect })}
                     />
                     <Select
-                      size="small"
+                      size="sm"
                       value={rule.action}
                       options={GLOBAL_PERMISSION_ACTION_OPTIONS}
                       placeholder={t('permissionPolicy.globalRulesAction')}
                       aria-label={t('permissionPolicy.globalRulesAction')}
                       disabled={isSaving || exiting}
-                      error={!rule.action.trim()}
-                      onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
+                      invalid={!rule.action.trim()}
+                      onValueChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
                     />
                     <Input
                       value={rule.resource}
