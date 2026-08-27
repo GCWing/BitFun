@@ -17,7 +17,8 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Search, ConfirmDialog } from '@/component-library';
+import { ConfirmDialog } from '@/component-library';
+import { SearchField } from '@bitfun/ui';
 import {
   GalleryEmpty,
   GalleryGrid,
@@ -371,7 +372,7 @@ const MiniAppGalleryView: React.FC = () => {
         subtitle={t('subtitle')}
         actions={(
           <>
-            <Search value={search} onChange={setSearch} placeholder={t('searchPlaceholder')} size="small" />
+            <SearchField value={search} onValueChange={setSearch} placeholder={t('searchPlaceholder')} size="sm" />
             <span className="miniapp-gallery__import-anchor">
               <IconButton
                 ref={importTriggerRef}

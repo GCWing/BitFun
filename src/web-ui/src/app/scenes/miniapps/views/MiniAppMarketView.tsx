@@ -18,10 +18,10 @@ import {
 import {
   Badge,
   ConfirmDialog,
-  Search,
   Select,
   type SelectOption,
 } from '@/component-library';
+import { SearchField } from '@bitfun/ui';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -279,11 +279,11 @@ const MiniAppMarketView: React.FC = () => {
             data-bf-component="miniapp-market-view"
             data-bf-part="headerActions"
           >
-            <Search
+            <SearchField
               value={query}
-              onChange={setQuery}
+              onValueChange={setQuery}
               placeholder={t('market.search')}
-              size="small"
+              size="sm"
             />
             <MarketAccountControls
               loginOpen={loginOpen}

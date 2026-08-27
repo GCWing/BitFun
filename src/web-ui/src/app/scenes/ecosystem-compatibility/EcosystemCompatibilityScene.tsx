@@ -21,7 +21,8 @@ import {
   Webhook,
   Wrench,
 } from 'lucide-react';
-import { Search, Textarea } from '@/component-library';
+import { Textarea } from '@/component-library';
+import { SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -759,12 +760,12 @@ const EcosystemCompatibilityScene: React.FC = () => {
         data-bf-part="sidebar"
       >
         <div className="ecosystem-compatibility__sidebar-header">
-          <Search
-            size="small"
+          <SearchField
+            size="sm"
             value={searchQuery}
-            onChange={setSearchQuery}
+            onValueChange={setSearchQuery}
             placeholder={t('search.placeholder')}
-            inputAriaLabel={t('search.label')}
+            aria-label={t('search.label')}
           />
           <button
             type="button"
