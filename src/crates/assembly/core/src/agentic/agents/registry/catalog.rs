@@ -3,8 +3,8 @@ use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
     DeepResearchMode, DeepReviewAgent, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
-    GenerateDocAgent, MultitaskMode, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
-    ReviewJudgeAgent, ReviewWorkerAgent, TeamMode,
+    GenerateDocAgent, MinimalMode, MultitaskMode, PlanMode, ResearchSpecialistAgent,
+    ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent, TeamMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -45,6 +45,7 @@ pub(crate) fn builtin_agent_specs_for_ids<'a>(
 fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
     match id {
         "agentic" => || Arc::new(AgenticMode::new()),
+        "minimal" => || Arc::new(MinimalMode::new()),
         "Cowork" => || Arc::new(CoworkMode::new()),
         "debug" => || Arc::new(DebugMode::new()),
         "Multitask" => || Arc::new(MultitaskMode::new()),

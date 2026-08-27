@@ -234,6 +234,7 @@ async fn review_lookup_cold_loads_the_requested_project_registry() {
 fn top_level_modes_default_to_auto() {
     for agent_type in [
         "agentic",
+        "minimal",
         "Multitask",
         "Cowork",
         "Plan",
@@ -321,6 +322,28 @@ async fn computer_use_is_builtin_subagent_not_mode() {
     );
 }
 
+#[tokio::test]
+async fn minimal_is_a_builtin_mode_with_the_focused_manifest() {
+    let registry = AgentRegistry::new();
+    let modes = registry.get_modes_info().await;
+    let minimal = modes
+        .iter()
+        .find(|agent| agent.id == "minimal")
+        .expect("Minimal should be registered as a built-in mode");
+
+    assert_eq!(
+        minimal.default_tools,
+        vec![
+            "Read",
+            "Edit",
+            "Write",
+            "ExecCommand",
+            "WriteStdin",
+            "ExecControl",
+        ]
+    );
+}
+
 #[test]
 fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
     for spec in builtin_agent_specs()
@@ -328,6 +351,9 @@ fn every_builtin_primary_mode_defaults_to_the_thread_goal_lifecycle() {
         .filter(|spec| spec.category == AgentCategory::Mode)
     {
         let mode = (spec.factory)();
+        if !mode.include_implicit_thread_goal_tools() {
+            continue;
+        }
         let default_tools = mode.default_tools();
         for tool_name in THREAD_GOAL_TOOL_NAMES {
             assert!(
@@ -423,12 +449,10 @@ fn sdk_agent_registry_excludes_desktop_product_workflows() {
 
 #[test]
 fn product_full_agent_registry_preserves_the_complete_builtin_catalog() {
-    let mut selected = AgentRegistry::for_profile(
-        bitfun_product_capabilities::DeliveryProfile::ProductFull,
-    )
-    .agent_ids(RuntimeAgentRegistryQuery::default());
-    let mut compatibility =
-        AgentRegistry::new().agent_ids(RuntimeAgentRegistryQuery::default());
+    let mut selected =
+        AgentRegistry::for_profile(bitfun_product_capabilities::DeliveryProfile::ProductFull)
+            .agent_ids(RuntimeAgentRegistryQuery::default());
+    let mut compatibility = AgentRegistry::new().agent_ids(RuntimeAgentRegistryQuery::default());
     selected.sort();
     compatibility.sort();
 

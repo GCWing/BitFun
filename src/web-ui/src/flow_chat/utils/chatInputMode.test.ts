@@ -199,12 +199,14 @@ describe('resolveSwitchableChatInputModes', () => {
     expect(
       resolveSwitchableChatInputModes([
         { id: 'agentic' },
+        { id: 'minimal' },
         { id: 'Cowork' },
         { id: 'Claw' },
         { id: 'PlannerPlus' },
       ]),
     ).toEqual([
       { id: 'agentic' },
+      { id: 'minimal' },
       { id: 'PlannerPlus' },
     ]);
   });

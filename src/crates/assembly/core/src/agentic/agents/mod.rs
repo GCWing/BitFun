@@ -27,8 +27,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
-    TeamMode,
+    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MinimalMode, MultitaskMode,
+    PlanMode, TeamMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -255,6 +255,16 @@ pub trait Agent: Send + Sync + 'static {
 
     /// Get the list of default tools for this agent
     fn default_tools(&self) -> Vec<String>;
+
+    /// Whether deferred MCP tools may extend this agent's configured tool set.
+    fn include_dynamic_mcp_tools(&self) -> bool {
+        true
+    }
+
+    /// Whether the mode receives the main-session goal lifecycle implicitly.
+    fn include_implicit_thread_goal_tools(&self) -> bool {
+        true
+    }
 
     /// Per-agent exposure overrides for allowed tools.
     ///
