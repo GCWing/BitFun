@@ -3,7 +3,12 @@ import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
 import { CloudAccountClient, CloudAccountRequestError, CloudAccountSession } from './CloudAccountClient';
 import { RemoteI18n } from '../i18n/RemoteI18n';
-import { AccountDeviceCommandTransport, RemoteCommandTransport, RoomRemoteCommandTransport } from './RemoteCommandTransport';
+import {
+  AccountDeviceCommandTransport,
+  INTERACTIVE_DIRECTORY_TIMEOUT_MS,
+  RemoteCommandTransport,
+  RoomRemoteCommandTransport
+} from './RemoteCommandTransport';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteCrypto } from './RemoteCrypto';
 import { RemoteChatCommandClient } from './RemoteChatCommandController';
@@ -11,6 +16,7 @@ import { RemoteFileDownloadClient } from './RemoteFileDownloadController';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteModelClient } from './RemoteModelController';
 import { RemoteResponseMapper } from './RemoteResponseMapper';
+import { stampRemoteSessionsWorkspace } from './RemoteSessionIdentity';
 import { TranscriptIntegrityPolicy } from './TranscriptIntegrityPolicy';
 import { RemoteSessionClient } from './RemoteSessionController';
 import { RemoteToolActionClient } from './RemoteToolActionController';
@@ -198,9 +204,10 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       return [];
     }
     const response = await this.send<SessionListResponse>(
-      RemoteCommandFactory.listSessions(path, limit, 0, '')
+      RemoteCommandFactory.listSessions(path, limit, 0, ''),
+      INTERACTIVE_DIRECTORY_TIMEOUT_MS
     );
-    return RemoteResponseMapper.sessions(response.sessions || []);
+    return stampRemoteSessionsWorkspace(RemoteResponseMapper.sessions(response.sessions || []), path);
   }
 
   async listSessions(limit: number, offset: number, query: string, agentType: string): Promise<SessionListResult> {

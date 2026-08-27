@@ -117,7 +117,6 @@ export abstract class AppRootRuntimeComposition {
     this.host = host;
   }
 
-  abstract applyDiscoveredWorkspaceSessions(all: RemoteSession[]): void;
   abstract closeAppSidebar(): void;
   abstract connect(autoReconnect?: boolean, accountPassword?: string): Promise<void>;
   abstract currentActiveTurnId(): string;
@@ -131,6 +130,7 @@ export abstract class AppRootRuntimeComposition {
   abstract hasRemoteBindingForResume(): boolean;
   abstract isRemoteConversationContext(sessionId: string): boolean;
   abstract mergeSessions(primary: RemoteSession[], extras: RemoteSession[]): RemoteSession[];
+  abstract loadWorkspaceSessionsOnDevice(deviceId: string, path: string): Promise<void>;
   abstract openAddConnectionFromSettings(): void;
   abstract openAppSidebar(): void;
   abstract openRemoteControlSettings(): void;
@@ -384,9 +384,6 @@ export abstract class AppRootRuntimeComposition {
         onWorkspaceSelected: (workspace: WorkspaceInfo): void => {
           this.remoteConnectionController.applyWorkspace(workspace);
           this.remoteSessionController.clearSessions();
-        },
-        onSessionsDiscovered: (sessions: RemoteSession[]): void => {
-          this.applyDiscoveredWorkspaceSessions(sessions);
         },
         onRefreshSessions: async (): Promise<void> => {
           await this.remoteSessionViewModel.refreshSessions();
@@ -863,6 +860,9 @@ export abstract class AppRootRuntimeComposition {
         this.conversationController.createRemoteSession(agentType, true);
       },
       createAssistant: (): void => { this.conversationController.openRemoteCreateSession(); },
+      openCreateInWorkspace: (path: string, deviceId?: string): void => {
+        void this.conversationController.openRemoteCreateSessionInWorkspace(path, deviceId);
+      },
       createInWorkspace: (path: string, agentType: string, deviceId?: string): void => {
         this.conversationController.createRemoteSessionInWorkspace(path, agentType, false, deviceId);
       },
@@ -877,6 +877,9 @@ export abstract class AppRootRuntimeComposition {
       },
       retryDirectoryDevice: (deviceId: string): void => {
         void this.deviceDirectoryViewModel.retryDevice(deviceId);
+      },
+      loadWorkspaceSessions: async (deviceId: string, path: string): Promise<void> => {
+        await this.loadWorkspaceSessionsOnDevice(deviceId, path);
       },
       openSession: (session: RemoteSession): void => this.conversationController.openHomeSession(session),
       openSessionInPlace: (session: RemoteSession): void => this.conversationController.openHomeSession(session, true),
@@ -904,6 +907,9 @@ export abstract class AppRootRuntimeComposition {
       addDesktop: (): void => {
         this.closeAppSidebar();
         this.openConnectSheet(CONNECT_INTENT_SCAN);
+      },
+      refreshDevices: (): void => {
+        void this.settingsController.refreshAccountDevicesIfStale(0);
       },
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {

@@ -43,6 +43,10 @@ export class RemoteSessionViewModel {
   // session raises the busy flag, so without this the flag an open sets would
   // read, to the next tap, as a run in progress.
   private openInFlight: number = 0;
+  // Only the latest selection may start polling after a shared or delayed
+  // transcript request settles. This is separate from the loading gate token:
+  // the gate owns presentation, while this generation owns lifecycle effects.
+  private openGeneration: number = 0;
 
   constructor(
     pageState: RemotePageState,
@@ -219,6 +223,12 @@ export class RemoteSessionViewModel {
       RemoteLogger.info(`session open ignored session=${RemoteSessionViewModel.shortId(item.id)} busy=${isBusy ? '1' : '0'} available=${remoteAvailable ? '1' : '0'}`);
       return;
     }
+    if (this.openInFlight > 0 && this.pageState.activeSession.sessionId === item.id) {
+      RemoteLogger.info(
+        `session open coalesced session=${RemoteSessionViewModel.shortId(item.id)}`
+      );
+      return;
+    }
     // Bracketing the open: every stage between this line and the transcript
     // reaching the screen logs, so the gap that the user feels can be pinned on
     // one of them rather than inferred from the two ends.
@@ -231,6 +241,7 @@ export class RemoteSessionViewModel {
     // transcript is cached it lands before the gate opens and the pane goes
     // straight from one conversation to the next.
     const loadingToken = this.openLoadingGate.arm();
+    const openGeneration = ++this.openGeneration;
     onRouteChat(item.id);
     RemoteLogger.info(`session open routed session=${RemoteSessionViewModel.shortId(item.id)}`);
     this.openInFlight += 1;
@@ -258,7 +269,8 @@ export class RemoteSessionViewModel {
           // measured against this device it pushed the transcript from ~2.4s
           // out to ~5.5s.
           await this.hooks.onLoadActiveMessages();
-          if (this.pageState.activeSession.sessionId === session.sessionId) {
+          if (openGeneration === this.openGeneration &&
+            this.pageState.activeSession.sessionId === session.sessionId) {
             this.hooks.onStartPolling();
           }
         }

@@ -1,6 +1,16 @@
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 
 export type DeviceDirectoryStatus = 'idle' | 'cached' | 'loading' | 'ready' | 'failed';
+export type WorkspaceDirectoryStatus = 'idle' | 'loading' | 'ready' | 'failed';
+
+/** Disclosure and lazy-load state that must outlive a sidebar component. */
+@ObservedV2
+export class WorkspaceDirectoryState {
+  @Trace deviceId: string = '';
+  @Trace path: string = '';
+  @Trace expanded: boolean = false;
+  @Trace status: WorkspaceDirectoryStatus = 'idle';
+}
 
 /**
  * One account desktop in the sidebar. Nested @Trace fields are what
@@ -23,6 +33,8 @@ export class DeviceDirectoryEntry {
 @ObservedV2
 export class DeviceDirectoryState {
   @Trace devices: DeviceDirectoryEntry[] = [];
+  /** Disclosure state is independent of device catalog projection instances. */
+  @Trace workspaceDirectory: WorkspaceDirectoryState[] = [];
   /** Device whose workspaces are projected below the flat device list. */
   @Trace selectedDeviceId: string = '';
 
@@ -32,6 +44,7 @@ export class DeviceDirectoryState {
 
   clear(): void {
     this.devices = [];
+    this.workspaceDirectory = [];
     this.selectedDeviceId = '';
   }
 
@@ -41,6 +54,49 @@ export class DeviceDirectoryState {
 
   find(deviceId: string): DeviceDirectoryEntry | undefined {
     return this.devices.find((item: DeviceDirectoryEntry): boolean => item.deviceId === deviceId);
+  }
+
+  workspaceExpanded(deviceId: string, path: string): boolean {
+    return this.findWorkspace(deviceId, path)?.expanded || false;
+  }
+
+  workspaceStatus(deviceId: string, path: string): WorkspaceDirectoryStatus {
+    return this.findWorkspace(deviceId, path)?.status || 'idle';
+  }
+
+  setWorkspaceExpanded(deviceId: string, path: string, expanded: boolean): void {
+    this.ensureWorkspace(deviceId, path).expanded = expanded;
+  }
+
+  setWorkspaceStatus(deviceId: string, path: string, status: WorkspaceDirectoryStatus): void {
+    this.ensureWorkspace(deviceId, path).status = status;
+  }
+
+  private findWorkspace(deviceId: string, path: string): WorkspaceDirectoryState | undefined {
+    const targetDeviceId = deviceId.trim();
+    const normalizedPath = DeviceDirectoryState.normalizeWorkspacePath(path);
+    return this.workspaceDirectory.find((item: WorkspaceDirectoryState): boolean =>
+      item.deviceId === targetDeviceId && item.path === normalizedPath
+    );
+  }
+
+  private ensureWorkspace(deviceId: string, path: string): WorkspaceDirectoryState {
+    const targetDeviceId = deviceId.trim();
+    const normalizedPath = DeviceDirectoryState.normalizeWorkspacePath(path);
+    const existing = this.findWorkspace(targetDeviceId, normalizedPath);
+    if (existing) {
+      return existing;
+    }
+    const created = new WorkspaceDirectoryState();
+    created.deviceId = targetDeviceId;
+    created.path = normalizedPath;
+    this.workspaceDirectory = this.workspaceDirectory.concat([created]);
+    return created;
+  }
+
+  private static normalizeWorkspacePath(path: string): string {
+    const normalized = path.trim().replace(/\/+$/, '');
+    return normalized.length > 0 ? normalized : path.trim();
   }
 }
 

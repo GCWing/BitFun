@@ -7,10 +7,13 @@ import {
   SessionListResponse
 } from '../model/RemoteModels';
 import { CloudAccountBinding } from './CloudAccountClient';
-import { AccountDeviceCommandTransport } from './RemoteCommandTransport';
+import {
+  AccountDeviceCommandTransport,
+  INTERACTIVE_DIRECTORY_TIMEOUT_MS
+} from './RemoteCommandTransport';
 import { RemoteCommandFactory } from './RemoteCommandFactory';
 import { RemoteResponseMapper } from './RemoteResponseMapper';
-import { stampRemoteSessionsDevice } from './RemoteSessionIdentity';
+import { stampRemoteSessionsDevice, stampRemoteSessionsWorkspace } from './RemoteSessionIdentity';
 
 export interface AccountDeviceDirectorySource {
   listRecentWorkspaces(deviceId: string): Promise<RecentWorkspaceEntry[]>;
@@ -46,9 +49,14 @@ export class AccountDeviceDirectory implements AccountDeviceDirectorySource {
       return [];
     }
     const response = await this.transport(deviceId).send<SessionListResponse>(
-      RemoteCommandFactory.listSessions(path, 50, 0, '')
+      RemoteCommandFactory.listSessions(path, 50, 0, ''),
+      INTERACTIVE_DIRECTORY_TIMEOUT_MS
     );
-    return stampRemoteSessionsDevice(RemoteResponseMapper.sessions(response.sessions || []), deviceId);
+    const sessions = stampRemoteSessionsWorkspace(
+      RemoteResponseMapper.sessions(response.sessions || []),
+      path
+    );
+    return stampRemoteSessionsDevice(sessions, deviceId);
   }
 
   private transport(deviceId: string): AccountDeviceCommandTransport {

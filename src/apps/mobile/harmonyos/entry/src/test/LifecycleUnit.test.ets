@@ -352,7 +352,9 @@ export default function lifecycleUnitTest() {
           knownModelCatalogVersion: 0
         }
       });
-      await delay(20);
+      // Production defers the first idle poll briefly so rapid session
+      // selections coalesce. An explicit poll remains immediate.
+      await controller.pollNow();
       controller.stop();
 
       expect(snapshots.length).assertEqual(1);

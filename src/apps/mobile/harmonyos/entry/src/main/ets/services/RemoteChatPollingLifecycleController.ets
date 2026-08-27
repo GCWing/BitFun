@@ -22,7 +22,9 @@ export class RemoteChatPollingLifecycleController {
   private readonly controller: ChatSessionController;
 
   constructor(sessionManager: RemoteSessionManager, callbacks: ChatSessionControllerCallbacks) {
-    this.controller = new ChatSessionController(sessionManager, callbacks);
+    this.controller = new ChatSessionController(sessionManager, callbacks, {
+      initialPollDelayMs: 400
+    });
   }
 
   startActiveSession(snapshot: RemoteChatPollingStartSnapshot): void {

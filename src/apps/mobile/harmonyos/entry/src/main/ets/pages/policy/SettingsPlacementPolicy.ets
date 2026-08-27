@@ -57,6 +57,11 @@ export class SettingsPlacementPolicy {
   }
 
   static resolve(input: AdaptiveLayoutInput, kind: SettingsSheetKind): SettingsPlacement {
+    // Settings and profile are one continuous page. Keep that workflow on a
+    // full-width bottom sheet at every width, even when it crosses a fold.
+    if (kind === SettingsSheetKind.Settings) {
+      return SettingsPlacementPolicy.bottomPlacement(kind);
+    }
     if (input.isHoverOperate) {
       return SettingsPlacementPolicy.hoverPlacement(input, kind);
     }

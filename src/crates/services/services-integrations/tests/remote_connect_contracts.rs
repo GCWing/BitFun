@@ -479,6 +479,33 @@ fn remote_chat_history_assembly_preserves_in_progress_assistant_history() {
 }
 
 #[test]
+fn remote_chat_history_assembly_does_not_materialize_an_empty_assistant_shell() {
+    let mut turn = remote_history_contract_turn(true);
+    turn.rounds.clear();
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[0].turn_id.as_deref(), Some("turn-1"));
+}
+
+#[test]
+fn remote_chat_history_assembly_keeps_an_error_only_assistant_message() {
+    let mut turn = remote_history_contract_turn(false);
+    turn.rounds.clear();
+    turn.status = "failed".to_string();
+    turn.error = Some("Model request failed".to_string());
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].status.as_deref(), Some("failed"));
+    assert_eq!(messages[1].error.as_deref(), Some("Model request failed"));
+}
+
+#[test]
 fn remote_chat_history_assembly_preserves_failed_turn_error() {
     let mut turn = remote_history_contract_turn(false);
     turn.status = "failed".to_string();

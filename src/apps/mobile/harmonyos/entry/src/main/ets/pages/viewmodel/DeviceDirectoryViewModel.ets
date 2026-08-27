@@ -9,6 +9,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteSessionListStore } from '../../services/RemoteSessionListCache';
 import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
+import { RemoteUiState } from '../../services/RemoteUiState';
 import {
   DeviceDirectoryEntry,
   DeviceDirectoryState,
@@ -29,6 +30,7 @@ export class DeviceDirectoryViewModel {
   private readonly hooks: DeviceDirectoryViewModelHooks;
   private readonly directory?: AccountDeviceDirectorySource;
   private readonly inFlight: Set<string> = new Set<string>();
+  private readonly workspaceInFlight: Set<string> = new Set<string>();
 
   constructor(
     state: DeviceDirectoryState,
@@ -87,7 +89,10 @@ export class DeviceDirectoryViewModel {
       entry.workspaces = workspaces;
     }
     if (sessions.length > 0) {
-      entry.sessions = stampRemoteSessionsDevice(sessions, target);
+      entry.sessions = RemoteUiState.mergeSessions(
+        stampRemoteSessionsDevice(sessions, target),
+        entry.sessions
+      );
     }
     if (entry.status === 'idle' || entry.status === 'cached') {
       entry.status = 'ready';
@@ -169,6 +174,56 @@ export class DeviceDirectoryViewModel {
     await this.loadDevice(deviceId);
   }
 
+  /**
+   * Loads exactly one workspace after its disclosure opens.
+   *
+   * Device selection deliberately stops at the workspace catalog; fanning out
+   * every workspace here was both expensive and the source of unrelated row
+   * updates while the user was only opening one branch.
+   */
+  async loadWorkspaceSessions(deviceId: string, path: string): Promise<void> {
+    const entry = this.state.find(deviceId);
+    const normalizedPath = path.trim();
+    if (!entry || normalizedPath.length === 0 || !entry.online) {
+      return;
+    }
+    const requestKey = `${deviceId}\u0001${normalizedPath}`;
+    if (this.workspaceInFlight.has(requestKey)) {
+      return;
+    }
+    const source = this.directorySource();
+    if (!source) {
+      throw new Error('Account device directory is unavailable.');
+    }
+    this.workspaceInFlight.add(requestKey);
+    try {
+      const sessions = await new DeviceDirectoryCoordinator(source)
+        .loadWorkspaceSessions(deviceId, normalizedPath);
+      entry.sessions = DeviceDirectoryViewModel.replaceWorkspaceSessions(
+        entry.sessions,
+        normalizedPath,
+        sessions
+      );
+      await this.persistDevice(deviceId, entry.workspaces, entry.sessions);
+    } finally {
+      this.workspaceInFlight.delete(requestKey);
+    }
+  }
+
+  /** Replaces one refreshed workspace while preserving every cached sibling. */
+  captureWorkspaceSessions(deviceId: string, path: string, sessions: RemoteSession[]): void {
+    const entry = this.state.find(deviceId.trim());
+    const normalizedPath = path.trim();
+    if (!entry || normalizedPath.length === 0) {
+      return;
+    }
+    entry.sessions = DeviceDirectoryViewModel.replaceWorkspaceSessions(
+      entry.sessions,
+      normalizedPath,
+      stampRemoteSessionsDevice(sessions, deviceId.trim())
+    );
+  }
+
   async ensureLoaded(deviceId: string): Promise<void> {
     const entry = this.state.find(deviceId);
     if (!entry) {
@@ -222,7 +277,6 @@ export class DeviceDirectoryViewModel {
     try {
       const coordinator = new DeviceDirectoryCoordinator(source);
       entry.workspaces = await coordinator.loadWorkspaces(deviceId);
-      entry.sessions = await coordinator.loadSessions(deviceId, entry.workspaces);
       entry.status = 'ready';
       entry.errorText = '';
       await this.persistDevice(deviceId, entry.workspaces, entry.sessions);
@@ -302,5 +356,17 @@ export class DeviceDirectoryViewModel {
       RemoteLogger.warn(`device session cache read failed device=${deviceId}: ${String(err)}`);
       return [];
     }
+  }
+
+  private static replaceWorkspaceSessions(
+    current: RemoteSession[],
+    path: string,
+    replacement: RemoteSession[]
+  ): RemoteSession[] {
+    const target = path.trim();
+    const preserved = current.filter((item: RemoteSession): boolean => {
+      return (item.workspacePath || '').trim() !== target;
+    });
+    return replacement.concat(preserved);
   }
 }

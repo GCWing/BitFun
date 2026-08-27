@@ -2095,6 +2095,25 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
 
         let items: Vec<ChatMessageItem> = ordered.into_iter().map(|entry| entry.item).collect();
 
+        // A turn is persisted as soon as it starts, before the assistant has
+        // produced any content. That durable turn shell is not an assistant
+        // message: while the turn is running, its live state is carried by
+        // `active_turn`. Materializing the empty shell here would expose the
+        // same turn through both history and live state and make clients render
+        // two pending replies.
+        let has_assistant_message = text_parts
+            .iter()
+            .chain(thinking_parts.iter())
+            .any(|content| !content.trim().is_empty())
+            || !tools_flat.is_empty()
+            || turn
+                .error
+                .as_deref()
+                .is_some_and(|error| !error.trim().is_empty());
+        if !has_assistant_message {
+            continue;
+        }
+
         result.push(ChatMessage {
             id: format!("{}_assistant", turn.turn_id),
             role: "assistant".to_string(),

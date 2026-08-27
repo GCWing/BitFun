@@ -2999,6 +2999,18 @@ mod tests {
     }
 
     #[test]
+    fn core_service_agent_runtime_owner_does_not_project_an_empty_assistant_shell() {
+        let mut turn = remote_history_test_turn(TurnStatus::InProgress, None);
+        turn.model_rounds.clear();
+
+        let messages = remote_chat_messages_from_turns(&[turn]);
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[0].turn_id.as_deref(), Some("turn-1"));
+    }
+
+    #[test]
     fn core_service_agent_runtime_owner_preserves_failed_remote_turn_error() {
         let mut turn = remote_history_test_turn(TurnStatus::Error, None);
         turn.error = Some("AI client could not reach the configured proxy".to_string());

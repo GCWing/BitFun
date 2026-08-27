@@ -3,9 +3,10 @@ import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels'
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
 import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { AccountProfilePanel } from './AccountProfilePanel';
 import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
-import { DefaultAccountAvatar } from './DefaultAccountAvatar';
+import { CloudAccountDevice } from '../../services/CloudAccountClient';
 
 @ComponentV2
 export struct SettingsSheet {
@@ -22,8 +23,16 @@ export struct SettingsSheet {
   @Param accountUsername: string = '';
   @Param authenticatedUserId: string = '';
   @Param deviceId: string = '';
+  @Param controlTargetDeviceId: string = '';
+  @Param connectionState: string = 'idle';
   @Event onClose: () => void = () => {};
   @Event onOpenAccount: () => void = () => {};
+  @Event onReconnect: () => void = () => {};
+  @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
+  @Event cloudListDevices: () => Promise<CloudAccountDevice[]> =
+    async (): Promise<CloudAccountDevice[]> => [];
+  @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
+    async (_device: CloudAccountDevice): Promise<void> => {};
   @Event onSetLanguage: (language: string) => Promise<void> = async (_language: string) => {};
   @Event onSelectGeneralChatModel: (modelId: string) => Promise<boolean> = async (_modelId: string) => false;
   @Event onSaveGeneralChatConfig: (
@@ -74,80 +83,93 @@ export struct SettingsSheet {
 
   @Builder
   SettingsHome() {
-    Stack({ alignContent: Alignment.TopEnd }) {
-      Scroll() {
-        Column({ space: 0 }) {
-          Text(RemoteI18n.t('settings.title'))
-            .fontSize(28)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(INK)
-            .width('100%')
-            .margin({ bottom: 30 })
-
-          this.AccountEntry()
-
-          this.SectionTitle(RemoteI18n.t('settings.general.section'))
-          this.GeneralCard()
-
-          this.SectionTitle(RemoteI18n.t('settings.about.section'))
-          this.AboutCard()
+    Column() {
+      Row() {
+        Text(RemoteI18n.t('settings.title'))
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(INK)
+        Blank()
+        Button() {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(18)
+            .fontColor([INK])
         }
-        .width('100%')
-        .padding({ left: 16, right: 16, top: 64, bottom: 34 })
+        .width(40)
+        .height(40)
+        .padding(0)
+        .type(ButtonType.Circle)
+        .backgroundColor(CARD)
+        .accessibilityText(RemoteI18n.t('common.close'))
+        .onClick(() => {
+          this.onClose();
+        })
       }
       .width('100%')
-      .height('100%')
-      .scrollBar(BarState.Off)
+      .height(84)
+      .padding({ left: 28, right: 18, top: 10 })
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(PAGE_BG)
 
-      Button() {
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(18)
-          .fontColor([INK])
+      Divider()
+        .strokeWidth(1)
+        .color(LINE)
+
+      Scroll() {
+        Column({ space: 0 }) {
+          AccountProfilePanel({
+            accountUsername: this.accountUsername,
+            accountUserId: this.authenticatedUserId,
+            deviceId: this.deviceId,
+            controlTargetDeviceId: this.controlTargetDeviceId,
+            connectionState: this.connectionState,
+            cloudLogout: this.cloudLogout,
+            cloudListDevices: this.cloudListDevices,
+            cloudSelectDevice: this.cloudSelectDevice,
+            onReconnect: this.onReconnect,
+            onLoggedOut: this.onOpenAccount,
+            embeddedInSettings: true,
+            preferences: () => {
+              this.GeneralSettingsSection()
+            },
+            about: () => {
+              this.AboutSettingsSection()
+            }
+          })
+        }
+        .width('100%')
+        .padding({ left: 24, right: 24, top: 22, bottom: 34 })
       }
-      .width(40)
-      .height(40)
-      .padding(0)
-      .type(ButtonType.Circle)
-      .backgroundColor(CARD)
-      .margin({ top: 22, right: 18 })
-      .accessibilityText(RemoteI18n.t('common.close'))
-      .onClick(() => {
-        this.onClose();
-      })
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
     }
     .width('100%')
     .height('100%')
   }
 
   @Builder
-  AccountEntry() {
-    Row({ space: 12 }) {
-      DefaultAccountAvatar({ avatarSize: 34 })
-      Column({ space: 2 }) {
-        Text(RemoteI18n.t('remote.settings.profile'))
-          .fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK)
-        Text(this.accountUsername || (this.authenticatedUserId.length > 0 ?
-          RemoteI18n.t('remote.settings.accountSignedIn') :
-          RemoteI18n.t('remote.settings.accountNotSignedIn')))
-          .fontSize(13).fontColor(MUTED)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(14).fontColor([MUTED]).opacity(0.72)
-    }
-    .width('100%').height(64).padding({ left: 18, right: 18 })
-    .backgroundColor(CARD).borderRadius(8).margin({ bottom: 24 })
-    .onClick(() => this.onOpenAccount())
+  private GeneralSettingsSection() {
+    this.SectionTitle(RemoteI18n.t('settings.general.section'))
+    this.GeneralCard()
+    this.SectionTitle(RemoteI18n.t('settings.model.section'))
+    this.ModelCard()
+  }
+
+  @Builder
+  private AboutSettingsSection() {
+    this.SectionTitle(RemoteI18n.t('settings.about.section'))
+    this.AboutCard()
   }
 
   @Builder
   SectionTitle(title: string) {
     Text(title)
       .fontSize(18)
-      .fontWeight(FontWeight.Bold)
+      .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
-      .margin({ left: 12, bottom: 8 })
+      .margin({ left: 8, bottom: 10 })
   }
 
   @Builder
@@ -162,12 +184,18 @@ export struct SettingsSheet {
         },
         $r('sys.symbol.textformat')
       )
-      Text('')
-        .width('84%')
-        .height(1)
-        .backgroundColor(LINE)
+    }
+    .width('100%')
+    .backgroundColor(CARD)
+    .borderRadius(20)
+    .margin({ bottom: 28 })
+  }
+
+  @Builder
+  ModelCard() {
+    Column() {
       this.SettingsRow(
-        RemoteI18n.t('settings.modelService.title'),
+        RemoteI18n.t('settings.model.default'),
         this.modelServiceStatus(),
         true,
         () => {
@@ -177,16 +205,15 @@ export struct SettingsSheet {
       )
     }
     .width('100%')
-    .padding({ top: 5, bottom: 5 })
     .backgroundColor(CARD)
-    .borderRadius(8)
-    .margin({ bottom: 24 })
+    .borderRadius(20)
+    .margin({ bottom: 28 })
   }
 
   @Builder
   AboutCard() {
     Column() {
-      this.StaticRow(RemoteI18n.t('settings.about.product'), 'BitFun HarmonyOS')
+      this.StaticRow(RemoteI18n.t('settings.about.bitfun'), 'HarmonyOS')
       Text('')
         .width('84%')
         .height(1)
@@ -194,9 +221,8 @@ export struct SettingsSheet {
       this.StaticRow(RemoteI18n.t('settings.about.version'), '1.0.0')
     }
     .width('100%')
-    .padding({ top: 5, bottom: 5 })
     .backgroundColor(CARD)
-    .borderRadius(8)
+    .borderRadius(20)
   }
 
   @Builder
@@ -214,7 +240,7 @@ export struct SettingsSheet {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .width('100%')
-    .height(52)
+    .height(56)
     .padding({ left: 18, right: 18 })
     .alignItems(VerticalAlign.Center)
   }
@@ -245,7 +271,7 @@ export struct SettingsSheet {
       }
     }
     .width('100%')
-    .height(52)
+    .height(56)
     .padding({ left: 18, right: 18 })
     .alignItems(VerticalAlign.Center)
     .onClick(action)

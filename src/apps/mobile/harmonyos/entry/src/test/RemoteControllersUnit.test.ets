@@ -1624,6 +1624,69 @@ export default function remoteControllersUnitTest() {
   });
 
   describe('RemoteChatCommandController', () => {
+    it('coalesces rapid transcript misses to the latest selected session', 0, async () => {
+      const client = new FakeRemoteChatCommandClient();
+      const projection = new RemoteChatMessagesProjectionRecord();
+      let activeSessionId = 'session-1';
+      client.deferMessages = true;
+      const controller = new RemoteChatCommandController(client, {
+        onMessagesLoaded: (messages: ChatMessage[], hasMoreMessages: boolean) => {
+          projection.messages = messages;
+          projection.hasMoreMessages = hasMoreMessages;
+        },
+        onMessageCountKnown: (pollVersion: number, knownMessageCount: number) => {
+          projection.pollVersion = pollVersion;
+          projection.knownMessageCount = knownMessageCount;
+        },
+        onTimelineReady: () => {},
+        onSendSucceeded: (_turnId: string, _pendingActiveId: string) => {},
+        onSendFailed: (
+          _rawText: string,
+          _images: SelectedImageAttachment[],
+          _localMessageId: string,
+          _pendingActiveId: string
+        ) => {},
+        onActiveSession: (_session: SessionSummary) => {},
+        onSessionTitleChanged: (_sessionId: string, _title: string) => {},
+        onStatusText: (_statusText: string) => {},
+        onToast: (_message: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onPollRequested: () => {}
+      }, inertRemoteChatCache());
+      const canApply = (sessionId: string): boolean => sessionId === activeSessionId;
+
+      const first = controller.loadMessages('session-1', canApply);
+      await Promise.resolve();
+      activeSessionId = 'session-2';
+      const middle = controller.loadMessages('session-2', canApply);
+      await Promise.resolve();
+      activeSessionId = 'session-3';
+      const latest = controller.loadMessages('session-3', canApply);
+      await Promise.resolve();
+
+      expect(client.messageRequests.length).assertEqual(1);
+      expect(client.messageRequests[0]).assertEqual('session-1');
+      client.resolveNextMessages({
+        messages: [chatMessage('message-1', 'assistant', 'Stale')],
+        hasMore: false
+      });
+      // The stale result is intentionally written to the cache before the
+      // latest waiter gets the transport slot.
+      await delay(0);
+
+      expect(client.messageRequests.length).assertEqual(2);
+      expect(client.messageRequests[1]).assertEqual('session-3');
+      client.resolveNextMessages({
+        messages: [chatMessage('message-3', 'assistant', 'Latest')],
+        hasMore: false
+      });
+      await Promise.all([first, middle, latest]);
+
+      expect(client.messageRequests.length).assertEqual(2);
+      expect(projection.messages.length).assertEqual(1);
+      expect(projection.messages[0].id).assertEqual('message-3');
+    });
+
     it('loads active messages and ignores stale route projections', 0, async () => {
       const client = new FakeRemoteChatCommandClient();
       const projection = new RemoteChatMessagesProjectionRecord();

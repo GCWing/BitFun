@@ -56,6 +56,23 @@ export class RemoteCreateFlowController {
   }
 
   openRemoteCreateSession(): void {
+    this.openRemoteCreateSessionWithWorkspace();
+  }
+
+  async openRemoteCreateSessionInWorkspace(path: string, deviceId?: string): Promise<void> {
+    const runtime = requireRemoteRuntime(this.remoteRuntime);
+    if (!runtime.connection.ensureAvailable()) {
+      return;
+    }
+    try {
+      await this.ensureRemoteControlTarget(deviceId);
+      this.openRemoteCreateSessionWithWorkspace(path);
+    } catch (err) {
+      runtime.hooks.showToast(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private openRemoteCreateSessionWithWorkspace(workspacePath: string = ''): void {
     const runtime = requireRemoteRuntime(this.remoteRuntime);
     if (!runtime.connection.ensureAvailable()) {
       return;
@@ -75,10 +92,28 @@ export class RemoteCreateFlowController {
         online: true
       }]);
     }
-    this.remoteCreate.setWorkspaces(this.remote.recentWorkspaces);
+    const workspaces = this.remote.recentWorkspaces;
+    this.remoteCreate.setWorkspaces(workspaces);
+    if (workspacePath.length > 0) {
+      const selected = workspaces.find((workspace: RecentWorkspaceEntry): boolean =>
+        workspace.path === workspacePath
+      );
+      this.remoteCreate.selectWorkspace(selected || {
+        path: workspacePath,
+        name: this.workspaceDisplayName(workspacePath),
+        lastOpened: '',
+        workspaceKind: 'normal'
+      });
+    }
     runtime.appShell.pushRoute(AppRoute.RemoteCreate);
     this.loadRemoteCreateChoices();
     this.loadRemoteCreateModelCatalog();
+  }
+
+  private workspaceDisplayName(path: string): string {
+    const normalized = path.replace(/\/+$/, '');
+    const separator = normalized.lastIndexOf('/');
+    return separator >= 0 ? normalized.slice(separator + 1) : normalized;
   }
 
   closeRemoteCreateSession(): void {

@@ -31,3 +31,32 @@ export function stampRemoteSessionsDevice(sessions: RemoteSession[], deviceId: s
   }
   return sessions.map((item: RemoteSession): RemoteSession => stampRemoteSessionDevice(item, deviceId));
 }
+
+/** Fills the scope omitted by older list_sessions payloads without mutating it. */
+export function stampRemoteSessionWorkspace(session: RemoteSession, workspacePath: string): RemoteSession {
+  if ((session.workspacePath || '').length > 0 || workspacePath.length === 0) {
+    return session;
+  }
+  return {
+    id: session.id,
+    title: session.title,
+    agentType: session.agentType,
+    status: session.status,
+    updatedAt: session.updatedAt,
+    createdAt: session.createdAt,
+    messageCount: session.messageCount,
+    workspacePath,
+    workspaceName: session.workspaceName,
+    pinned: session.pinned,
+    titleGenerated: session.titleGenerated,
+    deviceId: session.deviceId
+  };
+}
+
+export function stampRemoteSessionsWorkspace(
+  sessions: RemoteSession[],
+  workspacePath: string
+): RemoteSession[] {
+  return sessions.map((item: RemoteSession): RemoteSession =>
+    stampRemoteSessionWorkspace(item, workspacePath));
+}

@@ -4,7 +4,9 @@ import {
   MarkdownParser,
   ParsedMarkdownBlock,
   ParsedMarkdownInline,
-  ParsedMarkdownListItem
+  ParsedMarkdownListItem,
+  ParsedMarkdownTableCell,
+  ParsedMarkdownTableRow
 } from './MarkdownParser';
 
 export class MessageFileReference {
@@ -48,6 +50,11 @@ export class MessageFileReferenceProjector {
       MessageFileReferenceProjector.collectInlines(block.inlines, references, seenRemotePaths, limit);
       block.items.forEach((item: ParsedMarkdownListItem) => {
         MessageFileReferenceProjector.collectInlines(item.inlines, references, seenRemotePaths, limit);
+      });
+      block.tableRows.forEach((row: ParsedMarkdownTableRow) => {
+        row.cells.forEach((cell: ParsedMarkdownTableCell) => {
+          MessageFileReferenceProjector.collectInlines(cell.inlines, references, seenRemotePaths, limit);
+        });
       });
     });
     return references;

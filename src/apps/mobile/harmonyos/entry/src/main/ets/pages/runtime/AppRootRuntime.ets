@@ -3,7 +3,10 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemoteLogger } from '../../services/RemoteLogger';
-import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
+import {
+  stampRemoteSessionsDevice,
+  stampRemoteSessionsWorkspace
+} from '../../services/RemoteSessionIdentity';
 import { RemoteUiState } from '../../services/RemoteUiState';
 import { AppRootHostPort } from '../host/AppRootHostAdapter';
 import { CONNECT_INTENT_SCAN } from '../state/AppShellState';
@@ -264,6 +267,22 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }
   }
 
+  async loadWorkspaceSessionsOnDevice(deviceId: string, path: string): Promise<void> {
+    const targetDeviceId = deviceId.trim();
+    const targetPath = path.trim();
+    if (targetDeviceId.length === 0 || targetPath.length === 0) {
+      return;
+    }
+    if (this.isConnectedDirectoryTarget(targetDeviceId)) {
+      const sessions = await this.sessionManager.listSessionsForWorkspace(targetPath, 50);
+      this.deviceDirectoryViewModel.captureWorkspaceSessions(targetDeviceId, targetPath, sessions);
+      this.remoteWorkspaceSessions = this.replaceWorkspaceSessions(targetPath, sessions);
+      this.publishRemoteWorkspaceSessions();
+      return;
+    }
+    await this.deviceDirectoryViewModel.loadWorkspaceSessions(targetDeviceId, targetPath);
+  }
+
   private isConnectedDirectoryTarget(deviceId: string): boolean {
     return deviceId === this.remotePageState.controlTargetDeviceId &&
       RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState));
@@ -382,17 +401,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }, 220);
   }
 
-  applyDiscoveredWorkspaceSessions(all: RemoteSession[]): void {
-    this.remoteWorkspaceSessions = all;
-    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
-    const current = stampRemoteSessionsDevice(this.remotePageState.sessions, deviceId);
-    const extras = stampRemoteSessionsDevice(
-      all.filter((item: RemoteSession) => item.workspacePath !== this.remotePageState.workspacePath),
-      deviceId
-    );
-    this.publishRemoteSessions(this.mergeSessions(current, extras), this.remotePageState.hasMoreSessions);
-  }
-
   /**
    * Reconciles the workspace row that owns a newly created remote session.
    *
@@ -472,9 +480,17 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
    */
   publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void {
     const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
-    const stamped = stampRemoteSessionsDevice(sessions, deviceId);
+    const scoped = stampRemoteSessionsWorkspace(sessions, this.remotePageState.workspacePath);
+    const stamped = stampRemoteSessionsDevice(scoped, deviceId);
     this.remotePageState.setSessions(stamped, hasMore);
     this.remoteSessionListCache.save(stamped, hasMore);
+    const currentPath = this.remotePageState.workspacePath;
+    if (currentPath.length > 0) {
+      const currentSessions = stamped.filter((item: RemoteSession): boolean => {
+        return (item.workspacePath || '') === currentPath;
+      });
+      this.deviceDirectoryViewModel.captureWorkspaceSessions(deviceId, currentPath, currentSessions);
+    }
     this.deviceDirectoryViewModel.captureLive(
       deviceId,
       this.remotePageState.recentWorkspaces,
