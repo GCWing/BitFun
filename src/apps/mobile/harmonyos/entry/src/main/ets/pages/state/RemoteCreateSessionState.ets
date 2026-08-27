@@ -96,9 +96,11 @@ export class RemoteCreateSessionState {
     this.isLoadingWorkspaces = false;
   }
 
-  selectDevice(device: CloudAccountDevice): void {
+  selectDevice(device: CloudAccountDevice, supportsHarnessProfiles: boolean = false): void {
     this.selectedDeviceId = device.deviceId;
     this.selectedDeviceName = device.deviceName;
+    this.supportsHarnessProfiles = supportsHarnessProfiles;
+    this.selectedHarnessProfile = 'balanced';
     this.clearWorkspace();
     this.openMenu = 'none';
     this.errorText = '';

@@ -873,6 +873,20 @@ export default function remoteControllersUnitTest() {
       expect(state.submissionContext().agentType).assertEqual('Ultra');
     });
 
+    it('refreshes Harness support and defaults to Standard when the creation target changes', 0, () => {
+      const state = new RemoteCreateSessionState();
+      state.prepare('desktop-a', 'Desktop A', '', true);
+      state.setSelectedHarnessProfile('ultimate');
+
+      state.selectDevice({ deviceId: 'desktop-b', deviceName: 'Desktop B', online: true }, false);
+      expect(state.supportsHarnessProfiles).assertFalse();
+      expect(state.selectedHarnessProfile).assertEqual('balanced');
+
+      state.selectDevice({ deviceId: 'desktop-c', deviceName: 'Desktop C', online: true }, true);
+      expect(state.supportsHarnessProfiles).assertTrue();
+      expect(state.selectedHarnessProfile).assertEqual('balanced');
+    });
+
     it('keeps the chat option on the assistant agent so the desktop binds its assistant workspace', 0, () => {
       const state = new RemoteCreateSessionState();
       state.prepare('desktop-b', 'Desktop B');

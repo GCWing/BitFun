@@ -192,7 +192,10 @@ export class RemoteCreateFlowController {
     this.remoteCreate.isLoadingWorkspaces = true;
     try {
       await runtime.settings.selectCloudAccountDevice(device, false);
-      this.remoteCreate.selectDevice(device);
+      this.remoteCreate.selectDevice(
+        device,
+        this.remote.supportsHostCapability(REMOTE_HARNESS_PROFILES_CAPABILITY)
+      );
       this.remoteCreate.setDraft(draft);
       await this.loadRemoteCreateWorkspaces();
     } catch (err) {
