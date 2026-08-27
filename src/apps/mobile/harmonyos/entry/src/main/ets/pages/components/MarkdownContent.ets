@@ -144,15 +144,21 @@ export struct MarkdownContent {
   MarkdownTable(rows: ParsedMarkdownTableRow[]) {
     Scroll() {
       Column() {
-        ForEach(rows, (row: ParsedMarkdownTableRow) => {
+        ForEach(rows, (row: ParsedMarkdownTableRow, rowIndex: number) => {
           Row() {
             ForEach(row.cells, (cell: ParsedMarkdownTableCell) => {
               this.MarkdownTableCell(cell, row.header)
             }, (cell: ParsedMarkdownTableCell) => cell.id)
           }
+          .constraintSize({ minWidth: '100%' })
+          .backgroundColor(this.tableRowBackground(row.header, rowIndex))
+          .border({
+            width: { bottom: rowIndex < rows.length - 1 ? 1 : 0 },
+            color: LINE
+          })
         }, (row: ParsedMarkdownTableRow) => row.id)
       }
-        .constraintSize({ minWidth: '100%' })
+      .constraintSize({ minWidth: '100%' })
     }
     .scrollable(ScrollDirection.Horizontal)
     .scrollBar(BarState.Off)
@@ -160,6 +166,7 @@ export struct MarkdownContent {
     .backgroundColor(CARD)
     .borderRadius(10)
     .border({ width: 1, color: LINE })
+    .clip(true)
   }
 
   @Builder
@@ -167,21 +174,20 @@ export struct MarkdownContent {
     Column() {
       Text() {
         ForEach(cell.inlines, (inline: ParsedMarkdownInline) => {
-          this.InlineSpan(inline, INK, header)
+          this.InlineSpan(inline, INK, false)
         }, (inline: ParsedMarkdownInline) => inline.id)
       }
       .width('100%')
-      .fontSize(12)
-      .lineHeight(18)
+      .fontSize(13)
+      .lineHeight(19)
+      .fontWeight(header ? FontWeight.Medium : FontWeight.Regular)
       .fontColor(INK)
       .textAlign(this.tableTextAlign(cell.alignment))
     }
-    .width(132)
-    .constraintSize({ minHeight: 38 })
-    .padding({ left: 10, right: 10, top: 9, bottom: 9 })
+    .layoutWeight(1)
+    .constraintSize({ minWidth: 132, minHeight: 42 })
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
     .justifyContent(FlexAlign.Center)
-    .backgroundColor(header ? SOFT : CARD)
-    .border({ width: { right: 1, bottom: 1 }, color: LINE })
   }
 
   @Builder
@@ -253,5 +259,12 @@ export struct MarkdownContent {
       return TextAlign.End;
     }
     return TextAlign.Start;
+  }
+
+  private tableRowBackground(header: boolean, rowIndex: number): ResourceColor {
+    if (header || rowIndex % 2 === 0) {
+      return SOFT;
+    }
+    return CARD;
   }
 }
