@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { IconButton, Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -349,14 +349,14 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
         
         <div data-bf-component="git-settings-view" data-bf-part="headerRight" className="bitfun-git-settings-view__header-right">
-          <IconButton 
+          <IconButton
+            aria-label={t('settingsView.refresh')}
             onClick={loadConfig}
             disabled={loading}
             title={t('settingsView.refresh')}
-            size="small"
-          >
-            <RefreshCw size={16} />
-          </IconButton>
+            size="sm"
+            icon={<RefreshCw size={16} />}
+          />
           
           <Button 
             onClick={saveConfig}
@@ -374,14 +374,13 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <div data-bf-component="git-settings-view" data-bf-part="status" data-bf-state="error" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--error">
           <X size={14} />
           <span>{error}</span>
-          <IconButton 
-            onClick={() => setError(null)} 
+          <IconButton
+            aria-label={t('settingsView.dismissError')}
+            onClick={() => setError(null)}
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
-          >
-            <X size={12} />
-          </IconButton>
+            size="sm"
+            icon={<X size={12} />}
+          />
         </div>
       )}
       
@@ -389,14 +388,13 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <div data-bf-component="git-settings-view" data-bf-part="status" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--success">
           <Check size={14} />
           <span>{success}</span>
-          <IconButton 
-            onClick={() => setSuccess(null)} 
+          <IconButton
+            aria-label={t('settingsView.dismissSuccess')}
+            onClick={() => setSuccess(null)}
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
-          >
-            <X size={12} />
-          </IconButton>
+            size="sm"
+            icon={<X size={12} />}
+          />
         </div>
       )}
 

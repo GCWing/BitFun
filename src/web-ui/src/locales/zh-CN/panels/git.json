@@ -311,6 +311,8 @@
     "loadFailedTitle": "Failed to load settings",
     "retry": "重试",
     "refresh": "刷新设置",
+    "dismissError": "关闭错误提示",
+    "dismissSuccess": "关闭成功提示",
     "saving": "保存中...",
     "save": "保存设置",
     "success": {
