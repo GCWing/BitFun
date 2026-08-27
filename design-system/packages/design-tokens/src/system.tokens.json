@@ -274,7 +274,7 @@
       "backdropBlur": {
         "$description": "Background blur applied by the reference modal scrim.",
         "$type": "filter",
-        "$value": "blur(40px)"
+        "$value": "blur(20px)"
       },
       "surfaceRadius": {
         "$description": "Reference corner radius for the modal surface.",
@@ -327,7 +327,7 @@
       "footerBlur": {
         "$description": "Backdrop blur applied to content passing beneath the floating modal action bar.",
         "$type": "filter",
-        "$value": "blur(20px)"
+        "$value": "blur(10px)"
       },
       "footerActionMinWidth": { "$value": "100px" },
       "maxInlineSizeSmall": { "$value": "420px" },

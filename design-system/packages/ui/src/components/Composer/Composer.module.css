@@ -56,7 +56,7 @@
     border: var(--bf-border-width-default) solid var(--bf-color-field-border);
     border-radius: var(--bf-control-composer-surface-radius);
     background: var(--bf-color-surface-raised);
-    box-shadow: var(--bf-shadow-raised);
+    box-shadow: var(--bf-shadow-composer);
     transition:
       border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
       box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
@@ -71,7 +71,7 @@
   .surface:focus-within {
     border-color: var(--bf-color-field-border-focus);
     box-shadow:
-      var(--bf-shadow-raised),
+      var(--bf-shadow-composer),
       0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
   }
 
@@ -81,7 +81,7 @@
 
   .root[data-invalid="true"] > .surface:focus-within {
     box-shadow:
-      var(--bf-shadow-raised),
+      var(--bf-shadow-composer),
       0 0 0 var(--bf-focus-width) var(--bf-color-status-danger-surface);
   }
 

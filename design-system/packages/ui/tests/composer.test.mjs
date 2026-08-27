@@ -76,6 +76,6 @@ test("Composer styling uses only shared public token layers", async () => {
   assert.match(styles, /--bf-control-composer-min-block-size/);
   assert.match(styles, /--bf-color-surface-raised/);
   assert.match(styles, /--bf-color-field-border-focus/);
-  assert.match(styles, /--bf-shadow-raised/);
+  assert.match(styles, /--bf-shadow-composer/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

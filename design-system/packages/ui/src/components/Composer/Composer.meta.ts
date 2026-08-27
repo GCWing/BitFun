@@ -39,6 +39,6 @@ export const composerMeta = {
     "font.family.control",
     "font.size.small",
     "font.weight.regular",
-    "shadow.raised",
+    "shadow.composer",
   ],
 } as const satisfies ComponentMeta;

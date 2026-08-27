@@ -142,6 +142,7 @@ const requiredSemanticTokens = [
   "color.status.danger.surface",
   "effect.blur.base",
   "opacity.disabled",
+  "shadow.composer",
   "shadow.raised",
   "shadow.overlay",
 ];

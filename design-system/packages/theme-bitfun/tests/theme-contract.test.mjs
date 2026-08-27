@@ -218,7 +218,9 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
   assert.equal(themes.light["color.status.warning.surface"], "rgba(154, 101, 31, 0.08)");
   assert.equal(themes.light["shadow.base"], "0 4px 8px rgba(16, 26, 39, 0.07)");
+  assert.equal(themes.light["shadow.composer"], "0 2px 6px rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["shadow.menu"], "0 4px 10px rgba(0, 0, 0, 0.12)");
+  assert.equal(themes.light["shadow.overlay"], "0 4px 20px rgba(0, 0, 0, 0.12)");
   assert.equal(themes.light["opacity.disabled"], 0.55);
   assert.equal(themes.dark["color.surface.canvas"], "#0e0e10");
   assert.equal(themes.dark["color.content.primary"], "#e8e8e8");
@@ -228,7 +230,9 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.dark["color.scrollbar.thumb"], "rgba(255, 255, 255, 0.12)");
   assert.equal(themes.dark["color.scrollbar.thumbHover"], "rgba(255, 255, 255, 0.15)");
   assert.equal(themes.dark["shadow.base"], "0 4px 8px rgba(0, 0, 0, 0.7)");
+  assert.equal(themes.dark["shadow.composer"], "0 2px 6px rgba(0, 0, 0, 0.32)");
   assert.equal(themes.dark["shadow.menu"], "0 4px 10px rgba(0, 0, 0, 0.48)");
+  assert.equal(themes.dark["shadow.overlay"], "0 4px 20px rgba(0, 0, 0, 0.48)");
   assert.equal(themes.dark["opacity.disabled"], 0.6);
 });
 

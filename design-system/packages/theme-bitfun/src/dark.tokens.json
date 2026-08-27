@@ -113,8 +113,9 @@
     "lg": { "$value": "0 8px 16px rgba(0, 0, 0, 0.6)" },
     "xl": { "$value": "0 12px 24px rgba(0, 0, 0, 0.5)" },
     "raised": { "$value": "{shadow.sm}" },
+    "composer": { "$value": "0 2px 6px rgba(0, 0, 0, 0.32)" },
     "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.48)" },
-    "overlay": { "$value": "{shadow.lg}" }
+    "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.48)" }
   },
   "effect": {
     "blur": {
