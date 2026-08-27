@@ -2,7 +2,7 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -11,7 +11,7 @@ import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/Min
 import { useAppearance } from '@/infrastructure/appearance';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useMiniAppStore } from './miniAppStore';
@@ -168,19 +168,16 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
             disabled={!app || loading}
             onOpen={handleOpenCustomize}
           />
-          <IconButton
-            variant="ghost"
-            size="small"
-            onClick={handleReload}
-            disabled={loading}
-            tooltip={t('scene.reload')}
-          >
-            {loading ? (
-              <Loader2 size={14} className="miniapp-scene__spinning" />
-            ) : (
-              <RefreshCw size={14} />
-            )}
-          </IconButton>
+          <Tooltip content={t('scene.reload')} disabled={loading}>
+            <IconButton
+              size="sm"
+              onClick={handleReload}
+              disabled={loading}
+              loading={loading}
+              aria-label={t('scene.reload')}
+              icon={<RefreshCw />}
+            />
+          </Tooltip>
         </div>
       </div>
       <div className={[
@@ -221,15 +218,14 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                     <span>{t('customize.previewTitle')}</span>
                     <small>{t('customize.previewHint')}</small>
                   </div>
-                  <IconButton
-                    variant="ghost"
-                    size="small"
-                    onClick={() => setCustomizePreview(null)}
-                    tooltip={t('customize.hidePreview')}
-                    aria-label={t('customize.hidePreview')}
-                  >
-                    <X size={14} />
-                  </IconButton>
+                  <Tooltip content={t('customize.hidePreview')}>
+                    <IconButton
+                      size="sm"
+                      onClick={() => setCustomizePreview(null)}
+                      aria-label={t('customize.hidePreview')}
+                      icon={<X />}
+                    />
+                  </Tooltip>
                 </div>
                 <div className="miniapp-scene__preview-stage-body">
                   <MiniAppDraftPreview

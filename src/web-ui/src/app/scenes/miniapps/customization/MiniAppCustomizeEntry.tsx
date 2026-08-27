@@ -1,6 +1,7 @@
 import React from 'react';
+import { IconButton } from '@bitfun/ui';
 import { WandSparkles } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 
 interface MiniAppCustomizeEntryProps {
@@ -16,17 +17,16 @@ export const MiniAppCustomizeEntry: React.FC<MiniAppCustomizeEntryProps> = ({
   const label = t('customize.trigger');
 
   return (
-    <IconButton
-      variant="ghost"
-      size="small"
-      shape="square"
-      onClick={onOpen}
-      disabled={disabled}
-      tooltip={label}
-      aria-label={label}
-    >
-      <WandSparkles size={14} />
-    </IconButton>
+    <Tooltip content={label} disabled={disabled}>
+      <IconButton
+        size="sm"
+        shape="square"
+        onClick={onOpen}
+        disabled={disabled}
+        aria-label={label}
+        icon={<WandSparkles />}
+      />
+    </Tooltip>
   );
 };
 
