@@ -16,7 +16,6 @@ BitFun Playbook currently contains **22 features**, **16 settings pages**, and *
 - 生成的产品控制目录：`src/crates/contracts/product-domains/src/generated/product-control-catalog.json`
 - 生成的交互项逐项审计：`docs/interactive-capabilities/technical/product-control-open-audit.json`
 - 生成的底层审计表：`docs/interactive-capabilities/technical/tauri-command-map.json`
-- 生成的可见交互审计表：`docs/interactive-capabilities/technical/ui-interaction-inventory.json`
 
 - Human-authored explanations, keywords, and evidence overlay: `src/shared/interactive-capabilities/catalog.json`
 - Compiled business Query/Command, schema, risk, and handler owners: `src/crates/contracts/product-domains/src/product_control_owner_registry.rs`
@@ -26,10 +25,11 @@ BitFun Playbook currently contains **22 features**, **16 settings pages**, and *
 - Generated frontend catalog: `src/web-ui/src/app/global-search/generated/interactive-capabilities.json`
 - Generated runtime catalog: `src/crates/contracts/product-domains/src/generated/product-control-catalog.json`
 - Generated per-item interaction audit: `docs/interactive-capabilities/technical/product-control-open-audit.json`
+- Generated low-level audit map: `docs/interactive-capabilities/technical/tauri-command-map.json`
 
-说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **653** 个 Tauri 命令，以及 **366** 个产品交互源码文件中的 **4395** 个交互候选，只用于实现覆盖审计。
+说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **653** 个 Tauri 命令只用于实现覆盖审计。产品 UI 交互源码会在生成和检查时扫描并校验，但不会保存成随普通 UI 改动频繁变化的版本化快照。
 
-Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **653** Tauri commands and **4395** interaction candidates across **366** product UI source files remain implementation-audit evidence only.
+Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **653** Tauri commands remain implementation-audit evidence only. Product UI interaction sources are scanned and validated during generation and checks, but are not stored as a versioned snapshot that churns with ordinary UI changes.
 
 ## 控制边界 / Control boundary
 
@@ -51,7 +51,7 @@ Docs, website, search, and agents see only features, settings, and documented su
 - 每项子能力必须声明控制类型；所有 operation/option 必须被说明书条目引用，静态值必须符合 schema，任何未绑定 Provider 都会在 Rust 契约测试中失败。
 - 每个共享配置 option 必须从默认配置可读、绑定到类型化 GlobalConfig，并能通过真实 ConfigService 写入后回读；Desktop 原生 Provider 也必须逐项绑定，新增但漏接的 handler 会阻断 CI。
 - Operation 可声明结构化参数，但必须拒绝未知字段；无参数的 UI 动作若误声明参数，生成会失败。
-- Tauri 命令、设置页、场景、产品动作和交互源码按结构闭包校验；新增事实如果没有业务绑定、说明证据或明确的内部分类会直接失败。
+- Tauri 命令、设置页、场景和产品动作按结构闭包校验；新增事实如果没有业务绑定、说明证据或明确的内部分类会直接失败。UI 交互源码清单在内存中审计，不作为需提交的生成产物。
 - 所有投影共享同一个 graph hash；生成文件有差异就失败，不存在可通过抬高计数或更新摘要绕过的基线。
 
 - Every settings page, product action, and scene registration must map to one semantic entry.
@@ -60,5 +60,5 @@ Docs, website, search, and agents see only features, settings, and documented su
 - Every item must declare its control class. Every operation/option must be referenced by a manual item, static values must satisfy their schema, and Rust contract tests reject provider bindings without an implementation.
 - Every shared config option must be readable from defaults, bind to typed GlobalConfig, and round-trip through the real ConfigService. Desktop native providers are exhaustively bound as well, so a new but unwired handler fails CI.
 - Operations may declare structured arguments but must reject unknown fields. Argument declarations on parameterless UI actions fail generation.
-- Tauri commands, settings pages, scenes, product actions, and interaction sources are checked as structural closure; a new fact without an owner binding, documentation evidence, or explicit internal classification fails.
+- Tauri commands, settings pages, scenes, and product actions are checked as structural closure; a new fact without an owner binding, documentation evidence, or explicit internal classification fails. The UI interaction-source inventory is audited in memory instead of becoming a committed generated artifact.
 - Every projection carries the same graph hash. Generated drift fails directly, with no editable count or digest baseline that can be raised to bypass review.
