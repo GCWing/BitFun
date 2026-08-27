@@ -27,6 +27,12 @@ export {
   type ModalSize,
 } from "./components/Modal";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
+export {
+  ScrollArea,
+  type ScrollAreaOrientation,
+  type ScrollAreaProps,
+  type ScrollbarVisibility,
+} from "./components/ScrollArea";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {

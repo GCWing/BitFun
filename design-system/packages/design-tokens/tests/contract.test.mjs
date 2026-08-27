@@ -64,7 +64,17 @@ test("split-view content panels preserve the elevated shell curvature contract",
   assert.equal(tokens["layout.splitView.contentPanelRadius"], "24px");
 });
 
-test("Modal tokens preserve the reference surface and chrome contract", () => {
+test("shared scrollbar geometry preserves the compact native scrollbar contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["scrollbar.width"], "6px");
+  assert.equal(systemDocument.scrollbar.radius.$value, "{radius.pill}");
+  assert.equal(tokens["scrollbar.radius"], "9999px");
+});
+
+test("Modal tokens preserve the reference surface and chrome contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
   assert.equal(tokens["overlay.modal.backdropBlur"], "blur(40px)");
   assert.equal(tokens["overlay.modal.surfaceRadius"], "28px");
   assert.equal(tokens["overlay.modal.headerGap"], "20px");
@@ -73,6 +83,7 @@ test("Modal tokens preserve the reference surface and chrome contract", () => {
   assert.equal(tokens["overlay.modal.headerPaddingInline"], "24px");
   assert.equal(tokens["overlay.modal.titleFontSize"], "24px");
   assert.equal(tokens["overlay.modal.titleFontWeight"], 700);
+  assert.equal(systemDocument.overlay.modal.scrollbarWidth.$value, "{scrollbar.width}");
   assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
   assert.equal(tokens["overlay.modal.footerBlur"], "blur(20px)");
   assert.equal(tokens["overlay.modal.footerFadeExtent"], "24px");

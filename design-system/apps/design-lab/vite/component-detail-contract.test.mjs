@@ -24,6 +24,10 @@ test("preview matrices define horizontal columns for every registered state coun
   );
   assert.match(
     source,
+    /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(244px, 1fr\)\)/s,
+  );
+  assert.match(
+    source,
     /\.component-preview-matrix\[data-state-count="4"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(124px, 1fr\)\)/s,
   );
   assert.match(
@@ -150,6 +154,21 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   assert.match(source, /trailing=\{<Eye aria-hidden="true" \/>\}/);
   assert.match(source, /leadingIcon=\{<SearchIcon aria-hidden="true" \/>\}/);
   assert.match(source, /shortcut=\{<KeyHint icon=\{<Command aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
+});
+
+test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ScrollArea"/);
+  assert.match(detail, /const scrollAreaOrientations = \["vertical", "horizontal", "both"\] as const/);
+  assert.match(detail, /case "ScrollArea":\s*return \["auto", "always", "hidden"\] as const/);
+  assert.match(detail, /orientation=\{scrollAreaOrientation\}/);
+  assert.match(detail, /scrollbarVisibility=\{state as ScrollbarVisibility\}/);
+  assert.match(styles, /\.component-scroll-area-example\s*\{[^}]*block-size:\s*160px/s);
 });
 
 test("Field preview exposes label content independently from layout orientation", async () => {

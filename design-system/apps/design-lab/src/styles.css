@@ -848,6 +848,15 @@ body,
   background: var(--bf-color-surface-canvas);
 }
 
+.component-scroll-area-card-preview {
+  inline-size: 100%;
+  max-inline-size: 220px;
+  block-size: 112px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-surface-panel);
+}
+
 .component-card__body {
   display: grid;
   align-content: start;
@@ -3243,6 +3252,51 @@ input.lab-force-focus {
   line-height: var(--bf-line-height-body);
 }
 
+.component-scroll-area-example {
+  inline-size: 220px;
+  block-size: 160px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-surface-panel);
+}
+
+.component-scroll-area-example__content {
+  display: flex;
+  min-block-size: max-content;
+  flex-direction: column;
+}
+
+.component-scroll-area-example__item {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  min-block-size: var(--bf-control-height-md);
+  padding-inline: var(--bf-space-4);
+  border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-font-size-small);
+  white-space: nowrap;
+}
+
+[data-bf-component="scroll-area"][data-bf-orientation="horizontal"] > .component-scroll-area-example__content,
+[data-bf-component="scroll-area"][data-bf-orientation="both"] > .component-scroll-area-example__content {
+  inline-size: max-content;
+  min-block-size: 100%;
+  flex-direction: row;
+}
+
+[data-bf-component="scroll-area"][data-bf-orientation="horizontal"] .component-scroll-area-example__item,
+[data-bf-component="scroll-area"][data-bf-orientation="both"] .component-scroll-area-example__item {
+  inline-size: 136px;
+  min-block-size: 100%;
+  border-block-end: 0;
+  border-inline-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+}
+
+[data-bf-component="scroll-area"][data-bf-orientation="both"] > .component-scroll-area-example__content {
+  min-block-size: 320px;
+}
+
 @media (max-width: 700px) {
   .component-modal-preview-stage {
     padding: 16px;
@@ -3272,6 +3326,12 @@ input.lab-force-focus {
   grid-template-columns: 96px minmax(240px, 1fr);
   grid-template-rows: 50px minmax(190px, 1fr);
   min-width: 420px;
+}
+
+.component-preview-matrix[data-state-count="3"] {
+  grid-template-columns: 96px repeat(3, minmax(244px, 1fr));
+  grid-template-rows: 50px minmax(190px, 1fr);
+  min-width: 828px;
 }
 
 .component-preview-matrix[data-state-count="4"] {

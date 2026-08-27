@@ -107,6 +107,17 @@
       }
     }
   },
+  "scrollbar": {
+    "$type": "dimension",
+    "width": {
+      "$description": "Reference thickness for compact application scrollbars.",
+      "$value": "6px"
+    },
+    "radius": {
+      "$description": "Corner radius for the scrollbar thumb.",
+      "$value": "{radius.pill}"
+    }
+  },
   "overlay": {
     "modal": {
       "$type": "dimension",
@@ -147,7 +158,7 @@
         "$value": 700
       },
       "scrollbarWidth": {
-        "$value": "6px"
+        "$value": "{scrollbar.width}"
       },
       "contentPaddingSm": { "$value": "{space.3}" },
       "contentPaddingMd": { "$value": "{space.4}" },

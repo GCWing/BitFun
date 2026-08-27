@@ -17,6 +17,10 @@
     "keyHint": {
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },
+    "scrollbar": {
+      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
+    },
     "content": {
       "primary": { "$type": "color", "$value": "{ref.color.neutral.900}" },
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.750}" },

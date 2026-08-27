@@ -6,6 +6,7 @@ import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
 import { modalMeta } from "./components/Modal/Modal.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
+import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
@@ -26,6 +27,7 @@ export const componentRegistry = [
   keyHintMeta,
   modalMeta,
   pageHeaderMeta,
+  scrollAreaMeta,
   searchFieldMeta,
   switchMeta,
   tabGroupMeta,

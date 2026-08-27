@@ -22,6 +22,7 @@ import {
   Input,
   KeyHint,
   PageHeader,
+  ScrollArea,
   SearchField,
   Stack,
   Switch,
@@ -57,6 +58,7 @@ const componentIcons = {
   KeyHint: Keyboard,
   Modal: AppWindow,
   PageHeader: Heading,
+  ScrollArea: Rows3,
   SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
@@ -136,6 +138,21 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           size="sm"
           title={t("components.preview.appearance")}
         />
+      );
+    case "ScrollArea":
+      return (
+        <ScrollArea
+          aria-label={t("components.preview.scrollAreaLabel")}
+          className="component-scroll-area-card-preview"
+        >
+          <div className="component-scroll-area-example__content">
+            {Array.from({ length: 5 }, (_, index) => (
+              <span className="component-scroll-area-example__item" key={index}>
+                {t("components.preview.scrollAreaItem", { index: index + 1 })}
+              </span>
+            ))}
+          </div>
+        </ScrollArea>
       );
     case "SearchField":
       return (

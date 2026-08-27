@@ -21,6 +21,7 @@ import {
   KeyHint,
   Modal,
   PageHeader,
+  ScrollArea,
   SearchField,
   Switch,
   TabGroup,
@@ -28,6 +29,8 @@ import {
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
+  type ScrollAreaOrientation,
+  type ScrollbarVisibility,
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
@@ -62,9 +65,13 @@ const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
 const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
+const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
+  always: "detail.option.always",
+  auto: "detail.option.auto",
+  both: "detail.option.both",
   chevron: "detail.option.chevron",
   center: "detail.option.center",
   default: "detail.option.default",
@@ -74,6 +81,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
   horizontal: "detail.option.horizontal",
+  hidden: "detail.option.hidden",
   invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
@@ -158,11 +166,14 @@ export function ComponentDetailPage({
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
       ? "off"
       : component.name === "TabGroup"
         ? "selected"
+        : component.name === "ScrollArea"
+          ? "auto"
         : "default",
   );
   const [inspectorDisabled, setInspectorDisabled] = useState(false);
@@ -189,6 +200,8 @@ export function ComponentDetailPage({
       case "Modal":
       case "PageHeader":
         return ["default"] as const;
+      case "ScrollArea":
+        return ["auto", "always", "hidden"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       default:
@@ -245,6 +258,9 @@ export function ComponentDetailPage({
           : "";
       return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
     }
+    if (component.name === "ScrollArea") {
+      return `import { ScrollArea } from "@bitfun/ui";\n\n<ScrollArea\n  aria-label="${t("components.preview.scrollAreaLabel")}"\n  className="activity-scroll-area"\n  orientation="${scrollAreaOrientation}"\n  scrollbarVisibility="${previewState}"\n>\n  {items.map((item) => <div key={item.id}>{item.label}</div>)}\n</ScrollArea>`;
+    }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
       return `import { TabGroup } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\nconst items = [\n  { icon: <MessageCircle />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <MessageCircle />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
@@ -267,6 +283,7 @@ export function ComponentDetailPage({
     previewIcon,
     previewIconPosition,
     previewState,
+    scrollAreaOrientation,
     size,
     t,
     variant,
@@ -576,6 +593,25 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "ScrollArea") {
+      return (
+        <ScrollArea
+          aria-label={t("components.preview.scrollAreaLabel")}
+          className="component-scroll-area-example"
+          orientation={scrollAreaOrientation}
+          scrollbarVisibility={state as ScrollbarVisibility}
+        >
+          <div className="component-scroll-area-example__content">
+            {Array.from({ length: 7 }, (_, index) => (
+              <span className="component-scroll-area-example__item" key={index}>
+                {t("components.preview.scrollAreaItem", { index: index + 1 })}
+              </span>
+            ))}
+          </div>
+        </ScrollArea>
+      );
+    }
+
     if (component.name === "TabGroup") {
       const defaultTab = state === "unselected" ? "settings" : "welcome";
       return (
@@ -730,7 +766,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "SearchField" ? (
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionItem"
@@ -743,6 +779,8 @@ export function ComponentDetailPage({
                       ? "key-hint"
                       : component.name === "PageHeader"
                         ? "page-header"
+                      : component.name === "ScrollArea"
+                        ? "scroll-area"
                       : "search-field"}
                   data-state-count={states.length}
                 >
@@ -898,6 +936,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
                       options={pageHeaderAlignments}
                       value={pageHeaderAlign}
+                    />
+                  )}
+                  {component.name === "ScrollArea" && (
+                    <InspectorSelect
+                      label={t("detail.orientation")}
+                      onChange={(value) => setScrollAreaOrientation(value as ScrollAreaOrientation)}
+                      options={scrollAreaOrientations}
+                      value={scrollAreaOrientation}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

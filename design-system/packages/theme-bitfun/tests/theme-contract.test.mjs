@@ -210,6 +210,8 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.action.neutral.surface"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.action.neutral.surfaceHover"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.action.neutral.surfacePressed"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.scrollbar.thumbHover"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
   assert.equal(themes.light["color.control.switch.track"], "#dddddd");
   assert.equal(themes.light["color.control.switch.trackChecked"], "#34c78c");
@@ -222,6 +224,8 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.dark["color.keyHint.background"], "rgba(255, 255, 255, 0.1)");
   assert.equal(themes.dark["color.action.primary.background"], "rgba(255, 255, 255, 0.16)");
   assert.equal(themes.dark["color.action.neutral.surface"], "rgba(255, 255, 255, 0.1)");
+  assert.equal(themes.dark["color.scrollbar.thumb"], "rgba(255, 255, 255, 0.12)");
+  assert.equal(themes.dark["color.scrollbar.thumbHover"], "rgba(255, 255, 255, 0.15)");
   assert.equal(themes.dark["shadow.base"], "0 4px 8px rgba(0, 0, 0, 0.7)");
   assert.equal(themes.dark["opacity.disabled"], 0.6);
 });
