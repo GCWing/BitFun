@@ -25,7 +25,13 @@
       "deleteConfirmBody": "從本機刪除此已匯入的寵物形象？此操作無法復原。",
       "deleteSuccess": "已刪除匯入的形象",
       "deleteFailed": "刪除匯入形象失敗",
-      "refresh": "重新整理形象列表"
+      "refresh": "重新整理形象列表",
+      "presets": {
+        "blueGolden": {
+          "name": "困困",
+          "description": "困困是一隻甜美的藍金漸層貓，圓臉發腮、眼睛大而明亮，柔軟的銀藍毛尖透著溫暖的奶金色。"
+        }
+      }
     },
     "workspaceSearch": {
       "title": "加速工作區搜尋",

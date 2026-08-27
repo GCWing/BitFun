@@ -20,11 +20,11 @@ vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
 
 vi.mock('./AgentCompanionPetService', () => ({
   DEFAULT_AGENT_COMPANION_PET: {
-    id: 'default',
-    displayName: 'Default',
+    id: 'blue-golden',
+    displayName: '困困',
     source: 'preset',
-    packagePath: '',
-    spritesheetPath: '',
+    packagePath: '/agent-companion-pets/blue-golden',
+    spritesheetPath: '/agent-companion-pets/blue-golden/spritesheet.png',
     spritesheetMimeType: 'image/png',
   },
 }));
@@ -62,6 +62,42 @@ describe('AIExperienceConfigService startup behavior', () => {
     expect(configManagerMock.watch).toHaveBeenCalledWith('app.ai_experience', expect.any(Function));
     expect(configManagerMock.getConfig).toHaveBeenCalledTimes(1);
     expect(configManagerMock.getConfig).toHaveBeenCalledWith('app.ai_experience');
+  });
+
+  it('uses the blue-golden cat when no companion pet has been configured', async () => {
+    configManagerMock.getConfig.mockResolvedValueOnce({
+      enable_agent_companion: true,
+    });
+    const { aiExperienceConfigService } = await import('./AIExperienceConfigService');
+
+    const settings = await aiExperienceConfigService.getSettingsAsync();
+
+    expect(settings.agent_companion_pet).toMatchObject({
+      id: 'blue-golden',
+      displayName: '困困',
+      packagePath: '/agent-companion-pets/blue-golden',
+      spritesheetPath: '/agent-companion-pets/blue-golden/spritesheet.png',
+    });
+  });
+
+  it('preserves an existing user-selected companion pet', async () => {
+    const selectedPet = {
+      id: 'usagi',
+      displayName: 'Usagi',
+      source: 'preset' as const,
+      packagePath: '/agent-companion-pets/usagi',
+      spritesheetPath: '/agent-companion-pets/usagi/spritesheet.webp',
+      spritesheetMimeType: 'image/webp',
+    };
+    configManagerMock.getConfig.mockResolvedValueOnce({
+      enable_agent_companion: false,
+      agent_companion_pet: selectedPet,
+    });
+    const { aiExperienceConfigService } = await import('./AIExperienceConfigService');
+
+    const settings = await aiExperienceConfigService.getSettingsAsync();
+
+    expect(settings.agent_companion_pet).toEqual(selectedPet);
   });
 
   it('can force refresh settings for cross-window lifecycle synchronization', async () => {

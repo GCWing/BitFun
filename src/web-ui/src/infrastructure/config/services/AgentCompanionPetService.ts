@@ -10,14 +10,14 @@ const BUILTIN_PET_BASE = '/agent-companion-pets';
 const BUILTIN_PET_DISPLAY_NAMES = builtinPetMetadata.displayNames;
 
 export const DEFAULT_AGENT_COMPANION_PET: AgentCompanionPetSelection = {
-  id: 'bitfun',
-  displayName: 'Bitfun',
+  id: 'blue-golden',
+  displayName: BUILTIN_PET_DISPLAY_NAMES.blueGolden,
   description:
-    "BitFun's mascot — Bifang, a figure from Chinese mythology said to live on Mount Zhang'e. In the Classic of Mountains and Seas (Shan Hai Jing · Western Mountains), Bifang is described as crane-like with one foot, blue feathers marked with red, and a white beak.",
+    'A sweet, round-faced blue-golden shaded cat with wide bright eyes and soft silver-blue fur warmed by creamy-gold highlights.',
   source: 'preset',
-  packagePath: `${BUILTIN_PET_BASE}/bitfun`,
-  spritesheetPath: `${BUILTIN_PET_BASE}/bitfun/spritesheet.webp`,
-  spritesheetMimeType: 'image/webp',
+  packagePath: `${BUILTIN_PET_BASE}/blue-golden`,
+  spritesheetPath: `${BUILTIN_PET_BASE}/blue-golden/spritesheet.png`,
+  spritesheetMimeType: 'image/png',
 };
 
 /** Cache: absolute file path → blob URL (prevents re-reading the same file). */
@@ -64,6 +64,16 @@ export function releaseAgentCompanionPetPreviewBlobs(
 const BUILTIN_PETS: AgentCompanionPetSelection[] = [
   {
     ...DEFAULT_AGENT_COMPANION_PET,
+  },
+  {
+    id: 'bitfun',
+    displayName: 'Bitfun',
+    description:
+      "BitFun's mascot — Bifang, a figure from Chinese mythology said to live on Mount Zhang'e. In the Classic of Mountains and Seas (Shan Hai Jing · Western Mountains), Bifang is described as crane-like with one foot, blue feathers marked with red, and a white beak.",
+    source: 'preset',
+    packagePath: `${BUILTIN_PET_BASE}/bitfun`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/bitfun/spritesheet.webp`,
+    spritesheetMimeType: 'image/webp',
   },
   {
     id: 'boxcat',

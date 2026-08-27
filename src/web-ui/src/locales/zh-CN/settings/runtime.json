@@ -25,7 +25,13 @@
       "deleteConfirmBody": "从本机删除该已导入的宠物形象？此操作不可恢复。",
       "deleteSuccess": "已删除导入的形象",
       "deleteFailed": "删除导入形象失败",
-      "refresh": "刷新形象列表"
+      "refresh": "刷新形象列表",
+      "presets": {
+        "blueGolden": {
+          "name": "困困",
+          "description": "困困是一只甜美的蓝金渐层猫，圆脸发腮、眼睛大而明亮，柔软的银蓝毛尖透着温暖的奶金色。"
+        }
+      }
     },
     "workspaceSearch": {
       "title": "加速工作区搜索",

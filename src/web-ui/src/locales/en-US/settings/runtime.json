@@ -25,7 +25,13 @@
       "deleteConfirmBody": "Delete this imported pet from your device? This cannot be undone.",
       "deleteSuccess": "Imported appearance removed",
       "deleteFailed": "Failed to remove imported appearance",
-      "refresh": "Refresh appearances"
+      "refresh": "Refresh appearances",
+      "presets": {
+        "blueGolden": {
+          "name": "困困",
+          "description": "A sweet blue-golden shaded cat with a round full-cheeked face, wide bright eyes, and soft silver-blue fur warmed by creamy-gold highlights."
+        }
+      }
     },
     "workspaceSearch": {
       "title": "Accelerated workspace search",

@@ -452,15 +452,15 @@ pub struct AgentCompanionPetSelection {
 
 fn default_agent_companion_pet() -> Option<AgentCompanionPetSelection> {
     Some(AgentCompanionPetSelection {
-        id: "bitfun".to_string(),
-        display_name: "Bitfun".to_string(),
+        id: "blue-golden".to_string(),
+        display_name: "困困".to_string(),
         description: Some(
-            "BitFun's mascot — Bifang, a figure from Chinese mythology said to live on Mount Zhang'e. In the Classic of Mountains and Seas (Shan Hai Jing · Western Mountains), Bifang is described as crane-like with one foot, blue feathers marked with red, and a white beak.".to_string(),
+            "A sweet, round-faced blue-golden shaded cat with wide bright eyes and soft silver-blue fur warmed by creamy-gold highlights.".to_string(),
         ),
         source: "preset".to_string(),
-        package_path: "/agent-companion-pets/bitfun".to_string(),
-        spritesheet_path: "/agent-companion-pets/bitfun/spritesheet.webp".to_string(),
-        spritesheet_mime_type: "image/webp".to_string(),
+        package_path: "/agent-companion-pets/blue-golden".to_string(),
+        spritesheet_path: "/agent-companion-pets/blue-golden/spritesheet.png".to_string(),
+        spritesheet_mime_type: "image/png".to_string(),
     })
 }
 
@@ -2374,7 +2374,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_agent_companion_pet_to_bitfun() {
+    fn defaults_agent_companion_pet_to_blue_golden() {
         let config: AIExperienceConfig =
             serde_json::from_value(serde_json::json!({})).expect("empty config should default");
 
@@ -2382,13 +2382,14 @@ mod tests {
             .agent_companion_pet
             .as_ref()
             .expect("default companion pet should be present");
-        assert_eq!(pet.id, "bitfun");
-        assert_eq!(pet.display_name, "Bitfun");
-        assert_eq!(pet.package_path, "/agent-companion-pets/bitfun");
+        assert_eq!(pet.id, "blue-golden");
+        assert_eq!(pet.display_name, "困困");
+        assert_eq!(pet.package_path, "/agent-companion-pets/blue-golden");
         assert_eq!(
             pet.spritesheet_path,
-            "/agent-companion-pets/bitfun/spritesheet.webp"
+            "/agent-companion-pets/blue-golden/spritesheet.png"
         );
+        assert_eq!(pet.spritesheet_mime_type, "image/png");
     }
 
     #[test]

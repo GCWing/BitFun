@@ -89,7 +89,7 @@ function normalizeSettings(settings: AIExperienceSettings | null | undefined): A
       ...settings?.voice_input,
     },
   };
-  // Legacy configs used null to mean the built-in SVG panda. Panda is now the default preset.
+  // Legacy configs used null to mean the built-in SVG panda. Resolve null to the current preset.
   if (!merged.agent_companion_pet) {
     merged.agent_companion_pet = DEFAULT_AGENT_COMPANION_PET;
   }

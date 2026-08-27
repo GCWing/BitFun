@@ -501,14 +501,25 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     }
   };
 
-  const companionPetOptions: SelectOption[] = companionPets.map(pet => ({
-    value: pet.packagePath,
-    label: pet.displayName,
-    description: pet.description ?? undefined,
-    group: pet.source === 'preset'
-      ? t('features.pet.groupPreset')
-      : t('features.pet.groupImported'),
-  }));
+  const companionPetOptions: SelectOption[] = companionPets.map(pet => {
+    const localizedCopy = pet.source === 'preset' && pet.id === 'blue-golden'
+      ? {
+        displayName: t('features.pet.presets.blueGolden.name'),
+        description: t('features.pet.presets.blueGolden.description'),
+      }
+      : {
+        displayName: pet.displayName,
+        description: pet.description,
+      };
+    return {
+      value: pet.packagePath,
+      label: localizedCopy.displayName,
+      description: localizedCopy.description ?? undefined,
+      group: pet.source === 'preset'
+        ? t('features.pet.groupPreset')
+        : t('features.pet.groupImported'),
+    };
+  });
 
   const companionDisplayModeOptions: SelectOption[] = [
     {
