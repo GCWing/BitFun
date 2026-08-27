@@ -1030,8 +1030,8 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(openButton).toBeTruthy();
     expect(container.querySelector('[data-bf-component="subagent-avatar"][data-bf-avatar-id]'))
       .toBeTruthy();
-    expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
-      .toBe('repo-investigator');
+    expect(container.textContent).not.toContain('repo-investigator');
+    expect(container.querySelector('[data-bf-part="subagentName"]')).toBeNull();
 
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -1052,7 +1052,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
   });
 
-  it('shows the caller-selected agent id before the spawn result arrives', async () => {
+  it('does not show the caller-selected agent id before the spawn result arrives', async () => {
     const toolItem: FlowToolItem = {
       id: 'task-tool-pending-spawn',
       type: 'tool',
@@ -1076,8 +1076,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
-      .toBe('repo-investigator');
+    expect(container.textContent).not.toContain('repo-investigator');
+    expect(container.querySelector('[data-bf-part="subagentName"]')).toBeNull();
   });
 
   it('opens an ordinary CodeReview subagent instead of treating it as Deep Review coverage', async () => {

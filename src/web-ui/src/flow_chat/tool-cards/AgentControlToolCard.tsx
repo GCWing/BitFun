@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import { flowChatStore } from '../store/FlowChatStore';
 import {
+  formatAgentIdForDisplay,
   SubagentAvatar,
 } from '../subagent-identity';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
@@ -123,6 +124,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
     || linkedSession?.mode?.trim()
     || inputAgentType
     || t('toolCards.taskTool.defaultAgentKind');
+  const agentDisplayName = agentId ? formatAgentIdForDisplay(agentId) : agentName;
   const stableAgentType = linkedSession?.mode?.trim()
     || linkedSession?.config?.agentType?.trim()
     || inputAgentType;
@@ -166,7 +168,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
       parentSessionId: sessionId,
       workspacePath: parentSession?.workspacePath,
       sessionKind: 'subagent',
-      sessionTitle: agentName,
+      sessionTitle: agentDisplayName,
       agentType: stableAgentType || undefined,
       parentToolCallId: toolCall?.id || toolItem.id,
       subagentType: stableSubagentType || undefined,
@@ -175,7 +177,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
       includeInternal: true,
     });
   }, [
-    agentName,
+    agentDisplayName,
     linkedSubagentSessionId,
     sessionId,
     stableAgentType,
@@ -209,7 +211,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
         data-bf-component="agent-control-tool-card"
         data-bf-part="name"
       >
-        {agentName}
+        {agentDisplayName}
       </span>
     </>
   );

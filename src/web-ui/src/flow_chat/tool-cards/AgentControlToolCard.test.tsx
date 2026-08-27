@@ -113,7 +113,7 @@ function agentToolItem(
       id: 'agent-call',
       input: toolName === 'AgentSpawn'
         ? {
-            agent_id: 'parser-review',
+            agent_id: 'parser_review-worker_2',
             agent_type: 'SwarmWorker',
             prompt: 'Inspect the parser flow and report findings.',
           }
@@ -175,7 +175,12 @@ describeWithJsdom('AgentControlToolCard', () => {
       const pill = container.querySelector<HTMLButtonElement>('.agent-control-tool-card__agent-pill');
       const toggle = container.querySelector<HTMLElement>('[data-testid="agent-control-tool-card-toggle"]');
       expect(pill?.textContent?.trim()).toBeTruthy();
-      expect(pill?.textContent).toContain(toolName === 'AgentSpawn' ? 'parser-review' : 'agent-1');
+      expect(pill?.textContent).toContain(
+        toolName === 'AgentSpawn' ? 'Parser review worker 2' : 'Agent 1',
+      );
+      expect(pill?.textContent).not.toContain(
+        toolName === 'AgentSpawn' ? 'parser_review-worker_2' : 'agent-1',
+      );
       expect(pill?.querySelector('[data-bf-component="subagent-avatar"]')).not.toBeNull();
       expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
       expect(container.textContent).not.toContain('SwarmWorker');
@@ -204,6 +209,7 @@ describeWithJsdom('AgentControlToolCard', () => {
         parentSessionId: 'parent-session',
         parentToolCallId: 'agent-call',
         sessionKind: 'subagent',
+        sessionTitle: toolName === 'AgentSpawn' ? 'Parser review worker 2' : 'Agent 1',
         includeInternal: true,
       }));
       expect(container.textContent).toContain(
@@ -235,7 +241,7 @@ describeWithJsdom('AgentControlToolCard', () => {
       `--subagent-avatar-hue-shift: ${presentation.hueShiftDegrees}deg`,
     );
     expect(container.querySelector('.agent-control-tool-card__fallback-avatar')).toBeNull();
-    expect(container.textContent).toContain('agent-1');
+    expect(container.textContent).toContain('Agent 1');
   });
 
   it('stays collapsed and disables expansion while parameters are streaming', async () => {

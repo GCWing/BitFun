@@ -24,6 +24,7 @@ import {
   type SessionLineageNode,
 } from '../../utils/sessionLineage';
 import {
+  formatAgentIdForDisplay,
   SubagentAvatar,
 } from '../../subagent-identity';
 import './SessionTreePopover.scss';
@@ -34,6 +35,7 @@ export interface SessionTreeSelection {
   parentSessionId?: string;
   parentToolCallId?: string;
   title: string;
+  displayTitle: string;
   agentType?: string;
   subagentType?: string;
   agentId?: string;
@@ -67,6 +69,12 @@ function lifecycleLabel(
 
 function nodeHasActiveWork(node: SessionLineageNode): boolean {
   return node.lifecycle === 'running' || node.lifecycle === 'finishing';
+}
+
+function nodeDisplayTitle(node: SessionLineageNode): string {
+  return !node.isRoot && node.agentId
+    ? formatAgentIdForDisplay(node.agentId)
+    : node.title;
 }
 
 export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
@@ -322,6 +330,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       parentSessionId: node.parentSessionId,
       parentToolCallId: node.parentToolCallId,
       title: node.title,
+      displayTitle: nodeDisplayTitle(node),
       agentType: node.agentType,
       subagentType: node.subagentType,
       agentId: node.agentId,
@@ -362,6 +371,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       parentSessionId: node.parentSessionId,
       parentToolCallId: node.parentToolCallId,
       title: node.title,
+      displayTitle: nodeDisplayTitle(node),
       agentType: node.agentType,
       subagentType: node.subagentType,
       agentId: node.agentId,
@@ -393,12 +403,16 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       ? t('flowChatHeader.agentTreeCancelling')
       : lifecycleLabel(node.lifecycle, t);
     const secondaryLabel = node.subagentType || node.agentType;
-    const primaryLabel = node.isRoot ? node.title : node.agentId || node.title;
+    const rawPrimaryLabel = node.isRoot ? node.title : node.agentId || node.title;
+    const primaryLabel = nodeDisplayTitle(node);
+    const descriptiveTitle = node.title !== primaryLabel && node.title !== rawPrimaryLabel
+      ? node.title
+      : undefined;
     const nodeMeta = node.isRoot
       ? secondaryLabel
-      : [secondaryLabel, node.title]
+      : [secondaryLabel, descriptiveTitle]
           .filter((value, index, values): value is string =>
-            Boolean(value) && values.indexOf(value) === index && value !== primaryLabel
+            Boolean(value) && values.indexOf(value) === index
           )
           .join(' · ');
     const canCancel = !!onCancelSession && !node.isRoot && nodeHasActiveWork(node);
@@ -443,7 +457,9 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             onClick={() => handleSelect(node)}
             aria-label={node.isRoot
               ? undefined
-              : [primaryLabel, secondaryLabel, node.title, statusLabel].filter(Boolean).join(', ')}
+              : [primaryLabel, secondaryLabel, descriptiveTitle, statusLabel]
+                  .filter(Boolean)
+                  .join(', ')}
           >
             {node.isRoot
               ? <MessageSquare size={13} aria-hidden="true" />
