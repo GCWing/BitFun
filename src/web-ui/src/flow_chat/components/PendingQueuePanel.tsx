@@ -12,7 +12,7 @@
  *   deduped via `steeringId`.
  */
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pencil,
@@ -46,6 +46,7 @@ interface PendingQueuePanelProps {
 
 export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelProps): JSX.Element | null {
   const { t } = useTranslation('flow-chat');
+  const sendNowInFlightIdsRef = useRef(new Set<string>());
   useSyncExternalStore(
     interruptedTurnRecoveryGate.subscribe,
     interruptedTurnRecoveryGate.getSnapshot,
@@ -129,70 +130,77 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
   const handleSendNow = useCallback(
     async (item: QueuedMessage) => {
       if (!sessionId || recoveryInFlight) return;
-      const machine = stateMachineManager.get(sessionId);
-      const dialogTurnId = machine?.getContext().currentDialogTurnId ?? null;
+      if (sendNowInFlightIdsRef.current.has(item.id)) return;
+      sendNowInFlightIdsRef.current.add(item.id);
 
-      // A running turn takes the message through the steering channel, which
-      // carries the whole payload — text, attachments and metadata alike.
-      // ACP agents own their execution loop and expose no mid-turn injection
-      // point, so they take the drain path below instead.
-      if (dialogTurnId && !isAcpSession) {
-        pendingQueueManager.setStatus(sessionId, item.id, 'sending_now');
-        try {
-          const resp = await agentAPI.steerDialogTurn({
-            sessionId,
-            dialogTurnId,
-            content: item.content,
-            displayContent: item.displayMessage ?? item.content,
-            imageContexts: item.imageContexts,
-            userMessageMetadata: item.userMessageMetadata,
-          });
-          // Optimistically render the steering bubble in the running round so
-          // the user sees their message land immediately. The backend
-          // `UserSteeringInjected` event dedupes by the same `steeringId`.
-          if (resp?.steeringId) {
-            try {
-              insertSteeringItemIfAbsent({
-                sessionId,
-                turnId: dialogTurnId,
-                steeringId: resp.steeringId,
-                content: item.displayMessage ?? item.content,
-                images: item.imageDisplayData as SteeringImage[] | undefined,
-                status: 'pending',
-              });
-            } catch (renderErr) {
-              log.warn('Optimistic steering render failed', { renderErr });
-            }
-          }
-          pendingQueueManager.remove(sessionId, item.id);
-          return;
-        } catch (err) {
-          // Most often the turn finished between the click and the request.
-          // Fall through to the drain path rather than reporting a failure the
-          // user cannot act on.
-          log.warn('Steering rejected, falling back to the drain path', {
-            sessionId,
-            itemId: item.id,
-            err,
-          });
-          pendingQueueManager.setStatus(sessionId, item.id, 'queued');
-        }
-      }
-
-      // No turn to inject into. Move the item to the head and send it at the
-      // first opportunity: right now if the session is idle, otherwise the
-      // IDLE drain listener picks it up the moment the current turn ends.
       try {
-        if (!pendingQueueManager.promoteForExplicitDrain(sessionId, item.id)) {
-          log.warn('Send now item is no longer queued', { sessionId, itemId: item.id });
-          return;
+        const machine = stateMachineManager.get(sessionId);
+        const dialogTurnId = machine?.getContext().currentDialogTurnId ?? null;
+
+        // A running turn takes the message through the steering channel, which
+        // carries the whole payload — text, attachments and metadata alike.
+        // ACP agents own their execution loop and expose no mid-turn injection
+        // point, so they take the drain path below instead.
+        if (dialogTurnId && !isAcpSession) {
+          pendingQueueManager.setStatus(sessionId, item.id, 'sending_now');
+          try {
+            const resp = await agentAPI.steerDialogTurn({
+              sessionId,
+              dialogTurnId,
+              content: item.content,
+              displayContent: item.displayMessage ?? item.content,
+              imageContexts: item.imageContexts,
+              userMessageMetadata: item.userMessageMetadata,
+            });
+            // Optimistically render the steering bubble in the running round so
+            // the user sees their message land immediately. The backend
+            // `UserSteeringInjected` event dedupes by the same `steeringId`.
+            if (resp?.steeringId) {
+              try {
+                insertSteeringItemIfAbsent({
+                  sessionId,
+                  turnId: dialogTurnId,
+                  steeringId: resp.steeringId,
+                  content: item.displayMessage ?? item.content,
+                  images: item.imageDisplayData as SteeringImage[] | undefined,
+                  status: 'pending',
+                });
+              } catch (renderErr) {
+                log.warn('Optimistic steering render failed', { renderErr });
+              }
+            }
+            pendingQueueManager.remove(sessionId, item.id);
+            return;
+          } catch (err) {
+            // Most often the turn finished between the click and the request.
+            // Fall through to the drain path rather than reporting a failure the
+            // user cannot act on.
+            log.warn('Steering rejected, falling back to the drain path', {
+              sessionId,
+              itemId: item.id,
+              err,
+            });
+            pendingQueueManager.setStatus(sessionId, item.id, 'queued');
+          }
         }
-        await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId, {
-          allowInterruptedRecoveryAbandon: true,
-        });
-      } catch (err) {
-        log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
-        notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
+
+        // No turn to inject into. Move the item to the head and send it at the
+        // first opportunity: right now if the session is idle, otherwise the
+        // IDLE drain listener picks it up the moment the current turn ends.
+        try {
+          if (!pendingQueueManager.promoteForExplicitDrain(sessionId, item.id)) {
+            log.warn('Send now item is no longer queued', { sessionId, itemId: item.id });
+            return;
+          }
+          await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId, {
+            allowInterruptedRecoveryAbandon: true,
+          });
+        } catch (err) {
+          log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
+          notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
+        }
+      } finally {
+        sendNowInFlightIdsRef.current.delete(item.id);
       }
     },
     [isAcpSession, recoveryInFlight, sessionId, t],
