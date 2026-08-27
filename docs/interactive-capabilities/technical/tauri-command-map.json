@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "45868ac0809aca71acdf49b9ed64e7e139f15cd8a1504d1330fdaf29ccf9ca61",
-  "commandCount": 651,
+  "catalogDigest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
+  "commandCount": 653,
   "coverage": {
-    "commandCount": 651,
-    "documentedCommandCount": 613,
+    "commandCount": 653,
+    "documentedCommandCount": 615,
     "implementationCommandCount": 38,
     "implementationDigest": "965d441b20c0092bc25c1dd48db3e31f72a977479fe9d1ff7c788d8e17d7395b"
   },
@@ -1470,6 +1470,22 @@
       "rustPath": "computer_use_request_permissions",
       "sourceFile": "src/apps/desktop/src/api/computer_use_api.rs",
       "signature": "fn computer_use_request_permissions() -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "confirm_frontend_update",
+      "moduleId": "frontend_workbench",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:creative-frontend-authoring"
+      ],
+      "visibility": "documented",
+      "rustPath": "frontend_workbench::confirm_frontend_update",
+      "sourceFile": "src/apps/desktop/src/frontend_workbench.rs",
+      "signature": "fn confirm_frontend_update( state: tauri::State<'_, Arc<FrontendWorkbenchManager>>, webview: tauri::WebviewWindow, request: FrontendUpdateDecisionRequest, ) -> Result<Value, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -8020,6 +8036,22 @@
       "sourceFile": "src/apps/desktop/src/api/review_platform_api.rs",
       "signature": "fn review_platform_update_auth_token( _state: State<'_, AppState>, request: ReviewPlatformUpdateAuthTokenRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "rollback_frontend_update",
+      "moduleId": "frontend_workbench",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:creative-frontend-authoring"
+      ],
+      "visibility": "documented",
+      "rustPath": "frontend_workbench::rollback_frontend_update",
+      "sourceFile": "src/apps/desktop/src/frontend_workbench.rs",
+      "signature": "fn rollback_frontend_update( state: tauri::State<'_, Arc<FrontendWorkbenchManager>>, webview: tauri::WebviewWindow, request: FrontendUpdateDecisionRequest, ) -> Result<Value, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "rollback_miniapp",

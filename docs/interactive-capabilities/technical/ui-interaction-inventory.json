@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "45868ac0809aca71acdf49b9ed64e7e139f15cd8a1504d1330fdaf29ccf9ca61",
+  "catalogDigest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "981019f2d18ab8ca85a2247122aab358ec6618c69ca8a693b480f28e480555eb",
-  "fileCount": 365,
-  "interactionCount": 4421,
+  "digest": "97d7b40c2075a564ba77eedb7393f3d8b2663d77f20b0a2719d3ff9eb11310b9",
+  "fileCount": 366,
+  "interactionCount": 4395,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -126,13 +126,13 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/AccountPanel.tsx",
-      "interactionCount": 36,
-      "digest": "87f4fb6403cda53eb678def002714fd769ab919150da0afcf5b0893d5ba77408"
+      "interactionCount": 28,
+      "digest": "a656559f1bf2833d78eb55d85918ed9d641334618e90835b61a5336bac643910"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDialog.tsx",
-      "interactionCount": 78,
-      "digest": "09abb0dbf16dacac21d4b739599ee4d57866292d34371df902d3c1767dd771b3"
+      "interactionCount": 46,
+      "digest": "8747879670a8d485fd4b31c5772348e4523516fe59d24c40759f9b1de341f6c9"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/RemoteConnectDialog/RemoteConnectDisclaimer.tsx",
@@ -141,13 +141,23 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/components/SceneBar/SceneBar.tsx",
-      "interactionCount": 12,
-      "digest": "ebf091544288b0654cd940503aa5f8c2404fdfccb0c265aa3568728d99c3b2e0"
+      "interactionCount": 10,
+      "digest": "64e1538aaa632aab087d1409b62b5c946a99dd107ee9031c610db65e2aceadd6"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/SceneBar/useSceneTabNavigation.ts",
       "interactionCount": 1,
       "digest": "493da28b1558566c11075d3148cbf0b9f75c2103c7c45d6b65846593246ea7f5"
+    },
+    {
+      "sourceFile": "src/web-ui/src/app/components/SceneTopBar/SceneChrome.tsx",
+      "interactionCount": 5,
+      "digest": "a62f29ca25ddbcefe04fad595f846b481c7a6c6ffebbb813277699fc4d459d67"
+    },
+    {
+      "sourceFile": "src/web-ui/src/app/components/SceneTopBar/SceneTopBar.tsx",
+      "interactionCount": 2,
+      "digest": "ed7201691ffc51cf9c13baa941212e60befd549c24c00a8baebe1697b1839e3e"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/TitleBar/NotificationButton.tsx",
@@ -266,8 +276,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/global-search/GlobalSearchRoot.tsx",
-      "interactionCount": 19,
-      "digest": "2aeaca8d728a5fa487c2843b356604d6928c8b28f5fce98392449befd4020471"
+      "interactionCount": 26,
+      "digest": "5e99cbff91db02f087edc00d046284f538bec8af3ad1d02c9581f00d2de12b80"
     },
     {
       "sourceFile": "src/web-ui/src/app/global-search/interactiveCapabilityCatalog.ts",
@@ -422,7 +432,7 @@
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppGalleryView.tsx",
       "interactionCount": 16,
-      "digest": "a5ad6f4e5ab83494d0dcec51b2580cfb9152e8ea1b62865ea83da6491b6478e6"
+      "digest": "efcfbd180088f3dbf8d16878bafa313ce204b971564867cec76fc419505c6c37"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppMarketView.tsx",
@@ -645,11 +655,6 @@
       "digest": "ea060e14ea967a8f3d7614d37a30e40745f47f2def1318e842dd858ae653e0be"
     },
     {
-      "sourceFile": "src/web-ui/src/component-library/components/Modal/Modal.tsx",
-      "interactionCount": 3,
-      "digest": "b8051f3ce05c2bc03a14d7c5661ee67c5467e161116d223f9633885ea6d89977"
-    },
-    {
       "sourceFile": "src/web-ui/src/component-library/components/NumberInput/NumberInput.tsx",
       "interactionCount": 16,
       "digest": "ecf0961cd95d9b89f6764fb44bd1e40b4742b71183ae6454fd4baf7f30b2b623"
@@ -691,8 +696,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/registry.tsx",
-      "interactionCount": 67,
-      "digest": "f0c04827acbc395c56442a6a9f56976199ff7e74944c4acf92e5e687c8f5bb71"
+      "interactionCount": 66,
+      "digest": "82f8a85b6e40ee054b07d430f158d3f1ded1b770d07f188ce5e9caa1931c4ff5"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/preview/MarkdownPreview.tsx",
@@ -781,8 +786,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInput.tsx",
-      "interactionCount": 72,
-      "digest": "e651a27bb5f56afdfd959d347d30ffb5d77e11a53f483bd477c1bfc881c961d7"
+      "interactionCount": 63,
+      "digest": "8899ee85648843c3003c6e56129a5e74e7a2f3c1b375396d2c4d2bc308abcee1"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInputApprovalBand.tsx",
@@ -836,8 +841,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/HarnessProfileSelector.tsx",
-      "interactionCount": 6,
-      "digest": "46f5e5d7ea81bfc842800d0828091753e4e50a2958cd498e6491bb05e4f70f62"
+      "interactionCount": 21,
+      "digest": "02e327e71efacffd9bc329df134b9de2e46d601752ad09e3b28901ed7ad1e2c0"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ImageAnalysisCard.tsx",
@@ -921,8 +926,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.tsx",
-      "interactionCount": 49,
-      "digest": "1a2907522c75ea3b8faeb75ca1a0db41d2578473cc02e25353b1e92e7f4db6bf"
+      "interactionCount": 46,
+      "digest": "66c15f43f218808294928f84b519406e7098a07f679af433e12f6698ff877fd6"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/modern/FlowChatTurnRail.tsx",
@@ -1371,8 +1376,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/MemorySettingsPage.tsx",
-      "interactionCount": 26,
-      "digest": "b2e66d55d31b5ccf6714a150f1570126bc8257305d509cee0e113b6ddad66188"
+      "interactionCount": 29,
+      "digest": "01dab833ff1b42aa8c3139d56b80157872d465df343f9695ef289f4aaeaa50e2"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSelectionRadio.tsx",
@@ -1382,7 +1387,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx",
       "interactionCount": 150,
-      "digest": "3ea0b2ee92bfbd4b6ad40f3fed55fa73b5756a9fd55d1b05b209a0638d4e15e6"
+      "digest": "6157193e1e92b1356d44c249bd050310726cd16ef56623c5de112630ffdd9551"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/QuickActionsConfig.tsx",
@@ -1427,7 +1432,7 @@
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/UsageStatisticsConfig.tsx",
       "interactionCount": 12,
-      "digest": "8dbdabc85f9522b362facf6cf76a4423e255dc32cf714247ce6e0343014b1914"
+      "digest": "64de6d71828e1281d830869669e97b760267704bc1506d8894eb1d108702b52c"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/VoiceInputConfig.tsx",

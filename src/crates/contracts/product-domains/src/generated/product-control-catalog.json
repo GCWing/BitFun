@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "45868ac0809aca71acdf49b9ed64e7e139f15cd8a1504d1330fdaf29ccf9ca61",
+  "digest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -138,10 +138,10 @@
     "features": 22,
     "settings": 16,
     "userFacing": 38,
-    "documentedItems": 315,
+    "documentedItems": 316,
     "controlCoverage": {
       "direct": 49,
-      "delegated": 61,
+      "delegated": 62,
       "interactive": 205,
       "unsupported": 0
     }
@@ -192,6 +192,7 @@
         "create-session",
         "session-lifecycle",
         "model-mode-permissions",
+        "creative-frontend-authoring",
         "turn-control",
         "permission-mailbox",
         "history-search",
@@ -378,6 +379,54 @@
         "additionalProperties": true
       },
       "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "session"
+      }
+    },
+    {
+      "id": "feature.ai-assistant:delegate:creative-frontend-authoring",
+      "capabilityId": "feature.ai-assistant",
+      "itemIds": [
+        "creative-frontend-authoring"
+      ],
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "delegateTools": [
+        "FrontendWorkbench",
+        "Read",
+        "Write",
+        "Edit"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "session"
@@ -18181,7 +18230,9 @@
         "新建会话",
         "继续任务",
         "权限",
-        "目标"
+        "目标",
+        "创造模式",
+        "前端定制"
       ],
       "keywordsEn": [
         "chat",
@@ -18190,17 +18241,21 @@
         "new session",
         "continue task",
         "permission",
-        "goal"
+        "goal",
+        "Creative mode",
+        "frontend customization"
       ],
       "highlightsZh": [
         "创建、归档、恢复和分叉会话",
         "暂停、继续或引导正在运行的任务",
-        "查看工具调用、权限请求和用量"
+        "查看工具调用、权限请求和用量",
+        "用创造模式安全定制正在运行的 BitFun 前端"
       ],
       "highlightsEn": [
         "Create, archive, restore, and fork sessions",
         "Pause, continue, or steer running work",
-        "Inspect tool calls, permission requests, and usage"
+        "Inspect tool calls, permission requests, and usage",
+        "Safely customize the running BitFun frontend in Creative mode"
       ],
       "items": [
         {
@@ -18235,6 +18290,28 @@
             "reasonCode": "unstructuredInteraction",
             "reasonZh": "“为会话选择模型、工作模式、记忆模式与权限模式”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
             "reasonEn": "“Choose the model, work mode, memory mode, and permission mode per session” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+          }
+        },
+        {
+          "id": "creative-frontend-authoring",
+          "titleZh": "让创造模式安全修改正在运行的 BitFun 前端",
+          "titleEn": "Let Creative mode safely customize the running BitFun frontend",
+          "control": {
+            "kind": "delegate",
+            "tools": [
+              "FrontendWorkbench",
+              "Read",
+              "Write",
+              "Edit"
+            ],
+            "workflowZh": [
+              "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
+              "用原草稿 ID 调用 apply 后，告知用户必须在 15 秒内通过不可变确认窗口保留修改；再次查询 status，只有不再 pending 才算完成"
+            ],
+            "workflowEn": [
+              "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
+              "Apply with the original draft ID, tell the user to keep the change through the immutable confirmation window within 15 seconds, and treat it as complete only after status is no longer pending"
+            ]
           }
         },
         {
@@ -18453,6 +18530,8 @@
         "继续任务",
         "权限",
         "目标",
+        "创造模式",
+        "前端定制",
         "chat",
         "conversation",
         "session",
@@ -18460,18 +18539,24 @@
         "continue task",
         "permission",
         "goal",
+        "Creative mode",
+        "frontend customization",
         "创建、归档、恢复和分叉会话",
         "暂停、继续或引导正在运行的任务",
         "查看工具调用、权限请求和用量",
+        "用创造模式安全定制正在运行的 BitFun 前端",
         "Create, archive, restore, and fork sessions",
         "Pause, continue, or steer running work",
         "Inspect tool calls, permission requests, and usage",
+        "Safely customize the running BitFun frontend in Creative mode",
         "打开并新建一个 AI 会话",
         "Open and create a new AI session",
         "重命名、归档、恢复、删除、分叉与导出会话",
         "Rename, archive, restore, delete, fork, and export sessions",
         "为会话选择模型、工作模式、记忆模式与权限模式",
         "Choose the model, work mode, memory mode, and permission mode per session",
+        "让创造模式安全修改正在运行的 BitFun 前端",
+        "Let Creative mode safely customize the running BitFun frontend",
         "开始、引导、打断、取消或恢复一次 Agent 运行",
         "Start, steer, interrupt, cancel, or recover an agent turn",
         "查看并逐个或批量回答等待中的权限请求",
@@ -18498,9 +18583,16 @@
         "打开 AI 助手，我想继续刚才的任务",
         "Start a new session so we can debug this build error",
         "Open the AI assistant; I want to continue my previous task",
+        "FrontendWorkbench",
+        "Read",
+        "Write",
+        "Edit",
+        "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
+        "用原草稿 ID 调用 apply 后，告知用户必须在 15 秒内通过不可变确认窗口保留修改；再次查询 status，只有不再 pending 才算完成",
+        "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
+        "Apply with the original draft ID, tell the user to keep the change through the immutable confirmation window within 15 seconds, and treat it as complete only after status is no longer pending",
         "SessionControl",
         "SessionHistory",
-        "Read",
         "Grep",
         "先用 SessionControl 的 list 找到目标会话，再用 SessionHistory 导出带索引的会话记录",
         "先只读取导出文件的索引区，再用 Read 或 Grep 定位并读取需要的轮次，避免把完整历史塞进上下文",
