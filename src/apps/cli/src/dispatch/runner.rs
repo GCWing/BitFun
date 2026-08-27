@@ -482,11 +482,13 @@ mod tests {
         let mut command = Command::new("/bin/sh");
         command
             .arg("-c")
+            // Keep the leader in the shell's `wait` builtin so TERM runs its
+            // trap immediately; an external `sleep` can defer trap handling.
             .arg(
                 "trap 'exit 0' TERM; trap '' HUP; \
                  sh -c 'trap \"\" TERM HUP; printf ready > \"$BITFUN_DISPATCH_TERM_TEST_READY\"; \
                  while :; do sleep 30; done' & \
-                 while :; do sleep 30; done",
+                 wait",
             )
             // These trailing arguments make the real process identity match
             // the hidden worker contract without launching BitFun Runtime.

@@ -95,6 +95,7 @@ struct BackgroundTaskStartRequest<'a> {
     coordinator: &'a std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
     context: &'a ToolUseContext,
     context_mode: SubagentContextMode,
+    requested_agent_id: Option<String>,
     target_session_id: Option<String>,
     subagent_type: Option<String>,
     logical_subagent_type: Option<String>,
@@ -273,11 +274,11 @@ impl TaskTool {
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
         let description = invocation.description.clone();
-        let mut prompt = invocation.prompt.clone().ok_or_else(|| {
-            BitFunError::tool(
-                "Required parameters: prompt and description. Missing prompt".to_string(),
-            )
-        })?;
+        let requested_agent_id = invocation.requested_agent_id.clone();
+        let mut prompt = invocation
+            .prompt
+            .clone()
+            .ok_or_else(|| BitFunError::tool("Required parameter missing: prompt".to_string()))?;
         let context_mode = invocation.context_mode;
         let target_session_id = match invocation.target_agent_id.as_deref() {
             Some(agent_id) => Some(coordinator.resolve_agent_id(&session_id, agent_id).await?),
@@ -777,6 +778,7 @@ impl TaskTool {
                 coordinator: &coordinator,
                 context,
                 context_mode,
+                requested_agent_id,
                 target_session_id,
                 subagent_type,
                 logical_subagent_type,
@@ -801,6 +803,7 @@ impl TaskTool {
             &coordinator,
             context,
             context_mode,
+            requested_agent_id,
             target_session_id,
             subagent_type,
             logical_subagent_type,
@@ -839,6 +842,7 @@ impl TaskTool {
             coordinator,
             context,
             context_mode,
+            requested_agent_id,
             target_session_id,
             subagent_type,
             logical_subagent_type,
@@ -870,6 +874,7 @@ impl TaskTool {
         .await?;
         let request = SubagentExecutionRequest {
             task_description: prepared_prompt,
+            requested_agent_id,
             context_mode,
             target_session_id,
             subagent_type,
@@ -920,6 +925,7 @@ impl TaskTool {
         coordinator: &std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
         context: &ToolUseContext,
         context_mode: SubagentContextMode,
+        requested_agent_id: Option<String>,
         target_session_id: Option<String>,
         subagent_type: Option<String>,
         logical_subagent_type: Option<String>,
@@ -973,6 +979,7 @@ impl TaskTool {
             );
             let request = SubagentExecutionRequest {
                 task_description: prepared_prompt.clone(),
+                requested_agent_id: requested_agent_id.clone(),
                 context_mode,
                 target_session_id: target_session_id.clone(),
                 subagent_type: subagent_type.clone(),
@@ -1278,7 +1285,11 @@ impl TaskTool {
         if supports_follow_up {
             if let Some(subagent_session_id) = result.session_id() {
                 let agent_id = coordinator
-                    .agent_id_for_subagent_session(&session_id, subagent_session_id)
+                    .agent_id_for_subagent_session_with_requested_id(
+                        &session_id,
+                        subagent_session_id,
+                        requested_agent_id.as_deref(),
+                    )
                     .await?;
                 data["agent_id"] = json!(agent_id.clone());
                 result_for_assistant.push_str(&format!(

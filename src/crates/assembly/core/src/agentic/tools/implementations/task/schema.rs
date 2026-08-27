@@ -4,13 +4,6 @@ impl TaskTool {
     pub(super) fn base_schema_properties() -> Map<String, Value> {
         let mut properties = Map::new();
         properties.insert(
-            "description".to_string(),
-            json!({
-                "type": "string",
-                "description": "A short (3-5 word) description of the task"
-            }),
-        );
-        properties.insert(
             "prompt".to_string(),
             json!({
                 "type": "string",
@@ -60,7 +53,7 @@ impl TaskTool {
             "agent_id".to_string(),
             json!({
                 "type": "string",
-                "description": "Required for action='send_input' and action='cancel'."
+                "description": "For action='spawn', Choose a meaningful unique ID matching [a-z][a-z0-9_-]{0,31}. For action='send_input' and action='cancel', use the ID chosen when the agent was spawned."
             }),
         );
         properties.insert(
@@ -74,7 +67,8 @@ impl TaskTool {
             "type": "object",
             "properties": properties,
             "required": [
-                "action"
+                "action",
+                "agent_id"
             ],
             "additionalProperties": false
         })
@@ -88,22 +82,22 @@ When to use:
 - Use direct tools instead for focused lookups, known paths, single symbols, or code that can be inspected with a few reads or searches.
 
 Supported actions:
-- `spawn`: create and run a new subagent. The result contains an `agent_id` for future `send_input` or `cancel`.
-- `send_input`: continue an existing subagent. Provide `agent_id`, `description`, and `prompt`. Optionally provide `model_id` to switch the subagent model for this and later turns.
+- `spawn`: create and run a new subagent. Choose a meaningful unique `agent_id`.
+- `send_input`: continue an existing subagent. Provide its `agent_id` and a `prompt`. Optionally provide `model_id` to switch the subagent model for this and later turns.
 - `cancel`: cancel a background subagent. Provide `agent_id`.
 
 Two modes for action='spawn':
 The two modes are mutually exclusive: do not provide `subagent_type` when `fork_context=true`.
 1. With an explicit `subagent_type` (default)
-  - Provide `subagent_type`, `description`, and `prompt`.
+  - Provide `agent_id`, `subagent_type`, and `prompt`.
   - Available types are listed in the <available_agents> section. Each type has specific capabilities and tools.
   - In this mode, the subagent does not share your context. Include all necessary background information in the prompt.
 2. By forking the current context
-  - Set `fork_context=true`, and provide `description` and `prompt`. Do not provide `subagent_type`.
+  - Set `fork_context=true`, and provide `agent_id` and `prompt`. Do not provide `subagent_type`.
   - In this mode, the subagent inherits the full conversation history up to this point — all prior user messages, assistant responses, and tool results. You do not need to repeat information already covered in the conversation.
 
 `prompt` writing guidelines:
-- Do not put `action`, `subagent_type`, `agent_id`, `description`, or `model_id` inside the prompt string.
+- Do not put `action`, `subagent_type`, `agent_id`, or `model_id` inside the prompt string.
 - Keep it under 180 lines / 16KB. For large delegations, split the work into multiple Task calls with clear ownership.
 - Pass file paths, symbols, constraints, and exact questions instead of pasting large file contents.
 - Clearly tell the agent whether you expect code changes or research only (searches, file reads, web fetches, etc.), because it does not know the user's intent unless you state it.
@@ -119,7 +113,6 @@ The two modes are mutually exclusive: do not provide `subagent_type` when `fork_
 - For a configured model, call ListModels first and use its returned `model_id`.
 
 Usage notes:
-- Include a short description of what the agent will do for this round (for `spawn` and `send_input`).
 - Provide a clear prompt for `spawn` and `send_input` so the agent can work autonomously and return the information you need.
 - The subagent inherits your workspace. If the subagent should inspect or operate on a path outside the current workspace, say that target path and scope clearly in the prompt.
 - Launch independent agents concurrently when that improves coverage or latency or when the user explicitly requests it. To do this, send parallel Task calls in a single assistant message.
@@ -129,10 +122,10 @@ Usage notes:
 
 Examples (assume "example-reviewer" is present in the agent listing):
 <examples>
-- Start a new specialized subagent: `{ "action": "spawn", "description": "Inspect parser flow", "subagent_type": "example-reviewer", "prompt": "Inspect the parser flow in src/parser.rs and report risks, key functions, and any missing tests." }`
-- Start by forking the current context: `{ "action": "spawn", "description": "Check migration impact", "fork_context": true, "prompt": "Using the current context, check whether the migration affects config loading. Stay read-only and report the answer with file references." }`
-- Continue an existing subagent with a specific model: `{ "action": "send_input", "description": "Continue parser review", "agent_id": "a1", "model_id": "fast", "prompt": "Continue from your prior parser review and focus on the error recovery paths." }`
-- Cancel a background subagent: `{ "action": "cancel", "agent_id": "a1" }`
+- Start a new specialized subagent: `{ "action": "spawn", "agent_id": "parser-review", "subagent_type": "example-reviewer", "prompt": "Inspect the parser flow in src/parser.rs and report risks, key functions, and any missing tests." }`
+- Start by forking the current context: `{ "action": "spawn", "agent_id": "migration-impact", "fork_context": true, "prompt": "Using the current context, check whether the migration affects config loading. Stay read-only and report the answer with file references." }`
+- Continue an existing subagent with a specific model: `{ "action": "send_input", "agent_id": "parser-review", "model_id": "fast", "prompt": "Continue from your prior parser review and focus on the error recovery paths." }`
+- Cancel a background subagent: `{ "action": "cancel", "agent_id": "parser-review" }`
 </examples>
 "#
             .to_string()
@@ -144,9 +137,9 @@ impl AgentSpawnTool {
         json!({
             "type": "object",
             "properties": {
-                "description": {
+                "agent_id": {
                     "type": "string",
-                    "description": "A short (3-5 word) description of the work"
+                    "description": "A meaningful and unique ID for the new agent. It must match the pattern [a-z][a-z0-9_-]{0,31}."
                 },
                 "prompt": {
                     "type": "string",
@@ -161,7 +154,7 @@ impl AgentSpawnTool {
                     "description": "Optional model selection. Can be 'inherit', 'primary', 'fast', or a configured model ID."
                 }
             },
-            "required": ["description", "prompt", "agent_type"],
+            "required": ["agent_id", "prompt", "agent_type"],
             "additionalProperties": false
         })
     }
@@ -171,13 +164,15 @@ impl AgentSpawnTool {
 
 Choose an `agent_type` permitted by the current system prompt. Each type has its own role and tool set.
 
+Choose a meaningful `agent_id` for this agent. It must be unique among agents launched by the current parent session and match `[a-z][a-z0-9_-]{0,31}`. Reusing an existing or deleted agent's ID fails; the runtime never renames it automatically.
+
 Write a self-contained `prompt` that gives the agent everything it needs to complete the work:
 - State the objective, scope, relevant paths or symbols, constraints, and expected result.
 - Say whether code changes are expected or the work is read-only.
 - Pass precise references instead of pasting large file contents.
 - Keep the prompt under 180 lines / 16KB when practical; split broad work into focused agents with clear ownership.
 
-The agent shares the current workspace and starts with a fresh conversation. The result includes an `agent_id` and `bg_task_id`. Use `bg_task_id` with AgentWait to collect the result. For agents that support follow-up turns, use `agent_id` with AgentSendInput; use it with AgentInterrupt to stop active work.
+The agent shares the current workspace and starts with a fresh conversation. The result includes a `bg_task_id`. Use `bg_task_id` with AgentWait to collect the result. For agents that support follow-up turns, use the requested `agent_id` with AgentSendInput; use it with AgentInterrupt to stop active work.
 
 Set `model_id` only when a particular model is required. Omit it to use the agent's configured model. `inherit` selects the current model; `primary` and `fast` select the corresponding configured model slots. Call ListModels before using a configured model ID.
 
@@ -193,11 +188,7 @@ impl AgentSendInputTool {
             "properties": {
                 "agent_id": {
                     "type": "string",
-                    "description": "The agent ID returned when the agent was launched."
-                },
-                "description": {
-                    "type": "string",
-                    "description": "A short (3-5 word) description of this round of work"
+                    "description": "The agent ID chosen when the agent was launched."
                 },
                 "prompt": {
                     "type": "string",
@@ -208,7 +199,7 @@ impl AgentSendInputTool {
                     "description": "Optional model selection for this and later turns. Can be 'inherit', 'primary', 'fast', or a configured model ID."
                 }
             },
-            "required": ["agent_id", "description", "prompt"],
+            "required": ["agent_id", "prompt"],
             "additionalProperties": false
         })
     }
@@ -216,7 +207,7 @@ impl AgentSendInputTool {
     pub(super) fn render_agent_send_input_description(&self) -> String {
         r#"Send a new instruction to an existing agent. The instruction starts a background turn and the call returns immediately.
 
-Use the `agent_id` returned when the agent was launched. The agent retains its earlier conversation, so the `prompt` can refer to prior findings or ask it to continue, refine, verify, or change direction. State the new objective and expected result clearly.
+Use the `agent_id` chosen when the agent was launched. The agent retains its earlier conversation, so the `prompt` can refer to prior findings or ask it to continue, refine, verify, or change direction. State the new objective and expected result clearly.
 
 The result includes a new `bg_task_id`. Use it with AgentWait to collect the result of this turn."#
             .to_string()
@@ -246,7 +237,7 @@ impl AgentInterruptTool {
     pub(super) fn render_agent_interrupt_description(&self) -> String {
         r#"Interrupt an agent's active background work.
 
-Use the `agent_id` returned when the agent was launched. Set `cascade` to true when the target's active descendant agents should also be interrupted; otherwise descendants continue independently. The result reports how many active background runs were interrupted. Use this when the work is no longer needed, its scope has changed, or it should stop before further side effects occur."#
+Use the `agent_id` chosen when the agent was launched. Set `cascade` to true when the target's active descendant agents should also be interrupted; otherwise descendants continue independently. The result reports how many active background runs were interrupted. Use this when the work is no longer needed, its scope has changed, or it should stop before further side effects occur."#
             .to_string()
     }
 }

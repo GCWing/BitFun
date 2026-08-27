@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 9;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -92,17 +92,18 @@ pub use bitfun_runtime_ports::{
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
-    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
-    AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, AgentWorkspaceReferenceSourceRange, ClockPort,
-    DialogSteerOutcome, DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort,
-    McpCatalogPort, NetworkPort, PermissionAuditRecord, PermissionDelegationContext,
-    PermissionGrant, PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
-    PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
-    PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
-    RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentTurnSettlementResult,
+    AgentTurnSettlementStatus, AgentUserAnswersRequest, AgentUserShellCommandPort,
+    AgentUserShellCommandRequest, AgentUserShellCommandResult, AgentWorkspaceReference,
+    AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchEntry,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
+    AgentWorkspaceReferenceSourceRange, ClockPort, DialogSteerOutcome, DialogSubmissionPolicy,
+    DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort, NetworkPort,
+    PermissionAuditRecord, PermissionDelegationContext, PermissionGrant, PermissionGrantKey,
+    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
+    PermissionRequestSource, PermissionRequestSourceKind, PortError, PortErrorKind, PortResult,
+    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
@@ -617,7 +618,7 @@ impl AgentRuntime {
     pub async fn wait_for_turn_settlement(
         &self,
         request: AgentTurnSettlementRequest,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<AgentTurnSettlementResult, RuntimeError> {
         self.inner.wait_for_turn_settlement(request).await
     }
 

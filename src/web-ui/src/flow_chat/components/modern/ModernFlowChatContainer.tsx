@@ -2389,7 +2389,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       parentSessionId: selection.parentSessionId,
       workspacePath: selection.workspacePath || activeSession.workspacePath,
       sessionKind: 'subagent',
-      sessionTitle: selection.title,
+      sessionTitle: selection.agentId || selection.title,
       agentType: selection.agentType,
       parentToolCallId: selection.parentToolCallId,
       subagentType: selection.subagentType,

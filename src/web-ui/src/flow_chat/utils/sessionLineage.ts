@@ -20,6 +20,7 @@ export interface SessionLineageNode {
   title: string;
   agentType?: string;
   subagentType?: string;
+  agentId?: string;
   lifecycle: SessionLineageLifecycle;
   createdAt: number;
   workspacePath?: string;
@@ -76,6 +77,7 @@ function nodeFromMetadata(metadata: SessionLineageEntry): FlatSessionLineageNode
     title: metadata.sessionName,
     agentType: metadata.agentType,
     subagentType: metadata.subagentType,
+    agentId: metadata.agentId,
     lifecycle: metadataLifecycle(metadata),
     createdAt: metadata.createdAtMs,
     workspacePath: metadata.workspacePath,
@@ -93,6 +95,7 @@ function nodeFromSession(session: Session): FlatSessionLineageNode {
     title: session.title?.trim() || session.subagentType || session.mode || 'Agent',
     agentType: session.mode || session.config.agentType,
     subagentType: session.subagentType,
+    agentId: undefined,
     lifecycle: sessionLineageLifecycleForSession(session),
     createdAt: session.createdAt,
     workspacePath: session.workspacePath,
@@ -149,6 +152,7 @@ export function buildSessionLineageTree(
       if (persistedNode?.title.trim()) {
         liveNode.title = persistedNode.title;
       }
+      liveNode.agentId = persistedNode?.agentId;
       nodes.set(session.sessionId, liveNode);
     }
   }

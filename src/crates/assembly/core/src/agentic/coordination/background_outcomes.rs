@@ -192,13 +192,18 @@ impl BackgroundSubagentOutcomeStore {
         self.changes.notify_waiters();
     }
 
-    pub(crate) async fn discard(&self, task_pk: i64) -> BitFunResult<()> {
+    pub(crate) async fn discard(
+        &self,
+        task_pk: i64,
+        release_agent_reservation: bool,
+    ) -> BitFunResult<bool> {
         self.live_results.remove(&task_pk);
-        self.coordination_store
-            .delete_background_task(task_pk)
+        let released_agent_reservation = self
+            .coordination_store
+            .discard_unsubmitted_background_task(task_pk, release_agent_reservation)
             .await?;
         self.changes.notify_waiters();
-        Ok(())
+        Ok(released_agent_reservation)
     }
 
     pub(crate) async fn wait_for(
@@ -503,6 +508,31 @@ impl BackgroundSubagentOutcomeStore {
             .await
     }
 
+    pub(crate) async fn agent_id_for_session_with_requested_id(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+        requested_agent_id: Option<&str>,
+    ) -> BitFunResult<String> {
+        self.coordination_store
+            .agent_id_for_session_with_requested_id(
+                parent_session_id,
+                child_session_id,
+                requested_agent_id,
+            )
+            .await
+    }
+
+    pub(crate) async fn existing_agent_id_for_session(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        self.coordination_store
+            .existing_agent_id_for_session(parent_session_id, child_session_id)
+            .await
+    }
+
     pub(crate) async fn resolve_agent_id(
         &self,
         parent_session_id: &str,
@@ -704,6 +734,8 @@ mod tests {
                 "persisted child result".to_string(),
                 &[],
                 TurnStats::default(),
+                Some("complete".to_string()),
+                Some(true),
             )
             .await
             .expect("complete child turn");

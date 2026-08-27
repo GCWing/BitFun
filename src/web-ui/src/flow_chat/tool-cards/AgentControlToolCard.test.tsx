@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import {
   resolveSubagentAvatarPresentation,
-  useSubagentIdentityStore,
 } from '../subagent-identity';
 import { AgentControlToolCard } from './AgentControlToolCard';
 
@@ -114,13 +113,12 @@ function agentToolItem(
       id: 'agent-call',
       input: toolName === 'AgentSpawn'
         ? {
+            agent_id: 'parser-review',
             agent_type: 'SwarmWorker',
-            description: 'Inspect parser',
             prompt: 'Inspect the parser flow and report findings.',
           }
         : {
             agent_id: 'agent-1',
-            description: 'Continue parser review',
             prompt: 'Continue with the error recovery paths.',
           },
     },
@@ -146,7 +144,6 @@ describeWithJsdom('AgentControlToolCard', () => {
     vi.stubGlobal('CustomEvent', window.CustomEvent);
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
-    useSubagentIdentityStore.getState().clear();
     mocks.includeChildSession = true;
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -158,7 +155,6 @@ describeWithJsdom('AgentControlToolCard', () => {
     container.remove();
     dom.window.close();
     mocks.listeners.clear();
-    useSubagentIdentityStore.getState().clear();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
@@ -179,7 +175,10 @@ describeWithJsdom('AgentControlToolCard', () => {
       const pill = container.querySelector<HTMLButtonElement>('.agent-control-tool-card__agent-pill');
       const toggle = container.querySelector<HTMLElement>('[data-testid="agent-control-tool-card-toggle"]');
       expect(pill?.textContent?.trim()).toBeTruthy();
+      expect(pill?.textContent).toContain(toolName === 'AgentSpawn' ? 'parser-review' : 'agent-1');
       expect(pill?.querySelector('[data-bf-component="subagent-avatar"]')).not.toBeNull();
+      expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
+      expect(container.textContent).not.toContain('SwarmWorker');
       expect(container.textContent).toContain('Running');
       expect(container.querySelector('[data-bf-part="expandIndicator"]')).not.toBeNull();
       expect(container.textContent).not.toContain(
@@ -260,8 +259,8 @@ describeWithJsdom('AgentControlToolCard', () => {
       status: 'streaming',
       isParamsStreaming: true,
       partialParams: {
+        agent_id: 'parser-review',
         agent_type: 'SwarmWorker',
-        description: 'Inspect parser',
         prompt: 'Partial prompt that must stay collapsed.',
       },
     });

@@ -159,6 +159,26 @@ pub trait Tool: Send + Sync {
         }
     }
 
+    /// Validate invariants on the original input that a Hook rewrite must not
+    /// relax. The default preserves existing tool behavior while discarding
+    /// ordinary repairable validation failures.
+    ///
+    /// Tools whose full [`validate_input`] can return a repairable error before
+    /// reaching an invariant must override this method and inspect every
+    /// independently recognizable protected field in the partial input.
+    async fn validate_input_rewrite_invariants(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        let validation = self.validate_input(input, context).await;
+        if validation.blocks_input_rewrite() {
+            validation
+        } else {
+            ValidationResult::default()
+        }
+    }
+
     /// Render result for assistant
     fn render_result_for_assistant(&self, _output: &Value) -> String {
         "Tool result".to_string()

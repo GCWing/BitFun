@@ -1296,7 +1296,7 @@ impl CliAgentRuntimeClient {
         };
         match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => {
-                runtime.wait_for_turn_settlement(request).await
+                runtime.wait_for_turn_settlement(request).await.map(|_| ())
             }
             CliAgentRuntimeBackend::Shared(client) => {
                 let result = client
@@ -2762,10 +2762,10 @@ mod dual_backend_behavior_tests {
         AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
         AgentSubmissionResult, AgentTurnCancellationPort, AgentTurnCancellationRequest,
         AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-        AgenticEvent, DialogSubmitOutcome, PermissionReply, PermissionRequest,
-        PermissionRequestManager, PermissionRequestSource, PermissionRequestSourceKind, PortError,
-        PortErrorKind, PortResult, RuntimeError, SessionState, SessionTranscript,
-        SessionTranscriptReader, SessionTranscriptRequest,
+        AgentTurnSettlementResult, AgentTurnSettlementStatus, AgenticEvent, DialogSubmitOutcome,
+        PermissionReply, PermissionRequest, PermissionRequestManager, PermissionRequestSource,
+        PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeError,
+        SessionState, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
     };
     use bitfun_agent_runtime_ipc::{
         RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcErrorCode,
@@ -3101,7 +3101,7 @@ mod dual_backend_behavior_tests {
         async fn wait_for_turn_settlement(
             &self,
             request: AgentTurnSettlementRequest,
-        ) -> PortResult<()> {
+        ) -> PortResult<AgentTurnSettlementResult> {
             match self
                 .state
                 .settlement_outcomes
@@ -3111,7 +3111,11 @@ mod dual_backend_behavior_tests {
                 .cloned()
             {
                 Some(Some(error)) => Err(error),
-                _ => Ok(()),
+                _ => Ok(AgentTurnSettlementResult {
+                    status: AgentTurnSettlementStatus::Completed,
+                    final_response: Some("fixture result".to_string()),
+                    finish_reason: Some("stop".to_string()),
+                }),
             }
         }
     }

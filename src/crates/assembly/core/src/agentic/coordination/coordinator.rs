@@ -107,7 +107,8 @@ use bitfun_runtime_ports::{
     agent_workspace_references_from_metadata, resolve_permission_mode,
     AgentMessageWorkspaceReferencesRequest, AgentSessionComposerUpdate,
     AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSearchEntry,
+    AgentTurnSettlementResult, AgentTurnSettlementStatus, AgentWorkspaceReference,
+    AgentWorkspaceReferenceKind, AgentWorkspaceReferenceSearchEntry,
     AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DelegationPolicy,
     PermissionDelegationContext, PermissionMode, PermissionModeLayers, PermissionRuntimeCeiling,
     RemoteExecPort, ResolvedPermissionMode, SessionStoragePathRequest,
@@ -466,6 +467,7 @@ pub enum SubagentResultStatus {
 #[derive(Debug, Clone)]
 pub(crate) struct SubagentExecutionRequest {
     pub(crate) task_description: String,
+    pub(crate) requested_agent_id: Option<String>,
     pub(crate) context_mode: SubagentContextMode,
     pub(crate) target_session_id: Option<String>,
     pub(crate) subagent_type: Option<String>,
@@ -594,6 +596,51 @@ fn logical_subagent_type_or_runtime(
     logical_subagent_type.unwrap_or(runtime_type).to_string()
 }
 
+fn external_delegation_agent_id(logical_id: &str, invocation_id: &uuid::Uuid) -> String {
+    const AGENT_ID_MAX_LEN: usize = 32;
+    const SUFFIX_LEN: usize = 8;
+    const PREFIX_MAX_LEN: usize = AGENT_ID_MAX_LEN - SUFFIX_LEN - 1;
+
+    let mut prefix = String::new();
+    for character in logical_id.chars() {
+        let character = if character.is_ascii_alphanumeric() {
+            character.to_ascii_lowercase()
+        } else if matches!(character, '_' | '-') {
+            character
+        } else {
+            '-'
+        };
+        if matches!(character, '_' | '-')
+            && prefix
+                .chars()
+                .last()
+                .is_some_and(|last| matches!(last, '_' | '-'))
+        {
+            continue;
+        }
+        prefix.push(character);
+    }
+    let prefix = prefix.trim_matches(|character| matches!(character, '_' | '-'));
+    let mut prefix = if prefix
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_lowercase)
+    {
+        prefix.to_string()
+    } else if prefix.is_empty() {
+        "agent".to_string()
+    } else {
+        format!("agent-{prefix}")
+    };
+    prefix.truncate(PREFIX_MAX_LEN);
+    while prefix.ends_with('_') || prefix.ends_with('-') {
+        prefix.pop();
+    }
+
+    let suffix = invocation_id.simple().to_string();
+    format!("{prefix}-{}", &suffix[..SUFFIX_LEN])
+}
+
 fn fork_subagent_system_reminder() -> String {
     "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
 }
@@ -683,6 +730,7 @@ struct PersistedSubagentContinuationContext {
 
 #[derive(Debug, Clone)]
 pub(crate) struct HiddenSubagentExecutionRequest {
+    requested_agent_id: Option<String>,
     target_session_id: Option<String>,
     dialog_turn_id: Option<String>,
     session_name: String,
@@ -2939,6 +2987,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         final_response.clone(),
                         &execution_result.new_messages,
                         stats,
+                        Some(execution_result.effective_finish_reason.clone()),
+                        Some(execution_result.has_final_response),
                     )
                     .await
             }
@@ -2950,6 +3000,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         final_response.clone(),
                         &execution_result.new_messages,
                         stats,
+                        Some(execution_result.effective_finish_reason.clone()),
+                        Some(execution_result.has_final_response),
                     )
                     .await
             }
@@ -2977,6 +3029,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await;
                 return (status, String::new());
             }
+        }
+
+        if persistence_succeeded {
+            let status = if execution_result.success && execution_result.has_final_response {
+                AgentTurnSettlementStatus::Completed
+            } else {
+                AgentTurnSettlementStatus::Failed
+            };
+            session_manager.record_turn_settlement_result(
+                session_id,
+                turn_id,
+                AgentTurnSettlementResult {
+                    status,
+                    final_response: (status == AgentTurnSettlementStatus::Completed)
+                        .then_some(final_response.clone()),
+                    finish_reason: Some(execution_result.effective_finish_reason.clone()),
+                },
+            );
         }
 
         if recovery_generation.is_some() {
@@ -3249,6 +3319,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Cancelled,
+                final_response: None,
+                finish_reason: Some("cancelled".to_string()),
+            },
+        );
+
         match session_manager
             .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
             .await
@@ -3320,6 +3400,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await;
             }
         };
+
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Cancelled,
+                final_response: None,
+                finish_reason: Some("interrupted".to_string()),
+            },
+        );
 
         match session_manager
             .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
@@ -3492,6 +3582,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 );
             }
         }
+
+        session_manager.record_turn_settlement_result(
+            session_id,
+            turn_id,
+            AgentTurnSettlementResult {
+                status: AgentTurnSettlementStatus::Failed,
+                final_response: None,
+                finish_reason: Some("failed".to_string()),
+            },
+        );
 
         match session_manager
             .update_session_state_for_turn_if_processing(
@@ -4152,10 +4252,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 );
             }
             let round_id = format!("{}-round-0", turn_id);
-            let tool_call_id = format!("task_{}", uuid::Uuid::new_v4());
+            let invocation_id = uuid::Uuid::new_v4();
+            let tool_call_id = format!("task_{invocation_id}");
+            let agent_id = external_delegation_agent_id(&logical_id, &invocation_id);
             let tool_params = serde_json::json!({
                 "action": "spawn",
-                "description": format!("Run external command with {logical_id}"),
+                "agent_id": agent_id.clone(),
                 "prompt": prompt,
                 "subagent_type": logical_id,
             });
@@ -4220,6 +4322,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
             let request = SubagentExecutionRequest {
                 task_description: prompt.clone(),
+                requested_agent_id: Some(agent_id),
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some(binding.runtime_agent_key),
@@ -7287,7 +7390,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         "Dialog turn not found: {turn_id}"
                     )));
                 }
-                return Err(BitFunError::Service(format!(
+                return Err(BitFunError::OutcomeUnknown(format!(
                     "Turn settlement evidence is unavailable: session_id={session_id}, turn_id={turn_id}"
                 )));
             }
@@ -9295,6 +9398,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<SubagentResult> {
         let HiddenSubagentExecutionRequest {
+            requested_agent_id: _,
             target_session_id,
             dialog_turn_id,
             session_name,
@@ -11037,6 +11141,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         .session_manager
                         .is_transient_session(&session.session_id);
                     return Ok(HiddenSubagentExecutionRequest {
+                        requested_agent_id: request.requested_agent_id,
                         target_session_id: Some(session.session_id.clone()),
                         dialog_turn_id: None,
                         session_name: session.session_name.clone(),
@@ -11130,6 +11235,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_config.model_binding_fingerprint = immutable_model_fingerprint;
 
                 Ok(HiddenSubagentExecutionRequest {
+                    requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
                     session_name: format!("Subagent: {}", task_description),
@@ -11217,6 +11323,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 initial_messages.push(Message::user(task_description.clone()));
 
                 Ok(HiddenSubagentExecutionRequest {
+                    requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
                     session_name: format!("Fork: {}", task_description),
@@ -11517,6 +11624,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<String> {
         self.background_subagent_outcomes
             .agent_id_for_session(parent_session_id, subagent_session_id)
+            .await
+    }
+
+    pub(crate) async fn agent_id_for_subagent_session_with_requested_id(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+        requested_agent_id: Option<&str>,
+    ) -> BitFunResult<String> {
+        self.background_subagent_outcomes
+            .agent_id_for_session_with_requested_id(
+                parent_session_id,
+                subagent_session_id,
+                requested_agent_id,
+            )
+            .await
+    }
+
+    pub(crate) async fn existing_agent_id_for_subagent_session(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        self.background_subagent_outcomes
+            .existing_agent_id_for_session(parent_session_id, subagent_session_id)
             .await
     }
 
@@ -11827,6 +11959,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let logical_agent_type = request.agent_type.clone();
 
         let hidden_request = HiddenSubagentExecutionRequest {
+            requested_agent_id: None,
             target_session_id: None,
             dialog_turn_id: None,
             session_name: request.session_name,
@@ -11964,7 +12097,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .background_subagent_outcomes
             .register(BackgroundTaskRegistration {
                 parent_session_id: subagent_parent_info.session_id.clone(),
-                requested_agent_id: None,
+                requested_agent_id: request.requested_agent_id.clone(),
                 child_session_id: subagent_session_id.clone(),
                 parent_dialog_turn_id: subagent_parent_info.dialog_turn_id.clone(),
                 parent_tool_call_id: subagent_parent_info.tool_call_id.clone(),
@@ -11992,19 +12125,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
-            if let Err(error) = self.background_subagent_outcomes.discard(task_pk).await {
-                warn!(
-                    "Failed to discard cancelled background task start: task_pk={}, error={}",
-                    task_pk, error
-                );
-            }
-            self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
-                .await;
-            if is_new_swarm_node {
-                let _ = self
-                    .background_subagent_outcomes
-                    .rollback_swarm_child(&subagent_session_id)
+            let cleanup_is_safe = match self
+                .background_subagent_outcomes
+                .discard(task_pk, request.prepared_session_created)
+                .await
+            {
+                Ok(released_agent_reservation) => {
+                    !request.prepared_session_created || released_agent_reservation
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to discard cancelled background task start; preserving the prepared session: task_pk={}, error={}",
+                        task_pk, error
+                    );
+                    false
+                }
+            };
+            if cleanup_is_safe {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                     .await;
+                if is_new_swarm_node {
+                    let _ = self
+                        .background_subagent_outcomes
+                        .rollback_swarm_child(&subagent_session_id)
+                        .await;
+                }
             }
             return Err(BitFunError::Cancelled(
                 "Background subagent start was cancelled".to_string(),
@@ -12029,21 +12174,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             {
                 Ok(submit_result) => submit_result,
                 Err(error) => {
-                    if let Err(discard_error) =
-                        self.background_subagent_outcomes.discard(task_pk).await
+                    let cleanup_is_safe = match self
+                        .background_subagent_outcomes
+                        .discard(task_pk, request.prepared_session_created)
+                        .await
                     {
-                        warn!(
-                            "Failed to discard unsubmitted background task: task_pk={}, error={}",
-                            task_pk, discard_error
-                        );
-                    }
-                    self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
-                        .await;
-                    if is_new_swarm_node {
-                        let _ = self
-                            .background_subagent_outcomes
-                            .rollback_swarm_child(&subagent_session_id)
+                        Ok(released_agent_reservation) => {
+                            !request.prepared_session_created || released_agent_reservation
+                        }
+                        Err(discard_error) => {
+                            warn!(
+                                "Failed to discard unsubmitted background task; preserving the prepared session: task_pk={}, error={}",
+                                task_pk, discard_error
+                            );
+                            false
+                        }
+                    };
+                    if cleanup_is_safe {
+                        self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
                             .await;
+                        if is_new_swarm_node {
+                            let _ = self
+                                .background_subagent_outcomes
+                                .rollback_swarm_child(&subagent_session_id)
+                                .await;
+                        }
                     }
                     return Err(BitFunError::tool(error));
                 }
@@ -13767,6 +13922,23 @@ impl ConversationCoordinator {
         }
 
         let duration_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let cancelled = cancellation_token.is_cancelled()
+            || results.iter().any(|result| {
+                result
+                    .result
+                    .result
+                    .get("category")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("cancelled")
+            });
+        let success = results.iter().all(user_shell_tool_result_succeeded);
+        let finish_reason = if cancelled {
+            "cancelled"
+        } else if success {
+            "complete"
+        } else {
+            "tool_error"
+        };
         if let Err(error) = session_manager
             .complete_dialog_turn(
                 &session_id,
@@ -13779,6 +13951,8 @@ impl ConversationCoordinator {
                     total_tokens: 0,
                     duration_ms,
                 },
+                Some(finish_reason.to_string()),
+                Some(false),
             )
             .await
         {
@@ -13796,15 +13970,6 @@ impl ConversationCoordinator {
             return;
         }
 
-        let cancelled = cancellation_token.is_cancelled()
-            || results.iter().any(|result| {
-                result
-                    .result
-                    .result
-                    .get("category")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("cancelled")
-            });
         if cancelled {
             Self::persist_cancelled_dialog_turn(
                 event_queue.as_ref(),
@@ -13816,7 +13981,6 @@ impl ConversationCoordinator {
             )
             .await;
         } else {
-            let success = results.iter().all(user_shell_tool_result_succeeded);
             let _ = session_manager
                 .update_session_state_for_turn_if_processing(
                     &session_id,
@@ -14599,7 +14763,8 @@ mod tests {
         append_skill_agent_listing_diff_reminders, apply_primary_agent_model_default,
         btw_session_memory_mode, build_subagent_session_relationship,
         commit_interrupted_turn_intent, delegation_policy_for_agent_turn,
-        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
+        external_delegation_agent_id, lineage_active_turn_after_transcript,
+        lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         permission_mode_from_metadata, resolve_agent_session_create_created_by,
@@ -14646,7 +14811,9 @@ mod tests {
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
+    use crate::util::errors::BitFunError;
     use bitfun_agent_runtime::permission::PermissionRequestManager;
+    use bitfun_runtime_ports::AgentTurnSettlementStatus;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 
@@ -15547,6 +15714,7 @@ mod tests {
         cancellation_token.cancel();
         let request = SubagentExecutionRequest {
             task_description: "should not start".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: None,
             subagent_type: Some("Explore".to_string()),
@@ -16249,6 +16417,13 @@ mod tests {
         )
         .await;
 
+        assert_eq!(
+            session_manager
+                .turn_settlement_result(&session.session_id, &turn_id)
+                .and_then(|result| result.final_response),
+            Some("complete response".to_string())
+        );
+
         let events = coordinator.event_queue.dequeue_batch(10).await;
         assert!(events.iter().any(|envelope| matches!(
             &envelope.event,
@@ -16261,6 +16436,130 @@ mod tests {
             .delete_session_by_id(&session.session_id)
             .await
             .expect("clean up persisted test session");
+    }
+
+    #[tokio::test]
+    async fn transient_turns_keep_authoritative_terminal_results() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let session = session_manager
+            .create_transient_session_with_id_and_details(
+                Some("transient-session".to_string()),
+                "Transient completion".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("create transient session");
+        let turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "finish".to_string(),
+                Some("turn-transient-result".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start turn");
+        let intermediate = Message::assistant("intermediate tool-round text".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-tool".to_string());
+        let final_message = Message::assistant("authoritative final answer".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-final".to_string());
+
+        ConversationCoordinator::persist_completed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &turn_id,
+            &ExecutionResult {
+                final_message: final_message.clone(),
+                total_rounds: 2,
+                success: true,
+                new_messages: vec![intermediate, final_message],
+                finish_reason: FinishReason::Complete,
+                total_tools: 1,
+                duration_ms: 1,
+                partial_recovery_reason: None,
+                effective_finish_reason: "complete".to_string(),
+                has_final_response: true,
+            },
+            None,
+        )
+        .await;
+
+        let settlement = session_manager
+            .turn_settlement_result(&session.session_id, &turn_id)
+            .expect("transient turn settlement result");
+        assert_eq!(settlement.status, AgentTurnSettlementStatus::Completed);
+        assert_eq!(
+            settlement.final_response.as_deref(),
+            Some("authoritative final answer")
+        );
+        assert_eq!(settlement.finish_reason.as_deref(), Some("complete"));
+
+        let cancelled_turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "cancel".to_string(),
+                Some("turn-transient-cancelled".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start cancelled turn");
+        ConversationCoordinator::persist_cancelled_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &cancelled_turn_id,
+            true,
+        )
+        .await;
+        let cancelled = session_manager
+            .turn_settlement_result(&session.session_id, &cancelled_turn_id)
+            .expect("cancelled turn settlement result");
+        assert_eq!(cancelled.status, AgentTurnSettlementStatus::Cancelled);
+        assert_eq!(cancelled.final_response, None);
+        assert_eq!(cancelled.finish_reason.as_deref(), Some("cancelled"));
+
+        let failed_turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "fail".to_string(),
+                Some("turn-transient-failed".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start failed turn");
+        ConversationCoordinator::persist_failed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &failed_turn_id,
+            &BitFunError::AIClient("provider failed".to_string()),
+            true,
+        )
+        .await;
+        let failed = session_manager
+            .turn_settlement_result(&session.session_id, &failed_turn_id)
+            .expect("failed turn settlement result");
+        assert_eq!(failed.status, AgentTurnSettlementStatus::Failed);
+        assert_eq!(failed.final_response, None);
+        assert_eq!(failed.finish_reason.as_deref(), Some("failed"));
     }
 
     async fn create_two_turn_session(
@@ -16299,6 +16598,8 @@ mod tests {
                     format!("reply to {prompt}"),
                     &[],
                     TurnStats::default(),
+                    Some("complete".to_string()),
+                    Some(true),
                 )
                 .await
                 .expect("complete persisted turn");
@@ -17879,6 +18180,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn external_delegation_agent_ids_are_semantic_unique_and_valid() {
+        let first = external_delegation_agent_id(
+            "Review Security / Auth",
+            &uuid::Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap(),
+        );
+        let second = external_delegation_agent_id(
+            "Review Security / Auth",
+            &uuid::Uuid::parse_str("87654321-1234-5678-1234-567812345678").unwrap(),
+        );
+
+        assert_eq!(first, "review-security-auth-12345678");
+        assert_eq!(second, "review-security-auth-87654321");
+        assert_ne!(first, second);
+        crate::agentic::coordination::validate_agent_id(&first).unwrap();
+        crate::agentic::coordination::validate_agent_id(&second).unwrap();
+    }
+
     #[tokio::test]
     async fn coordinator_test_fixture_injects_terminal_port() {
         let (coordinator, _) = test_coordinator();
@@ -19043,6 +19362,7 @@ mod tests {
         let resolved = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Inspect the managed worktree".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19119,6 +19439,7 @@ mod tests {
         let resolved = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Inspect the workspace".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19182,6 +19503,7 @@ mod tests {
         let fresh_only = coordinator
             .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
                 task_description: "Run once".to_string(),
+                requested_agent_id: None,
                 context_mode: SubagentContextMode::Fresh,
                 target_session_id: None,
                 subagent_type: Some("Explore".to_string()),
@@ -19285,6 +19607,7 @@ mod tests {
 
         let request = SubagentExecutionRequest {
             task_description: "Continue the investigation".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(subagent_session.session_id.clone()),
             subagent_type: None,
@@ -19349,6 +19672,7 @@ mod tests {
 
         let inherit_request = SubagentExecutionRequest {
             task_description: "Continue with the parent model".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fresh,
             target_session_id: Some(subagent_session.session_id.clone()),
             subagent_type: None,
@@ -19421,6 +19745,7 @@ mod tests {
 
         let request = SubagentExecutionRequest {
             task_description: "Fork and inspect the repo".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fork,
             target_session_id: None,
             subagent_type: None,
@@ -19464,6 +19789,7 @@ mod tests {
 
         let inherit_request = SubagentExecutionRequest {
             task_description: "Fork with the parent model".to_string(),
+            requested_agent_id: None,
             context_mode: SubagentContextMode::Fork,
             target_session_id: None,
             subagent_type: None,

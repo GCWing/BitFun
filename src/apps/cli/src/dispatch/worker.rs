@@ -400,7 +400,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         })
         .await;
     let (terminal_state, terminal_error) = match settlement {
-        Ok(()) => (terminal_state, terminal_error),
+        Ok(_) => (terminal_state, terminal_error),
         Err(error) => (
             DispatchJobState::Failed,
             Some(format!(

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionTreePopover } from './SessionTreePopover';
 import {
   resolveSubagentAvatarPresentation,
-  useSubagentIdentityStore,
 } from '../../subagent-identity';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,7 +75,6 @@ describe('SessionTreePopover', () => {
     mocks.sessions.clear();
     mocks.sessions.set('root', createSession('root', 'main'));
     mocks.sessions.set('child', createSession('child', 'subagent', 'root'));
-    useSubagentIdentityStore.getState().clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -143,9 +141,18 @@ describe('SessionTreePopover', () => {
     }));
   });
 
-  it('maps sibling avatars from session IDs while keeping names distinct', async () => {
+  it('maps sibling avatars from session IDs and uses Runtime agent IDs as names', async () => {
     mocks.sessions.set('child-2', createSession('child-2', 'subagent', 'root'));
     mocks.sessions.set('child-3', createSession('child-3', 'subagent', 'root'));
+    mocks.getSessionLineage.mockResolvedValue({
+      rootSessionId: 'root',
+      sessions: [
+        { sessionId: 'root', sessionName: 'Root session', agentType: 'code', createdAtMs: 1, status: 'active' },
+        { sessionId: 'child', sessionName: 'Running child', agentType: 'worker', createdAtMs: 2, status: 'active', parentSessionId: 'root', subagentType: 'worker', agentId: 'parser-review' },
+        { sessionId: 'child-2', sessionName: 'Running child', agentType: 'worker', createdAtMs: 3, status: 'active', parentSessionId: 'root', subagentType: 'worker', agentId: 'test-runner' },
+        { sessionId: 'child-3', sessionName: 'Running child', agentType: 'worker', createdAtMs: 4, status: 'active', parentSessionId: 'root', subagentType: 'worker', agentId: 'docs-audit' },
+      ],
+    });
     const t = (key: string) => key;
 
     await act(async () => {
@@ -165,7 +172,7 @@ describe('SessionTreePopover', () => {
     const subagentNodes = Array.from(document.querySelectorAll<HTMLElement>(
       '.session-tree-popover__panel [role="treeitem"]:not([data-session-id="root"])',
     ));
-    const avatars = subagentNodes.map((node) => {
+    subagentNodes.forEach((node) => {
       const sessionId = node.dataset.sessionId!;
       const avatar = node.querySelector<HTMLElement>(
         '[data-bf-component="subagent-avatar"]',
@@ -174,11 +181,11 @@ describe('SessionTreePopover', () => {
 
       expect(avatar.dataset.bfAvatarId).toBe(presentation.avatarId);
       expect(avatar.dataset.bfAvatarColorId).toBe(presentation.colorId);
-      return avatar;
     });
 
-    expect(avatars).toHaveLength(3);
-    expect(new Set(avatars.map(avatar => avatar.dataset.bfNameId)).size).toBe(3);
+    expect(subagentNodes).toHaveLength(3);
+    expect(subagentNodes.map(node => node.querySelector('.session-tree-popover__node-title')?.textContent))
+      .toEqual(['parser-review', 'test-runner', 'docs-audit']);
   });
 
   it('closes a sibling action-menu portal and restores focus with the parent', async () => {
@@ -229,6 +236,13 @@ describe('SessionTreePopover', () => {
     const onSelectSession = vi.fn();
     const onRequestClose = vi.fn();
     const t = (key: string) => key;
+    mocks.getSessionLineage.mockResolvedValue({
+      rootSessionId: 'root',
+      sessions: [
+        { sessionId: 'root', sessionName: 'Root session', agentType: 'code', createdAtMs: 1, status: 'active' },
+        { sessionId: 'child', sessionName: 'Running child', agentType: 'worker', createdAtMs: 2, status: 'active', parentSessionId: 'root', subagentType: 'worker', agentId: 'parser-review' },
+      ],
+    });
 
     await act(async () => {
       root.render(
@@ -257,6 +271,7 @@ describe('SessionTreePopover', () => {
 
     expect(onSelectSession).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'child',
+      agentId: 'parser-review',
       isRoot: false,
     }));
     expect(onRequestClose).toHaveBeenCalledTimes(1);

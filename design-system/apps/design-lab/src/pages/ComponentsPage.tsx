@@ -1,13 +1,27 @@
 import {
   ArrowRight,
   Check,
+  Command,
+  Eye,
+  Heading,
+  Keyboard,
+  List,
+  Rows3,
   MessageCircle,
   MousePointerClick,
   PanelTop,
+  Search as SearchIcon,
   ToggleLeft,
 } from "lucide-react";
 import {
+  ActionItem,
   Button,
+  Field,
+  IconButton,
+  Input,
+  KeyHint,
+  PageHeader,
+  SearchField,
   Stack,
   Switch,
   TabGroup,
@@ -34,7 +48,14 @@ interface ComponentsPageProps {
 }
 
 const componentIcons = {
+  ActionItem: List,
   Button: MousePointerClick,
+  Field: Rows3,
+  IconButton: List,
+  Input: Eye,
+  KeyHint: Keyboard,
+  PageHeader: Heading,
+  SearchField: SearchIcon,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 } as const;
@@ -43,12 +64,75 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
 
   switch (component.name) {
+    case "ActionItem":
+      return (
+        <ActionItem
+          leading={<MessageCircle aria-hidden="true" />}
+          shortcut={<KeyHint>K</KeyHint>}
+        >
+          {t("components.preview.assistant")}
+        </ActionItem>
+      );
     case "Button":
       return (
         <Stack align="center" direction="horizontal" gap="2" wrap>
           <Button variant="fill">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
         </Stack>
+      );
+    case "Field":
+      return (
+        <Field
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          orientation="horizontal"
+        >
+          <Switch tabIndex={-1} />
+        </Field>
+      );
+    case "IconButton":
+      return (
+        <Stack align="center" direction="horizontal" gap="2">
+          <IconButton
+            aria-label={t("components.preview.listView")}
+            icon={<List aria-hidden="true" />}
+            tabIndex={-1}
+          />
+          <IconButton
+            aria-label={t("components.preview.listView")}
+            icon={<List aria-hidden="true" />}
+            tabIndex={-1}
+            variant="fill"
+          />
+        </Stack>
+      );
+    case "Input":
+      return (
+        <Input
+          aria-label={t("components.preview.inputLabel")}
+          placeholder={t("components.preview.inputPlaceholder")}
+          trailing={<Eye aria-hidden="true" />}
+        />
+      );
+    case "KeyHint":
+      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    case "PageHeader":
+      return (
+        <PageHeader
+          description={t("components.preview.appearanceDescription")}
+          level={2}
+          size="sm"
+          title={t("components.preview.appearance")}
+        />
+      );
+    case "SearchField":
+      return (
+        <SearchField
+          aria-label={t("components.preview.searchLabel")}
+          leadingIcon={<SearchIcon aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
+        />
       );
     case "Switch":
       return (

@@ -33,13 +33,14 @@ use bitfun_runtime_ports::{
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, AgentTurnInterruptionRequest, AgentTurnInterruptionResult,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserAnswersRequest,
-    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
-    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
-    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
-    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentTurnSettlementResult,
+    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
+    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferencePort,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
+    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
+    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
+    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+    WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -1449,7 +1450,7 @@ impl AgentRuntime {
     pub async fn wait_for_turn_settlement(
         &self,
         request: AgentTurnSettlementRequest,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<AgentTurnSettlementResult, RuntimeError> {
         let port = self.turn_settlement.as_ref().ok_or_else(|| {
             RuntimeError::Port(PortError::new(
                 PortErrorKind::NotAvailable,
@@ -2303,6 +2304,7 @@ mod tests {
                         parent_session_id: None,
                         parent_tool_call_id: None,
                         subagent_type: None,
+                        agent_id: None,
                         workspace_path: Some("/workspace/project".to_string()),
                         remote_connection_id: None,
                         remote_ssh_host: None,
@@ -2319,6 +2321,7 @@ mod tests {
                         parent_session_id: Some("root_1".to_string()),
                         parent_tool_call_id: Some("tool_1".to_string()),
                         subagent_type: Some("explore".to_string()),
+                        agent_id: Some("child-agent".to_string()),
                         workspace_path: Some("/workspace/project".to_string()),
                         remote_connection_id: None,
                         remote_ssh_host: None,

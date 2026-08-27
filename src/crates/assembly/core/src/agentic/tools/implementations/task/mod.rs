@@ -269,22 +269,22 @@ impl Tool for TaskTool {
                 .map(|agent_id| format!("Cancelling background task: {}", agent_id))
                 .unwrap_or_else(|| "Cancelling background task".to_string()),
             Some(TaskAction::SendInput) => input
-                .get("description")
+                .get("agent_id")
                 .and_then(Value::as_str)
-                .map(|description| {
+                .map(|agent_id| {
                     if options.verbose {
-                        format!("Sending input to task: {}", description)
+                        format!("Sending input to task: {}", agent_id)
                     } else {
-                        format!("Task input: {}", description)
+                        format!("Task input: {}", agent_id)
                     }
                 })
                 .unwrap_or_else(|| "Sending input to task".to_string()),
             Some(TaskAction::Spawn) | None => {
-                if let Some(description) = input.get("description").and_then(|v| v.as_str()) {
+                if let Some(agent_id) = input.get("agent_id").and_then(|v| v.as_str()) {
                     if options.verbose {
-                        format!("Creating task: {}", description)
+                        format!("Creating task: {}", agent_id)
                     } else {
-                        format!("Task: {}", description)
+                        format!("Task: {}", agent_id)
                     }
                 } else {
                     "Creating task".to_string()

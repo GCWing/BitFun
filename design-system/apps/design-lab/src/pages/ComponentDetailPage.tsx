@@ -3,10 +3,24 @@ import {
   ChevronDown,
   ChevronRight,
   Clipboard,
+  Command,
+  Eye,
+  List,
   MessageCircle,
+  MoreHorizontal,
+  Plus,
+  Search as SearchIcon,
+  X,
 } from "lucide-react";
 import {
+  ActionItem,
   Button,
+  Field,
+  IconButton,
+  Input,
+  KeyHint,
+  PageHeader,
+  SearchField,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -37,18 +51,29 @@ type InspectorTab = "properties" | "styles" | "tokens";
 type PreviewIcon = "chevron" | "none";
 type PreviewIconPosition = "left" | "right";
 type PreviewSize = "sm" | "md" | "lg";
+type FieldOrientation = "horizontal" | "vertical";
+type PageHeaderAlign = "center" | "start";
+type PageHeaderSize = "display" | "lg" | "md" | "sm";
 
-const buttonVariants = ["fill", "outline"] as const;
+const buttonVariants = ["outline", "fill", "primary", "text"] as const;
+const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
+const fieldOrientations = ["vertical", "horizontal"] as const;
+const pageHeaderAlignments = ["start", "center"] as const;
+const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
   chevron: "detail.option.chevron",
+  center: "detail.option.center",
   default: "detail.option.default",
   disabled: "detail.option.disabled",
+  display: "detail.option.display",
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
+  horizontal: "detail.option.horizontal",
+  invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
@@ -57,10 +82,15 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   off: "detail.option.off",
   on: "detail.option.on",
   outline: "detail.option.outline",
+  primary: "detail.option.primary",
+  quiet: "detail.option.quiet",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
+  start: "detail.option.start",
+  text: "detail.option.text",
   unselected: "detail.option.unselected",
+  vertical: "detail.option.vertical",
 };
 
 function InspectorSelect({
@@ -122,7 +152,11 @@ export function ComponentDetailPage({
 }: ComponentDetailPageProps) {
   const { t } = useI18n();
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [size, setSize] = useState<PreviewSize>("md");
+  const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
+  const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [previewState, setPreviewState] = useState(
     component.name === "Switch"
       ? "off"
@@ -139,17 +173,32 @@ export function ComponentDetailPage({
 
   const states = useMemo(() => {
     switch (component.name) {
-      case "Button":
+      case "ActionItem":
         return ["default", "hover", "active", "disabled"] as const;
+      case "Button":
+      case "IconButton":
+        return ["default", "hover", "active", "disabled"] as const;
+      case "Input":
+      case "SearchField":
+        return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+      case "Field":
+      case "KeyHint":
+      case "PageHeader":
+        return ["default"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
   }, [component.name]);
-  const inspectorStates = component.name === "Button" ? buttonInspectorStates : states;
+  const inspectorStates = component.name === "Button" || component.name === "IconButton"
+    ? buttonInspectorStates
+    : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "ActionItem") {
+      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+    }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       const iconImport = previewIcon === "chevron"
@@ -159,6 +208,35 @@ export function ComponentDetailPage({
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "IconButton") {
+      const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
+      return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
+    }
+    if (component.name === "Field") {
+      return `import { Field, Switch } from "@bitfun/ui";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.notifications")}"\n  orientation="${fieldOrientation}"\n  required\n>\n  <Switch />\n</Field>`;
+    }
+    if (component.name === "Input") {
+      const stateProps = previewState === "disabled"
+        ? " disabled"
+        : previewState === "invalid"
+          ? " invalid"
+          : "";
+      return `import { Input } from "@bitfun/ui";\nimport { Eye } from "lucide-react";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Eye />}${stateProps}\n/>`;
+    }
+    if (component.name === "KeyHint") {
+      return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
+    }
+    if (component.name === "PageHeader") {
+      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
+    }
+    if (component.name === "SearchField") {
+      const stateProps = previewState === "disabled"
+        ? " disabled"
+        : previewState === "invalid"
+          ? " invalid"
+          : "";
+      return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
@@ -172,8 +250,12 @@ export function ComponentDetailPage({
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
     component.name,
+    fieldOrientation,
+    iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
+    pageHeaderAlign,
+    pageHeaderSize,
     previewIcon,
     previewIconPosition,
     previewState,
@@ -192,11 +274,55 @@ export function ComponentDetailPage({
     }
   }
 
+  function renderIconButtonPreview(
+    state = previewState,
+    previewVariant = iconButtonVariant,
+    applyInspectorControls = false,
+  ) {
+    return (
+      <IconButton
+        aria-label={t("components.preview.listView")}
+        className={state === "focus-visible" ? "lab-force-focus" : undefined}
+        data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+        disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
+        icon={<List aria-hidden="true" />}
+        loading={state === "loading" || applyInspectorControls && inspectorLoading}
+        size={size}
+        variant={previewVariant}
+      />
+    );
+  }
+
   function renderPreview(
     state = previewState,
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "ActionItem") {
+      return (
+        <ActionItem
+          actions={[
+            {
+              icon: <Plus aria-hidden="true" />,
+              id: "add",
+              label: t("components.preview.add"),
+            },
+            {
+              icon: <MoreHorizontal aria-hidden="true" />,
+              id: "more",
+              label: t("components.preview.more"),
+            },
+          ]}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled"}
+          leading={<MessageCircle aria-hidden="true" />}
+          shortcut={<KeyHint>K</KeyHint>}
+        >
+          {t("components.preview.assistant")}
+        </ActionItem>
+      );
+    }
+
     if (component.name === "Button") {
       const inspectorIcon = applyInspectorControls && previewIcon === "chevron"
         ? <ChevronRight aria-hidden="true" size={14} />
@@ -220,6 +346,78 @@ export function ComponentDetailPage({
         >
           {t("components.preview.session")}
         </Button>
+      );
+    }
+
+    if (component.name === "Input") {
+      const previewClassName = state === "hover"
+        ? "lab-force-hover"
+        : state === "focus-visible"
+          ? "lab-force-focus"
+          : undefined;
+      return (
+        <Input
+          aria-label={t("components.preview.inputLabel")}
+          className={previewClassName}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          placeholder={t("components.preview.inputPlaceholder")}
+          trailing={<Eye aria-hidden="true" />}
+        />
+      );
+    }
+
+    if (component.name === "Field") {
+      return (
+        <Field
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          orientation={fieldOrientation}
+          required
+        >
+          <Switch />
+        </Field>
+      );
+    }
+
+    if (component.name === "KeyHint") {
+      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "PageHeader") {
+      return (
+        <PageHeader
+          action={(
+            <IconButton
+              aria-label={t("components.preview.close")}
+              icon={<X aria-hidden="true" />}
+            />
+          )}
+          align={pageHeaderAlign}
+          description={t("components.preview.appearanceDescription")}
+          level={2}
+          size={pageHeaderSize}
+          title={t("components.preview.appearance")}
+        />
+      );
+    }
+
+    if (component.name === "SearchField") {
+      const previewClassName = state === "hover"
+        ? "lab-force-hover"
+        : state === "focus-visible"
+          ? "lab-force-focus"
+          : undefined;
+      return (
+        <SearchField
+          aria-label={t("components.preview.searchLabel")}
+          className={previewClassName}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          leadingIcon={<SearchIcon aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
+        />
       );
     }
 
@@ -302,7 +500,11 @@ export function ComponentDetailPage({
               tokenOverrides={tokenOverrides}
             >
               {component.name === "Button" ? (
-                <div className="component-preview-matrix" data-component="button">
+                <div
+                  className="component-preview-matrix"
+                  data-component="button"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -330,8 +532,82 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
+              ) : component.name === "IconButton" ? (
+                <div
+                  className="component-preview-matrix"
+                  data-component="icon-button"
+                  data-state-count={states.length}
+                >
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  {iconButtonVariants.map((matrixVariant) => (
+                    <Fragment key={matrixVariant}>
+                      <span className="component-preview-matrix__row-label">
+                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                      </span>
+                      {states.map((state) => (
+                        <div
+                          className="component-preview-matrix__cell"
+                          data-active={matrixVariant === iconButtonVariant && state === previewState || undefined}
+                          key={`${matrixVariant}-${state}`}
+                        >
+                          {renderIconButtonPreview(state, matrixVariant)}
+                        </div>
+                      ))}
+                    </Fragment>
+                  ))}
+                </div>
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "SearchField" ? (
+                <div
+                  className="component-preview-matrix"
+                  data-component={component.name === "ActionItem"
+                    ? "action-item"
+                    : component.name === "Field"
+                      ? "field"
+                    : component.name === "Input"
+                      ? "input"
+                    : component.name === "KeyHint"
+                      ? "key-hint"
+                      : component.name === "PageHeader"
+                        ? "page-header"
+                      : "search-field"}
+                  data-state-count={states.length}
+                >
+                  <span className="component-preview-matrix__corner" />
+                  {states.map((state, index) => (
+                    <span
+                      className="component-preview-matrix__column-label"
+                      data-last={index === states.length - 1 || undefined}
+                      key={state}
+                    >
+                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                    </span>
+                  ))}
+                  <span className="component-preview-matrix__row-label">{component.name}</span>
+                  {states.map((state) => (
+                    <div
+                      className="component-preview-matrix__cell"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      {renderPreview(state)}
+                    </div>
+                  ))}
+                </div>
               ) : component.name === "TabGroup" ? (
-                <div className="component-preview-matrix" data-component="tab-group">
+                <div
+                  className="component-preview-matrix"
+                  data-component="tab-group"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -354,7 +630,11 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : (
-                <div className="component-preview-matrix" data-component="switch">
+                <div
+                  className="component-preview-matrix"
+                  data-component="switch"
+                  data-state-count={states.length}
+                >
                   <span className="component-preview-matrix__corner" />
                   {states.map((state, index) => (
                     <span
@@ -423,7 +703,39 @@ export function ComponentDetailPage({
                       value={variant}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {component.name === "IconButton" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setIconButtonVariant(value as (typeof iconButtonVariants)[number])}
+                      options={iconButtonVariants}
+                      value={iconButtonVariant}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorSelect
+                      label={t("detail.orientation")}
+                      onChange={(value) => setFieldOrientation(value as FieldOrientation)}
+                      options={fieldOrientations}
+                      value={fieldOrientation}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setPageHeaderSize(value as PageHeaderSize)}
+                      options={pageHeaderSizes}
+                      value={pageHeaderSize}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorSelect
+                      label={t("detail.alignment")}
+                      onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
+                      options={pageHeaderAlignments}
+                      value={pageHeaderAlign}
+                    />
+                  )}
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}
@@ -437,14 +749,14 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorDisabled}
                       label={t("detail.disabled")}
                       onCheckedChange={setInspectorDisabled}
                     />
                   )}
-                  {component.name === "Button" && (
+                  {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorToggle
                       checked={inspectorLoading}
                       label={t("detail.loading")}
@@ -479,7 +791,9 @@ export function ComponentDetailPage({
                   density={density}
                   tokenOverrides={tokenOverrides}
                 >
-                  {renderPreview(previewState, variant, true)}
+                  {component.name === "IconButton"
+                    ? renderIconButtonPreview(previewState, iconButtonVariant, true)
+                    : renderPreview(previewState, variant, true)}
                 </ThemeRoot>
               </section>
 

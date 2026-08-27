@@ -12,6 +12,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import { KeyHint } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
@@ -43,6 +44,7 @@ import { openGlobalSearch } from '@/app/global-search/globalSearchStore';
 import { activateProductAction } from '@/app/global-search/productActionActivator';
 import {
   getGlobalSearchShortcutLabel,
+  splitGlobalSearchShortcutLabel,
   subscribeGlobalSearchShortcut,
 } from '@/app/global-search/globalSearchShortcut';
 import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources/useExternalAppAwareness';
@@ -77,6 +79,7 @@ const MainNav: React.FC<MainNavProps> = ({
     getGlobalSearchShortcutLabel,
     getGlobalSearchShortcutLabel,
   );
+  const searchShortcutHint = splitGlobalSearchShortcutLabel(searchShortcutLabel);
   // const { t: tPages } = useI18n('scenes/pages'); // temporarily hidden: Pages nav entry
   const {
     currentWorkspace,
@@ -413,13 +416,13 @@ const MainNav: React.FC<MainNavProps> = ({
                 <span className="bitfun-nav-panel__search-trigger__label">
                   {t('nav.search.triggerPlaceholder')}
                 </span>
-                <kbd
-                  className="bitfun-nav-panel__search-trigger__shortcut"
+                <KeyHint
                   data-testid="nav-search-shortcut"
                   aria-hidden="true"
+                  icon={searchShortcutHint.modifier}
                 >
-                  {searchShortcutLabel}
-                </kbd>
+                  {searchShortcutHint.key}
+                </KeyHint>
               </button>
             </Tooltip>
           </div>

@@ -187,6 +187,11 @@ impl Tool for FileEditTool {
             }
         };
 
+        let rewrite_invariant = self.validate_input_rewrite_invariants(input, context).await;
+        if !rewrite_invariant.result {
+            return rewrite_invariant;
+        }
+
         if input.get("old_string").is_none() {
             return ValidationResult {
                 result: false,
@@ -203,16 +208,6 @@ impl Tool for FileEditTool {
                 error_code: Some(400),
                 meta: None,
             };
-        }
-
-        let force = input
-            .get("force")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check_edit(
-            context, "Edit", "edit", file_path, force,
-        ) {
-            return rejection;
         }
 
         let old_string = input
@@ -303,6 +298,29 @@ impl Tool for FileEditTool {
         }
 
         ValidationResult::default()
+    }
+
+    async fn validate_input_rewrite_invariants(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        let Some(file_path) = input
+            .get("file_path")
+            .and_then(Value::as_str)
+            .filter(|path| !path.is_empty())
+        else {
+            return ValidationResult::default();
+        };
+        let force_requested = input.get("force").and_then(Value::as_bool).unwrap_or(false);
+        crate::agentic::execution::edit_constraint_guard::check_edit(
+            context,
+            "Edit",
+            "edit",
+            file_path,
+            force_requested,
+        )
+        .unwrap_or_default()
     }
 
     async fn call_impl(
@@ -456,7 +474,7 @@ impl Tool for FileEditTool {
 mod tests {
     use super::{FileEditTool, EDIT_TOOL_PROMPT};
     use crate::agentic::tools::framework::Tool;
-    use serde_json::Value;
+    use serde_json::{json, Value};
 
     #[tokio::test]
     async fn edit_tool_prompt_matches_claude_style() {
@@ -520,5 +538,27 @@ mod tests {
             FileEditTool::new().short_description(),
             "A tool for editing files"
         );
+    }
+
+    #[tokio::test]
+    async fn non_relaxable_edit_invariant_precedes_repairable_schema_errors() {
+        let validation = FileEditTool::new()
+            .validate_input(
+                &json!({
+                    "file_path": "tests/a.rs",
+                    "old_string": "x",
+                    "force": true
+                }),
+                None,
+            )
+            .await;
+
+        assert_eq!(validation.error_code, Some(403));
+        assert!(validation.blocks_input_rewrite());
+        assert!(!validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("new_string is required"));
     }
 }

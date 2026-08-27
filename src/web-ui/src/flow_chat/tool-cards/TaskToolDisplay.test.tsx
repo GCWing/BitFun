@@ -3,7 +3,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskToolDisplay } from './TaskToolDisplay';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
-import { useSubagentIdentityStore } from '../subagent-identity';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 const mocks = vi.hoisted(() => ({
@@ -340,7 +339,6 @@ describeWithJsdom('TaskToolDisplay', () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
     taskCollapseStateManager.clearAll();
-    useSubagentIdentityStore.getState().clear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -359,7 +357,6 @@ describeWithJsdom('TaskToolDisplay', () => {
     mocks.dynamicReviewTurn.startTime = 1000;
     mocks.dynamicReviewTurn.endTime = undefined;
     mocks.dynamicReviewTurn.error = undefined;
-    useSubagentIdentityStore.getState().clear();
     taskCollapseStateManager.clearAll();
   });
 
@@ -801,8 +798,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-1',
         input: {
           action: 'spawn',
-          description: 'Review CLI app layer diff',
-          prompt: 'Review the CLI app layer',
+          agent_id: 'cli-review',
+          prompt: 'Review CLI app layer diff',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -840,8 +837,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-error',
         input: {
           action: 'spawn',
-          description: 'Review failed area',
-          prompt: 'Review the area',
+          agent_id: 'failed-area-review',
+          prompt: 'Review failed area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -872,8 +869,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-cancelled',
         input: {
           action: 'spawn',
-          description: 'Review cancelled area',
-          prompt: 'Review the area',
+          agent_id: 'cancelled-area-review',
+          prompt: 'Review cancelled area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -904,8 +901,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-dynamic-error',
         input: {
           action: 'spawn',
-          description: 'Review dynamic area',
-          prompt: 'Review the area',
+          agent_id: 'dynamic-area-review',
+          prompt: 'Review dynamic area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -944,8 +941,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-dynamic-cancelled',
         input: {
           action: 'spawn',
-          description: 'Review dynamic area',
-          prompt: 'Review the area',
+          agent_id: 'dynamic-area-review',
+          prompt: 'Review dynamic area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -1013,12 +1010,11 @@ describeWithJsdom('TaskToolDisplay', () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'Explore', 'Investigate task card behavior'),
       subagentSessionId: 'subagent-session-1',
+      toolResult: {
+        success: true,
+        result: { duration: 1000, agent_id: 'repo-investigator' },
+      },
     };
-    useSubagentIdentityStore.getState().reconcileRoot('parent-session', [{
-      sessionId: 'subagent-session-1',
-      createdAt: 1000,
-      active: false,
-    }]);
 
     await act(async () => {
       root.render(
@@ -1035,7 +1031,7 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(container.querySelector('[data-bf-component="subagent-avatar"][data-bf-avatar-id]'))
       .toBeTruthy();
     expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
-      .toMatch(/^subagentIdentity\.names\.name\d{2}$/);
+      .toBe('repo-investigator');
 
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -1054,6 +1050,34 @@ describeWithJsdom('TaskToolDisplay', () => {
       remoteSshHost: 'host-1',
       includeInternal: true,
     });
+  });
+
+  it('shows the caller-selected agent id before the spawn result arrives', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'task-tool-pending-spawn',
+      type: 'tool',
+      toolName: 'Task',
+      timestamp: Date.now(),
+      status: 'running',
+      toolCall: {
+        id: 'task-call-pending-spawn',
+        input: {
+          action: 'spawn',
+          agent_id: 'repo-investigator',
+          prompt: 'Investigate the failing repository path.',
+          subagent_type: 'Explore',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.querySelector('[data-bf-part="subagentName"]')?.textContent)
+      .toBe('repo-investigator');
   });
 
   it('opens an ordinary CodeReview subagent instead of treating it as Deep Review coverage', async () => {
@@ -1200,9 +1224,9 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-spawn',
         input: {
           action: 'spawn',
+          agent_id: 'isolated-context',
           fork_context: true,
-          description: 'Explore isolated context',
-          prompt: 'Investigate the isolated path',
+          prompt: 'Explore isolated context by investigating the isolated path',
         },
       },
       toolResult: {
@@ -1237,13 +1261,13 @@ describeWithJsdom('TaskToolDisplay', () => {
       toolName: 'Task',
       timestamp: Date.now(),
       status: 'running',
+      subagentSessionId: 'subagent-session-1',
       toolCall: {
         id: 'task-call-send-input',
         input: {
           action: 'send_input',
-          session_id: 'subagent-session-1',
-          description: 'Continue investigation',
-          prompt: 'Keep checking the failing path',
+          agent_id: 'repo-investigator',
+          prompt: 'Continue investigation by checking the failing path',
         },
       },
     };
@@ -1480,7 +1504,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       toolCall: {
         id: 'task-call-1',
         input: {
-          description: 'Investigate background behavior',
+          action: 'spawn',
+          agent_id: 'background-investigation',
           prompt: 'Keep checking the background path',
           subagent_type: 'Explore',
           run_in_background: true,
@@ -1540,8 +1565,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-cancel',
         input: {
           action: 'cancel',
-          session_id: 'subagent-session-1',
-          description: 'Cancel investigation',
+          agent_id: 'repo-investigator',
         },
       },
       toolResult: {

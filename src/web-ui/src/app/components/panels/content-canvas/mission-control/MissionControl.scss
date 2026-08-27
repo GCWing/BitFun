@@ -201,21 +201,6 @@
     color: var(--bf-appearance-token-color-text-muted);
     border-top: 1px dashed var(--bf-appearance-token-border-base);
     flex-shrink: 0;
-
-    kbd {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 16px;
-      height: 14px;
-      padding: 0 4px;
-      font-size: 9px;
-      font-family: inherit;
-      background: var(--bf-appearance-token-element-bg-soft);
-      border: 1px solid var(--bf-appearance-token-border-base);
-      border-radius: 2px;
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
   }
 
   &__separator {

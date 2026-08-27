@@ -1,7 +1,7 @@
 use super::*;
 
-const AGENT_SPAWN_FIELDS: &[&str] = &["description", "prompt", "agent_type", "model_id"];
-const AGENT_SEND_INPUT_FIELDS: &[&str] = &["agent_id", "description", "prompt", "model_id"];
+const AGENT_SPAWN_FIELDS: &[&str] = &["agent_id", "prompt", "agent_type", "model_id"];
+const AGENT_SEND_INPUT_FIELDS: &[&str] = &["agent_id", "prompt", "model_id"];
 const AGENT_INTERRUPT_FIELDS: &[&str] = &["agent_id", "cascade"];
 
 fn input_object<'a>(
@@ -98,13 +98,18 @@ impl AgentSpawnTool {
 
     pub(super) fn task_input(input: &Value) -> BitFunResult<Value> {
         let object = input_object(input, "AgentSpawn", AGENT_SPAWN_FIELDS)?;
-        let description = required_string(object, "description", "AgentSpawn")?;
+        let agent_id = required_string(object, "agent_id", "AgentSpawn")?;
+        let raw_agent_id = object
+            .get("agent_id")
+            .and_then(Value::as_str)
+            .expect("required_string already verified agent_id is a string");
+        crate::agentic::coordination::validate_agent_id(raw_agent_id)?;
         let prompt = required_string(object, "prompt", "AgentSpawn")?;
         let agent_type = required_string(object, "agent_type", "AgentSpawn")?;
         let model_id = optional_string(object, "model_id")?;
         let mut task_input = json!({
             "action": "spawn",
-            "description": description,
+            "agent_id": agent_id,
             "prompt": prompt,
             "subagent_type": agent_type,
             "run_in_background": true
@@ -143,7 +148,7 @@ impl AgentSpawnTool {
                             "bg_task_id": bg_task_id
                         }),
                         result_for_assistant: Some(format!(
-                            "Agent started successfully in the background.\nagent_id: \"{agent_id}\"\nbg_task_id: \"{bg_task_id}\"\nUse AgentWait with this bg_task_id when you need the result. The result will not be delivered automatically."
+                            "Agent started successfully in the background.\nbg_task_id: \"{bg_task_id}\"\nYou can continue with other work while the agent runs. Use AgentWait with this bg_task_id when you need the result."
                         )),
                         image_attachments,
                     }
@@ -196,13 +201,13 @@ impl Tool for AgentSpawnTool {
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
         input
-            .get("description")
+            .get("agent_id")
             .and_then(Value::as_str)
-            .map(|description| {
+            .map(|agent_id| {
                 if options.verbose {
-                    format!("Launching agent: {description}")
+                    format!("Launching agent: {agent_id}")
                 } else {
-                    format!("Agent: {description}")
+                    format!("Agent: {agent_id}")
                 }
             })
             .unwrap_or_else(|| "Launching agent".to_string())
@@ -242,13 +247,11 @@ impl AgentSendInputTool {
     pub(super) fn task_input(input: &Value) -> BitFunResult<Value> {
         let object = input_object(input, "AgentSendInput", AGENT_SEND_INPUT_FIELDS)?;
         let agent_id = required_string(object, "agent_id", "AgentSendInput")?;
-        let description = required_string(object, "description", "AgentSendInput")?;
         let prompt = required_string(object, "prompt", "AgentSendInput")?;
         let model_id = optional_string(object, "model_id")?;
         let mut task_input = json!({
             "action": "send_input",
             "agent_id": agent_id,
-            "description": description,
             "prompt": prompt,
             "run_in_background": true
         });
@@ -286,7 +289,7 @@ impl AgentSendInputTool {
                             "bg_task_id": bg_task_id
                         }),
                         result_for_assistant: Some(format!(
-                            "Instruction sent successfully. The agent is working in the background.\nagent_id: \"{agent_id}\"\nbg_task_id: \"{bg_task_id}\"\nUse AgentWait with this bg_task_id when you need the result. The result will not be delivered automatically."
+                            "Instruction sent successfully. The agent is working in the background.\nbg_task_id: \"{bg_task_id}\"\nYou can continue with other work while the agent runs. Use AgentWait with this bg_task_id when you need the result."
                         )),
                         image_attachments,
                     }
@@ -333,13 +336,13 @@ impl Tool for AgentSendInputTool {
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
         input
-            .get("description")
+            .get("agent_id")
             .and_then(Value::as_str)
-            .map(|description| {
+            .map(|agent_id| {
                 if options.verbose {
-                    format!("Sending input to agent: {description}")
+                    format!("Sending input to agent: {agent_id}")
                 } else {
-                    format!("Agent input: {description}")
+                    format!("Agent input: {agent_id}")
                 }
             })
             .unwrap_or_else(|| "Sending input to agent".to_string())

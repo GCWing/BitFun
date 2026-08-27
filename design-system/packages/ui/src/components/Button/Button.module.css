@@ -63,6 +63,47 @@
     --_button-border: transparent;
   }
 
+  .button[data-bf-variant="primary"] {
+    --_button-background: var(--bf-color-action-primary-background);
+    --_button-background-hover: var(--bf-color-action-primary-hover);
+    --_button-background-active: var(--bf-color-action-primary-pressed);
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-action-primary-content);
+  }
+
+  .button[data-bf-variant="primary"]:disabled {
+    --_button-background: var(--bf-color-action-neutral-surface);
+    --_button-content: var(--bf-color-action-neutral-content-disabled);
+  }
+
+  .button[data-bf-variant="text"] {
+    --_button-background: transparent;
+    --_button-background-hover: transparent;
+    --_button-background-active: transparent;
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-accent-default);
+
+    padding-inline: 0;
+  }
+
+  .button[data-bf-variant="text"]:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+    --_button-content: var(--bf-color-accent-hover);
+
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+  }
+
+  .button[data-bf-variant="text"]:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
+    --_button-content: var(--bf-color-accent-default);
+
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+  }
+
+  .button[data-bf-variant="text"]:disabled {
+    --_button-content: var(--bf-color-action-neutral-content-disabled);
+  }
+
   .button[data-bf-variant="fill"]:disabled {
     background: var(--bf-color-action-neutral-surface);
   }
@@ -77,6 +118,18 @@
   .button[data-bf-tone="danger"][data-bf-variant="fill"] {
     --_button-background: var(--bf-color-status-danger-surface);
     --_button-border: var(--bf-color-status-danger-border);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="primary"] {
+    --_button-background: var(--bf-color-status-danger-content);
+    --_button-background-hover: var(--bf-color-status-danger-content);
+    --_button-background-active: var(--bf-color-status-danger-content);
+    --_button-border: transparent;
+    --_button-content: var(--bf-color-content-inverse);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="text"] {
+    --_button-content: var(--bf-color-status-danger-content);
   }
 
   .button[data-bf-tone="danger"][data-bf-variant="fill"]:disabled {

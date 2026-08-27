@@ -1,0 +1,156 @@
+@layer bf.components {
+  .button {
+    --_icon-button-background: transparent;
+    --_icon-button-background-hover: var(--bf-color-action-neutral-surface);
+    --_icon-button-background-active: var(--bf-color-action-neutral-surface-pressed);
+    --_icon-button-content: var(--bf-color-action-neutral-content);
+    --_icon-button-icon-size: 14px;
+    --_icon-button-size: var(--bf-control-height-sm);
+
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--_icon-button-size);
+    block-size: var(--_icon-button-size);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--bf-radius-sm);
+    color: var(--_icon-button-content);
+    background: var(--_icon-button-background);
+    cursor: pointer;
+    transition:
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .button:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+    background: var(--_icon-button-background-hover);
+  }
+
+  .button:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
+    background: var(--_icon-button-background-active);
+  }
+
+  .button:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .button:disabled {
+    --_icon-button-content: var(--bf-color-action-neutral-content-disabled);
+
+    cursor: not-allowed;
+  }
+
+  .button[data-bf-variant="fill"] {
+    --_icon-button-background: var(--bf-color-action-neutral-surface);
+    --_icon-button-background-hover: var(--bf-color-action-neutral-surface-hover);
+  }
+
+  .button[data-bf-variant="primary"] {
+    --_icon-button-background: var(--bf-color-action-primary-background);
+    --_icon-button-background-hover: var(--bf-color-action-primary-hover);
+    --_icon-button-background-active: var(--bf-color-action-primary-pressed);
+    --_icon-button-content: var(--bf-color-action-primary-content);
+  }
+
+  .button[data-bf-variant="primary"]:disabled {
+    --_icon-button-background: var(--bf-color-action-neutral-surface);
+    --_icon-button-content: var(--bf-color-action-neutral-content-disabled);
+  }
+
+  .button[data-bf-tone="danger"] {
+    --_icon-button-background-hover: var(--bf-color-status-danger-surface);
+    --_icon-button-background-active: var(--bf-color-status-danger-surface);
+    --_icon-button-content: var(--bf-color-status-danger-content);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="fill"] {
+    --_icon-button-background: var(--bf-color-status-danger-surface);
+  }
+
+  .button[data-bf-tone="danger"][data-bf-variant="primary"] {
+    --_icon-button-background: var(--bf-color-status-danger-content);
+    --_icon-button-background-hover: var(--bf-color-status-danger-content);
+    --_icon-button-background-active: var(--bf-color-status-danger-content);
+    --_icon-button-content: var(--bf-color-content-inverse);
+  }
+
+  .button[data-bf-shape="circle"] {
+    border-radius: var(--bf-radius-pill);
+  }
+
+  .button[data-size="md"] {
+    --_icon-button-icon-size: 16px;
+    --_icon-button-size: var(--bf-control-height-md);
+  }
+
+  .button[data-size="lg"] {
+    --_icon-button-icon-size: 20px;
+    --_icon-button-size: var(--bf-control-height-lg);
+  }
+
+  .icon,
+  .progress {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--_icon-button-icon-size);
+    block-size: var(--_icon-button-icon-size);
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .progress {
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: var(--bf-radius-pill);
+    opacity: 0;
+  }
+
+  .button[data-loading="true"] .icon {
+    opacity: 0;
+  }
+
+  .button[data-loading="true"] .progress {
+    opacity: 1;
+    animation: bf-icon-button-progress var(--bf-motion-duration-loop) linear infinite;
+  }
+
+  @keyframes bf-icon-button-progress {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .button,
+    .progress {
+      transition: none;
+    }
+
+    .button[data-loading="true"] .progress {
+      animation: none;
+      border-inline-end-color: currentColor;
+      opacity: 0.72;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .button {
+      border: var(--bf-border-width-default) solid ButtonText;
+    }
+
+    .button:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

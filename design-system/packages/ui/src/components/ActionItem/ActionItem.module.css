@@ -1,0 +1,118 @@
+@layer bf.components {
+  .root {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--bf-control-height-sm);
+    gap: var(--bf-space-1);
+    padding-inline: var(--bf-space-2);
+    border-radius: var(--bf-radius-base);
+    color: var(--bf-color-action-neutral-content);
+    background: transparent;
+    transition:
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root:not([data-disabled="true"]):hover,
+  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="hover"]) {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .root:not([data-disabled="true"]):has(.trigger:active),
+  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) {
+    background: var(--bf-color-action-neutral-surface-pressed);
+  }
+
+  .root:not([data-disabled="true"]):has(.trigger:active) .label,
+  .root:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) .label {
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .root:has(.trigger:focus-visible) {
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  }
+
+  .root[data-disabled="true"] {
+    color: var(--bf-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .trigger {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: inherit;
+    gap: var(--bf-space-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .trigger:disabled {
+    cursor: not-allowed;
+  }
+
+  .leading {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-font-size-small);
+    block-size: var(--bf-font-size-small);
+  }
+
+  .leading > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .label {
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shortcut,
+  .actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .actions {
+    gap: var(--bf-space-1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root:has(.trigger:focus-visible) {
+      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+    }
+
+    .root:not([data-disabled="true"]):hover,
+    .root:not([data-disabled="true"]):has(.trigger:active) {
+      background: Highlight;
+      color: HighlightText;
+    }
+  }
+}

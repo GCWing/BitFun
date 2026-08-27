@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { KeyHint } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   File,
@@ -670,10 +671,10 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         )}
       </div>
       <div data-bf-component="file-mention-picker" data-bf-part="footer" className="file-mention-picker__footer">
-        <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
-        <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>
-        <span><kbd>←</kbd> {t('fileMention.backHint')}</span>
-        <span><kbd>Enter</kbd> {t('fileMention.selectHint')}</span>
+        <span><KeyHint>↑</KeyHint><KeyHint>↓</KeyHint> {t('fileMention.navHint')}</span>
+        <span><KeyHint>→</KeyHint> {t('fileMention.enterHint')}</span>
+        <span><KeyHint>←</KeyHint> {t('fileMention.backHint')}</span>
+        <span><KeyHint>Enter</KeyHint> {t('fileMention.selectHint')}</span>
       </div>
     </div>
   );

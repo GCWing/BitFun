@@ -53,7 +53,6 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
-import { reconcileSubagentIdentitiesFromFlowState } from '../../subagent-identity';
 import { createTab } from '@/shared/utils/tabUtils';
 import type { TabCreationOptions } from '@/shared/utils/tabUtils';
 import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
@@ -585,10 +584,6 @@ function handleSubagentSessionLinked(
     FlowChatStore.getInstance().updateSessionModelName(childSessionId, modelId.trim());
   }
   reconcileBackgroundSubagentSession(childSessionId);
-  reconcileSubagentIdentitiesFromFlowState(
-    FlowChatStore.getInstance().getState(),
-    childSessionId,
-  );
 }
 
 function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | undefined {
