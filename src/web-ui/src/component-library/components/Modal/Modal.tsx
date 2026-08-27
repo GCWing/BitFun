@@ -6,6 +6,7 @@ import React, { useEffect, useState, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { PopupCloseButton } from '../PopupCloseButton';
 import './Modal.scss';
 
@@ -126,7 +127,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isImeOwnedKeyboardEvent(e)) {
         onClose();
       }
     };

@@ -9,6 +9,7 @@ import { requireMonaco } from '@/tools/editor/services/monacoRuntime';
 import { useI18n } from '@/infrastructure/i18n';
 import { MonacoEditorCore, type MonacoEditorCoreRef } from '@/tools/editor/core';
 import type { EditorConfigPartial } from '@/tools/editor/config';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './CodeEditor.scss';
 
 export interface CodeEditorProps {
@@ -96,7 +97,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
+      if (e.key === 'Escape' && isFullscreen && !isImeOwnedKeyboardEvent(e)) {
         setIsFullscreen(false);
       }
     };

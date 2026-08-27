@@ -127,6 +127,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     draftKey ? state.drafts[draftKey] : undefined
   ));
   const [localDraft, setLocalDraft] = useState(createEmptyAskUserQuestionDraft);
+  const composingOtherInputsRef = useRef(new Set<number>());
   const draft = storedDraft ?? localDraft;
   const { answers, otherInputs, submissionPhase } = draft;
   const isSubmitting = submissionPhase === 'submitting';
@@ -241,21 +242,35 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     });
   }, [draftKey]);
 
-  const handleOtherInputChange = useCallback((questionIndex: number, value: string) => {
+  const handleOtherInputChange = useCallback((
+    questionIndex: number,
+    value: string,
+    preserveOtherSelection = false,
+  ) => {
     if (draftKey) {
-      askUserQuestionDraftStore.getState().setOtherInput(draftKey, questionIndex, value);
+      askUserQuestionDraftStore.getState().setOtherInput(
+        draftKey,
+        questionIndex,
+        value,
+        preserveOtherSelection,
+      );
       return;
     }
     setLocalDraft(current => {
       const isEmpty = value.trim().length === 0;
       const currentAnswer = current.answers[questionIndex];
       let nextAnswers = current.answers;
-      if (isEmpty && Array.isArray(currentAnswer) && currentAnswer.includes('Other')) {
+      if (
+        isEmpty
+        && !preserveOtherSelection
+        && Array.isArray(currentAnswer)
+        && currentAnswer.includes('Other')
+      ) {
         nextAnswers = {
           ...current.answers,
           [questionIndex]: currentAnswer.filter(answer => answer !== 'Other'),
         };
-      } else if (isEmpty && currentAnswer === 'Other') {
+      } else if (isEmpty && !preserveOtherSelection && currentAnswer === 'Other') {
         nextAnswers = { ...current.answers };
         delete nextAnswers[questionIndex];
       }
@@ -462,7 +477,24 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                 className="other-input-inline"
                 placeholder={t('toolCards.askUser.pleaseSpecify')}
                 value={otherInput}
-                onChange={(e) => handleOtherInputChange(questionIndex, e.target.value)}
+                onChange={(e) => handleOtherInputChange(
+                  questionIndex,
+                  e.target.value,
+                  composingOtherInputsRef.current.has(questionIndex)
+                    || (e.nativeEvent as InputEvent).isComposing,
+                )}
+                onCompositionStart={() => {
+                  composingOtherInputsRef.current.add(questionIndex);
+                }}
+                onCompositionEnd={(e) => {
+                  // WebKit can emit the final input event immediately after
+                  // compositionend. Keep Other selected through that event so
+                  // a transient empty IME value cannot unmount this input.
+                  handleOtherInputChange(questionIndex, e.currentTarget.value, true);
+                  queueMicrotask(() => {
+                    composingOtherInputsRef.current.delete(questionIndex);
+                  });
+                }}
                 disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                 autoFocus
               />

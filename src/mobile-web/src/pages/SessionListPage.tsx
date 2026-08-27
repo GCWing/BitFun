@@ -14,6 +14,11 @@ import logoIcon from '../assets/Logo-ICON.png';
 
 const PAGE_SIZE = 30;
 
+const isImeOwnedKey = (event: React.KeyboardEvent, compositionActive = false): boolean => {
+  const nativeEvent = event.nativeEvent as KeyboardEvent;
+  return compositionActive || nativeEvent.isComposing || nativeEvent.keyCode === 229;
+};
+
 type DisplayMode = 'pro' | 'assistant';
 
 interface SessionListPageProps {
@@ -175,6 +180,7 @@ const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
 );
 
 const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect, onOpenDevices }) => {
+  const renameInputCompositionActiveRef = useRef(false);
   const { t, formatDate } = useI18n();
   const {
     sessions,
@@ -1399,8 +1405,21 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               placeholder={t('sessions.sessionNamePlaceholder')}
               autoFocus
               onKeyDown={(e) => {
+                if (
+                  (e.key === 'Enter' || e.key === 'Escape')
+                  && isImeOwnedKey(e, renameInputCompositionActiveRef.current)
+                ) {
+                  e.stopPropagation();
+                  return;
+                }
                 if (e.key === 'Enter') handleRename();
                 if (e.key === 'Escape') setRenameTarget(null);
+              }}
+              onCompositionStart={() => {
+                renameInputCompositionActiveRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                renameInputCompositionActiveRef.current = false;
               }}
             />
             <div className="session-list__rename-actions">

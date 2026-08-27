@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 interface MenuPosition {
   top: number;
@@ -52,7 +53,7 @@ export function useShellNavMenuState(
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isImeOwnedKeyboardEvent(event)) {
         setMenuOpen(false);
         setWorkspaceMenuOpen(false);
       }

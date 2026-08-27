@@ -20,6 +20,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import { globalAPI } from '@/infrastructure/api/service-api/GlobalAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import {
   joinDirectoryPath,
   parentDirectoryPath,
@@ -83,6 +84,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(initialPath || null);
   const pathInputRef = useRef<HTMLInputElement>(null);
+  const pathInputCompositionActiveRef = useRef(false);
   const loadSeqRef = useRef(0);
 
   const parentPath = useMemo(() => parentDirectoryPath(currentPath), [currentPath]);
@@ -272,6 +274,13 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                 data-bf-component="peer-device"
                 data-bf-part="pathInput"
                 onKeyDown={(event) => {
+                  if (
+                    (event.key === 'Enter' || event.key === 'Escape')
+                    && isImeOwnedKeyboardEvent(event, pathInputCompositionActiveRef.current)
+                  ) {
+                    event.stopPropagation();
+                    return;
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault();
                     handleCommitPathInput();
@@ -280,6 +289,12 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                     setPathInputValue(currentPath);
                     setIsEditingPath(false);
                   }
+                }}
+                onCompositionStart={() => {
+                  pathInputCompositionActiveRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  pathInputCompositionActiveRef.current = false;
                 }}
               />
             ) : (

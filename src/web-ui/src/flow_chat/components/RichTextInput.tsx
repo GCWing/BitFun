@@ -918,6 +918,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     if (composing && (e.key === 'Enter' || e.key === 'Escape')) {
+      e.stopPropagation();
       return;
     }
 

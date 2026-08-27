@@ -7,6 +7,7 @@ import React, {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { KeyHint } from '@bitfun/ui';
 import {
   BarChart3,
@@ -159,6 +160,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drilldownGroup, setDrilldownGroup] = useState<GlobalSearchDrilldownGroupId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputCompositionActiveRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const generatedId = useId().replace(/:/g, '');
   const instanceId = `global-search-${generatedId || 'content'}`;
@@ -275,6 +277,13 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
   }, [onBeforeActivate, openAssistant, selectAssistantWorkspace, setActiveWorkspace, tCommon]);
 
   const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      (event.key === 'Enter' || event.key === 'Escape')
+      && isImeOwnedKeyboardEvent(event, inputCompositionActiveRef.current)
+    ) {
+      event.stopPropagation();
+      return;
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       const nextIndex = Math.min(navigableItems.length - 1, Math.max(0, activeIndex + 1));
@@ -323,6 +332,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
   }, [focusSearchInput]);
 
   const handleRootKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isImeOwnedKeyboardEvent(event, inputCompositionActiveRef.current)) return;
     if (event.key !== 'Escape' || !drilldownGroup) return;
     event.preventDefault();
     event.stopPropagation();
@@ -356,6 +366,12 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 setDrilldownGroup(null);
               }}
               onKeyDown={handleInputKeyDown}
+              onCompositionStart={() => {
+                inputCompositionActiveRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                inputCompositionActiveRef.current = false;
+              }}
               placeholder={tCommon('nav.search.inputPlaceholder')}
               aria-label={tCommon('nav.search.inputLabel')}
               role="combobox"

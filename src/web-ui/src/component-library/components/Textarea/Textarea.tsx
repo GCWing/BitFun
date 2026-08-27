@@ -1,4 +1,5 @@
 import React, { forwardRef, useRef, useImperativeHandle, useCallback, useId } from 'react';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './Textarea.scss';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -29,6 +30,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       className = '',
       value,
       onChange,
+      onKeyDown,
+      onCompositionStart,
+      onCompositionEnd,
       style,
       'data-bf-component': rootAppearanceComponent = 'textarea',
       'data-bf-part': rootAppearancePart = 'root',
@@ -40,6 +44,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const textareaId = props.id ?? `${generatedId}-textarea`;
     const supportId = `${generatedId}-support`;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const compositionActiveRef = useRef(false);
     const [charCount, setCharCount] = React.useState(0);
 
     useImperativeHandle(ref, () => textareaRef.current!);
@@ -94,6 +99,24 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             className="bitfun-textarea__field"
             value={value}
             onChange={handleChange}
+            onKeyDown={(event) => {
+              if (
+                (event.key === 'Enter' || event.key === 'Escape')
+                && isImeOwnedKeyboardEvent(event, compositionActiveRef.current)
+              ) {
+                event.stopPropagation();
+                return;
+              }
+              onKeyDown?.(event);
+            }}
+            onCompositionStart={(event) => {
+              compositionActiveRef.current = true;
+              onCompositionStart?.(event);
+            }}
+            onCompositionEnd={(event) => {
+              compositionActiveRef.current = false;
+              onCompositionEnd?.(event);
+            }}
             maxLength={maxLength}
             aria-invalid={error || undefined}
             aria-describedby={(error && errorMessage) || (!error && hint) || showCount

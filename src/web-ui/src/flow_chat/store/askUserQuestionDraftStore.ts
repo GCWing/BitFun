@@ -25,7 +25,12 @@ interface AskUserQuestionDraftState {
     value: string,
     checked: boolean,
   ) => void;
-  setOtherInput: (key: string, questionIndex: number, value: string) => void;
+  setOtherInput: (
+    key: string,
+    questionIndex: number,
+    value: string,
+    preserveOtherSelection?: boolean,
+  ) => void;
   setSubmissionPhase: (key: string, phase: AskUserQuestionSubmissionPhase) => void;
   clearDraft: (key: string) => void;
   removeSessionDrafts: (sessionIds: Iterable<string>) => void;
@@ -156,12 +161,12 @@ export const useAskUserQuestionDraftStore = create<AskUserQuestionDraftState>((s
     }));
   },
 
-  setOtherInput: (key, questionIndex, value) => {
+  setOtherInput: (key, questionIndex, value, preserveOtherSelection = false) => {
     set(state => updateDraft(state, key, draft => {
       const isEmpty = value.trim().length === 0;
       return {
         ...draft,
-        answers: isEmpty
+        answers: isEmpty && !preserveOtherSelection
           ? removeOtherAnswer(draft.answers, questionIndex)
           : draft.answers,
         otherInputs: {

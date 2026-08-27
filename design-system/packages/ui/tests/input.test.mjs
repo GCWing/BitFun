@@ -5,6 +5,19 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Input } from "../dist/index.js";
 
+test("Input keeps IME-owned Enter and Escape away from submit and cancel handlers", async () => {
+  const source = await readFile(
+    new URL("../src/components/Input/Input.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /isImeOwnedKeyboardEvent/);
+  assert.match(source, /event\.key === "Enter" \|\| event\.key === "Escape"/);
+  assert.match(source, /event\.stopPropagation\(\)/);
+  assert.match(source, /onCompositionStart/);
+  assert.match(source, /onCompositionEnd/);
+});
+
 test("Input keeps native input semantics and independent content slots", () => {
   const markup = renderToStaticMarkup(
     createElement(Input, {

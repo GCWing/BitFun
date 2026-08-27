@@ -6,6 +6,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { WorkspaceInfo } from '@/shared/types';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 interface AssistantSessionCreateMenuProps {
   assistants: WorkspaceInfo[];
@@ -62,7 +63,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
       closeMenu();
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape' && !isImeOwnedKeyboardEvent(event)) closeMenu();
     };
 
     document.addEventListener('mousedown', handleMouseDown);

@@ -12,6 +12,7 @@ import { gitService, gitEventService } from '../../../../tools/git/services';
 import { gitStateManager } from '../../../../tools/git/state/GitStateManager';
 import { notificationService } from '../../../../shared/notification-system/services/NotificationService';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './BranchQuickSwitch.scss';
 
 const log = createLogger('BranchQuickSwitch');
@@ -43,6 +44,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputCompositionActiveRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -195,6 +197,13 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   }, [repositoryPath, currentBranch, isSwitching, onSwitchSuccess, onClose, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (
+      (e.key === 'Enter' || e.key === 'Escape')
+      && isImeOwnedKeyboardEvent(e, inputCompositionActiveRef.current)
+    ) {
+      e.stopPropagation();
+      return;
+    }
     if (filteredBranches.length === 0) return;
     switch (e.key) {
       case 'ArrowDown':
@@ -238,6 +247,12 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           placeholder={t('quickSwitch.searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          onCompositionStart={() => {
+            inputCompositionActiveRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            inputCompositionActiveRef.current = false;
+          }}
           className="branch-quick-switch__input"
           data-bf-component="branch-quick-switch"
           data-bf-part="input"

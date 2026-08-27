@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import MiniAppCard from '../components/MiniAppCard';
 import MiniAppDetailModal from '../components/MiniAppDetailModal';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -99,7 +100,7 @@ const MiniAppGalleryView: React.FC = () => {
       closeImportMenu();
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isImeOwnedKeyboardEvent(event)) return;
       closeImportMenu();
       requestAnimationFrame(() => importTriggerRef.current?.focus());
     };

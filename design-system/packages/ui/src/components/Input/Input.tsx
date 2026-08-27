@@ -1,10 +1,12 @@
 import {
   forwardRef,
+  useRef,
   type ChangeEventHandler,
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Input.module.css";
 
 export interface InputProps
@@ -26,12 +28,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   invalid = false,
   leading,
   onChange,
+  onCompositionEnd,
+  onCompositionStart,
+  onKeyDown,
   onValueChange,
   size = "sm",
   trailing,
   type = "text",
   ...props
 }, ref) {
+  const compositionActiveRef = useRef(false);
   const handleChange: ChangeEventHandler<HTMLInputElement> = (event) => {
     onChange?.(event);
     onValueChange?.(event.currentTarget.value);
@@ -58,6 +64,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
         className={classNames(styles.input, inputClassName)}
         disabled={disabled}
         onChange={handleChange}
+        onCompositionEnd={(event) => {
+          compositionActiveRef.current = false;
+          onCompositionEnd?.(event);
+        }}
+        onCompositionStart={(event) => {
+          compositionActiveRef.current = true;
+          onCompositionStart?.(event);
+        }}
+        onKeyDown={(event) => {
+          if (
+            (event.key === "Enter" || event.key === "Escape")
+            && isImeOwnedKeyboardEvent(event, compositionActiveRef.current)
+          ) {
+            event.stopPropagation();
+            return;
+          }
+          onKeyDown?.(event);
+        }}
         ref={ref}
         type={type}
       />

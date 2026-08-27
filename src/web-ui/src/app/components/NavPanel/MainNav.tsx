@@ -14,6 +14,7 @@ import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExtern
 import { createPortal } from 'react-dom';
 import { KeyHint } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import {
@@ -219,7 +220,7 @@ const MainNav: React.FC<MainNavProps> = ({
       closeWorkspaceMenu();
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeWorkspaceMenu();
+      if (event.key === 'Escape' && !isImeOwnedKeyboardEvent(event)) closeWorkspaceMenu();
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);

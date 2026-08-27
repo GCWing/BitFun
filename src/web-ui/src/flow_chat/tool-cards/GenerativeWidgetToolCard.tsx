@@ -14,6 +14,7 @@ import { useGenerativeWidgetPromptMenu } from '@/tools/generative-widget/useGene
 import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { captureElementToDownloadsPng } from '../utils/captureElementToDownloadsPng';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { createTab } from '@/shared/utils/tabUtils';
 import { notificationService } from '@/shared/notification-system';
 import './GenerativeWidgetToolCard.scss';
@@ -183,7 +184,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
     }
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
+      if (event.key !== 'Escape' || isImeOwnedKeyboardEvent(event)) {
         return;
       }
       setMenuSelectionActive(false);

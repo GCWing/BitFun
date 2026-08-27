@@ -17,6 +17,7 @@ import {
   useAnchoredPopoverPosition,
   type AnchoredPopoverLayout,
 } from '@/shared/utils/useAnchoredPopoverPosition';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { PresenceBoundary } from '../PresenceBoundary/PresenceBoundary';
 import './Select.scss';
 
@@ -144,6 +145,7 @@ export const Select: React.FC<SelectProps> = ({
   const selectRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchCompositionActiveRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isKeyboardNavigation = useRef(false);
 
@@ -655,6 +657,13 @@ export const Select: React.FC<SelectProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
+              if (
+                (e.key === 'Enter' || e.key === 'Escape')
+                && isImeOwnedKeyboardEvent(e, searchCompositionActiveRef.current)
+              ) {
+                e.stopPropagation();
+                return;
+              }
               if (['Enter', 'Escape', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
                 setKeyboardOpen(true);
               }
@@ -681,6 +690,12 @@ export const Select: React.FC<SelectProps> = ({
                   -1,
                 ));
               }
+            }}
+            onCompositionStart={() => {
+              searchCompositionActiveRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              searchCompositionActiveRef.current = false;
             }}
             data-bf-component="select"
             data-bf-part="searchInput"

@@ -11,6 +11,7 @@ import {
   useMarketAccount,
 } from '@/infrastructure/market-account';
 import { useNotification } from '@/shared/notification-system';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import {
   calculateMarketAccountMenuPosition,
   type MarketAccountMenuPosition,
@@ -97,7 +98,7 @@ export function MarketAccountControls({
       }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isImeOwnedKeyboardEvent(event)) return;
       setMenuOpen(false);
       menuTriggerRef.current?.focus();
     };

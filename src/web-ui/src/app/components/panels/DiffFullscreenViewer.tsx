@@ -5,6 +5,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { X, CheckCircle, XCircle } from 'lucide-react';
 import { PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { DiffEditor } from '../../../tools/editor';
 import './DiffFullscreenViewer.css';
 
@@ -54,7 +55,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
   // Close on Escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isImeOwnedKeyboardEvent(e)) {
         onClose();
       }
     };

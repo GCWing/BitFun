@@ -7,6 +7,7 @@ import { Button } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './TerminalEditModal.scss';
 
 export interface TerminalEditModalProps {
@@ -50,7 +51,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isImeOwnedKeyboardEvent(e)) {
         onClose();
       }
     };

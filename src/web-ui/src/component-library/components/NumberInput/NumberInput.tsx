@@ -6,6 +6,7 @@
 import React, { forwardRef, useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, Minus, Plus } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './NumberInput.scss';
 
 export interface NumberInputProps {
@@ -54,6 +55,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
     const [isHovered, setIsHovered] = useState(false);
     const dragStartRef = useRef<{ y: number; value: number } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const compositionActiveRef = useRef(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const formatValue = useCallback(
@@ -107,6 +109,13 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (
+          (e.key === 'Enter' || e.key === 'Escape')
+          && isImeOwnedKeyboardEvent(e, compositionActiveRef.current)
+        ) {
+          e.stopPropagation();
+          return;
+        }
         if (e.key === 'Enter') {
           handleInputBlur();
           inputRef.current?.blur();
@@ -225,6 +234,12 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
               onFocus={() => setIsEditing(true)}
               onBlur={handleInputBlur}
               onKeyDown={handleKeyDown}
+              onCompositionStart={() => {
+                compositionActiveRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                compositionActiveRef.current = false;
+              }}
               disabled={disabled}
               data-bf-component="number-input"
               data-bf-part="input"

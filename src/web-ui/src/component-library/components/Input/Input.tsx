@@ -2,7 +2,8 @@
  * Input component
  */
 
-import React, { forwardRef, useId } from 'react';
+import React, { forwardRef, useId, useRef } from 'react';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './Input.scss';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'prefix'> {
@@ -29,8 +30,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   hint,
   className = '',
   disabled,
+  onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   ...props
 }, ref) => {
+  const compositionActiveRef = useRef(false);
   const generatedId = useId();
   const inputId = props.id ?? `${generatedId}-input`;
   const supportId = `${generatedId}-support`;
@@ -67,6 +72,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           data-bf-component="input"
           data-bf-part="control"
           disabled={disabled}
+          onKeyDown={(event) => {
+            if (
+              (event.key === 'Enter' || event.key === 'Escape')
+              && isImeOwnedKeyboardEvent(event, compositionActiveRef.current)
+            ) {
+              event.stopPropagation();
+              return;
+            }
+            onKeyDown?.(event);
+          }}
+          onCompositionStart={(event) => {
+            compositionActiveRef.current = true;
+            onCompositionStart?.(event);
+          }}
+          onCompositionEnd={(event) => {
+            compositionActiveRef.current = false;
+            onCompositionEnd?.(event);
+          }}
           aria-invalid={error || undefined}
           aria-describedby={(error && errorMessage) || (!error && hint) ? supportId : props['aria-describedby']}
         />

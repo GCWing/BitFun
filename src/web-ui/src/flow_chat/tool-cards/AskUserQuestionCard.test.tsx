@@ -234,6 +234,50 @@ describe('AskUserQuestionCard', () => {
     expect(container.querySelector<HTMLInputElement>('.other-input-inline')?.value).toBe('CockroachDB');
   });
 
+  it('keeps the custom input mounted and focused during Chinese IME composition', () => {
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    const otherRadio = container.querySelector<HTMLInputElement>('input[value="Other"]');
+    act(() => otherRadio?.click());
+
+    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    expect(customInput).not.toBeNull();
+    act(() => {
+      customInput?.focus();
+      customInput?.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      if (customInput) {
+        setInputValue(customInput, 'n');
+        setInputValue(customInput, '');
+      }
+    });
+
+    expect(container.querySelector('.other-input-inline')).toBe(customInput);
+    expect(document.activeElement).toBe(customInput);
+    expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
+
+    act(() => {
+      if (customInput) {
+        setInputValue(customInput, '你');
+        customInput.dispatchEvent(new CompositionEvent('compositionend', {
+          bubbles: true,
+          data: '你',
+        }));
+      }
+    });
+
+    expect(container.querySelector<HTMLInputElement>('.other-input-inline')?.value).toBe('你');
+    expect(document.activeElement).toBe(customInput);
+  });
+
   it('deselects a blank multi-select Other answer and omits it from submission', async () => {
     act(() => {
       root.render(
