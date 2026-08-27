@@ -1,5 +1,21 @@
 import type { SubscriptionProvider } from '../types';
 
+/**
+ * Keeps the settings UI to one sign-in action while selecting the Codex flow
+ * that can actually return to the host running authorization.
+ */
+export function preferredSubscriptionLoginMethod(
+  provider: SubscriptionProvider,
+  localBrowserCallbackReachable: boolean,
+): 'device' | undefined {
+  return provider === 'codex' && !localBrowserCallbackReachable ? 'device' : undefined;
+}
+
+/** Antigravity currently exposes only a callback bound on the execution host. */
+export function subscriptionLoginRequiresLocalDevice(provider: SubscriptionProvider): boolean {
+  return provider === 'antigravity';
+}
+
 export interface SubscriptionLoginOperation {
   id: number;
   sessionId: string;

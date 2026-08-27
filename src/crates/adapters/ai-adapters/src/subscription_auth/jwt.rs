@@ -32,6 +32,14 @@ pub(crate) fn subject(token: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Checks the unverified JWT `exp` claim for proactive refresh only. Opaque
+/// access tokens return false and continue using the provider's stored expiry.
+pub(crate) fn expires_within(token: &str, now_ms: i64, skew_ms: i64) -> bool {
+    decode_claims(token)
+        .and_then(|claims| claims.get("exp").and_then(Value::as_i64))
+        .is_some_and(|expires| expires.saturating_mul(1000) <= now_ms.saturating_add(skew_ms))
+}
+
 /// Extracts the ChatGPT account id from a Codex id/access token, mirroring
 /// OpenCode's `extractAccountIdFromClaims`.
 pub(crate) fn chatgpt_account_id(token: &str) -> Option<String> {
@@ -114,5 +122,13 @@ mod tests {
     #[test]
     fn returns_none_for_malformed_token() {
         assert_eq!(decode_claims("not-a-jwt"), None);
+    }
+
+    #[test]
+    fn checks_jwt_expiry_without_treating_opaque_tokens_as_expired() {
+        let token = make_token(serde_json::json!({ "exp": 1_800_000_000i64 }));
+        assert!(expires_within(&token, 1_799_999_900_000, 120_000));
+        assert!(!expires_within(&token, 1_799_999_000_000, 120_000));
+        assert!(!expires_within("opaque-token", 1_799_999_900_000, 120_000));
     }
 }
