@@ -68,6 +68,7 @@ export function ModalProvider({
 }
 
 export interface ModalProps {
+  ariaDescribedBy?: string;
   ariaLabel?: string;
   ariaLabelledBy?: string;
   backdropBlur?: ModalBackdropBlur;
@@ -80,9 +81,13 @@ export interface ModalProps {
   contentClassName?: string;
   contentLayout?: ModalContentLayout;
   contentPadding?: ModalContentPadding;
+  description?: ReactNode;
   dialogClassName?: string;
   draggable?: boolean;
   elevation?: ModalElevation;
+  footer?: ReactNode;
+  footerClassName?: string;
+  headerActions?: ReactNode;
   isOpen: boolean;
   onClose: () => void;
   overlayClassName?: string;
@@ -170,6 +175,7 @@ function isTopModal(ownerDocument: Document, identity: symbol): boolean {
 }
 
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
+  ariaDescribedBy,
   ariaLabel,
   ariaLabelledBy,
   backdropBlur = "none",
@@ -182,9 +188,13 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   contentClassName,
   contentLayout = "scroll",
   contentPadding = "none",
+  description,
   dialogClassName,
   draggable = false,
   elevation = "overlay",
+  footer,
+  footerClassName,
+  headerActions,
   isOpen,
   onClose,
   overlayClassName,
@@ -214,6 +224,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   const resizeStartRef = useRef<ResizeStart | null>(null);
   const resizeDirectionRef = useRef<string>("");
   const generatedTitleId = useId();
+  const generatedDescriptionId = useId();
   const [isPresent, setIsPresent] = useState(isOpen);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -473,7 +484,11 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     isResizing && "resizing",
     isExiting && "exiting",
   ].filter(Boolean).join(" ");
-  const hasHeader = Boolean(title || showCloseButton);
+  const hasHeader = Boolean(title || description || headerActions || showCloseButton || draggable);
+  const resolvedDescribedBy = [
+    ariaDescribedBy,
+    description !== undefined && description !== null ? generatedDescriptionId : undefined,
+  ].filter(Boolean).join(" ") || undefined;
 
   return createPortal(
     <div
@@ -498,6 +513,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       }}
     >
       <div
+        aria-describedby={resolvedDescribedBy}
         aria-hidden={isExiting || undefined}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy ?? (title ? generatedTitleId : undefined)}
@@ -506,6 +522,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
         data-bf-border={border}
         data-bf-component="modal"
         data-bf-elevation={elevation}
+        data-bf-has-footer={footer !== undefined && footer !== null ? "true" : "false"}
         data-bf-part="dialog"
         data-bf-placement={placement}
         data-bf-radius={radius}
@@ -522,10 +539,10 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           <div
             className={styles.headerShell}
             data-bf-component="modal"
-            data-bf-has-title={title ? "true" : "false"}
+            data-bf-has-title={title || description ? "true" : "false"}
             data-bf-part="headerShell"
           >
-            {(title || draggable) && (
+            {(title || description || draggable) && (
               <div
                 className={styles.header}
                 data-bf-component="modal"
@@ -534,24 +551,43 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
                 onPointerDown={handleDragStart}
                 ref={headerRef}
               >
-                {title && (
-                  <div className={styles.titleGroup} data-bf-component="modal" data-bf-part="titleGroup">
-                    <h2
-                      className={styles.title}
-                      data-bf-component="modal"
-                      data-bf-part="title"
-                      data-testid={titleTestId}
-                      id={generatedTitleId}
-                    >
-                      {title}
-                    </h2>
-                    {titleExtra && (
-                      <span className={styles.titleExtra} data-bf-component="modal" data-bf-part="titleExtra">
-                        {titleExtra}
-                      </span>
+                {(title || description) && (
+                  <div className={styles.heading} data-bf-component="modal" data-bf-part="heading">
+                    {title && (
+                      <div className={styles.titleGroup} data-bf-component="modal" data-bf-part="titleGroup">
+                        <h2
+                          className={styles.title}
+                          data-bf-component="modal"
+                          data-bf-part="title"
+                          data-testid={titleTestId}
+                          id={generatedTitleId}
+                        >
+                          {title}
+                        </h2>
+                        {titleExtra && (
+                          <span className={styles.titleExtra} data-bf-component="modal" data-bf-part="titleExtra">
+                            {titleExtra}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {description !== undefined && description !== null && (
+                      <p
+                        className={styles.description}
+                        data-bf-component="modal"
+                        data-bf-part="description"
+                        id={generatedDescriptionId}
+                      >
+                        {description}
+                      </p>
                     )}
                   </div>
                 )}
+              </div>
+            )}
+            {headerActions !== undefined && headerActions !== null && (
+              <div className={styles.headerActions} data-bf-component="modal" data-bf-part="headerActions">
+                {headerActions}
               </div>
             )}
             {showCloseButton && (
@@ -578,6 +614,16 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
         >
           {children}
         </div>
+
+        {footer !== undefined && footer !== null && (
+          <footer
+            className={classNames(styles.footer, footerClassName)}
+            data-bf-component="modal"
+            data-bf-part="footer"
+          >
+            {footer}
+          </footer>
+        )}
 
         {resizable && (["n", "s", "w", "e", "nw", "ne", "sw", "se"] as const).map((direction) => (
           <div

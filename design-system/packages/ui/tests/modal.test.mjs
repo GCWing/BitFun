@@ -17,6 +17,11 @@ test("Modal owns a portaled, stacked focus and dismissal contract", async () => 
   assert.match(source, /data-bf-part="overlay"/);
   assert.match(source, /data-bf-part="dialog"/);
   assert.match(source, /data-bf-part="content"/);
+  assert.match(source, /aria-describedby=\{resolvedDescribedBy\}/);
+  assert.match(source, /data-bf-part="description"/);
+  assert.match(source, /data-bf-part="headerActions"/);
+  assert.match(source, /data-bf-part="footer"/);
+  assert.match(source, /data-bf-has-footer=/);
 });
 
 test("Modal geometry and surface styling use public design tokens", async () => {
@@ -28,5 +33,10 @@ test("Modal geometry and surface styling use public design tokens", async () => 
   assert.match(styles, /--bf-color-surface-raised/);
   assert.match(styles, /--bf-radius-4xl/);
   assert.match(styles, /--bf-shadow-overlay/);
+  assert.match(styles, /--bf-overlay-modal-footer-content-inset/);
+  assert.match(styles, /--bf-overlay-modal-footer-height/);
+  assert.match(styles, /--bf-overlay-modal-footer-blur/);
+  assert.match(styles, /backdrop-filter:\s*var\(--bf-overlay-modal-footer-blur\)/);
+  assert.match(styles, /--bf-overlay-modal-footer-action-min-width/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

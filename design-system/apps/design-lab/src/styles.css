@@ -3165,11 +3165,6 @@ input.lab-force-focus {
   line-height: var(--bf-line-height-body);
 }
 
-.component-modal-preview-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .component-preview-matrix {
   display: grid;
   align-items: stretch;

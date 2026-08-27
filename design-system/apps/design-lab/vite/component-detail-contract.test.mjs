@@ -131,6 +131,8 @@ test("Modal preview uses the published component inside a local themed portal ho
   assert.match(detail, /portalContainer=\{\(\) => modalPreviewHostRef\.current\}/);
   assert.match(detail, /backdropBlur="subtle"/);
   assert.match(detail, /contentPadding="lg"/);
+  assert.match(detail, /description=\{t\("components\.preview\.modalDescription"\)\}/);
+  assert.match(detail, /footer=\{\(/);
   assert.match(detail, /radius="2xl"/);
   assert.match(styles, /\.component-modal-preview-host\s*\{[^}]*transform:\s*translateZ\(0\)/s);
 });

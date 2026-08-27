@@ -232,7 +232,7 @@ export function ComponentDetailPage({
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
     if (component.name === "Modal") {
-      return `import { Button, Modal } from "@bitfun/ui";\nimport { useState } from "react";\n\nconst [open, setOpen] = useState(false);\n\n<Button onClick={() => setOpen(true)}>\n  ${t("components.preview.openModal")}\n</Button>\n<Modal\n  backdropBlur="subtle"\n  contentPadding="lg"\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  radius="2xl"\n  size="small"\n  title="${t("components.preview.modalTitle")}"\n>\n  <p>${t("components.preview.modalBody")}</p>\n</Modal>`;
+      return `import { Button, Modal } from "@bitfun/ui";\nimport { useState } from "react";\n\nconst [open, setOpen] = useState(false);\n\n<Button onClick={() => setOpen(true)}>\n  ${t("components.preview.openModal")}\n</Button>\n<Modal\n  backdropBlur="subtle"\n  contentPadding="lg"\n  description="${t("components.preview.modalDescription")}"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  radius="2xl"\n  size="small"\n  title="${t("components.preview.modalTitle")}"\n>\n  <p>${t("components.preview.modalBody")}</p>\n</Modal>`;
     }
     if (component.name === "PageHeader") {
       return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
@@ -520,6 +520,17 @@ export function ComponentDetailPage({
                   <Modal
                     backdropBlur="subtle"
                     contentPadding="lg"
+                    description={t("components.preview.modalDescription")}
+                    footer={(
+                      <>
+                        <Button onClick={() => setModalOpen(false)} variant="fill">
+                          {t("components.preview.modalCancel")}
+                        </Button>
+                        <Button onClick={() => setModalOpen(false)} variant="primary">
+                          {t("components.preview.modalSave")}
+                        </Button>
+                      </>
+                    )}
                     isOpen={modalOpen}
                     onClose={() => setModalOpen(false)}
                     portalContainer={() => modalPreviewHostRef.current}
@@ -529,11 +540,6 @@ export function ComponentDetailPage({
                   >
                     <div className="component-modal-preview-body">
                       <p>{t("components.preview.modalBody")}</p>
-                      <div className="component-modal-preview-actions">
-                        <Button onClick={() => setModalOpen(false)} variant="fill">
-                          {t("components.preview.close")}
-                        </Button>
-                      </div>
                     </div>
                   </Modal>
                 </div>
