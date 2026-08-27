@@ -59,6 +59,8 @@ export interface UsageTrendPoint {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  /** Tokens written into the provider cache for this bucket. */
+  cacheWriteTokens: number;
   /** 0.0..=1.0 when the bucket has cache telemetry. */
   cacheHitRate: number | null;
 }
@@ -69,6 +71,8 @@ export interface UsageStatistics {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCachedTokens: number;
+  /** Tokens written into provider caches across the selected range. */
+  totalCacheWriteTokens: number;
   /** Prompt input tokens from requests that reported cache telemetry. */
   totalCacheReportedInputTokens: number;
   byModel: UsageStatisticsEntry[];

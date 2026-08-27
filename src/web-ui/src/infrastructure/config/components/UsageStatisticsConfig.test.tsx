@@ -96,6 +96,7 @@ const SAMPLE_STATS: UsageStatistics = {
   totalInputTokens: 4_400_000,
   totalOutputTokens: 400_000,
   totalCachedTokens: 4_200_000,
+  totalCacheWriteTokens: 0,
   totalCacheReportedInputTokens: 4_400_000,
   byModel: [
     {
@@ -136,6 +137,7 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 1_000_000,
       outputTokens: 100_000,
       cacheReadTokens: 900_000,
+      cacheWriteTokens: 50_000,
       cacheHitRate: 0.9,
     },
     {
@@ -143,6 +145,7 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 2_000_000,
       outputTokens: 200_000,
       cacheReadTokens: 1_900_000,
+      cacheWriteTokens: 0,
       cacheHitRate: 0.95,
     },
   ],
@@ -194,8 +197,67 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelector('[data-bf-part="trendPanel"]')).not.toBeNull();
     expect(container.querySelectorAll('.bitfun-usage-stats__donut').length).toBe(3);
     expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
+    expect(container.textContent).not.toContain('trend.legend.cacheCreation');
     // Hit rate is truncated to two decimals, never rounded up.
     expect(container.textContent).toContain('95.00%');
+  });
+
+  it('keeps idle hit-rate points continuous but splits active telemetry gaps', async () => {
+    const idlePoint = {
+      ...SAMPLE_STATS.trend[0],
+      bucket: '2026-08-16T12:00:00.000Z',
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheHitRate: null,
+    };
+    const activeGapPoint = {
+      ...SAMPLE_STATS.trend[0],
+      bucket: '2026-08-16T14:00:00.000Z',
+      cacheHitRate: null,
+    };
+    getStatisticsMock.mockResolvedValue({
+      ...SAMPLE_STATS,
+      trend: [
+        SAMPLE_STATS.trend[0],
+        idlePoint,
+        { ...SAMPLE_STATS.trend[1], bucket: '2026-08-16T13:00:00.000Z' },
+        activeGapPoint,
+        { ...SAMPLE_STATS.trend[1], bucket: '2026-08-16T15:00:00.000Z' },
+      ],
+    });
+
+    await render();
+
+    expect(container.querySelectorAll('[data-cache-hit-rate-segment="line"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-cache-hit-rate-segment="point"]')).toHaveLength(1);
+
+    const hoverCapture = container.querySelector(
+      '.bitfun-usage-stats__trend-svg > rect[fill="transparent"]',
+    ) as SVGRectElement;
+    vi.spyOn(hoverCapture, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      width: 400,
+    } as DOMRect);
+
+    await act(async () => {
+      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+        bubbles: true,
+        clientX: 300,
+      }));
+    });
+    let tooltipRows = container.querySelectorAll('.bitfun-usage-stats__trend-tooltip-row');
+    expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('–');
+
+    await act(async () => {
+      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+        bubbles: true,
+        clientX: 100,
+      }));
+    });
+    tooltipRows = container.querySelectorAll('.bitfun-usage-stats__trend-tooltip-row');
+    expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('0.00%');
   });
 
   it('keeps same-named models distinct and labels deleted configurations', async () => {
