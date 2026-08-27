@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "58d766fcc65df497d6de40113bf8bbbc2cdc0b216df7355ee9e90c1a98c9e677",
+  "digest": "981019f2d18ab8ca85a2247122aab358ec6618c69ca8a693b480f28e480555eb",
   "fileCount": 365,
-  "interactionCount": 4423,
+  "interactionCount": 4421,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -1381,8 +1381,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx",
-      "interactionCount": 152,
-      "digest": "32726de1185e90e8949c2eefe6491f2ae9e0b39fd4b2a148d24649a37cc0ac13"
+      "interactionCount": 150,
+      "digest": "3ea0b2ee92bfbd4b6ad40f3fed55fa73b5756a9fd55d1b05b209a0638d4e15e6"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/QuickActionsConfig.tsx",

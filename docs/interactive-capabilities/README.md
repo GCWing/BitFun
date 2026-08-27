@@ -27,9 +27,9 @@ BitFun Playbook currently contains **22 features**, **16 settings pages**, and *
 - Generated runtime catalog: `src/crates/contracts/product-domains/src/generated/product-control-catalog.json`
 - Generated per-item interaction audit: `docs/interactive-capabilities/technical/product-control-open-audit.json`
 
-说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **651** 个 Tauri 命令，以及 **365** 个产品交互源码文件中的 **4423** 个交互候选，只用于实现覆盖审计。
+说明书、网站、搜索和 Agent 只看“功能 + 设置 + 子能力”。每项子能力都必须引用已注册 Tauri Command 或可解析的源码标记；这些证据不会进入公开目录。当前 **651** 个 Tauri 命令，以及 **365** 个产品交互源码文件中的 **4421** 个交互候选，只用于实现覆盖审计。
 
-Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **651** Tauri commands and **4423** interaction candidates across **365** product UI source files remain implementation-audit evidence only.
+Docs, website, search, and agents see only features, settings, and documented sub-capabilities. Every sub-capability must reference a registered Tauri command or a resolvable source marker; evidence is stripped from public projections. The **651** Tauri commands and **4421** interaction candidates across **365** product UI source files remain implementation-audit evidence only.
 
 ## 控制边界 / Control boundary
 
