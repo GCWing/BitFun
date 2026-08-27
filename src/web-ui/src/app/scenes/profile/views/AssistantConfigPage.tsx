@@ -10,7 +10,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { Input, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -29,7 +29,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Input } from '@bitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -566,8 +566,8 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
+                    size="sm"
                   />
                 ) : (
                   <span
@@ -590,8 +590,8 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
+                    size="sm"
                   />
                 ) : (
                   <span

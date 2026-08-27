@@ -6,7 +6,7 @@
  * scheduled without knowing which workspace it runs in.
  */
 
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bot,
@@ -18,7 +18,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
-import { Input, Select, Textarea } from '@/component-library';
+import { Select, Textarea } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -225,10 +225,9 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 {t('editor.fields.name')}
               </span>
               <Input
-                size="medium"
                 className="bf-todos__field-control"
                 value={draft.name}
-                error={validationErrors.name}
+                invalid={validationErrors.name}
                 aria-label={t('editor.fields.name')}
                 placeholder={t('editor.placeholders.name')}
                 onChange={(event) => {
@@ -237,6 +236,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                   updateDraft({ name });
                 }}
                 data-testid="todos-editor-name"
+                size="md"
               />
             </div>
 
@@ -351,11 +351,10 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
               {draft.scheduleKind === 'every' ? (
                 <div className="bf-todos__interval">
                   <Input
-                    size="medium"
                     className="bf-todos__field-control"
                     type="number"
                     value={draft.everyValue}
-                    error={validationErrors.everyValue}
+                    invalid={validationErrors.everyValue}
                     min="1"
                     aria-label={t('editor.fields.every')}
                     placeholder="1"
@@ -364,6 +363,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                       clearError('everyValue');
                       updateDraft({ everyValue });
                     }}
+                    size="md"
                   />
                   <Select
                     size="medium"
@@ -381,10 +381,9 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 
               {draft.scheduleKind === 'cron' ? (
                 <Input
-                  size="medium"
                   className="bf-todos__field-control"
                   value={draft.expr}
-                  error={validationErrors.cronExpr}
+                  invalid={validationErrors.cronExpr}
                   aria-label={t('editor.fields.cronExpr')}
                   placeholder="0 8 * * *"
                   onChange={(event) => {
@@ -392,6 +391,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                     clearError('cronExpr');
                     updateDraft({ expr });
                   }}
+                  size="md"
                 />
               ) : null}
             </div>
@@ -495,12 +495,12 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                     {t('editor.fields.timezone')}
                   </span>
                   <Input
-                    size="medium"
                     className="bf-todos__field-control"
                     value={draft.tz}
                     aria-label={t('editor.fields.timezone')}
                     placeholder={t('editor.placeholders.timezone')}
                     onChange={(event) => updateDraft({ tz: event.currentTarget.value })}
+                    size="md"
                   />
                   <span className="bf-todos__field-note">{t('editor.hints.cronExpr')}</span>
                 </div>

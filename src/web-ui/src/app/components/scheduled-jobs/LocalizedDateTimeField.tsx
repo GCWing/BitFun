@@ -13,9 +13,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Input } from '@bitfun/ui';
 import { CalendarDays } from 'lucide-react';
-import { Input, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import DateTimePickerPopover from './DateTimePickerPopover';
 import {
@@ -125,9 +125,8 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
       data-bf-state={error ? 'error' : undefined}
     >
       <Input
-        size="small"
         value={text}
-        error={error}
+        invalid={error}
         disabled={disabled}
         inputMode="numeric"
         placeholder={dateTimeFormatHint(order)}
@@ -136,6 +135,7 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
         onFocus={() => { editingRef.current = true; }}
         onChange={event => commitText(event.currentTarget.value)}
         onBlur={handleBlur}
+        size="sm"
       />
 
       <Tooltip content={t('dateTimeField.openPicker')} disabled={disabled}>

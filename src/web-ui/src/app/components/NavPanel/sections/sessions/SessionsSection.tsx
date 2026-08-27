@@ -6,10 +6,10 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
-import { Input, PresenceBoundary, Tooltip } from '@/component-library';
+import { PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -1748,12 +1748,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   <Input
                     ref={editInputRef}
                     className="bitfun-nav-panel__inline-item-edit-field"
-                    variant="default"
-                    inputSize="small"
                     value={editingTitle}
                     onChange={e => setEditingTitle(e.target.value)}
                     onKeyDown={handleEditKeyDown}
                     onBlur={handleConfirmEdit}
+                    size="sm"
                   />
                   <Tooltip content={t('nav.sessions.confirmEdit')} placement="top">
                     <IconButton

@@ -1,7 +1,7 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Input, Modal, Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
+import { Modal, Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -339,13 +339,13 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                     onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
                   />
                   <Input
-                    inputSize="small"
                     value={rule.resource}
                     placeholder={t('projectPermissions.resourcePlaceholder')}
                     aria-label={t('projectPermissions.resource')}
                     disabled={isBusy}
-                    error={!rule.resource.trim()}
+                    invalid={!rule.resource.trim()}
                     onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
+                    size="sm"
                   />
                   <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="ruleActions" className="workspace-project-permissions-dialog__rule-actions">
                     <Tooltip content={t('projectPermissions.moveRuleUp')}>
