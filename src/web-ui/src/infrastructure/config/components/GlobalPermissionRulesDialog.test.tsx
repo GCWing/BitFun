@@ -33,8 +33,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+vi.mock('@bitfun/ui', () => ({
   Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) => (
     isOpen ? <div role="dialog">{children}</div> : null
   ),
@@ -53,6 +52,18 @@ vi.mock('@/component-library', () => ({
   }) => (
     <button type="button" aria-label={ariaLabel} disabled={disabled} onClick={onClick}>{children}</button>
   ),
+  Input: ({ value, disabled, onChange, 'aria-label': ariaLabel }: {
+    value: string;
+    disabled?: boolean;
+    onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    'aria-label'?: string;
+  }) => (
+    <input value={value} aria-label={ariaLabel} disabled={disabled} onInput={onChange} />
+  ),
+}));
+
+vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Select: ({ value, options, disabled, onChange, 'aria-label': ariaLabel }: {
     value: string;
     options: Array<{ value: string; label: string }>;
@@ -68,14 +79,6 @@ vi.mock('@/component-library', () => ({
     >
       {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select>
-  ),
-  Input: ({ value, disabled, onChange, 'aria-label': ariaLabel }: {
-    value: string;
-    disabled?: boolean;
-    onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    'aria-label'?: string;
-  }) => (
-    <input value={value} aria-label={ariaLabel} disabled={disabled} onInput={onChange} />
   ),
 }));
 

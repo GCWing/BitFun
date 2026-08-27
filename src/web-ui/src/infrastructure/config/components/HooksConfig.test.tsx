@@ -26,11 +26,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: translateMock }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
   Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
   ),
@@ -39,6 +38,10 @@ vi.mock('@/component-library', () => ({
     isOpen: boolean;
     title?: string;
   }) => (isOpen ? <div role="dialog" aria-label={title}>{children}</div> : null),
+}));
+
+vi.mock('@/component-library', () => ({
+  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
   ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
     confirmText?: string;
     isOpen: boolean;

@@ -2,9 +2,6 @@
 @use '../../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .miniapp-gallery {
-  --miniapp-card-max-inline-size: 400px;
-  --miniapp-card-min-block-size: 152px;
-
   background: var(--bf-appearance-token-color-bg-scene);
 
   .gallery-page-header {
@@ -93,9 +90,9 @@
 
   &__card-grid.gallery-grid--skeleton .gallery-skeleton-card {
     width: 100%;
-    max-width: var(--miniapp-card-max-inline-size);
-    height: var(--miniapp-card-min-block-size);
-    min-height: var(--miniapp-card-min-block-size);
+    max-width: 400px;
+    height: 152px;
+    min-height: 152px;
   }
 
 }
@@ -160,6 +157,9 @@
 
 @media (max-width: 480px) {
   .miniapp-gallery {
-    --miniapp-card-max-inline-size: 100%;
+    .miniapp-card,
+    &__card-grid.gallery-grid--skeleton .gallery-skeleton-card {
+      max-width: 100%;
+    }
   }
 }

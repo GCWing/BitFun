@@ -45,12 +45,15 @@ vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({ success: mocks.success, error: mocks.error }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Avatar: ({ src, alt }: any) => <img src={src} alt={alt} />,
+vi.mock('@bitfun/ui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Modal: ({ isOpen, title, children }: any) => isOpen ? (
     <section role="dialog" aria-label={title}>{children}</section>
   ) : null,
+}));
+
+vi.mock('@/component-library', () => ({
+  Avatar: ({ src, alt }: any) => <img src={src} alt={alt} />,
 }));
 
 describe('MarketAccountControls', () => {

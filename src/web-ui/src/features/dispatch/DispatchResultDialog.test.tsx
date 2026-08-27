@@ -21,8 +21,7 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
+vi.mock('@bitfun/ui', () => ({
   Button: ({
     children,
     disabled,
@@ -32,8 +31,13 @@ vi.mock('@/component-library', () => ({
       {children}
     </button>
   ),
-  Modal: ({ children, isOpen }: React.PropsWithChildren<{ isOpen: boolean }>) =>
-    isOpen ? <div>{children}</div> : null,
+  Modal: ({ children, isOpen }: React.PropsWithChildren<{ isOpen: boolean }>) => (
+    isOpen ? <div>{children}</div> : null
+  ),
+}));
+
+vi.mock('@/component-library', () => ({
+  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
 }));
 
 const SYNCED = {

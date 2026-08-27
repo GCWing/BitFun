@@ -38,21 +38,24 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Button: ({ children, isLoading: _isLoading, iconOnly: _iconOnly, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
   Modal: ({ isOpen, title, titleExtra, children }: any) => isOpen ? (
     <section role="dialog" aria-label={title}>{titleExtra}{children}</section>
   ) : null,
-  Search: ({ value, onChange, onSearch, inputAriaLabel }: any) => (
+  SearchField: ({ value, onValueChange, onSearch, 'aria-label': ariaLabel }: any) => (
     <input
-      aria-label={inputAriaLabel}
+      aria-label={ariaLabel}
       value={value}
-      onChange={event => onChange(event.target.value)}
+      onChange={event => onValueChange(event.target.value)}
       onKeyDown={event => event.key === 'Enter' && onSearch(event.currentTarget.value)}
     />
   ),
+}));
+
+vi.mock('@/component-library', () => ({
   Select: () => <div />,
   Input: ({ label, ...props }: any) => <label>{label}<input {...props} /></label>,
   Textarea: ({ label, showCount: _showCount, ...props }: any) => (

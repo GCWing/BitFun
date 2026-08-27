@@ -33,6 +33,30 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
+vi.mock('@bitfun/ui', () => ({
+  IconButton: ({
+    children,
+    icon,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    icon?: React.ReactNode;
+  }) => <button {...props}>{icon ?? children}</button>,
+  Input: ({
+    leading,
+    trailing,
+    ...props
+  }: React.InputHTMLAttributes<HTMLInputElement> & {
+    leading?: React.ReactNode;
+    trailing?: React.ReactNode;
+  }) => (
+    <div>
+      {leading}
+      <input {...props} />
+      {trailing}
+    </div>
+  ),
+}));
+
 vi.mock('@/component-library', () => ({
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
@@ -44,33 +68,6 @@ vi.mock('@/component-library', () => ({
     <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
   ) : null,
   ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
-  IconButton: ({
-    children,
-    tooltip: _tooltip,
-    size: _size,
-    variant: _variant,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    tooltip?: React.ReactNode;
-    size?: string;
-    variant?: string;
-  }) => <button {...props}>{children}</button>,
-  Input: ({
-    prefix,
-    suffix,
-    inputSize: _inputSize,
-    ...props
-  }: React.InputHTMLAttributes<HTMLInputElement> & {
-    prefix?: React.ReactNode;
-    suffix?: React.ReactNode;
-    inputSize?: string;
-  }) => (
-    <div>
-      {prefix}
-      <input {...props} />
-      {suffix}
-    </div>
-  ),
   Select: ({
     value,
     options,
@@ -251,7 +248,7 @@ describe('UsageStatisticsConfig', () => {
     } as DOMRect);
 
     await act(async () => {
-      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+      hoverCapture.dispatchEvent(new MouseEvent('pointermove', {
         bubbles: true,
         clientX: 300,
       }));
@@ -260,7 +257,7 @@ describe('UsageStatisticsConfig', () => {
     expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('–');
 
     await act(async () => {
-      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+      hoverCapture.dispatchEvent(new MouseEvent('pointermove', {
         bubbles: true,
         clientX: 100,
       }));

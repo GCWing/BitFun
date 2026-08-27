@@ -228,7 +228,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       void onSelectProfile(profileId);
     }
     close();
-  }, [close, fixedSession, onSelectProfile, onStartNewSession, selectedProfile, t]);
+  }, [close, fixedSession, onSelectProfile, onStartNewSession, selectedProfile]);
 
   const handleSelectAgent = useCallback((agent: HarnessAgentOption) => {
     if (agent.available === false) {

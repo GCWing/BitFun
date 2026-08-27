@@ -38,10 +38,10 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  Modal: ({ isOpen, children }: React.PropsWithChildren<{ isOpen: boolean }>) =>
-    isOpen ? <div>{children}</div> : null,
+vi.mock('@bitfun/ui', () => ({
+  Modal: ({ isOpen, children }: React.PropsWithChildren<{ isOpen: boolean }>) => (
+    isOpen ? <div>{children}</div> : null
+  ),
   Button: ({
     children,
     onClick,
@@ -95,6 +95,10 @@ vi.mock('@/component-library', () => ({
       data-testid={testId}
     />
   )),
+}));
+
+vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Checkbox: ({
     checked,
     onChange,

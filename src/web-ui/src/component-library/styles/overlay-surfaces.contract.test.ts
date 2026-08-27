@@ -185,8 +185,8 @@ describe('overlay surface contracts', () => {
       'design-system/packages/ui/src/components/Modal/Modal.module.css',
     );
 
-    expect(modalStyles).toContain('padding-inline-end: var(--bf-overlay-modal-edge-gutter);');
-    expect(modalStyles).toContain('margin-block: var(--bf-overlay-modal-edge-gutter);');
+    expect(modalStyles).toContain('padding-inline-end: var(--bf-overlay-modal-header-padding-inline);');
+    expect(modalStyles).toContain('margin-block-start: var(--bf-overlay-modal-header-padding-block-start);');
     expect(modalStyles).not.toContain('margin-inline-end: var(--bf-overlay-modal-edge-gutter);');
   });
 

@@ -18,7 +18,7 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
   Button: ({
     children,
     onClick,
@@ -26,24 +26,6 @@ vi.mock('@/component-library', () => ({
     children: React.ReactNode;
     onClick?: () => void;
   }) => <button onClick={onClick}>{children}</button>,
-  Checkbox: ({
-    checked,
-    label,
-    onChange,
-  }: {
-    checked: boolean;
-    label: string;
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  }) => (
-    <label>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-      />
-      {label}
-    </label>
-  ),
   Modal: ({
     ariaLabel,
     children,
@@ -53,6 +35,9 @@ vi.mock('@/component-library', () => ({
     children: React.ReactNode;
     isOpen: boolean;
   }) => (isOpen ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
+}));
+
+vi.mock('@/component-library', () => ({
   PopupCloseButton: ({
     'aria-label': ariaLabel,
     onClick,
