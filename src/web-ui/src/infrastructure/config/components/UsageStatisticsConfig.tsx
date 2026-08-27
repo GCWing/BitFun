@@ -33,7 +33,6 @@ import './UsageStatisticsConfig.scss';
 const SERIES_COLORS = {
   input: 'var(--bf-appearance-token-color-accent-500)',
   output: 'var(--bf-appearance-token-color-success)',
-  cacheCreation: 'var(--bf-appearance-token-color-warning)',
   cacheRead: 'var(--bf-appearance-token-color-cyan-500)',
   cacheHitRate: 'var(--bf-appearance-token-color-purple-500)',
 } as const;
@@ -366,13 +365,12 @@ interface TrendChartProps {
 }
 
 const TREND_SERIES: {
-  key: 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens';
+  key: 'inputTokens' | 'outputTokens' | 'cacheReadTokens';
   color: string;
   legendKey: string;
 }[] = [
   { key: 'inputTokens', color: SERIES_COLORS.input, legendKey: 'trend.legend.input' },
   { key: 'outputTokens', color: SERIES_COLORS.output, legendKey: 'trend.legend.output' },
-  { key: 'cacheWriteTokens', color: SERIES_COLORS.cacheCreation, legendKey: 'trend.legend.cacheCreation' },
   { key: 'cacheReadTokens', color: SERIES_COLORS.cacheRead, legendKey: 'trend.legend.cacheRead' },
 ];
 
@@ -404,7 +402,6 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
       point.inputTokens,
       point.outputTokens,
       point.cacheReadTokens,
-      point.cacheWriteTokens,
     ), 0),
   );
   const yTicks = 4;
@@ -416,8 +413,11 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
   const yFor = (value: number): number => (
     PAD_TOP + plotHeight - (value / maxTokens) * plotHeight
   );
-  const rateFor = (value: number | null): number | null => (
-    value === null ? null : PAD_TOP + plotHeight - value * plotHeight
+  // Buckets without cache telemetry (idle hours, or the provider never
+  // reported cached tokens) plot at 0% so the dashed line stays continuous,
+  // matching the token series which also sit at zero for those buckets.
+  const rateFor = (value: number | null): number => (
+    PAD_TOP + plotHeight - (value ?? 0) * plotHeight
   );
 
   const xTickIndexes = useMemo(() => {
@@ -490,14 +490,11 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
           />
         ))}
 
-        {/* Cache hit rate (right axis, dashed) */}
+        {/* Cache hit rate (right axis, dashed). Buckets without telemetry
+            plot at 0% so the line stays continuous like the token series. */}
         <polyline
           points={points
-            .map((point, index) => {
-              const y = rateFor(point.cacheHitRate);
-              return y === null ? '' : `${xFor(index)},${y}`;
-            })
-            .filter(Boolean)
+            .map((point, index) => `${xFor(index)},${rateFor(point.cacheHitRate)}`)
             .join(' ')}
           fill="none"
           stroke={SERIES_COLORS.cacheHitRate}
@@ -530,6 +527,28 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               y2={PAD_TOP + plotHeight}
               className="bitfun-usage-stats__trend-cursor"
             />
+            {/* Hover markers: one dot per series so small values stay visible
+                where a zero-baseline token axis would otherwise flatten them
+                (e.g. 276K next to a 20M peak). */}
+            {TREND_SERIES.map((series) => (
+              <circle
+                key={`hover-dot-${series.key}`}
+                cx={xFor(hoverIndex)}
+                cy={yFor(hovered[series.key])}
+                r="3.5"
+                fill={series.color}
+                stroke="var(--bf-appearance-token-element-bg-soft)"
+                strokeWidth="1"
+              />
+            ))}
+            <circle
+              cx={xFor(hoverIndex)}
+              cy={rateFor(hovered.cacheHitRate)}
+              r="3.5"
+              fill={SERIES_COLORS.cacheHitRate}
+              stroke="var(--bf-appearance-token-element-bg-soft)"
+              strokeWidth="1"
+            />
             <g className="bitfun-usage-stats__trend-tooltip">
               <rect
                 x={Math.min(Math.max(xFor(hoverIndex) - 92, PAD_LEFT), CHART_WIDTH - PAD_RIGHT - 184)}
@@ -548,12 +567,13 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
               {[
                 { label: t('trend.legend.input'), value: hovered.inputTokens, color: SERIES_COLORS.input },
                 { label: t('trend.legend.output'), value: hovered.outputTokens, color: SERIES_COLORS.output },
-                { label: t('trend.legend.cacheCreation'), value: hovered.cacheWriteTokens, color: SERIES_COLORS.cacheCreation },
                 { label: t('trend.legend.cacheRead'), value: hovered.cacheReadTokens, color: SERIES_COLORS.cacheRead },
                 {
                   label: t('trend.legend.cacheHitRate'),
-                  value: hovered.cacheHitRate === null ? null : `${Math.round(hovered.cacheHitRate * 100)}%`,
+                  // Mirrors the line: buckets without telemetry are drawn at 0%.
+                  value: hovered.cacheHitRate ?? 0,
                   color: SERIES_COLORS.cacheHitRate,
+                  isRate: true,
                 },
               ].map((row, index) => (
                 <text
@@ -563,7 +583,12 @@ const TrendChart: React.FC<TrendChartProps> = ({ points, granularity, timeZone }
                   className="bitfun-usage-stats__trend-tooltip-row"
                 >
                   <tspan fill={row.color}>● </tspan>
-                  {row.label}: {row.value === null ? '–' : formatTokens(row.value as number)}
+                  {row.label}:{' '}
+                  {row.isRate
+                    ? formatHitRate(row.value as number | null)
+                    : row.value === null
+                      ? '–'
+                      : formatTokens(row.value as number)}
                 </text>
               ))}
             </g>
