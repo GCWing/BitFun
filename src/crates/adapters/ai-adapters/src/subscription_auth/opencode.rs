@@ -32,6 +32,12 @@ const STORE_KEY: &str = "opencode";
 const OFFERINGS_METADATA_KEY: &str = "api_offerings";
 const SUPPORTED_FORMATS: [&str; 3] = ["openai", "responses", "anthropic"];
 
+struct FreshCredential {
+    access: String,
+    expires_at_ms: Option<i64>,
+    metadata: Option<serde_json::Value>,
+}
+
 #[derive(Debug, Deserialize)]
 struct DeviceCodeResponse {
     device_code: String,
@@ -650,13 +656,17 @@ pub(crate) async fn begin_login(
     })
 }
 
-async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
+async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<FreshCredential> {
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
         .ok_or_else(|| anyhow!("OpenCode is not connected; sign in first"))?;
     match entry {
-        StoredCredential::Api { key, .. } => Ok(key),
+        StoredCredential::Api { key, metadata } => Ok(FreshCredential {
+            access: key,
+            expires_at_ms: None,
+            metadata,
+        }),
         StoredCredential::Oauth {
             refresh: refresh_token,
             access,
@@ -665,16 +675,22 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
             metadata,
         } => {
             if expires > now_ms() + REFRESH_LEEWAY_MS {
-                return Ok(access);
+                return Ok(FreshCredential {
+                    access,
+                    expires_at_ms: Some(expires),
+                    metadata,
+                });
             }
             let refreshed = refresh(&refresh_token, options).await?;
             let new_expires = now_ms() + refreshed.expires_in * 1000;
+            let refreshed_access = refreshed.access_token.clone();
+            let refreshed_metadata = metadata.clone();
             let outcome = store::upsert_if_revision(
                 STORE_KEY,
                 snapshot.revision,
                 StoredCredential::Oauth {
                     refresh: refreshed.refresh_token,
-                    access: refreshed.access_token.clone(),
+                    access: refreshed_access.clone(),
                     expires: new_expires,
                     account_id,
                     metadata,
@@ -684,7 +700,11 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
             match outcome {
                 store::ConditionalCommitOutcome::Committed { .. } => {
                     log::info!("opencode subscription tokens refreshed");
-                    Ok(refreshed.access_token)
+                    Ok(FreshCredential {
+                        access: refreshed_access,
+                        expires_at_ms: Some(new_expires),
+                        metadata: refreshed_metadata,
+                    })
                 }
                 store::ConditionalCommitOutcome::Conflict { current_revision } => {
                     let current = super::load_current_store_after_conflict(
@@ -693,19 +713,30 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
                     )
                     .await?;
                     match current.credential {
-                        Some(StoredCredential::Api { key, .. }) => {
+                        Some(StoredCredential::Api { key, metadata }) => {
                             log::info!(
                                 "opencode refresh reused the current API credential after a concurrent update"
                             );
-                            Ok(key)
+                            Ok(FreshCredential {
+                                access: key,
+                                expires_at_ms: None,
+                                metadata,
+                            })
                         }
                         Some(StoredCredential::Oauth {
-                            access, expires, ..
+                            access,
+                            expires,
+                            metadata,
+                            ..
                         }) if expires > now_ms() => {
                             log::info!(
                                 "opencode refresh reused tokens committed by a concurrent refresh"
                             );
-                            Ok(access)
+                            Ok(FreshCredential {
+                                access,
+                                expires_at_ms: Some(expires),
+                                metadata,
+                            })
                         }
                         _ => Err(super::store_revision_conflict(
                             super::SubscriptionProvider::Opencode,
@@ -720,7 +751,7 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<String> {
 
 /// Refreshes account/org/catalog metadata using a fresh credential.
 pub(crate) async fn refresh_profile(options: &SubscriptionHttpOptions) -> Result<()> {
-    let access = ensure_fresh(options).await?;
+    let access = ensure_fresh(options).await?.access;
     let snapshot = store::load_entry_with_revision(STORE_KEY).await?;
     let entry = snapshot
         .credential
@@ -760,18 +791,32 @@ pub(crate) async fn refresh_profile(options: &SubscriptionHttpOptions) -> Result
     Ok(())
 }
 
+fn inference_headers(metadata: Option<&serde_json::Value>) -> HashMap<String, String> {
+    let org_id = metadata
+        .and_then(serde_json::Value::as_object)
+        .and_then(|metadata| metadata.get("org_id").or_else(|| metadata.get("orgID")))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    org_id
+        .map(|org_id| HashMap::from([("x-org-id".to_string(), org_id.to_string())]))
+        .unwrap_or_default()
+}
+
 async fn resolve_route(
     route: OpenCodeRoute,
     options: &SubscriptionHttpOptions,
 ) -> Result<ResolvedCredential> {
-    let api_key = ensure_fresh(options).await?;
+    let credential = ensure_fresh(options).await?;
+    let extra_headers = inference_headers(credential.metadata.as_ref());
     Ok(ResolvedCredential {
-        api_key,
+        api_key: credential.access,
         base_url: Some(route.base_url.to_string()),
         request_url: Some(route.request_url.to_string()),
         format: Some(route.format.to_string()),
-        extra_headers: HashMap::new(),
-        expires_at: None,
+        extra_headers,
+        expires_at: credential.expires_at_ms.map(|expires| expires / 1000),
     })
 }
 
@@ -798,10 +843,10 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        absolute_verification_url, offerings_from_metadata, offerings_from_remote_config,
-        route_for, OpenCodePlan, RemoteConfig, RemoteModel, RemoteModelProvider, RemoteProvider,
-        GO_MESSAGES_URL, GO_REQUEST_URL, GO_RESPONSES_URL, ZEN_MESSAGES_URL, ZEN_REQUEST_URL,
-        ZEN_RESPONSES_URL,
+        absolute_verification_url, inference_headers, offerings_from_metadata,
+        offerings_from_remote_config, route_for, OpenCodePlan, RemoteConfig, RemoteModel,
+        RemoteModelProvider, RemoteProvider, GO_MESSAGES_URL, GO_REQUEST_URL, GO_RESPONSES_URL,
+        ZEN_MESSAGES_URL, ZEN_REQUEST_URL, ZEN_RESPONSES_URL,
     };
     use std::collections::HashMap;
 
@@ -949,5 +994,21 @@ mod tests {
         assert_eq!(offerings.len(), 6);
         assert!(offerings.iter().any(|item| item.plan == OpenCodePlan::Zen));
         assert!(offerings.iter().any(|item| item.plan == OpenCodePlan::Go));
+    }
+
+    #[test]
+    fn forwards_current_and_legacy_org_ids_to_subscription_inference() {
+        for metadata in [
+            serde_json::json!({ "org_id": "org-current" }),
+            serde_json::json!({ "orgID": "org-legacy" }),
+        ] {
+            let headers = inference_headers(Some(&metadata));
+            assert_eq!(headers.len(), 1);
+            assert!(headers
+                .get("x-org-id")
+                .is_some_and(|value| value.starts_with("org-")));
+        }
+        assert!(inference_headers(Some(&serde_json::json!({ "org_id": " " }))).is_empty());
+        assert!(inference_headers(None).is_empty());
     }
 }

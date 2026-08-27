@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import {
+  preferredSubscriptionLoginMethod,
   settleSubscriptionLoginStart,
+  subscriptionLoginRequiresLocalDevice,
   SubscriptionLoginCoordinator,
 } from './subscriptionLoginCoordinator';
+
+describe('preferredSubscriptionLoginMethod', () => {
+  it('uses Codex device authorization when the callback browser is not local', () => {
+    expect(preferredSubscriptionLoginMethod('codex', false)).toBe('device');
+    expect(preferredSubscriptionLoginMethod('codex', true)).toBeUndefined();
+  });
+
+  it('lets single-method providers choose their backend default', () => {
+    expect(preferredSubscriptionLoginMethod('antigravity', false)).toBeUndefined();
+    expect(preferredSubscriptionLoginMethod('opencode', false)).toBeUndefined();
+    expect(preferredSubscriptionLoginMethod('grok', false)).toBeUndefined();
+  });
+
+  it('identifies the browser-only provider that cannot sign in through a peer', () => {
+    expect(subscriptionLoginRequiresLocalDevice('antigravity')).toBe(true);
+    expect(subscriptionLoginRequiresLocalDevice('codex')).toBe(false);
+    expect(subscriptionLoginRequiresLocalDevice('opencode')).toBe(false);
+    expect(subscriptionLoginRequiresLocalDevice('grok')).toBe(false);
+  });
+});
 
 describe('SubscriptionLoginCoordinator', () => {
   it('assigns an immutable session id to each operation', () => {

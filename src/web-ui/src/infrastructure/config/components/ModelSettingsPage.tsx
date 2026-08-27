@@ -41,9 +41,13 @@ import ReasoningConfigPanel, { type ReasoningConfigApplyResult } from './Reasoni
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import { i18nService } from '@/infrastructure/i18n';
+import { isTauriRuntime } from '@/infrastructure/runtime';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { LONG_CONTEXT_WARNING_THRESHOLD_TOKENS } from '@/shared/constants/modelContext';
 import {
+  preferredSubscriptionLoginMethod,
   settleSubscriptionLoginStart,
+  subscriptionLoginRequiresLocalDevice,
   SubscriptionLoginCoordinator,
   type SubscriptionLoginOperation,
 } from './subscriptionLoginCoordinator';
@@ -84,7 +88,7 @@ interface ProviderGroup {
 
 interface SubscriptionLoginPanelState {
   provider: SubscriptionProvider;
-  method: SubscriptionLoginMethod;
+  method?: SubscriptionLoginMethod;
   authorizationUrl: string;
   userCode?: string | null;
   deadlineMs?: number;
@@ -99,21 +103,6 @@ interface SubscriptionLogoutRequest {
 
 const SUBSCRIPTION_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const SUBSCRIPTION_MIGRATION_NOTICE_KEY = 'bitfun.subscription-auth.secure-store-notice.v1';
-const DEFAULT_SUBSCRIPTION_LOGIN_METHODS: Record<SubscriptionProvider, SubscriptionLoginMethod[]> = {
-  codex: ['browser', 'device'],
-  antigravity: ['browser'],
-  opencode: ['device'],
-  grok: ['device'],
-};
-
-function subscriptionLoginMethods(account: SubscriptionAccount): SubscriptionLoginMethod[] {
-  const supportedMethods = account.login_methods?.filter(
-    (method): method is SubscriptionLoginMethod => method === 'browser' || method === 'device',
-  );
-  return supportedMethods?.length
-    ? supportedMethods
-    : DEFAULT_SUBSCRIPTION_LOGIN_METHODS[account.provider];
-}
 
 function subscriptionLoginCancelledError(): Error {
   const error = new Error('Login cancelled');
@@ -1108,24 +1097,33 @@ const ModelSettingsPage: React.FC = () => {
     };
   }, []);
 
-  const handleSubscriptionLogin = useCallback(async (
-    provider: SubscriptionProvider,
-    method: SubscriptionLoginMethod,
-  ) => {
+  const handleSubscriptionLogin = useCallback(async (provider: SubscriptionProvider) => {
+    if (isPeerDeviceModeActive() && subscriptionLoginRequiresLocalDevice(provider)) {
+      notification.error(t('subscriptionAuth.peerLoginRequiresLocalDevice'));
+      return;
+    }
     // The settings surface intentionally permits one authorization flow at a
     // time. This prevents a stale provider poll/finally block from clearing a
     // newer provider's state or leaving an undiscoverable backend session.
     const operation = loginCoordinatorRef.current.begin(provider);
     if (!operation) return;
+    const requestedMethod = preferredSubscriptionLoginMethod(
+      provider,
+      isTauriRuntime() && !isPeerDeviceModeActive(),
+    );
     setLoggingInProvider(provider);
     setSubscriptionLoginPanel({
       provider,
-      method,
+      method: requestedMethod,
       authorizationUrl: '',
       status: 'starting',
     });
     try {
-      const started = await aiApi.startSubscriptionLogin(provider, operation.sessionId, method);
+      const started = await aiApi.startSubscriptionLogin(
+        provider,
+        operation.sessionId,
+        requestedMethod,
+      );
       const settlement = await settleSubscriptionLoginStart(
         loginCoordinatorRef.current,
         operation,
@@ -1259,7 +1257,7 @@ const ModelSettingsPage: React.FC = () => {
         ) {
           setSubscriptionLoginPanel({
             provider,
-            method,
+            method: requestedMethod,
             authorizationUrl: '',
             userCode: undefined,
             status: 'failed',
@@ -3244,7 +3242,6 @@ const ModelSettingsPage: React.FC = () => {
               }
               const isLoggingIn = loggingInProvider === account.provider;
               const anyLoginInProgress = loggingInProvider !== null;
-              const availableLoginMethods = subscriptionLoginMethods(account);
               const loginPanel = subscriptionLoginPanel?.provider === account.provider
                 ? subscriptionLoginPanel
                 : null;
@@ -3322,20 +3319,17 @@ const ModelSettingsPage: React.FC = () => {
                           {t('subscriptionAuth.retryVault')}
                         </Button>
                       ) : (
-                        availableLoginMethods.map((method) => (
-                          <Button
-                            key={method}
-                            size="sm"
-                            variant="fill"
-                            loading={isLoggingIn && loginPanel?.method === method}
-                            disabled={anyLoginInProgress}
-                            onClick={() => void handleSubscriptionLogin(account.provider, method)}
-                          >
-                            {t(method === 'browser'
-                              ? 'subscriptionAuth.browserLogin'
-                              : 'subscriptionAuth.deviceLogin')}
-                          </Button>
-                        ))
+                        <Button
+                          size="sm"
+                          variant="fill"
+                          loading={isLoggingIn}
+                          disabled={anyLoginInProgress}
+                          onClick={() => void handleSubscriptionLogin(account.provider)}
+                        >
+                          {t(loginPanel?.status === 'failed'
+                            ? 'subscriptionAuth.retryLogin'
+                            : 'subscriptionAuth.login')}
+                        </Button>
                       )}
                       {isLoggingIn && (
                         <Button
@@ -3421,9 +3415,9 @@ const ModelSettingsPage: React.FC = () => {
                         </div>
                       )}
 
-                      {(loginPanel.status === 'pending' || loginPanel.status === 'failed') && (
+                      {loginPanel.status === 'pending' && (
                         <div className="bitfun-model-settings__subscription-login-actions" data-bf-component="model-settings" data-bf-part="subscriptionActions">
-                          {loginPanel.status === 'pending' && loginPanel.userCode && (
+                          {loginPanel.userCode && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -3432,24 +3426,14 @@ const ModelSettingsPage: React.FC = () => {
                               {t('subscriptionAuth.copyCode')}
                             </Button>
                           )}
-                          {loginPanel.status === 'pending' && loginPanel.authorizationUrl && (
+                          {loginPanel.authorizationUrl && (
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => void handleOpenSubscriptionAuthorization(loginPanel.authorizationUrl)}
                               leadingIcon={<ExternalLink size={14} aria-hidden="true" />}
                             >
-
                               {t('subscriptionAuth.openAuthorization')}
-                            </Button>
-                          )}
-                          {loginPanel.status === 'failed' && (
-                            <Button
-                              size="sm"
-                              variant="fill"
-                              onClick={() => void handleSubscriptionLogin(account.provider, loginPanel.method)}
-                            >
-                              {t('subscriptionAuth.retryLogin')}
                             </Button>
                           )}
                         </div>

@@ -44,6 +44,7 @@
     "refreshFailed": "Refresh failed: {{error}}",
     "loginSuccess": "Signed in",
     "loginFailed": "Sign-in failed: {{error}}",
+    "peerLoginRequiresLocalDevice": "Antigravity sign-in must be completed on the device running BitFun. Switch to that device and sign in there.",
     "logoutSuccess": "Signed out",
     "logoutCleanupPending": "Signed out. Credential cleanup is pending and will retry automatically.",
     "logoutFailed": "Sign-out failed: {{error}}",

@@ -32,6 +32,9 @@ use tokio_util::sync::CancellationToken;
 /// Maximum lifetime of a pending login session (matches OpenCode).
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
+/// OpenCode release whose built-in subscription protocols these adapters mirror.
+pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.23";
+
 /// One of the subscription providers BitFun can sign in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

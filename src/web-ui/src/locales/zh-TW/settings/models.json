@@ -44,6 +44,7 @@
     "refreshFailed": "重新整理失敗：{{error}}",
     "loginSuccess": "登入成功",
     "loginFailed": "登入失敗：{{error}}",
+    "peerLoginRequiresLocalDevice": "Antigravity 登入必須在執行 BitFun 的裝置上完成，請切換到該裝置後再登入。",
     "logoutSuccess": "已登出",
     "logoutCleanupPending": "已登出，憑據清理仍在等待中，稍後會自動重試。",
     "logoutFailed": "登出失敗：{{error}}",

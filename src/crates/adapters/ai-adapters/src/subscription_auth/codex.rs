@@ -28,7 +28,6 @@ const SCOPE: &str = "openid profile email offline_access";
 const CHATGPT_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const CHATGPT_REQUEST_URL: &str = "https://chatgpt.com/backend-api/codex/responses";
 const DEFAULT_MODEL: &str = "gpt-5.5";
-const OPENCODE_VERSION: &str = "1.18.21";
 const REFRESH_LEEWAY_MS: i64 = 5 * 60 * 1000;
 const STORE_KEY: &str = "codex";
 
@@ -63,7 +62,8 @@ struct DeviceAuthorizationResponse {
 
 fn opencode_user_agent() -> String {
     format!(
-        "opencode/{OPENCODE_VERSION} ({}; {})",
+        "opencode/{} ({}; {})",
+        super::OPENCODE_COMPAT_VERSION,
         std::env::consts::OS,
         std::env::consts::ARCH
     )
@@ -484,7 +484,7 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 mod tests {
     use super::{
         build_authorize_url, device_poll_interval, opencode_user_agent, redirect_uri,
-        CALLBACK_PORT, DEFAULT_MODEL, OPENCODE_VERSION,
+        CALLBACK_PORT, DEFAULT_MODEL,
     };
     use crate::subscription_auth::pkce::Pkce;
 
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(device_poll_interval(&serde_json::json!(2)), 2);
         assert_eq!(device_poll_interval(&serde_json::json!(0)), 5);
         assert_eq!(DEFAULT_MODEL, "gpt-5.5");
-        assert_eq!(OPENCODE_VERSION, "1.18.21");
-        assert!(opencode_user_agent().starts_with("opencode/1.18.21 ("));
+        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.23");
+        assert!(opencode_user_agent().starts_with("opencode/1.18.23 ("));
     }
 }
