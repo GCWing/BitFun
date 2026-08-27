@@ -711,6 +711,31 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn product_registered_edit_preserves_non_relaxable_validation() {
+        let registry = ProductToolRuntime::default()
+            .create_registry()
+            .expect("the default runtime plan must materialize");
+        let edit = registry
+            .get_tool("Edit")
+            .expect("Edit tool should be registered");
+        let input = json!({
+            "file_path": "tests/existing.rs",
+            "old_string": "old",
+            "force": true
+        });
+
+        let ordinary = edit.validate_input(&input, None).await;
+        assert_eq!(ordinary.message.as_deref(), Some("new_string is required"));
+        assert!(!ordinary.blocks_input_rewrite());
+
+        let invariant = edit
+            .validate_non_relaxable_input(&input, None)
+            .await
+            .expect("snapshot-wrapped Edit must forward its non-relaxable guard");
+        assert!(invariant.blocks_input_rewrite());
+    }
+
     #[test]
     fn product_tool_runtime_owner_preserves_registry_contract() {
         let runtime = ProductToolRuntime::default();

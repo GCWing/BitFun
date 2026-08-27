@@ -824,10 +824,9 @@ impl ToolPipeline {
                 })
         }?;
         let tool_context = self.build_tool_use_context(task, CancellationToken::new());
-        let validation = tool
-            .validate_input(&task.original_effective_arguments, Some(&tool_context))
-            .await;
-        validation.blocks_input_rewrite().then_some(validation)
+        tool.validate_non_relaxable_input(&task.original_effective_arguments, Some(&tool_context))
+            .await
+            .filter(bitfun_agent_tools::ValidationResult::blocks_input_rewrite)
     }
 
     async fn apply_hook_input_rewrite(
@@ -2784,6 +2783,19 @@ mod tests {
             input: &serde_json::Value,
             _context: Option<&ToolUseContext>,
         ) -> ValidationResult {
+            let valid = input
+                .get("city")
+                .and_then(serde_json::Value::as_str)
+                .is_some()
+                && input.as_object().is_some_and(|object| object.len() == 1);
+            if !valid {
+                return ValidationResult {
+                    result: false,
+                    message: Some("city must be the only target argument".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
             if input.get("city").and_then(serde_json::Value::as_str) == Some("protected") {
                 return ValidationResult {
                     result: false,
@@ -2792,17 +2804,27 @@ mod tests {
                     meta: Some(json!({ "blocks_input_rewrite": true })),
                 };
             }
-            let valid = input
-                .get("city")
-                .and_then(serde_json::Value::as_str)
-                .is_some()
-                && input.as_object().is_some_and(|object| object.len() == 1);
             ValidationResult {
-                result: valid,
-                message: (!valid).then(|| "city must be the only target argument".to_string()),
-                error_code: (!valid).then_some(400),
+                result: true,
+                message: None,
+                error_code: None,
                 meta: None,
             }
+        }
+
+        async fn validate_non_relaxable_input(
+            &self,
+            input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> Option<ValidationResult> {
+            (input.get("city").and_then(serde_json::Value::as_str) == Some("protected")).then(
+                || ValidationResult {
+                    result: false,
+                    message: Some("the original target is protected".to_string()),
+                    error_code: Some(403),
+                    meta: Some(json!({ "blocks_input_rewrite": true })),
+                },
+            )
         }
 
         async fn call_impl(
@@ -3287,7 +3309,7 @@ mod tests {
         let task = test_tool_task_with_arguments(
             "rewrite-protected-original",
             "get_weather",
-            json!({ "city": "protected" }),
+            json!({ "city": "protected", "legacy_shape_error": true }),
         );
         let tool_id = pipeline.state_manager.create_task(task.clone()).await;
 
@@ -3302,7 +3324,7 @@ mod tests {
             .expect("rewritten task");
         assert_eq!(
             persisted.original_effective_arguments,
-            json!({ "city": "protected" })
+            json!({ "city": "protected", "legacy_shape_error": true })
         );
         assert_eq!(persisted.effective_arguments(), &json!({ "city": "copy" }));
         assert!(persisted

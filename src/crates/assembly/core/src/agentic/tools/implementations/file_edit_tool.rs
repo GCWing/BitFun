@@ -170,6 +170,21 @@ impl Tool for FileEditTool {
         file_permission_intents_allowing_managed_plan_edits("edit", [file_path], context)
     }
 
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let file_path = input
+            .get("file_path")
+            .and_then(Value::as_str)
+            .filter(|path| !path.is_empty())?;
+        let force = input.get("force").and_then(Value::as_bool).unwrap_or(false);
+        crate::agentic::execution::edit_constraint_guard::check_edit(
+            context, "Edit", "edit", file_path, force,
+        )
+    }
+
     async fn validate_input(
         &self,
         input: &Value,
@@ -456,7 +471,7 @@ impl Tool for FileEditTool {
 mod tests {
     use super::{FileEditTool, EDIT_TOOL_PROMPT};
     use crate::agentic::tools::framework::Tool;
-    use serde_json::Value;
+    use serde_json::{json, Value};
 
     #[tokio::test]
     async fn edit_tool_prompt_matches_claude_style() {
@@ -520,5 +535,26 @@ mod tests {
             FileEditTool::new().short_description(),
             "A tool for editing files"
         );
+    }
+
+    #[tokio::test]
+    async fn rewrite_invariant_is_not_hidden_by_a_later_shape_error() {
+        let tool = FileEditTool::new();
+        let input = json!({
+            "file_path": "tests/existing.rs",
+            "old_string": "old",
+            "force": true
+        });
+
+        let ordinary = tool.validate_input(&input, None).await;
+        assert!(!ordinary.result);
+        assert_eq!(ordinary.message.as_deref(), Some("new_string is required"));
+        assert!(!ordinary.blocks_input_rewrite());
+
+        let invariant = tool
+            .validate_non_relaxable_input(&input, None)
+            .await
+            .expect("force is a non-relaxable edit-guard rejection");
+        assert!(invariant.blocks_input_rewrite());
     }
 }

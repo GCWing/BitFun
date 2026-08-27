@@ -153,6 +153,22 @@ pub trait Tool: Send + Sync {
         }
     }
 
+    /// Validate invariants from the original input that a PreToolUse rewrite
+    /// must not relax.
+    ///
+    /// The default preserves existing tools that mark a normal validation
+    /// rejection with `blocks_input_rewrite`. Tools whose ordinary validator
+    /// can return a repairable shape error before reaching an invariant should
+    /// override this method and run the invariant independently.
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let validation = self.validate_input(input, context).await;
+        validation.blocks_input_rewrite().then_some(validation)
+    }
+
     /// Render result for assistant
     fn render_result_for_assistant(&self, _output: &Value) -> String {
         "Tool result".to_string()

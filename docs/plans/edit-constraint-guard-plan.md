@@ -124,8 +124,8 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
 - matcher 规则和 operation scope；
 - 确定性抽取、模型解析失败、合法与非法撤销；
 - 新建测试辅助文件、已有测试文件和 delete-only 的差异；
-- `PreToolUse updatedInput` 修复普通无效参数、从受保护原始目标重写到新副本、从合法
-  原始目标重写到受保护目标，以及 hook allow 不能覆盖不可放宽拒绝；
+- `PreToolUse updatedInput` 修复仅含普通格式错误的参数、从同时带有普通格式错误的受保护
+  原始目标重写到新副本、从合法原始目标重写到受保护目标，以及 hook allow 不能覆盖不可放宽拒绝；
 - shell 重定向、`tee`、`cp`、`mv`、`rm`、in-place `sed/perl`、Python、Node、WriteStdin、
   Git pathspec 与无法解析目标的高风险命令；
 - 递归删除、符号链接、远程工作区检查失败；

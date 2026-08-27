@@ -391,6 +391,25 @@ impl Tool for FileWriteTool {
         file_permission_intents_allowing_managed_plan_edits("edit", [file_path.as_str()], context)
     }
 
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let ParsedWritePayload::Target { file_path, .. } = Self::parse_payload(input).ok()? else {
+            return None;
+        };
+        let force_requested = input.get("force").and_then(Value::as_bool).unwrap_or(false);
+        crate::agentic::execution::edit_constraint_guard::check_write(
+            context,
+            "Write",
+            "write",
+            file_path,
+            force_requested,
+        )
+        .await
+    }
+
     async fn validate_input(
         &self,
         input: &Value,
