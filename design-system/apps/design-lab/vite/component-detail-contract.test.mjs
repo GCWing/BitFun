@@ -132,7 +132,7 @@ test("Modal preview exposes a direct anatomy specimen and a separate interaction
   assert.match(detail, /renderModalExample\(true\)/);
   assert.match(detail, /portalled=\{interactive\}/);
   assert.match(detail, /preventScroll=\{interactive\}/);
-  assert.match(detail, /description=\{t\("components\.preview\.modalDescription"\)\}/);
+  assert.match(detail, /contentPadding="lg"/);
   assert.match(detail, /footer=\{\(/);
   assert.match(detail, /size="xxlarge"/);
   assert.match(detail, /showScrollbar=\{modalShowScrollbar\}/);

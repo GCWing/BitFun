@@ -75,7 +75,8 @@ test("Modal tokens preserve the reference surface and chrome contract", () => {
   assert.equal(tokens["overlay.modal.titleFontWeight"], 700);
   assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
   assert.equal(tokens["overlay.modal.footerBlur"], "blur(20px)");
-  assert.equal(tokens["overlay.modal.footerContentInset"], "80px");
+  assert.equal(tokens["overlay.modal.footerFadeExtent"], "24px");
+  assert.equal(tokens["overlay.modal.footerContentInset"], "104px");
 });
 
 test("control heights preserve an eight-pixel size step in every density mode", () => {

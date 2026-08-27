@@ -49,6 +49,7 @@ test("Modal geometry and surface styling use public design tokens", async () => 
   assert.match(styles, /--bf-shadow-overlay/);
   assert.match(styles, /--bf-overlay-modal-footer-content-inset/);
   assert.match(styles, /--bf-overlay-modal-footer-height/);
+  assert.match(styles, /--bf-overlay-modal-footer-fade-extent/);
   assert.match(styles, /--bf-overlay-modal-footer-blur/);
   assert.match(styles, /backdrop-filter:\s*var\(--bf-overlay-modal-footer-blur\)/);
   assert.match(styles, /--bf-overlay-modal-footer-action-min-width/);

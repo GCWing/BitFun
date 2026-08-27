@@ -59,6 +59,7 @@ export const modalMeta = {
     "overlay.modal.footerPaddingBlockEnd",
     "overlay.modal.footerPaddingInline",
     "overlay.modal.footerHeight",
+    "overlay.modal.footerFadeExtent",
     "overlay.modal.footerContentInset",
     "overlay.modal.footerBlur",
     "overlay.modal.footerActionMinWidth",

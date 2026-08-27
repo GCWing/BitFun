@@ -3770,7 +3770,7 @@ const ModelSettingsPage: React.FC = () => {
             : (getProviderInstanceId(editingConfig)
               ? t('editProvider')
               : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
-        size="wide"
+        size="xxlarge"
         contentLayout="flex"
         footer={reasoningPanelDraft ? undefined : (
           <>

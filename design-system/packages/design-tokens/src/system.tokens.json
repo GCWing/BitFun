@@ -163,9 +163,13 @@
         "$description": "Total visual height of the floating modal action bar.",
         "$value": "68px"
       },
+      "footerFadeExtent": {
+        "$description": "Distance the frosted footer treatment extends upward over scrolling content.",
+        "$value": "{space.6}"
+      },
       "footerContentInset": {
         "$description": "Trailing scroll space that keeps content reachable beneath the floating modal action bar.",
-        "$value": "80px"
+        "$value": "104px"
       },
       "footerBlur": {
         "$description": "Backdrop blur applied to content passing beneath the floating modal action bar.",
