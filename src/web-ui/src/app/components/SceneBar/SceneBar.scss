@@ -6,9 +6,9 @@
 .bitfun-scene-bar {
   display: flex;
   align-items: center;
-  height: var(--bf-control-tab-group-item-height);
-  min-height: var(--bf-control-tab-group-item-height);
-  flex-shrink: 0;
+  flex: 1 1 240px;
+  min-width: calc(var(--bf-control-height-sm) * 4);
+  height: 100%;
   overflow: hidden;
   background: transparent;
   user-select: none;
@@ -139,15 +139,6 @@
       outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
       outline-offset: var(--bf-focus-offset);
     }
-  }
-
-  &__controls {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    height: 100%;
-    margin-left: auto;
-    padding-left: var(--bf-space-2);
   }
 
   &__tab-label {

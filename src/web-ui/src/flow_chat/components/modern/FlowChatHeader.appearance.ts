@@ -5,8 +5,6 @@ export const flowChatHeaderAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   parts: [
     { id: 'root' },
     { id: 'leftActions' },
-    { id: 'message' },
-    { id: 'turnBadge' },
     { id: 'actions' },
     { id: 'sessionOverview' },
     { id: 'sessionOverviewTrigger' },

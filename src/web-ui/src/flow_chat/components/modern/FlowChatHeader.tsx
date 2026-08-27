@@ -1,7 +1,7 @@
 /**
- * FlowChat header.
- * Shows the currently viewed turn and user message.
- * Height matches side panel headers (40px).
+ * Session-level actions for FlowChat.
+ * The workspace scene renders these actions in the shared scene top bar;
+ * standalone FlowChat hosts keep the inline fallback.
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -21,6 +21,10 @@ import {
   X,
 } from 'lucide-react';
 import { Tooltip } from '@/component-library';
+import {
+  SceneChromeContribution,
+  useSceneChromeContext,
+} from '@/app/components/SceneTopBar/SceneChrome';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -58,18 +62,10 @@ export interface FlowChatHeaderCommandSummary {
 }
 
 export interface FlowChatHeaderProps {
-  /** Current turn index. */
-  currentTurn: number;
-  /** Total turns. */
-  totalTurns: number;
-  /** Current user message. */
-  currentUserMessage: string;
   /** Whether the header is visible. */
   visible: boolean;
   /** Session ID. */
   sessionId?: string;
-  /** Jump to the currently displayed turn. */
-  onJumpToCurrentTurn?: () => void;
   /** Current search query string. */
   searchQuery?: string;
   /** Called when the user types in the search box. */
@@ -108,12 +104,8 @@ export interface FlowChatHeaderProps {
   onToggleRightPanel?: () => void;
 }
 export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
-  currentTurn,
-  totalTurns,
-  currentUserMessage,
   visible,
   sessionId,
-  onJumpToCurrentTurn,
   searchQuery = '',
   onSearchChange,
   searchMatchCount = 0,
@@ -135,13 +127,12 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { currentWorkspace } = useWorkspaceContext();
+  const sceneChrome = useSceneChromeContext();
+  const isSceneChromeActive = sceneChrome?.activeSceneId === 'session';
   const [isSessionOverviewOpen, setIsSessionOverviewOpen] = useState(false);
   const [isBackgroundCommandSectionMenuOpen, setIsBackgroundCommandSectionMenuOpen] = useState(false);
   const [openBackgroundCommandMenuId, setOpenBackgroundCommandMenuId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const headerRef = useRef<HTMLDivElement | null>(null);
-  const leftActionsRef = useRef<HTMLDivElement | null>(null);
-  const rightActionsRef = useRef<HTMLDivElement | null>(null);
   const sessionOverviewRootRef = useRef<HTMLDivElement | null>(null);
   const sessionOverviewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const sessionOverviewPanelRef = useRef<HTMLDivElement | null>(null);
@@ -159,13 +150,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     totalCount: 0,
   });
 
-  // Truncate long messages.
-  const truncatedMessage = currentUserMessage.length > 50
-    ? currentUserMessage.slice(0, 50) + '...'
-    : currentUserMessage;
-  const turnBadgeLabel = t('flowChatHeader.turnBadge', {
-    current: currentTurn
-  });
   const hasBackgroundCommands = backgroundCommands.length > 0;
   const backgroundCommandCount = backgroundCommands.length;
   const runningBackgroundCommandCount = backgroundCommands.filter(command => command.status === 'running').length;
@@ -354,35 +338,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isSearchOpen]);
-
-  useLayoutEffect(() => {
-    const header = headerRef.current;
-    const leftActions = leftActionsRef.current;
-    const rightActions = rightActionsRef.current;
-    if (!header || !leftActions || !rightActions) return;
-
-    const updateSideWidth = () => {
-      const sideWidth = Math.ceil(Math.max(
-        leftActions.getBoundingClientRect().width,
-        rightActions.getBoundingClientRect().width,
-      ));
-      header.style.setProperty('--bf-appearance-token-flowchat-header-side-width', `${sideWidth}px`);
-    };
-
-    updateSideWidth();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateSideWidth);
-      return () => window.removeEventListener('resize', updateSideWidth);
-    }
-
-    const observer = new ResizeObserver(updateSideWidth);
-    observer.observe(leftActions);
-    observer.observe(rightActions);
-
-    return () => observer.disconnect();
-  }, [isSearchOpen, totalTurns, visible]);
+  }, [isSceneChromeActive, isSearchOpen, visible]);
 
   const handleOpenSearch = useCallback(() => {
     setIsSearchOpen(true);
@@ -621,71 +577,22 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     ? t('common:header.collapseRightPanel')
     : t('common:header.expandRightPanel');
 
-  // The header occupies a row above the message list, so its mount state must
-  // not depend on turn measurement: unmounting on a transient `totalTurns === 0`
-  // would resize the list mid-session. Only the centre message is withheld.
-  if (!visible) {
-    return null;
-  }
-  const hasTurnInfo = totalTurns > 0;
-
-  return (
+  const leftActions = (
     <div
-      className="flowchat-header"
-      ref={headerRef}
+      className="flowchat-header__actions flowchat-header__actions--left"
       data-bf-component="flow-chat-header"
-      data-bf-part="root"
+      data-bf-part="leftActions"
     >
-      <div
-        className="flowchat-header__actions flowchat-header__actions--left"
-        ref={leftActionsRef}
-        data-bf-component="flow-chat-header"
-        data-bf-part="leftActions"
-      >
-        <SessionFilesBadge sessionId={sessionId} />
-      </div>
-
-      {hasTurnInfo ? (
-        <Tooltip content={currentUserMessage} placement="bottom">
-          <div
-            className="flowchat-header__message"
-            data-bf-component="flow-chat-header"
-            data-bf-part="message"
-            role="button"
-            tabIndex={0}
-            onClick={onJumpToCurrentTurn}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onJumpToCurrentTurn?.();
-              }
-            }}
-            aria-label={t('flowChatHeader.jumpToCurrentTurn', {
-              turn: currentTurn
-            })}
-          >
-            <span
-              className="flowchat-header__turn-badge"
-              aria-label={turnBadgeLabel}
-              data-bf-component="flow-chat-header"
-              data-bf-part="turnBadge"
-            >
-              <span>{turnBadgeLabel}</span>
-            </span>
-            <span className="flowchat-header__message-text">
-              {truncatedMessage}
-            </span>
-          </div>
-        </Tooltip>
-      ) : null}
-
-      <div
-        className="flowchat-header__actions"
-        ref={rightActionsRef}
-        data-bf-component="flow-chat-header"
-        data-bf-part="actions"
-      >
-        {isSearchOpen ? (
+      <SessionFilesBadge sessionId={sessionId} />
+    </div>
+  );
+  const rightActions = (
+    <div
+      className="flowchat-header__actions"
+      data-bf-component="flow-chat-header"
+      data-bf-part="actions"
+    >
+        {visible ? (isSearchOpen ? (
           <div
             className="flowchat-header__search"
             role="search"
@@ -767,7 +674,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               icon={<Search size={14} />}
             />
           </Tooltip>
-        )}
+        )) : null}
         <div
           className="flowchat-header__session-overview"
           ref={sessionOverviewRootRef}
@@ -1095,6 +1002,36 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           </Tooltip>
         ) : null}
       </div>
+  );
+
+  if (sceneChrome) {
+    return (
+      <SceneChromeContribution sceneId="session">
+        <div
+          className="flowchat-header__chrome-actions flow-chat-typography"
+          data-shortcut-scope="chat"
+          data-bf-component="flow-chat-header"
+          data-bf-part="root"
+        >
+          {leftActions}
+          {rightActions}
+        </div>
+      </SceneChromeContribution>
+    );
+  }
+
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <div
+      className="flowchat-header"
+      data-bf-component="flow-chat-header"
+      data-bf-part="root"
+    >
+      {leftActions}
+      {rightActions}
     </div>
   );
 };

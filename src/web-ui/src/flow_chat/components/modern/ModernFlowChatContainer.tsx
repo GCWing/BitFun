@@ -45,7 +45,6 @@ import {
 } from '../../store/modernFlowChatStore';
 import type {
   FlowChatConfig,
-  DialogTurn,
   Session,
   SessionHistoryPresentation,
 } from '../../types/flow-chat';
@@ -73,7 +72,6 @@ import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetail
 import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
-import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
 import { hasActiveSessionLineageDescendants } from '../../utils/sessionLineage';
 import {
   findDialogTurn,
@@ -979,19 +977,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchCurrentMatchVirtualIndex,
   ]);
 
-  const resolveLocalCommandHeaderTitle = useCallback((metadata: DialogTurn['userMessage']['metadata']) => {
-    if (metadata?.localCommandKind === 'usage_report') {
-      return t('usage.title');
-    }
-    const threadGoalTitle = resolveThreadGoalHeaderTitle(
-      metadata as Record<string, unknown> | undefined
-    );
-    if (threadGoalTitle) {
-      return threadGoalTitle;
-    }
-    return null;
-  }, [t]);
-
   const turnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
     if (!activeSession) {
       return [];
@@ -1276,19 +1261,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       turnRailItems.flatMap(turn => turn.turnId ? [turn.turnId] : []),
     );
   }, [turnRailItems]);
-
-  const currentHeaderMessage = useMemo(() => {
-    const turnId = effectiveVisibleTurnInfo?.turnId;
-    if (!turnId) {
-      return effectiveVisibleTurnInfo?.userMessage ?? '';
-    }
-    const turn = renderedTurns.find(item => item.id === turnId);
-    const localCommandTitle = resolveLocalCommandHeaderTitle(turn?.userMessage?.metadata);
-    if (localCommandTitle) {
-      return localCommandTitle;
-    }
-    return effectiveVisibleTurnInfo?.userMessage ?? '';
-  }, [effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, renderedTurns, resolveLocalCommandHeaderTitle]);
 
   const requestTurnNavigation = useCallback((turnId: string): FlowChatTurnNavigationStatus => {
     if (!isViewportActive) {
@@ -2606,17 +2578,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         data-bf-part="root"
       >
         <FlowChatHeader
-          currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
-          totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? 0}
-          currentUserMessage={currentHeaderMessage}
           visible={virtualItems.length > 0}
           sessionId={activeSession?.sessionId}
           isRightPanelOpen={isRightPanelOpen}
           onToggleRightPanel={onToggleRightPanel}
-          onJumpToCurrentTurn={() => {
-            const turnId = effectiveVisibleTurnInfo?.turnId;
-            if (turnId) navigateToTurn(turnId);
-          }}
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
           searchMatchCount={searchMatches.length}

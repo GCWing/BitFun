@@ -3,6 +3,10 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  SceneChromeHost,
+  SceneChromeProvider,
+} from '@/app/components/SceneTopBar/SceneChrome';
 import { FlowChatHeader, type FlowChatHeaderProps } from './FlowChatHeader';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,12 +25,7 @@ const {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, values?: Record<string, unknown>) => {
-      if (key === 'flowChatHeader.turnBadge') {
-        return `Turn ${values?.current ?? ''}`;
-      }
-      return key;
-    },
+    t: (key: string) => key,
   }),
 }));
 
@@ -91,9 +90,6 @@ vi.mock('./SessionTreePopover', () => ({
 
 function createProps(overrides: Partial<FlowChatHeaderProps> = {}): FlowChatHeaderProps {
   return {
-    currentTurn: 1,
-    totalTurns: 2,
-    currentUserMessage: 'First prompt',
     visible: true,
     ...overrides,
   };
@@ -125,31 +121,9 @@ describe('FlowChatHeader', () => {
     vi.restoreAllMocks();
   });
 
-  it('reserves the larger action group width on both sides of the centered title', () => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      const width = this.classList.contains('flowchat-header__actions--left')
-        ? 32
-        : this.classList.contains('flowchat-header__actions')
-          ? 196
-          : 0;
-
-      return {
-        x: 0,
-        y: 0,
-        width,
-        height: 36,
-        top: 0,
-        right: width,
-        bottom: 36,
-        left: 0,
-        toJSON: () => ({}),
-      };
-    });
-
+  it('keeps the inline fallback hidden until the session has content', () => {
     act(() => {
-      root.render(<FlowChatHeader {...createProps()} visible={false} totalTurns={0} />);
+      root.render(<FlowChatHeader {...createProps({ visible: false })} />);
     });
 
     expect(container.querySelector('.flowchat-header')).toBeNull();
@@ -158,8 +132,39 @@ describe('FlowChatHeader', () => {
       root.render(<FlowChatHeader {...createProps()} />);
     });
 
-    const header = container.querySelector<HTMLElement>('.flowchat-header');
-    expect(header?.style.getPropertyValue('--bf-appearance-token-flowchat-header-side-width')).toBe('196px');
+    expect(container.querySelector('.flowchat-header')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="message"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="turnBadge"]')).toBeNull();
+  });
+
+  it('contributes only active Session actions to the shared scene top bar', () => {
+    const renderInScene = (activeSceneId: 'session' | 'settings', visible = false) => {
+      root.render(
+        <SceneChromeProvider activeSceneId={activeSceneId}>
+          <SceneChromeHost data-testid="scene-actions-host" />
+          <FlowChatHeader
+            {...createProps({
+              visible,
+              onToggleRightPanel: vi.fn(),
+            })}
+          />
+        </SceneChromeProvider>,
+      );
+    };
+
+    act(() => renderInScene('session'));
+
+    const host = container.querySelector('[data-testid="scene-actions-host"]');
+    expect(host?.querySelector('[data-testid="session-files-badge"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-search"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-session-overview"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-right-panel"]')).not.toBeNull();
+
+    act(() => renderInScene('settings'));
+    expect(host?.childElementCount).toBe(0);
+
+    act(() => renderInScene('session', true));
+    expect(host?.querySelector('[data-testid="flowchat-header-search"]')).not.toBeNull();
   });
 
   it('omits the list, previous-turn, and next-turn navigation controls', () => {

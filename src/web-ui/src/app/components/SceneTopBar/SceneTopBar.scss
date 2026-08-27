@@ -1,0 +1,36 @@
+.bitfun-scene-top-bar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  flex: 0 0 var(--bf-control-tab-group-item-height);
+  width: 100%;
+  min-width: 0;
+  height: var(--bf-control-tab-group-item-height);
+  overflow: visible;
+  background: var(--bf-appearance-token-color-bg-scene);
+  container-name: scene-top-bar;
+  container-type: inline-size;
+  user-select: none;
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 100%;
+    margin-inline-start: var(--bf-space-2);
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  &__window-controls {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    height: 100%;
+    margin-inline-start: var(--bf-space-2);
+  }
+}
