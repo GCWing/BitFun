@@ -136,6 +136,19 @@ test("Icon preview exposes the complete named catalog and semantic controls", as
   assert.match(styles, /\.component-icon-catalog\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(132px, 1fr\)\)/s);
 });
 
+test("StatusPill preview exposes compact indicator anatomy and semantic tones", async () => {
+  const [catalog, detail] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "StatusPill"/);
+  assert.match(detail, /case "StatusPill":\s*return \["neutral", "info", "success", "warning", "danger"\] as const/);
+  assert.match(detail, /<StatusPill/);
+  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /tone=\{state as StatusPillTone\}/);
+});
+
 test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 

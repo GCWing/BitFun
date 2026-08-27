@@ -1,0 +1,71 @@
+@layer bf.components {
+  .root,
+  .leading,
+  .label {
+    box-sizing: border-box;
+  }
+
+  .root {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bf-control-status-pill-gap);
+    padding-block: var(--bf-control-status-pill-padding-block);
+    padding-inline: var(--bf-control-status-pill-padding-inline);
+    border-radius: var(--bf-control-status-pill-radius);
+    color: var(--bf-color-status-success-content);
+    background: var(--bf-color-status-success-surface);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-control-status-pill-font-size);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: normal;
+    white-space: nowrap;
+  }
+
+  .leading {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-control-status-pill-icon-size);
+    block-size: var(--bf-control-status-pill-icon-size);
+  }
+
+  .leading > :where(svg, img, [data-bf-component="icon"]) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .label {
+    min-inline-size: 0;
+  }
+
+  .root[data-tone="neutral"] {
+    color: var(--bf-color-content-secondary);
+    background: var(--bf-color-surface-subtle);
+  }
+
+  .root[data-tone="info"] {
+    color: var(--bf-color-status-info-content);
+    background: var(--bf-color-status-info-surface);
+  }
+
+  .root[data-tone="warning"] {
+    color: var(--bf-color-status-warning-content);
+    background: var(--bf-color-status-warning-surface);
+  }
+
+  .root[data-tone="danger"] {
+    color: var(--bf-color-status-danger-content);
+    background: var(--bf-color-status-danger-surface);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--bf-border-width-default) solid CanvasText;
+      color: CanvasText;
+      background: Canvas;
+    }
+  }
+}

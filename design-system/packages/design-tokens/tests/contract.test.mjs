@@ -90,6 +90,17 @@ test("Activity geometry preserves inline and surfaced status compositions", asyn
   assert.equal(systemDocument.control.changeCount.radius.$value, "{radius.xs}");
 });
 
+test("StatusPill geometry preserves compact semantic status anatomy", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.statusPill.gap"], "2px");
+  assert.equal(tokens["control.statusPill.paddingBlock"], "3px");
+  assert.equal(tokens["control.statusPill.paddingInline"], "6px");
+  assert.equal(tokens["control.statusPill.iconSize"], "14px");
+  assert.equal(tokens["control.statusPill.fontSize"], "11px");
+  assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
+});
+
 test("ActionCard geometry preserves compact and descriptive entry compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

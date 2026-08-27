@@ -46,6 +46,7 @@ import {
   ScrollArea,
   SearchField,
   Stack,
+  StatusPill,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -92,6 +93,7 @@ const componentIcons = {
   PageHeader: Heading,
   ScrollArea: Rows3,
   SearchField: SearchIcon,
+  StatusPill: Check,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
   Toolbar: PanelTop,
@@ -325,6 +327,12 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           placeholder={t("components.preview.searchPlaceholder")}
           shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
         />
+      );
+    case "StatusPill":
+      return (
+        <StatusPill leading={<Icon name="circle" />}>
+          Ask
+        </StatusPill>
       );
     case "Switch":
       return (

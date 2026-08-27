@@ -135,6 +135,11 @@ export {
   type ScrollbarVisibility,
 } from "./components/ScrollArea";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
+export {
+  StatusPill,
+  type StatusPillProps,
+  type StatusPillTone,
+} from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
 export {
   TabGroup,

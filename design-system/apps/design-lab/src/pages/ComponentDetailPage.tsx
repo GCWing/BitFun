@@ -59,6 +59,7 @@ import {
   PageHeader,
   ScrollArea,
   SearchField,
+  StatusPill,
   Switch,
   TabGroup,
   ThemeRoot,
@@ -78,6 +79,7 @@ import {
   type CardContentAlignment,
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
+  type StatusPillTone,
   type ToolbarSize,
   type TokenOverrides,
 } from "@bitfun/ui";
@@ -257,6 +259,8 @@ export function ComponentDetailPage({
       ? "with-context"
       : component.name === "Switch"
         ? "off"
+      : component.name === "StatusPill"
+        ? "success"
       : component.name === "Toolbar"
         ? "with-center"
       : component.name === "TabGroup"
@@ -312,6 +316,8 @@ export function ComponentDetailPage({
         return ["default", "selected-item", "disabled-item", "scrolling"] as const;
       case "ScrollArea":
         return ["auto", "always", "hidden"] as const;
+      case "StatusPill":
+        return ["neutral", "info", "success", "warning", "danger"] as const;
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       case "Toolbar":
@@ -415,6 +421,9 @@ export function ComponentDetailPage({
           ? " invalid"
           : "";
       return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
+    }
+    if (component.name === "StatusPill") {
+      return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="circle" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
     }
     if (component.name === "NavigationPanel") {
       return `import { IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\nimport { Monitor, Search, Settings } from "lucide-react";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Monitor />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Settings />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Search />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
@@ -668,6 +677,17 @@ export function ComponentDetailPage({
         >
           {t("components.preview.actionCardTitle")}
         </ActionCard>
+      );
+    }
+
+    if (component.name === "StatusPill") {
+      return (
+        <StatusPill
+          leading={<Icon name="circle" />}
+          tone={state as StatusPillTone}
+        >
+          Ask
+        </StatusPill>
       );
     }
 
@@ -1469,7 +1489,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "StatusPill" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionCard"
@@ -1478,6 +1498,8 @@ export function ComponentDetailPage({
                       ? "action-item"
                     : component.name === "Field"
                       ? "field"
+                    : component.name === "StatusPill"
+                      ? "status-pill"
                     : component.name === "FieldGroup"
                       ? "field-group"
                     : component.name === "Input"
@@ -1725,6 +1747,7 @@ export function ComponentDetailPage({
                     label={t("detail.state")}
                     onChange={setPreviewState}
                     options={inspectorStates}
+                    translateOptions={component.name !== "StatusPill"}
                     value={previewState}
                   />
                   {component.name === "ActivityItem" && (

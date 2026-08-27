@@ -1,0 +1,34 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const statusPillMeta = {
+  category: "feedback",
+  description: "A compact semantic status label with an optional decorative leading indicator.",
+  maturity: "stable",
+  name: "StatusPill",
+  props: [
+    { name: "children", type: "ReactNode" },
+    { name: "leading", type: "ReactNode" },
+    { defaultValue: "success", name: "tone", type: "neutral | info | success | warning | danger" },
+  ],
+  states: ["neutral", "info", "success", "warning", "danger"],
+  tokens: [
+    "color.surface.subtle",
+    "color.content.secondary",
+    "color.status.info.content",
+    "color.status.info.surface",
+    "color.status.success.content",
+    "color.status.success.surface",
+    "color.status.warning.content",
+    "color.status.warning.surface",
+    "color.status.danger.content",
+    "color.status.danger.surface",
+    "control.statusPill.gap",
+    "control.statusPill.paddingBlock",
+    "control.statusPill.paddingInline",
+    "control.statusPill.radius",
+    "control.statusPill.iconSize",
+    "control.statusPill.fontSize",
+    "font.family.control",
+    "font.weight.regular",
+  ],
+} as const satisfies ComponentMeta;

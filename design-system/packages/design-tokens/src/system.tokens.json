@@ -157,6 +157,15 @@
       "radius": { "$value": "{radius.xs}" },
       "fontSize": { "$value": "11px" }
     },
+    "statusPill": {
+      "$type": "dimension",
+      "gap": { "$value": "2px" },
+      "paddingBlock": { "$value": "3px" },
+      "paddingInline": { "$value": "6px" },
+      "radius": { "$value": "{radius.pill}" },
+      "iconSize": { "$value": "14px" },
+      "fontSize": { "$value": "11px" }
+    },
     "iconButton": {
       "$type": "dimension",
       "xsSize": { "$value": "22px" },
