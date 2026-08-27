@@ -94,6 +94,9 @@ vi.mock('@/component-library', () => ({
   Select: () => <div />,
   Switch: () => <input type="checkbox" readOnly />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDanger: vi.fn(async () => false),
 }));
 

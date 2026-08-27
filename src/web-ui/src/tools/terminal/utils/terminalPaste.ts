@@ -1,4 +1,4 @@
-import { confirmDialogChoice } from '@/component-library';
+import { confirmDialogChoice } from '@/infrastructure/confirm-dialog';
 import { i18nService } from '@/infrastructure/i18n';
 
 export type TerminalPasteWarningMode = 'auto' | 'always' | 'never';

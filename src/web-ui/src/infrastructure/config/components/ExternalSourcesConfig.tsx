@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, ConfirmDialog } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +14,8 @@ import {
   Settings2,
   ShieldCheck,
 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  Select,
-  Tooltip,
-} from '@/component-library';
+import { ConfigPageLoading, Select, Tooltip } from '@/component-library';
+
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';

@@ -3,13 +3,12 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, ConfirmDialog } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import { PopupCloseButton } from '@/component-library';
-import { ConfirmDialog } from './ConfirmDialog';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -690,7 +689,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
 
         {/* Delete Confirmation Dialog */}
         <ConfirmDialog
-          open={deleteConfirm.show}
+          isOpen={deleteConfirm.show}
           title={t('ssh.remote.deleteTitle') || 'Delete'}
           message={deleteConfirm.entry
             ? t('ssh.remote.deleteConfirm') || `Delete "${deleteConfirm.entry.name}"?`
@@ -699,8 +698,9 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           confirmText={t('actions.delete') || 'Delete'}
           cancelText={t('actions.cancel')}
           onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteConfirm({ show: false, entry: null })}
-          destructive
+          onClose={() => setDeleteConfirm({ show: false, entry: null })}
+          confirmDanger
+          type="error"
         />
 
         {/* Footer */}

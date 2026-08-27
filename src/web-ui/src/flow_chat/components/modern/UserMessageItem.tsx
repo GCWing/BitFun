@@ -26,7 +26,8 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
-import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
+import { Tooltip, ToolProcessingDots } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,

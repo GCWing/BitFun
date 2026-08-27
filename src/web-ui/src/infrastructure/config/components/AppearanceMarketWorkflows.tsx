@@ -1,7 +1,8 @@
 import { Button } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
-import { confirmDialog, Input, Select, Textarea } from '@/component-library';
+import { Input, Select, Textarea } from '@/component-library';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   appearanceMarketAPI,
   type AppearanceAdminSubmissionDetail,

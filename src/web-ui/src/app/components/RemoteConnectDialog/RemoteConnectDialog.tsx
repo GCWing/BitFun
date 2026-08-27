@@ -42,7 +42,7 @@ import {
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Badge, Select } from '@/component-library';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';

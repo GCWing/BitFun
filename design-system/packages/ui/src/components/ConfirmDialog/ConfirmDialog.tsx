@@ -1,7 +1,10 @@
 import {
+  createContext,
   forwardRef,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -23,6 +26,38 @@ import styles from "./ConfirmDialog.module.css";
 export type ConfirmDialogCloseReason = ModalCloseReason | "cancel-button";
 export type ConfirmDialogType = "info" | "warning" | "error" | "success";
 export type ConfirmDialogAction = () => void | Promise<void>;
+
+interface ConfirmDialogContextValue {
+  cancelLabel: ReactNode;
+  confirmLabel: ReactNode;
+}
+
+const ConfirmDialogContext = createContext<ConfirmDialogContextValue>({
+  cancelLabel: "Cancel",
+  confirmLabel: "Confirm",
+});
+
+export interface ConfirmDialogProviderProps {
+  cancelLabel?: ReactNode;
+  children: ReactNode;
+  confirmLabel?: ReactNode;
+}
+
+export function ConfirmDialogProvider({
+  cancelLabel = "Cancel",
+  children,
+  confirmLabel = "Confirm",
+}: ConfirmDialogProviderProps) {
+  const value = useMemo(
+    () => ({ cancelLabel, confirmLabel }),
+    [cancelLabel, confirmLabel],
+  );
+  return (
+    <ConfirmDialogContext.Provider value={value}>
+      {children}
+    </ConfirmDialogContext.Provider>
+  );
+}
 
 export interface ConfirmDialogProps {
   cancelText?: ReactNode;
@@ -63,11 +98,11 @@ const defaultIcons: Record<ConfirmDialogType, ReactNode> = {
 
 export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
   function ConfirmDialog({
-    cancelText = "Cancel",
+    cancelText,
     closeOnEscape = true,
     closeOnOverlayClick = true,
     confirmDanger = false,
-    confirmText = "Confirm",
+    confirmText,
     icon,
     isOpen,
     message,
@@ -91,6 +126,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
     title,
     type = "warning",
   }, ref) {
+    const labels = useContext(ConfirmDialogContext);
     const confirmButtonRef = useRef<HTMLButtonElement>(null);
     const mountedRef = useRef(true);
     const [internalPendingAction, setInternalPendingAction] = useState<"confirm" | "secondary" | null>(null);
@@ -99,6 +135,8 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
     const resolvedIcon = icon === false ? null : icon ?? defaultIcons[type];
     const hasMessage = message !== undefined && message !== null && message !== "";
     const hasPreview = preview !== undefined && preview !== null && preview !== "";
+    const resolvedCancelText = cancelText ?? labels.cancelLabel;
+    const resolvedConfirmText = confirmText ?? labels.confirmLabel;
 
     useEffect(() => () => {
       mountedRef.current = false;
@@ -142,7 +180,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
           <>
             {showCancel && (
               <Button disabled={busy} onClick={() => requestCancel("cancel-button")} variant="fill">
-                {cancelText}
+                {resolvedCancelText}
               </Button>
             )}
             {secondaryText !== undefined && secondaryText !== null && (
@@ -163,7 +201,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
               tone={confirmDanger || type === "error" ? "danger" : "neutral"}
               variant={confirmDanger || type === "error" ? "primary" : "fill"}
             >
-              {confirmText}
+              {resolvedConfirmText}
             </Button>
           </>
         )}
@@ -185,7 +223,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
         {(hasMessage || hasPreview) && (
           <div className={styles.content} data-bf-component="confirm-dialog" data-bf-part="content">
             {hasMessage && (
-              <div className={styles.messageRow} data-bf-part="message-row">
+      <div className={styles.messageRow} data-bf-part="messageRow">
                 {resolvedIcon !== null && (
                   <span
                     aria-hidden="true"

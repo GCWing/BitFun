@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ConfirmDialog } from "../dist/index.js";
+import { ConfirmDialog, ConfirmDialogProvider } from "../dist/index.js";
 
 test("ConfirmDialog composes semantic content and actions on Modal", () => {
   const markup = renderToStaticMarkup(createElement(ConfirmDialog, {
@@ -54,6 +54,26 @@ test("ConfirmDialog can omit the icon and cancel action", () => {
   assert.doesNotMatch(markup, /data-bf-part="icon"/);
   assert.doesNotMatch(markup, />Cancel<\/span>/);
   assert.match(markup, />OK<\/span>/);
+});
+
+test("ConfirmDialogProvider supplies product-localized action defaults", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ConfirmDialogProvider, {
+      cancelLabel: "取消",
+      confirmLabel: "确定",
+    }, createElement(ConfirmDialog, {
+      isOpen: true,
+      message: "继续吗？",
+      onClose: () => undefined,
+      onConfirm: () => undefined,
+      portalled: false,
+      preventScroll: false,
+      title: "确认",
+    })),
+  );
+
+  assert.match(markup, />取消<\/span>/);
+  assert.match(markup, />确定<\/span>/);
 });
 
 test("ConfirmDialog owns async pending and dismissal guards", async () => {

@@ -129,7 +129,7 @@ vi.mock('@/infrastructure/event-bus', () => ({
   },
 }));
 
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmWarning: confirmWarningMock,
 }));
 

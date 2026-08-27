@@ -15,7 +15,8 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Search, Select, confirmDanger, Tooltip } from '@/component-library';
+import { Badge, Search, Select, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,

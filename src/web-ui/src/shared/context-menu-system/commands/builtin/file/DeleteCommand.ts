@@ -5,7 +5,7 @@ import { CommandResult } from '../../../types/command.types';
 import { MenuContext, ContextType, FileNodeContext } from '../../../types/context.types';
 import { globalEventBus } from '../../../../../infrastructure/event-bus';
 import { i18nService } from '@/infrastructure/i18n';
-import { confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 
 export class DeleteFileCommand extends BaseCommand {
   constructor() {

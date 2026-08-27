@@ -59,7 +59,7 @@ import type {
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { exportSessionToMarkdown } from '@/flow_chat/services/sessionMarkdownExport';
 import type { TranscriptExportScope } from '@/flow_chat/utils/dialogTranscriptExport';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import {
   AssistantAvatar,
   type AssistantAvatarStatus,

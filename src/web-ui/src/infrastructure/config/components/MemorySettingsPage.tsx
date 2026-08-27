@@ -1,15 +1,9 @@
-import { Switch, IconButton } from '@bitfun/ui';
+import { Switch, IconButton, ConfirmDialog } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  NumberInput,
-  Select,
-  type SelectOption,
-  Tooltip,
-} from '@/component-library';
+import { ConfigPageLoading, NumberInput, Select, type SelectOption, Tooltip } from '@/component-library';
+
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';

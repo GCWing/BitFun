@@ -61,6 +61,9 @@ vi.mock('@/component-library', () => ({
   Textarea: ({ label, showCount: _showCount, ...props }: any) => (
     <label>{label}<textarea {...props} /></label>
   ),
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDialog: mocks.confirmDialog,
 }));
 

@@ -12,7 +12,7 @@ const getRepositoryTrustMock = vi.hoisted(() => vi.fn());
 const warningMock = vi.hoisted(() => vi.fn());
 const successMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmWarning: confirmWarningMock,
 }));
 

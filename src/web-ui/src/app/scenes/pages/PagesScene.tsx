@@ -21,7 +21,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { PresenceBoundary, Select, confirmDanger, confirmWarning, type SelectOption } from '@/component-library';
+import { PresenceBoundary, Select, type SelectOption } from '@/component-library';
+import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import {
   pageAPI,

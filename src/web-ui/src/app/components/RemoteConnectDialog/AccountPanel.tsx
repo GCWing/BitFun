@@ -23,7 +23,7 @@ import { Alert } from '@/component-library';
 import {
   confirmDanger,
   confirmWarning,
-} from '@/component-library/components/ConfirmDialog/confirmService';
+} from '@/infrastructure/confirm-dialog';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,

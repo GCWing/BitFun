@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConfirmDialogOptions } from '@/component-library';
+import { ConfirmDialogOptions } from '@/infrastructure/confirm-dialog';
 import type { PromptCommandShellReviewPlan } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { reviewPromptCommandShell } from './promptCommandShellReview';
 

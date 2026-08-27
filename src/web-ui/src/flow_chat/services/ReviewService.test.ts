@@ -38,7 +38,7 @@ vi.mock('@/infrastructure/api', () => ({
 }));
 
 // Review drives the real trust recovery; only its user-facing edges are stubbed.
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmWarning: (...args: unknown[]) => mocks.confirmWarning(...args),
 }));
 

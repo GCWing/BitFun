@@ -2,14 +2,8 @@ import { Button, Switch, IconButton, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
-import {
-  NumberInput,
-  ConfigPageLoading,
-  Select,
-  confirmDanger,
-  type SelectOption,
-  Tooltip,
-} from '@/component-library';
+import { NumberInput, ConfigPageLoading, Select, type SelectOption, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import {

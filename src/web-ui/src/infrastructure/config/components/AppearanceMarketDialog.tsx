@@ -12,7 +12,8 @@ import {
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { confirmDialog, Select } from '@/component-library';
+import { Select } from '@/component-library';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { MarketAccountControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,

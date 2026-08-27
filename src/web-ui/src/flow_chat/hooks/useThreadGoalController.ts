@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
 import type { Session } from '../types/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';

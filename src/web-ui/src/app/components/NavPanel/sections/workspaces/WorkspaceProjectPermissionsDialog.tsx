@@ -1,7 +1,8 @@
 import { Button, IconButton, Input, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
+import { Select, type SelectOption, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   permissionAPI,
   type PermissionGrant,

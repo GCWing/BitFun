@@ -8,7 +8,8 @@
 import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { Select, Textarea, confirmDanger, Tooltip } from '@/component-library';
+import { Select, Textarea, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,
   type CreateCronJobRequest,

@@ -1,8 +1,4 @@
-import {
-  confirmDialogChoice,
-  type ConfirmDialogChoice,
-  type ConfirmDialogOptions,
-} from '@/component-library';
+import { confirmDialogChoice, type ConfirmDialogChoice, type ConfirmDialogOptions } from '@/infrastructure/confirm-dialog';
 import type {
   PromptCommandShellReviewDecision,
   PromptCommandShellReviewPlan,

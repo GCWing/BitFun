@@ -58,7 +58,7 @@ vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
   },
 }));
 
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmWarning: confirmWarningMock,
 }));
 
@@ -71,19 +71,6 @@ vi.mock('@/shared/notification-system', () => ({
 
 vi.mock('@/component-library', () => ({
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
   ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
   ConfigPageMessage: ({
     message,
@@ -95,51 +82,6 @@ vi.mock('@/component-library', () => ({
   }: {
     onClick: () => void;
   }) => <button type="button" onClick={onClick}>refresh</button>,
-  IconButton: ({
-    'aria-label': ariaLabel,
-    children,
-    disabled,
-    onClick,
-    title,
-  }: {
-    'aria-label'?: string;
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-    title?: string;
-  }) => (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-    >
-      {children}
-    </button>
-  ),
-  ConfirmDialog: ({
-    confirmText,
-    isOpen,
-    message,
-    onConfirm,
-    title,
-  }: {
-    confirmText: string;
-    isOpen: boolean;
-    message: React.ReactNode;
-    onConfirm: () => void;
-    title: string;
-  }) => isOpen ? (
-    <div role="dialog">
-      <h2>{title}</h2>
-      <div>{message}</div>
-      <button type="button" data-testid="confirm-delete" onClick={onConfirm}>
-        {confirmText}
-      </button>
-    </div>
-  ) : null,
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   NumberInput: ({
     disabled,
     label,
@@ -159,21 +101,59 @@ vi.mock('@/component-library', () => ({
       onChange={event => onChange(Number(event.currentTarget.value))}
     />
   ),
-  Switch: ({
-    checked,
+}));
+
+vi.mock('@bitfun/ui', () => ({
+  Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
+  ),
+  ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
+    confirmText: string;
+    isOpen: boolean;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    title: string;
+  }) => isOpen ? (
+    <div role="dialog">
+      <h2>{title}</h2>
+      <div>{message}</div>
+      <button type="button" data-testid="confirm-delete" onClick={onConfirm}>
+        {confirmText}
+      </button>
+    </div>
+  ) : null,
+  IconButton: ({
+    'aria-label': ariaLabel,
+    children,
     disabled,
-    onChange,
+    icon,
+    onClick,
+    title,
   }: {
+    'aria-label'?: string;
+    children?: React.ReactNode;
+    disabled?: boolean;
+    icon?: React.ReactNode;
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+    >
+      {icon ?? children}
+    </button>
+  ),
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Switch: ({ checked, disabled, onChange }: {
     checked: boolean;
     disabled?: boolean;
     onChange: React.ChangeEventHandler<HTMLInputElement>;
   }) => (
-    <input
-      checked={checked}
-      disabled={disabled}
-      type="checkbox"
-      onChange={onChange}
-    />
+    <input checked={checked} disabled={disabled} type="checkbox" onChange={onChange} />
   ),
 }));
 

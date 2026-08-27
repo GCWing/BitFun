@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, ConfirmDialog, SearchField } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -16,13 +16,9 @@ import {
   ShieldCheck,
   Star,
 } from 'lucide-react';
-import {
-  Badge,
-  ConfirmDialog,
-  Select,
-  type SelectOption,
-} from '@/component-library';
-import { SearchField } from '@bitfun/ui';
+import { Badge, Select, type SelectOption } from '@/component-library';
+
+
 import {
   GalleryDetailModal,
   GalleryEmpty,

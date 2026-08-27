@@ -37,8 +37,10 @@ vi.mock('@/infrastructure/runtime', () => ({
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => notificationMocks,
 }));
-vi.mock('@/component-library', async () => {
-  const actual = await vi.importActual<typeof import('@/component-library')>('@/component-library');
+vi.mock('@/infrastructure/confirm-dialog', async () => {
+  const actual = await vi.importActual<typeof import('@/infrastructure/confirm-dialog')>(
+    '@/infrastructure/confirm-dialog',
+  );
   return { ...actual, confirmDanger: confirmDangerMock };
 });
 vi.mock('../../api/service-api/MCPAPI', () => ({

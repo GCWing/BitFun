@@ -82,6 +82,9 @@ vi.mock('@/component-library', () => ({
     active ? <>{children}</> : null
   ),
   Select: () => <div />,
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDanger: mocks.confirmDanger,
   confirmWarning: vi.fn(),
 }));

@@ -141,6 +141,9 @@ vi.mock('@/infrastructure/event-bus', () => ({
 
 vi.mock('@/component-library', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDanger: componentLibraryMock.confirmDanger,
 }));
 
