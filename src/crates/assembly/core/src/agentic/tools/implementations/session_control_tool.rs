@@ -32,7 +32,7 @@ use bitfun_runtime_ports::{
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// SessionControl tool - create, cancel, delete, or list persisted sessions
+/// SessionControl tool - create, cancel, delete, rename, or list persisted sessions
 pub struct SessionControlTool;
 
 const CANCEL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -171,6 +171,20 @@ impl SessionControlTool {
         }
     }
 
+    fn rename_request(
+        workspace: &SessionControlWorkspaceTarget,
+        session_id: &str,
+        session_name: &str,
+    ) -> AgentSessionRenameRequest {
+        AgentSessionRenameRequest {
+            workspace_path: workspace.project_workspace.clone(),
+            session_id: session_id.to_string(),
+            session_name: session_name.to_string(),
+            remote_connection_id: workspace.remote_connection_id.clone(),
+            remote_ssh_host: workspace.remote_ssh_host.clone(),
+        }
+    }
+
     fn validation_context(context: Option<&ToolUseContext>) -> SessionControlValidationContext<'_> {
         SessionControlValidationContext {
             current_session_id: context.and_then(|value| value.session_id.as_deref()),
@@ -278,7 +292,7 @@ Actions:
 - "list": List all sessions.
 
 Arguments:
-- "workspace": Absolute workspace path. Required for create and list. Ignored for cancel and delete.
+- "workspace": Absolute workspace path. Required for create and list. Ignored for cancel, delete, and rename.
 - "session_name": Used by create (defaults to "New Session") and required as the new title for rename.
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
@@ -309,7 +323,7 @@ Arguments:
                 },
                 "workspace": {
                     "type": "string",
-                    "description": "Required absolute workspace path for create and list. Ignored for cancel and delete."
+                    "description": "Required absolute workspace path for create and list. Ignored for cancel, delete, and rename."
                 },
                 "session_id": {
                     "type": "string",
@@ -610,13 +624,7 @@ Arguments:
                 // renameChatSessionTitle (AgentSessionManagementPort::rename_session)
                 // so the persisted title stays consistent with the desktop/frontend.
                 runtime
-                    .rename_session(AgentSessionRenameRequest {
-                        workspace_path: workspace.display_workspace.clone(),
-                        session_id: session_id.to_string(),
-                        session_name: session_name.to_string(),
-                        remote_connection_id: workspace.remote_connection_id.clone(),
-                        remote_ssh_host: workspace.remote_ssh_host.clone(),
-                    })
+                    .rename_session(Self::rename_request(&workspace, session_id, session_name))
                     .await
                     .map_err(|error| {
                         BitFunError::tool(format!(
@@ -760,6 +768,24 @@ mod tests {
         assert_eq!(PathBuf::from(target.display_workspace), worktree_path);
         assert_eq!(PathBuf::from(target.project_workspace), project_path);
         assert_eq!(target.execution_target, Some(execution_target));
+    }
+
+    #[test]
+    fn worktree_rename_uses_project_scope_for_persistence() {
+        let target = SessionControlWorkspaceTarget {
+            display_workspace: "/worktrees/wt-1".to_string(),
+            project_workspace: "/repo".to_string(),
+            execution_target: None,
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        let request = SessionControlTool::rename_request(&target, "session-1", "Renamed");
+
+        assert_eq!(request.workspace_path, "/repo");
+        assert_eq!(request.session_id, "session-1");
+        assert_eq!(request.session_name, "Renamed");
     }
 
     #[tokio::test]

@@ -2409,6 +2409,14 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
     path
 }
 
+/// Return the session whose durable metadata must be synchronized for an event.
+fn session_changed_id_for_sync(event: &AgenticEvent) -> Option<&str> {
+    match event {
+        AgenticEvent::SessionTitleGenerated { session_id, .. } => Some(session_id),
+        _ => None,
+    }
+}
+
 /// Deliver one event to the WebView and, when peer controllers are attached,
 /// fan it out to paired devices. Text chunks arrive here already coalesced by
 /// `TextChunkCoalescer`.
@@ -2417,6 +2425,9 @@ async fn deliver_event_to_webview(
     event: AgenticEvent,
     session_event_journal: &SessionEventJournal,
 ) {
+    if let Some(session_id) = session_changed_id_for_sync(&event) {
+        api::remote_connect_api::notify_session_changed(session_id, "");
+    }
     let cursor = session_event_journal.record(&event);
     let Some(mut projected) = bitfun_events::project_agentic_frontend_event(event) else {
         log::warn!("Unhandled AgenticEvent type in desktop delivery");
@@ -2993,6 +3004,21 @@ mod event_loop_driver_tests {
             attempt_index: None,
             text: text.to_string(),
         }
+    }
+
+    #[test]
+    fn session_title_events_request_durable_session_sync() {
+        let title_event = AgenticEvent::SessionTitleGenerated {
+            session_id: "renamed-session".to_string(),
+            title: "Renamed".to_string(),
+            method: "manual".to_string(),
+        };
+
+        assert_eq!(
+            session_changed_id_for_sync(&title_event),
+            Some("renamed-session")
+        );
+        assert_eq!(session_changed_id_for_sync(&text_chunk("hello")), None);
     }
 
     /// Regression test for the P1 scheduling issue: the window timer is only

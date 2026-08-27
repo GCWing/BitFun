@@ -13,7 +13,7 @@ interface SessionSummary {
 }
 
 interface SessionControlInput {
-  action?: 'create' | 'cancel' | 'delete' | 'list';
+  action?: 'create' | 'cancel' | 'delete' | 'rename' | 'list';
   workspace?: string;
   session_id?: string;
   session_name?: string;
@@ -22,10 +22,11 @@ interface SessionControlInput {
 
 interface SessionControlResult {
   success?: boolean;
-  action?: 'create' | 'cancel' | 'delete' | 'list';
+  action?: 'create' | 'cancel' | 'delete' | 'rename' | 'list';
   workspace?: string;
   count?: number;
   session_id?: string;
+  session_name?: string;
   had_active_turn?: boolean;
   cancelled_turn_id?: string;
   status?: 'cancel_requested' | 'no_active_turn';
@@ -69,7 +70,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
   const workspace = resultData?.workspace ?? inputData.workspace;
   const session = resultData?.session;
   const sessionId = session?.session_id ?? resultData?.session_id ?? inputData.session_id;
-  const sessionName = session?.session_name ?? inputData.session_name;
+  const sessionName = session?.session_name ?? resultData?.session_name ?? inputData.session_name;
   const agentType = session?.agent_type ?? inputData.agent_type;
   const sessions = Array.isArray(resultData?.sessions) ? resultData.sessions : [];
   const sessionCount = resultData?.count ?? sessions.length;
@@ -94,6 +95,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
         return sessionName || t('toolCards.sessionControl.defaultSessionName');
       case 'cancel':
       case 'delete':
+      case 'rename':
         return sessionId || t('toolCards.sessionControl.unknownSession');
       case 'list':
       default:
@@ -115,6 +117,11 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
           return <>{t('toolCards.sessionControl.cancelledSession', { session: label })}</>;
         case 'delete':
           return <>{t('toolCards.sessionControl.deletedSession', { session: label })}</>;
+        case 'rename':
+          return <>{t('toolCards.sessionControl.renamedSession', {
+            session: label,
+            name: sessionName || t('toolCards.sessionControl.defaultSessionName'),
+          })}</>;
         case 'list':
         default:
           return <>{t('toolCards.sessionControl.listedSessions', { count: sessionCount })}</>;
@@ -129,6 +136,11 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
           return <>{t('toolCards.sessionControl.cancellingSession', { session: label })}...</>;
         case 'delete':
           return <>{t('toolCards.sessionControl.deletingSession', { session: label })}...</>;
+        case 'rename':
+          return <>{t('toolCards.sessionControl.renamingSession', {
+            session: label,
+            name: sessionName || t('toolCards.sessionControl.defaultSessionName'),
+          })}...</>;
         case 'list':
         default:
           return <>{t('toolCards.sessionControl.listingSessions')}...</>;
@@ -146,6 +158,11 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
         return <>{t('toolCards.sessionControl.preparingCancel', { session: label })}</>;
       case 'delete':
         return <>{t('toolCards.sessionControl.preparingDelete', { session: label })}</>;
+      case 'rename':
+        return <>{t('toolCards.sessionControl.preparingRename', {
+          session: label,
+          name: sessionName || t('toolCards.sessionControl.defaultSessionName'),
+        })}</>;
       case 'list':
       default:
         return <>{t('toolCards.sessionControl.preparingList')}</>;
