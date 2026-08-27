@@ -5,10 +5,10 @@
  * several rows with different times.
  */
 
-import { Switch } from '@bitfun/ui';
+import { IconButton, Switch } from '@bitfun/ui';
 import React from 'react';
 import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -153,25 +153,25 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
           onChange={(event) => onToggleEnabled(job, event.currentTarget.checked)}
         />
         <div className="bf-todos__row-action-buttons">
-          <IconButton
-            type="button"
-            size="xs"
-            aria-label={t('actions.edit')}
-            tooltip={t('actions.edit')}
-            onClick={() => onEdit(job)}
-          >
-            <Pencil size={13} />
-          </IconButton>
-          <IconButton
-            type="button"
-            size="xs"
-            variant="danger"
-            aria-label={t('actions.delete')}
-            tooltip={t('actions.delete')}
-            onClick={() => onDelete(job)}
-          >
-            <Trash2 size={13} />
-          </IconButton>
+          <Tooltip content={t('actions.edit')}>
+            <IconButton
+              type="button"
+              size="sm"
+              aria-label={t('actions.edit')}
+              icon={<Pencil />}
+              onClick={() => onEdit(job)}
+            />
+          </Tooltip>
+          <Tooltip content={t('actions.delete')}>
+            <IconButton
+              type="button"
+              size="sm"
+              tone="danger"
+              aria-label={t('actions.delete')}
+              icon={<Trash2 />}
+              onClick={() => onDelete(job)}
+            />
+          </Tooltip>
         </div>
       </div>
     </div>
