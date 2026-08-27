@@ -101,6 +101,17 @@ test("StatusPill geometry preserves compact semantic status anatomy", async () =
   assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
 });
 
+test("Select geometry preserves independent content and indicator regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.select.paddingInline"], "12px");
+  assert.equal(tokens["control.select.leadingInset"], "12px");
+  assert.equal(tokens["control.select.trailingInset"], "12px");
+  assert.equal(tokens["control.select.contentGap"], "8px");
+  assert.equal(tokens["control.select.indicatorSize"], "14px");
+  assert.equal(systemDocument.control.select.radius.$value, "{radius.base}");
+});
+
 test("ActionCard geometry preserves compact and descriptive entry compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

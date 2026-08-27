@@ -136,6 +136,13 @@ export {
 } from "./components/ScrollArea";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export {
+  Select,
+  type SelectOption,
+  type SelectProps,
+  type SelectSize,
+  type SelectValue,
+} from "./components/Select";
+export {
   StatusPill,
   type StatusPillProps,
   type StatusPillTone,

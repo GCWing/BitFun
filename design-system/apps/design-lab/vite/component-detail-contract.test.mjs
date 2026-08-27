@@ -149,6 +149,20 @@ test("StatusPill preview exposes compact indicator anatomy and semantic tones", 
   assert.match(detail, /tone=\{state as StatusPillTone\}/);
 });
 
+test("Select preview exposes native grouped selection and independent states", async () => {
+  const [catalog, detail] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Select"/);
+  assert.match(detail, /case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(detail, /onValueChange=\{\(value\) => setSelectValue\(String\(value\)\)\}/);
+  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /disabled=\{state === "disabled"\}/);
+  assert.match(detail, /invalid=\{state === "invalid"\}/);
+});
+
 test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
@@ -233,7 +247,7 @@ test("ConfirmDialog preview exposes semantic, destructive, preview, and pending 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Input":\s*case "SearchField":\s*case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);

@@ -17,6 +17,7 @@ import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPane
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
+import { selectMeta } from "./components/Select/Select.meta";
 import { statusPillMeta } from "./components/StatusPill/StatusPill.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
@@ -49,6 +50,7 @@ export const componentRegistry = [
   pageHeaderMeta,
   scrollAreaMeta,
   searchFieldMeta,
+  selectMeta,
   statusPillMeta,
   switchMeta,
   tabGroupMeta,

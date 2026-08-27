@@ -45,6 +45,7 @@ import {
   PageHeader,
   ScrollArea,
   SearchField,
+  Select,
   Stack,
   StatusPill,
   Switch,
@@ -93,6 +94,7 @@ const componentIcons = {
   PageHeader: Heading,
   ScrollArea: Rows3,
   SearchField: SearchIcon,
+  Select: List,
   StatusPill: Check,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
@@ -333,6 +335,17 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <StatusPill leading={<Icon name="circle" />}>
           Ask
         </StatusPill>
+      );
+    case "Select":
+      return (
+        <Select
+          aria-label={t("components.preview.appearance")}
+          options={[
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+          ]}
+          value="ask"
+        />
       );
     case "Switch":
       return (

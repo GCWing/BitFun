@@ -3635,6 +3635,10 @@ input.lab-force-focus {
   inline-size: 100%;
 }
 
+.component-preview-matrix[data-component="select"] [data-bf-component="select"] {
+  min-inline-size: 240px;
+}
+
 .component-preview-matrix[data-component="switch"] {
   grid-template-columns: 88px repeat(4, minmax(112px, 1fr));
   grid-template-rows: 50px minmax(250px, 1fr);

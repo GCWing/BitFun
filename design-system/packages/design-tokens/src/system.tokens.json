@@ -166,6 +166,15 @@
       "iconSize": { "$value": "14px" },
       "fontSize": { "$value": "11px" }
     },
+    "select": {
+      "$type": "dimension",
+      "paddingInline": { "$value": "{space.3}" },
+      "leadingInset": { "$value": "{space.3}" },
+      "trailingInset": { "$value": "{space.3}" },
+      "contentGap": { "$value": "{space.2}" },
+      "indicatorSize": { "$value": "14px" },
+      "radius": { "$value": "{radius.base}" }
+    },
     "iconButton": {
       "$type": "dimension",
       "xsSize": { "$value": "22px" },
