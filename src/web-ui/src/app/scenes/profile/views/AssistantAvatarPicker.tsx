@@ -1,9 +1,9 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Input } from '@/component-library';
+import { Input } from '@/component-library';
 import {
   AssistantAvatar,
   ASSISTANT_AVATAR_PRESETS,
@@ -151,16 +151,14 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
             </div>
             <IconButton
               type="button"
-              size="xs"
-              variant="ghost"
+              size="sm"
               aria-label={t('identity.avatarPickerClose')}
+              icon={<X />}
               onClick={() => {
                 setIsOpen(false);
                 triggerRef.current?.focus();
               }}
-            >
-              <X size={14} />
-            </IconButton>
+            />
           </div>
 
           <div className="acp-avatar-picker__section-label">{t('identity.avatarOfficialPresets')}</div>
