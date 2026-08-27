@@ -3,9 +3,8 @@
  * Supports editing terminal name and startup command
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Field, Input, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './TerminalEditModal.scss';
@@ -85,35 +84,42 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('dialog.editTerminal.title')} size="small">
       <div data-bf-component="terminal-edit-modal" data-bf-part="content" className="terminal-edit-dialog__content">
-        <Input
-          ref={nameInputRef}
-          label={t('dialog.editTerminal.nameLabel')}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t('dialog.editTerminal.namePlaceholder')}
-        />
+        <Field label={t('dialog.editTerminal.nameLabel')}>
+          <Input
+            ref={nameInputRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('dialog.editTerminal.namePlaceholder')}
+          />
+        </Field>
 
         {showWorkingDirectory ? (
-          <Input
+          <Field
+            description={t('dialog.editTerminal.workingDirectoryHint')}
             label={t('dialog.editTerminal.workingDirectoryLabel')}
-            value={workingDirectory}
-            onChange={(e) => setWorkingDirectory(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t('dialog.editTerminal.workingDirectoryPlaceholder')}
-            hint={t('dialog.editTerminal.workingDirectoryHint')}
-          />
+          >
+            <Input
+              value={workingDirectory}
+              onChange={(e) => setWorkingDirectory(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t('dialog.editTerminal.workingDirectoryPlaceholder')}
+            />
+          </Field>
         ) : null}
 
         {showStartupCommand ? (
-          <Input
+          <Field
+            description={t('dialog.editTerminal.startupCommandHint')}
             label={t('dialog.editTerminal.startupCommandLabel')}
-            value={startupCommand}
-            onChange={(e) => setStartupCommand(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t('dialog.editTerminal.startupCommandPlaceholder')}
-            hint={t('dialog.editTerminal.startupCommandHint')}
-          />
+          >
+            <Input
+              value={startupCommand}
+              onChange={(e) => setStartupCommand(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t('dialog.editTerminal.startupCommandPlaceholder')}
+            />
+          </Field>
         ) : null}
       </div>
 
