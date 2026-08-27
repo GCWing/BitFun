@@ -1,4 +1,4 @@
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, IconButton, Input, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,7 +17,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { Select, Textarea, Tooltip } from '@/component-library';
+import { Textarea, Tooltip } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1099,8 +1099,8 @@ const AcpAgentsConfig: React.FC = () => {
                 className="bitfun-acp-agents__filter-select"
                 options={registryFilterOptions}
                 value={registryFilter}
-                onChange={(value) => setRegistryFilter(value as RegistryFilter)}
-                size="small"
+                onValueChange={(value) => setRegistryFilter(value as RegistryFilter)}
+                size="sm"
               />
               <Button
                 variant="outline"
@@ -1303,10 +1303,10 @@ const AcpAgentsConfig: React.FC = () => {
                           className="bitfun-acp-agents__confirmation-select"
                           options={permissionOptions}
                           value={clientConfig.permissionMode}
-                          onChange={(value) => patchClientConfig(preset.id, {
+                          onValueChange={(value) => patchClientConfig(preset.id, {
                             permissionMode: normalizePermissionMode(value),
                           })}
-                          size="small"
+                          size="sm"
                         />
                       ) : canInstallCli ? (
                         <Button
@@ -1460,10 +1460,10 @@ const AcpAgentsConfig: React.FC = () => {
                           className="bitfun-acp-agents__confirmation-select"
                           options={permissionOptions}
                           value={clientConfig.permissionMode}
-                          onChange={(value) => patchClientConfig(clientId, {
+                          onValueChange={(value) => patchClientConfig(clientId, {
                             permissionMode: normalizePermissionMode(value),
                           })}
-                          size="small"
+                          size="sm"
                         />
                       ) : canViewError ? (
                         <Button
@@ -1769,10 +1769,10 @@ const AcpAgentsConfig: React.FC = () => {
                                       className="bitfun-acp-agents__confirmation-select"
                                       options={permissionOptions}
                                       value={row.clientConfig.permissionMode}
-                                      onChange={(value) => patchClientConfig(row.clientId, {
+                                      onValueChange={(value) => patchClientConfig(row.clientId, {
                                         permissionMode: normalizePermissionMode(value),
                                       })}
-                                      size="small"
+                                      size="sm"
                                     />
                                   ) : row.preset ? (
                                   <Button
