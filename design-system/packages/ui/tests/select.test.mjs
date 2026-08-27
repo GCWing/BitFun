@@ -6,7 +6,7 @@ import test from "node:test";
 import { Icon, Select } from "../dist/index.js";
 
 const options = [
-  { label: "Ask", value: "ask" },
+  { label: "Ask", testAttributes: { "data-mode": "ask" }, testId: "ask-option", value: "ask" },
   { disabled: true, label: "Plan", value: "plan" },
   { group: "Advanced", label: "Agent", value: 3 },
 ];
@@ -20,7 +20,9 @@ test("Select preserves native selection and grouped option semantics", () => {
 
   assert.match(markup, /<select/);
   assert.match(markup, /aria-label="Mode"/);
-  assert.match(markup, /<option value="ask" selected="">Ask<\/option>/);
+  assert.match(markup, /<option[^>]*value="ask"[^>]*selected="">Ask<\/option>/);
+  assert.match(markup, /data-testid="ask-option"/);
+  assert.match(markup, /data-mode="ask"/);
   assert.match(markup, /<option disabled="" value="plan">Plan<\/option>/);
   assert.match(markup, /<optgroup label="Advanced">/);
   assert.match(markup, /value="3">Agent<\/option>/);

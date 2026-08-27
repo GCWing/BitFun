@@ -15,6 +15,8 @@ export interface SelectOption {
   disabled?: boolean;
   group?: string;
   label: string;
+  testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
+  testId?: string;
   value: SelectValue;
 }
 
@@ -57,7 +59,13 @@ function groupOptions(options: readonly SelectOption[]) {
 
 function renderOption(option: SelectOption) {
   return (
-    <option disabled={option.disabled} key={`${typeof option.value}:${option.value}`} value={String(option.value)}>
+    <option
+      data-testid={option.testId}
+      disabled={option.disabled}
+      key={`${typeof option.value}:${option.value}`}
+      value={String(option.value)}
+      {...option.testAttributes}
+    >
       {option.label}
     </option>
   );
