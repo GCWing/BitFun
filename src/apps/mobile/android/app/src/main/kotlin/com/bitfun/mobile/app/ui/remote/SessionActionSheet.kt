@@ -90,8 +90,8 @@ internal fun SessionActionSheet(
     status: String,
     capabilities: SessionActionCapabilities,
     onViewDetails: () -> Unit,
-    onArchive: () -> Unit,
-    onExport: () -> Unit,
+    onArchive: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -99,6 +99,11 @@ internal fun SessionActionSheet(
     // sheet that is itself gone after a process death, and restoring "about to
     // delete" without the tap that got there is not a state worth rebuilding.
     var confirmingDelete by remember { mutableStateOf(false) }
+    // Archive and export are local-storage operations a remote session can never
+    // offer, so those callbacks are optional: a surface without them renders no
+    // row instead of rendering one that does nothing.
+    val showArchive = capabilities.canArchive && onArchive != null
+    val showExport = capabilities.canExport && onExport != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -213,7 +218,7 @@ internal fun SessionActionSheet(
                     onDismiss()
                 }
             }
-            if (capabilities.canArchive) {
+            if (showArchive) {
                 val archived = status.equals("archived", ignoreCase = true)
                 val label = stringResource(
                     if (archived) R.string.session_unarchive else R.string.session_archive,
@@ -223,16 +228,20 @@ internal fun SessionActionSheet(
                     onDismiss()
                 }
             }
-            if (capabilities.canExport) {
-                // The source draws a cloud here; the label says copy, and on
-                // Android the action puts Markdown on the clipboard.
-                ActionRow(R.drawable.ic_symbol_cloud, stringResource(R.string.general_chat_export)) {
+            if (showExport) {
+                // The label says "Copy Markdown" for Harmony parity, but Android
+                // opens an Intent.ACTION_SEND text/plain share sheet; this icon
+                // must not promise a file or cloud export.
+                ActionRow(
+                    R.drawable.ic_symbol_doc_text_badge_arrow_up,
+                    stringResource(R.string.general_chat_export),
+                ) {
                     onExport()
                     onDismiss()
                 }
             }
             if (capabilities.canDelete) {
-                if (capabilities.canArchive || capabilities.canExport) {
+                if (showArchive || showExport) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
                 ActionRow(
@@ -254,12 +263,14 @@ internal fun SessionActionPopup(
     status: String,
     capabilities: SessionActionCapabilities,
     onViewDetails: () -> Unit,
-    onArchive: () -> Unit,
-    onExport: () -> Unit,
+    onArchive: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var confirmingDelete by remember { mutableStateOf(false) }
+    val showArchive = capabilities.canArchive && onArchive != null
+    val showExport = capabilities.canExport && onExport != null
     val targetBounds = anchorBounds
     val positionProvider = remember(targetBounds) {
         object : PopupPositionProvider {
@@ -371,7 +382,7 @@ internal fun SessionActionPopup(
                         onViewDetails(); onDismiss()
                     }
                 }
-                if (capabilities.canArchive) {
+                if (showArchive) {
                     ActionRow(
                         R.drawable.ic_symbol_archivebox,
                         stringResource(
@@ -380,13 +391,16 @@ internal fun SessionActionPopup(
                         ),
                     ) { onArchive(); onDismiss() }
                 }
-                if (capabilities.canExport) {
-                    ActionRow(R.drawable.ic_symbol_cloud, stringResource(R.string.general_chat_export)) {
+                if (showExport) {
+                    ActionRow(
+                        R.drawable.ic_symbol_doc_text_badge_arrow_up,
+                        stringResource(R.string.general_chat_export),
+                    ) {
                         onExport(); onDismiss()
                     }
                 }
                 if (capabilities.canDelete) {
-                    if (capabilities.canArchive || capabilities.canExport) {
+                    if (showArchive || showExport) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                     }
                     ActionRow(

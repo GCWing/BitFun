@@ -5,6 +5,7 @@ import com.bitfun.mobile.core.feature.CoreLog
 import com.bitfun.mobile.core.feature.pairing.asTransportLog
 import com.bitfun.mobile.core.feature.session.RemoteSessionStore
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceStore
+import com.bitfun.mobile.core.persistence.MobilePersistenceStores
 import com.bitfun.mobile.core.persistence.SecureStore
 import com.bitfun.mobile.core.transport.AccountDeviceCommandTransport
 import com.bitfun.mobile.core.transport.CloudAccountClient
@@ -60,6 +61,7 @@ public class AccountStore internal constructor(
     private val secureStore: SecureStore,
     private val deviceId: String,
     private val deviceName: String,
+    private val persistence: MobilePersistenceStores? = null,
 ) {
     private val _state = MutableStateFlow<AccountUiState>(AccountUiState.Idle)
     public val state: StateFlow<AccountUiState> = _state.asStateFlow()
@@ -80,7 +82,12 @@ public class AccountStore internal constructor(
     public fun createSessionStore(scope: CoroutineScope): RemoteSessionStore? {
         val current = session ?: return null
         val target = current.targetDeviceId?.takeIf(String::isNotBlank) ?: return null
-        return RemoteSessionStore.create(scope, backend.transport(current, target))
+        return RemoteSessionStore.create(
+            scope,
+            backend.transport(current, target),
+            deviceKey = target,
+            persistence = persistence,
+        )
     }
 
     public fun createWorkspaceStore(scope: CoroutineScope): RemoteWorkspaceStore? {
@@ -270,7 +277,8 @@ public class AccountStore internal constructor(
             secureStore: SecureStore,
             deviceId: String,
             deviceName: String,
-        ): AccountStore = AccountStore(scope, backend, secureStore, deviceId, deviceName)
+            persistence: MobilePersistenceStores? = null,
+        ): AccountStore = AccountStore(scope, backend, secureStore, deviceId, deviceName, persistence)
 
         internal fun backend(log: CoreLog, legacyMobileDeviceNames: Set<String>): AccountBackend {
             val transportLog = log.asTransportLog()

@@ -56,6 +56,7 @@ internal fun CircleControl(
             Icon(
                 painterResource(icon),
                 contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(width = glyphWidth.dp, height = glyphHeight.dp),
             )
         }

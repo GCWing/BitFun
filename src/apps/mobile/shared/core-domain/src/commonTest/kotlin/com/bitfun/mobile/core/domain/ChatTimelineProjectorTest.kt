@@ -4,7 +4,6 @@ import com.bitfun.mobile.core.protocol.ImageAttachment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ChatTimelineProjectorTest {
@@ -109,7 +108,7 @@ class ChatTimelineProjectorTest {
     }
 
     @Test
-    fun updatesActiveTurnItemIdWhenVisibleContentChanges() {
+    fun keepsActiveTurnItemIdStableWhenVisibleContentChanges() {
         val firstItems = ChatTimelineProjector.project(
             emptyList(),
             emptyList(),
@@ -125,9 +124,8 @@ class ChatTimelineProjectorTest {
 
         assertEquals(1, firstItems.size)
         assertEquals(1, secondItems.size)
-        assertTrue(firstItems[0].id.startsWith("active-turn-stable-1-"))
-        assertTrue(secondItems[0].id.startsWith("active-turn-stable-1-"))
-        assertNotEquals(firstItems[0].id, secondItems[0].id)
+        assertEquals("active-turn-stable-1", firstItems[0].id)
+        assertEquals(firstItems[0].id, secondItems[0].id)
     }
 
     @Test
@@ -206,6 +204,68 @@ class ChatTimelineProjectorTest {
         assertTrue(ToolStatusSemantics.shouldKeepPrevious("cancelled", "completed"))
         assertTrue(ToolStatusSemantics.shouldKeepPrevious("canceled", "running"))
         assertFalse(ToolStatusSemantics.shouldKeepPrevious("running", "finished"))
+    }
+
+    @Test
+    fun placesActiveTurnAfterAnchoredOptimisticMessage() {
+        val items = ChatTimelineProjector.project(
+            messages = listOf(message("persisted-user", "user", "First")),
+            pendingMessages = listOf(message("pending-local-1", "user", "Second")),
+            activeTurn = activeMessage("turn-1", "Reply", "active", 1),
+            hasMoreMessages = false,
+            activeTurnAnchorId = "pending-local-1",
+        )
+
+        assertEquals(
+            listOf(
+                ChatTimelineItemType.USER_MESSAGE,
+                ChatTimelineItemType.OPTIMISTIC_USER_MESSAGE,
+                ChatTimelineItemType.ASSISTANT_LIVE_TURN,
+            ),
+            items.map { it.type },
+        )
+    }
+
+    @Test
+    fun placesActiveTurnBeforePendingWhenAnchorIsMissingOrStale() {
+        val items = ChatTimelineProjector.project(
+            messages = listOf(message("persisted-user", "user", "First")),
+            pendingMessages = listOf(message("pending-local-2", "user", "Second")),
+            activeTurn = activeMessage("turn-1", "Reply", "active", 1),
+            hasMoreMessages = false,
+            activeTurnAnchorId = "stale-local-id",
+        )
+
+        assertEquals(
+            listOf("message-persisted-user", "active-turn-1", "pending-pending-local-2"),
+            items.map { it.id },
+        )
+    }
+
+    @Test
+    fun staleAnchorFallsBackWithoutCrashing() {
+        val items = ChatTimelineProjector.project(
+            messages = emptyList(),
+            pendingMessages = listOf(message("pending-local-3", "user", "Second")),
+            activeTurn = activeMessage("turn-1", "Reply", "active", 1),
+            hasMoreMessages = false,
+            activeTurnAnchorId = "not-present",
+        )
+
+        assertEquals(listOf("active-turn-1", "pending-pending-local-3"), items.map { it.id })
+    }
+
+    @Test
+    fun activeRowIdRemainsStableWhenInterleavedAfterAnchor() {
+        val items = ChatTimelineProjector.project(
+            messages = listOf(message("persisted-user", "user", "First")),
+            pendingMessages = listOf(message("pending-local-1", "user", "Second")),
+            activeTurn = activeMessage("turn-1", "Reply", "active", 2),
+            hasMoreMessages = false,
+            activeTurnAnchorId = "pending-local-1",
+        )
+
+        assertEquals("active-turn-1", items.single { it.type == ChatTimelineItemType.ASSISTANT_LIVE_TURN }.id)
     }
 
     @Test

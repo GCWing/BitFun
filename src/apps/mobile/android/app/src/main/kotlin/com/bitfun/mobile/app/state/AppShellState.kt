@@ -108,6 +108,20 @@ internal class AppShellState(
         remoteSessionId = null
     }
 
+    /**
+     * Opens the remote surface's connect page without launching the scanner.
+     *
+     * The sidebar's "Connect a computer" row is a door to the choose-connection
+     * page, not a camera trigger: scanning stays a named action the user taps.
+     * [openRemoteScanner] remains for entry points whose whole job is to scan.
+     */
+    internal fun openRemoteConnect() {
+        surface = MobileSurface.REMOTE
+        remoteCreating = false
+        remoteSessionId = null
+        remoteScanRequested = false
+    }
+
     internal fun openRemoteScanner() {
         surface = MobileSurface.REMOTE
         remoteCreating = false

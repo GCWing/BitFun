@@ -22,6 +22,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +43,7 @@ internal const val SIDEBAR_SETTINGS_TEST_TAG: String = "app-sidebar-settings"
  */
 @Composable
 internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: () -> Unit) {
+    val newChatLabel = stringResource(R.string.sidebar_new_chat)
     Row(
         modifier = Modifier.fillMaxWidth().height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -52,7 +56,10 @@ internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: (
                 .clip(RoundedCornerShape(23.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(23.dp))
-                .clickable(onClick = onNewChat)
+                .clickable(role = Role.Button, onClick = onNewChat)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = newChatLabel
+                }
                 .testTag(SIDEBAR_NEW_CHAT_TEST_TAG),
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
@@ -64,7 +71,7 @@ internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: (
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                stringResource(R.string.sidebar_new_chat),
+                newChatLabel,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,

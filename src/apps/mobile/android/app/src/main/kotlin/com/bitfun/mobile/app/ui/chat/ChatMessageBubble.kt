@@ -121,12 +121,17 @@ private fun AssistantContent(row: ConversationRow, callbacks: MessageBlockCallba
         return
     }
 
-    row.thinking?.let { ThinkingBlock(it, row.streaming) }
+    row.thinking?.let { ThinkingBlock(it, row.streaming, row.id) }
     if (row.text.isNotEmpty()) {
         // No bubble on this side, matching `ChatMessageChrome.ets`: an agent
         // turn carries headings, lists and code cards, and a rounded tint
         // around all of that reads as one quoted lump.
-        MarkdownContent(text = row.text, onOpenLink = callbacks.onOpenLink, modifier = Modifier)
+        MarkdownContent(
+            text = row.text,
+            onOpenLink = callbacks.onOpenLink,
+            modifier = Modifier,
+            streaming = row.streaming,
+        )
         FileReferenceCards(
             text = row.text,
             previewingRemotePath = callbacks.previewingRemotePath,

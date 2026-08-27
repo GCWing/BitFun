@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +60,8 @@ internal fun AdaptiveModalSurface(
                     .fillMaxSize()
                     .background(bitFunColors.modalScrim)
                     .clickable(onClick = onDismissRequest)
-                    .safeDrawingPadding(),
+                    .safeDrawingPadding()
+                    .imePadding(),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Surface(

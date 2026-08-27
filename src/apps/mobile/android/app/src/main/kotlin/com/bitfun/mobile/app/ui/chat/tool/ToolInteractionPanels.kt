@@ -29,12 +29,16 @@ import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.QuestionAnswerValue
 import com.bitfun.mobile.core.feature.session.QuestionOption
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditContract
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditSupport
 import com.bitfun.mobile.core.feature.session.ToolQuestion
 
 /**
  * Approve and reject as equal halves of one row, ported from
  * `ToolConfirmationPanel` in `pages/components/ToolInteractionPanels.ets`.
  *
+ * Editable approval is gated by [ToolApprovalEditContract.support] and is
+ * intentionally not rendered while support is [ToolApprovalEditSupport.UNSUPPORTED].
  * The HarmonyOS source offers a JSON editor over `tool_input` before approving.
  * Android does not expose it yet because the shared intent still carries only a
  * tool id; the HarmonyOS command factory currently drops `updatedInput` at the

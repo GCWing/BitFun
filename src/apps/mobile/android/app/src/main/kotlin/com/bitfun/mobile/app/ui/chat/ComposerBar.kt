@@ -59,7 +59,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +72,7 @@ import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
 import com.bitfun.mobile.app.ui.theme.MotionStructureMillis
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignBreakpoints
 import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
@@ -86,6 +90,9 @@ internal const val MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX: String = "composer-mod
 
 /** The relay refuses more than this, and refusing here is a better error. */
 internal const val MAX_COMPOSER_IMAGES: Int = 4
+
+internal fun composerIsWide(screenWidthDp: Int): Boolean =
+    screenWidthDp >= MobileDesignBreakpoints.Wide
 
 // The measurements come straight from `ComposerBar.ets`, which sizes the bar in
 // vp — the same unit as dp. Naming them keeps the two files diffable.
@@ -122,6 +129,13 @@ internal fun ComposerBar(
     phase: ConnectionPhase,
     model: ModelOption?,
     modelOptions: List<ModelOption> = emptyList(),
+    /**
+     * Whether the model catalog command failed and left no selectable models.
+     * When true the bar still offers the model control so the settings sheet can
+     * explain the failure and offer Retry, instead of silently dropping the
+     * control and hiding the only route to that explanation.
+     */
+    modelCatalogFailed: Boolean = false,
     capabilities: ChatComposerCapabilities,
     /**
      * What the empty field says. Every surface asks for something different —
@@ -301,7 +315,7 @@ internal fun ComposerBar(
                         }
                         // The model belongs to the session, but it is chosen
                         // here: it is the one setting a user changes mid-turn.
-                        if (model != null) {
+                        if (model != null || modelOptions.isNotEmpty() || modelCatalogFailed) {
                             ModelControl(
                                 model = model,
                                 enabled = !busy,
@@ -393,7 +407,7 @@ private fun AddButton(enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .size(ActionSize)
             .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(role = Role.Button, enabled = enabled, onClick = onClick),
     ) {
         Icon(
             painterResource(R.drawable.ic_symbol_plus),
@@ -413,7 +427,7 @@ private fun AddButton(enabled: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModelControl(
-    model: ModelOption,
+    model: ModelOption?,
     enabled: Boolean,
     modelOptions: List<ModelOption>,
     onClick: () -> Unit,
@@ -422,7 +436,9 @@ private fun ModelControl(
     onSelectorDismiss: () -> Unit,
 ) {
     val label = stringResource(R.string.models_title)
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val displayModel = model ?: modelOptions.firstOrNull { it.selected }
+    val displayLabel = displayModel?.primaryLabel ?: label
+    val wide = composerIsWide(LocalConfiguration.current.screenWidthDp)
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -434,10 +450,13 @@ private fun ModelControl(
                 .clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 4.dp)
                 .testTag(MODEL_CONTROL_TEST_TAG)
-                .semantics { contentDescription = "$label · ${model.primaryLabel}" },
+                .semantics {
+                    contentDescription = "$label · $displayLabel"
+                    role = Role.Button
+                },
         ) {
             Text(
-                model.primaryLabel,
+                displayLabel,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -538,7 +557,7 @@ private fun ModelSelectorContent(
                     modifier = Modifier
                         .size(MobileDesignGeometry.SelectionCloseSize)
                         .clip(CircleShape)
-                        .clickable(onClick = onDismiss),
+                        .clickable(role = Role.Button, onClick = onDismiss),
                 ) {
                     Icon(
                         painterResource(R.drawable.ic_symbol_xmark),
@@ -586,6 +605,12 @@ private fun ModelSelectorContent(
                                 else Color.Transparent,
                             )
                             .clickable { onSelect(option.id) }
+                            .semantics {
+                                contentDescription =
+                                    "${option.primaryLabel} · ${option.secondaryLabel}"
+                                role = Role.Button
+                                selected = option.selected
+                            }
                             .padding(horizontal = 10.dp)
                             .testTag(MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX + option.id),
                     ) {
@@ -656,6 +681,7 @@ private fun PrimaryActionButton(
             R.string.message_voice_input
         else -> R.string.message_send
     }
+    val actionDescription = stringResource(description)
 
     Box(
         contentAlignment = Alignment.Center,
@@ -671,6 +697,10 @@ private fun PrimaryActionButton(
                     else -> Unit
                 }
             }
+            .semantics {
+                contentDescription = actionDescription
+                role = Role.Button
+            }
             .testTag(COMPOSER_SEND_TEST_TAG),
     ) {
         when (action) {
@@ -685,7 +715,7 @@ private fun PrimaryActionButton(
 
             ComposerPrimaryAction.VOICE, ComposerPrimaryAction.VOICE_BLOCKED -> Icon(
                 painterResource(R.drawable.ic_symbol_mic),
-                contentDescription = stringResource(description),
+                contentDescription = null,
                 tint = colors.onSurface,
                 modifier = Modifier.size(22.dp).alpha(
                     if (action == ComposerPrimaryAction.VOICE) 1f else DimmedAlpha,
@@ -694,7 +724,7 @@ private fun PrimaryActionButton(
 
             else -> Icon(
                 painterResource(R.drawable.ic_symbol_arrow_up),
-                contentDescription = stringResource(description),
+                contentDescription = null,
                 tint = colors.onSurface,
                 modifier = Modifier.size(23.dp).alpha(
                     if (action == ComposerPrimaryAction.SEND) 1f else DimmedAlpha,
@@ -756,7 +786,7 @@ private fun AttachmentStrip(
                         .size(32.dp)
                         .clip(CircleShape)
                         .background(BadgeScrim)
-                        .clickable(enabled = enabled) { onRemove(image.id) }
+                        .clickable(role = Role.Button, enabled = enabled) { onRemove(image.id) }
                         .semantics { contentDescription = removeLabel },
                 ) {
                     Text(

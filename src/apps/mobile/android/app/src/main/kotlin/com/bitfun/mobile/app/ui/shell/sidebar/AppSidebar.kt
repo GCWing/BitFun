@@ -43,6 +43,7 @@ import com.bitfun.mobile.core.feature.session.SessionActionPolicy
 import com.bitfun.mobile.core.feature.session.SessionActionScope
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.layout.SettingsPlacement
+import com.bitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.bitfun.mobile.core.feature.shell.SidebarPresentation
 import com.bitfun.mobile.core.feature.shell.SidebarSessionRow
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
@@ -95,6 +96,7 @@ internal fun AppSidebar(
     onArchiveSession: (String, Boolean) -> Unit,
     onExportSession: (SidebarSessionRow) -> Unit,
     onDeleteSession: (String) -> Unit,
+    onDeleteRemoteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAccount: () -> Unit,
     modifier: Modifier,
@@ -107,6 +109,9 @@ internal fun AppSidebar(
     var actionSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var actionAnchor by remember { mutableStateOf(IntRect.Zero) }
     var detailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var remoteActionSession by remember { mutableStateOf<RemoteSidebarSessionRow?>(null) }
+    var remoteActionAnchor by remember { mutableStateOf(IntRect.Zero) }
+    var remoteDetailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var archivedExpanded by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize().testTag(SIDEBAR_TEST_TAG)) {
@@ -148,6 +153,10 @@ internal fun AppSidebar(
                         onRetryActive = onRetryRemoteDevice,
                         onSelectDevice = onSelectRemoteDevice,
                         onOpenSession = onOpenRemoteSession,
+                        onOpenActions = { row, anchor ->
+                            remoteActionAnchor = anchor
+                            remoteActionSession = row
+                        },
                         onCreateInWorkspace = onCreateRemoteInWorkspace,
                         onOpenWorkspace = onOpenRemoteWorkspace,
                     )
@@ -226,6 +235,56 @@ internal fun AppSidebar(
             }
         }
         actionSurface()
+    }
+
+    remoteActionSession?.let { session ->
+        val busy = (remoteState as? RemoteSessionUiState.Ready)?.busy == true
+        val capabilities = SessionActionPolicy.resolve(
+            SessionActionScope.REMOTE,
+            session.agentType,
+            busy,
+        )
+        if (permanent) {
+            SessionActionPopup(
+                anchorBounds = remoteActionAnchor,
+                title = session.title,
+                status = "",
+                capabilities = capabilities,
+                onViewDetails = { remoteDetailsSessionId = session.id },
+                onDelete = { onDeleteRemoteSession(session.id) },
+                onDismiss = { remoteActionSession = null },
+            )
+        } else {
+            SessionActionSheet(
+                title = session.title,
+                status = "",
+                capabilities = capabilities,
+                onViewDetails = { remoteDetailsSessionId = session.id },
+                onDelete = { onDeleteRemoteSession(session.id) },
+                onDismiss = { remoteActionSession = null },
+            )
+        }
+    }
+
+    remoteDetailsSessionId?.let { id ->
+        val session = (remoteState as? RemoteSessionUiState.Ready)?.sessions
+            ?.firstOrNull { it.id == id }
+        if (session == null) {
+            remoteDetailsSessionId = null
+            return@let
+        }
+        SessionDetailsSheet(
+            title = session.title,
+            agentType = session.agentType,
+            status = session.status,
+            workspaceName = session.workspaceName,
+            workspacePath = session.workspacePath,
+            createdAt = session.createdAt,
+            updatedAt = session.updatedAt,
+            messageCount = session.messageCount,
+            placement = sessionDetailsPlacement,
+            onDismiss = { remoteDetailsSessionId = null },
+        )
     }
 
     detailsSessionId?.let { id ->

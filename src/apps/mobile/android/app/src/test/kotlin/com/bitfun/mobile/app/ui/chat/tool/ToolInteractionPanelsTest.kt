@@ -2,11 +2,18 @@ package com.bitfun.mobile.app.ui.chat.tool
 
 import com.bitfun.mobile.core.feature.session.QuestionAnswerValue
 import com.bitfun.mobile.core.feature.session.QuestionOption
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditContract
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditSupport
 import com.bitfun.mobile.core.feature.session.ToolQuestion
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ToolInteractionPanelsTest {
+    @Test
+    fun approvalEditSupportIsTypedAsUnsupported() {
+        assertEquals(ToolApprovalEditSupport.UNSUPPORTED, ToolApprovalEditContract.support)
+    }
+
     private val questions = listOf(
         ToolQuestion(0, "", "Pick one", listOf(QuestionOption("A", null), QuestionOption("B", null)), false),
         ToolQuestion(1, "", "Pick many", listOf(QuestionOption("X", null)), true),

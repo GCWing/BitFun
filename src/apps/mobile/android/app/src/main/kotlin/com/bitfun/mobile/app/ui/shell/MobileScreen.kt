@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.union
@@ -358,7 +359,11 @@ internal fun MobileScreen() {
             onToggleSearch = shell::toggleSearch,
             onScanDesktop = {
                 pairingViewModel.dispatch(PairingIntent.Disconnect)
-                shell.openRemoteScanner()
+                // The sidebar row opens the choose-connection page, not the
+                // camera: ML Kit's scanner is a full-screen system activity, so
+                // launching it from the drawer would leave the user no way to
+                // pick "scan" vs "sign in" and would cover the app on every tap.
+                shell.openRemoteConnect()
                 closeDrawer()
             },
             onRetryRemoteDevice = {
@@ -420,6 +425,7 @@ internal fun MobileScreen() {
             onDeleteSession = { id ->
                 generalChatViewModel.dispatch(GeneralChatIntent.DeleteSession(id))
             },
+            onDeleteRemoteSession = { id -> dispatchActiveSession(RemoteSessionIntent.DeleteSession(id)) },
             onOpenSettings = {
                 // HarmonyOS' `onSidebar.settings` always opens root settings.
                 // Remote-control settings has a separate remote-home action;
@@ -609,7 +615,7 @@ internal fun MobileScreen() {
         drawerContent = {
             Surface(
                 color = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
             ) { sidebar() }
         },
     ) {

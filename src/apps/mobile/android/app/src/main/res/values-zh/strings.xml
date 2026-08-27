@@ -242,6 +242,7 @@
     <string name="permission_full_description">允许所有工具操作，不再请求确认。</string>
     <string name="permission_loading">正在读取桌面权限设置…</string>
     <string name="permission_load_failed">权限设置加载失败，请重试。</string>
+    <string name="permission_unknown">无法读取桌面端的权限模式，请刷新后重试。</string>
     <string name="permission_save_failed">权限模式保存失败，桌面端仍是上方显示的模式。</string>
     <string name="permission_needs_connection">连接桌面后可修改权限模式。</string>
     <string name="permission_full_confirm_title">确认开启完全访问？</string>
@@ -253,6 +254,10 @@
     <string name="model_selector_local">本机自定义</string>
     <string name="model_selector_account">账号模型</string>
     <string name="model_selector_empty">暂无可用模型。</string>
+    <string name="model_catalog_load_failed">可用模型加载失败，请重试。</string>
+    <string name="model_catalog_unsupported">当前连接的桌面端不支持从本应用选择模型。</string>
+    <string name="model_catalog_retry">重试</string>
+    <string name="model_catalog_stale_warning">模型列表刷新失败，正在显示之前加载的列表。</string>
     <string name="workspace_title">工作区</string>
     <string name="workspace_failed">工作区信息加载失败。</string>
     <string name="assistants_title">助手</string>
@@ -355,6 +360,7 @@
     <string name="conversation_title_default">远程会话</string>
     <string name="chat_empty_title">还没有消息</string>
     <string name="chat_empty_hint">可以就这个工作区向智能体提问。</string>
+    <string name="chat_empty_loading">正在加载对话…</string>
     <string name="chat_pending">发送中…</string>
     <string name="chat_send_failed">发送失败，请检查连接后重试</string>
     <string name="chat_reply_interrupted">回复被中断。</string>

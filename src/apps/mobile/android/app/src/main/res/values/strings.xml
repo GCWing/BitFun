@@ -248,6 +248,7 @@
     <string name="permission_full_description">Every tool action runs, and nothing is confirmed again.</string>
     <string name="permission_loading">Reading the desktop\'s permission setting…</string>
     <string name="permission_load_failed">Could not read the permission setting. Try again.</string>
+    <string name="permission_unknown">The desktop\'s permission mode could not be read. Refresh to try again.</string>
     <string name="permission_save_failed">Could not save the permission mode. The desktop is still on the mode shown above.</string>
     <string name="permission_needs_connection">Connect to the desktop to change the permission mode.</string>
     <string name="permission_full_confirm_title">Turn on full access?</string>
@@ -259,6 +260,10 @@
     <string name="model_selector_local">On this device</string>
     <string name="model_selector_account">Account model</string>
     <string name="model_selector_empty">No models are ready to use.</string>
+    <string name="model_catalog_load_failed">Could not load the available models. Try again.</string>
+    <string name="model_catalog_unsupported">The connected desktop does not support choosing models from this app.</string>
+    <string name="model_catalog_retry">Retry</string>
+    <string name="model_catalog_stale_warning">The model list could not be refreshed. Showing the previously loaded list.</string>
     <string name="workspace_title">Workspace</string>
     <string name="workspace_failed">Could not load workspace information.</string>
     <string name="assistants_title">Assistants</string>
@@ -369,6 +374,7 @@
     <string name="conversation_title_default">Remote session</string>
     <string name="chat_empty_title">No messages yet</string>
     <string name="chat_empty_hint">Ask the agent anything about this workspace.</string>
+    <string name="chat_empty_loading">Loading conversation…</string>
     <string name="chat_pending">Sending…</string>
     <string name="chat_send_failed">Send failed. Check the connection and retry.</string>
     <!-- The agent's reply started and stopped partway; the user's never left the device. -->

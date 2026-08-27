@@ -296,6 +296,11 @@ private fun ModelOverview(
             ) {
                 ModelSourceRow(
                     icon = R.drawable.ic_symbol_cloud,
+                    iconTint = if (accountModels.isEmpty()) {
+                        MaterialTheme.colorScheme.outline
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     title = stringResource(R.string.model_service_account_summary),
                     subtitle = if (accountModels.isEmpty()) {
                         stringResource(R.string.model_service_account_empty)
@@ -309,6 +314,7 @@ private fun ModelOverview(
                 HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
                 ModelSourceRow(
                     icon = R.drawable.ic_symbol_wrench_and_screwdriver,
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                     title = if (complete) config.model else notConfigured,
                     subtitle = if (complete) localSource else "",
                     onBodyClick = if (complete) onSelectLocal else onEditLocal,
@@ -323,6 +329,7 @@ private fun ModelOverview(
 @Composable
 private fun ModelSourceRow(
     @DrawableRes icon: Int,
+    iconTint: Color,
     title: String,
     subtitle: String,
     onBodyClick: () -> Unit,
@@ -342,7 +349,7 @@ private fun ModelSourceRow(
             Icon(
                 painterResource(icon),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint,
                 modifier = Modifier.size(22.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

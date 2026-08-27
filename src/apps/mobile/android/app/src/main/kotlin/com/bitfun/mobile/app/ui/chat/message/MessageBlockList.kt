@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
@@ -80,7 +83,12 @@ internal fun MessageBlockList(
 private fun MessageBlockView(block: MessageBlock, callbacks: MessageBlockCallbacks) {
     when (block) {
         is MessageBlock.Text -> {
-            MarkdownContent(text = block.text, onOpenLink = callbacks.onOpenLink, modifier = Modifier)
+            MarkdownContent(
+                text = block.text,
+                onOpenLink = callbacks.onOpenLink,
+                modifier = Modifier,
+                streaming = block.streaming,
+            )
             FileReferenceCards(
                 text = block.text,
                 previewingRemotePath = callbacks.previewingRemotePath,
@@ -93,7 +101,7 @@ private fun MessageBlockView(block: MessageBlock, callbacks: MessageBlockCallbac
             )
         }
 
-        is MessageBlock.Thinking -> ThinkingBlock(block.text, block.streaming)
+        is MessageBlock.Thinking -> ThinkingBlock(block.text, block.streaming, block.id)
 
         is MessageBlock.Tools -> ToolStatusList(
             tools = block.tools,
@@ -121,6 +129,17 @@ private fun MessageBlockView(block: MessageBlock, callbacks: MessageBlockCallbac
  */
 @Composable
 private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockCallbacks) {
+    var expanded by remember(block.id) { mutableStateOf(block.running) }
+    var userToggled by remember(block.id) { mutableStateOf(false) }
+    LaunchedEffect(block.running) {
+        expanded = if (block.running) {
+            if (userToggled) expanded else true
+        } else {
+            userToggled = false
+            false
+        }
+    }
+
     val outline = MaterialTheme.colorScheme.outlineVariant
     Column(
         modifier = Modifier
@@ -131,14 +150,26 @@ private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockC
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {}
+                .toggleable(
+                    value = expanded,
+                    role = Role.Button,
+                    onValueChange = {
+                        userToggled = block.running
+                        expanded = !expanded
+                    },
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "↳",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            androidx.compose.material3.Icon(
+                painter = androidx.compose.ui.res.painterResource(
+                    if (expanded) R.drawable.ic_symbol_chevron_down else R.drawable.ic_symbol_chevron_right,
+                ),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(18.dp),
             )
             Text(
@@ -148,11 +179,8 @@ private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockC
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            // Its own dots, not the turn's: what is being waited on here is the
-            // subagent, and the agent that started it may be done.
-            if (block.running) ChatTypingDots(Modifier)
         }
-        if (block.children.isNotEmpty()) {
+        if (expanded) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -167,6 +195,15 @@ private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockC
                     .padding(start = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (block.running) ChatTypingDots(Modifier)
+                if (block.text.isNotBlank()) {
+                    Text(
+                        block.text,
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 block.children.forEach { child -> MessageBlockView(child, callbacks) }
             }
         }
@@ -181,9 +218,9 @@ private fun SubagentGroup(block: MessageBlock.Subagent, callbacks: MessageBlockC
  * is the only part of the turn there is to read.
  */
 @Composable
-internal fun ThinkingBlock(thinking: String, streaming: Boolean) {
-    var expanded by remember(thinking) { mutableStateOf(streaming) }
-    var userToggled by remember(thinking) { mutableStateOf(false) }
+internal fun ThinkingBlock(thinking: String, streaming: Boolean, stateKey: String) {
+    var expanded by remember(stateKey) { mutableStateOf(streaming) }
+    var userToggled by remember(stateKey) { mutableStateOf(false) }
     LaunchedEffect(streaming) {
         expanded = if (streaming) {
             if (userToggled) expanded else true

@@ -80,7 +80,11 @@ class MobileScreenTest {
 
         composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
 
-        waitForText("Get a pairing code")
+        // The drawer routes to the choose-connection page rather than launching
+        // the scanner, so both entry modes stay visible behind the closing drawer.
+        waitForText("Choose how to connect")
+        composeRule.onNodeWithText("Scan to connect").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign in to BitFun account").assertIsDisplayed()
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -453,12 +457,16 @@ class MobileScreenTest {
     private fun openRemote() {
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
         composeRule.onNodeWithTag(SIDEBAR_CODE_TEST_TAG).performClick()
-        waitForText("Get a pairing code")
+        waitForText("Choose how to connect")
     }
 
-    /** The compact connect page starts with the scanner; canceling it exposes the typed-link fallback. */
+    /**
+     * The connect page starts on the choose-connection step; tapping "Scan to
+     * connect" opens the system scanner, and canceling it exposes the typed-link
+     * fallback Harmony shows after a scan error.
+     */
     private fun openManualPairing() {
-        composeRule.onNodeWithText("I have a pairing code").performClick()
+        composeRule.onNodeWithText("Scan to connect").performClick()
         // Google Code Scanner owns a separate system activity. Espresso's
         // pressBack requires our activity to be resumed, so inject the platform
         // key directly and wait for the cancellation callback to reveal the

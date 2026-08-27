@@ -32,13 +32,13 @@ public data class RemoteReasoningCatalogProjection(
 
 @Serializable
 public data class RemoteModelConfig(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String,
-    @SerialName("provider") val provider: String,
-    @SerialName("base_url") val baseUrl: String,
-    @SerialName("model_name") val modelName: String,
+    @SerialName("id") val id: String = "",
+    @SerialName("name") val name: String = "",
+    @SerialName("provider") val provider: String = "",
+    @SerialName("base_url") val baseUrl: String = "",
+    @SerialName("model_name") val modelName: String = "",
     @SerialName("context_window") val contextWindow: Int? = null,
-    @SerialName("enabled") val enabled: Boolean,
+    @SerialName("enabled") val enabled: Boolean = false,
     @SerialName("capabilities") val capabilities: List<String> = emptyList(),
     @SerialName("reasoning") val reasoning: RemoteReasoningCatalogProjection? = null,
 )
@@ -53,16 +53,18 @@ public data class RemoteDefaultModels(
 
 /**
  * [version] lets the client send `known_model_catalog_version` and skip the
- * payload when nothing changed, so this arrives rarely despite its size.
+ * payload when nothing changed, so this arrives rarely despite its size. Legacy
+ * or minimal peers may omit `version`; the default keeps the catalog decodable
+ * instead of failing the whole reply as it did when the field was required.
  *
  * It is a [Long] rather than an [Int] because the desktop derives it from the
  * catalog's last-modified time in milliseconds and masks it to 53 bits — an
  * epoch-millisecond value passes 2^31 and stays there, so every real desktop
- * sends a number an [Int] cannot hold, and the whole poll reply fails to decode.
+ * sends a number an [Int] cannot hold.
  */
 @Serializable
 public data class RemoteModelCatalog(
-    @SerialName("version") val version: Long,
+    @SerialName("version") val version: Long = 0L,
     @SerialName("models") val models: List<RemoteModelConfig> = emptyList(),
     @SerialName("default_models") val defaultModels: RemoteDefaultModels = RemoteDefaultModels(),
     @SerialName("session_model_id") val sessionModelId: String? = null,

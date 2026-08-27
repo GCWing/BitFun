@@ -159,6 +159,27 @@ class ConversationHeaderTest {
     }
 
     @Test
+    fun tappingTheMenuAgainDismissesIt() {
+        composeRule.setContent {
+            ConversationHeader(
+                title = "Session",
+                contextTitle = "Studio",
+                canStop = false,
+                enabled = true,
+                onBack = {},
+                onRename = {},
+                onStop = {},
+                modifier = Modifier,
+            )
+        }
+
+        composeRule.onNodeWithTag(CONVERSATION_MENU_TEST_TAG).performClick()
+        composeRule.onNodeWithTag(HEADER_ACTION_MENU_TEST_TAG).assertIsDisplayed()
+        composeRule.onNodeWithTag(CONVERSATION_MENU_TEST_TAG).performClick()
+        composeRule.onNodeWithTag(HEADER_ACTION_MENU_TEST_TAG).assertDoesNotExist()
+    }
+
+    @Test
     fun anIdleSessionStillOffersUploadedFilesButNotStop() {
         composeRule.setContent {
             ConversationHeader(

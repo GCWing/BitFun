@@ -38,11 +38,51 @@ internal data class WindowMetrics(
     val horizontalCreases: List<HorizontalWindowCrease>,
 )
 
+internal enum class FoldState {
+    FLAT,
+    HALF_OPENED,
+    UNKNOWN,
+}
+
+internal data class FoldFeatureFacts(
+    val state: FoldState,
+    val isHorizontal: Boolean,
+)
+
+internal data class FoldFacts(
+    val hasFoldingFeature: Boolean,
+    val halfOpened: Boolean,
+    val flatOpened: Boolean,
+    val isFolded: Boolean,
+    val isExpandedFoldable: Boolean,
+    val hoverCandidate: Boolean,
+)
+
+internal fun reduceFoldFacts(
+    hasHingeSensor: Boolean,
+    features: List<FoldFeatureFacts>,
+): FoldFacts {
+    val hasFoldingFeature = features.isNotEmpty()
+    val halfOpened = features.any { it.state == FoldState.HALF_OPENED }
+    val flatOpened = hasFoldingFeature && features.all { it.state == FoldState.FLAT }
+    return FoldFacts(
+        hasFoldingFeature = hasFoldingFeature,
+        halfOpened = halfOpened,
+        flatOpened = flatOpened,
+        isFolded = hasHingeSensor && !hasFoldingFeature,
+        isExpandedFoldable = flatOpened,
+        hoverCandidate =
+            features.all { it.state != FoldState.UNKNOWN } &&
+                features.any {
+                    it.isHorizontal && it.state == FoldState.HALF_OPENED
+                },
+    )
+}
+
 private data class AndroidFoldInfo(
     val creases: List<WindowCrease>,
     val horizontalCreases: List<HorizontalWindowCrease>,
-    val hasFoldingFeature: Boolean,
-    val hoverCandidate: Boolean,
+    val foldFacts: FoldFacts,
 )
 
 /**
@@ -69,12 +109,25 @@ internal fun rememberWindowMetrics(): WindowMetrics {
     // somewhere that has no fold to report anyway.
     val foldInfoFlow = remember(activity, density) {
         if (activity == null) {
-            flowOf(AndroidFoldInfo(emptyList(), emptyList(), false, false))
+            flowOf(AndroidFoldInfo(emptyList(), emptyList(), reduceFoldFacts(false, emptyList())))
         } else {
             WindowInfoTracker.getOrCreate(activity)
                 .windowLayoutInfo(activity)
                 .map { info ->
                     val features = info.displayFeatures.filterIsInstance<FoldingFeature>()
+                    val foldFacts = reduceFoldFacts(
+                        hasHingeSensor = hasHingeSensor,
+                        features = features.map { feature ->
+                            FoldFeatureFacts(
+                                state = when (feature.state) {
+                                    FoldingFeature.State.HALF_OPENED -> FoldState.HALF_OPENED
+                                    FoldingFeature.State.FLAT -> FoldState.FLAT
+                                    else -> FoldState.UNKNOWN
+                                },
+                                isHorizontal = feature.orientation == FoldingFeature.Orientation.HORIZONTAL,
+                            )
+                        },
+                    )
                     AndroidFoldInfo(
                         creases = features
                             .filter { it.orientation == FoldingFeature.Orientation.VERTICAL }
@@ -96,29 +149,23 @@ internal fun rememberWindowMetrics(): WindowMetrics {
                                     )
                                 }
                             },
-                        hasFoldingFeature = features.isNotEmpty(),
-                        hoverCandidate = features.any { feature ->
-                            feature.orientation == FoldingFeature.Orientation.HORIZONTAL &&
-                                feature.state == FoldingFeature.State.HALF_OPENED
-                        },
+                        foldFacts = foldFacts,
                     )
                 }
         }
     }
     val foldInfo by foldInfoFlow.collectAsStateWithLifecycle(
-        AndroidFoldInfo(emptyList(), emptyList(), false, false),
+        AndroidFoldInfo(emptyList(), emptyList(), reduceFoldFacts(false, emptyList())),
     )
 
     return WindowMetrics(
         widthDp = widthDp,
         heightDp = heightDp,
         wideViewportMatched = widthDp >= ConversationLayoutPolicy.MD_MIN_WIDTH,
-        // Android exposes FLAT and HALF_OPENED while the app is visible; a
-        // fully closed device runs on a narrow cover display instead.
-        isFolded = false,
-        isExpandedFoldable = foldInfo.hasFoldingFeature || hasHingeSensor,
+        isFolded = foldInfo.foldFacts.isFolded,
+        isExpandedFoldable = foldInfo.foldFacts.isExpandedFoldable,
         isHoverLayout = ConversationLayoutPolicy.useHoverOperate(
-            foldInfo.hoverCandidate,
+            foldInfo.foldFacts.hoverCandidate,
             widthDp,
             heightDp,
         ),

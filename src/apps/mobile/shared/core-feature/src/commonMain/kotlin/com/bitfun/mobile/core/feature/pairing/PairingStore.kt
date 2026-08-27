@@ -4,6 +4,7 @@ import com.bitfun.mobile.core.feature.CoreLog
 import com.bitfun.mobile.core.feature.session.RemoteSessionStore
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceStore
+import com.bitfun.mobile.core.persistence.MobilePersistenceStores
 import com.bitfun.mobile.core.persistence.SecureStore
 import com.bitfun.mobile.core.protocol.CommandStatusResponse
 import com.bitfun.mobile.core.protocol.RemoteCommand
@@ -43,6 +44,7 @@ public class PairingStore internal constructor(
     private val pairing: RelayPairing,
     private val log: CoreLog,
     private val protection: UserIdProtection,
+    private val persistence: MobilePersistenceStores? = null,
 ) {
     private val _state = MutableStateFlow<PairingUiState>(PairingUiState.Idle)
     public val state: StateFlow<PairingUiState> = _state.asStateFlow()
@@ -75,7 +77,14 @@ public class PairingStore internal constructor(
 
     /** Builds the session feature without exposing the paired transport to UI. */
     public fun createSessionStore(scope: CoroutineScope): RemoteSessionStore? =
-        room?.let { RemoteSessionStore.create(scope, it).also { store -> sessionStore = store } }
+        room?.let {
+            RemoteSessionStore.create(
+                scope,
+                it,
+                deviceKey = it.descriptor.roomId,
+                persistence = persistence,
+            ).also { store -> sessionStore = store }
+        }
 
     /** Builds workspace and file-preview features over the same paired transport. */
     public fun createWorkspaceStore(scope: CoroutineScope): RemoteWorkspaceStore? =
@@ -307,12 +316,14 @@ public class PairingStore internal constructor(
             device: DeviceIdentity,
             protection: SecureStore,
             log: CoreLog,
+            persistence: MobilePersistenceStores?,
         ): PairingStore = PairingStore(
             scope = scope,
             device = device,
             pairing = relayPairing(log.asTransportLog()),
             log = log,
             protection = UserIdProtection(protection),
+            persistence = persistence,
         )
 
         /**
@@ -325,7 +336,7 @@ public class PairingStore internal constructor(
             scope: CoroutineScope,
             device: DeviceIdentity,
             protection: SecureStore,
-        ): PairingStore = create(scope, device, protection, CoreLog.None)
+        ): PairingStore = create(scope, device, protection, CoreLog.None, null)
     }
 }
 

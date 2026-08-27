@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -14,19 +15,30 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.bitfun.mobile.app.ui.chat.CONVERSATION_LIST_TEST_TAG
+import com.bitfun.mobile.app.ui.chat.CONVERSATION_LOADING_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.CHAT_STATUS_DOT_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.CHAT_STATUS_BAR_TEST_TAG
 import com.bitfun.mobile.app.ui.chat.ChatStatusBar
+import com.bitfun.mobile.app.ui.chat.ConversationEmptyState
 import com.bitfun.mobile.app.ui.chat.ConversationTimelineView
+import com.bitfun.mobile.app.ui.chat.COMPOSER_INPUT_TEST_TAG
+import com.bitfun.mobile.app.ui.chat.COMPOSER_SEND_TEST_TAG
+import com.bitfun.mobile.app.ui.chat.ConversationView
 import com.bitfun.mobile.app.ui.theme.BitFunTheme
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
+import com.bitfun.mobile.core.feature.layout.SettingsPlacementMode
 import com.bitfun.mobile.core.feature.session.ConversationRow
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
+import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
+import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.session.SessionAgentFilter
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,6 +64,7 @@ class ConversationViewTest {
                     onRejectTool = { _, _ -> },
                     onCancelTool = { _, _ -> },
                     onAnswerTool = { _, _ -> },
+                    onAnswerToolStructured = { _, _ -> },
                     onRetry = {},
                     onOpenFile = { _, _ -> },
                     previewingRemotePath = "",
@@ -138,6 +151,116 @@ class ConversationViewTest {
     }
 
     @Test
+    fun withLoadOlderHeaderStreamingGrowthStaysOnTheRealTail() {
+        val rows = mutableStateOf(
+            (1..40).map { index -> assistantRow("message-$index", id = "message-$index") },
+        )
+
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                TimelineForTest(rows.value, hasMoreMessages = true)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            rows.value = rows.value.dropLast(1) +
+                assistantRow(
+                    List(500) { "Growing tail line." }.joinToString(" ") + " header-tail-marker",
+                    id = "message-40",
+                    streaming = true,
+                )
+        }
+        composeRule.waitForIdle()
+
+        val listBounds = composeRule.onNodeWithTag(CONVERSATION_LIST_TEST_TAG)
+            .getUnclippedBoundsInRoot()
+        val tailBounds = composeRule.onNodeWithText("header-tail-marker", substring = true)
+            .getUnclippedBoundsInRoot()
+        assertTrue(tailBounds.bottom <= listBounds.bottom + 1.dp)
+        composeRule.onNodeWithContentDescription(string(R.string.chat_scroll_to_bottom))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun conversationWithNoTimelineShowsLoadingStateInsteadOfBlankSurface() {
+        setConversationContent(state = { readyState() })
+
+        composeRule.onNodeWithTag(CONVERSATION_LOADING_TEST_TAG).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.chat_empty_loading)).assertIsDisplayed()
+    }
+
+    @Test
+    fun composerShowsTheStoreDraftAndTypingDispatchesUpdateDraft() {
+        val intents = mutableListOf<RemoteSessionIntent>()
+        val state = mutableStateOf(readyState(sessionId = "s-code", draft = "existing draft"))
+
+        setConversationContent(state = { state.value }, onIntent = { intents += it })
+
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("existing draft")
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).performTextReplacement("replaced draft")
+
+        assertEquals(
+            listOf<RemoteSessionIntent>(RemoteSessionIntent.UpdateDraft("replaced draft")),
+            intents,
+        )
+    }
+
+    @Test
+    fun composerFollowsStoreDraftUpdatesWithinTheSameSession() {
+        val state = mutableStateOf(readyState(sessionId = "s-code", draft = "first"))
+
+        setConversationContent(state = { state.value })
+
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("first")
+        composeRule.runOnIdle { state.value = state.value.copy(draft = "second") }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("second")
+    }
+
+    @Test
+    fun switchingSessionsShowsTheRestoredDraft() {
+        val state = mutableStateOf(readyState(sessionId = "s-a", draft = "draft-a"))
+
+        setConversationContent(state = { state.value })
+
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("draft-a")
+        composeRule.runOnIdle {
+            state.value = readyState(sessionId = "s-b", draft = "draft-b")
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("draft-b")
+    }
+
+    @Test
+    fun sendUsesTheStoreDraftAndDoesNotFakeClearIt() {
+        val intents = mutableListOf<RemoteSessionIntent>()
+
+        setConversationContent(
+            state = { readyState(sessionId = "s-code", draft = "send me") },
+            onIntent = { intents += it },
+        )
+
+        composeRule.onNodeWithTag(COMPOSER_SEND_TEST_TAG).performClick()
+
+        assertEquals(
+            listOf<RemoteSessionIntent>(RemoteSessionIntent.SendMessage("s-code", "send me", null)),
+            intents,
+        )
+    }
+
+    @Test
+    fun emptyStateShowsInvitationCopy() {
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                ConversationEmptyState(modifier = Modifier.fillMaxSize())
+            }
+        }
+        composeRule.onNodeWithText(string(R.string.chat_empty_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.chat_empty_hint)).assertIsDisplayed()
+    }
+
+    @Test
     fun reconnectingStatusBarMatchesTheFixedHeightColorAndCopyContract() {
         composeRule.setContent {
             BitFunTheme(dark = false) {
@@ -173,17 +296,61 @@ class ConversationViewTest {
         composeRule.onNodeWithText(string(R.string.chat_status_executing)).assertExists()
     }
 
+    private fun setConversationContent(
+        state: () -> RemoteSessionUiState.Ready,
+        onIntent: (RemoteSessionIntent) -> Unit = {},
+    ) {
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                ConversationView(
+                    state = state(),
+                    phase = ConnectionPhase.CONNECTED,
+                    settingsPlacement = SettingsPlacement(SettingsPlacementMode.BOTTOM, 0, 0, 0),
+                    onBack = {},
+                    onIntent = onIntent,
+                    contextTitle = "Test desktop",
+                    onOpenFile = { _, _ -> },
+                    previewingRemotePath = "",
+                    previewLoading = false,
+                    download = RemoteFileDownloadUiState.None,
+                    onDownloadFile = { _, _ -> },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+
+    private fun readyState(
+        sessionId: String = "",
+        draft: String = "",
+    ) = RemoteSessionUiState.Ready(
+        sessions = emptyList(),
+        selectedSessionId = sessionId,
+        timeline = null,
+        busy = false,
+        permissionMode = null,
+        permissionModeFailure = null,
+        query = "",
+        agentFilter = SessionAgentFilter.ALL,
+        hasMore = false,
+        hasMoreMessages = false,
+        modelCatalog = null,
+        modelCatalogFailure = null,
+        draft = draft,
+    )
+
     @Composable
-    private fun TimelineForTest(rows: List<ConversationRow>) {
+    private fun TimelineForTest(rows: List<ConversationRow>, hasMoreMessages: Boolean = false) {
         ConversationTimelineView(
             rows = rows,
-            hasMoreMessages = false,
+            hasMoreMessages = hasMoreMessages,
             onLoadOlder = {},
             enabled = true,
             onApproveTool = {},
             onRejectTool = { _, _ -> },
             onCancelTool = { _, _ -> },
             onAnswerTool = { _, _ -> },
+            onAnswerToolStructured = { _, _ -> },
             onRetry = {},
             onOpenFile = { _, _ -> },
             previewingRemotePath = "",

@@ -21,6 +21,24 @@ class ConversationPresentationTest {
     }
 
     @Test
+    fun anActiveTurnStaysBelowTheMessageThatStartedIt() {
+        val persisted = listOf(message("user-1", "user", "First"))
+        val optimistic = listOf(message("local-1", "user", "Second"))
+        val activeTurn = message("turn-1", "assistant", "Working")
+
+        assertEquals(
+            listOf("message-user-1", "pending-local-1", "active-turn-1"),
+            timeline(persisted, optimistic, activeTurn, activeTurnAnchorId = "local-1")
+                .conversationRows().map { it.id },
+        )
+        // With no anchor, the live turn follows the persisted messages instead.
+        assertEquals(
+            listOf("message-user-1", "active-turn-1", "pending-local-1"),
+            timeline(persisted, optimistic, activeTurn).conversationRows().map { it.id },
+        )
+    }
+
+    @Test
     fun aMessageStillInFlightIsShownAsPendingUntilItsTwinArrives() {
         val optimistic = timeline(optimistic = listOf(message("local-1", "user", "ship it")))
         assertEquals(listOf(true), optimistic.conversationRows().map { it.pending })
@@ -136,6 +154,26 @@ class ConversationPresentationTest {
     }
 
     @Test
+    fun successMapsToCompletedWithItsOutput() {
+        val card = cardsFor(tool(status = "success", resultPreview = "ok")).single()
+
+        assertEquals(ToolPhase.COMPLETED, card.phase)
+        assertTrue(card.actions.isEmpty())
+        assertEquals("ok", card.output)
+    }
+
+    @Test
+    fun toolExpandabilityComesFromTheStatusContract() {
+        assertEquals(true, toolCard(tool(status = "completed")).expandable)
+        assertEquals(true, toolCard(tool(status = "running")).expandable)
+        assertEquals(false, toolCard(tool(status = "queued", name = "Bash")).expandable)
+        assertEquals(
+            true,
+            toolCard(tool(name = "AskUserQuestion", status = "sent")).expandable,
+        )
+    }
+
+    @Test
     fun aToolWithNoIdIsShownButNotActionable() {
         // Every action is addressed by id, so buttons here could not be delivered.
         val card = cardsFor(tool(id = null, status = "pending_confirmation")).single()
@@ -179,11 +217,13 @@ private fun timeline(
     persisted: List<ChatMessage> = emptyList(),
     optimistic: List<ChatMessage> = emptyList(),
     activeTurn: ChatMessage? = null,
+    activeTurnAnchorId: String = "",
 ) = ChatTimelineState(
     sessionId = "s-1",
     persistedMessages = persisted,
     optimisticMessages = optimistic,
     activeTurn = activeTurn,
+    activeTurnAnchorId = activeTurnAnchorId,
     syncPhase = ChatSyncPhase.IDLE,
     cursor = ChatSessionCursor(0, 0, 0),
     modelCatalog = RemoteModelCatalog(version = 0),

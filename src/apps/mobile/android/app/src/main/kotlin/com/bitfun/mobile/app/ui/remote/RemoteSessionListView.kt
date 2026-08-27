@@ -383,11 +383,6 @@ internal fun RemoteSessionListContent(
                         status = session.status,
                         capabilities = capabilities,
                         onViewDetails = openDetails,
-                        // Archive and export are local-storage operations, so
-                        // the policy never offers them for a REMOTE scope and
-                        // these cannot be reached from this list.
-                        onArchive = {},
-                        onExport = {},
                         onDelete = delete,
                         onDismiss = dismissActions,
                     ) else SessionActionPopup(
@@ -396,8 +391,6 @@ internal fun RemoteSessionListContent(
                         status = session.status,
                         capabilities = capabilities,
                         onViewDetails = openDetails,
-                        onArchive = {},
-                        onExport = {},
                         onDelete = delete,
                         onDismiss = dismissActions,
                     )

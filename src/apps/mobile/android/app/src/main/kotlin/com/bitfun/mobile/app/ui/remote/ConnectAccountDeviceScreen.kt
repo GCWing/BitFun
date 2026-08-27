@@ -225,12 +225,13 @@ private fun DeviceListCard(
             } else {
                 state.devices.forEach { device ->
                     val selected = device.id == state.selectedDeviceId
+                    val reconnectable = selected && !device.online
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(60.dp)
-                            .clickable(enabled = device.online, onClick = { onSelect(device.id) })
-                            .alpha(if (device.online) 1f else 0.64f)
+                            .clickable(enabled = device.online || reconnectable, onClick = { onSelect(device.id) })
+                            .alpha(if (device.online || selected) 1f else 0.64f)
                             .testTag(CONNECT_ACCOUNT_DEVICE_ROW_TEST_TAG_PREFIX + device.id),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -239,7 +240,7 @@ private fun DeviceListCard(
                             painterResource(R.drawable.ic_symbol_desktop),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(26.dp).alpha(if (device.online) 0.68f else 0.38f),
+                            modifier = Modifier.size(26.dp).alpha(if (device.online || selected) 0.68f else 0.38f),
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.weight(1f)) {
                             Text(
@@ -250,7 +251,13 @@ private fun DeviceListCard(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                stringResource(if (device.online) R.string.account_online else R.string.account_offline),
+                                stringResource(
+                                    when {
+                                        selected && device.online -> R.string.account_device_current_control
+                                        device.online -> R.string.account_online
+                                        else -> R.string.account_offline
+                                    },
+                                ),
                                 fontSize = 13.sp,
                                 color = if (device.online) {
                                     bitFunColors.success
@@ -259,7 +266,15 @@ private fun DeviceListCard(
                                 },
                             )
                         }
-                        if (device.online && !selected) {
+                        if (reconnectable) {
+                            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
+                                Text(
+                                    stringResource(R.string.remote_settings_reconnect),
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
+                        } else if (device.online && !selected) {
                             Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
                                 Text(
                                     stringResource(R.string.account_connect),
@@ -267,12 +282,6 @@ private fun DeviceListCard(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 )
                             }
-                        } else if (selected) {
-                            Text(
-                                stringResource(R.string.account_device_current_control),
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }

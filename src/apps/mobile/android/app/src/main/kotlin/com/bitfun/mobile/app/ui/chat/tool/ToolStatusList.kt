@@ -44,6 +44,7 @@ private const val CANCEL_REASON = "Cancelled from the Android client"
 
 internal const val TOOL_ROW_TEST_TAG: String = "tool-row"
 internal const val TOOL_GROUP_TEST_TAG: String = "tool-group"
+internal const val TOOL_EXPAND_TEST_TAG: String = "tool-expand"
 
 /** The indent that lines a row's detail up under its label rather than its icon. */
 private val DETAIL_INDENT = 28.dp
@@ -181,7 +182,7 @@ internal fun ToolStatusRow(
     var expanded by remember(tool.id) { mutableStateOf(false) }
     val blocking = tool.actions.isNotEmpty()
     val emphasized = expanded || blocking || tool.phase == ToolPhase.FAILED
-    val canExpand = tool.input.isNotEmpty() || tool.output.isNotEmpty()
+    val canExpand = tool.expandable
     val openable = tool.filePath.isNotEmpty()
 
     Column(
@@ -237,6 +238,7 @@ internal fun ToolStatusRow(
                 Box(
                     modifier = Modifier
                         .size(width = 32.dp, height = 28.dp)
+                        .testTag(TOOL_EXPAND_TEST_TAG)
                         .clickable { expanded = !expanded },
                     contentAlignment = Alignment.Center,
                 ) {

@@ -33,6 +33,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -188,9 +191,11 @@ private fun SessionRow(
                 anchorBounds = coordinates.boundsInWindow().toIntRect()
             }
             .combinedClickable(
+                role = Role.Button,
                 onClick = { onOpen(session) },
                 onLongClick = { onOpenActions(session, anchorBounds) },
             )
+            .semantics { contentDescription = title }
             .padding(start = 12.dp, end = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +221,7 @@ private fun SessionRow(
                 .width(34.dp)
                 .height(40.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable { onOpenActions(session, anchorBounds) }
+                .clickable(role = Role.Button) { onOpenActions(session, anchorBounds) }
                 .testTag(SIDEBAR_MORE_TEST_TAG),
             contentAlignment = Alignment.Center,
         ) {
@@ -240,6 +245,7 @@ private fun Rect.toIntRect(): IntRect = IntRect(
 /** The archive, shown as how much is in it rather than as what is in it. */
 @Composable
 private fun ArchivedDisclosureRow(count: Int, expanded: Boolean, onToggle: () -> Unit) {
+    val archivedLabel = stringResource(R.string.sidebar_archived)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -247,7 +253,10 @@ private fun ArchivedDisclosureRow(count: Int, expanded: Boolean, onToggle: () ->
             .height(46.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(if (expanded) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-            .clickable(onClick = onToggle)
+            .clickable(role = Role.Button, onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                contentDescription = archivedLabel
+            }
             .padding(start = 12.dp, end = 12.dp)
             .testTag(SIDEBAR_ARCHIVED_TEST_TAG),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -260,7 +269,7 @@ private fun ArchivedDisclosureRow(count: Int, expanded: Boolean, onToggle: () ->
             modifier = Modifier.size(20.dp),
         )
         Text(
-            stringResource(R.string.sidebar_archived),
+            archivedLabel,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,

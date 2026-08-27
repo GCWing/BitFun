@@ -40,6 +40,110 @@ class RemoteSessionStoreTest {
         assertEquals(0, list.offset)
         assertNull(list.query)
         assertEquals("model-primary", ready.modelCatalog?.defaultModels?.primary)
+        assertNull(ready.modelCatalogFailure)
+    }
+
+    @Test
+    fun modelCatalogRemoteRejectedIsRetryableAndRefreshRecovers() = runTest {
+        val transport = FakeSessionTransport()
+        transport.modelCatalogFailure = RelayFailure.RemoteRejected("Unknown command")
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertNull(failed.modelCatalog)
+        // A rejection is not proof of an old peer: a modern desktop can refuse
+        // the catalog command transiently, so it stays retryable.
+        assertEquals(ModelCatalogFailure.LOAD_FAILED, failed.modelCatalogFailure)
+        assertTrue(failed.sessions.isNotEmpty())
+
+        transport.modelCatalogFailure = null
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.RefreshModelCatalog)
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("model-primary", ready.modelCatalog?.defaultModels?.primary)
+        assertNull(ready.modelCatalogFailure)
+        assertFalse(ready.busy)
+        assertEquals(listOf("get_model_catalog"), transport.commands.map { it.cmd })
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun modelCatalogMalformedResponseIsTypedAsRetryableFailure() = runTest {
+        val transport = FakeSessionTransport()
+        transport.modelCatalogFailure = RelayFailure.MalformedResponse
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertNull(ready.modelCatalog)
+        // Malformed is a local protocol fault, not a peer capability statement.
+        assertEquals(ModelCatalogFailure.LOAD_FAILED, ready.modelCatalogFailure)
+        assertTrue(ready.sessions.isNotEmpty())
+    }
+
+    @Test
+    fun modelCatalogNetworkFailureIsTypedWithoutFailingTheSession() = runTest {
+        val transport = FakeSessionTransport()
+        transport.modelCatalogFailure = RelayFailure.Timeout
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertNull(ready.modelCatalog)
+        assertEquals(ModelCatalogFailure.LOAD_FAILED, ready.modelCatalogFailure)
+        assertTrue(ready.sessions.isNotEmpty())
+    }
+
+    @Test
+    fun refreshModelCatalogRecoversFromATransientFailureAndUpdatesTheTimeline() = runTest {
+        val transport = FakeSessionTransport()
+        transport.modelCatalogFailure = RelayFailure.Timeout
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        assertEquals(
+            ModelCatalogFailure.LOAD_FAILED,
+            assertIs<RemoteSessionUiState.Ready>(store.state.value).modelCatalogFailure,
+        )
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("keep-draft"))
+        assertEquals("keep-draft", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
+        assertNull(assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline?.modelCatalog?.defaultModels?.primary)
+
+        transport.modelCatalogFailure = null
+        transport.commands.clear()
+        store.dispatch(RemoteSessionIntent.RefreshModelCatalog)
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("model-primary", ready.modelCatalog?.defaultModels?.primary)
+        assertNull(ready.modelCatalogFailure)
+        assertFalse(ready.busy)
+        assertEquals("s-code", ready.selectedSessionId)
+        assertEquals("model-primary", ready.timeline?.modelCatalog?.defaultModels?.primary)
+        assertEquals("keep-draft", ready.draft)
+        assertTrue(ready.sessions.isNotEmpty())
+        // The refresh is the catalog command alone; it does not re-read the
+        // session list or the transcript it must keep on screen.
+        assertEquals(listOf("get_model_catalog"), transport.commands.map { it.cmd })
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun modelCatalogContractIsTheStaticSupportedFact() {
+        assertEquals("get_model_catalog", ModelCatalogContract.commandName)
+        assertEquals(ModelCatalogSupport.SUPPORTED, ModelCatalogContract.support)
     }
 
     @Test
@@ -130,6 +234,9 @@ class RemoteSessionStoreTest {
         assertEquals("/repo", create.workspacePath)
         assertEquals("code", create.agentType)
         assertEquals("review the parser", transport.commands.first { it.cmd == "send_message" }.content)
+        // The desktop routes send_message by agent type, so it must match the
+        // session that create_session just opened, not fall back to "agentic".
+        assertEquals("code", transport.commands.first { it.cmd == "send_message" }.agentType)
         assertEquals("s-new", assertIs<RemoteSessionUiState.Ready>(store.state.value).selectedSessionId)
         store.dispatch(RemoteSessionIntent.Stop)
     }
@@ -308,6 +415,70 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun unknownPermissionModeSurfacesAsUnknownNotAsk() = runTest {
+        val transport = FakeSessionTransport()
+        transport.permissionModeJson = """{"resp":"ok","mode":"future_mode"}"""
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(SessionPermissionMode.UNKNOWN, ready.permissionMode)
+        assertNull(ready.permissionModeFailure)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun missingPermissionModeSurfacesAsUnknown() = runTest {
+        val transport = FakeSessionTransport()
+        transport.permissionModeJson = """{"resp":"ok"}"""
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(SessionPermissionMode.UNKNOWN, ready.permissionMode)
+        assertNull(ready.permissionModeFailure)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun editedToolApprovalIsGatedUnsupportedWithoutSending() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(
+            RemoteSessionIntent.ApproveTool("s-code", "tool-1", updatedInput = """{"x":1}"""),
+        )
+        runCurrent()
+
+        assertTrue(transport.commands.none { it.cmd == "confirm_tool" })
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertFalse(ready.busy)
+        assertEquals(ToolApprovalEditSupport.UNSUPPORTED, ToolApprovalEditContract.support)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun plainToolApprovalStillSendsConfirmTool() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.ApproveTool("s-code", "tool-1"))
+        runCurrent()
+
+        val approval = transport.commands.last { it.cmd == "confirm_tool" }
+        assertEquals("tool-1", approval.toolId)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
     fun aSessionStillOpensWhenItsPermissionModeCannotBeRead() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionFailure = RelayFailure.Timeout
@@ -322,6 +493,77 @@ class RemoteSessionStoreTest {
         assertEquals("s-code", ready.selectedSessionId)
         assertNull(ready.permissionMode)
         assertEquals(PermissionModeFailure.LOAD, ready.permissionModeFailure)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun sendMessageCarriesTheSessionsAgentType() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "hello"))
+        runCurrent()
+
+        val sent = transport.commands.last { it.cmd == "send_message" }
+        assertEquals("s-code", sent.sessionId)
+        assertEquals("hello", sent.content)
+        // Matches the session opened above; without it the desktop defaults to
+        // "agentic" and rejects a turn for a differently typed session.
+        assertEquals("code", sent.agentType)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun sendMessageFallsBackToTheLocallyCreatedRecordWhenTheFilterHidesTheSession() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteSessionIntent.SetAgentFilter(SessionAgentFilter.CODE))
+        advanceUntilIdle()
+
+        // Cowork is not visible in the Code tab, so after a no-instruction
+        // create the session stays selected but is filtered out of
+        // Ready.sessions. send_message must still resolve its agent type from
+        // the locally created record instead of omitting agent_type.
+        store.dispatch(RemoteSessionIntent.CreateSession("cowork", "", "", null))
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("s-new", ready.selectedSessionId)
+        assertTrue(ready.sessions.none { it.id == "s-new" })
+
+        store.dispatch(RemoteSessionIntent.SendMessage("s-new", "hello"))
+        runCurrent()
+
+        val sent = transport.commands.last { it.cmd == "send_message" }
+        assertEquals("s-new", sent.sessionId)
+        // The desktop normalizes cowork/Cowork case on its side; the store must
+        // simply forward the created session's agent type instead of null.
+        assertEquals("cowork", sent.agentType)
+        store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun sendFailureKeepsTheDraftTheComposerWasAboutToSend() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+
+        store.dispatch(RemoteSessionIntent.UpdateDraft("keep me"))
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "keep me"))
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("keep me", ready.draft)
+        assertEquals(false, ready.busy)
         store.dispatch(RemoteSessionIntent.Stop)
     }
 
@@ -440,6 +682,8 @@ private class FakeSessionTransport : RemoteCommandTransport {
     /** When set, the permission commands fail while everything else works. */
     var permissionFailure: RelayFailure? = null
 
+    var permissionModeJson: String? = null
+
     /** When set, `list_sessions` serves one row per offset so paging is observable. */
     var paged: Boolean = false
 
@@ -449,8 +693,14 @@ private class FakeSessionTransport : RemoteCommandTransport {
     /** When set, `list_sessions` fails below the desktop instead. */
     var failure: RelayFailure? = null
 
+    /** When set, `get_model_catalog` fails with the selected transport result. */
+    var modelCatalogFailure: RelayFailure? = null
+
     /** When set, the open conversation's health poll fails below the desktop. */
     var pollFailure: RelayFailure? = null
+
+    /** When set, `send_message` fails below the desktop while the draft is kept. */
+    var sendMessageFailure: RelayFailure? = null
 
     /** Poll payloads served in order; the last one repeats, as a quiet desktop does. */
     var polls: List<String> = listOf(IDLE_POLL)
@@ -475,8 +725,14 @@ private class FakeSessionTransport : RemoteCommandTransport {
         if (command.cmd == "poll_session") {
             pollFailure?.let { throw RelayTransportException(it) }
         }
+        if (command.cmd == "send_message") {
+            sendMessageFailure?.let { throw RelayTransportException(it) }
+        }
         if (command.cmd == "get_permission_mode" || command.cmd == "set_permission_mode") {
             permissionFailure?.let { throw RelayTransportException(it) }
+        }
+        if (command.cmd == "get_model_catalog") {
+            modelCatalogFailure?.let { throw RelayTransportException(it) }
         }
         val json = when (command.cmd) {
             "get_workspace_info" ->
@@ -498,11 +754,11 @@ private class FakeSessionTransport : RemoteCommandTransport {
             } else {
                 """{"resp":"ok","messages":$messages,"has_more":${olderMessages != null}}"""
             }
-            "get_permission_mode" -> """{"resp":"ok","mode":"ask"}"""
+            "get_permission_mode" -> permissionModeJson ?: """{"resp":"ok","mode":"ask"}"""
             "poll_session" -> polls[minOf(pollIndex++, polls.lastIndex)]
             "create_session" -> """{"resp":"ok","session_id":"s-new"}"""
             "send_message" -> """{"resp":"ok","turn_id":"t-1"}"""
-            "delete_session", "update_session_title", "answer_question", "set_permission_mode" ->
+            "delete_session", "update_session_title", "answer_question", "set_permission_mode", "confirm_tool" ->
                 """{"resp":"ok"}"""
             else -> error("Unexpected command ${command.cmd}")
         }

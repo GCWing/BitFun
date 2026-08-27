@@ -1,9 +1,13 @@
 package com.bitfun.mobile.core.domain
 
 import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
-import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
 import kotlin.math.absoluteValue
 
+/**
+ * Harmony-parity revision tracking port, currently not consumed by the Kotlin UI.
+ * Android Compose uses `items(key = ...)` and iOS uses `ForEach` ids, so this
+ * tracker intentionally keeps coarse signatures only.
+ */
 public class ChatTimelineRevisionTracker public constructor() {
     private var signature: String = ""
     private var revision: Int = 0
@@ -47,9 +51,19 @@ public object ChatTimelineProjector {
         pendingMessages: List<ChatMessage>,
         activeTurn: ChatMessage?,
         hasMoreMessages: Boolean,
+    ): List<ChatTimelineItem> = project(messages, pendingMessages, activeTurn, hasMoreMessages, "")
+
+    public fun project(
+        messages: List<ChatMessage>,
+        pendingMessages: List<ChatMessage>,
+        activeTurn: ChatMessage?,
+        hasMoreMessages: Boolean,
+        activeTurnAnchorId: String,
     ): List<ChatTimelineItem> {
         val timelineMessages = realMessages(messages)
         val pendingItems = pendingMessagesNotPersisted(pendingMessages, timelineMessages)
+        val renderActiveTurn = activeTurn?.takeIf { shouldRenderActiveTurn(timelineMessages, it) }
+        val anchorIndex = anchorIndex(pendingItems, activeTurnAnchorId)
         val items = timelineMessages.map { message ->
             ChatTimelineItem(
                 id = "message-${message.id}",
@@ -61,7 +75,8 @@ public object ChatTimelineProjector {
             )
         }.toMutableList()
 
-        pendingItems.forEach { message ->
+        if (renderActiveTurn != null && anchorIndex < 0) items += activeTurnItem(renderActiveTurn)
+        pendingItems.forEachIndexed { index, message ->
             items += ChatTimelineItem(
                 id = "pending-${message.id}",
                 type = ChatTimelineItemType.OPTIMISTIC_USER_MESSAGE,
@@ -70,17 +85,7 @@ public object ChatTimelineProjector {
                 isFinalizing = false,
                 showRetryAction = false,
             )
-        }
-
-        if (activeTurn != null && shouldRenderActiveTurn(timelineMessages, activeTurn)) {
-            items += ChatTimelineItem(
-                id = "active-${activeTurnKey(activeTurn)}-${activeTurnVersionKey(activeTurn)}",
-                type = ChatTimelineItemType.ASSISTANT_LIVE_TURN,
-                message = activeTurn,
-                isStreaming = MessageStatusSemantics.isStreaming(activeTurn.status),
-                isFinalizing = MessageStatusSemantics.isFinalizing(activeTurn.status),
-                showRetryAction = false,
-            )
+            if (renderActiveTurn != null && index == anchorIndex) items += activeTurnItem(renderActiveTurn)
         }
 
         if (items.isEmpty() && !hasMoreMessages) {
@@ -97,6 +102,18 @@ public object ChatTimelineProjector {
         markLatestFailedMessageRetryable(items)
         return items
     }
+
+    private fun activeTurnItem(activeTurn: ChatMessage): ChatTimelineItem = ChatTimelineItem(
+        id = "active-${activeTurnKey(activeTurn)}",
+        type = ChatTimelineItemType.ASSISTANT_LIVE_TURN,
+        message = activeTurn,
+        isStreaming = MessageStatusSemantics.isStreaming(activeTurn.status),
+        isFinalizing = MessageStatusSemantics.isFinalizing(activeTurn.status),
+        showRetryAction = false,
+    )
+
+    private fun anchorIndex(pendingItems: List<ChatMessage>, id: String): Int =
+        if (id.isEmpty()) -1 else pendingItems.indexOfFirst { it.id == id }
 
     public fun pendingMessagesNotPersisted(
         pendingMessages: List<ChatMessage>,
@@ -175,43 +192,6 @@ public object ChatTimelineProjector {
 
     private fun activeTurnKey(activeTurn: ChatMessage): String =
         activeTurn.turnId?.takeIf(String::isNotEmpty) ?: activeTurn.id
-
-    private fun activeTurnVersionKey(activeTurn: ChatMessage): String {
-        val signature = listOf(
-            activeTurn.status,
-            (activeTurn.renderVersion ?: 0).toString(),
-            "${activeTurn.text.length}:${stableTextHash(activeTurn.text)}",
-            "${activeTurn.thinking.orEmpty().length}:${stableTextHash(activeTurn.thinking.orEmpty())}",
-            itemSignature(activeTurn.items.orEmpty()),
-            toolSignature(activeTurn.tools.orEmpty()),
-        ).joinToString("|")
-        return stableTextHash(signature)
-    }
-
-    private fun itemSignature(items: List<ChatMessageItemResponse>): String =
-        items.mapIndexed { index, item ->
-            listOf(
-                index.toString(),
-                item.type.orEmpty(),
-                if (item.isSubagent == true) "1" else "0",
-                "${item.content.orEmpty().length}:${stableTextHash(item.content.orEmpty())}",
-                item.tool?.let { toolSignature(listOf(it)) }.orEmpty(),
-                item.subItems?.let(::itemSignature).orEmpty(),
-            ).joinToString(":")
-        }.joinToString(",")
-
-    private fun toolSignature(tools: List<RemoteToolStatusResponse>): String =
-        tools.mapIndexed { index, tool ->
-            val preview = "${tool.inputPreview.orEmpty()}|${tool.resultPreview.orEmpty()}|${tool.errorPreview.orEmpty()}"
-            listOf(
-                index.toString(),
-                tool.id.orEmpty(),
-                tool.name.orEmpty(),
-                tool.status.orEmpty(),
-                (tool.durationMs ?: 0).toString(),
-                "${preview.length}:${stableTextHash(preview)}",
-            ).joinToString(":")
-        }.joinToString(",")
 
 }
 

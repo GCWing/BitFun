@@ -240,13 +240,26 @@ private fun AccountProfilePage(
                 } else {
                     state.devices.forEach { device ->
                         val selected = device.id == state.selectedDeviceId
-                        Row(Modifier.fillMaxWidth().height(54.dp).clickable(enabled = device.online, onClick = { onSelect(device.id) }), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val reconnectable = selected && !device.online
+                        Row(Modifier.fillMaxWidth().height(54.dp).clickable(enabled = device.online || reconnectable, onClick = { onSelect(device.id) }), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(painterResource(R.drawable.ic_symbol_desktop), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(device.name.ifBlank { device.id }, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (selected) stringResource(R.string.account_device_current_control) else stringResource(if (device.online) R.string.account_online else R.string.account_offline), fontSize = 13.sp, color = if (device.online) com.bitfun.mobile.app.ui.theme.bitFunColors.success else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    stringResource(
+                                        when {
+                                            selected && device.online -> R.string.account_device_current_control
+                                            device.online -> R.string.account_online
+                                            else -> R.string.account_offline
+                                        },
+                                    ),
+                                    fontSize = 13.sp,
+                                    color = if (device.online) com.bitfun.mobile.app.ui.theme.bitFunColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                            if (device.online && !selected) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
+                            if (reconnectable) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
+                                Text(stringResource(R.string.remote_settings_reconnect), fontSize = 14.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                            } else if (device.online && !selected) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp)) {
                                 Text(stringResource(R.string.account_connect), fontSize = 14.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                             }
                         }

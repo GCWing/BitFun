@@ -66,7 +66,8 @@ internal fun PermissionSection(
     // Cleared whenever the mode changes underneath it: a confirmation left
     // standing after a successful change would confirm the wrong thing.
     var confirmFullAccess by rememberSaveable(state.permissionMode) { mutableStateOf(false) }
-    val enabled = !state.busy && connected
+    val refreshEnabled = !state.busy && connected
+    val selectEnabled = refreshEnabled && state.permissionMode != SessionPermissionMode.UNKNOWN
 
     Column(
         modifier = modifier.fillMaxWidth().testTag(PERMISSION_SECTION_TEST_TAG),
@@ -87,7 +88,7 @@ internal fun PermissionSection(
             if (connected) {
                 TextButton(
                     onClick = { onIntent(RemoteSessionIntent.RefreshPermissionMode) },
-                    enabled = enabled,
+                    enabled = refreshEnabled,
                 ) { Text(stringResource(R.string.sessions_refresh)) }
             }
         }
@@ -108,7 +109,7 @@ internal fun PermissionSection(
                     label = stringResource(entry.label),
                     description = stringResource(entry.description),
                     selected = state.permissionMode == entry.mode,
-                    enabled = enabled,
+                    enabled = selectEnabled,
                     onSelect = {
                         // Full access removes every confirmation the desktop
                         // would otherwise ask for, so this one is confirmed.
@@ -128,7 +129,7 @@ internal fun PermissionSection(
             // rather than as the second half of choosing Full access.
             if (confirmFullAccess) {
                 FullAccessConfirmation(
-                    enabled = enabled,
+                    enabled = selectEnabled,
                     onCancel = { confirmFullAccess = false },
                     onConfirm = {
                         onIntent(
@@ -211,13 +212,14 @@ private fun ColumnScope.PermissionStatus(state: RemoteSessionUiState.Ready, conn
         !connected -> stringResource(R.string.permission_needs_connection)
         failure == PermissionModeFailure.LOAD -> stringResource(R.string.permission_load_failed)
         failure == PermissionModeFailure.SAVE -> stringResource(R.string.permission_save_failed)
+        state.permissionMode == SessionPermissionMode.UNKNOWN -> stringResource(R.string.permission_unknown)
         state.permissionMode == null -> stringResource(R.string.permission_loading)
         else -> return
     }
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
-        color = if (failure == null) {
+        color = if (failure == null && state.permissionMode != SessionPermissionMode.UNKNOWN) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             MaterialTheme.colorScheme.error

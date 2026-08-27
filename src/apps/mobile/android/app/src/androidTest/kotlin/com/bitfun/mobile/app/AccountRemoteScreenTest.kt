@@ -108,4 +108,34 @@ class AccountRemoteScreenTest {
         assertEquals("desk-1", selected)
         assertEquals(1, scans)
     }
+
+    @Test
+    fun aSelectedOfflineAccountDeviceCanReconnect() {
+        var selected = ""
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                ConnectAccountDeviceScreen(
+                    state = AccountUiState.Ready(
+                        userId = "user-1",
+                        username = "tester",
+                        devices = listOf(
+                            AccountDeviceUi("desk-1", "Studio Mac", online = true, lastSeenAt = null),
+                            AccountDeviceUi("desk-2", "Office PC", online = false, lastSeenAt = null),
+                        ),
+                        selectedDeviceId = "desk-2",
+                        selectedDeviceName = "Office PC",
+                    ),
+                    onBack = {},
+                    onRefresh = {},
+                    onSelect = { selected = it },
+                    onOpenScanner = {},
+                    modifier = Modifier,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(CONNECT_ACCOUNT_DEVICE_ROW_TEST_TAG_PREFIX + "desk-2").performClick()
+
+        assertEquals("desk-2", selected)
+    }
 }

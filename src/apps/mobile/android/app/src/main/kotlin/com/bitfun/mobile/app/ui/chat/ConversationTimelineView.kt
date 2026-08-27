@@ -1,6 +1,5 @@
 package com.bitfun.mobile.app.ui.chat
 
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,6 +36,30 @@ import com.bitfun.mobile.core.feature.session.ConversationRow
 import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
+/** Pure decisions for keeping a forward timeline at its visual tail. */
+internal object ConversationScrollPolicy {
+    fun shouldStickToBottom(
+        currentlySticking: Boolean,
+        isAtBottom: Boolean,
+        isScrollInProgress: Boolean,
+    ): Boolean = when {
+        isAtBottom -> true
+        isScrollInProgress -> false
+        else -> currentlySticking
+    }
+
+    fun shouldScrollToBottom(stickToBottom: Boolean, hasRows: Boolean): Boolean =
+        stickToBottom && hasRows
+
+    /**
+     * The LazyColumn puts the "load older messages" header at index zero when
+     * [hasMoreMessages] is true, so the real tail is one past [rowCount] instead
+     * of `rowCount - 1`.
+     */
+    fun lastItemIndex(rowCount: Int, hasMoreMessages: Boolean): Int =
+        if (hasMoreMessages) rowCount else (rowCount - 1).coerceAtLeast(0)
+}
+
 /** Timeline renderer over feature-owned presentation rows; session routing stays above it. */
 @Composable
 internal fun ConversationTimelineView(
@@ -65,19 +88,21 @@ internal fun ConversationTimelineView(
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress to listState.canScrollForward }
             .collect { (scrolling, canScrollForward) ->
-                when {
-                    !canScrollForward -> stickToBottom = true
-                    scrolling -> stickToBottom = false
-                }
+                stickToBottom = ConversationScrollPolicy.shouldStickToBottom(
+                    currentlySticking = stickToBottom,
+                    isAtBottom = !canScrollForward,
+                    isScrollInProgress = scrolling,
+                )
             }
     }
-    LaunchedEffect(rows, stickToBottom) {
-        if (stickToBottom && rows.isNotEmpty()) {
-            listState.scrollToItem(rows.lastIndex)
-            while (listState.canScrollForward) {
-                val viewport = listState.layoutInfo.viewportSize.height.coerceAtLeast(1)
-                if (listState.scrollBy(viewport * 8f) <= 0f) break
-            }
+    LaunchedEffect(rows, stickToBottom, hasMoreMessages) {
+        if (ConversationScrollPolicy.shouldScrollToBottom(stickToBottom, rows.isNotEmpty())) {
+            // A large offset positions the item's bottom at the viewport tail directly;
+            // unlike scrollToItem(index), it does not briefly expose the item's top.
+            listState.scrollToItem(
+                ConversationScrollPolicy.lastItemIndex(rows.size, hasMoreMessages),
+                scrollOffset = Int.MAX_VALUE,
+            )
         }
     }
 

@@ -84,6 +84,7 @@ public data class ToolCard public constructor(
     public val question: String?,
     public val questions: List<ToolQuestion>,
     public val actions: Set<ToolAction>,
+    public val expandable: Boolean,
 ) {
     public constructor(
         id: String,
@@ -112,6 +113,7 @@ public data class ToolCard public constructor(
         question,
         emptyList(),
         actions,
+        expandable = phase != ToolPhase.WAITING || ToolAction.ANSWER in actions,
     )
 }
 
@@ -166,6 +168,7 @@ public fun ChatTimelineState.conversationRows(): List<ConversationRow> =
         // The app pages the session list, not the message list, so an empty
         // timeline here really is an empty session.
         false,
+        activeTurnAnchorId,
     ).map { item ->
         val message = item.message
         ConversationRow(
@@ -297,6 +300,7 @@ internal fun toolCard(tool: RemoteToolStatusResponse): ToolCard {
         question = question,
         questions = questions,
         actions = actions,
+        expandable = ToolStatusPolicy.isExpandable(tool),
     )
 }
 

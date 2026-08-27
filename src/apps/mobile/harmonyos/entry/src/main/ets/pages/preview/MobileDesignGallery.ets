@@ -13,17 +13,30 @@ import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT } from '../components/Theme';
 struct MobileDesignGallery {
   @Param scenario: MobilePreviewScenario = MobilePreviewScenarios.connectedConversation;
 
+  private resolvedScenario(): MobilePreviewScenario {
+    switch (AppStorage.get<string>('scenarioId') ?? '') {
+      case 'streaming-dark':
+        return MobilePreviewScenarios.streamingDark;
+      case 'reconnecting-wide':
+        return MobilePreviewScenarios.reconnectingWide;
+      case 'connected-conversation':
+        return MobilePreviewScenarios.connectedConversation;
+      default:
+        return this.scenario;
+    }
+  }
+
   build() {
     Column() {
       this.PlatformLabel()
       ConversationHeader({
-        title: this.scenario.headerTitle,
-        subtitle: this.scenario.headerSubtitle,
+        title: this.resolvedScenario().headerTitle,
+        subtitle: this.resolvedScenario().headerSubtitle,
         showSidebarButton: true,
         showActions: true
       })
       Column({ space: MobileDesignGeometry.messageSpacing }) {
-        ForEach(this.scenario.messages, (message: MobilePreviewMessage) => {
+        ForEach(this.resolvedScenario().messages, (message: MobilePreviewMessage) => {
           this.MessageBubble(message)
         }, (message: MobilePreviewMessage) => `${message.role}:${message.text}`)
       }
@@ -37,10 +50,10 @@ struct MobileDesignGallery {
       })
       ComposerBar({
         presentation: ComposerPresentation.Compact,
-        chatInput: this.scenario.composerDraft,
-        isBusy: this.scenario.streaming,
-        canStop: this.scenario.streaming,
-        connectionState: this.scenario.connectionPhase
+        chatInput: this.resolvedScenario().composerDraft,
+        isBusy: this.resolvedScenario().streaming,
+        canStop: this.resolvedScenario().streaming,
+        connectionState: this.resolvedScenario().connectionPhase
       })
     }
     .width('100%')
@@ -62,7 +75,7 @@ struct MobileDesignGallery {
         .backgroundColor(SOFT)
         .borderRadius(10)
       Blank()
-      Text(`${this.scenario.viewportWidth} × ${this.scenario.viewportHeight}`)
+      Text(`${this.resolvedScenario().viewportWidth} × ${this.resolvedScenario().viewportHeight}`)
         .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(MUTED)
     }
@@ -109,6 +122,18 @@ struct MobileDesignGallery {
 struct MobileDesignCompactPreview {
   build() {
     MobileDesignGallery({ scenario: MobilePreviewScenarios.connectedConversation })
+  }
+}
+
+@Preview({
+  title: 'BitFun Mobile · Dark',
+  width: 390,
+  height: 844
+})
+@ComponentV2
+struct MobileDesignStreamingDarkPreview {
+  build() {
+    MobileDesignGallery({ scenario: MobilePreviewScenarios.streamingDark })
   }
 }
 
