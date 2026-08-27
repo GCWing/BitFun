@@ -75,7 +75,8 @@ fn try_build_request_body_with_context(
     let mut request_body = serde_json::json!({
         "model": client.config.model,
         "input": response_input,
-        "stream": true
+        "stream": true,
+        "store": false
     });
 
     if let Some(instructions) = instructions.filter(|value| !value.trim().is_empty()) {
@@ -101,6 +102,7 @@ fn try_build_request_body_with_context(
         "input",
         "instructions",
         "stream",
+        "store",
         "max_output_tokens",
         "prompt_cache_key",
         "tools",
@@ -134,6 +136,7 @@ fn try_build_request_body_with_context(
             "input",
             "instructions",
             "stream",
+            "store",
             "max_output_tokens",
             "prompt_cache_key",
         ],
@@ -359,6 +362,28 @@ mod tests {
         assert_eq!(request_body["tools"][0]["name"], json!("get_weather"));
         assert_eq!(request_body["tools"][0]["type"], json!("function"));
         assert!(request_body["tools"][0].get("function").is_none());
+    }
+
+    #[test]
+    fn responses_requests_disable_remote_storage_by_default() {
+        let request_body = build_request_body(&test_client(), None, Vec::new(), None, None);
+
+        assert_eq!(request_body["store"], json!(false));
+    }
+
+    #[test]
+    fn trim_custom_body_keeps_remote_storage_disabled() {
+        let mut client = test_client();
+        client.config.custom_request_body_mode = Some("trim".to_string());
+        let request_body = build_request_body(
+            &client,
+            None,
+            Vec::new(),
+            None,
+            Some(json!({ "reasoning": { "effort": "low" } })),
+        );
+
+        assert_eq!(request_body["store"], json!(false));
     }
 
     #[test]
