@@ -9,6 +9,10 @@ import {
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { useApp } from '@/app/hooks/useApp';
+import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { isRemoteWorkspace } from '@/shared/types';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import MiniAppCard from '../components/MiniAppCard';
 import MiniAppDetailModal from '../components/MiniAppDetailModal';
@@ -56,8 +60,9 @@ const MiniAppGalleryView: React.FC = () => {
   const setMarketOrigins = useMiniAppStore((state) => state.setMarketOrigins);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath } = useCurrentWorkspace();
   const notification = useNotification();
+  const { switchLeftPanelTab } = useApp();
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');
   const miniAppActivities = useMiniAppActivity();
@@ -71,7 +76,7 @@ const MiniAppGalleryView: React.FC = () => {
     inspection: MarketPackageInspection;
   } | null>(null);
   const [importMenuOpen, setImportMenuOpen] = useState(false);
-  const [creationModeNoticeOpen, setCreationModeNoticeOpen] = useState(false);
+  const [creatingWithCreative, setCreatingWithCreative] = useState(false);
   const importTriggerRef = useRef<HTMLButtonElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
 
@@ -322,6 +327,43 @@ const MiniAppGalleryView: React.FC = () => {
     }
   };
 
+  const handleCreateWithCreative = useCallback(async () => {
+    if (creatingWithCreative) return;
+    if (!workspace) {
+      notification.error(t('creationMode.noWorkspace'));
+      return;
+    }
+    if (isRemoteWorkspace(workspace)) {
+      notification.error(t('creationMode.remoteUnsupported'));
+      return;
+    }
+
+    setCreatingWithCreative(true);
+    closeImportMenu();
+    openScene('session');
+    switchLeftPanelTab('sessions');
+    try {
+      await flowChatManager.createChatSession(
+        flowChatSessionConfigForCurrentWorkspace(workspace),
+        'Creative',
+      );
+      notification.success(t('creationMode.started'));
+    } catch (error) {
+      log.error('Failed to start Creative MiniApp session', error);
+      notification.error(t('creationMode.startFailed'));
+    } finally {
+      setCreatingWithCreative(false);
+    }
+  }, [
+    closeImportMenu,
+    creatingWithCreative,
+    notification,
+    openScene,
+    switchLeftPanelTab,
+    t,
+    workspace,
+  ]);
+
   const renderGrid = () => {
     if (loading && apps.length === 0) {
       return (
@@ -442,10 +484,8 @@ const MiniAppGalleryView: React.FC = () => {
             <IconButton
               size="md"
               variant="primary"
-              onClick={() => {
-                closeImportMenu();
-                setCreationModeNoticeOpen(true);
-              }}
+              onClick={() => void handleCreateWithCreative()}
+              loading={creatingWithCreative}
               title={t('creationMode.action')}
               aria-label={t('creationMode.action')}
               data-testid="miniapp-create-action"
@@ -528,17 +568,6 @@ const MiniAppGalleryView: React.FC = () => {
         onOpen={handleOpenApp}
         onDelete={handleDeleteRequest}
         onStop={handleStopRunning}
-      />
-
-      <ConfirmDialog
-        isOpen={creationModeNoticeOpen}
-        onClose={() => setCreationModeNoticeOpen(false)}
-        onConfirm={() => setCreationModeNoticeOpen(false)}
-        title={t('creationMode.unavailableTitle')}
-        message={t('creationMode.unavailableMessage')}
-        type="info"
-        showCancel={false}
-        confirmText={t('creationMode.acknowledge')}
       />
 
       <ConfirmDialog

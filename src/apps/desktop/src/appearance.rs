@@ -581,7 +581,7 @@ pub fn create_main_window(
             }
         }
     } else {
-        WebviewUrl::App("index.html".into())
+        crate::frontend_workbench::custom_frontend_url("index.html")
     };
     let main_url_kind = match &main_url {
         WebviewUrl::External(_) => "external",
@@ -623,10 +623,9 @@ pub fn create_main_window(
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
 
-    // Debug builds may reload the initial page for development. Release builds
-    // keep top-level reloads blocked. Both modes continue to reject navigation
-    // to a different main-page URL and allow local sandboxed MiniApp documents.
-    let navigation_policy = MainWebviewNavigationPolicy::new(cfg!(debug_assertions));
+    // Exact top-level reloads are required for provisional Creative frontend
+    // activation and rollback. Different main-page URLs remain blocked.
+    let navigation_policy = MainWebviewNavigationPolicy::new(true);
     builder = builder.on_navigation(move |url| navigation_policy.should_allow(url));
 
     #[cfg(target_os = "macos")]
@@ -746,12 +745,7 @@ fn app_url(path: &str) -> WebviewUrl {
             }
         }
     } else {
-        let app_path = if path.starts_with('?') {
-            format!("index.html{}", path)
-        } else {
-            path.to_string()
-        };
-        WebviewUrl::App(app_path.into())
+        crate::frontend_workbench::custom_frontend_url(path)
     }
 }
 

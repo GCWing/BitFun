@@ -16,6 +16,7 @@ pub enum ToolPackFeatureGroup {
     ComputerUse,
     ImageAnalysis,
     MiniApp,
+    Creation,
     Canvas,
     AgentControl,
 }
@@ -30,6 +31,7 @@ impl ToolPackFeatureGroup {
             Self::ComputerUse => "computer-use",
             Self::ImageAnalysis => "image-analysis",
             Self::MiniApp => "miniapp",
+            Self::Creation => "creation",
             Self::Canvas => "canvas",
             Self::AgentControl => "agent-control",
         }
@@ -44,6 +46,7 @@ pub const ALL_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::ComputerUse,
     ToolPackFeatureGroup::ImageAnalysis,
     ToolPackFeatureGroup::MiniApp,
+    ToolPackFeatureGroup::Creation,
     ToolPackFeatureGroup::Canvas,
     ToolPackFeatureGroup::AgentControl,
 ];
@@ -70,6 +73,7 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
             ToolPackFeatureGroup::ImageAnalysis,
         ),
         (cfg!(feature = "miniapp"), ToolPackFeatureGroup::MiniApp),
+        (cfg!(feature = "creation"), ToolPackFeatureGroup::Creation),
         (cfg!(feature = "canvas"), ToolPackFeatureGroup::Canvas),
         (
             cfg!(feature = "agent-control"),
@@ -98,6 +102,7 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         | "PublishAppearance" | "PageDeploy" | "PagePublish" | "Playbook" => {
             Some(ToolPackFeatureGroup::MiniApp)
         }
+        "FrontendWorkbench" => Some(ToolPackFeatureGroup::Creation),
         "CreateCanvas" | "ReadCanvas" | "UpdateCanvas" | "PatchCanvas" => {
             Some(ToolPackFeatureGroup::Canvas)
         }
@@ -158,6 +163,7 @@ const CORE_MCP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup:
 const CORE_COMPUTER_USE_FEATURE_GROUPS: &[ToolPackFeatureGroup] =
     &[ToolPackFeatureGroup::ComputerUse];
 const CORE_MINIAPP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::MiniApp];
+const CORE_CREATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Creation];
 
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
@@ -259,6 +265,11 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         ],
     },
     ToolProviderGroupPlan {
+        provider_id: "core.creation",
+        feature_groups: CORE_CREATION_FEATURE_GROUPS,
+        tool_names: &["FrontendWorkbench"],
+    },
+    ToolProviderGroupPlan {
         provider_id: "core.canvas",
         feature_groups: CORE_CANVAS_FEATURE_GROUPS,
         tool_names: &["CreateCanvas", "ReadCanvas", "UpdateCanvas", "PatchCanvas"],
@@ -338,6 +349,7 @@ mod tests {
                 "computer-use",
                 "image-analysis",
                 "miniapp",
+                "creation",
                 "canvas",
                 "agent-control"
             ]
@@ -375,6 +387,10 @@ mod tests {
         assert_eq!(
             groups.contains(&ToolPackFeatureGroup::MiniApp),
             cfg!(feature = "miniapp")
+        );
+        assert_eq!(
+            groups.contains(&ToolPackFeatureGroup::Creation),
+            cfg!(feature = "creation")
         );
         assert_eq!(
             groups.contains(&ToolPackFeatureGroup::Canvas),
@@ -454,6 +470,7 @@ mod tests {
         assert_eq!(ToolPackFeatureGroup::ComputerUse.id(), "computer-use");
         assert_eq!(ToolPackFeatureGroup::ImageAnalysis.id(), "image-analysis");
         assert_eq!(ToolPackFeatureGroup::MiniApp.id(), "miniapp");
+        assert_eq!(ToolPackFeatureGroup::Creation.id(), "creation");
         assert_eq!(ToolPackFeatureGroup::Canvas.id(), "canvas");
         assert_eq!(ToolPackFeatureGroup::AgentControl.id(), "agent-control");
     }
@@ -477,6 +494,7 @@ mod tests {
                 "core.computer-use",
                 "core.review",
                 "core.miniapp",
+                "core.creation",
                 "core.canvas",
             ]
         );
@@ -550,6 +568,7 @@ mod tests {
                 "PageDeploy",
                 "PagePublish",
                 "Playbook",
+                "FrontendWorkbench",
                 "CreateCanvas",
                 "ReadCanvas",
                 "UpdateCanvas",
@@ -586,6 +605,7 @@ mod tests {
                 ("core.computer-use", vec!["computer-use"]),
                 ("core.review", vec!["agent-control"]),
                 ("core.miniapp", vec!["miniapp"]),
+                ("core.creation", vec!["creation"]),
                 ("core.canvas", vec!["canvas"]),
             ]
         );

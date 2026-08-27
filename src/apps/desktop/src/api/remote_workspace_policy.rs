@@ -53,6 +53,8 @@ pub enum RemoteWorkspacePolicy {
 
 /// Declared remote-workspace policy for every registered Tauri command.
 pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = &[
+    ("confirm_frontend_update", RemoteWorkspacePolicy::LocalOnly),
+    ("rollback_frontend_update", RemoteWorkspacePolicy::LocalOnly),
     ("accept_file", RemoteWorkspacePolicy::LegacyUnaudited),
     ("accept_operation", RemoteWorkspacePolicy::LegacyUnaudited),
     ("accept_session", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -2059,6 +2061,17 @@ mod tests {
             Some(RemoteWorkspacePolicy::WorkspaceAgnostic),
             "token usage is recorded by the current BitFun runtime and does not follow the workspace filesystem to an SSH host"
         );
+    }
+
+    #[test]
+    fn frontend_update_decisions_are_local_desktop_only() {
+        for command in ["confirm_frontend_update", "rollback_frontend_update"] {
+            assert_eq!(
+                remote_workspace_policy(command),
+                Some(RemoteWorkspacePolicy::LocalOnly),
+                "{command} must stay with the immutable controller-side confirmation window"
+            );
+        }
     }
 
     #[test]

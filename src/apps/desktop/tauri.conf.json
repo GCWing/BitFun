@@ -6,7 +6,7 @@
     "beforeDevCommand": "pnpm run dev:web",
     "devUrl": "http://localhost:1422",
     "beforeBuildCommand": "pnpm run frontend:build-all",
-    "frontendDist": "../../../dist"
+    "frontendDist": "bootstrap-ui"
   },
   "bundle": {
     "active": true,

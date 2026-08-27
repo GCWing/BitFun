@@ -28,8 +28,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DeepResearchMode, MinimalMode, MultitaskMode, PlanMode,
-    UltraMode,
+    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, MultitaskMode,
+    PlanMode, UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -157,9 +157,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         // further out than an hour, to Cron rather than holding the turn open
         // for the interval.
         "Cron".to_string(),
-        "InitMiniApp".to_string(),
-        "FinalizeMiniApp".to_string(),
-        "PublishMiniApp".to_string(),
         "PublishAppearance".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),

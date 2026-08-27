@@ -10,6 +10,8 @@
 static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "show_main_window",
     "hide_main_window_after_close_request",
+    "confirm_frontend_update",
+    "rollback_frontend_update",
     "quit_app",
     "minimize_to_tray",
     "initialize_tray_after_startup",
@@ -274,6 +276,12 @@ mod tests {
         assert!(is_local_only_command(
             "browser_webview_set_agent_target_state"
         ));
+    }
+
+    #[test]
+    fn frontend_update_decisions_stay_on_the_controller_device() {
+        assert!(is_local_only_command("confirm_frontend_update"));
+        assert!(is_local_only_command("rollback_frontend_update"));
     }
 
     #[test]

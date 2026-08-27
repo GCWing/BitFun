@@ -182,6 +182,7 @@ fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
     assert_eq!(mode_presentation_rank("agentic"), 0);
     assert_eq!(mode_presentation_rank("Cowork"), 1);
     assert_eq!(mode_presentation_rank("Ultra"), 5);
+    assert_eq!(mode_presentation_rank("Creative"), 6);
     assert_eq!(mode_presentation_rank("unknown"), 99);
 
     assert_eq!(
@@ -200,6 +201,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "minimal",
             "agentic",
             "Cowork",
+            "Creative",
             "Multitask",
             "Plan",
             "Claw",

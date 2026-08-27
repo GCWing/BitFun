@@ -376,17 +376,20 @@ const MemorySettingsPage: React.FC = () => {
           title={t('sections.advanced.title')}
           description={t('sections.advanced.description')}
           extra={(
-            <IconButton
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={() => setAdvancedOpen((open) => !open)}
-              tooltip={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
-              aria-label={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
-              aria-expanded={advancedOpen}
+            <Tooltip
+              content={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
+              placement="bottom"
             >
-              {advancedOpen ? <ChevronUp /> : <ChevronDown />}
-            </IconButton>
+              <IconButton
+                type="button"
+                variant="quiet"
+                size="sm"
+                onClick={() => setAdvancedOpen((open) => !open)}
+                aria-label={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
+                aria-expanded={advancedOpen}
+                icon={advancedOpen ? <ChevronUp /> : <ChevronDown />}
+              />
+            </Tooltip>
           )}
         >
           {advancedOpen && (

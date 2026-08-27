@@ -26,7 +26,7 @@ export type KnownHarnessProfileId =
   | 'ultimate'
   | 'creative'
   | 'other';
-export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
+export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | 'creative';
 
 export interface HarnessAgentOption {
   id: string;
@@ -83,11 +83,7 @@ function isDensityProfile(profile: KnownHarnessProfileId): profile is DensityHar
 function isSelectableProfile(
   profile: KnownHarnessProfileId,
 ): profile is SelectableHarnessProfileId {
-  return isDensityProfile(profile);
-}
-
-function isProfileInDevelopment(profile: KnownHarnessProfileId): boolean {
-  return profile === 'creative';
+  return isDensityProfile(profile) || profile === 'creative';
 }
 
 function sameAgent(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -213,14 +209,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   }, [close, open]);
 
   const handleSelectProfile = useCallback((profileId: KnownHarnessProfileId) => {
-    if (isProfileInDevelopment(profileId)) {
-      const name = t(`chatInput.harness.profiles.${profileId}.name`);
-      notificationService.info(t('chatInput.harness.comingSoonNotice', { name }), {
-        duration: 3200,
-      });
-      close();
-      return;
-    }
     if (profileId === 'other') {
       setPage('agents');
       return;
@@ -411,13 +399,10 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                 const name = t(`chatInput.harness.profiles.${id}.name`);
                 const connected = !creatingNewSession
                   && id === selectedProfile
-                  && !legacySession
-                  && !isProfileInDevelopment(id);
+                  && !legacySession;
                 const state = connected
                   ? 'current'
-                  : isProfileInDevelopment(id)
-                    ? 'coming-soon'
-                    : 'available';
+                  : 'available';
                 return (
                   <button
                     key={id}
@@ -438,9 +423,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                     </span>
                     <span className="bitfun-harness-selector__profile-status">
                       {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
-                      {isProfileInDevelopment(id)
-                        ? t('chatInput.harness.comingSoon')
-                        : null}
                       {id === 'other' ? (
                         <>
                           <span className="bitfun-harness-selector__agent-count">

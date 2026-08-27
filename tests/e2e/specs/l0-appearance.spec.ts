@@ -711,20 +711,9 @@ describe('L0 Appearance', () => {
     await importAction.click();
     await importMenu.waitForDisplayed({ reverse: true });
 
-    await $('[data-testid="miniapp-create-action"]').click();
-    const creationModeDialog = await waitForDisplayed(
-      '[data-bf-component="confirm-dialog"][data-bf-type="info"]',
-    );
-    expect((await creationModeDialog.$('.confirm-dialog__title').getText()).length).toBeGreaterThan(0);
-    expect((await creationModeDialog.$('.confirm-dialog__message').getText()).length).toBeGreaterThan(0);
-    const creationModeDialogActions = await creationModeDialog.$$('.confirm-dialog__actions button');
-    expect(creationModeDialogActions.length).toBe(1);
-    await saveElementScreenshot(
-      '[data-bf-component="confirm-dialog"][data-bf-type="info"]',
-      'l0-appearance-light-miniapp-creation-mode-notice',
-    );
-    await creationModeDialogActions[0].click();
-    await creationModeDialog.waitForDisplayed({ reverse: true });
+    const createAction = await $('[data-testid="miniapp-create-action"]');
+    expect(await createAction.isEnabled()).toBe(true);
+    expect((await createAction.getAttribute('aria-label'))?.length).toBeGreaterThan(0);
   });
 
   it('should render monochrome structural chrome against a white workspace', async () => {

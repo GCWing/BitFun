@@ -22,6 +22,7 @@ pub enum ProductCapabilityId {
     DeepReview,
     DeepResearch,
     MiniApp,
+    Creation,
     Canvas,
     VoiceInput,
 }
@@ -33,6 +34,7 @@ impl ProductCapabilityId {
             Self::DeepReview => "deep-review",
             Self::DeepResearch => "deep-research",
             Self::MiniApp => "miniapp",
+            Self::Creation => "creation",
             Self::Canvas => "canvas",
             Self::VoiceInput => "voice-input",
         }
@@ -55,6 +57,7 @@ pub enum ProductFeatureGroup {
     ComputerUse,
     ImageAnalysis,
     MiniApp,
+    Creation,
     Canvas,
     AgentControl,
 }
@@ -69,6 +72,7 @@ impl ProductFeatureGroup {
             Self::ComputerUse => "computer-use",
             Self::ImageAnalysis => "image-analysis",
             Self::MiniApp => "miniapp",
+            Self::Creation => "creation",
             Self::Canvas => "canvas",
             Self::AgentControl => "agent-control",
         }
@@ -91,6 +95,7 @@ impl From<ToolPackFeatureGroup> for ProductFeatureGroup {
             ToolPackFeatureGroup::ComputerUse => Self::ComputerUse,
             ToolPackFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
             ToolPackFeatureGroup::MiniApp => Self::MiniApp,
+            ToolPackFeatureGroup::Creation => Self::Creation,
             ToolPackFeatureGroup::Canvas => Self::Canvas,
             ToolPackFeatureGroup::AgentControl => Self::AgentControl,
         }
@@ -107,6 +112,7 @@ impl From<ProductFeatureGroup> for ToolPackFeatureGroup {
             ProductFeatureGroup::ComputerUse => Self::ComputerUse,
             ProductFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
             ProductFeatureGroup::MiniApp => Self::MiniApp,
+            ProductFeatureGroup::Creation => Self::Creation,
             ProductFeatureGroup::Canvas => Self::Canvas,
             ProductFeatureGroup::AgentControl => Self::AgentControl,
         }
@@ -1005,6 +1011,7 @@ const CODE_AGENT_TOOL_GROUPS: &[&str] = &[
 const DEEP_REVIEW_TOOL_GROUPS: &[&str] = &["core.review"];
 const DEEP_RESEARCH_TOOL_GROUPS: &[&str] = &["core.web", "core.mcp"];
 const MINIAPP_TOOL_GROUPS: &[&str] = &["core.miniapp"];
+const CREATION_TOOL_GROUPS: &[&str] = &["core.creation", "core.miniapp"];
 const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
 const CODE_AGENT_IDS: &[&str] = &[
@@ -1032,6 +1039,7 @@ const DEEP_REVIEW_AGENT_IDS: &[&str] = &[
     "DeepReview",
 ];
 const DEEP_RESEARCH_AGENT_IDS: &[&str] = &["DeepResearch", "ResearchSpecialist"];
+const CREATION_AGENT_IDS: &[&str] = &["Creative"];
 const NO_PRODUCT_AGENTS: &[&str] = &[];
 
 const CODE_AGENT_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
@@ -1058,6 +1066,12 @@ const MINIAPP_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::ne
     MINIAPP_TOOL_GROUPS,
     NO_PRODUCT_AGENTS,
 );
+const CREATION_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
+    ProductCapabilityId::Creation,
+    MINIAPP_SERVICES,
+    CREATION_TOOL_GROUPS,
+    CREATION_AGENT_IDS,
+);
 const CANVAS_CAPABILITY_PACK: ProductCapabilityPack = ProductCapabilityPack::new(
     ProductCapabilityId::Canvas,
     CANVAS_SERVICES,
@@ -1072,6 +1086,7 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
     DEEP_REVIEW_CAPABILITY_PACK,
     DEEP_RESEARCH_CAPABILITY_PACK,
     MINIAPP_CAPABILITY_PACK,
+    CREATION_CAPABILITY_PACK,
     CANVAS_CAPABILITY_PACK,
     VOICE_INPUT_CAPABILITY_PACK,
 ];

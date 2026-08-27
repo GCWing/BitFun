@@ -71,7 +71,8 @@ runtime dependency；真实产品入口必须同时显式选择 owner 与 modifi
 把完整 adapter、service 或 tool runtime 拉回窄闭包。
 
 Function Agent 的 Git/AI 适配由 `function-agents` 选择，MiniApp 的 domain/runtime/market
-闭包由 `tools-miniapp` 选择；不得再通过一个通用 `product-domains` Core feature 把两者、
+闭包由 `tools-miniapp` 选择，创造模式专属的前端工作台由独立的 `tools-creation` 选择；
+产品装配可以为 Creative 同时选择两个 owner，但不得再通过一个通用 `product-domains` Core feature 把它们、
 Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品装配计划若声明了当前
 二进制未编译的工具组，必须在 registry materialization 前明确失败，不能静默删掉该组。
 

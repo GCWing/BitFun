@@ -212,6 +212,7 @@ export const optionalDependencyFeatureOwnerRules = [
           'tools-browser-web',
           'tools-canvas',
           'tools-computer-use',
+          'tools-creation',
           'tools-git',
           'tools-image-analysis',
           'tools-mcp',
@@ -678,6 +679,7 @@ export const coreProductFullFeatureAssemblyRule = {
     'tools-browser-web',
     'tools-canvas',
     'tools-computer-use',
+    'tools-creation',
     'tools-git',
     'tools-image-analysis',
     'tools-mcp',
@@ -1292,6 +1294,15 @@ export const coreClosedFeatureProfileRules = [
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',
+    featureName: 'tools-creation',
+    requiredFeatureRefs: [
+      'bitfun-tool-packs/creation',
+    ],
+    exact: true,
+    reason: 'tools-creation must own only Creative product-authoring tools',
+  },
+  {
+    manifestPath: 'src/crates/assembly/core/Cargo.toml',
     featureName: 'tools-canvas',
     requiredFeatureRefs: [
       'bitfun-tool-packs/canvas',
@@ -1657,6 +1668,7 @@ export const ownerCrateFeatureAssemblyRules = [
       'computer-use',
       'image-analysis',
       'miniapp',
+      'creation',
       'canvas',
       'agent-control',
     ],

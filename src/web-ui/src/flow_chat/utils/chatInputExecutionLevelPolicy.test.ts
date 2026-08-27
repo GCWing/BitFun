@@ -13,6 +13,9 @@ describe('chatInputExecutionLevelPolicy', () => {
     expect(resolveComposerExecutionLevelSelection('minimal')).toEqual({
       modeId: 'minimal',
     });
+    expect(resolveComposerExecutionLevelSelection('creative')).toEqual({
+      modeId: 'Creative',
+    });
     expect(resolveSelectedComposerExecutionLevel({
       currentMode: ' Ultra ',
     })).toBe('ultimate');
@@ -26,6 +29,7 @@ describe('chatInputExecutionLevelPolicy', () => {
       modeId: 'agentic',
     });
     expect(resolveSelectedComposerExecutionLevel({ currentMode: 'agentic' })).toBe('balanced');
+    expect(resolveSelectedComposerExecutionLevel({ currentMode: ' Creative ' })).toBe('creative');
     expect(resolveSelectedComposerExecutionLevel({ currentMode: 'Plan' })).toBe('other');
   });
 

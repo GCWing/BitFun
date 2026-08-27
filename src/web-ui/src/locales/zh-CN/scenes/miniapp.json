@@ -7,9 +7,10 @@
   "importMenuLabel": "选择导入方式",
   "creationMode": {
     "action": "使用创造模式创建",
-    "unavailableTitle": "创造模式暂未开放",
-    "unavailableMessage": "创造模式仍在开发中，目前还不能用它创建小应用。",
-    "acknowledge": "知道了"
+    "started": "创造模式已就绪，可以描述你想创建的 MiniApp。",
+    "startFailed": "无法启动创造模式。",
+    "noWorkspace": "请先打开一个本地工作区再启动创造模式。",
+    "remoteUnsupported": "MiniApp 创建仅支持本地环境，远程工作区暂不可用。"
   },
   "running": "已启动",
   "allApps": "全部应用",

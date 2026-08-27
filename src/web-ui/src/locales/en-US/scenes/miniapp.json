@@ -7,9 +7,10 @@
   "importMenuLabel": "Choose an import source",
   "creationMode": {
     "action": "Create with Creation Mode",
-    "unavailableTitle": "Creation Mode is not available yet",
-    "unavailableMessage": "Creation Mode is still being built, so it cannot create a mini app yet.",
-    "acknowledge": "Got it"
+    "started": "Creation Mode is ready for your MiniApp request.",
+    "startFailed": "Could not start Creation Mode.",
+    "noWorkspace": "Open a local workspace before starting Creation Mode.",
+    "remoteUnsupported": "MiniApp creation is local-only and is unavailable in a remote workspace."
   },
   "running": "Running",
   "allApps": "All Apps",

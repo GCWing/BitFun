@@ -49,9 +49,6 @@ impl ClawMode {
                 // Local desktop/system control is delegated to the ComputerUse
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
-                "InitMiniApp".to_string(),
-                "FinalizeMiniApp".to_string(),
-                "PublishMiniApp".to_string(),
                 "PublishAppearance".to_string(),
                 "PageDeploy".to_string(),
                 "PagePublish".to_string(),
@@ -105,10 +102,12 @@ mod tests {
     use bitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
-    fn claw_mode_includes_miniapp_lifecycle_tools_in_defaults() {
+    fn claw_mode_excludes_creation_only_tools_from_defaults() {
         let tools = ClawMode::new().default_tools();
-        assert!(tools.contains(&"InitMiniApp".to_string()));
-        assert!(tools.contains(&"FinalizeMiniApp".to_string()));
+        assert!(!tools.contains(&"InitMiniApp".to_string()));
+        assert!(!tools.contains(&"FinalizeMiniApp".to_string()));
+        assert!(!tools.contains(&"PublishMiniApp".to_string()));
+        assert!(!tools.contains(&"FrontendWorkbench".to_string()));
         assert!(tools.contains(&"ListModels".to_string()));
     }
 

@@ -43,6 +43,11 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('set_main_window_transient_geometry')).toBe(true);
   });
 
+  it('keeps frontend confirmation and rollback on the controller window', () => {
+    expect(isPeerLocalOnlyCommand('confirm_frontend_update')).toBe(true);
+    expect(isPeerLocalOnlyCommand('rollback_frontend_update')).toBe(true);
+  });
+
   it('keeps ProductControl presentation callbacks local while routing commands to the peer', () => {
     expect(isPeerLocalOnlyCommand('mark_bitfun_control_surface_ready')).toBe(true);
     expect(isPeerLocalOnlyCommand('mark_bitfun_control_surface_unready')).toBe(true);

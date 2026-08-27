@@ -240,7 +240,7 @@ Assembly 是唯一组装根，只选择下层能力和实现，不能反向依�
 
 命名工作流的无 I/O 决策归 `agent-workflows`；具体 I/O 归 Services；`product-capabilities` 只选择工作流能力、Agent ID 和原子工具组。依赖方向固定为 `Assembly → agent-workflows → agent-runtime / contracts`，`agent-runtime` 禁止反向依赖 `agent-workflows`。当前 `agent-workflows` 的 DeepResearch 报告后处理不需要 Runtime 类型，因此直接依赖基础库；这不改变上述长期方向。
 
-原子逻辑模块应满足三个条件：一个明确 owner、一个可独立测试的输入输出契约、一个变化原因。`core.basic`、`core.agent`、`core.session`、`core.git`、`core.web`、`core.mcp`、`core.computer-use`、`core.review`、`core.miniapp`、`core.canvas` 分别表达实际工具职责；不得重新合成 `core.integration` 这类同时包含网络、Git、MCP、产品工具和平台能力的大组。
+原子逻辑模块应满足三个条件：一个明确 owner、一个可独立测试的输入输出契约、一个变化原因。`core.basic`、`core.agent`、`core.session`、`core.git`、`core.web`、`core.mcp`、`core.computer-use`、`core.review`、`core.miniapp`、`core.creation`、`core.canvas` 分别表达实际工具职责；其中 `core.creation` 只承载创造模式的产品创作入口，不吸收 MiniApp runtime/market owner。不得重新合成 `core.integration` 这类同时包含网络、Git、MCP、产品工具和平台能力的大组。
 
 当前生产循环仍由 `assembly/core` 的 `ConversationCoordinator → Scheduler → ExecutionEngine → RoundExecutor → ToolPipeline` 持有；`agent-runtime` 已拥有可移植决策与 Rust preview facade，但尚未独立拥有完整循环。`assembly/core` 因此仍是过渡期兼容组装与实际 owner，不能被描述成只有 wiring。后续迁移必须逐条切换真实调用方、保留行为等价测试并删除旧写入方；移动 DTO、增加 feature 或 re-export 均不算 owner 迁移。当前仍位于 Runtime/Core 的 DeepReview 兼容逻辑只允许迁出和修复，不继续承接新的产品行为。
 
@@ -832,10 +832,10 @@ flowchart LR
 
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
-| Desktop | 使用 `product-full`；Settings 从现有来源目录和 integration policy 生成简短应用概览，具体审批与冲突仍进入 Tool、Agent、MCP 或 Hook owner | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用 `DeliveryProfile::Cli` 和显式 Core owner closure；Runtime 只注册 Code Agent 清单及 `basic / agent / session / git / web / mcp / computer-use` 七个原子工具组，外部来源、插件和 Remote/SSH 仍由各自 owner 按入口需要装配 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas Agent / Tool；非交互不等待权限输入，远程能力未接入时不回退本机 |
+| Desktop | 使用 `product-full`，包含 Creative Agent 与 `core.creation`；Settings 从现有来源目录和 integration policy 生成简短应用概览，具体审批与冲突仍进入 Tool、Agent、MCP 或 Hook owner | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
+| CLI / TUI | 使用 `DeliveryProfile::Cli` 和显式 Core owner closure；Runtime 只注册 Code Agent 清单及 `basic / agent / session / git / web / mcp / computer-use` 七个原子工具组，外部来源、插件和 Remote/SSH 仍由各自 owner 按入口需要装配 | 不注册 DeepReview、DeepResearch、MiniApp、Creation 或 Canvas Agent / Tool；非交互不等待权限输入，远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts、Code Agent 清单与同一组七个原子工具组，不选择 CLI 的 plugin runtime 和 Remote Connect owner | load 成功后才发布活动状态；完整历史和兼容配置仍由 Core/ACP 管理；未选择的产品工作流不得借 Cargo feature union 偶然注册 |
-| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts、Code Agent 清单和七个原子工具组；TLS provider 由 Host 进程入口安装 | 不注册 DeepReview、DeepResearch、MiniApp 或 Canvas；当前协议也不暴露远程 workspace/SSH，未来远程 SDK 必须复用 Server/Remote 的认证和执行域 |
+| SDK Host（preview） | 使用 `DeliveryProfile::Sdk`、Runtime Parts、Code Agent 清单和七个原子工具组；TLS provider 由 Host 进程入口安装 | 不注册 DeepReview、DeepResearch、MiniApp、Creation 或 Canvas；当前协议也不暴露远程 workspace/SSH，未来远程 SDK 必须复用 Server/Remote 的认证和执行域 |
 | Peer / Server | Peer Host 执行真实工作区操作；通用 HTTP Server 未绑定可信 workspace owner 时明确返回不支持 | 控制端不替远端发现或执行；loopback 单用户边界不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |

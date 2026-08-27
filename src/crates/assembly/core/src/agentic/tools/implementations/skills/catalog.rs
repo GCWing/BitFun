@@ -22,6 +22,10 @@ mod tests {
             Some("debugging")
         );
         assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
+        assert_eq!(
+            builtin_skill_group_key("bitfun-frontend-dev"),
+            Some("creation")
+        );
         assert_eq!(builtin_skill_group_key("writing-skills"), Some("meta"));
         assert_eq!(
             builtin_skill_group_key("agent-browser"),

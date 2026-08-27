@@ -163,6 +163,7 @@ product-full = [
     "tools-computer-use",
     "tools-image-analysis",
     "tools-miniapp",
+    "tools-creation",
     "tools-canvas",
     "tools-agent-control",
     "function-agents",
@@ -357,6 +358,9 @@ tools-miniapp = [
     "runtime-services",
     "dep:reqwest",
     "dep:semver",
+]
+tools-creation = [
+    "bitfun-tool-packs/creation",
 ]
 tools-canvas = [
     "bitfun-tool-packs/canvas",
