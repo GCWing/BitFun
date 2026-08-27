@@ -161,7 +161,8 @@ describe('GlobalPermissionRulesDialog', () => {
       effect.dispatchEvent(new Event('change', { bubbles: true }));
       action.value = 'external_directory';
       action.dispatchEvent(new Event('change', { bubbles: true }));
-      resource.value = 'C:/trusted';
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+        ?.set?.call(resource, 'C:/trusted');
       resource.dispatchEvent(new Event('input', { bubbles: true }));
       await Promise.resolve();
     });

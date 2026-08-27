@@ -1,4 +1,4 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Input, Modal, Select, type SelectOption, Tooltip } from '@/component-library';
+import { Modal, Select, type SelectOption, Tooltip } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -421,13 +421,13 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                       onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
                     />
                     <Input
-                      inputSize="small"
                       value={rule.resource}
                       placeholder={t('permissionPolicy.globalRulesResourcePlaceholder')}
                       aria-label={t('permissionPolicy.globalRulesResource')}
                       disabled={isSaving || exiting}
-                      error={!rule.resource.trim()}
+                      invalid={!rule.resource.trim()}
                       onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
+                      size="sm"
                     />
                     <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
                       <Tooltip content={t('permissionPolicy.moveGlobalRuleUp')}>

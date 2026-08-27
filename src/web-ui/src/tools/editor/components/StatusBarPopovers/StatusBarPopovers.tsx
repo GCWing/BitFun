@@ -15,9 +15,10 @@ import {
   FileJson,
   type LucideIcon,
 } from 'lucide-react';
-import { Input } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import './StatusBarPopovers.scss';
+import { Input } from '@bitfun/ui';
 
 export type StatusBarPopoverType = 'position' | 'indent' | 'encoding' | 'language';
 
@@ -98,12 +99,11 @@ export const GoToLinePopover: React.FC<GoToLinePopoverProps> = ({
           ref={inputRef}
           type="text"
           className="status-bar-popover__input"
-          variant="outlined"
-          inputSize="small"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t('editor.statusBar.goToLinePlaceholder')}
+          size="sm"
         />
       </div>
     </div>,

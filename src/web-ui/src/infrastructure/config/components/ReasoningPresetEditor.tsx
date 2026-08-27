@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Input, NumberInput, Select, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { NumberInput, Select, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -424,7 +424,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     className="bitfun-reasoning-preset-editor__models-dev-search-control"
                   >
                     <Input
-                      size="small"
                       value={modelsDevSearch}
                       disabled={disabled}
                       placeholder={t('reasoningPresets.catalogSearchPlaceholder')}
@@ -463,6 +462,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           if (result) selectModelsDevSearchResult(result);
                         }
                       }}
+                      size="sm"
                     />
                     {showModelsDevSearchResults && createPortal(
                       <div
@@ -679,7 +679,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       {expanded ? (
                         <div className="bitfun-reasoning-preset-editor__row-name-editor">
                           <Input
-                            size="small"
                             aria-label={t('reasoningPresets.label')}
                             value={preset.label ?? ''}
                             disabled={disabled}
@@ -687,6 +686,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                             onChange={(event) => updatePreset(presetIndex, {
                               label: event.target.value || undefined,
                             })}
+                            size="sm"
                           />
                         </div>
                       ) : (

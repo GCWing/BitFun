@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
-import { Select, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select, NumberInput, Card, Modal, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2497,8 +2497,8 @@ const ModelSettingsPage: React.FC = () => {
             setEditingConfig(prev => ({ ...prev, api_key: e.target.value }));
           }}
           placeholder={t('form.apiKeyPlaceholder')}
-          inputSize="small"
-          suffix={apiKeySuffix}
+          trailing={apiKeySuffix}
+          size="sm"
         />
       </ConfigPageRow>
     );
@@ -2514,7 +2514,13 @@ const ModelSettingsPage: React.FC = () => {
             {isFromTemplate ? (
               <>
                 <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                  <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                  <Input
+                    data-testid="settings-model-provider-name-input"
+                    value={editingConfig.name || ''}
+                    onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={t('form.configNamePlaceholder')}
+                    size="sm"
+                  />
                 </ConfigPageRow>
                 {renderAuthRow()}
                 {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
@@ -2553,7 +2559,7 @@ const ModelSettingsPage: React.FC = () => {
                       }}
                       onFocus={(e) => e.target.select()}
                       placeholder={currentTemplate?.baseUrl}
-                      inputSize="small"
+                      size="sm"
                     />
                     {editingConfig.base_url && (
                       <div className="bitfun-model-settings__resolved-url">
@@ -2561,8 +2567,8 @@ const ModelSettingsPage: React.FC = () => {
                           value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
                           readOnly
                           onFocus={(e) => e.target.select()}
-                          inputSize="small"
                           className="bitfun-model-settings__resolved-url-input"
+                          size="sm"
                         />
                       </div>
                     )}
@@ -2625,7 +2631,7 @@ const ModelSettingsPage: React.FC = () => {
                           }
                         }}
                         placeholder={t('providerSelection.inputModelName')}
-                        inputSize="small"
+                        size="sm"
                       />
                       <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
@@ -2645,7 +2651,13 @@ const ModelSettingsPage: React.FC = () => {
                 {isProviderScopedEditing && (
                   <>
                     <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                      <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                      <Input
+                        data-testid="settings-model-provider-name-input"
+                        value={editingConfig.name || ''}
+                        onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder={t('form.configNamePlaceholder')}
+                        size="sm"
+                      />
                     </ConfigPageRow>
                     {renderAuthRow()}
                     {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
@@ -2665,7 +2677,7 @@ const ModelSettingsPage: React.FC = () => {
                           }}
                           onFocus={(e) => e.target.select()}
                           placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
-                          inputSize="small"
+                          size="sm"
                         />
                         {editingConfig.base_url && (
                           <div className="bitfun-model-settings__resolved-url">
@@ -2673,8 +2685,8 @@ const ModelSettingsPage: React.FC = () => {
                               value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
                               readOnly
                               onFocus={(e) => e.target.select()}
-                              inputSize="small"
                               className="bitfun-model-settings__resolved-url-input"
+                              size="sm"
                             />
                           </div>
                         )}
@@ -2737,7 +2749,7 @@ const ModelSettingsPage: React.FC = () => {
                           }
                         }}
                         placeholder={t('providerSelection.inputModelName')}
-                        inputSize="small"
+                        size="sm"
                       />
                       <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
@@ -2855,8 +2867,20 @@ const ModelSettingsPage: React.FC = () => {
                     <div className="bitfun-model-settings__custom-headers">
                       {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
                         <div key={index} className="bitfun-model-settings__header-row">
-                          <Input value={key} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.keyPlaceholder')} inputSize="small" className="bitfun-model-settings__header-key" />
-                          <Input value={value} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.valuePlaceholder')} inputSize="small" className="bitfun-model-settings__header-value" />
+                          <Input
+                            value={key}
+                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                            placeholder={t('advancedSettings.customHeaders.keyPlaceholder')}
+                            className="bitfun-model-settings__header-key"
+                            size="sm"
+                          />
+                          <Input
+                            value={value}
+                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                            placeholder={t('advancedSettings.customHeaders.valuePlaceholder')}
+                            className="bitfun-model-settings__header-value"
+                            size="sm"
+                          />
                           <Tooltip content={t('actions.delete')}>
                             <IconButton
                               aria-label={t('actions.delete')}
@@ -3556,7 +3580,7 @@ const ModelSettingsPage: React.FC = () => {
               value={streamTtftTimeoutInput}
               onChange={(e) => setStreamTtftTimeoutInput(e.target.value)}
               placeholder={t('streamTtftTimeout.placeholder')}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow
@@ -3567,7 +3591,7 @@ const ModelSettingsPage: React.FC = () => {
               value={streamIdleTimeoutInput}
               onChange={(e) => setStreamIdleTimeoutInput(e.target.value)}
               placeholder={t('streamIdleTimeout.placeholder')}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -3598,7 +3622,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, url: e.target.value }))}
               placeholder={t('proxy.urlPlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('proxy.username')} align="center">
@@ -3607,7 +3631,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, username: e.target.value }))}
               placeholder={t('proxy.usernamePlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('proxy.password')} align="center">
@@ -3617,7 +3641,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, password: e.target.value }))}
               placeholder={t('proxy.passwordPlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>

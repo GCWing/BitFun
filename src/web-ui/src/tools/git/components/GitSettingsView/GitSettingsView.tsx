@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { Tabs, TabPane, Select, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
