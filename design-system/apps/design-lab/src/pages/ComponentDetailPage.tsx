@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  ActionCard,
   ActionItem,
   ActivityItem,
   Button,
@@ -63,6 +64,7 @@ import {
   type ContrastMode,
   type DensityMode,
   type ActivityItemAppearance,
+  type ActionCardSize,
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
   type ToolbarSize,
@@ -102,6 +104,7 @@ const pageHeaderAlignments = ["start", "center"] as const;
 const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
 const activityItemAppearances = ["inline", "surface"] as const;
+const actionCardSizes = ["sm", "md"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
@@ -220,6 +223,7 @@ export function ComponentDetailPage({
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
@@ -251,6 +255,8 @@ export function ComponentDetailPage({
 
   const states = useMemo(() => {
     switch (component.name) {
+      case "ActionCard":
+        return ["default", "hover", "active", "focus-visible", "selected", "disabled"] as const;
       case "ActionItem":
         return ["default", "hover", "active", "disabled"] as const;
       case "ActivityItem":
@@ -289,6 +295,9 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "ActionCard") {
+      return `import { ActionCard } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal } from "lucide-react";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<MessageCircle />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
+    }
     if (component.name === "ActionItem") {
       return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
     }
@@ -587,6 +596,30 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "ActionCard") {
+      return (
+        <ActionCard
+          actions={[
+            {
+              icon: <MoreHorizontal aria-hidden="true" />,
+              id: "more",
+              label: t("components.preview.more"),
+            },
+          ]}
+          className={state === "focus-visible" ? "lab-force-focus" : undefined}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          description={t("components.preview.actionCardDescription")}
+          disabled={state === "disabled"}
+          leading={<MessageCircle aria-hidden="true" />}
+          selected={state === "selected"}
+          size={actionCardSize}
+          tabIndex={-1}
+        >
+          {t("components.preview.actionCardTitle")}
+        </ActionCard>
+      );
+    }
+
     if (component.name === "ActionItem") {
       return (
         <ActionItem
@@ -1305,11 +1338,13 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
-                  data-component={component.name === "ActionItem"
-                    ? "action-item"
+                  data-component={component.name === "ActionCard"
+                    ? "action-card"
+                    : component.name === "ActionItem"
+                      ? "action-item"
                     : component.name === "Field"
                       ? "field"
                     : component.name === "Input"
@@ -1530,6 +1565,14 @@ export function ComponentDetailPage({
                       onChange={(value) => setActivityItemAppearance(value as ActivityItemAppearance)}
                       options={activityItemAppearances}
                       value={activityItemAppearance}
+                    />
+                  )}
+                  {component.name === "ActionCard" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setActionCardSize(value as ActionCardSize)}
+                      options={actionCardSizes}
+                      value={actionCardSize}
                     />
                   )}
                   {component.name === "Toolbar" && (

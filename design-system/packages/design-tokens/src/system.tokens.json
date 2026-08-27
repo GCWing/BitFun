@@ -127,6 +127,20 @@
       "contentGap": { "$value": "{space.1}" },
       "dividerBlockSize": { "$value": "16px" }
     },
+    "actionCard": {
+      "$type": "dimension",
+      "smMinBlockSize": { "$value": "54px" },
+      "mdMinBlockSize": { "$value": "62px" },
+      "paddingBlock": { "$value": "{space.2}" },
+      "paddingInline": { "$value": "{space.3}" },
+      "gap": { "$value": "{space.2}" },
+      "leadingSize": { "$value": "30px" },
+      "iconSize": { "$value": "16px" },
+      "contentGap": { "$value": "{space.1}" },
+      "actionsGap": { "$value": "0px" },
+      "actionsPaddingInlineEnd": { "$value": "{space.2}" },
+      "radius": { "$value": "{radius.base}" }
+    },
     "changeCount": {
       "$type": "dimension",
       "gap": { "$value": "{space.1}" },

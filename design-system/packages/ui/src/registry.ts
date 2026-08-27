@@ -1,4 +1,5 @@
 import { actionItemMeta } from "./components/ActionItem/ActionItem.meta";
+import { actionCardMeta } from "./components/ActionCard/ActionCard.meta";
 import { activityItemMeta } from "./components/ActivityItem/ActivityItem.meta";
 import { buttonMeta } from "./components/Button/Button.meta";
 import { cardMeta } from "./components/Card/Card.meta";
@@ -25,6 +26,7 @@ export type {
 } from "./registry.types";
 
 export const componentRegistry = [
+  actionCardMeta,
   actionItemMeta,
   activityItemMeta,
   buttonMeta,

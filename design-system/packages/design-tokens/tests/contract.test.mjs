@@ -82,6 +82,17 @@ test("Activity geometry preserves inline and surfaced status compositions", asyn
   assert.equal(systemDocument.control.changeCount.radius.$value, "{radius.xs}");
 });
 
+test("ActionCard geometry preserves compact and descriptive entry compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.actionCard.smMinBlockSize"], "54px");
+  assert.equal(tokens["control.actionCard.mdMinBlockSize"], "62px");
+  assert.equal(tokens["control.actionCard.paddingInline"], "12px");
+  assert.equal(tokens["control.actionCard.leadingSize"], "30px");
+  assert.equal(tokens["control.actionCard.iconSize"], "16px");
+  assert.equal(systemDocument.control.actionCard.radius.$value, "{radius.base}");
+});
+
 test("split-view content panels preserve the elevated shell curvature contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

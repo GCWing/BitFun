@@ -1,6 +1,12 @@
 import "./styles/layers.css";
 
 export {
+  ActionCard,
+  type ActionCardAction,
+  type ActionCardProps,
+  type ActionCardSize,
+} from "./components/ActionCard";
+export {
   ActionItem,
   type ActionItemAction,
   type ActionItemProps,

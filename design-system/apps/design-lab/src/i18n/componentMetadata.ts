@@ -12,6 +12,7 @@ const categoryKeys: Readonly<Record<string, MessageKey>> = {
 };
 
 const descriptionKeys: Readonly<Record<string, MessageKey>> = {
+  ActionCard: "component.ActionCard.description",
   ActionItem: "component.ActionItem.description",
   ActivityItem: "component.ActivityItem.description",
   Button: "component.Button.description",

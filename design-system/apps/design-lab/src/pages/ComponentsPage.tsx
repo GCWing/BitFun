@@ -19,6 +19,7 @@ import {
   ToggleLeft,
 } from "lucide-react";
 import {
+  ActionCard,
   ActionItem,
   ActivityItem,
   Button,
@@ -70,6 +71,7 @@ interface ComponentsPageProps {
 }
 
 const componentIcons = {
+  ActionCard: MousePointerClick,
   ActionItem: List,
   ActivityItem: Terminal,
   Button: MousePointerClick,
@@ -94,6 +96,17 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
 
   switch (component.name) {
+    case "ActionCard":
+      return (
+        <ActionCard
+          className="component-action-card-card-preview"
+          description={t("components.preview.actionCardDescription")}
+          leading={<MessageCircle aria-hidden="true" />}
+          tabIndex={-1}
+        >
+          {t("components.preview.actionCardTitle")}
+        </ActionCard>
+      );
     case "ActionItem":
       return (
         <ActionItem
