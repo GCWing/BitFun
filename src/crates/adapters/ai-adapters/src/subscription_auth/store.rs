@@ -1,9 +1,8 @@
 //! Persistence for subscription-account credentials.
 //!
-//! OAuth tokens and API keys are stored in the operating-system credential
-//! vault (macOS Keychain, Windows Credential Manager, or Linux Secret
-//! Service). The JSON file contains only non-secret account metadata and
-//! references used to discover the corresponding vault entries.
+//! OAuth tokens and API keys are stored outside the metadata JSON. macOS uses
+//! a prompt-free encrypted file vault in BitFun's application data directory;
+//! Windows and Linux continue to use their native credential stores.
 //!
 //! Path: `{dirs::config_dir()}/bitfun/data/subscription_auth.json`.
 
@@ -18,6 +17,7 @@ use std::time::Duration;
 
 const STORE_VERSION: u8 = 2;
 const CLEANUP_JOURNAL_VERSION: u8 = 1;
+#[cfg(not(target_os = "macos"))]
 const KEYRING_SERVICE: &str = "openbitfun.bitfun.subscription-auth.v1";
 const STORE_FILE_LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 const STORE_FILE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
@@ -27,7 +27,7 @@ const STORE_FILE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 const SECRET_CHUNK_BYTES: usize = 2_048;
 
 /// A single credential assembled in memory after its secret material has been
-/// read from the platform credential vault.
+/// read from the credential vault.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StoredCredential {
@@ -360,6 +360,7 @@ fn failing_backup_cleanup() -> &'static Mutex<HashSet<PathBuf>> {
     PATHS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+#[cfg(not(target_os = "macos"))]
 fn native_keyring_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -885,10 +886,9 @@ async fn read_secure_file(path: &Path) -> Result<SecureStoreFile> {
     parse_secure_file(&bytes, path)
 }
 
+#[cfg(not(target_os = "macos"))]
 fn open_native_keyring_entry(entry_name: &str) -> std::result::Result<keyring_core::Entry, String> {
     if keyring_core::get_default_store().is_none() {
-        #[cfg(target_os = "macos")]
-        let store = apple_native_keyring_store::keychain::Store::new();
         #[cfg(target_os = "windows")]
         let store = windows_native_keyring_store::Store::new();
         #[cfg(all(
@@ -897,7 +897,6 @@ fn open_native_keyring_entry(entry_name: &str) -> std::result::Result<keyring_co
         ))]
         let store = zbus_secret_service_keyring_store::Store::new();
         #[cfg(not(any(
-            target_os = "macos",
             target_os = "windows",
             all(
                 unix,
@@ -917,6 +916,17 @@ fn open_native_keyring_entry(entry_name: &str) -> std::result::Result<keyring_co
         .map_err(|error| format!("open system credential entry: {error}"))
 }
 
+#[cfg(target_os = "macos")]
+fn macos_credential_vault(
+    metadata_path: &Path,
+) -> bitfun_services_core::credential_vault::CredentialVault {
+    let parent = metadata_path.parent().unwrap_or_else(|| Path::new("."));
+    bitfun_services_core::credential_vault::CredentialVault::new(
+        parent.join(".subscription_auth_vault.key"),
+        parent.join("subscription_auth_vault.json"),
+    )
+}
+
 async fn get_secret_bytes(entry_name: &str) -> Result<Option<Vec<u8>>> {
     if let Some(path) = overridden_store_path() {
         if test_vault_is_unavailable(&path) {
@@ -933,21 +943,32 @@ async fn get_secret_bytes(entry_name: &str) -> Result<Option<Vec<u8>>> {
             });
     }
 
-    let entry_name = entry_name.to_string();
-    tokio::task::spawn_blocking(move || {
-        let _guard = native_keyring_lock()
-            .lock()
-            .map_err(|_| "subscription keyring lock poisoned".to_string())?;
-        let entry = open_native_keyring_entry(&entry_name)?;
-        match entry.get_secret() {
-            Ok(secret) => Ok(Some(secret)),
-            Err(keyring_core::Error::NoEntry) => Ok(None),
-            Err(err) => Err(format!("read system credential entry: {err}")),
-        }
-    })
-    .await
-    .context("join system credential read task")?
-    .map_err(vault_unavailable)
+    #[cfg(target_os = "macos")]
+    {
+        let path = store_path()?;
+        return macos_credential_vault(&path)
+            .get(entry_name)
+            .await
+            .map_err(|error| vault_unavailable(error.to_string()));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let entry_name = entry_name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let _guard = native_keyring_lock()
+                .lock()
+                .map_err(|_| "subscription keyring lock poisoned".to_string())?;
+            let entry = open_native_keyring_entry(&entry_name)?;
+            match entry.get_secret() {
+                Ok(secret) => Ok(Some(secret)),
+                Err(keyring_core::Error::NoEntry) => Ok(None),
+                Err(err) => Err(format!("read system credential entry: {err}")),
+            }
+        })
+        .await
+        .context("join system credential read task")?
+        .map_err(vault_unavailable)
+    }
 }
 
 /// Reads the v1 combined JSON entry. It was written through the password API,
@@ -969,21 +990,30 @@ async fn get_legacy_password(provider: &str) -> Result<Option<String>> {
             });
     }
 
-    let provider = provider.to_string();
-    tokio::task::spawn_blocking(move || {
-        let _guard = native_keyring_lock()
-            .lock()
-            .map_err(|_| "subscription keyring lock poisoned".to_string())?;
-        let entry = open_native_keyring_entry(&provider)?;
-        match entry.get_password() {
-            Ok(secret) => Ok(Some(secret)),
-            Err(keyring_core::Error::NoEntry) => Ok(None),
-            Err(err) => Err(format!("read legacy system credential entry: {err}")),
-        }
-    })
-    .await
-    .context("join legacy system credential read task")?
-    .map_err(vault_unavailable)
+    #[cfg(target_os = "macos")]
+    {
+        return get_secret_bytes(provider)
+            .await
+            .map(|secret| secret.and_then(|bytes| String::from_utf8(bytes).ok()));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let provider = provider.to_string();
+        tokio::task::spawn_blocking(move || {
+            let _guard = native_keyring_lock()
+                .lock()
+                .map_err(|_| "subscription keyring lock poisoned".to_string())?;
+            let entry = open_native_keyring_entry(&provider)?;
+            match entry.get_password() {
+                Ok(secret) => Ok(Some(secret)),
+                Err(keyring_core::Error::NoEntry) => Ok(None),
+                Err(err) => Err(format!("read legacy system credential entry: {err}")),
+            }
+        })
+        .await
+        .context("join legacy system credential read task")?
+        .map_err(vault_unavailable)
+    }
 }
 
 async fn set_secret_bytes(entry_name: &str, secret: Vec<u8>) -> Result<()> {
@@ -1012,19 +1042,30 @@ async fn set_secret_bytes(entry_name: &str, secret: Vec<u8>) -> Result<()> {
         return Ok(());
     }
 
-    let entry_name = entry_name.to_string();
-    tokio::task::spawn_blocking(move || {
-        let _guard = native_keyring_lock()
-            .lock()
-            .map_err(|_| "subscription keyring lock poisoned".to_string())?;
-        let entry = open_native_keyring_entry(&entry_name)?;
-        entry
-            .set_secret(&secret)
-            .map_err(|err| format!("write system credential entry: {err}"))
-    })
-    .await
-    .context("join system credential write task")?
-    .map_err(vault_unavailable)
+    #[cfg(target_os = "macos")]
+    {
+        let path = store_path()?;
+        return macos_credential_vault(&path)
+            .set(entry_name, &secret)
+            .await
+            .map_err(|error| vault_unavailable(error.to_string()));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let entry_name = entry_name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let _guard = native_keyring_lock()
+                .lock()
+                .map_err(|_| "subscription keyring lock poisoned".to_string())?;
+            let entry = open_native_keyring_entry(&entry_name)?;
+            entry
+                .set_secret(&secret)
+                .map_err(|err| format!("write system credential entry: {err}"))
+        })
+        .await
+        .context("join system credential write task")?
+        .map_err(vault_unavailable)
+    }
 }
 
 async fn delete_secret_entry(entry_name: &str) -> Result<()> {
@@ -1045,20 +1086,31 @@ async fn delete_secret_entry(entry_name: &str) -> Result<()> {
         return Ok(());
     }
 
-    let entry_name = entry_name.to_string();
-    tokio::task::spawn_blocking(move || {
-        let _guard = native_keyring_lock()
-            .lock()
-            .map_err(|_| "subscription keyring lock poisoned".to_string())?;
-        let entry = open_native_keyring_entry(&entry_name)?;
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
-            Err(err) => Err(format!("delete system credential entry: {err}")),
-        }
-    })
-    .await
-    .context("join system credential delete task")?
-    .map_err(vault_unavailable)
+    #[cfg(target_os = "macos")]
+    {
+        let path = store_path()?;
+        return macos_credential_vault(&path)
+            .remove(entry_name)
+            .await
+            .map_err(|error| vault_unavailable(error.to_string()));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let entry_name = entry_name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let _guard = native_keyring_lock()
+                .lock()
+                .map_err(|_| "subscription keyring lock poisoned".to_string())?;
+            let entry = open_native_keyring_entry(&entry_name)?;
+            match entry.delete_credential() {
+                Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+                Err(err) => Err(format!("delete system credential entry: {err}")),
+            }
+        })
+        .await
+        .context("join system credential delete task")?
+        .map_err(vault_unavailable)
+    }
 }
 
 fn secret_chunks(secret: &str) -> Vec<Vec<u8>> {
@@ -1328,7 +1380,7 @@ async fn migrate_legacy_store(path: &Path, legacy: Store) -> Result<LoadState> {
                 );
             }
 
-            // A locked or temporarily unavailable native vault must not turn
+            // A temporarily unavailable credential vault must not turn
             // a retryable migration into permanent credential loss. Leave the
             // legacy file untouched and retry after the vault is available.
             if is_vault_unavailable(&error) {
@@ -1342,7 +1394,7 @@ async fn migrate_legacy_store(path: &Path, legacy: Store) -> Result<LoadState> {
                     provider_revisions: HashMap::new(),
                 });
             }
-            return Err(error.context("migrate subscription credential to the system vault"));
+            return Err(error.context("migrate subscription credential to the credential vault"));
         }
     }
 
@@ -1361,7 +1413,7 @@ async fn migrate_legacy_store(path: &Path, legacy: Store) -> Result<LoadState> {
             "finalize subscription credential migration cleanup journal failed; retrying later: {error:#}"
         );
     }
-    log::info!("subscription credentials migrated to the system credential vault");
+    log::info!("subscription credentials migrated to the credential vault");
     Ok(LoadState {
         credentials: legacy,
         requires_reauthentication: HashSet::new(),
@@ -1444,7 +1496,7 @@ pub(crate) async fn load_with_state() -> Result<LoadState> {
     load_with_state_unlocked(&path).await
 }
 
-/// Loads all credentials that are currently available from the system vault.
+/// Loads all credentials that are currently available from the credential vault.
 pub async fn load() -> Result<Store> {
     Ok(load_with_state().await?.credentials)
 }
@@ -1461,7 +1513,7 @@ pub(crate) async fn load_entry_with_revision(provider: &str) -> Result<Versioned
     let mut state = load_with_state().await?;
     if state.vault_unavailable.contains(provider) {
         return Err(anyhow!(
-            "system credential vault is locked or unavailable; unlock it and retry"
+            "credential vault is locked or unavailable; retry after the storage issue is resolved"
         ));
     }
     Ok(VersionedCredential {
@@ -1478,7 +1530,7 @@ pub(crate) async fn credential_revision(provider: &str) -> Result<u64> {
 }
 
 /// Inserts or replaces a provider credential. Secret material is committed to
-/// the platform vault before the non-secret metadata advertises the entry.
+/// the credential vault before the non-secret metadata advertises the entry.
 pub async fn upsert(provider: &str, credential: StoredCredential) -> Result<()> {
     match upsert_internal(provider, credential, None).await? {
         ConditionalCommitOutcome::Committed { .. } => Ok(()),
@@ -1554,7 +1606,7 @@ async fn upsert_internal(
     })
 }
 
-/// Removes one provider from both the native vault and metadata index.
+/// Removes one provider from both the credential vault and metadata index.
 pub(crate) async fn remove(provider: &str) -> Result<RemoveOutcome> {
     let (path, _transaction) = acquire_store_transaction().await?;
     let _ = load_with_state_unlocked(&path).await?;
@@ -1586,7 +1638,7 @@ pub(crate) async fn remove(provider: &str) -> Result<RemoveOutcome> {
     }
     if let Err(error) = reconcile_cleanup_journal(&path, &file.active_vault_entries()).await {
         return Ok(RemoveOutcome::CleanupPending(format!(
-            "native credential cleanup is pending; unlock the credential vault and retry: {error:#}"
+            "credential cleanup is pending; retry after the storage issue is resolved: {error:#}"
         )));
     }
     Ok(RemoveOutcome::Removed)

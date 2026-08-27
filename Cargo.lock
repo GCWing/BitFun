@@ -247,17 +247,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "apple-native-keyring-store"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "797f94b6a53d7d10b56dc18290e0d40a2158352f108bb4ff32350825081a9f29"
-dependencies = [
- "keyring-core",
- "log",
- "security-framework",
-]
-
-[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -855,7 +844,6 @@ name = "bitfun-ai-adapters"
 version = "0.2.19"
 dependencies = [
  "anyhow",
- "apple-native-keyring-store",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -1514,6 +1502,7 @@ dependencies = [
 name = "bitfun-services-core"
 version = "0.2.19"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "async-trait",
  "base64 0.22.1",
@@ -1531,6 +1520,7 @@ dependencies = [
  "ignore",
  "libc",
  "log",
+ "rand 0.8.7",
  "regex",
  "rusqlite",
  "rustls",
@@ -1554,7 +1544,6 @@ dependencies = [
  "aes",
  "aes-gcm",
  "anyhow",
- "apple-native-keyring-store",
  "argon2",
  "async-trait",
  "base64 0.22.1",

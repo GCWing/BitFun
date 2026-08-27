@@ -4,6 +4,8 @@
 //! tested without compiling the full BitFun product runtime.
 
 pub mod bounded_fs;
+#[cfg(feature = "credential-vault")]
+pub mod credential_vault;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostics;
 #[cfg(feature = "diff")]

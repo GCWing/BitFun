@@ -12,6 +12,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
+aes-gcm = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 bitfun-core-types = { path = "../../contracts/core-types", optional = true }
 bitfun-events = { path = "../../contracts/events", optional = true }
@@ -29,6 +30,7 @@ dunce = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 fs2 = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 ignore = { workspace = true, optional = true }
 globset = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
@@ -48,6 +50,18 @@ libc = { workspace = true, optional = true }
 [features]
 default = []
 tls-provider = ["dep:rustls"]
+credential-vault = [
+    "dep:aes-gcm",
+    "dep:anyhow",
+    "dep:base64",
+    "dep:fs2",
+    "dep:libc",
+    "dep:rand",
+    "dep:tokio",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/rt",
+]
 diagnostics = ["dep:regex"]
 diff = ["dep:similar", "dep:tokio", "tokio/rt", "tokio/time"]
 filesystem = [

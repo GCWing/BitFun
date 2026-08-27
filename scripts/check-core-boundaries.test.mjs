@@ -485,6 +485,7 @@ test('Services Core feature-free dependencies stay behind exact text and async I
   assert.deepEqual(
     ownersByDependency.get('tokio'),
     new Set([
+      'credential-vault',
       'diff',
       'filesystem',
       'json-io',
@@ -3925,6 +3926,7 @@ test('Services Core accepts only the reviewed feature-owned Tokio runtime graph'
       },
     ],
     features: {
+      'credential-vault': ['dep:tokio', 'tokio/fs', 'tokio/io-util', 'tokio/rt'],
       diff: ['dep:tokio', 'tokio/rt', 'tokio/time'],
       filesystem: ['dep:tokio', 'tokio/fs', 'tokio/rt'],
       'json-io': ['dep:tokio', 'tokio/fs', 'tokio/rt', 'tokio/sync', 'tokio/time'],

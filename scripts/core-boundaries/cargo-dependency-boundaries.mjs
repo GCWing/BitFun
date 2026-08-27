@@ -155,6 +155,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
 ]);
 
 const SERVICES_CORE_TOKIO_FEATURES = new Map([
+  ['credential-vault', ['fs', 'io-util', 'rt']],
   ['diff', ['rt', 'time']],
   ['filesystem', ['fs', 'rt']],
   ['json-io', ['fs', 'rt', 'sync', 'time']],

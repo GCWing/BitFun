@@ -3,8 +3,8 @@
 //! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
 //! Antigravity/Google, OpenCode, xAI/SuperGrok) with an in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
-//! is stored in the operating-system credential vault; the local JSON file
-//! contains non-secret account metadata only.
+//! is stored separately from the non-secret account metadata. macOS uses a
+//! prompt-free encrypted local vault; other platforms use their native store.
 //!
 //! There is no upgrade path for the previous Codex/Gemini CLI disk-scan import.
 
@@ -199,10 +199,10 @@ pub struct SubscriptionAccount {
     #[serde(default)]
     pub login_methods: Vec<SubscriptionLoginMethod>,
     /// The account was known previously, but its secret is absent from the
-    /// system credential vault. The UI should ask the user to sign in again.
+    /// credential vault. The UI should ask the user to sign in again.
     #[serde(default)]
     pub reauthentication_required: bool,
-    /// The system credential vault is currently locked or unavailable. Unlike
+    /// The credential vault is currently unavailable. Unlike
     /// a missing entry, this is retryable and should not request re-login.
     #[serde(default)]
     pub vault_unavailable: bool,
@@ -216,7 +216,7 @@ pub struct SubscriptionAccount {
 }
 
 /// Structured sign-out result. Metadata removal determines connection state;
-/// native-vault deletion may be queued for a later retry.
+/// credential deletion may be queued for a later retry.
 #[derive(Debug, Clone, Serialize)]
 pub struct SubscriptionLogoutResult {
     pub cleanup_pending: bool,
@@ -385,7 +385,7 @@ pub(crate) fn store_lock(provider: SubscriptionProvider) -> &'static tokio::sync
 
 /// Runs the externally cancellable authorization/polling phase, then commits
 /// the resulting credential without cancellation. Dropping a credential-vault
-/// write can leave an orphan secret because blocking platform keyring calls
+/// write can leave an orphan secret because credential-store calls
 /// continue running after their Rust future is dropped.
 pub(crate) async fn authorize_then_persist<T, Authorize, Persist, PersistFuture>(
     provider: SubscriptionProvider,
@@ -870,7 +870,7 @@ pub async fn logout(provider: SubscriptionProvider) -> Result<SubscriptionLogout
         },
         store::RemoveOutcome::CleanupPending(warning) => {
             log::warn!(
-                "subscription provider {} logged out with native credential cleanup pending: {}",
+                "subscription provider {} logged out with credential cleanup pending: {}",
                 provider.key(),
                 warning
             );

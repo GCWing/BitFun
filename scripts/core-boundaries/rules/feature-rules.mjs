@@ -41,20 +41,22 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'services-core optional implementation dependencies must stay behind their exact owner capability',
     dependencies: [
-      { depName: 'anyhow', ownerFeatures: ['dispatch-workspace', 'workspace-runtime'] },
+      { depName: 'aes-gcm', ownerFeatures: ['credential-vault'] },
+      { depName: 'anyhow', ownerFeatures: ['credential-vault', 'dispatch-workspace', 'workspace-runtime'] },
       { depName: 'async-trait', ownerFeatures: ['permission', 'workspace-runtime'] },
-      { depName: 'base64', ownerFeatures: ['filesystem'] },
+      { depName: 'base64', ownerFeatures: ['credential-vault', 'filesystem'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['local-storage'] },
       { depName: 'bitfun-events', ownerFeatures: ['local-storage'] },
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['permission', 'workspace-runtime'] },
       { depName: 'chrono', ownerFeatures: ['filesystem', 'local-storage'] },
       { depName: 'chrono-tz', ownerFeatures: ['token-usage-statistics'] },
       { depName: 'dunce', ownerFeatures: ['runtime-ownership', 'workspace-identity', 'workspace-runtime'] },
-      { depName: 'fs2', ownerFeatures: ['json-io', 'local-storage', 'runtime-ownership'] },
+      { depName: 'fs2', ownerFeatures: ['credential-vault', 'json-io', 'local-storage', 'runtime-ownership'] },
       { depName: 'git2', ownerFeatures: ['session-git'] },
       { depName: 'globset', ownerFeatures: ['workspace-instructions'] },
       { depName: 'ignore', ownerFeatures: ['filesystem'] },
-      { depName: 'libc', ownerFeatures: ['local-storage', 'process-runtime'] },
+      { depName: 'libc', ownerFeatures: ['credential-vault', 'local-storage', 'process-runtime'] },
+      { depName: 'rand', ownerFeatures: ['credential-vault'] },
       {
         depName: 'regex',
         ownerFeatures: [
@@ -86,6 +88,7 @@ export const optionalDependencyFeatureOwnerRules = [
         depName: 'tokio',
         ownerFeatures: [
           'diff',
+          'credential-vault',
           'filesystem',
           'json-io',
           'local-storage',
