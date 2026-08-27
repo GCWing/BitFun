@@ -21,6 +21,9 @@ import {
   IconButton,
   Input,
   KeyHint,
+  Menu,
+  MenuItem,
+  MenuSection,
   PageHeader,
   ScrollArea,
   SearchField,
@@ -56,6 +59,7 @@ const componentIcons = {
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
+  Menu: List,
   Modal: AppWindow,
   PageHeader: Heading,
   ScrollArea: Rows3,
@@ -120,6 +124,19 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "KeyHint":
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    case "Menu":
+      return (
+        <Menu aria-label={t("components.preview.menuLabel")} scrollbarVisibility="hidden">
+          <MenuSection title={t("components.preview.menuSectionTitle")}>
+            <MenuItem leading={<MessageCircle aria-hidden="true" />} tabIndex={-1}>
+              {t("components.preview.menuItemOne")}
+            </MenuItem>
+            <MenuItem leading={<MessageCircle aria-hidden="true" />} tabIndex={-1}>
+              {t("components.preview.menuItemTwo")}
+            </MenuItem>
+          </MenuSection>
+        </Menu>
+      );
     case "Modal":
       return (
         <Button

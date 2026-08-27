@@ -3161,6 +3161,10 @@ input.lab-force-focus {
   background: var(--bf-color-action-neutral-surface);
 }
 
+[data-bf-component="action-item"].lab-force-focus {
+  box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+}
+
 .component-modal-preview-overlay {
   position: relative;
   z-index: auto;

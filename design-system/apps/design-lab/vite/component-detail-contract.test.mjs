@@ -171,6 +171,22 @@ test("ScrollArea preview exposes direction and native scrollbar visibility contr
   assert.match(styles, /\.component-scroll-area-example\s*\{[^}]*block-size:\s*160px/s);
 });
 
+test("Menu preview exposes grouped anatomy, item states, and scrollbar control", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Menu"/);
+  assert.match(detail, /MenuSection/);
+  assert.match(detail, /MenuSeparator/);
+  assert.match(detail, /"scrolling", "focus-within", "disabled-item", "checked-item"/);
+  assert.match(detail, /scrollbarVisibility=\{menuShowScrollbar \? "auto" : "hidden"\}/);
+  assert.match(detail, /role=\{state === "checked-item"/);
+  assert.match(styles, /\[data-bf-component="action-item"\]\.lab-force-focus/);
+});
+
 test("Field preview exposes label content independently from layout orientation", async () => {
   const source = await readFile(detailSource, "utf8");
 

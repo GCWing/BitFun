@@ -11,6 +11,18 @@ export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
 export {
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  type MenuItemProps,
+  type MenuItemRole,
+  type MenuProps,
+  type MenuSectionAction,
+  type MenuSectionProps,
+  type MenuSeparatorProps,
+} from "./components/Menu";
+export {
   Modal,
   ModalProvider,
   type ModalBackdropBlur,

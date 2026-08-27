@@ -19,6 +19,10 @@ import {
   IconButton,
   Input,
   KeyHint,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
   Modal,
   PageHeader,
   ScrollArea,
@@ -82,6 +86,10 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   hover: "detail.option.hover",
   horizontal: "detail.option.horizontal",
   hidden: "detail.option.hidden",
+  scrolling: "detail.option.scrolling",
+  "focus-within": "detail.option.focus-within",
+  "disabled-item": "detail.option.disabled-item",
+  "checked-item": "detail.option.checked-item",
   invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
@@ -184,6 +192,7 @@ export function ComponentDetailPage({
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [modalOpen, setModalOpen] = useState(false);
   const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
+  const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
 
   const states = useMemo(() => {
     switch (component.name) {
@@ -200,6 +209,8 @@ export function ComponentDetailPage({
       case "Modal":
       case "PageHeader":
         return ["default"] as const;
+      case "Menu":
+        return ["default", "scrolling", "focus-within", "disabled-item", "checked-item"] as const;
       case "ScrollArea":
         return ["auto", "always", "hidden"] as const;
       case "TabGroup":
@@ -244,6 +255,9 @@ export function ComponentDetailPage({
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
+    if (component.name === "Menu") {
+      return `import { Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
+    }
     if (component.name === "Modal") {
       return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
     }
@@ -277,6 +291,7 @@ export function ComponentDetailPage({
     iconButtonVariant,
     inspectorDisabled,
     inspectorLoading,
+    menuShowScrollbar,
     modalShowScrollbar,
     pageHeaderAlign,
     pageHeaderSize,
@@ -548,6 +563,46 @@ export function ComponentDetailPage({
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
     }
 
+    if (component.name === "Menu") {
+      const itemCount = state === "scrolling" ? 12 : 3;
+      return (
+        <Menu
+          aria-label={t("components.preview.menuLabel")}
+          scrollbarVisibility={menuShowScrollbar ? "auto" : "hidden"}
+        >
+          <MenuSection
+            actions={[{
+              icon: <Plus aria-hidden="true" />,
+              id: "add",
+              label: t("components.preview.add"),
+            }]}
+            title={t("components.preview.menuSectionTitle")}
+          >
+            {Array.from({ length: itemCount }, (_, index) => (
+              <MenuItem
+                checked={state === "checked-item" && index === 0}
+                className={state === "focus-within" && index === 0 ? "lab-force-focus" : undefined}
+                disabled={state === "disabled-item" && index === 1}
+                key={index}
+                leading={<MessageCircle aria-hidden="true" />}
+                role={state === "checked-item" && index === 0 ? "menuitemcheckbox" : "menuitem"}
+              >
+                {index === 0
+                  ? t("components.preview.menuItemOne")
+                  : index === 1
+                    ? t("components.preview.menuItemTwo")
+                    : t("components.preview.menuItem", { index: index + 1 })}
+              </MenuItem>
+            ))}
+          </MenuSection>
+          <MenuSeparator />
+          <MenuSection aria-label={t("components.preview.menuMoreSection")}>
+            <MenuItem>{t("components.preview.menuMoreItem")}</MenuItem>
+          </MenuSection>
+        </Menu>
+      );
+    }
+
     if (component.name === "Modal") {
       return (
         <Button onClick={() => setModalOpen(true)} variant="fill">
@@ -766,7 +821,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
+              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionItem"
@@ -779,6 +834,8 @@ export function ComponentDetailPage({
                       ? "key-hint"
                       : component.name === "PageHeader"
                         ? "page-header"
+                      : component.name === "Menu"
+                        ? "menu"
                       : component.name === "ScrollArea"
                         ? "scroll-area"
                       : "search-field"}
@@ -965,6 +1022,13 @@ export function ComponentDetailPage({
                       checked={modalShowScrollbar}
                       label={t("detail.showScrollbar")}
                       onCheckedChange={setModalShowScrollbar}
+                    />
+                  )}
+                  {component.name === "Menu" && (
+                    <InspectorToggle
+                      checked={menuShowScrollbar}
+                      label={t("detail.showScrollbar")}
+                      onCheckedChange={setMenuShowScrollbar}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

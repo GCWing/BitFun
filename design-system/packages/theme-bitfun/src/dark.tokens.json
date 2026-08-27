@@ -113,6 +113,7 @@
     "lg": { "$value": "0 8px 16px rgba(0, 0, 0, 0.6)" },
     "xl": { "$value": "0 12px 24px rgba(0, 0, 0, 0.5)" },
     "raised": { "$value": "{shadow.sm}" },
+    "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.48)" },
     "overlay": { "$value": "{shadow.lg}" }
   },
   "effect": {

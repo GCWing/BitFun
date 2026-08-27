@@ -119,6 +119,25 @@
     }
   },
   "overlay": {
+    "menu": {
+      "$type": "dimension",
+      "inlineSize": { "$value": "220px" },
+      "maxBlockSize": { "$value": "480px" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "surfaceRadius": { "$value": "{radius.xl}" },
+      "sectionGap": { "$value": "{space.2}" },
+      "headingHeight": { "$value": "24px" },
+      "headingPaddingInline": { "$value": "{space.2}" },
+      "headingGap": { "$value": "{space.5}" },
+      "headingFontSize": { "$value": "11px" },
+      "headingActionSize": { "$value": "22px" },
+      "itemHeight": { "$value": "30px" },
+      "itemPaddingInline": { "$value": "{space.2}" },
+      "itemGap": { "$value": "{space.2}" },
+      "itemRadius": { "$value": "{radius.base}" },
+      "itemIconSize": { "$value": "14px" },
+      "scrollbarGap": { "$value": "2px" }
+    },
     "modal": {
       "$type": "dimension",
       "viewportGutter": {

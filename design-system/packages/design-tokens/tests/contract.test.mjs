@@ -72,6 +72,19 @@ test("shared scrollbar geometry preserves the compact native scrollbar contract"
   assert.equal(tokens["scrollbar.radius"], "9999px");
 });
 
+test("Menu tokens preserve the compact grouped surface contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["overlay.menu.inlineSize"], "220px");
+  assert.equal(tokens["overlay.menu.maxBlockSize"], "480px");
+  assert.equal(tokens["overlay.menu.headingHeight"], "24px");
+  assert.equal(tokens["overlay.menu.itemHeight"], "30px");
+  assert.equal(tokens["overlay.menu.itemIconSize"], "14px");
+  assert.equal(systemDocument.overlay.menu.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.overlay.menu.surfaceRadius.$value, "{radius.xl}");
+  assert.equal(systemDocument.overlay.menu.itemRadius.$value, "{radius.base}");
+});
+
 test("Modal tokens preserve the reference surface and chrome contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
