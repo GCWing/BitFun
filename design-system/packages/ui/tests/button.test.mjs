@@ -83,6 +83,7 @@ test("primary and text variants expose semantic emphasis without changing button
   assert.match(styles, /--bf-color-action-primary-background/);
   assert.match(styles, /--bf-color-action-primary-content/);
   assert.match(styles, /--bf-color-accent-default/);
+  assert.match(styles, /--bf-color-accent-disabled/);
   assert.match(styles, /text-decoration:underline/);
 });
 

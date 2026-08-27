@@ -58,4 +58,9 @@ test("Input styles consume semantic field and status tokens", async () => {
   assert.match(styles, /--bf-color-content-muted/);
   assert.match(styles, /--bf-color-status-danger-border/);
   assert.match(styles, /--bf-control-height-sm/);
+  assert.match(styles, /caret-color:var\(--bf-color-accent-default\)/);
+  assert.doesNotMatch(
+    styles,
+    /\.field\[data-disabled=(?:"true"|true)\]\{[^}]*opacity:/,
+  );
 });

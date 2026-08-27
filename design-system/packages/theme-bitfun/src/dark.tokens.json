@@ -30,7 +30,8 @@
     },
     "accent": {
       "default": { "$type": "color", "$value": "{ref.color.blue.400}" },
-      "hover": { "$type": "color", "$value": "{ref.color.blue.500}" }
+      "hover": { "$type": "color", "$value": "{ref.color.blue.500}" },
+      "disabled": { "$type": "color", "$value": "rgba(96, 165, 250, 0.30)" }
     },
     "border": {
       "subtle": { "$type": "color", "$value": "rgba(255, 255, 255, 0.12)" },

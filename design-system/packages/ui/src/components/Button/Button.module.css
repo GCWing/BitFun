@@ -101,7 +101,7 @@
   }
 
   .button[data-bf-variant="text"]:disabled {
-    --_button-content: var(--bf-color-action-neutral-content-disabled);
+    --_button-content: var(--bf-color-accent-disabled);
   }
 
   .button[data-bf-variant="fill"]:disabled {

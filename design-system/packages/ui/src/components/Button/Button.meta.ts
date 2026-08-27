@@ -27,6 +27,7 @@ export const buttonMeta = {
     "color.action.primary.pressed",
     "color.accent.default",
     "color.accent.hover",
+    "color.accent.disabled",
     "color.focus.ring",
     "color.status.danger.border",
     "color.status.danger.content",

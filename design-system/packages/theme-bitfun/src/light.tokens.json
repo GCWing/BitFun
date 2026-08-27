@@ -29,8 +29,9 @@
       "inverse": { "$type": "color", "$value": "{ref.color.neutral.0}" }
     },
     "accent": {
-      "default": { "$type": "color", "$value": "{ref.color.navy.950}" },
-      "hover": { "$type": "color", "$value": "{ref.color.neutral.900}" }
+      "default": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+      "hover": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+      "disabled": { "$type": "color", "$value": "rgba(5, 156, 176, 0.30)" }
     },
     "border": {
       "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.08)" },
@@ -67,7 +68,7 @@
     },
     "field": {
       "background": { "$type": "color", "$value": "{ref.color.neutral.0}" },
-      "backgroundHover": { "$type": "color", "$value": "{ref.color.neutral.50}" },
+      "backgroundHover": { "$type": "color", "$value": "{color.field.background}" },
       "border": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" },
       "borderHover": { "$type": "color", "$value": "rgba(16, 26, 39, 0.24)" },
       "borderFocus": { "$type": "color", "$value": "{ref.color.navy.950}" }

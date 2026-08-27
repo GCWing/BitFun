@@ -65,6 +65,7 @@ test("reference colors expose ordered name-plus-number scales for authoring", ()
     "gray",
     "navy",
     "blue",
+    "cyan",
     "green",
     "amber",
     "red",

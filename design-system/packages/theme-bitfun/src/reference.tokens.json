@@ -79,6 +79,20 @@
         "900": { "$value": "#1e3a8a" },
         "950": { "$value": "#172554" }
       },
+      "cyan": {
+        "$description": "Cyan scale for interactive text, required markers, and active text-entry emphasis.",
+        "50": { "$value": "#effcff" },
+        "100": { "$value": "#d8f8fc" },
+        "200": { "$value": "#b4eff5" },
+        "300": { "$value": "#7cdee9" },
+        "400": { "$value": "#36c6d7" },
+        "500": { "$value": "#059cb0" },
+        "600": { "$value": "#07879a" },
+        "700": { "$value": "#0a6d7d" },
+        "800": { "$value": "#0d5764" },
+        "900": { "$value": "#0e4853" },
+        "950": { "$value": "#072f38" }
+      },
       "green": {
         "$description": "Green scale for affirmative status and the BitFun switch accent.",
         "50": { "$value": "#effcf6" },
