@@ -56,6 +56,26 @@ test("Button preview opens on the filled variant used by the reference inspector
   );
 });
 
+test("Card preview exposes generic surface and slot composition contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Card"/);
+  assert.match(detail, /case "Card":\s*return \["raised", "subtle", "media"\] as const/);
+  assert.match(detail, /CardHeader/);
+  assert.match(detail, /CardBody/);
+  assert.match(detail, /CardFooter/);
+  assert.match(detail, /CardMedia/);
+  assert.match(detail, /appearance="raised"/);
+  assert.match(detail, /appearance="subtle"/);
+  assert.match(detail, /appearance="neutral"/);
+  assert.match(styles, /\.component-card-example\s*\{[^}]*max-inline-size:\s*760px/s);
+  assert.match(styles, /\.component-card-command-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+});
+
 test("Button matrix is limited to the four reference interaction states", async () => {
   const source = await readFile(detailSource, "utf8");
   const declaration = /case "Button":\s*case "IconButton":\s*return \[([^\]]+)\] as const;/.exec(source);

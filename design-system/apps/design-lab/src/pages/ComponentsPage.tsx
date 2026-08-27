@@ -22,6 +22,8 @@ import {
   ActionItem,
   ActivityItem,
   Button,
+  Card,
+  CardHeader,
   ChangeCount,
   Composer,
   ComposerToolbar,
@@ -71,6 +73,7 @@ const componentIcons = {
   ActionItem: List,
   ActivityItem: Terminal,
   Button: MousePointerClick,
+  Card: Rows3,
   Composer: ArrowUp,
   Field: Rows3,
   IconButton: List,
@@ -118,6 +121,23 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           <Button variant="fill">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
         </Stack>
+      );
+    case "Card":
+      return (
+        <Card
+          appearance="subtle"
+          className="component-card-card-preview"
+          gap="sm"
+          padding="sm"
+          radius="sm"
+        >
+          <CardHeader
+            align="center"
+            description={t("components.preview.cardDescription")}
+            leading={<Command aria-hidden="true" />}
+            title={t("components.preview.cardTitle")}
+          />
+        </Card>
       );
     case "Field":
       return (

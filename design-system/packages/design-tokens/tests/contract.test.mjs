@@ -126,6 +126,20 @@ test("NavigationPanel tokens preserve the grouped sidebar composition contract",
   assert.equal(systemDocument.layout.navigationPanel.itemRadius.$value, "{radius.base}");
 });
 
+test("Card tokens preserve raised, compact, and media surface compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.card.paddingSm"], "12px");
+  assert.equal(tokens["layout.card.paddingMd"], "20px");
+  assert.equal(tokens["layout.card.gapLg"], "30px");
+  assert.equal(tokens["layout.card.radiusSm"], "8px");
+  assert.equal(tokens["layout.card.radiusMd"], "12px");
+  assert.equal(tokens["layout.card.radiusLg"], "28px");
+  assert.equal(tokens["layout.card.mediaMinBlockSize"], "120px");
+  assert.equal(systemDocument.layout.card.paddingSm.$value, "{space.3}");
+  assert.equal(systemDocument.layout.card.radiusMd.$value, "{radius.lg}");
+});
+
 test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

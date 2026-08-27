@@ -15,6 +15,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   ActionItem: "component.ActionItem.description",
   ActivityItem: "component.ActivityItem.description",
   Button: "component.Button.description",
+  Card: "component.Card.description",
   Composer: "component.Composer.description",
   Field: "component.Field.description",
   IconButton: "component.IconButton.description",

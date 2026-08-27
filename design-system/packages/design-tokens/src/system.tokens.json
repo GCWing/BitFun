@@ -151,6 +151,20 @@
   },
   "layout": {
     "$type": "dimension",
+    "card": {
+      "paddingSm": { "$value": "{space.3}" },
+      "paddingMd": { "$value": "{space.5}" },
+      "gapSm": { "$value": "{space.2}" },
+      "gapMd": { "$value": "{space.3}" },
+      "gapLg": { "$value": "30px" },
+      "radiusSm": { "$value": "{radius.base}" },
+      "radiusMd": { "$value": "{radius.lg}" },
+      "radiusLg": { "$value": "28px" },
+      "headerGap": { "$value": "{space.2}" },
+      "titleDescriptionGap": { "$value": "{space.1}" },
+      "footerGap": { "$value": "{space.2}" },
+      "mediaMinBlockSize": { "$value": "120px" }
+    },
     "toolbar": {
       "smHeight": { "$value": "33px" },
       "mdHeight": { "$value": "45px" },

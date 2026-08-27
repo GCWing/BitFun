@@ -15,6 +15,24 @@ export {
 } from "./components/ActivityItem";
 export { Button, type ButtonProps } from "./components/Button";
 export {
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  CardMedia,
+  type CardAlignment,
+  type CardAppearance,
+  type CardBodyProps,
+  type CardFooterAlignment,
+  type CardFooterProps,
+  type CardGap,
+  type CardHeaderProps,
+  type CardMediaProps,
+  type CardPadding,
+  type CardProps,
+  type CardRadius,
+} from "./components/Card";
+export {
   Composer,
   ComposerContextBar,
   ComposerDivider,

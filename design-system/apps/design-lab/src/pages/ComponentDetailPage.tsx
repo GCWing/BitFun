@@ -25,6 +25,11 @@ import {
   ActionItem,
   ActivityItem,
   Button,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  CardMedia,
   ChangeCount,
   Composer,
   ComposerContextBar,
@@ -132,12 +137,15 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   outline: "detail.option.outline",
   primary: "detail.option.primary",
   quiet: "detail.option.quiet",
+  raised: "detail.option.raised",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
   start: "detail.option.start",
   surface: "detail.option.surface",
+  subtle: "detail.option.subtle",
   text: "detail.option.text",
+  media: "detail.option.media",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
 };
@@ -210,7 +218,9 @@ export function ComponentDetailPage({
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
-    component.name === "Composer"
+    component.name === "Card"
+      ? "raised"
+      : component.name === "Composer"
       ? "with-context"
       : component.name === "Switch"
         ? "off"
@@ -246,6 +256,8 @@ export function ComponentDetailPage({
         return ["default", "hover", "active", "disabled"] as const;
       case "Composer":
         return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
+      case "Card":
+        return ["raised", "subtle", "media"] as const;
       case "Input":
       case "SearchField":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
@@ -291,6 +303,12 @@ export function ComponentDetailPage({
         ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
+    }
+    if (component.name === "Card") {
+      if (previewState === "media") {
+        return `import { Card, CardBody, CardHeader, CardMedia } from "@bitfun/ui";\n\n<Card appearance="neutral" clip radius="md">\n  <CardMedia>\n    <ProductArtwork />\n  </CardMedia>\n  <CardBody padding="sm">\n    <CardHeader\n      title="${t("components.preview.cardMediaTitle")}"\n      description="${t("components.preview.cardMediaDescription")}"\n    />\n  </CardBody>\n</Card>`;
+      }
+      return `import { Card, CardBody, CardFooter, CardHeader } from "@bitfun/ui";\n\n<Card appearance="${previewState}" gap="md" padding="md" radius="lg">\n  <CardHeader\n    title="${t("components.preview.cardTitle")}"\n    description="${t("components.preview.cardDescription")}"\n  />\n  <CardBody>\n    <CommandGrid />\n  </CardBody>\n  <CardFooter align="end">\n    <Button>${t("components.preview.settings")}</Button>\n  </CardFooter>\n</Card>`;
     }
     if (component.name === "Composer") {
       const stateProps = `${previewState === "disabled" ? " disabled" : ""}${previewState === "invalid" ? " invalid" : ""}`;
@@ -679,6 +697,88 @@ export function ComponentDetailPage({
 
     if (component.name === "KeyHint") {
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "Card") {
+      if (state === "media") {
+        return (
+          <Card
+            appearance="neutral"
+            className="component-card-example component-card-example--media"
+            clip
+            radius="md"
+          >
+            <CardMedia>
+              <div className="component-card-media-visual">
+                <Monitor aria-hidden="true" />
+              </div>
+            </CardMedia>
+            <CardBody padding="sm">
+              <CardHeader
+                description={t("components.preview.cardMediaDescription")}
+                title={t("components.preview.cardMediaTitle")}
+              />
+            </CardBody>
+          </Card>
+        );
+      }
+
+      if (state === "subtle") {
+        return (
+          <Card
+            appearance="subtle"
+            className="component-card-example component-card-example--compact"
+            gap="sm"
+            padding="sm"
+            radius="sm"
+          >
+            <CardHeader
+              actions={(
+                <IconButton
+                  aria-label={t("components.preview.more")}
+                  icon={<MoreHorizontal aria-hidden="true" />}
+                  size="xs"
+                />
+              )}
+              align="center"
+              description={t("components.preview.activityDescription")}
+              leading={<Terminal aria-hidden="true" />}
+              title={t("components.preview.session")}
+            />
+          </Card>
+        );
+      }
+
+      return (
+        <Card
+          appearance="raised"
+          className="component-card-example"
+          gap="md"
+          padding="md"
+          radius="lg"
+        >
+          <CardHeader
+            description={t("components.preview.cardDescription")}
+            title={t("components.preview.cardTitle")}
+          />
+          <CardBody>
+            <div className="component-card-command-grid">
+              {["components.preview.menuItemOne", "components.preview.menuItemTwo", "components.preview.settings"].map((key) => (
+                <Card appearance="subtle" key={key} padding="sm" radius="sm">
+                  <CardHeader
+                    align="center"
+                    leading={<Command aria-hidden="true" />}
+                    title={t(key as MessageKey)}
+                  />
+                </Card>
+              ))}
+            </div>
+          </CardBody>
+          <CardFooter align="end">
+            <Button size="sm">{t("components.preview.settings")}</Button>
+          </CardFooter>
+        </Card>
+      );
     }
 
     if (component.name === "Menu") {
@@ -1072,6 +1172,13 @@ export function ComponentDetailPage({
                     </Button>
                   </div>
                   {renderModalExample(true)}
+                </div>
+              ) : component.name === "Card" ? (
+                <div className="component-card-preview-stage">
+                  <span className="component-card-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
                 </div>
               ) : component.name === "ActivityItem" ? (
                 <div className="component-activity-item-preview-stage">
