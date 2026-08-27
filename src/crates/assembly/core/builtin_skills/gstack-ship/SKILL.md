@@ -2,10 +2,10 @@
 name: ship
 description: |
   Ship workflow: detect + merge base branch, run tests, review diff, bump VERSION,
-  update CHANGELOG, commit, push, create PR. Use when asked to "ship", "deploy",
-  "push to main", "create a PR", "merge and push", or "get it deployed".
-  Proactively invoke this skill (do NOT push/PR directly) when the user says code
-  is ready, asks about deploying, wants to push code up, or asks to create a PR. (gstack)
+  update CHANGELOG, commit, push, and create a PR. Use for an explicit `/ship`
+  invocation or when the user requests the full ship, release, or deploy workflow.
+  For an ordinary commit, push, or pull-request publishing request, use the
+  built-in `commit-push-pr` skill instead. (gstack)
 ---
 
 # Ship: Fully Automated Ship Workflow
