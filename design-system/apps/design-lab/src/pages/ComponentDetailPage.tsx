@@ -1,11 +1,15 @@
 import { Fragment, useMemo, useState } from "react";
 import {
   ArrowUp,
+  Check,
   ChevronDown,
   ChevronRight,
   Clipboard,
   Command,
+  Copy,
+  Download,
   Eye,
+  ExternalLink,
   List,
   MessageCircle,
   Mic,
@@ -14,11 +18,14 @@ import {
   Plus,
   Search as SearchIcon,
   Settings,
+  Terminal,
   X,
 } from "lucide-react";
 import {
   ActionItem,
+  ActivityItem,
   Button,
+  ChangeCount,
   Composer,
   ComposerContextBar,
   ComposerDivider,
@@ -45,6 +52,7 @@ import {
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
+  type ActivityItemAppearance,
   type ScrollAreaOrientation,
   type ScrollbarVisibility,
   type TokenOverrides,
@@ -82,6 +90,7 @@ const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
 const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
+const activityItemAppearances = ["inline", "surface"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
@@ -98,6 +107,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   hover: "detail.option.hover",
   horizontal: "detail.option.horizontal",
   hidden: "detail.option.hidden",
+  inline: "detail.option.inline",
   scrolling: "detail.option.scrolling",
   "focus-within": "detail.option.focus-within",
   "with-context": "detail.option.with-context",
@@ -119,6 +129,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   selected: "detail.option.selected",
   sm: "detail.option.sm",
   start: "detail.option.start",
+  surface: "detail.option.surface",
   text: "detail.option.text",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
@@ -189,6 +200,7 @@ export function ComponentDetailPage({
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
+  const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [previewState, setPreviewState] = useState(
     component.name === "Composer"
       ? "with-context"
@@ -217,6 +229,8 @@ export function ComponentDetailPage({
     switch (component.name) {
       case "ActionItem":
         return ["default", "hover", "active", "disabled"] as const;
+      case "ActivityItem":
+        return ["default", "hover", "active", "focus-visible", "disabled"] as const;
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
@@ -249,6 +263,12 @@ export function ComponentDetailPage({
   const codeSample = useMemo(() => {
     if (component.name === "ActionItem") {
       return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+    }
+    if (component.name === "ActivityItem") {
+      if (activityItemAppearance === "inline") {
+        return `import { ActivityItem } from "@bitfun/ui";\nimport { Check } from "lucide-react";\n\n<ActivityItem\n  appearance="inline"\n  leading={<Check />}\n>\n  ${t("components.preview.activityStatus")}\n</ActivityItem>`;
+      }
+      return `import { ActivityItem, ChangeCount } from "@bitfun/ui";\nimport { Copy, Download, ExternalLink, Terminal } from "lucide-react";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Copy />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Download />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <ExternalLink />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"\n  label="${t("components.preview.activityAction")}"\n  leading={<Terminal />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
     }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -322,6 +342,7 @@ export function ComponentDetailPage({
         : "";
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
+    activityItemAppearance,
     component.name,
     composerShowContext,
     composerShowToolbar,
@@ -538,6 +559,48 @@ export function ComponentDetailPage({
         >
           {t("components.preview.assistant")}
         </ActionItem>
+      );
+    }
+
+    if (component.name === "ActivityItem") {
+      const surface = activityItemAppearance === "surface";
+      return (
+        <ActivityItem
+          actions={surface ? [
+            {
+              icon: <Copy aria-hidden="true" />,
+              id: "copy",
+              label: t("components.preview.activityCopy"),
+            },
+            {
+              icon: <Download aria-hidden="true" />,
+              id: "download",
+              label: t("components.preview.activityDownload"),
+            },
+            {
+              icon: <ExternalLink aria-hidden="true" />,
+              id: "open",
+              label: t("components.preview.activityOpen"),
+            },
+          ] : []}
+          appearance={activityItemAppearance}
+          className={state === "focus-visible"
+            ? "component-activity-item-example lab-force-focus"
+            : "component-activity-item-example"}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          disabled={state === "disabled"}
+          label={surface ? t("components.preview.activityAction") : undefined}
+          leading={surface
+            ? <Terminal aria-hidden="true" />
+            : <Check aria-hidden="true" />}
+          metadata={surface ? <ChangeCount additions={6} deletions={0} /> : undefined}
+          onActivate={surface ? () => undefined : undefined}
+          triggerProps={{ tabIndex: -1 }}
+        >
+          {surface
+            ? t("components.preview.activityDescription")
+            : t("components.preview.activityStatus")}
+        </ActivityItem>
       );
     }
 
@@ -937,6 +1000,13 @@ export function ComponentDetailPage({
                   </div>
                   {renderModalExample(true)}
                 </div>
+              ) : component.name === "ActivityItem" ? (
+                <div className="component-activity-item-preview-stage">
+                  <span className="component-activity-item-preview-stage__label">
+                    {t(optionLabelKeys[activityItemAppearance] ?? "detail.option.default")} · {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
               ) : component.name === "Composer" ? (
                 <div className="component-composer-preview-stage">
                   <span className="component-composer-preview-stage__label">
@@ -1208,6 +1278,14 @@ export function ComponentDetailPage({
                     options={inspectorStates}
                     value={previewState}
                   />
+                  {component.name === "ActivityItem" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setActivityItemAppearance(value as ActivityItemAppearance)}
+                      options={activityItemAppearances}
+                      value={activityItemAppearance}
+                    />
+                  )}
                   {component.name === "Composer" && (
                     <InspectorToggle
                       checked={composerShowContext}

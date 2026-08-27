@@ -15,11 +15,14 @@ import {
   PanelLeft,
   Plus,
   Search as SearchIcon,
+  Terminal,
   ToggleLeft,
 } from "lucide-react";
 import {
   ActionItem,
+  ActivityItem,
   Button,
+  ChangeCount,
   Composer,
   ComposerToolbar,
   Field,
@@ -62,6 +65,7 @@ interface ComponentsPageProps {
 
 const componentIcons = {
   ActionItem: List,
+  ActivityItem: Terminal,
   Button: MousePointerClick,
   Composer: ArrowUp,
   Field: Rows3,
@@ -90,6 +94,18 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         >
           {t("components.preview.assistant")}
         </ActionItem>
+      );
+    case "ActivityItem":
+      return (
+        <ActivityItem
+          appearance="surface"
+          className="component-activity-item-card-preview"
+          label={t("components.preview.activityAction")}
+          leading={<Terminal aria-hidden="true" />}
+          metadata={<ChangeCount additions={6} deletions={0} />}
+        >
+          {t("components.preview.activityDescription")}
+        </ActivityItem>
       );
     case "Button":
       return (

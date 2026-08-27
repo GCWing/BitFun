@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ActivityItem, ChangeCount } from "../dist/index.js";
+
+test("ActivityItem keeps identity, content, metadata, and actions independent", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActivityItem, {
+      actions: [
+        { icon: createElement("svg"), id: "copy", label: "Copy" },
+        { icon: createElement("svg"), id: "download", label: "Download" },
+      ],
+      appearance: "surface",
+      label: "Run command",
+      leading: createElement("svg", { "data-icon": "terminal" }),
+      metadata: createElement(ChangeCount, { additions: 6, deletions: 2 }),
+    }, "pnpm run check"),
+  );
+
+  assert.match(markup, /data-bf-component="activity-item"/);
+  assert.match(markup, /data-appearance="surface"/);
+  assert.match(markup, /data-bf-part="leading"/);
+  assert.match(markup, /data-bf-part="label">Run command<\/span>/);
+  assert.match(markup, /data-bf-part="description">pnpm run check<\/span>/);
+  assert.match(markup, /data-bf-part="metadata"/);
+  assert.match(markup, /data-bf-part="divider"/);
+  assert.match(markup, /data-bf-part="actions"/);
+  assert.equal((markup.match(/<button/g) ?? []).length, 2);
+});
+
+test("ActivityItem exposes an optional native trigger without nesting sibling actions", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActivityItem, {
+      actions: [{ icon: createElement("svg"), id: "open", label: "Open" }],
+      onActivate: () => undefined,
+      triggerProps: { "aria-expanded": false },
+    }, "Read file"),
+  );
+
+  const triggerEnd = markup.indexOf("</button>");
+  const siblingAction = markup.indexOf("<button", markup.indexOf("<button") + 1);
+
+  assert.equal((markup.match(/<button/g) ?? []).length, 2);
+  assert.match(markup, /<button[^>]+aria-expanded="false"[^>]+data-bf-part="trigger"/);
+  assert.ok(triggerEnd < siblingAction);
+});
+
+test("ActivityItem disables its trigger and sibling actions as one contract", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActivityItem, {
+      actions: [{ icon: createElement("svg"), id: "copy", label: "Copy" }],
+      disabled: true,
+      onActivate: () => undefined,
+    }, "Unavailable activity"),
+  );
+
+  assert.match(markup, /aria-disabled="true"/);
+  assert.match(markup, /data-disabled="true"/);
+  assert.equal((markup.match(/disabled=""/g) ?? []).length, 2);
+});
+
+test("ChangeCount formats positive additions and deletions with distinct parts", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ChangeCount, { additions: -6, deletions: -2 }),
+  );
+
+  assert.match(markup, /data-bf-component="change-count"/);
+  assert.match(markup, /data-bf-part="additions">\+6<\/span>/);
+  assert.match(markup, /data-bf-part="deletions">-2<\/span>/);
+});
+
+test("ActivityItem styles use public activity, status, and focus tokens", async () => {
+  const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /--bf-control-activity-item-surface-height/);
+  assert.match(styles, /--bf-control-activity-item-inline-icon-size/);
+  assert.match(styles, /--bf-control-change-count-padding-block/);
+  assert.match(styles, /--bf-control-icon-button-xs-size/);
+  assert.match(styles, /--bf-color-status-success-content/);
+  assert.match(styles, /--bf-color-status-danger-content/);
+  assert.match(styles, /--bf-color-focus-ring/);
+});

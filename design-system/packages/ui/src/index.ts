@@ -5,6 +5,14 @@ export {
   type ActionItemAction,
   type ActionItemProps,
 } from "./components/ActionItem";
+export {
+  ActivityItem,
+  ChangeCount,
+  type ActivityItemAction,
+  type ActivityItemAppearance,
+  type ActivityItemProps,
+  type ChangeCountProps,
+} from "./components/ActivityItem";
 export { Button, type ButtonProps } from "./components/Button";
 export {
   Composer,

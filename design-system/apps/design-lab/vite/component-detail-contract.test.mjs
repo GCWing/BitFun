@@ -110,6 +110,25 @@ test("ActionItem preview keeps its trigger and end actions as separate contracts
   assert.match(source, /id: "more"/);
 });
 
+test("ActivityItem preview exposes inline and surfaced anatomy without product behavior", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ActivityItem"/);
+  assert.match(detail, /const activityItemAppearances = \["inline", "surface"\] as const/);
+  assert.match(detail, /case "ActivityItem":\s*return \["default", "hover", "active", "focus-visible", "disabled"\] as const/);
+  assert.match(detail, /appearance=\{activityItemAppearance\}/);
+  assert.match(detail, /label=\{surface \? t\("components\.preview\.activityAction"\) : undefined\}/);
+  assert.match(detail, /metadata=\{surface \? <ChangeCount additions=\{6\} deletions=\{0\} \/> : undefined\}/);
+  assert.match(detail, /actions=\{surface \? \[/);
+  assert.match(detail, /setActivityItemAppearance/);
+  assert.match(styles, /\.component-activity-item-example\s*\{[^}]*max-inline-size:\s*680px/s);
+  assert.match(styles, /\[data-bf-component="activity-item"\]\.lab-force-focus/);
+});
+
 test("ActionItem preview reserves a full-width column for its complete anatomy", async () => {
   const source = await readFile(stylesSource, "utf8");
 

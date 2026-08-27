@@ -110,6 +110,35 @@
       "editorPadding": { "$value": "{space.1}" },
       "toolbarGap": { "$value": "{space.2}" },
       "dividerBlockSize": { "$value": "16px" }
+    },
+    "activityItem": {
+      "$type": "dimension",
+      "inlineGap": { "$value": "{space.1}" },
+      "inlineIconSize": { "$value": "12px" },
+      "inlineFontSize": { "$value": "11px" },
+      "inlineLineHeight": { "$value": "17px" },
+      "surfaceHeight": { "$value": "30px" },
+      "surfaceGap": { "$value": "{space.2}" },
+      "surfacePaddingBlock": { "$value": "{space.1}" },
+      "surfacePaddingInlineStart": { "$value": "{space.2}" },
+      "surfacePaddingInlineEnd": { "$value": "3px" },
+      "surfaceRadius": { "$value": "{radius.base}" },
+      "surfaceIconSize": { "$value": "14px" },
+      "contentGap": { "$value": "{space.1}" },
+      "dividerBlockSize": { "$value": "16px" }
+    },
+    "changeCount": {
+      "$type": "dimension",
+      "gap": { "$value": "{space.1}" },
+      "paddingBlock": { "$value": "2px" },
+      "paddingInline": { "$value": "{space.1}" },
+      "radius": { "$value": "{radius.xs}" },
+      "fontSize": { "$value": "11px" }
+    },
+    "iconButton": {
+      "$type": "dimension",
+      "xsSize": { "$value": "22px" },
+      "xsIconSize": { "$value": "14px" }
     }
   },
   "layout": {
