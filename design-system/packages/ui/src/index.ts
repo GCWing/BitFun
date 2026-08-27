@@ -49,7 +49,25 @@ export {
   type ComposerDividerProps,
   type ComposerProps,
 } from "./components/Composer";
-export { Field, type FieldProps } from "./components/Field";
+export {
+  Field,
+  type FieldControlWidth,
+  type FieldHorizontalGap,
+  type FieldLabelWidth,
+  type FieldProps,
+} from "./components/Field";
+export {
+  FieldGroup,
+  FieldRow,
+  FormSection,
+  type FieldGroupAppearance,
+  type FieldGroupProps,
+  type FieldRowAlignment,
+  type FieldRowPadding,
+  type FieldRowProps,
+  type FormSectionHeading,
+  type FormSectionProps,
+} from "./components/FieldGroup";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";

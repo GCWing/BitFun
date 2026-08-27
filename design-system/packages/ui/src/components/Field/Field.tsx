@@ -15,16 +15,23 @@ interface FieldControlProps {
   required?: boolean;
 }
 
+export type FieldControlWidth = "auto" | "fill";
+export type FieldHorizontalGap = "md" | "lg";
+export type FieldLabelWidth = "auto" | "sm" | "md" | "lg";
+
 export interface FieldProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: ReactElement<FieldControlProps>;
   controlClassName?: string;
   controlLeading?: ReactNode;
   controlTrailing?: ReactNode;
+  controlWidth?: FieldControlWidth;
   description?: ReactNode;
+  horizontalGap?: FieldHorizontalGap;
   label: ReactNode;
   labelAction?: ReactNode;
   labelClassName?: string;
+  labelWidth?: FieldLabelWidth;
   orientation?: "horizontal" | "vertical";
   required?: boolean;
 }
@@ -35,10 +42,13 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   controlClassName,
   controlLeading,
   controlTrailing,
+  controlWidth = "auto",
   description,
+  horizontalGap = "md",
   label,
   labelAction,
   labelClassName,
+  labelWidth = "auto",
   orientation = "vertical",
   required = false,
   ...props
@@ -63,6 +73,9 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       {...props}
       className={classNames(styles.root, className)}
       data-bf-component="field"
+      data-control-width={controlWidth}
+      data-horizontal-gap={horizontalGap}
+      data-label-width={labelWidth}
       data-orientation={orientation}
       data-required={isRequired ? "true" : "false"}
       ref={ref}

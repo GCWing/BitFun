@@ -3408,43 +3408,7 @@ input.lab-force-focus {
 }
 
 .component-modal-example {
-  display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: var(--bf-space-4);
-}
-
-.component-modal-example > h3 {
-  margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-label);
-  font-weight: var(--bf-font-weight-semibold);
-  line-height: var(--bf-line-height-tight);
-}
-
-.component-modal-example__panel {
-  overflow: hidden;
-  border-radius: var(--bf-radius-xl);
-  background: var(--bf-color-action-neutral-surface);
-}
-
-.component-modal-example__row {
-  padding-block: var(--bf-space-4);
-  padding-inline: var(--bf-space-5);
-}
-
-.component-modal-example__row + .component-modal-example__row {
-  border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-}
-
-.component-modal-example__field[data-orientation="horizontal"] {
-  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
-  column-gap: var(--bf-space-8);
-}
-
-.component-modal-example__field-control,
-.component-modal-example__control {
-  inline-size: 100%;
 }
 
 .component-modal-example__hint {
@@ -3542,10 +3506,11 @@ input.lab-force-focus {
     max-block-size: 620px;
   }
 
-  .component-modal-example__field[data-orientation="horizontal"] {
-    grid-template-columns: 1fr;
-    row-gap: var(--bf-space-2);
-  }
+}
+
+.component-field-group-example {
+  inline-size: 100%;
+  max-inline-size: 760px;
 }
 
 .component-preview-matrix {

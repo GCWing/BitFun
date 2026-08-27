@@ -42,6 +42,22 @@ test("Field exposes horizontal layout independently from its control", () => {
   assert.match(markup, /type="checkbox"/);
 });
 
+test("Field exposes reusable horizontal label and fill-control geometry", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Field, {
+      controlWidth: "fill",
+      horizontalGap: "lg",
+      label: "Provider name",
+      labelWidth: "md",
+      orientation: "horizontal",
+    }, createElement(Input)),
+  );
+
+  assert.match(markup, /data-control-width="fill"/);
+  assert.match(markup, /data-horizontal-gap="lg"/);
+  assert.match(markup, /data-label-width="md"/);
+});
+
 test("Field keeps label and control adornments outside the associated control", () => {
   const markup = renderToStaticMarkup(
     createElement(Field, {
@@ -72,4 +88,6 @@ test("Field styles consume shared content and typography tokens", async () => {
   assert.match(styles, /--bf-layout-field-root-gap/);
   assert.match(styles, /--bf-layout-field-label-action-gap/);
   assert.match(styles, /--bf-layout-field-control-gap/);
+  assert.match(styles, /--bf-layout-field-horizontal-gap-wide/);
+  assert.match(styles, /--bf-layout-field-label-width-md/);
 });

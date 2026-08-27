@@ -168,10 +168,25 @@
     "field": {
       "rootGap": { "$value": "{space.2}" },
       "horizontalGap": { "$value": "{space.5}" },
+      "horizontalGapWide": { "$value": "{space.10}" },
+      "labelWidthSm": { "$value": "150px" },
+      "labelWidthMd": { "$value": "200px" },
+      "labelWidthLg": { "$value": "400px" },
       "contentGap": { "$value": "{space.1}" },
       "labelGap": { "$value": "2px" },
       "labelActionGap": { "$value": "{space.2}" },
       "controlGap": { "$value": "{space.2}" }
+    },
+    "formSection": {
+      "gap": { "$value": "{space.4}" },
+      "headerGap": { "$value": "{space.5}" },
+      "titleDescriptionGap": { "$value": "{space.1}" },
+      "titleFontSize": { "$value": "15px" }
+    },
+    "fieldGroup": {
+      "radius": { "$value": "{radius.lg}" },
+      "rowPaddingBlock": { "$value": "{space.4}" },
+      "rowPaddingInline": { "$value": "{space.5}" }
     },
     "card": {
       "paddingSm": { "$value": "{space.3}" },

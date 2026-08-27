@@ -156,12 +156,30 @@ test("Field tokens preserve independent label, description, and control regions"
 
   assert.equal(tokens["layout.field.rootGap"], "8px");
   assert.equal(tokens["layout.field.horizontalGap"], "20px");
+  assert.equal(tokens["layout.field.horizontalGapWide"], "40px");
+  assert.equal(tokens["layout.field.labelWidthSm"], "150px");
+  assert.equal(tokens["layout.field.labelWidthMd"], "200px");
+  assert.equal(tokens["layout.field.labelWidthLg"], "400px");
   assert.equal(tokens["layout.field.contentGap"], "4px");
   assert.equal(tokens["layout.field.labelGap"], "2px");
   assert.equal(tokens["layout.field.labelActionGap"], "8px");
   assert.equal(tokens["layout.field.controlGap"], "8px");
   assert.equal(systemDocument.layout.field.rootGap.$value, "{space.2}");
   assert.equal(systemDocument.layout.field.labelActionGap.$value, "{space.2}");
+});
+
+test("Form grouping tokens preserve section, surface, and row composition", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.formSection.gap"], "16px");
+  assert.equal(tokens["layout.formSection.headerGap"], "20px");
+  assert.equal(tokens["layout.formSection.titleDescriptionGap"], "4px");
+  assert.equal(tokens["layout.formSection.titleFontSize"], "15px");
+  assert.equal(tokens["layout.fieldGroup.radius"], "12px");
+  assert.equal(tokens["layout.fieldGroup.rowPaddingBlock"], "16px");
+  assert.equal(tokens["layout.fieldGroup.rowPaddingInline"], "20px");
+  assert.equal(systemDocument.layout.formSection.gap.$value, "{space.4}");
+  assert.equal(systemDocument.layout.fieldGroup.radius.$value, "{radius.lg}");
 });
 
 test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {

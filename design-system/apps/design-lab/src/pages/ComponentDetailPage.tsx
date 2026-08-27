@@ -38,6 +38,9 @@ import {
   ComposerDivider,
   ComposerToolbar,
   Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
   IconButton,
   Input,
   KeyHint,
@@ -279,6 +282,8 @@ export function ComponentDetailPage({
       case "Modal":
       case "PageHeader":
         return ["default"] as const;
+      case "FieldGroup":
+        return ["subtle", "plain", "divided"] as const;
       case "Menu":
         return ["default", "scrolling", "focus-within", "disabled-item", "checked-item"] as const;
       case "NavigationPanel":
@@ -363,6 +368,9 @@ export function ComponentDetailPage({
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
+    if (component.name === "FieldGroup") {
+      return `import { Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
+    }
     if (component.name === "Menu") {
       return `import { Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
@@ -438,103 +446,108 @@ export function ComponentDetailPage({
 
   function renderModalConfigurationContent() {
     return (
-      <section className="component-modal-example" aria-label={t("components.preview.modalSectionTitle")}>
-        <h3>{t("components.preview.modalSectionTitle")}</h3>
-        <div className="component-modal-example__panel">
-          <div className="component-modal-example__row">
+      <FormSection
+        aria-label={t("components.preview.modalSectionTitle")}
+        className="component-modal-example"
+        headingAs="h3"
+        title={t("components.preview.modalSectionTitle")}
+      >
+        <FieldGroup>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalProviderName")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
-              <Input className="component-modal-example__control" defaultValue="OpenBitFun" />
+              <Input defaultValue="OpenBitFun" />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalAuthentication")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="API Key"
                 readOnly
                 trailing={<ChevronDown aria-hidden="true" />}
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalApiKey")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="bitfun-provider-api-key"
                 readOnly
                 trailing={<Eye aria-hidden="true" />}
                 type="password"
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalApiUrl")}
+              labelWidth="md"
               orientation="horizontal"
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="https://api.openbitfun.com"
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalRequestFormat")}
+              labelWidth="md"
               orientation="horizontal"
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="Anthropic (messages)"
                 readOnly
                 trailing={<ChevronDown aria-hidden="true" />}
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalSelectModels")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="k3-256k"
                 trailing={<Plus aria-hidden="true" />}
               />
             </Field>
-          </div>
-        </div>
+          </FieldRow>
+        </FieldGroup>
         <p className="component-modal-example__hint">{t("components.preview.modalPresetModels")}</p>
         <div className="component-modal-example__model-card">
           <strong>k3-256k</strong>
           <span>{t("components.preview.modalModelSummary")}</span>
         </div>
-      </section>
+      </FormSection>
     );
   }
 
@@ -771,6 +784,42 @@ export function ComponentDetailPage({
 
     if (component.name === "KeyHint") {
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "FieldGroup") {
+      const plain = state === "plain";
+      return (
+        <FormSection
+          className="component-field-group-example"
+          description={t("components.preview.fieldDescription")}
+          headingAs="h3"
+          title={t("components.preview.modalSectionTitle")}
+        >
+          <FieldGroup appearance={plain ? "plain" : "subtle"} dividers={state === "divided"}>
+            <FieldRow>
+              <Field
+                controlWidth="fill"
+                label={t("components.preview.modalProviderName")}
+                labelWidth="md"
+                orientation="horizontal"
+                required
+              >
+                <Input defaultValue="OpenBitFun" />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field
+                controlWidth="fill"
+                label={t("components.preview.modalApiUrl")}
+                labelWidth="md"
+                orientation="horizontal"
+              >
+                <Input defaultValue="https://api.openbitfun.com" />
+              </Field>
+            </FieldRow>
+          </FieldGroup>
+        </FormSection>
+      );
     }
 
     if (component.name === "Card") {
@@ -1344,7 +1393,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionCard"
@@ -1353,6 +1402,8 @@ export function ComponentDetailPage({
                       ? "action-item"
                     : component.name === "Field"
                       ? "field"
+                    : component.name === "FieldGroup"
+                      ? "field-group"
                     : component.name === "Input"
                       ? "input"
                     : component.name === "KeyHint"

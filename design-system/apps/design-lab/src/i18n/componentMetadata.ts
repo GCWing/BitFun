@@ -19,6 +19,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   Card: "component.Card.description",
   Composer: "component.Composer.description",
   Field: "component.Field.description",
+  FieldGroup: "component.FieldGroup.description",
   IconButton: "component.IconButton.description",
   Input: "component.Input.description",
   KeyHint: "component.KeyHint.description",

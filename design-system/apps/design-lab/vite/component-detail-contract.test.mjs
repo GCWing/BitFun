@@ -284,6 +284,22 @@ test("Field preview exposes label and control composition independently from lay
   assert.match(styles, /\.component-field-example\[data-orientation="horizontal"\] \[data-bf-part="control"\]\s*\{[^}]*inline-size:\s*150px/s);
 });
 
+test("FieldGroup preview exposes section, surface, row, and field composition contracts", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(source, /case "FieldGroup":\s*return \["subtle", "plain", "divided"\] as const/);
+  assert.match(source, /component\.name === "FieldGroup"/);
+  assert.match(source, /<FormSection/);
+  assert.match(source, /<FieldGroup appearance=\{plain \? "plain" : "subtle"\} dividers=\{state === "divided"\}/);
+  assert.match(source, /<FieldRow>/);
+  assert.match(source, /controlWidth="fill"/);
+  assert.match(source, /labelWidth="md"/);
+  assert.match(styles, /\.component-field-group-example\s*\{[^}]*max-inline-size:\s*760px/s);
+});
+
 test("PageHeader preview decouples semantic level from visual size and alignment", async () => {
   const source = await readFile(detailSource, "utf8");
 

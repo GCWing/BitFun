@@ -5,6 +5,7 @@ import { buttonMeta } from "./components/Button/Button.meta";
 import { cardMeta } from "./components/Card/Card.meta";
 import { composerMeta } from "./components/Composer/Composer.meta";
 import { fieldMeta } from "./components/Field/Field.meta";
+import { fieldGroupMeta } from "./components/FieldGroup/FieldGroup.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
 import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
@@ -33,6 +34,7 @@ export const componentRegistry = [
   cardMeta,
   composerMeta,
   fieldMeta,
+  fieldGroupMeta,
   iconButtonMeta,
   inputMeta,
   keyHintMeta,

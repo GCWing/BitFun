@@ -29,6 +29,9 @@ import {
   Composer,
   ComposerToolbar,
   Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
   IconButton,
   Input,
   KeyHint,
@@ -200,6 +203,18 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             </MenuItem>
           </MenuSection>
         </Menu>
+      );
+    case "FieldGroup":
+      return (
+        <FormSection headingAs="h3" title={t("components.preview.modalSectionTitle")}>
+          <FieldGroup>
+            <FieldRow>
+              <Field controlWidth="fill" label={t("components.preview.modalProviderName")} labelWidth="sm" orientation="horizontal">
+                <Input defaultValue="OpenBitFun" readOnly />
+              </Field>
+            </FieldRow>
+          </FieldGroup>
+        </FormSection>
       );
     case "Composer":
       return (

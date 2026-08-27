@@ -12,6 +12,38 @@
     column-gap: var(--bf-layout-field-horizontal-gap);
   }
 
+  .root[data-orientation="horizontal"][data-horizontal-gap="lg"] {
+    column-gap: var(--bf-layout-field-horizontal-gap-wide);
+  }
+
+  .root[data-orientation="horizontal"][data-label-width="sm"] {
+    grid-template-columns: var(--bf-layout-field-label-width-sm) auto;
+  }
+
+  .root[data-orientation="horizontal"][data-label-width="md"] {
+    grid-template-columns: var(--bf-layout-field-label-width-md) auto;
+  }
+
+  .root[data-orientation="horizontal"][data-label-width="lg"] {
+    grid-template-columns: minmax(0, var(--bf-layout-field-label-width-lg)) auto;
+  }
+
+  .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="auto"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="sm"] {
+    grid-template-columns: var(--bf-layout-field-label-width-sm) minmax(0, 1fr);
+  }
+
+  .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="md"] {
+    grid-template-columns: var(--bf-layout-field-label-width-md) minmax(0, 1fr);
+  }
+
+  .root[data-orientation="horizontal"][data-control-width="fill"][data-label-width="lg"] {
+    grid-template-columns: minmax(0, var(--bf-layout-field-label-width-lg)) minmax(0, 1fr);
+  }
+
   .content {
     display: flex;
     min-inline-size: 0;
@@ -64,6 +96,15 @@
     min-inline-size: 0;
     align-items: center;
     gap: var(--bf-layout-field-control-gap);
+  }
+
+  .root[data-control-width="fill"] .control {
+    inline-size: 100%;
+  }
+
+  .root[data-control-width="fill"] .control > :not(.controlAdornment) {
+    flex: 1 1 auto;
+    inline-size: 100%;
   }
 
   .control > :not(.controlAdornment) {
