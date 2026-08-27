@@ -186,35 +186,22 @@
       "check_command_exists",
       "check_commands_exist"
     ],
-    "storageMaintenance": [
-      "cleanup_storage",
-      "cleanup_storage_with_policy",
-      "get_project_storage_paths",
-      "get_storage_paths",
-      "get_storage_statistics"
-    ],
     "runtimeLifecycle": [
       "ensure_assistant_bootstrap",
       "ensure_coordinator_session",
       "initialize_ai",
       "initialize_mcp_servers",
       "initialize_mcp_servers_non_destructive",
-      "initialize_project_storage",
-      "initialize_snapshot",
       "initialize_tray_after_startup",
       "initialize_workspace_startup_state",
-      "reload_config",
-      "reload_global_config",
-      "subscribe_config_updates"
+      "reload_config"
     ],
     "genericConfigPrimitives": [
       "get_config",
       "get_configs",
-      "set_config",
-      "sync_config_to_global"
+      "set_config"
     ],
     "persistencePrimitives": [
-      "record_file_change",
       "save_session_metadata",
       "save_session_turn",
       "touch_session_activity"
@@ -8959,9 +8946,6 @@
     },
     "browser": {
       "capabilityId": "feature.browser"
-    },
-    "storage_commands": {
-      "capabilityId": "feature.files-editor"
     },
     "announcement": {
       "capabilityId": "setting.application.general"

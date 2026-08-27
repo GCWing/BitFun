@@ -87,7 +87,6 @@ use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::speech_api::*;
-use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
@@ -1570,7 +1569,6 @@ pub async fn run() {
             import_config,
             validate_config,
             reload_config,
-            sync_config_to_global,
             get_global_config_health,
             get_runtime_logging_info,
             export_diagnostics_bundle,
@@ -1672,8 +1670,6 @@ pub async fn run() {
             compute_diff,
             apply_patch,
             save_merged_diff_content,
-            initialize_snapshot,
-            record_file_change,
             rollback_session,
             rollback_session_to_turn,
             accept_session,
@@ -1696,12 +1692,6 @@ pub async fn run() {
             get_file_change_history,
             get_all_modified_files,
             get_baseline_snapshot_diff,
-            get_storage_paths,
-            get_project_storage_paths,
-            cleanup_storage,
-            cleanup_storage_with_policy,
-            get_storage_statistics,
-            initialize_project_storage,
             // Session persistence API
             list_persisted_sessions,
             search_session_content,
@@ -1761,9 +1751,7 @@ pub async fn run() {
             get_acp_session_commands,
             set_acp_session_model,
             set_acp_session_config_option,
-            reload_global_config,
             get_global_config_status,
-            subscribe_config_updates,
             get_model_configs,
             get_ai_model_catalog,
             project_ai_model_reasoning_catalog,
