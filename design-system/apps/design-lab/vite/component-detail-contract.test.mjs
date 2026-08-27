@@ -354,6 +354,7 @@ test("FieldGroup preview exposes section, surface, row, and field composition co
   assert.match(source, /case "FieldGroup":\s*return \["subtle", "plain", "divided"\] as const/);
   assert.match(source, /component\.name === "FieldGroup"/);
   assert.match(source, /<FormSection/);
+  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
   assert.match(source, /<FieldGroup appearance=\{plain \? "plain" : "subtle"\} dividers=\{state === "divided"\}/);
   assert.match(source, /<FieldRow>/);
   assert.match(source, /controlWidth="fill"/);
@@ -370,6 +371,7 @@ test("PageHeader preview decouples semantic level from visual size and alignment
   assert.match(source, /size=\{pageHeaderSize\}/);
   assert.match(source, /align=\{pageHeaderAlign\}/);
   assert.match(source, /action=\{\(/);
+  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {

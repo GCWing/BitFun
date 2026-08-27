@@ -27,11 +27,13 @@ test("PageHeader exposes alignment and action content independently", () => {
     createElement(PageHeader, {
       action: createElement(Button, null, "Close"),
       align: "center",
+      leading: createElement("svg", { "aria-hidden": "true" }),
       title: "Good morning, coding partner",
     }),
   );
 
   assert.match(markup, /data-align="center"/);
+  assert.match(markup, /data-bf-part="leading"[^>]*><svg aria-hidden="true"><\/svg>/);
   assert.match(markup, /data-bf-part="action"/);
   assert.match(markup, /<button/);
   assert.match(markup, /data-bf-part="action"[^]*>Close<\/span>/);

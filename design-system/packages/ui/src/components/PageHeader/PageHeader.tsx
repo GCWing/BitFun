@@ -14,6 +14,7 @@ export interface PageHeaderProps
   align?: "center" | "start";
   description?: ReactNode;
   headingClassName?: string;
+  leading?: ReactNode;
   level?: 1 | 2 | 3 | 4 | 5 | 6;
   size?: "display" | "lg" | "md" | "sm";
   title: ReactNode;
@@ -25,6 +26,7 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
   className,
   description,
   headingClassName,
+  leading,
   level = 1,
   size = "md",
   title,
@@ -42,6 +44,11 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
       data-size={size}
       ref={ref}
     >
+      {leading !== undefined && leading !== null && (
+        <span className={styles.leading} data-bf-part="leading">
+          {leading}
+        </span>
+      )}
       <span className={styles.content} data-bf-part="content">
         <Heading className={classNames(styles.heading, headingClassName)} data-bf-part="heading">
           {title}

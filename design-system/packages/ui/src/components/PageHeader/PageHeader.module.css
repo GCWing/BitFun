@@ -12,6 +12,13 @@
     text-align: center;
   }
 
+  .leading {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: inherit;
+  }
+
   .content {
     display: flex;
     flex: 1 1 auto;

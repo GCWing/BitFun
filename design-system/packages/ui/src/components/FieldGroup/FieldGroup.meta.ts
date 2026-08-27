@@ -8,6 +8,7 @@ export const fieldGroupMeta = {
   props: [
     { name: "FormSection.title", type: "ReactNode" },
     { name: "FormSection.description", type: "ReactNode" },
+    { name: "FormSection.leading", type: "ReactNode" },
     { name: "FormSection.actions", type: "ReactNode" },
     { defaultValue: "h2", name: "FormSection.headingAs", type: "h2 | h3 | h4" },
     { defaultValue: "subtle", name: "appearance", type: "subtle | plain" },

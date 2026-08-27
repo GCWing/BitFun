@@ -15,6 +15,7 @@ import {
   PanelLeft,
   Plus,
   Search as SearchIcon,
+  Settings,
   Terminal,
   ToggleLeft,
 } from "lucide-react";
@@ -220,7 +221,11 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "FieldGroup":
       return (
-        <FormSection headingAs="h3" title={t("components.preview.modalSectionTitle")}>
+        <FormSection
+          headingAs="h3"
+          leading={<Settings aria-hidden="true" />}
+          title={t("components.preview.modalSectionTitle")}
+        >
           <FieldGroup>
             <FieldRow>
               <Field controlWidth="fill" label={t("components.preview.modalProviderName")} labelWidth="sm" orientation="horizontal">
@@ -283,6 +288,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       return (
         <PageHeader
           description={t("components.preview.appearanceDescription")}
+          leading={<Heading aria-hidden="true" />}
           level={2}
           size="sm"
           title={t("components.preview.appearance")}

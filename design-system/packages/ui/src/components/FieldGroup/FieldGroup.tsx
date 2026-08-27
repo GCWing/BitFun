@@ -17,6 +17,7 @@ export interface FormSectionProps
   actions?: ReactNode;
   description?: ReactNode;
   headingAs?: FormSectionHeading;
+  leading?: ReactNode;
   title?: ReactNode;
 }
 
@@ -37,6 +38,7 @@ export const FormSection = forwardRef<HTMLElement, FormSectionProps>(
     className,
     description,
     headingAs = "h2",
+    leading,
     title,
     ...props
   }, ref) {
@@ -49,20 +51,33 @@ export const FormSection = forwardRef<HTMLElement, FormSectionProps>(
       >
         {(title !== undefined && title !== null)
           || (description !== undefined && description !== null)
+          || (leading !== undefined && leading !== null)
           || (actions !== undefined && actions !== null) ? (
             <div className={styles.header} data-bf-part="header">
-              <div className={styles.headingContent} data-bf-part="heading-content">
-                {title !== undefined && title !== null && createElement(
-                  headingAs,
-                  { className: styles.title, "data-bf-part": "title" },
-                  title,
-                )}
-                {description !== undefined && description !== null && (
-                  <div className={styles.description} data-bf-part="description">
-                    {description}
+              {(title !== undefined && title !== null)
+                || (description !== undefined && description !== null)
+                || (leading !== undefined && leading !== null) ? (
+                  <div className={styles.headingRegion} data-bf-part="heading-region">
+                    {leading !== undefined && leading !== null && (
+                      <div className={styles.leading} data-bf-part="leading">{leading}</div>
+                    )}
+                    {(title !== undefined && title !== null)
+                      || (description !== undefined && description !== null) ? (
+                        <div className={styles.headingContent} data-bf-part="heading-content">
+                          {title !== undefined && title !== null && createElement(
+                            headingAs,
+                            { className: styles.title, "data-bf-part": "title" },
+                            title,
+                          )}
+                          {description !== undefined && description !== null && (
+                            <div className={styles.description} data-bf-part="description">
+                              {description}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                   </div>
-                )}
-              </div>
+                ) : null}
               {actions !== undefined && actions !== null && (
                 <div className={styles.actions} data-bf-part="actions">{actions}</div>
               )}

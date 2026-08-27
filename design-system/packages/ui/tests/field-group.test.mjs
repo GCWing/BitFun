@@ -17,6 +17,7 @@ test("form grouping composes semantic sections, grouped surfaces, and independen
       actions: createElement("button", { type: "button" }, "Reset"),
       description: "Connection settings",
       headingAs: "h3",
+      leading: createElement("svg", { "aria-hidden": "true" }),
       title: "Provider",
     }, createElement(FieldGroup, {
       appearance: "subtle",
@@ -36,6 +37,8 @@ test("form grouping composes semantic sections, grouped surfaces, and independen
 
   assert.match(markup, /<section[^>]+data-bf-component="form-section"/);
   assert.match(markup, /<h3[^>]+data-bf-part="title"[^>]*>Provider<\/h3>/);
+  assert.match(markup, /data-bf-part="heading-region"/);
+  assert.match(markup, /data-bf-part="leading"[^>]*><svg aria-hidden="true"><\/svg>/);
   assert.match(markup, /data-bf-part="description"[^>]*>Connection settings/);
   assert.match(markup, /data-bf-part="actions"[^>]*><button[^>]*>Reset/);
   assert.match(markup, /data-bf-component="field-group"/);

@@ -2,12 +2,13 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const pageHeaderMeta = {
   category: "primitive",
-  description: "A title composition with independent semantic level, visual size, description, action, and alignment.",
+  description: "A title composition with independent leading content, semantic level, visual size, description, action, and alignment.",
   maturity: "stable",
   name: "PageHeader",
   props: [
     { name: "title", type: "ReactNode" },
     { name: "description", type: "ReactNode" },
+    { name: "leading", type: "ReactNode" },
     { name: "action", type: "ReactNode" },
     { defaultValue: "1", name: "level", type: "1 | 2 | 3 | 4 | 5 | 6" },
     { defaultValue: "md", name: "size", type: "sm | md | lg | display" },

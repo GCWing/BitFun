@@ -1,6 +1,8 @@
 @layer bf.components {
   .section,
   .header,
+  .headingRegion,
+  .leading,
   .headingContent,
   .title,
   .description,
@@ -33,6 +35,21 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--bf-layout-form-section-title-description-gap);
+  }
+
+  .headingRegion {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: var(--bf-space-2);
+  }
+
+  .leading {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: var(--bf-color-content-primary);
   }
 
   .title {
