@@ -298,6 +298,7 @@ test('built-in and external browsers share one agent action contract', async () 
 });
 
 test('docs, runtime, and technical views are generated projections of one semantic source', async () => {
+  const { interactionAudit } = buildCapabilityCatalog();
   const source = JSON.parse(await read('src/shared/interactive-capabilities/catalog.json'));
   const publicCatalog = JSON.parse(await read('docs/interactive-capabilities/capabilities.json'));
   const runtimeCatalog = JSON.parse(await read(
@@ -309,12 +310,9 @@ test('docs, runtime, and technical views are generated projections of one semant
   const technicalMap = JSON.parse(await read(
     'docs/interactive-capabilities/technical/tauri-command-map.json',
   ));
-  const interactionMap = JSON.parse(await read(
-    'docs/interactive-capabilities/technical/ui-interaction-inventory.json',
-  ));
 
   const sourceIds = source.capabilities.map(({ id }) => id);
-  assert.deepEqual(interactionMap.roots, ['src/web-ui/src']);
+  assert.deepEqual(interactionAudit.roots, ['src/web-ui/src']);
   assert.deepEqual(publicCatalog.capabilities.map(({ id }) => id), sourceIds);
   assert.deepEqual(publicCatalog.searchAcceptance, source.searchAcceptance);
   assert.deepEqual(runtimeCatalog.searchAcceptance, source.searchAcceptance);
@@ -324,7 +322,7 @@ test('docs, runtime, and technical views are generated projections of one semant
   assert.equal(publicCatalog.digest, runtimeCatalog.digest);
   assert.equal(publicCatalog.digest, productControlCatalog.digest);
   assert.equal(publicCatalog.digest, technicalMap.catalogDigest);
-  assert.equal(publicCatalog.digest, interactionMap.catalogDigest);
+  assert.equal(publicCatalog.digest, interactionAudit.catalogDigest);
   assert.deepEqual(publicCatalog.definitions, runtimeCatalog.definitions);
   assert.deepEqual(publicCatalog.definitions, productControlCatalog.definitions);
   assert.ok(publicCatalog.definitions.length > publicCatalog.capabilities.length);
@@ -337,21 +335,21 @@ test('docs, runtime, and technical views are generated projections of one semant
       );
     }
   }
-  assert.equal(interactionMap.fileCount, interactionMap.files.length);
+  assert.equal(interactionAudit.fileCount, interactionAudit.files.length);
   assert.equal(
-    interactionMap.interactionCount,
-    interactionMap.files.reduce((total, file) => total + file.interactionCount, 0),
+    interactionAudit.interactionCount,
+    interactionAudit.files.reduce((total, file) => total + file.interactionCount, 0),
   );
-  assert.ok(interactionMap.files.every(({ interactionCount, digest }) =>
+  assert.ok(interactionAudit.files.every(({ interactionCount, digest }) =>
     interactionCount > 0 && /^[a-f0-9]{64}$/u.test(digest)));
-  const interactionSourceFiles = interactionMap.files.map(({ sourceFile }) => sourceFile);
+  const interactionSourceFiles = interactionAudit.files.map(({ sourceFile }) => sourceFile);
   assert.deepEqual(interactionSourceFiles, [...interactionSourceFiles].sort());
   assert.ok(interactionSourceFiles.every((sourceFile) => !sourceFile.includes('/generated/')));
-  assert.ok(interactionMap.files.some(({ sourceFile }) =>
+  assert.ok(interactionAudit.files.some(({ sourceFile }) =>
     sourceFile.endsWith('/BrowserPanel.tsx')));
-  assert.ok(interactionMap.files.some(({ sourceFile }) =>
+  assert.ok(interactionAudit.files.some(({ sourceFile }) =>
     sourceFile.endsWith('/AssistantDefaultsPage.tsx')));
-  assert.ok(interactionMap.files.some(({ sourceFile }) =>
+  assert.ok(interactionAudit.files.some(({ sourceFile }) =>
     sourceFile.endsWith('/AppearanceSettingsPage.tsx')));
   assert.equal(publicCatalog.source, 'src/shared/interactive-capabilities/catalog.json');
 
