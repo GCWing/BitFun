@@ -4,6 +4,7 @@ export const usageStatisticsConfigAppearanceDescriptor: AppearanceSurfaceDescrip
   id: 'usage-statistics-config',
   parts: [
     { id: 'root' },
+    { id: 'overview' },
     { id: 'filters' },
     { id: 'summary' },
     { id: 'distributions' },

@@ -7,10 +7,10 @@ import {
 
 describe('chatInputExecutionLevelPolicy', () => {
   it('maps presentation levels directly to Agent types', () => {
-    expect(resolveComposerExecutionLevelSelection('ultimate', 'agentic')).toEqual({
+    expect(resolveComposerExecutionLevelSelection('ultimate')).toEqual({
       modeId: 'Ultra',
     });
-    expect(resolveComposerExecutionLevelSelection('minimal', 'agentic')).toEqual({
+    expect(resolveComposerExecutionLevelSelection('minimal')).toEqual({
       modeId: 'minimal',
     });
     expect(resolveSelectedComposerExecutionLevel({
@@ -18,16 +18,15 @@ describe('chatInputExecutionLevelPolicy', () => {
     })).toBe('ultimate');
   });
 
-  it('maps Balanced to agentic only when leaving a tier Agent', () => {
-    expect(resolveComposerExecutionLevelSelection('minimal', 'Ultra')).toEqual({
+  it('maps Standard to agentic and projects specialized Agents as Other', () => {
+    expect(resolveComposerExecutionLevelSelection('minimal')).toEqual({
       modeId: 'minimal',
     });
-    expect(resolveComposerExecutionLevelSelection('balanced', 'Plan')).toEqual({
-      modeId: 'Plan',
-    });
-    expect(resolveComposerExecutionLevelSelection('balanced', 'minimal')).toEqual({
+    expect(resolveComposerExecutionLevelSelection('balanced')).toEqual({
       modeId: 'agentic',
     });
+    expect(resolveSelectedComposerExecutionLevel({ currentMode: 'agentic' })).toBe('balanced');
+    expect(resolveSelectedComposerExecutionLevel({ currentMode: 'Plan' })).toBe('other');
   });
 
   it('lets a root project composer configure its execution level', () => {

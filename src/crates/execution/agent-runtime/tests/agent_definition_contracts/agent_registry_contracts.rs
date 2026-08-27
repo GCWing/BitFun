@@ -22,8 +22,8 @@ fn visibility_policy_supports_public_restricted_hidden_and_denied_parents() {
     assert!(restricted.can_access_from_parent(Some("DeepResearch")));
     assert!(!restricted.can_access_from_parent(Some("agentic")));
 
-    let denied = SubagentVisibilityPolicy::public().deny_for(["Team"]);
-    assert!(!denied.can_access_from_parent(Some("Team")));
+    let denied = SubagentVisibilityPolicy::public().deny_for(["BlockedParent"]);
+    assert!(!denied.can_access_from_parent(Some("BlockedParent")));
     assert!(denied.can_access_from_parent(Some("agentic")));
 
     let hidden = SubagentVisibilityPolicy::hidden(["DeepReview"]);
@@ -181,8 +181,7 @@ fn subagent_source_contract_preserves_runtime_kind_and_presentation_order() {
 fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
     assert_eq!(mode_presentation_rank("agentic"), 0);
     assert_eq!(mode_presentation_rank("Cowork"), 1);
-    assert_eq!(mode_presentation_rank("Team"), 5);
-    assert_eq!(mode_presentation_rank("Ultra"), 6);
+    assert_eq!(mode_presentation_rank("Ultra"), 5);
     assert_eq!(mode_presentation_rank("unknown"), 99);
 
     assert_eq!(
@@ -205,7 +204,6 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "Plan",
             "Claw",
             "DeepResearch",
-            "Team",
             "Ultra",
             "SwarmPlanner",
             "SwarmWorker",
@@ -296,9 +294,6 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     assert!(computer_use
         .visibility_policy
         .can_access_from_parent(Some("Claw")));
-    assert!(computer_use
-        .visibility_policy
-        .can_access_from_parent(Some("Team")));
     assert!(!computer_use
         .visibility_policy
         .can_access_from_parent(Some("agentic")));

@@ -4,7 +4,7 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,7 +19,7 @@ import {
   KeyRound,
   Trash2,
 } from 'lucide-react';
-import { Textarea, Modal, ToolProcessingDots, confirmDanger, Tooltip } from '@/component-library';
+import { Textarea, ToolProcessingDots, confirmDanger, Tooltip } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,

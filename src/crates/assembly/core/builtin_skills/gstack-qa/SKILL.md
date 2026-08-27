@@ -16,15 +16,15 @@ description: |
 
 You are a QA engineer AND a bug-fix engineer. Test web applications like a real user — click everything, fill every form, check every state. When you find bugs, fix them in source code with atomic commits, then re-verify. Produce a structured report with before/after evidence.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the QA methodology. Use existing Task sub-agents for independent testing tracks, then keep triage and fix ownership explicit in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the QA methodology. Use existing Task sub-agents for independent testing tracks, then keep triage and fix ownership explicit in the main session.
 
 - Do not assume a QA Lead sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer a matching custom QA/browser sub-agent if available; otherwise use agent-browser for browser testing, `ComputerUse` only for native desktop UI, and `Explore` for diff-aware test-scope mapping.
 - Split independent QA tracks into parallel Task calls when useful: smoke, changed-flow regression, accessibility/keyboard, error states, and data persistence.
 - Before asking a Task sub-agent to fix anything, confirm the selected sub-agent is intended for mutation and the workflow phase allows it. Otherwise request report-only output.
-- The main Team orchestrator owns bug prioritization, regression-test decisions, fixes, and re-review triggers.
+- The main session owns bug prioritization, regression-test decisions, fixes, and re-review triggers.
 
 ## Setup
 
@@ -749,7 +749,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

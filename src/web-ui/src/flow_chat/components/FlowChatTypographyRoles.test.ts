@@ -63,7 +63,6 @@ describe('FlowChat semantic typography roles', () => {
     const workspaceStrip = readSource('./ChatInputWorkspaceStrip.scss');
 
     expectRole(chatInput, '&__target-tab {', 'control');
-    expectRole(chatInput, '&__agent-capsule {', 'control');
     expectRole(chatInput, '&__mode-option {', 'control');
     expectRole(chatInput, '&__slash-command-name {', 'control');
     expectRole(harness, '.bitfun-harness-selector__trigger {', 'control');

@@ -1,10 +1,9 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useState } from 'react';
 import { FolderOpen, Clock, FileText, Code, Folder } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
 import { WorkspaceInfo, WorkspaceKind, WorkspaceType } from '../../../shared/types';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
-import { Modal } from '@/component-library';
 import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';

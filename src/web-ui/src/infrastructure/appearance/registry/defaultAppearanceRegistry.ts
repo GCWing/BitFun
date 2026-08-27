@@ -1,6 +1,5 @@
 import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
 import { inputAppearanceDescriptor } from '@/component-library/components/Input/appearance';
-import { modalAppearanceDescriptor } from '@/component-library/components/Modal/appearance';
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
@@ -296,7 +295,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
   return new AppearanceRegistry()
     .registerComponent(cardAppearanceDescriptor)
     .registerComponent(inputAppearanceDescriptor)
-    .registerComponent(modalAppearanceDescriptor)
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)

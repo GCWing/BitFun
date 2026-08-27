@@ -2,9 +2,8 @@
  * Dialog when a remote update is available (daily prompt or manual check).
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useRef } from 'react';
-import { Modal } from '@/component-library';
 import { Download } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
@@ -49,7 +48,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
       title={t('update.availableTitle')}
       showCloseButton={true}
       size="medium"
-      contentInset
+      contentPadding="lg"
     >
       <div
         className="bitfun-update-available"

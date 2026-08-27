@@ -1,4 +1,4 @@
-import { Button, SearchField } from '@bitfun/ui';
+import { Button, Modal, SearchField } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -12,7 +12,7 @@ import {
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { confirmDialog, Modal, Select } from '@/component-library';
+import { confirmDialog, Select } from '@/component-library';
 import { MarketAccountControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
@@ -453,8 +453,9 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       title={t('package.market.title')}
       titleExtra={<MarketAccountControls />}
       size="xlarge"
-      contentInset
-      contentClassName="modal__content--fill-flex appearance-market__modal"
+      contentPadding="lg"
+      contentLayout="flex"
+      contentClassName="appearance-market__modal"
       testId="appearance-market-dialog"
     >
       <div

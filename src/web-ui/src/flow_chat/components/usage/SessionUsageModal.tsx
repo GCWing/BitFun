@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '@/component-library';
+import { Modal } from '@bitfun/ui';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { setChatPopupActive } from '../chatPopupState';
 import { SessionUsageReportCard } from './SessionUsageReportCard';

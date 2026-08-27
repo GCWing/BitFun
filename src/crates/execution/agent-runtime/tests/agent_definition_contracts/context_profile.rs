@@ -9,7 +9,6 @@ fn context_profile_maps_long_running_agents_to_long_task_profile() {
         "DeepReview",
         "DeepResearch",
         "ComputerUse",
-        "Team",
         "ReviewFrontend",
         "ReviewSecurity",
     ] {

@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Modal, confirmDanger, Tooltip } from '@/component-library';
+import { confirmDanger, Tooltip } from '@/component-library';
 import type { UserSkillGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -278,7 +278,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
       }}
       title={t('agentsOverview.skillGroupPicker.manageTitle')}
       size="large"
-      contentInset
+      contentPadding="lg"
       testId="skill-group-manager"
     >
       <div className="skill-group-manager" data-bf-component="skill-group-picker" data-bf-part="manager">

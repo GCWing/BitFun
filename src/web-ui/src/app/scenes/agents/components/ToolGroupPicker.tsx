@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Modal, confirmDanger, Tooltip } from '@/component-library';
+import { confirmDanger, Tooltip } from '@/component-library';
 import type { UserToolGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {
@@ -261,7 +261,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
       }}
       title={t('agentsOverview.toolGroups.manageTitle')}
       size="large"
-      contentInset
+      contentPadding="lg"
       testId="tool-group-manager"
     >
       <div className="tool-group-manager" data-bf-component="tool-group-picker" data-bf-part="manager">

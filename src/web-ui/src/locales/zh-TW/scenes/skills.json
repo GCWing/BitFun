@@ -128,14 +128,12 @@
     "manageGroups": "管理 Skill 分組",
     "modes": {
       "agentic": "agentic",
-      "cowork": "Cowork",
-      "team": "Team"
+      "cowork": "Cowork"
     },
     "modeDescriptions": {
       "agentic": "偏編碼的預設模式",
       "cowork": "辦公協作模式",
-      "claw": "助理模式",
-      "team": "團隊模式"
+      "claw": "助理模式"
     },
     "modeActions": {
       "reset": "重設 {{mode}}",

@@ -2,7 +2,7 @@
  * WorkspaceBody — main workspace container.
  *
  * Left-right layout:
- *   .nav-area   (216px default, flex-column)
+ *   .nav-area   (300px default, flex-column)
  *     NavBar        (35px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
@@ -20,7 +20,7 @@ import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
 import { useApp } from '../hooks/useApp';
 import './WorkspaceBody.scss';
 
-const NAV_DEFAULT_WIDTH = 216;
+const NAV_DEFAULT_WIDTH = 300;
 const NAV_MIN_WIDTH = 216;
 const NAV_MAX_WIDTH = 480;
 const COLLAPSE_THRESHOLD = 64;

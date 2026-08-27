@@ -1,6 +1,6 @@
-import { Button, Input } from '@bitfun/ui';
+import { Button, Input, Modal } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, Textarea } from '@/component-library';
+import { Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -234,7 +234,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
         }}
         title={t('nav.workspaces.relatedPaths.dialog.title')}
         size="large"
-        contentInset
+        contentPadding="lg"
         contentClassName="workspace-related-paths-dialog__modal"
       >
         <div

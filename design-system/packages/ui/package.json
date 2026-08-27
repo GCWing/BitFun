@@ -30,7 +30,8 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@bitfun/design-tokens": "workspace:^"
+    "@bitfun/design-tokens": "workspace:^",
+    "lucide-react": "^0.541.0"
   },
   "peerDependencies": {
     "react": ">=18.3.0 <20",

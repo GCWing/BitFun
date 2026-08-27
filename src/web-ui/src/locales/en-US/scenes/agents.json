@@ -398,7 +398,6 @@
     "Multitask": "Multitask mode: decompose work into orthogonal branches and use subagents in parallel when beneficial",
     "Plan": "Plan mode: create detailed task plans and execution steps",
     "Claw": "Claw mode: extract and integrate information from external sources",
-    "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks",
     "Ultra": "Swarm planning mode: decompose complex work into bounded agent tasks, coordinate execution, and synthesize reviewed results"
   }
 }

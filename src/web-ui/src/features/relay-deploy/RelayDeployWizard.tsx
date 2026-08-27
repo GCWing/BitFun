@@ -10,10 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal, Input, Select, Alert, Tooltip } from '@/component-library';
+import { Input, Select, Alert, Tooltip } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -1314,7 +1314,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         size="large"
         showCloseButton
         closeOnOverlayClick={false}
-        contentClassName="modal__content--fill-flex"
+        contentLayout="flex"
       >
         <div className="relay-deploy-wizard" data-bf-component="relay-deploy" data-bf-part="root">
           <div className="relay-deploy-wizard__steps" data-bf-component="relay-deploy" data-bf-part="steps">

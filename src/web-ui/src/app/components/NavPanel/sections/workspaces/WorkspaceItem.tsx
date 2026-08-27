@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ConfirmDialog,
   InputDialog,
-  Modal,
   PresenceBoundary,
   BITFUN_ICON_SIZE,
   SessionGroupAssistantIcon,
@@ -1242,7 +1241,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     onClose={() => setSearchIndexModalOpen(false)}
                     title={tFiles('search.index.indicator.label')}
                     size="small"
-                    contentInset
+                    contentPadding="lg"
                     contentClassName="bitfun-nav-panel__workspace-index-modal-content"
                   >
                     <div className={`bitfun-nav-panel__workspace-index-tooltip is-${searchIndexIndicator.tone}`} data-bf-component="workspace-item" data-bf-part="indexPanel">

@@ -9,7 +9,6 @@ import { Search } from '@components/Search';
 import { Select } from '@components/Select';
 import { Checkbox } from '@components/Checkbox';
 import { Textarea } from '@components/Textarea';
-import { Modal } from '@components/Modal';
 import { CubeLoading } from '@components/CubeLoading';
 import { Alert } from '@components/Alert';
 import { Tooltip } from '@components/Tooltip';
@@ -290,29 +289,6 @@ export const componentRegistry: ComponentCategory[] = [
             </div>
           </div>
         ),
-      },
-      {
-        id: 'modal-basic',
-        name: 'Modal - Basic',
-        description: '基础弹窗',
-        category: 'feedback',
-        component: () => {
-          const [isOpen, setIsOpen] = React.useState(false);
-          return (
-            <>
-              <Button variant="fill" onClick={() => setIsOpen(true)}>打开弹窗</Button>
-              <Modal
-                isOpen={isOpen}
-                onClose={() => setIsOpen(false)}
-                title="基础弹窗"
-              >
-                <div style={{ padding: '16px' }}>
-                  <p>Modal body content</p>
-                </div>
-              </Modal>
-            </>
-          );
-        },
       },
       {
         id: 'alert-demo',

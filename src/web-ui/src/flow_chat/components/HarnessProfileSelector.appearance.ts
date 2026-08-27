@@ -7,20 +7,23 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'trigger' },
     { id: 'menu' },
     { id: 'profile' },
+    { id: 'agent' },
+    { id: 'sessionSummary' },
+    { id: 'newSession' },
   ],
   facets: [
     {
       id: 'profile',
       attribute: 'data-bf-profile',
-      values: ['minimal', 'balanced', 'ultimate', 'creative'],
+      values: ['minimal', 'balanced', 'ultimate', 'creative', 'other'],
     },
   ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
+    { id: 'fixed', selector: { kind: 'self', suffix: '[data-bf-state~="fixed"]' } },
     { id: 'current', selector: { kind: 'self', suffix: '[data-bf-state~="current"]' } },
-    // The gear the composer is set to but the session has not adopted yet.
-    { id: 'pending', selector: { kind: 'self', suffix: '[data-bf-state~="pending"]' } },
-    { id: 'newSession', selector: { kind: 'self', suffix: '[data-bf-state~="new-session"]' } },
+    { id: 'available', selector: { kind: 'self', suffix: '[data-bf-state~="available"]' } },
+    { id: 'unavailable', selector: { kind: 'self', suffix: '[data-bf-state~="unavailable"]' } },
     { id: 'comingSoon', selector: { kind: 'self', suffix: '[data-bf-state~="coming-soon"]' } },
   ],
 };

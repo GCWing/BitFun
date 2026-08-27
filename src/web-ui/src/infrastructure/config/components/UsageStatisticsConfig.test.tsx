@@ -26,6 +26,9 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
     t: translateMock,
     formatDate: (date: Date | number) => new Date(date).toISOString(),
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) => (
+      new Intl.NumberFormat('en-US', options).format(value)
+    ),
     resolvedTimeZone: 'UTC',
   }),
 }));
@@ -199,6 +202,11 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelectorAll('.bitfun-usage-stats__donut').length).toBe(3);
     expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
     expect(container.textContent).not.toContain('trend.legend.cacheCreation');
+    expect(container.querySelectorAll('.bitfun-config-page-section')).toHaveLength(4);
+    expect(container.querySelectorAll('[data-bf-part="distributions"] table')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-bf-part="distributions"] th[scope="row"]')).toHaveLength(3);
+    expect(container.querySelector('[data-bf-part="trendPanel"] svg[role="img"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="trendPanel"] table.bitfun-sr-only')).not.toBeNull();
     // Hit rate is truncated to two decimals, never rounded up.
     expect(container.textContent).toContain('95.00%');
   });

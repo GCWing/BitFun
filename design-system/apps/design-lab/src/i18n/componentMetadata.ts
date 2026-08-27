@@ -18,6 +18,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   IconButton: "component.IconButton.description",
   Input: "component.Input.description",
   KeyHint: "component.KeyHint.description",
+  Modal: "component.Modal.description",
   PageHeader: "component.PageHeader.description",
   SearchField: "component.SearchField.description",
   Switch: "component.Switch.description",

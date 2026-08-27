@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton } from '@bitfun/ui';
+import { Button, Switch, IconButton, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -20,7 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, ConfirmDialog, Input, Modal, Search, Select } from '@/component-library';
+import { Badge, ConfirmDialog, Input, Search, Select } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {

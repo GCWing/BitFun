@@ -3143,6 +3143,33 @@ input.lab-force-focus {
   background: var(--lab-surface);
 }
 
+.component-modal-preview-host {
+  position: relative;
+  display: grid;
+  min-height: 420px;
+  overflow: hidden;
+  place-items: center;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+.component-modal-preview-body {
+  display: grid;
+  gap: var(--bf-space-5);
+}
+
+.component-modal-preview-body p {
+  margin: 0;
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-font-size-base);
+  line-height: var(--bf-line-height-body);
+}
+
+.component-modal-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .component-preview-matrix {
   display: grid;
   align-items: stretch;

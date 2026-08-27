@@ -1,6 +1,10 @@
 {
   "title": "調用統計",
   "subtitle": "目前裝置本機儲存的歷史模型調用統計，不會跨裝置合併或同步；包含按模型、供應商與端點統計的請求數、Token 用量與快取命中率。",
+  "overview": {
+    "title": "統計概覽",
+    "description": "調整統計範圍與篩選條件，資料會自動重新整理。"
+  },
   "timeRange": {
     "label": "時間範圍",
     "last24Hours": "近24小時",
@@ -43,7 +47,12 @@
     "cachedTokens": "快取命中 Token",
     "cacheHitRate": "快取命中率"
   },
+  "chart": {
+    "totalTokens": "Token 總量：{{count}}",
+    "tokensUnit": "Token"
+  },
   "distributions": {
+    "title": "使用分佈",
     "byModel": "模型分佈",
     "byGroup": "分組使用分佈",
     "byEndpoint": "端點分佈"
@@ -60,6 +69,9 @@
   },
   "trend": {
     "title": "Token 使用趨勢",
+    "description": "依時間查看輸入、輸出、快取寫入、快取讀取 Token 與快取命中率的變化。",
+    "dataTableCaption": "Token 使用趨勢明細",
+    "time": "時間",
     "legend": {
       "input": "Input",
       "output": "Output",
@@ -68,6 +80,7 @@
     }
   },
   "table": {
+    "caption": "{{dimension}}明細",
     "model": "模型",
     "group": "分組",
     "endpoint": "端點",

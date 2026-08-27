@@ -33,7 +33,7 @@ export const skillsAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'tab', attribute: 'data-bf-tab', values: ['installed', 'discover'] },
     { id: 'category', attribute: 'data-bf-category', values: ['all', 'builtin', 'user', 'project', 'suite'] },
     { id: 'level', attribute: 'data-bf-level', values: ['user', 'project'] },
-    { id: 'mode', attribute: 'data-bf-mode', values: ['agentic', 'Cowork', 'Claw', 'Team'] },
+    { id: 'mode', attribute: 'data-bf-mode', values: ['agentic', 'Cowork', 'Claw'] },
   ],
   states: [
     { id: 'hover', selector: { kind: 'self', suffix: ':hover' } },

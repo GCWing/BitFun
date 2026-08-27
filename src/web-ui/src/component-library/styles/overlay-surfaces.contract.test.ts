@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const SOURCE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const REPOSITORY_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));
 const readSource = (path: string): string => readFileSync(join(SOURCE_ROOT, path), 'utf8');
+const readRepositorySource = (path: string): string => readFileSync(join(REPOSITORY_ROOT, path), 'utf8');
 
 const portalStyleOverrides: Record<string, string> = {
   'app/components/NavPanel/components/AssistantSessionCreateMenu.tsx':
@@ -157,20 +159,21 @@ describe('overlay surface contracts', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Modal Appearance and About content from creating another dialog shell', () => {
+  it('keeps the independent Modal as the default visual owner', () => {
     const builtinSource = readSource(
       'infrastructure/appearance/builtins/buildBuiltinAppearance.ts',
     );
-    const modalSource = builtinSource.slice(builtinSource.indexOf('      modal: {'));
-    const dialogSource = modalSource.slice(
-      modalSource.indexOf('          dialog: {'),
-      modalSource.indexOf('            facets:'),
+    const registrySource = readSource(
+      'infrastructure/appearance/registry/defaultAppearanceRegistry.ts',
+    );
+    const modalStyles = readRepositorySource(
+      'design-system/packages/ui/src/components/Modal/Modal.module.css',
     );
 
-    expect(dialogSource).toContain("maxHeight: { kind: 'percent', value: 100 }");
-    expect(dialogSource).not.toMatch(
-      /backgroundColor|borderColor|borderStyle|borderWidth|borderRadius|boxShadow/,
-    );
+    expect(builtinSource).not.toMatch(/^\s+modal:\s*\{/m);
+    expect(registrySource).not.toContain('modalAppearanceDescriptor');
+    expect(modalStyles).toContain('background: var(--bf-color-overlay-scrim);');
+    expect(modalStyles).toContain('background: var(--bf-color-surface-raised);');
 
     const aboutAppearance = readSource('app/components/AboutDialog/appearance.ts');
     expect(aboutAppearance).toContain("{ id: 'root', visualRole: 'content'");
@@ -178,11 +181,25 @@ describe('overlay surface contracts', () => {
   });
 
   it('keeps the Modal close inset on the header shell', () => {
-    const modalStyles = readSource('component-library/components/Modal/Modal.scss');
+    const modalStyles = readRepositorySource(
+      'design-system/packages/ui/src/components/Modal/Modal.module.css',
+    );
 
-    expect(modalStyles).toContain('padding-inline-end: var(--modal-close-edge-gutter);');
-    expect(modalStyles).toContain('margin-block: var(--modal-close-edge-gutter);');
-    expect(modalStyles).not.toContain('margin-inline-end: var(--modal-close-edge-gutter);');
+    expect(modalStyles).toContain('padding-inline-end: var(--bf-overlay-modal-edge-gutter);');
+    expect(modalStyles).toContain('margin-block: var(--bf-overlay-modal-edge-gutter);');
+    expect(modalStyles).not.toContain('margin-inline-end: var(--bf-overlay-modal-edge-gutter);');
+  });
+
+  it('removes the legacy Web UI Modal source, export, preview, and import path', () => {
+    const legacyDirectory = ['component-library', 'components', 'Modal'].join('/');
+    const legacyImport = ['@components', 'Modal'].join('/');
+    const componentIndex = readSource('component-library/components/index.ts');
+    const previewRegistry = readSource('component-library/components/registry.tsx');
+
+    expect(existsSync(join(SOURCE_ROOT, legacyDirectory))).toBe(false);
+    expect(componentIndex).not.toContain("./Modal");
+    expect(previewRegistry).not.toContain(legacyImport);
+    expect(previewRegistry).not.toContain("modal-basic");
   });
 
   it('keeps About styles limited to rendered content without redundant visual branches', () => {
@@ -269,7 +286,6 @@ describe('overlay surface contracts', () => {
   });
 
   it.each([
-    'component-library/components/Modal/Modal.scss',
     'app/components/panels/BranchSelectModal.scss',
     'infrastructure/peer-device/PeerDirectoryBrowser.scss',
     'features/ssh-remote/RemoteFileBrowser.scss',
@@ -295,9 +311,9 @@ describe('overlay surface contracts', () => {
     expect(usageModal).not.toContain('border-radius: 16px');
     expect(globalSearch).not.toContain('box-shadow: 0 18px 48px var(--bf-appearance-token-color-overlay-black-30)');
     expect(globalSearch).not.toContain('border-radius: 14px');
-    expect(globalSearch).not.toMatch(
-      /& > \.modal\.modal--xlarge \{[^}]*background:/,
-    );
+    expect(globalSearch).not.toContain(['.modal', 'overlay'].join('-'));
+    expect(globalSearch).not.toContain(['.modal', ''].join('--'));
+    expect(globalSearch).not.toContain(['.modal', ''].join('__'));
     expect(deepReview).not.toContain('.modal:has(.deep-review-consent)');
     expect(createBranchRoot).not.toContain('background:');
     expect(createBranchRoot).not.toContain('border:');

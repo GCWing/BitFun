@@ -7,6 +7,7 @@ import {
 import type { SystemTokenMode } from "@bitfun/design-tokens";
 import type { ThemeDataName } from "@bitfun/theme-bitfun";
 import {
+  AppWindow,
   Blocks,
   BookOpen,
   Braces,
@@ -85,6 +86,7 @@ interface SearchDestination {
 
 const componentIcons: Record<string, LucideIcon> = {
   Button: MousePointerClick,
+  Modal: AppWindow,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 };

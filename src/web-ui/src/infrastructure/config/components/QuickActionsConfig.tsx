@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
-import { ConfigPageLoading, Modal, Textarea, Tooltip } from '@/component-library';
+import { ConfigPageLoading, Textarea, Tooltip } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -78,7 +78,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
       onClose={onClose}
       title={isEdit ? t('modal.editTitle') : t('modal.addTitle')}
       size="medium"
-      contentInset
+      contentPadding="lg"
     >
       <div className="quick-actions-config__modal-body" onKeyDown={handleKeyDown} data-bf-component="quick-actions-config" data-bf-part="dialog">
         {target && (

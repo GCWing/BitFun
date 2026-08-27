@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Archive, Bot, FolderKanban, Loader2, MessageSquare, Trash2 } from 'lucide-react';
-import { Checkbox, Modal } from '@/component-library';
+import { Checkbox} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -306,7 +306,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
       onClose={isBusy ? () => {} : onClose}
       title={t('nav.sessions.manage')}
       size="xlarge"
-      contentClassName="modal__content--fill-flex workspace-session-batch-modal__content-shell"
+      contentLayout="flex"
+      contentClassName="workspace-session-batch-modal__content-shell"
       closeOnOverlayClick={!isBusy}
     >
       <div data-bf-component="workspace-session-batch-modal" data-bf-part="root" className="workspace-session-batch-modal">

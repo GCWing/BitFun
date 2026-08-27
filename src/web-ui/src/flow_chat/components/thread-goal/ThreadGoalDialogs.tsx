@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Target } from 'lucide-react';
-import { Modal, Textarea } from '@/component-library';
+import { Textarea } from '@/component-library';
 import type { ThreadGoalController } from '../../hooks/useThreadGoalController';
 import type { ThreadGoalUiAction } from '../../services/threadGoalActions';
 import {
@@ -118,7 +118,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
         onClose={controller.closeMenu}
         title={t('threadGoal.menuTitle')}
         size="medium"
-        contentInset
+        contentPadding="lg"
         contentClassName="bitfun-thread-goal-modal__body"
       >
         {goal ? (
@@ -233,7 +233,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
             : t('threadGoal.editTitleUpdate')
         }
         size="medium"
-        contentInset
+        contentPadding="lg"
         contentClassName="bitfun-thread-goal-modal__body"
       >
         <div
@@ -272,7 +272,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
         onClose={controller.dismissResume}
         title={t('threadGoal.resumeTitle')}
         size="medium"
-        contentInset
+        contentPadding="lg"
         contentClassName="bitfun-thread-goal-modal__body"
       >
         <div

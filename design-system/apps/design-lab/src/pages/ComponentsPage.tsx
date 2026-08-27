@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowRight,
   Check,
   Command,
@@ -54,6 +55,7 @@ const componentIcons = {
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
+  Modal: AppWindow,
   PageHeader: Heading,
   SearchField: SearchIcon,
   Switch: ToggleLeft,
@@ -116,6 +118,16 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "KeyHint":
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    case "Modal":
+      return (
+        <Button
+          leadingIcon={<AppWindow aria-hidden="true" />}
+          size="sm"
+          tabIndex={-1}
+        >
+          {t("components.preview.openModal")}
+        </Button>
+      );
     case "PageHeader":
       return (
         <PageHeader

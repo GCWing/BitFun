@@ -35,7 +35,7 @@
     color tokens.$motion-fast tokens.$easing-standard;
 
   &:hover,
-  &[data-bf-state='open'] {
+  &[data-bf-state~='open'] {
     background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-primary);
   }
@@ -53,8 +53,7 @@
 }
 
 // The execution gears grow from focus corners to a 2 x 2 plan and finally a
-// 3 x 3 coverage grid. Creative uses the registered grid-and-brush mark and
-// intentionally omits the shared accent core.
+// 3 x 3 coverage grid. Creative and Other branch from that density scale.
 .bitfun-harness-selector__density-mark {
   position: relative;
   display: inline-grid;
@@ -79,8 +78,8 @@
   color: var(--bf-appearance-token-color-accent-500);
 }
 
-// A plain three-row list: density mark, name plus the promise the gear makes,
-// and a trailing state.
+// One surface swaps between the fixed-Session summary, Harness profiles, and
+// the second-level Agent list.
 .bitfun-harness-selector__menu {
   @include surfaces.floating-surface;
 
@@ -91,8 +90,8 @@
   flex-direction: column;
   gap: 2px;
   width: max-content;
-  min-width: 252px;
-  max-width: min(320px, calc(100vw - 16px));
+  min-width: 228px;
+  max-width: min(308px, calc(100vw - 16px));
   padding: 5px;
   color: var(--bf-appearance-token-color-text-primary);
   font-family: var(--bf-appearance-token-font-family-sans);
@@ -100,13 +99,14 @@
   user-select: none;
 }
 
-.bitfun-harness-selector__profile {
+.bitfun-harness-selector__profile,
+.bitfun-harness-selector__agent {
   display: flex;
   align-items: center;
   gap: 11px;
   width: 100%;
-  min-height: 46px;
-  padding: 6px 8px;
+  min-height: 38px;
+  padding: 5px 8px;
   border: 0;
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: transparent;
@@ -131,11 +131,121 @@
   }
 }
 
-.bitfun-harness-selector__profile-copy {
+.bitfun-harness-selector__session-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 38px;
+  padding: 6px 8px;
+
+  > svg {
+    color: var(--bf-appearance-token-color-accent-500);
+  }
+}
+
+.bitfun-harness-selector__session-value {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-harness-selector__session-directive {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: flow-type.$support-size;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-harness-selector__new-session {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-primary);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  svg {
+    flex: none;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--bf-appearance-token-element-bg-soft);
+  }
+}
+
+.bitfun-harness-selector__agent-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--bf-appearance-token-color-text-secondary);
+}
+
+.bitfun-harness-selector__back {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
+}
+
+.bitfun-harness-selector__divider {
+  height: 1px;
+  margin: 1px 5px 2px;
+  background: var(--bf-appearance-token-border-subtle);
+}
+
+.bitfun-harness-selector__empty {
+  padding: 14px 10px;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: flow-type.$support-size;
+  text-align: center;
+}
+
+.bitfun-harness-selector__profile-copy {
   flex: 1 1 auto;
-  flex-direction: column;
-  gap: 1px;
   min-width: 0;
 }
 
@@ -147,23 +257,20 @@
   white-space: nowrap;
 }
 
-.bitfun-harness-selector__profile-promise {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$support-size;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .bitfun-harness-selector__profile-status {
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   color: var(--bf-appearance-token-color-text-muted);
   font-size: flow-type.$meta-size;
 
   svg {
     color: var(--bf-appearance-token-color-accent-500);
   }
+}
+
+.bitfun-harness-selector__agent-count {
+  color: var(--bf-appearance-token-color-text-muted);
+  font-variant-numeric: tabular-nums;
 }

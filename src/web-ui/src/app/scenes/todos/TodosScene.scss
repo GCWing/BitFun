@@ -995,7 +995,7 @@ $todos-compact-breakpoint: 720px;
 .bf-todos-editor-modal {
   padding: $size-gap-6;
 
-  .modal__header-shell--close-only {
+  [data-bf-component='modal'][data-bf-part='headerShell'][data-bf-has-title='false'] {
     position: absolute;
     top: $size-gap-3;
     right: $size-gap-3;
@@ -1003,7 +1003,7 @@ $todos-compact-breakpoint: 720px;
     z-index: $z-content;
   }
 
-  .modal__close {
+  [data-bf-component='modal'][data-bf-part='close'] {
     margin-inline-start: 0;
   }
 
@@ -1017,15 +1017,15 @@ $todos-compact-breakpoint: 720px;
 // Keep the shared xxlarge dialog's 960px design-system ceiling, while leaving
 // more surrounding context visible than a near-fullscreen sheet. The concrete
 // Modal selector keeps this proportional width above runtime Appearance rules.
-.modal-overlay.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
-  > .modal.modal--xxlarge[data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'] {
+.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'] {
   width: min(960px, 84vw);
   max-width: min(960px, 84vw);
   max-height: min(760px, calc(100vh - 48px));
 }
 
-.modal-overlay.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
-  .bf-todos-editor-modal__content.modal__content[data-bf-component='modal'][data-bf-part='content'] {
+.bf-todos-editor-modal[data-bf-component='modal'][data-bf-part='overlay']
+  .bf-todos-editor-modal__content[data-bf-component='modal'][data-bf-part='content'] {
   display: flex;
   min-height: 0;
   overflow: hidden;
@@ -1129,7 +1129,7 @@ $todos-compact-breakpoint: 720px;
   .bf-todos-editor-modal {
     padding: $size-gap-3;
 
-    .modal__header-shell--close-only {
+    [data-bf-component='modal'][data-bf-part='headerShell'][data-bf-has-title='false'] {
       top: $size-gap-3;
       right: $size-gap-3;
     }

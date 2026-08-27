@@ -8,7 +8,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { KeyHint } from '@bitfun/ui';
+import { ActionItem, Button, KeyHint, Modal, SearchField } from '@bitfun/ui';
 import {
   BarChart3,
   Blocks,
@@ -17,10 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  FolderOpen,
-  FolderPlus,
+  Folder,
   Globe,
   Keyboard,
+  MessageCircle,
   MessageSquareText,
   MessagesSquare,
   MoreHorizontal,
@@ -37,7 +37,6 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { Modal } from '@/component-library';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -55,7 +54,11 @@ import {
   subscribeGlobalSearchShortcut,
 } from './globalSearchShortcut';
 import { useGlobalSearchStore } from './globalSearchStore';
-import { PRODUCT_ACTION_CATALOG, type ProductActionIcon } from './productActionCatalog';
+import {
+  PRODUCT_ACTION_CATALOG,
+  type ProductActionIcon,
+  type ProductActionId,
+} from './productActionCatalog';
 import {
   buildGlobalSearchResultPresentation,
   type GlobalSearchDrilldownGroupId,
@@ -83,9 +86,9 @@ const EMPTY_SNAPSHOT: GlobalSearchSnapshot = {
 };
 
 const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
+  'message-circle': MessageCircle,
+  folder: Folder,
   plus: Plus,
-  'folder-open': FolderOpen,
-  'folder-plus': FolderPlus,
   globe: Globe,
   terminal: SquareTerminal,
   files: FileText,
@@ -99,11 +102,26 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   network: Network,
 };
 
+type ModalActionIconTone = 'red' | 'orange' | 'green' | 'cyan' | 'blue' | 'purple';
+
+/**
+ * The reference uses color to distinguish the primary commands in this modal.
+ * Keep that presentation local: the same actions stay neutral in other hosts.
+ */
+const MODAL_ACTION_ICON_TONES: Partial<Record<ProductActionId, ModalActionIconTone>> = {
+  'session.new': 'red',
+  'surface.browser.open': 'orange',
+  'surface.terminal.open': 'green',
+  'project.open': 'cyan',
+  'project.new': 'blue',
+  'surface.files.open': 'purple',
+};
+
 const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> = {
   messages: MessageSquareText,
   sessions: MessagesSquare,
   files: FileText,
-  workspaces: FolderOpen,
+  workspaces: Folder,
   assistants: Bot,
   capabilities: Blocks,
   settings: SlidersHorizontal,
@@ -241,12 +259,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
     : -1;
 
   useEffect(() => {
-    if (navigableItems.length === 0) {
+    if (activeId && !navigableItems.some((item) => item.id === activeId)) {
       setActiveId(null);
-      return;
-    }
-    if (!activeId || !navigableItems.some((item) => item.id === activeId)) {
-      setActiveId(navigableItems[0].id);
     }
   }, [activeId, navigableItems]);
 
@@ -355,72 +369,133 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
         onKeyDownCapture={handleRootKeyDownCapture}
       >
         <header className="global-search__header">
-          <div className="global-search__query" data-bf-component="global-search" data-bf-part="query">
-            <Search size={18} strokeWidth={1.8} aria-hidden="true" className="global-search__query-icon" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setDrilldownGroup(null);
-              }}
-              onKeyDown={handleInputKeyDown}
-              onCompositionStart={() => {
-                inputCompositionActiveRef.current = true;
-              }}
-              onCompositionEnd={() => {
-                inputCompositionActiveRef.current = false;
-              }}
-              placeholder={tCommon('nav.search.inputPlaceholder')}
-              aria-label={tCommon('nav.search.inputLabel')}
-              role="combobox"
-              aria-autocomplete="list"
-              aria-expanded="true"
-              aria-controls={resultsId}
-              aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
-              maxLength={SEARCH_QUERY_MAX_LENGTH}
-              autoFocus={autoFocus}
-            />
-            {query ? (
-              <button
-                type="button"
-                className="global-search__clear"
-                onClick={() => {
+          {variant === 'modal' ? (
+            <div
+              className="global-search__query-system-shell"
+              data-bf-component="global-search"
+              data-bf-part="query"
+            >
+              <SearchField
+                ref={inputRef}
+                className="global-search__query global-search__query--system"
+                value={query}
+                onValueChange={(nextQuery) => {
+                  setQuery(nextQuery);
+                  setDrilldownGroup(null);
+                }}
+                onKeyDown={handleInputKeyDown}
+                onCompositionStart={() => {
+                  inputCompositionActiveRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  inputCompositionActiveRef.current = false;
+                }}
+                onClear={query ? () => {
                   setQuery('');
                   setDrilldownGroup(null);
                   inputRef.current?.focus();
+                } : undefined}
+                clearLabel={query ? tCommon('nav.search.clear') : undefined}
+                leadingIcon={<Search size={18} strokeWidth={1.8} />}
+                shortcut={query ? undefined : (
+                  <KeyHint icon={searchShortcutHint.modifier}>
+                    {searchShortcutHint.key}
+                  </KeyHint>
+                )}
+                size="md"
+                placeholder={tCommon('nav.search.inputPlaceholder')}
+                aria-label={tCommon('nav.search.inputLabel')}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="true"
+                aria-controls={resultsId}
+                aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
+                maxLength={SEARCH_QUERY_MAX_LENGTH}
+                autoFocus={autoFocus}
+              />
+            </div>
+          ) : (
+            <div className="global-search__query" data-bf-component="global-search" data-bf-part="query">
+              <Search size={18} strokeWidth={1.8} aria-hidden="true" className="global-search__query-icon" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setDrilldownGroup(null);
                 }}
-                aria-label={tCommon('nav.search.clear')}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            ) : variant === 'modal' ? (
-              <KeyHint aria-hidden="true" icon={searchShortcutHint.modifier}>
-                {searchShortcutHint.key}
-              </KeyHint>
-            ) : null}
-          </div>
+                onKeyDown={handleInputKeyDown}
+                onCompositionStart={() => {
+                  inputCompositionActiveRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  inputCompositionActiveRef.current = false;
+                }}
+                placeholder={tCommon('nav.search.inputPlaceholder')}
+                aria-label={tCommon('nav.search.inputLabel')}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="true"
+                aria-controls={resultsId}
+                aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
+                maxLength={SEARCH_QUERY_MAX_LENGTH}
+                autoFocus={autoFocus}
+              />
+              {query ? (
+                <button
+                  type="button"
+                  className="global-search__clear"
+                  onClick={() => {
+                    setQuery('');
+                    setDrilldownGroup(null);
+                    inputRef.current?.focus();
+                  }}
+                  aria-label={tCommon('nav.search.clear')}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          )}
 
           <div className="global-search__scope-bar" data-bf-component="global-search" data-bf-part="scopeBar">
             <div className="global-search__scopes">
               {(['all', 'actions', 'content'] as const).map((candidate) => {
                 const selected = effectiveScope === candidate;
                 return (
-                  <button
-                    key={candidate}
-                    type="button"
-                    className={`global-search__scope${selected ? ' is-selected' : ''}`}
-                    aria-pressed={selected}
-                    disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
-                    onClick={() => {
-                      setScope(candidate);
-                      setDrilldownGroup(null);
-                      inputRef.current?.focus();
-                    }}
-                  >
-                    {tCommon(`nav.search.scopes.${candidate}`)}
-                  </button>
+                  variant === 'modal' ? (
+                    <Button
+                      key={candidate}
+                      size="sm"
+                      variant={selected ? 'fill' : 'outline'}
+                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      aria-pressed={selected}
+                      disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
+                      onClick={() => {
+                        setScope(candidate);
+                        setDrilldownGroup(null);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {tCommon(`nav.search.scopes.${candidate}`)}
+                    </Button>
+                  ) : (
+                    <button
+                      key={candidate}
+                      type="button"
+                      className={`global-search__scope${selected ? ' is-selected' : ''}`}
+                      aria-pressed={selected}
+                      disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
+                      onClick={() => {
+                        setScope(candidate);
+                        setDrilldownGroup(null);
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      {tCommon(`nav.search.scopes.${candidate}`)}
+                    </button>
+                  )
                 );
               })}
             </div>
@@ -513,8 +588,75 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                   {groupItems.map((item) => {
                     const ItemIcon = iconForItem(item);
                     const selected = item.id === activeId;
-                    const variant = resultVariant(item.group);
-                    const entity = variant === 'entity';
+                    const itemVariant = resultVariant(item.group);
+                    const entity = itemVariant === 'entity';
+                    const modalActionIconTone = item.target.kind === 'action'
+                      ? MODAL_ACTION_ICON_TONES[item.target.actionId]
+                      : undefined;
+                    const resultCopy = (
+                      <span className="global-search__result-copy">
+                        <span className="global-search__result-title-row">
+                          <span className="global-search__result-title">{item.title}</span>
+                          {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
+                        </span>
+                        {item.subtitle && !(defaultActionGroup && itemVariant === 'action') ? (
+                          <span className="global-search__result-subtitle">{item.subtitle}</span>
+                        ) : null}
+                      </span>
+                    );
+
+                    if (variant === 'modal' && itemVariant === 'action') {
+                      return (
+                        <ActionItem
+                          key={item.id}
+                          id={`${instanceId}-option-${item.id}`}
+                          data-search-result-id={item.id}
+                          role="option"
+                          aria-selected={selected}
+                          className={`global-search__result global-search__result--action${selected ? ' is-selected' : ''}`}
+                          triggerClassName="global-search__result-trigger"
+                          onClick={() => void activateItem(item)}
+                          data-bf-state={selected ? 'selected' : undefined}
+                          leading={(
+                            <span
+                              className="global-search__action-icon"
+                              data-icon-tone={modalActionIconTone}
+                              aria-hidden="true"
+                            >
+                              <ItemIcon size={20} strokeWidth={1.75} />
+                            </span>
+                          )}
+                        >
+                          {resultCopy}
+                        </ActionItem>
+                      );
+                    }
+
+                    if (variant === 'modal' && entity) {
+                      return (
+                        <ActionItem
+                          key={item.id}
+                          id={`${instanceId}-option-${item.id}`}
+                          data-search-result-id={item.id}
+                          role="option"
+                          aria-selected={selected}
+                          className={`global-search__result global-search__result--entity${selected ? ' is-selected' : ''}`}
+                          triggerClassName="global-search__result-trigger"
+                          onClick={() => void activateItem(item)}
+                          data-bf-state={selected ? 'selected' : undefined}
+                          leading={<ItemIcon size={20} strokeWidth={1.65} />}
+                          shortcut={(
+                            <span className="global-search__result-tools">
+                              <Pin size={14} strokeWidth={1.55} />
+                              <MoreHorizontal size={16} strokeWidth={1.8} />
+                            </span>
+                          )}
+                        >
+                          {resultCopy}
+                        </ActionItem>
+                      );
+                    }
+
                     return (
                       <button
                         key={item.id}
@@ -523,8 +665,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         type="button"
                         role="option"
                         aria-selected={selected}
-                        className={`global-search__result global-search__result--${variant}${selected ? ' is-selected' : ''}`}
-                        onMouseEnter={() => setActiveId(item.id)}
+                        className={`global-search__result global-search__result--${itemVariant}${selected ? ' is-selected' : ''}`}
                         onClick={() => void activateItem(item)}
                         data-bf-component="global-search"
                         data-bf-part="result"
@@ -532,19 +673,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       >
                         <span className="global-search__result-icon" aria-hidden="true">
                           <ItemIcon
-                            size={variant === 'standard' ? 16 : 20}
-                            strokeWidth={variant === 'action' ? 1.75 : 1.65}
+                            size={itemVariant === 'standard' ? 16 : 20}
+                            strokeWidth={itemVariant === 'action' ? 1.75 : 1.65}
                           />
                         </span>
-                        <span className="global-search__result-copy">
-                          <span className="global-search__result-title-row">
-                            <span className="global-search__result-title">{item.title}</span>
-                            {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
-                          </span>
-                          {item.subtitle ? (
-                            <span className="global-search__result-subtitle">{item.subtitle}</span>
-                          ) : null}
-                        </span>
+                        {resultCopy}
                         {item.context ? (
                           <span className="global-search__result-context">{item.context}</span>
                         ) : null}
@@ -563,6 +696,10 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           })}
         </div>
 
+        {(variant === 'embedded'
+          || Boolean(parsedQuery.query)
+          || Boolean(drilldownGroup)
+          || snapshot.diagnostics.length > 0) ? (
         <footer className="global-search__footer" data-bf-component="global-search" data-bf-part="footer">
           {snapshot.diagnostics.length > 0 ? (
             <span
@@ -584,6 +721,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
             ) : null}
           </span>
         </footer>
+        ) : null}
       </div>
   );
 };
@@ -625,6 +763,10 @@ const GlobalSearchRoot: React.FC = () => {
       isOpen={open}
       onClose={closeSearch}
       size="xlarge"
+      radius="2xl"
+      backdropBlur="subtle"
+      contentPadding="md"
+      contentLayout="flex"
       showCloseButton={false}
       overlayClassName="global-search-overlay"
       contentClassName="global-search-modal-content"

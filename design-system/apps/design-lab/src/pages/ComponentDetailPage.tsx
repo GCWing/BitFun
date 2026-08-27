@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,6 +19,7 @@ import {
   IconButton,
   Input,
   KeyHint,
+  Modal,
   PageHeader,
   SearchField,
   Switch,
@@ -170,6 +171,8 @@ export function ComponentDetailPage({
   const [previewIconPosition, setPreviewIconPosition] = useState<PreviewIconPosition>("left");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
+  const [modalOpen, setModalOpen] = useState(false);
+  const modalPreviewHostRef = useRef<HTMLDivElement | null>(null);
 
   const states = useMemo(() => {
     switch (component.name) {
@@ -183,6 +186,7 @@ export function ComponentDetailPage({
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
       case "Field":
       case "KeyHint":
+      case "Modal":
       case "PageHeader":
         return ["default"] as const;
       case "TabGroup":
@@ -226,6 +230,9 @@ export function ComponentDetailPage({
     }
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
+    }
+    if (component.name === "Modal") {
+      return `import { Button, Modal } from "@bitfun/ui";\nimport { useState } from "react";\n\nconst [open, setOpen] = useState(false);\n\n<Button onClick={() => setOpen(true)}>\n  ${t("components.preview.openModal")}\n</Button>\n<Modal\n  backdropBlur="subtle"\n  contentPadding="lg"\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  radius="2xl"\n  size="small"\n  title="${t("components.preview.modalTitle")}"\n>\n  <p>${t("components.preview.modalBody")}</p>\n</Modal>`;
     }
     if (component.name === "PageHeader") {
       return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
@@ -384,6 +391,14 @@ export function ComponentDetailPage({
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
     }
 
+    if (component.name === "Modal") {
+      return (
+        <Button onClick={() => setModalOpen(true)}>
+          {t("components.preview.openModal")}
+        </Button>
+      );
+    }
+
     if (component.name === "PageHeader") {
       return (
         <PageHeader
@@ -499,7 +514,30 @@ export function ComponentDetailPage({
               density={density}
               tokenOverrides={tokenOverrides}
             >
-              {component.name === "Button" ? (
+              {component.name === "Modal" ? (
+                <div className="component-modal-preview-host" ref={modalPreviewHostRef}>
+                  {renderPreview()}
+                  <Modal
+                    backdropBlur="subtle"
+                    contentPadding="lg"
+                    isOpen={modalOpen}
+                    onClose={() => setModalOpen(false)}
+                    portalContainer={() => modalPreviewHostRef.current}
+                    radius="2xl"
+                    size="small"
+                    title={t("components.preview.modalTitle")}
+                  >
+                    <div className="component-modal-preview-body">
+                      <p>{t("components.preview.modalBody")}</p>
+                      <div className="component-modal-preview-actions">
+                        <Button onClick={() => setModalOpen(false)} variant="fill">
+                          {t("components.preview.close")}
+                        </Button>
+                      </div>
+                    </div>
+                  </Modal>
+                </div>
+              ) : component.name === "Button" ? (
                 <div
                   className="component-preview-matrix"
                   data-component="button"

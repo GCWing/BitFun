@@ -3,11 +3,10 @@
  * Custom modal for confirmation prompts
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { AlertTriangle } from 'lucide-react';
-import { Modal } from '@/component-library';
 import './ConfirmDialog.scss';
 
 interface ConfirmDialogProps {

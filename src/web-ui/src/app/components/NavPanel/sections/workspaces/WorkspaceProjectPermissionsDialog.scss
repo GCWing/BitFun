@@ -151,8 +151,8 @@
 
 .workspace-project-permissions-dialog-overlay {
   &:has(.select--open) {
-    .modal,
-    .modal__content,
+    [data-bf-component='modal'][data-bf-part='dialog'],
+    [data-bf-component='modal'][data-bf-part='content'],
     .workspace-project-permissions-dialog__section {
       overflow: visible;
     }

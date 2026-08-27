@@ -327,10 +327,6 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         Some(false)
     );
     assert_eq!(
-        resolve_builtin_default_enabled("miniapp-dev", "Team"),
-        Some(false)
-    );
-    assert_eq!(
         resolve_builtin_default_enabled("agent-browser", "coding_shared"),
         Some(false)
     );
@@ -996,7 +992,7 @@ fn explicit_invocation_reaches_default_hidden_agent_browser() {
         priority: 10,
     };
 
-    for mode_id in ["agentic", "coding_shared", "Claw", "Cowork", "Team"] {
+    for mode_id in ["agentic", "coding_shared", "Claw", "Cowork"] {
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", mode_id),
             Some(false),

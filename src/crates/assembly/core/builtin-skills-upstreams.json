@@ -20,7 +20,7 @@
       "revision_basis": "latest upstream commit before the BitFun import timestamp",
       "bitfun_import_commit": "6341358703da217c3b2dd8e887ca877c35acaafc",
       "local_patches": [
-        "preserve existing BitFun Team Mode orchestration, Task, AGENTS.md, and .bitfun/team conventions",
+        "preserve existing BitFun Task orchestration, AGENTS.md, and .bitfun/team conventions",
         "repair bundled skill references and remove references to absent workflows",
         "replace pseudo browser commands with version-checked agent-browser commands",
         "preserve BitFun ComputerUse for native desktop UI",

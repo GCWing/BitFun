@@ -44,6 +44,7 @@ import './MiniAppGalleryView.scss';
 import { IconButton } from '@bitfun/ui';
 
 const log = createLogger('MiniAppGalleryView');
+const MINIAPP_CARD_MIN_WIDTH = 280;
 
 const MiniAppGalleryView: React.FC = () => {
   const apps = useMiniAppStore((state) => state.apps);
@@ -326,7 +327,7 @@ const MiniAppGalleryView: React.FC = () => {
       return (
         <GallerySkeleton
           count={8}
-          minCardWidth={360}
+          minCardWidth={MINIAPP_CARD_MIN_WIDTH}
           className="miniapp-gallery__card-grid"
         />
       );
@@ -348,7 +349,7 @@ const MiniAppGalleryView: React.FC = () => {
     }
 
     return (
-      <GalleryGrid minCardWidth={360} className="miniapp-gallery__card-grid">
+      <GalleryGrid minCardWidth={MINIAPP_CARD_MIN_WIDTH} className="miniapp-gallery__card-grid">
         {filtered.map((app, index) => (
           <MiniAppCard
             key={app.id}
@@ -462,7 +463,7 @@ const MiniAppGalleryView: React.FC = () => {
           tools={activeApps.length > 0 ? <span className="gallery-zone-badge">{activeApps.length}</span> : null}
         >
           {activeApps.length > 0 ? (
-            <GalleryGrid minCardWidth={360} className="miniapp-gallery__card-grid">
+            <GalleryGrid minCardWidth={MINIAPP_CARD_MIN_WIDTH} className="miniapp-gallery__card-grid">
               {activeApps.map((app, index) => (
                 <MiniAppCard
                   key={app.id}

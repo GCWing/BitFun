@@ -9,32 +9,40 @@
  * focused variant to the canonical overlay host keeps these product-specific
  * dimensions and paint above that generic contract without abandoning tokens.
  */
-#bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+#bitfun-appearance-overlay-host
+  > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
   padding: 12px 16px;
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 
-  > .modal.modal--xlarge {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
     width: min(720px, 100%);
     max-width: 720px;
     height: min(520px, calc(100vh - 24px));
     max-height: calc(100vh - 24px);
   }
 
-  > .modal.modal--xlarge > .modal__header-shell {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+    > [data-bf-component='modal'][data-bf-part='headerShell'] {
     border-bottom: 0;
   }
 
-  > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+    > [data-bf-component='modal'][data-bf-part='headerShell']
+    > [data-bf-component='modal'][data-bf-part='header'] {
     padding: 22px 24px 8px;
   }
 
-  > .modal.modal--xlarge > .modal__header-shell .modal__title-group {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+    > [data-bf-component='modal'][data-bf-part='headerShell']
+    [data-bf-component='modal'][data-bf-part='titleGroup'] {
     min-width: 0;
   }
 
-  > .modal.modal--xlarge > .modal__header-shell .modal__title {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+    > [data-bf-component='modal'][data-bf-part='headerShell']
+    [data-bf-component='modal'][data-bf-part='title'] {
     color: var(--bf-appearance-token-color-text-primary);
     font-size: 21px;
     font-weight: 700;
@@ -42,7 +50,8 @@
     line-height: 1.25;
   }
 
-  > .modal.modal--xlarge > .modal__content {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+    > [data-bf-component='modal'][data-bf-part='content'] {
     padding: 0 24px 16px;
     overflow: hidden;
     background: var(--bf-appearance-token-color-bg-secondary);
@@ -55,19 +64,23 @@
 }
 
 @media (max-width: 640px) {
-  #bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+  #bitfun-appearance-overlay-host
+    > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
     padding: 10px 12px;
 
-    > .modal.modal--xlarge {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
       height: calc(100vh - 20px);
       max-height: calc(100vh - 20px);
     }
 
-    > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+      > [data-bf-component='modal'][data-bf-part='headerShell']
+      > [data-bf-component='modal'][data-bf-part='header'] {
       padding: 18px 18px 9px;
     }
 
-    > .modal.modal--xlarge > .modal__content {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+      > [data-bf-component='modal'][data-bf-part='content'] {
       padding: 0 18px 14px;
       overflow-y: auto;
     }
@@ -75,23 +88,29 @@
 }
 
 @media (max-width: 420px) {
-  #bitfun-appearance-overlay-host > .modal-overlay.session-usage-modal {
+  #bitfun-appearance-overlay-host
+    > .session-usage-modal[data-bf-component='modal'][data-bf-part='overlay'] {
     padding: 8px;
 
-    > .modal.modal--xlarge {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge'] {
       height: calc(100vh - 16px);
       max-height: calc(100vh - 16px);
     }
 
-    > .modal.modal--xlarge > .modal__header-shell > .modal__header {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+      > [data-bf-component='modal'][data-bf-part='headerShell']
+      > [data-bf-component='modal'][data-bf-part='header'] {
       padding-inline: 14px;
     }
 
-    > .modal.modal--xlarge > .modal__header-shell .modal__title {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+      > [data-bf-component='modal'][data-bf-part='headerShell']
+      [data-bf-component='modal'][data-bf-part='title'] {
       font-size: 19px;
     }
 
-    > .modal.modal--xlarge > .modal__content {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xlarge']
+      > [data-bf-component='modal'][data-bf-part='content'] {
       padding-inline: 14px;
     }
   }

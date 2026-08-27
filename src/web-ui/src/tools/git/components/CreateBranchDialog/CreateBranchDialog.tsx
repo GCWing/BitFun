@@ -3,11 +3,11 @@
  * Provides a consistent UI for creating a new branch from an existing base branch.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GitBranch } from 'lucide-react';
-import { Modal, Input } from '@/component-library';
+import { Input } from '@/component-library';
 import './CreateBranchDialog.scss';
 
 export interface CreateBranchDialogProps {

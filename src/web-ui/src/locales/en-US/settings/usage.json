@@ -1,6 +1,10 @@
 {
   "title": "Usage Statistics",
   "subtitle": "Historical model calls stored on this device. Usage is not merged or synced across devices; view requests, tokens, and cache hit rates by model, provider, and endpoint.",
+  "overview": {
+    "title": "Usage Overview",
+    "description": "Adjust the range and filters; statistics refresh automatically."
+  },
   "timeRange": {
     "label": "Time range",
     "last24Hours": "Last 24 Hours",
@@ -43,7 +47,12 @@
     "cachedTokens": "Cached Tokens",
     "cacheHitRate": "Cache Hit Rate"
   },
+  "chart": {
+    "totalTokens": "{{count}} tokens",
+    "tokensUnit": "Tokens"
+  },
   "distributions": {
+    "title": "Usage Distribution",
     "byModel": "Model Distribution",
     "byGroup": "Group Usage Distribution",
     "byEndpoint": "Endpoint Distribution"
@@ -60,6 +69,9 @@
   },
   "trend": {
     "title": "Token Usage Trend",
+    "description": "Track input, output, cache-write, cache-read tokens, and cache hit rate over time.",
+    "dataTableCaption": "Token usage trend details",
+    "time": "Time",
     "legend": {
       "input": "Input",
       "output": "Output",
@@ -68,6 +80,7 @@
     }
   },
   "table": {
+    "caption": "{{dimension}} details",
     "model": "Model",
     "group": "Group",
     "endpoint": "Endpoint",

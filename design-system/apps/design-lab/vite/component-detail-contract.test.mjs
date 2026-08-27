@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const detailSource = new URL("../src/pages/ComponentDetailPage.tsx", import.meta.url);
+const catalogSource = new URL("../src/pages/ComponentsPage.tsx", import.meta.url);
 const stylesSource = new URL("../src/styles.css", import.meta.url);
 
 test("every preview matrix declares its state-column count", async () => {
@@ -116,6 +117,22 @@ test("ActionItem preview reserves a full-width column for its complete anatomy",
     source,
     /\.component-preview-matrix\[data-component="action-item"\]\s+\[data-bf-component="action-item"\]\s*\{[^}]*inline-size:\s*100%/s,
   );
+});
+
+test("Modal preview uses the published component inside a local themed portal host", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Modal"/);
+  assert.match(detail, /component\.name === "Modal"/);
+  assert.match(detail, /portalContainer=\{\(\) => modalPreviewHostRef\.current\}/);
+  assert.match(detail, /backdropBlur="subtle"/);
+  assert.match(detail, /contentPadding="lg"/);
+  assert.match(detail, /radius="2xl"/);
+  assert.match(styles, /\.component-modal-preview-host\s*\{[^}]*transform:\s*translateZ\(0\)/s);
 });
 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {

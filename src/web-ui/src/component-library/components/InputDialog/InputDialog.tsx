@@ -4,9 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal } from '../Modal/Modal';
 import { Input } from '../Input/Input';
 import './InputDialog.scss';
 
@@ -112,6 +111,7 @@ export const InputDialog: React.FC<InputDialogProps> = ({
       title={title}
       size="small"
       showCloseButton={true}
+      overlayClassName="input-dialog-overlay"
     >
       <div className="input-dialog" data-bf-component="input-dialog" data-bf-part="root">
         <div className="input-dialog__body" data-bf-component="input-dialog" data-bf-part="body">

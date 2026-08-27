@@ -4,17 +4,17 @@
  */
 
 .bitfun-about-dialog-overlay {
-  > .modal.modal--xxlarge[data-testid='about-dialog-modal'] {
+  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'][data-testid='about-dialog-modal'] {
     width: min(960px, 100%);
     max-width: min(960px, 100%);
   }
 
-  .modal__header {
+  [data-bf-component='modal'][data-bf-part='header'] {
     min-height: 48px;
     padding: 8px 24px;
   }
 
-  .modal__title {
+  [data-bf-component='modal'][data-bf-part='title'] {
     color: var(--bf-appearance-token-color-text-primary);
     font-size: var(--bf-appearance-token-font-size-lg);
     font-weight: var(--bf-appearance-token-font-weight-semibold);
@@ -412,7 +412,7 @@
 
 @media (max-width: 900px) {
   .bitfun-about-dialog-overlay {
-    > .modal.modal--xxlarge[data-testid='about-dialog-modal'] {
+    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'][data-testid='about-dialog-modal'] {
       width: 100%;
       max-width: 100%;
     }
@@ -439,7 +439,7 @@
 
 @media (max-width: 760px) {
   .bitfun-about-dialog-overlay {
-    .modal__header {
+    [data-bf-component='modal'][data-bf-part='header'] {
       min-height: 48px;
       padding: 8px 18px;
     }
@@ -515,12 +515,12 @@
 
 @media (max-width: 520px) {
   .bitfun-about-dialog-overlay {
-    .modal__header {
+    [data-bf-component='modal'][data-bf-part='header'] {
       min-height: 48px;
       padding: 8px 14px;
     }
 
-    .modal__title {
+    [data-bf-component='modal'][data-bf-part='title'] {
       font-size: var(--bf-appearance-token-font-size-base);
     }
   }

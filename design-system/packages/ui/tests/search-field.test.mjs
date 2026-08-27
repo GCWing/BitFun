@@ -33,9 +33,38 @@ test("SearchField source preserves consumer key handling before Enter submission
   assert.match(source, /onSearch\?\.\(event\.currentTarget\.value\)/);
 });
 
+test("SearchField exposes a labeled clear action without hiding it from assistive technology", () => {
+  const markup = renderToStaticMarkup(
+    createElement(SearchField, {
+      "aria-label": "Search",
+      clearLabel: "Clear search",
+      onClear: () => {},
+      value: "query",
+    }),
+  );
+
+  assert.match(markup, /aria-label="Clear search"/);
+  assert.match(markup, /data-bf-component="icon-button"/);
+});
+
 test("SearchField owns pill composition while reusing Input behavior", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /border-radius:var\(--bf-radius-pill\)/);
   assert.match(styles, /--bf-font-size-caption/);
+});
+
+test("SearchField focus changes only the existing border color", async () => {
+  const styles = await readFile(
+    new URL("../src/components/SearchField/SearchField.module.css", import.meta.url),
+    "utf8",
+  );
+  const focusRule = styles.match(
+    /\.root \.field:not\(\[data-invalid="true"\]\):focus-within\s*\{([^}]+)\}/,
+  )?.[1];
+
+  assert.ok(focusRule);
+  assert.match(focusRule, /border-color: var\(--bf-color-content-primary\)/);
+  assert.match(focusRule, /box-shadow: none/);
+  assert.doesNotMatch(focusRule, /border-width|outline/);
 });

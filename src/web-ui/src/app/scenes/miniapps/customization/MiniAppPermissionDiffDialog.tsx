@@ -1,8 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { MiniAppPermissionDiff } from '@/infrastructure/api/service-api/MiniAppAPI';
-import { Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 
 interface MiniAppPermissionDiffDialogProps {
@@ -46,7 +45,7 @@ export const MiniAppPermissionDiffDialog: React.FC<MiniAppPermissionDiffDialogPr
       title={t('customize.permissionDialog.title')}
       size="medium"
       closeOnOverlayClick={!applying}
-      contentInset
+      contentPadding="lg"
       overlayClassName="miniapp-permission-dialog"
     >
       <div className="miniapp-permission-dialog__body">

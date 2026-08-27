@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Bot,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Grid2X2,
   Grid3X3,
   Scan,
@@ -16,24 +19,51 @@ import { notificationService } from '@/shared/notification-system';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './HarnessProfileSelector.scss';
 
-export type HarnessProfileId = KnownHarnessProfileId;
-export type KnownHarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | 'creative';
+export type HarnessProfileId = KnownHarnessProfileId | (string & {});
+export type KnownHarnessProfileId =
+  | 'minimal'
+  | 'balanced'
+  | 'ultimate'
+  | 'creative'
+  | 'other';
 export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
 
-interface HarnessProfileSelectorProps {
-  /** Session still runs the legacy agent mode and cannot switch. */
-  legacySession?: boolean;
-  /** The Session has accepted its first runtime Turn, so its Harness is fixed. */
-  sessionStarted?: boolean;
-  selectedProfile: HarnessProfileId;
-  disabled?: boolean;
-  onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
+export interface HarnessAgentOption {
+  id: string;
+  name: string;
+  available?: boolean;
 }
 
-const PROFILE_IDS: KnownHarnessProfileId[] = ['minimal', 'balanced', 'ultimate', 'creative'];
-type DensityHarnessProfileId = Exclude<KnownHarnessProfileId, 'creative'>;
+export type HarnessNewSessionSelection =
+  | { kind: 'profile'; id: SelectableHarnessProfileId }
+  | { kind: 'agent'; id: string };
 
-/** The density step represented by each Harness Profile. */
+interface HarnessProfileSelectorProps {
+  /** Session still runs a legacy fixed mode and cannot switch. */
+  legacySession?: boolean;
+  /** The Session has accepted its first runtime Turn, so Harness and main Agent are fixed. */
+  sessionStarted?: boolean;
+  selectedProfile: HarnessProfileId;
+  selectedAgentId?: string;
+  directiveLabel?: string;
+  otherAgents?: HarnessAgentOption[];
+  disabled?: boolean;
+  onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
+  onSelectAgent?: (agentId: string) => void | Promise<void>;
+  onStartNewSession?: (
+    selection: HarnessNewSessionSelection,
+  ) => void | Promise<void>;
+}
+
+const PROFILE_IDS: KnownHarnessProfileId[] = [
+  'minimal',
+  'balanced',
+  'ultimate',
+  'creative',
+  'other',
+];
+type DensityHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
+
 const PROFILE_GEARS: Record<DensityHarnessProfileId, 1 | 2 | 3> = {
   minimal: 1,
   balanced: 2,
@@ -47,28 +77,25 @@ const PROFILE_DENSITY_ICONS: Record<DensityHarnessProfileId, LucideIcon> = {
 };
 
 function isDensityProfile(profile: KnownHarnessProfileId): profile is DensityHarnessProfileId {
-  return profile !== 'creative';
+  return profile === 'minimal' || profile === 'balanced' || profile === 'ultimate';
 }
 
 function isSelectableProfile(
   profile: KnownHarnessProfileId,
 ): profile is SelectableHarnessProfileId {
-  return profile !== 'creative';
+  return isDensityProfile(profile);
 }
 
-function isProfileInDevelopment(
-  profile: KnownHarnessProfileId,
-): profile is Exclude<KnownHarnessProfileId, SelectableHarnessProfileId> {
-  return !isSelectableProfile(profile);
+function isProfileInDevelopment(profile: KnownHarnessProfileId): boolean {
+  return profile === 'creative';
 }
 
-/**
- * Profile-list icons use progressively denser frames around the same Agent
- * core. Creative branches from that scale with its own BitFun grid-and-brush
- * mark, redrawn from the supplied reference. The ChatInput trigger stays
- * text-only so this visual vocabulary remains inside the list.
- */
-function HarnessDensityMark({
+function sameAgent(left: string | null | undefined, right: string | null | undefined): boolean {
+  return left?.trim().toLowerCase() === right?.trim().toLowerCase();
+}
+
+/** Icons stay in the menu; the ChatInput trigger remains text-only. */
+function HarnessProfileMark({
   profile,
 }: {
   profile: KnownHarnessProfileId;
@@ -87,6 +114,12 @@ function HarnessDensityMark({
         <HarnessCreativeIcon
           className="bitfun-harness-selector__density-frame"
           size={26}
+        />
+      ) : profile === 'other' ? (
+        <Bot
+          className="bitfun-harness-selector__density-frame"
+          size={24}
+          strokeWidth={1.45}
         />
       ) : DensityIcon ? (
         <DensityIcon
@@ -108,21 +141,30 @@ function HarnessDensityMark({
 }
 
 /**
- * Harness picker embedded in the composer capsule.
- *
- * It sits opposite the model control: the left end of the capsule says how the
- * next turn runs, the right end says what runs it. The three execution gears
- * share one Agent core; Creative uses its registered grid-and-brush mark.
+ * Before the first Turn this is the Session execution picker. Afterwards it
+ * becomes a lightweight Session signature; alternative choices are disclosed only
+ * through the explicit new-Session action. Per-task directives remain in the
+ * adjacent add menu.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
   sessionStarted = false,
   selectedProfile,
+  selectedAgentId,
+  directiveLabel,
+  otherAgents = [],
   disabled = false,
   onSelectProfile,
+  onSelectAgent,
+  onStartNewSession,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const fixedSession = legacySession || sessionStarted;
   const [open, setOpen] = useState(false);
+  const [page, setPage] = useState<'summary' | 'profiles' | 'agents'>(
+    fixedSession ? 'summary' : 'profiles',
+  );
+  const previousFixedSessionRef = useRef(fixedSession);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuLayout = useAnchoredPopoverPosition({
@@ -132,10 +174,21 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     preferredPlacement: 'top',
     alignment: 'start',
     gap: 8,
-    layoutRevision: legacySession ? 1 : 0,
+    layoutRevision: `${fixedSession ? 1 : 0}:${page}:${otherAgents.length}`,
   });
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    setPage(fixedSession ? 'summary' : 'profiles');
+  }, [fixedSession]);
+
+  useEffect(() => {
+    const becameFixed = fixedSession && !previousFixedSessionRef.current;
+    previousFixedSessionRef.current = fixedSession;
+    if (becameFixed) {
+      setPage('summary');
+    }
+  }, [fixedSession]);
 
   useEffect(() => {
     if (!open) return;
@@ -159,20 +212,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     };
   }, [close, open]);
 
-  const canSelectStartedProfile = useCallback((profileId: KnownHarnessProfileId) => (
-    !sessionStarted || profileId === selectedProfile
-  ), [selectedProfile, sessionStarted]);
-
-  const handleSelect = useCallback((profileId: KnownHarnessProfileId) => {
-    if (legacySession) {
-      notificationService.info(t('chatInput.harness.legacySessionNotice'), { duration: 3800 });
-      close();
-      return;
-    }
-    if (profileId === selectedProfile && !isProfileInDevelopment(profileId)) {
-      close();
-      return;
-    }
+  const handleSelectProfile = useCallback((profileId: KnownHarnessProfileId) => {
     if (isProfileInDevelopment(profileId)) {
       const name = t(`chatInput.harness.profiles.${profileId}.name`);
       notificationService.info(t('chatInput.harness.comingSoonNotice', { name }), {
@@ -181,29 +221,90 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       close();
       return;
     }
-    if (!canSelectStartedProfile(profileId)) {
-      notificationService.info(t('chatInput.harness.sessionStartedNotice'), { duration: 3800 });
+    if (profileId === 'other') {
+      setPage('agents');
+      return;
+    }
+    if (fixedSession) {
+      if (isSelectableProfile(profileId)) {
+        void onStartNewSession?.({ kind: 'profile', id: profileId });
+      }
       close();
       return;
     }
-    void onSelectProfile(profileId);
+    if (profileId === selectedProfile) {
+      close();
+      return;
+    }
+    if (isSelectableProfile(profileId)) {
+      void onSelectProfile(profileId);
+    }
     close();
-  }, [canSelectStartedProfile, close, legacySession, onSelectProfile, selectedProfile, t]);
+  }, [close, fixedSession, onSelectProfile, onStartNewSession, selectedProfile, t]);
+
+  const handleSelectAgent = useCallback((agent: HarnessAgentOption) => {
+    if (agent.available === false) {
+      notificationService.info(t('chatInput.harness.agentUnavailable', { name: agent.name }), {
+        duration: 3200,
+      });
+      return;
+    }
+    if (fixedSession) {
+      void onStartNewSession?.({ kind: 'agent', id: agent.id });
+      close();
+      return;
+    }
+    const connected = selectedProfile === 'other' && sameAgent(agent.id, selectedAgentId);
+    if (!connected) {
+      void onSelectAgent?.(agent.id);
+    }
+    close();
+  }, [close, fixedSession, onSelectAgent, onStartNewSession, selectedAgentId, selectedProfile, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
+  const selectedAgent = otherAgents.find(agent => sameAgent(agent.id, selectedAgentId));
   const selectedProfileAvailable = Boolean(
-    knownSelectedProfile && isSelectableProfile(knownSelectedProfile),
+    knownSelectedProfile
+      && (
+        isSelectableProfile(knownSelectedProfile)
+        || (
+          knownSelectedProfile === 'other'
+          && selectedAgent
+          && selectedAgent.available !== false
+        )
+      ),
   );
-  const triggerLabel = legacySession
+  const primaryLabel = legacySession
     ? t('chatInput.harness.compatibilityShort')
-    : knownSelectedProfile
-      ? t(`chatInput.harness.profiles.${knownSelectedProfile}.name`)
-      : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
+    : knownSelectedProfile === 'other'
+      ? selectedAgent?.name || selectedAgentId || t('chatInput.harness.profiles.other.name')
+      : knownSelectedProfile
+        ? t(`chatInput.harness.profiles.${knownSelectedProfile}.name`)
+        : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
+  const triggerLabel = directiveLabel
+    ? `${primaryLabel} · ${directiveLabel}`
+    : primaryLabel;
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
-    : selectedProfileAvailable
-        ? t('chatInput.harness.selectorTooltip', { name: triggerLabel })
-        : t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile });
+    : !selectedProfileAvailable
+      ? t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile })
+      : sessionStarted
+        ? directiveLabel
+          ? t('chatInput.harness.fixedTooltipWithDirective', {
+              name: primaryLabel,
+              directive: directiveLabel,
+            })
+          : t('chatInput.harness.fixedTooltip', { name: primaryLabel })
+        : directiveLabel
+          ? t('chatInput.harness.selectorTooltipWithDirective', {
+            name: primaryLabel,
+            directive: directiveLabel,
+          })
+          : t('chatInput.harness.selectorTooltip', { name: primaryLabel });
+  const triggerState = [open ? 'open' : '', fixedSession ? 'fixed' : '']
+    .filter(Boolean)
+    .join(' ') || undefined;
+  const creatingNewSession = fixedSession && page !== 'summary';
 
   return (
     <div className="bitfun-harness-selector" data-bf-component="harness-selector" data-bf-part="root">
@@ -214,22 +315,24 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           className="bitfun-harness-selector__trigger"
           data-bf-component="harness-selector"
           data-bf-part="trigger"
-          data-bf-state={open ? 'open' : undefined}
+          data-bf-state={triggerState}
           data-harness-legacy={legacySession ? 'true' : undefined}
           data-harness-locked={sessionStarted ? 'true' : undefined}
+          data-harness-fixed={fixedSession ? 'true' : undefined}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={triggerTooltip}
           disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
-            setOpen(value => !value);
+            setOpen(value => {
+              if (!value) setPage(fixedSession ? 'summary' : 'profiles');
+              return !value;
+            });
           }}
           data-testid="harness-profile-selector"
         >
-          <span className="bitfun-harness-selector__trigger-value">
-            {triggerLabel}
-          </span>
+          <span className="bitfun-harness-selector__trigger-value">{triggerLabel}</span>
         </button>
       </Tooltip>
 
@@ -240,8 +343,10 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-bf-component="harness-selector"
           data-bf-part="menu"
           data-bf-state="open"
+          data-bf-page={page}
           data-bf-placement={menuLayout?.placement ?? 'top'}
           data-harness-locked={sessionStarted ? 'true' : undefined}
+          data-harness-fixed={fixedSession ? 'true' : undefined}
           role="menu"
           style={{
             top: `${menuLayout?.top ?? 0}px`,
@@ -250,54 +355,162 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           }}
           onMouseDown={event => event.stopPropagation()}
         >
-          {PROFILE_IDS.map((id) => {
-            const name = t(`chatInput.harness.profiles.${id}.name`);
-            const connected =
-              isSelectableProfile(id)
-              && id === selectedProfile
-              && !legacySession;
-            const state = connected
-              ? 'current'
-              : isProfileInDevelopment(id)
-                ? 'coming-soon'
-                : !canSelectStartedProfile(id)
-                  ? 'new-session-only'
-                  : 'available';
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={connected}
-                className={`bitfun-harness-selector__profile${connected ? ' is-current' : ''}`}
+          {page === 'summary' ? (
+            <>
+              <div
+                className="bitfun-harness-selector__session-summary"
                 data-bf-component="harness-selector"
-                data-bf-part="profile"
-                data-bf-profile={id}
-                data-bf-state={state}
-                onClick={() => handleSelect(id)}
-                data-testid={`harness-profile-${id}`}
+                data-bf-part="sessionSummary"
+                data-testid="harness-session-summary"
+                role="presentation"
               >
-                <HarnessDensityMark profile={id} />
-                <span className="bitfun-harness-selector__profile-copy">
-                  <span className="bitfun-harness-selector__profile-name">{name}</span>
-                  <span className="bitfun-harness-selector__profile-promise">
-                    {t(`chatInput.harness.profiles.${id}.promise`)}
+                <span className="bitfun-harness-selector__session-value">{primaryLabel}</span>
+                <Check size={13} strokeWidth={2.4} aria-hidden />
+                {directiveLabel ? (
+                  <span className="bitfun-harness-selector__session-directive">
+                    {t('chatInput.harness.nextMessageDirective', { directive: directiveLabel })}
                   </span>
-                </span>
-                <span className="bitfun-harness-selector__profile-status">
-                  {connected ? (
-                    <Check size={13} strokeWidth={2.4} aria-hidden />
-                  ) : isProfileInDevelopment(id) ? (
-                    t('chatInput.harness.comingSoon')
-                  ) : !canSelectStartedProfile(id) ? (
-                    t('chatInput.harness.newSessionOnly')
-                  ) : (
-                    null
-                  )}
-                </span>
+                ) : null}
+              </div>
+              {onStartNewSession ? (
+                <>
+                  <div className="bitfun-harness-selector__divider" aria-hidden />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="bitfun-harness-selector__new-session"
+                    data-bf-component="harness-selector"
+                    data-bf-part="newSession"
+                    onClick={() => setPage('profiles')}
+                    data-testid="harness-start-new-session"
+                  >
+                    <span>{t('chatInput.harness.startNewSession')}</span>
+                    <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
+                  </button>
+                </>
+              ) : null}
+            </>
+          ) : page === 'profiles' ? (
+            <>
+              {fixedSession ? (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="bitfun-harness-selector__back"
+                    onClick={() => setPage('summary')}
+                    data-testid="harness-new-session-back"
+                  >
+                    <ChevronLeft size={14} strokeWidth={1.8} aria-hidden />
+                    <span>{t('chatInput.harness.newSessionModesTitle')}</span>
+                  </button>
+                  <div className="bitfun-harness-selector__divider" aria-hidden />
+                </>
+              ) : null}
+              {PROFILE_IDS.map((id) => {
+                const name = t(`chatInput.harness.profiles.${id}.name`);
+                const connected = !creatingNewSession
+                  && id === selectedProfile
+                  && !legacySession
+                  && !isProfileInDevelopment(id);
+                const state = connected
+                  ? 'current'
+                  : isProfileInDevelopment(id)
+                    ? 'coming-soon'
+                    : 'available';
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                    aria-checked={creatingNewSession ? undefined : connected}
+                    className={`bitfun-harness-selector__profile${connected ? ' is-current' : ''}`}
+                    data-bf-component="harness-selector"
+                    data-bf-part="profile"
+                    data-bf-profile={id}
+                    data-bf-state={state}
+                    onClick={() => handleSelectProfile(id)}
+                    data-testid={`harness-profile-${id}`}
+                  >
+                    <HarnessProfileMark profile={id} />
+                    <span className="bitfun-harness-selector__profile-copy">
+                      <span className="bitfun-harness-selector__profile-name">{name}</span>
+                    </span>
+                    <span className="bitfun-harness-selector__profile-status">
+                      {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                      {isProfileInDevelopment(id)
+                        ? t('chatInput.harness.comingSoon')
+                        : null}
+                      {id === 'other' ? (
+                        <>
+                          <span className="bitfun-harness-selector__agent-count">
+                            {otherAgents.length}
+                          </span>
+                          <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
+                        </>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className="bitfun-harness-selector__back"
+                onClick={() => setPage('profiles')}
+                data-testid="harness-agent-back"
+              >
+                <ChevronLeft size={14} strokeWidth={1.8} aria-hidden />
+                <span>{t('chatInput.harness.otherAgentsTitle')}</span>
               </button>
-            );
-          })}
+              <div className="bitfun-harness-selector__divider" aria-hidden />
+              {otherAgents.length === 0 ? (
+                <div className="bitfun-harness-selector__empty">
+                  {t('chatInput.harness.otherAgentsEmpty')}
+                </div>
+              ) : otherAgents.map(agent => {
+                const connected = !creatingNewSession
+                  && selectedProfile === 'other'
+                  && sameAgent(agent.id, selectedAgentId);
+                const state = connected
+                  ? 'current'
+                  : agent.available === false
+                    ? 'unavailable'
+                    : 'available';
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                    aria-checked={creatingNewSession ? undefined : connected}
+                    className={`bitfun-harness-selector__agent${connected ? ' is-current' : ''}`}
+                    data-bf-component="harness-selector"
+                    data-bf-part="agent"
+                    data-bf-agent-id={agent.id}
+                    data-bf-state={state}
+                    onClick={() => handleSelectAgent(agent)}
+                    data-testid={`harness-agent-${agent.id}`}
+                  >
+                    <span className="bitfun-harness-selector__agent-mark" aria-hidden>
+                      <Bot size={18} strokeWidth={1.55} />
+                    </span>
+                    <span className="bitfun-harness-selector__profile-copy">
+                      <span className="bitfun-harness-selector__profile-name">{agent.name}</span>
+                    </span>
+                    <span className="bitfun-harness-selector__profile-status">
+                      {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                      {agent.available === false
+                        ? t('chatInput.harness.unavailable')
+                        : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </div>,
         getAppearanceOverlayHost(),
       )}

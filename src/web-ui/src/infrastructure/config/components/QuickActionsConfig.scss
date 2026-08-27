@@ -101,7 +101,7 @@
   }
 
   // ── Modal body ──────────────────────────────────────────────────────────
-  // Modal `contentInset` only adds horizontal padding; offset from title bar + bottom edge here.
+  // Modal large content padding owns the inset; offset from title bar + bottom edge here.
   &__modal-body {
     display: flex;
     flex-direction: column;

@@ -324,7 +324,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 onClick={handleManageDevices}
                 data-testid="nav-device-status-manage"
               >
-                {t('deviceOverview.connectNewDevice')}
+                {t('remoteConnect.centerTitle')}
               </Button>
               {overview.peerActive && (
                 <Button

@@ -32,6 +32,10 @@ import type {
   AgentDialogTurnExecution,
   SessionPermissionMode,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import {
+  applyChatInputTurnDirective,
+  type ChatInputTurnDirective,
+} from '../utils/chatInputDirective';
 
 const log = createLogger('FlowChat');
 
@@ -68,6 +72,10 @@ interface UseMessageSenderProps {
   turnPermissionMode?: SessionPermissionMode | null;
   /** Disarms the one-off mode once a submission has carried it. */
   onTurnPermissionModeConsumed?: () => void;
+  /** Product directive applied to the next submitted task without replacing the Session's main Agent. */
+  turnDirective?: ChatInputTurnDirective | null;
+  /** Disarms the directive once a submission has carried it. */
+  onTurnDirectiveConsumed?: () => void;
 }
 
 interface UseMessageSenderReturn {
@@ -96,6 +104,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     onSessionConflictRetrySuccess,
     turnPermissionMode,
     onTurnPermissionModeConsumed,
+    turnDirective,
+    onTurnDirectiveConsumed,
   } = props;
 
   const sendMessage = useCallback(async (
@@ -167,7 +177,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
           remoteSshHost: context.remoteSshHost,
         }));
       const userMessageMetadata =
-        options?.composerPresentation || sessionReferences.length > 0 || turnPermissionMode
+        options?.composerPresentation || sessionReferences.length > 0 || turnPermissionMode || turnDirective
           ? {
               ...(options?.composerPresentation
                 ? { composerPresentation: options.composerPresentation }
@@ -176,6 +186,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
               // Read by the coordinator as the turn layer of
               // `turn -> session -> global default`.
               ...(turnPermissionMode ? { permission_mode: turnPermissionMode } : {}),
+              ...(turnDirective ? { taskDirective: { id: turnDirective.id } } : {}),
             }
           : undefined;
       let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
@@ -209,6 +220,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
           ? `${fullContextSection}\n\n${aiTrimmedMessage}`
           : aiTrimmedMessage;
       }
+      fullMessage = applyChatInputTurnDirective(fullMessage, turnDirective);
 
       // Always pass imageContexts to the backend; the coordinator decides
       // whether to pre-analyse via a vision model or attach directly.
@@ -245,6 +257,9 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       // next one the user types.
       if (turnPermissionMode) {
         onTurnPermissionModeConsumed?.();
+      }
+      if (turnDirective) {
+        onTurnDirectiveConsumed?.();
       }
 
       onExitTemplateMode?.();
@@ -286,6 +301,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     onSessionConflictRetrySuccess,
     turnPermissionMode,
     onTurnPermissionModeConsumed,
+    turnDirective,
+    onTurnDirectiveConsumed,
   ]);
 
   return {

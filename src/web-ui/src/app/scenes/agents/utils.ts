@@ -96,10 +96,6 @@ function codingAnalysisCapabilities() {
   return [{ category: 'coding' as const, level: 4 }, { category: 'analysis' as const, level: 4 }];
 }
 
-function analysisCapabilities() {
-  return [{ category: 'analysis' as const, level: 4 }];
-}
-
 function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
   if (agent.capabilities?.length) {
     return {
@@ -119,7 +115,6 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
     if (id === 'computeruse') return { ...agent, capabilities: [{ category: 'ops', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'deepresearch') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 4 }] };
     if (id === 'multitask') return { ...agent, capabilities: codingAnalysisCapabilities() };
-    if (id === 'team') return { ...agent, capabilities: analysisCapabilities() };
   }
 
   if (id === 'explore' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };

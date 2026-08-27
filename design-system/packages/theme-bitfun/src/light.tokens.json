@@ -7,6 +7,13 @@
       "raised": { "$type": "color", "$value": "{ref.color.neutral.0}" },
       "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.03)" }
     },
+    "overlay": {
+      "scrim": {
+        "$description": "Backdrop veil behind blocking modal surfaces.",
+        "$type": "color",
+        "$value": "rgba(16, 26, 39, 0.20)"
+      }
+    },
     "keyHint": {
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },

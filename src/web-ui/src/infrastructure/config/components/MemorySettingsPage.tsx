@@ -1,8 +1,15 @@
 import { Switch, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
-import { ConfigPageLoading, ConfirmDialog, NumberInput, Select, type SelectOption, Tooltip } from '@/component-library';
+import { ChevronDown, ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  ConfigPageLoading,
+  ConfirmDialog,
+  NumberInput,
+  Select,
+  type SelectOption,
+  Tooltip,
+} from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -17,7 +24,6 @@ import {
   ConfigPageRow,
   ConfigPageSection,
 } from './common';
-import './MemoriesConfig.scss';
 
 const log = createLogger('MemorySettings');
 
@@ -87,6 +93,7 @@ const MemorySettingsPage: React.FC = () => {
   const [savingKey, setSavingKey] = useState<keyof MemoriesConfigShape | null>(null);
   const [actionBusy, setActionBusy] = useState<'reset-settings' | 'open-directory' | 'reset-memory' | null>(null);
   const [resetMemoryConfirmOpen, setResetMemoryConfirmOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -365,10 +372,25 @@ const MemorySettingsPage: React.FC = () => {
           </ConfigPageRow>
         </ConfigPageSection>
 
-        <details className="bitfun-memories-config__advanced">
-          <summary>{t('sections.advanced.title')}</summary>
-          <div className="bitfun-memories-config__advanced-content">
-            <ConfigPageSection title={t('sections.advanced.title')} description={t('sections.advanced.description')}>
+        <ConfigPageSection
+          title={t('sections.advanced.title')}
+          description={t('sections.advanced.description')}
+          extra={(
+            <IconButton
+              type="button"
+              variant="ghost"
+              size="small"
+              onClick={() => setAdvancedOpen((open) => !open)}
+              tooltip={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
+              aria-label={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
+              aria-expanded={advancedOpen}
+            >
+              {advancedOpen ? <ChevronUp /> : <ChevronDown />}
+            </IconButton>
+          )}
+        >
+          {advancedOpen && (
+            <>
               <ConfigPageRow
                 label={t('fields.minRolloutIdleHours.label')}
                 description={t('fields.minRolloutIdleHours.description')}
@@ -482,9 +504,9 @@ const MemorySettingsPage: React.FC = () => {
                   disabled={savingKey === 'max_unused_days' || memoryWorkDisabled}
                 />
               </ConfigPageRow>
-            </ConfigPageSection>
-          </div>
-        </details>
+            </>
+          )}
+        </ConfigPageSection>
       </ConfigPageContent>
       <ConfirmDialog
         isOpen={resetMemoryConfirmOpen}

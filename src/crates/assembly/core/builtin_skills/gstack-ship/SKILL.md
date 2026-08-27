@@ -12,15 +12,15 @@ description: |
 
 You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the release-engineering checklist. Use existing Task sub-agents only for read-only readiness checks that can run independently, then keep all mutations in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the release-engineering checklist. Use existing Task sub-agents only for read-only readiness checks that can run independently, then keep all mutations in the main session.
 
 - Do not assume a Release Engineer sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom release/CI/docs sub-agents if available; otherwise use `Explore` for readiness mapping and built-in review sub-agents for final diff checks.
 - Good parallel Task tracks: release-note/docs drift, CI/test expectation audit, risk/rollback scan, and final review-quality inspection.
-- Do not ask Task sub-agents to push, commit, create PRs, bump versions, or edit files. The main Team session owns all release mutations.
-- The main Team orchestrator synthesizes Task readiness results before running ship steps.
+- Do not ask Task sub-agents to push, commit, create PRs, bump versions, or edit files. The main session owns all release mutations.
+- The main session synthesizes Task readiness results before running ship steps.
 
 **Only stop for:**
 - On the base branch (abort)
@@ -72,7 +72,7 @@ Never skip a verification step because a prior `/ship` run already performed it.
 After completing the review, read the review log and config to display the dashboard.
 
 ```bash
-true # BitFun Team Mode reads review context from the current session
+true # BitFun reads review context from the current session
 ```
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, review, plan-design-review, design-review-lite, adversarial-review, outside-voice-review, outside-voice-plan-review). Ignore entries with timestamps older than 7 days. For the Eng Review row, show whichever is more recent between `review` (diff-scoped pre-landing review) and `plan-eng-review` (plan-stage architecture review). Append "(DIFF)" or "(PLAN)" to the status to distinguish. For the Adversarial row, show whichever is more recent between `adversarial-review` (new auto-scaled) and `outside-voice-review` (legacy). For Design Review, show whichever is more recent between `plan-design-review` (full visual audit) and `design-review-lite` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. For the Outside Voice row, show the most recent `outside-voice-plan-review` entry — this captures outside voices from both /plan-ceo-review and /plan-eng-review.
@@ -100,7 +100,7 @@ Display:
 ```
 
 **Review tiers:**
-- **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \`Team Mode setting skip_eng_review=true\` (the "don't bother me" setting).
+- **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance.
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
 - **Adversarial Review (automatic):** Always-on for every review. Every diff gets both BitFun adversarial subagent and outside-voice sub-agent adversarial challenge. Large diffs (200+ lines) additionally get outside-voice sub-agent structured review with P1 gate. No configuration needed.
@@ -126,7 +126,7 @@ Check diff size: `git diff <base>...HEAD --stat | tail -1`. If the diff is >200 
 
 If CEO Review is missing, mention as informational ("CEO Review not run — recommended for product changes") but do NOT block.
 
-For Design Review: run `source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
+For Design Review: run `source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null)`. If `SCOPE_FRONTEND=true` and no design review (plan-design-review or design-review-lite) exists in the dashboard, mention: "Design Review not run — this PR changes frontend code. The lite design check will run automatically in Step 3.5, but consider running /design-review for a full visual audit post-implementation." Still never block.
 
 Continue to Step 1.5 — do NOT block or ask. Ship runs its own review in Step 3.5.
 
@@ -1046,7 +1046,7 @@ higher confidence.
 Check if the diff touches frontend files using `git diff + rg scope inference`:
 
 ```bash
-source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/null)
+source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null)
 ```
 
 **If `SCOPE_FRONTEND=false`:** Skip design review silently. No output.
@@ -1069,7 +1069,7 @@ source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/nul
 6. **Log the result** for the Review Readiness Dashboard:
 
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 
 Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of `git rev-parse --short HEAD`.
@@ -1104,7 +1104,7 @@ Present outside-voice sub-agent output under a `CODEX (design):` header, merged 
 ### Detect stack and scope
 
 ```bash
-source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/null) || true
+source <(true # BitFun infers diff scope with git/rg <base> 2>/dev/null) || true
 # Detect stack for specialist context
 STACK=""
 [ -f Gemfile ] && STACK="${STACK}ruby "
@@ -1130,7 +1130,7 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
-true # BitFun Team Mode has no external specialist-stats helper 2>/dev/null || true
+true # BitFun has no external specialist-stats helper 2>/dev/null || true
 ```
 
 ### Select specialists
@@ -1180,7 +1180,7 @@ Construct the prompt for each specialist. The prompt includes:
 3. Past learnings for this domain (if any exist):
 
 ```bash
-true # BitFun Team Mode has no external learnings helper
+true # BitFun has no external learnings helper
 ```
 
 If learnings are found, include them: "Past learnings for this domain: {learnings}"
@@ -1307,7 +1307,7 @@ If the Red Team subagent fails or times out, skip silently and continue.
 Before classifying findings, check if any were previously skipped by the user in a prior review on this branch.
 
 ```bash
-true # BitFun Team Mode reads review context from the current session
+true # BitFun reads review context from the current session
 ```
 
 Parse the output: only lines BEFORE `---CONFIG---` are JSONL entries (the output also contains `---CONFIG---` and `---HEAD---` footer sections that are not JSONL — ignore those).
@@ -1358,7 +1358,7 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
 
 9. Persist the review result to the review log:
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 Substitute TIMESTAMP (ISO 8601), STATUS ("clean" if no issues, "issues_found" otherwise),
 and N values from the summary counts above. The `via:"ship"` distinguishes from standalone `/review` runs.
@@ -1421,7 +1421,7 @@ DIFF_DEL=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ deletion' 
 DIFF_TOTAL=$((DIFF_INS + DIFF_DEL))
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 # Legacy opt-out — only gates outside-voice sub-agent passes, BitFun always runs
-OLD_CFG="" # BitFun Team Mode has no external codex_reviews config
+OLD_CFG="" # BitFun has no external codex_reviews config
 echo "DIFF_SIZE: $DIFF_TOTAL"
 echo "OLD_CFG: ${OLD_CFG:-not_set}"
 ```
@@ -1509,7 +1509,7 @@ If `DIFF_TOTAL < 200`: skip this section silently. The BitFun + outside-voice su
 
 After all passes complete, persist:
 ```bash
-true # BitFun Team Mode has no external review-log helper
+true # BitFun has no external review-log helper
 ```
 Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if outside-voice sub-agent ran, "task" if only independent subagent ran. GATE = the outside-voice sub-agent structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if outside-voice sub-agent was unavailable. If all passes failed, do NOT persist.
 
@@ -1540,7 +1540,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun Team Mode has no external telemetry helper
+true # BitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`

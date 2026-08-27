@@ -37,15 +37,15 @@ subjective decisions.
 - Bump VERSION without asking — always use AskUserQuestion for version changes
 - Use `Write` tool on CHANGELOG.md — always use `Edit` with exact `old_string` matches
 
-## BitFun Team Mode Dispatch
+## BitFun Dispatch
 
-When this skill is invoked by BitFun Team Mode, this skill supplies the documentation-release methodology. Use existing Task sub-agents for read-only doc drift discovery, then keep edits in the main Team session.
+When this skill is invoked by BitFun, this skill supplies the documentation-release methodology. Use existing Task sub-agents for read-only doc drift discovery, then keep edits in the main session.
 
 - Do not assume a Technical Writer sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom docs/writing sub-agents if available; otherwise use `Explore` for diff-to-doc mapping and locating impacted docs.
 - Good parallel Task tracks: README/API drift, architecture docs drift, changelog/release-note gaps, and TODO cleanup candidates.
 - Do not ask Task sub-agents to edit docs. Require evidence: changed behavior, affected docs, stale statements, and suggested wording.
-- The main Team orchestrator owns all doc edits and risky narrative questions.
+- The main session owns all doc edits and risky narrative questions.
 
 ---
 

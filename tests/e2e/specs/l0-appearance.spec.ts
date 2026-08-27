@@ -553,11 +553,12 @@ describe('L0 Appearance', () => {
       miniAppPresentation.card!.neutralActionBackground,
     );
     expect(miniAppPresentation.card!.primaryActionBackground).not.toBe('rgb(16, 26, 39)');
-    expect(miniAppPresentation.card!.height).toBeGreaterThanOrEqual(159.5);
-    expect(Math.abs(
-      miniAppPresentation.card!.width / miniAppPresentation.card!.height - 2.4,
-    )).toBeLessThanOrEqual(0.03);
-    expect(miniAppPresentation.card!.iconWidth).toBeGreaterThanOrEqual(70);
+    expect(miniAppPresentation.card!.width).toBeGreaterThanOrEqual(279.5);
+    expect(miniAppPresentation.card!.width).toBeLessThanOrEqual(400.5);
+    expect(miniAppPresentation.card!.height).toBeGreaterThanOrEqual(151.5);
+    expect(miniAppPresentation.card!.height).toBeLessThanOrEqual(180);
+    expect(miniAppPresentation.card!.iconWidth).toBeGreaterThanOrEqual(55.5);
+    expect(miniAppPresentation.card!.iconWidth).toBeLessThanOrEqual(72.5);
     expect(Math.abs(
       miniAppPresentation.card!.iconHeight! - miniAppPresentation.card!.iconWidth!,
     )).toBeLessThanOrEqual(0.1);
@@ -570,7 +571,8 @@ describe('L0 Appearance', () => {
     expect(miniAppPresentation.card!.tagsVisible).toBe(true);
     expect(miniAppPresentation.card!.tagsOverlapActions).toBe(false);
     expect(miniAppPresentation.card!.actionsRightGap).toBeGreaterThanOrEqual(12);
-    expect(miniAppPresentation.card!.actionsBottomGap).toBeGreaterThanOrEqual(20);
+    expect(miniAppPresentation.card!.actionsBottomGap).toBeGreaterThanOrEqual(11.5);
+    expect(miniAppPresentation.card!.actionsBottomGap).toBeLessThanOrEqual(16.5);
 
     await saveElementScreenshot(
       '[data-bf-component="mini-app-card"]',

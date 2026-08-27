@@ -3,14 +3,12 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button, IconButton, Input as DesignInput } from '@bitfun/ui';
+import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { Input, Modal, Tooltip } from '@/component-library';
-import { Select } from '@/component-library';
-import { Alert } from '@/component-library';
+import { Alert, Input, Select, Tooltip } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,
@@ -722,7 +720,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         showCloseButton
         closeOnOverlayClick={false}
         overlayClassName="ssh-connection-dialog__modal-overlay"
-        contentClassName="modal__content--fill-flex"
+        contentLayout="flex"
       >
         <div className="ssh-connection-dialog" data-bf-component="ssh-remote" data-bf-part="connection">
           {error && (

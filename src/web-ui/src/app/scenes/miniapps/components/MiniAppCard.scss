@@ -3,9 +3,9 @@
 
 .miniapp-card {
   width: 100%;
+  max-width: var(--miniapp-card-max-inline-size, 400px);
   min-width: 0;
-  min-height: 160px;
-  aspect-ratio: 12 / 5;
+  min-height: var(--miniapp-card-min-block-size, 152px);
   box-sizing: border-box;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
@@ -53,11 +53,11 @@
 
   &__main {
     display: grid;
-    grid-template-columns: clamp(72px, 20%, 88px) minmax(0, 1fr);
-    gap: $size-gap-4;
+    grid-template-columns: clamp(60px, 18%, 72px) minmax(0, 1fr);
+    gap: $size-gap-3;
     flex: 1;
     min-height: 0;
-    padding: $size-gap-3 $size-gap-5;
+    padding: $size-gap-3 $size-gap-4;
   }
 
   &__content {
@@ -99,7 +99,7 @@
     align-self: center;
     justify-self: center;
     width: 100%;
-    max-width: 88px;
+    max-width: 72px;
     aspect-ratio: 1;
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-full;
@@ -235,6 +235,7 @@
     gap: $size-gap-2;
     width: 100%;
     padding-top: $size-gap-2;
+    margin-top: auto;
     box-sizing: border-box;
     flex-shrink: 0;
     position: relative;
@@ -293,17 +294,16 @@
 
 @media (max-width: 480px) {
   .miniapp-card {
-    min-height: 176px;
-    aspect-ratio: auto;
+    max-width: 100%;
 
     &__main {
-      grid-template-columns: 64px minmax(0, 1fr);
-      gap: $size-gap-3;
-      padding: $size-gap-4;
+      grid-template-columns: 56px minmax(0, 1fr);
+      gap: $size-gap-2;
+      padding: $size-gap-3;
     }
 
     &__icon-area {
-      max-width: 64px;
+      max-width: 56px;
     }
 
   }

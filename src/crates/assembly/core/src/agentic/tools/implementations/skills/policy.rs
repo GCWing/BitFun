@@ -27,18 +27,6 @@ mod tests {
             Some(false)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("gstack-review", "Team"),
-            Some(true)
-        );
-        assert_eq!(
-            resolve_builtin_default_enabled("ppt-design", "Team"),
-            Some(false)
-        );
-        assert_eq!(
-            resolve_builtin_default_enabled("miniapp-dev", "Team"),
-            Some(false)
-        );
-        assert_eq!(
             resolve_builtin_default_enabled("find-skills", "DeepResearch"),
             Some(true)
         );

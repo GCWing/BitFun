@@ -7,7 +7,7 @@
 @use '../../component-library/styles/tokens.scss' as *;
 @use '../styles/workspace-shell-surfaces' as shell-surfaces;
 
-$_nav-width: 216px;
+$_nav-width: 300px;
 $_nav-collapsed-width: 76px;
 $_nav-bar-height: 35px;
 $_resize-target-width: 6px;
@@ -96,7 +96,7 @@ $_resize-target-width: 6px;
   gap: $size-gap-5;
   min-width: 0;
   min-height: 0;
-  padding: $size-gap-4 $size-gap-4 $size-gap-5;
+  padding: $size-gap-4 $size-gap-4 0;
   overflow: hidden;
   border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
   background: var(--bf-appearance-token-color-bg-scene);

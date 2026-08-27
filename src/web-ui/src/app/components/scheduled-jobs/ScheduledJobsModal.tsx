@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal } from '@/component-library';
+import { Modal } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import ScheduledJobsView from '@/app/components/scheduled-jobs/ScheduledJobsView';
 import type { CronJobTargetKind } from '@/infrastructure/api';

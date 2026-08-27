@@ -212,7 +212,6 @@ fn is_long_task_agent(agent_type: &str) -> bool {
             | "DeepReview"
             | "DeepResearch"
             | "ComputerUse"
-            | "Team"
             | "Ultra"
             | "SwarmPlanner"
             | "SwarmWorker"

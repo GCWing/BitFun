@@ -3,9 +3,9 @@
  * Supports editing terminal name and startup command
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Modal } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Input } from '@/component-library';
+import { Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './TerminalEditModal.scss';
