@@ -190,10 +190,19 @@
     color: var(--bf-color-content-secondary);
   }
 
-  .content[data-bf-layout="flex"] {
+  .content[data-bf-layout="flex"],
+  .content[data-bf-layout="fill"] {
     display: flex;
     overflow: hidden;
     flex-direction: column;
+  }
+
+  .content[data-bf-show-scrollbar="false"] {
+    scrollbar-width: none;
+  }
+
+  .content[data-bf-show-scrollbar="false"]::-webkit-scrollbar {
+    display: none;
   }
 
   .content[data-bf-padding="sm"] { padding: var(--bf-overlay-modal-content-padding-sm); }

@@ -9,13 +9,17 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type HTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { IconButton } from "../IconButton";
+import { IconButton, type IconButtonProps } from "../IconButton";
 import { classNames } from "../../internal/classNames";
+import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Modal.module.css";
 
 const MODAL_EXIT_DURATION_MS = 180;
@@ -30,7 +34,8 @@ const FOCUSABLE_SELECTOR = [
 
 export type ModalBackdropBlur = "none" | "subtle" | "base";
 export type ModalBorder = "none" | "subtle" | "default";
-export type ModalContentLayout = "scroll" | "flex";
+export type ModalCloseReason = "close-button" | "escape-key" | "overlay";
+export type ModalContentLayout = "scroll" | "flex" | "fill";
 export type ModalContentPadding = "none" | "sm" | "md" | "lg" | "xl";
 export type ModalElevation = "none" | "raised" | "overlay";
 export type ModalPlacement = "center" | "bottom-left" | "bottom-right";
@@ -71,11 +76,14 @@ export interface ModalProps {
   ariaDescribedBy?: string;
   ariaLabel?: string;
   ariaLabelledBy?: string;
+  autoFocus?: boolean;
   backdropBlur?: ModalBackdropBlur;
   border?: ModalBorder;
   children: ReactNode;
+  closeButtonProps?: Omit<IconButtonProps, "aria-label" | "icon" | "onClick">;
   closeButtonLabel?: string;
   closeButtonTestId?: string;
+  closeIcon?: ReactNode;
   closeOnEscape?: boolean;
   closeOnOverlayClick?: boolean;
   contentClassName?: string;
@@ -88,19 +96,23 @@ export interface ModalProps {
   footer?: ReactNode;
   footerClassName?: string;
   headerActions?: ReactNode;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (reason: ModalCloseReason) => void;
   overlayClassName?: string;
   placement?: ModalPlacement;
   portalContainer?: ModalPortalTarget;
+  preventScroll?: boolean;
   radius?: ModalRadius;
   resizable?: boolean;
   role?: "dialog" | "alertdialog";
   showCloseButton?: boolean;
+  showScrollbar?: boolean;
   size?: ModalSize;
   testId?: string;
   title?: ReactNode;
   titleExtra?: ReactNode;
+  titleProps?: Omit<HTMLAttributes<HTMLHeadingElement>, "children" | "className" | "id">;
   titleTestId?: string;
 }
 
@@ -174,15 +186,23 @@ function isTopModal(ownerDocument: Document, identity: symbol): boolean {
   return stack?.[stack.length - 1] === identity;
 }
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((element) => element.getAttribute("aria-hidden") !== "true");
+}
+
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   ariaDescribedBy,
   ariaLabel,
   ariaLabelledBy,
+  autoFocus = true,
   backdropBlur = "none",
   border = "subtle",
   children,
+  closeButtonProps,
   closeButtonLabel,
   closeButtonTestId,
+  closeIcon,
   closeOnEscape = true,
   closeOnOverlayClick = true,
   contentClassName,
@@ -195,19 +215,23 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   footer,
   footerClassName,
   headerActions,
+  initialFocusRef,
   isOpen,
   onClose,
   overlayClassName,
   placement = "center",
   portalContainer,
+  preventScroll = true,
   radius = "xl",
   resizable = false,
   role = "dialog",
   showCloseButton = true,
+  showScrollbar = true,
   size = "medium",
   testId,
   title,
   titleExtra,
+  titleProps,
   titleTestId,
 }, forwardedRef) {
   const context = useContext(ModalContext);
@@ -220,6 +244,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   const modalRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pointerStartedOnOverlayRef = useRef(false);
   const dragStartRef = useRef<DragStart | null>(null);
   const resizeStartRef = useRef<ResizeStart | null>(null);
   const resizeDirectionRef = useRef<string>("");
@@ -258,9 +283,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
   }, [isOpen, isPresent, ownerDocument]);
 
   useEffect(() => {
-    if ((!isOpen && !isPresent) || !ownerDocument) return;
+    if ((!isOpen && !isPresent) || !ownerDocument || !preventScroll) return;
     return lockDocumentScroll(ownerDocument);
-  }, [isOpen, isPresent, ownerDocument]);
+  }, [isOpen, isPresent, ownerDocument, preventScroll]);
 
   useEffect(() => {
     if (!isOpen || !ownerDocument) return;
@@ -272,13 +297,14 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
     const handleEscape = (event: KeyboardEvent) => {
       if (
         event.key !== "Escape"
+        || isImeOwnedKeyboardEvent(event)
         || !closeOnEscape
         || !isTopModal(ownerDocument, identityRef.current)
       ) {
         return;
       }
       event.preventDefault();
-      onClose();
+      onClose("escape-key");
     };
     ownerDocument.addEventListener("keydown", handleEscape);
     return () => ownerDocument.removeEventListener("keydown", handleEscape);
@@ -292,8 +318,12 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       ? ownerDocument.activeElement
       : null;
     const dialog = modalRef.current;
-    const focusable = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-    (focusable ?? dialog)?.focus();
+    if (autoFocus) {
+      const focusTarget = initialFocusRef?.current
+        ?? (dialog ? getFocusableElements(dialog)[0] : null)
+        ?? dialog;
+      focusTarget?.focus();
+    }
 
     const trapFocus = (event: KeyboardEvent) => {
       if (
@@ -303,7 +333,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       ) {
         return;
       }
-      const elements = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const elements = getFocusableElements(dialog);
       if (elements.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -327,7 +357,26 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       if (previousFocusRef.current?.isConnected) previousFocusRef.current.focus();
       previousFocusRef.current = null;
     };
-  }, [isOpen, ownerDocument]);
+  }, [autoFocus, initialFocusRef, isOpen, ownerDocument]);
+
+  const requestClose = useCallback((reason: ModalCloseReason) => {
+    if (!isOpen) return;
+    onClose(reason);
+  }, [isOpen, onClose]);
+
+  const handleOverlayPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    pointerStartedOnOverlayRef.current = event.currentTarget === event.target;
+  }, []);
+
+  const handleOverlayClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const shouldClose = closeOnOverlayClick
+      && pointerStartedOnOverlayRef.current
+      && event.currentTarget === event.target
+      && ownerDocument
+      && isTopModal(ownerDocument, identityRef.current);
+    pointerStartedOnOverlayRef.current = false;
+    if (shouldClose) requestClose("overlay");
+  }, [closeOnOverlayClick, ownerDocument, requestClose]);
 
   useEffect(() => {
     const view = ownerDocument?.defaultView;
@@ -501,16 +550,8 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
       onAnimationEnd={(event) => {
         if (isExiting && event.currentTarget === event.target) setIsPresent(false);
       }}
-      onClick={(event) => {
-        if (
-          closeOnOverlayClick
-          && event.currentTarget === event.target
-          && ownerDocument
-          && isTopModal(ownerDocument, identityRef.current)
-        ) {
-          onClose();
-        }
-      }}
+      onClick={handleOverlayClick}
+      onPointerDown={handleOverlayPointerDown}
     >
       <div
         aria-describedby={resolvedDescribedBy}
@@ -556,6 +597,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
                     {title && (
                       <div className={styles.titleGroup} data-bf-component="modal" data-bf-part="titleGroup">
                         <h2
+                          {...titleProps}
                           className={styles.title}
                           data-bf-component="modal"
                           data-bf-part="title"
@@ -592,12 +634,13 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
             )}
             {showCloseButton && (
               <IconButton
+                {...closeButtonProps}
                 aria-label={resolvedCloseLabel}
-                className={styles.close}
+                className={classNames(styles.close, closeButtonProps?.className)}
                 data-bf-part="close"
                 data-testid={closeButtonTestId}
-                icon={<X aria-hidden="true" />}
-                onClick={onClose}
+                icon={closeIcon ?? <X aria-hidden="true" />}
+                onClick={() => requestClose("close-button")}
                 size="sm"
                 variant="quiet"
               />
@@ -611,6 +654,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
           data-bf-layout={contentLayout}
           data-bf-part="content"
           data-bf-padding={contentPadding}
+          data-bf-show-scrollbar={showScrollbar ? "true" : "false"}
         >
           {children}
         </div>

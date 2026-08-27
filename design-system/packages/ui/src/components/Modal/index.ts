@@ -3,6 +3,7 @@ export {
   ModalProvider,
   type ModalBackdropBlur,
   type ModalBorder,
+  type ModalCloseReason,
   type ModalContentLayout,
   type ModalContentPadding,
   type ModalElevation,

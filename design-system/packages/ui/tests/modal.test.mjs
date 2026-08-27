@@ -12,8 +12,14 @@ test("Modal owns a portaled, stacked focus and dismissal contract", async () => 
   assert.match(source, /const modalStacks = new WeakMap<Document, symbol\[\]>/);
   assert.match(source, /isTopModal\(ownerDocument, identityRef\.current\)/);
   assert.match(source, /event\.key !== "Escape"/);
+  assert.match(source, /isImeOwnedKeyboardEvent\(event\)/);
   assert.match(source, /event\.key !== "Tab"/);
   assert.match(source, /previousFocusRef\.current\?\.isConnected/);
+  assert.match(source, /initialFocusRef\?\.current/);
+  assert.match(source, /pointerStartedOnOverlayRef\.current/);
+  assert.match(source, /requestClose\("overlay"\)/);
+  assert.match(source, /requestClose\("close-button"\)/);
+  assert.match(source, /onClose\("escape-key"\)/);
   assert.match(source, /data-bf-part="overlay"/);
   assert.match(source, /data-bf-part="dialog"/);
   assert.match(source, /data-bf-part="content"/);
@@ -22,6 +28,7 @@ test("Modal owns a portaled, stacked focus and dismissal contract", async () => 
   assert.match(source, /data-bf-part="headerActions"/);
   assert.match(source, /data-bf-part="footer"/);
   assert.match(source, /data-bf-has-footer=/);
+  assert.match(source, /data-bf-show-scrollbar=/);
 });
 
 test("Modal geometry and surface styling use public design tokens", async () => {
