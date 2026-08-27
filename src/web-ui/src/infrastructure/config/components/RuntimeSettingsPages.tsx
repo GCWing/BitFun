@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Modal } from '@bitfun/ui';
+import { Button, Switch, IconButton, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
-import { NumberInput, ConfigPageLoading, Select, type SelectOption, Tooltip } from '@/component-library';
+import { NumberInput, ConfigPageLoading, Select as LegacySelect, type SelectOption, Tooltip } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -898,7 +898,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             description={t('features.pet.displayModeDescription')}
             align="center"
           >
-            <Select
+            <LegacySelect
               className="bitfun-runtime-settings__pet-select"
               dropdownClassName="bitfun-runtime-settings__pet-select-dropdown"
               size="small"
@@ -1116,7 +1116,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
           >
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <Select
-                size="small"
+                size="sm"
                 value={resolveToolPermissionMode(toolPermissionConfig)}
                 options={[
                   { value: 'ask', label: t('permissionPolicy.ask') },
@@ -1124,7 +1124,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   { value: 'full_access', label: t('permissionPolicy.fullAccess') },
                 ]}
                 disabled={permissionConfigSaving}
-                onChange={handlePermissionModeChange}
+                onValueChange={handlePermissionModeChange}
               />
             </div>
           </ConfigPageRow>
@@ -1200,9 +1200,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
               <Select
                 value={subagentBatchExecutionPolicy}
                 options={subagentBatchExecutionPolicyOptions}
-                size="small"
+                size="sm"
                 disabled={toolExecConfigLoading}
-                onChange={handleSubagentBatchExecutionPolicyChange}
+                onValueChange={handleSubagentBatchExecutionPolicyChange}
               />
             </div>
           </ConfigPageRow>
@@ -1434,11 +1434,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   <Select
                     value={preferredBrowser}
                     options={browserSelectOptions}
-                    size="small"
+                    size="sm"
                     disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
-                    onChange={(value) => {
-                      if (!Array.isArray(value)) void handleBrowserControlBrowserChange(value);
-                    }}
+                    onValueChange={(value) => void handleBrowserControlBrowserChange(value)}
                   />
                 </div>
               </ConfigPageRow>

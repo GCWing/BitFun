@@ -1,6 +1,6 @@
 import React, { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@/component-library';
+import { Select } from '@bitfun/ui';
 import type { AIModelConfig } from '../types';
 import { getModelDisplayName } from '../services/modelConfigs';
 import './ModelSelectionRadio.scss';
@@ -131,14 +131,14 @@ export const ModelSelectionRadio: React.FC<ModelSelectionRadioProps> = ({
           <div className="model-selection-radio__dropdown" data-bf-component="config" data-bf-part="modelSelectionDropdown">
             <Select
               value={customModelId || ''}
-              onChange={handleCustomModelChange}
+              onValueChange={handleCustomModelChange}
               disabled={disabled}
               placeholder={t('selection.selectModel')}
               options={enabledModels.map(model => ({
                 label: getModelDisplayName(model),
                 value: model.id!,
               }))}
-              size="small"
+              size="sm"
             />
           </div>
         )}
