@@ -10,10 +10,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import {
-  IconButton,
-  Input,
-} from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -32,6 +29,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
+import { IconButton, Input } from '@bitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -418,28 +416,28 @@ const AssistantConfigPage: React.FC = () => {
         <div className="acp-right-shell acp-right-shell--editor">
           <div className="acp-persona-editor" data-bf-component="assistant-config-page" data-bf-part="editor">
             <div className="acp-persona-editor__head" data-bf-component="assistant-config-page" data-bf-part="editorHeader">
-              <IconButton
-                type="button"
-                size="xs"
-                className="acp-persona-editor__back"
-                onClick={closePersonaDoc}
-                aria-label={t('nursery.template.closeDetail')}
-                tooltip={t('nursery.template.closeDetail')}
-              >
-                <ArrowLeft size={13} />
-              </IconButton>
+              <Tooltip content={t('nursery.template.closeDetail')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  className="acp-persona-editor__back"
+                  onClick={closePersonaDoc}
+                  aria-label={t('nursery.template.closeDetail')}
+                  icon={<ArrowLeft size={13} />}
+                />
+              </Tooltip>
               <span className="acp-persona-editor__title">{t(`nursery.assistant.personaDocs.${docLabelKey}`)}</span>
-              <IconButton
-                type="button"
-                size="xs"
-                variant="danger"
-                className="acp-persona-editor__close"
-                onClick={closePersonaDoc}
-                aria-label={t('nursery.template.closeDetail')}
-                tooltip={t('nursery.template.closeDetail')}
-              >
-                <X size={13} />
-              </IconButton>
+              <Tooltip content={t('nursery.template.closeDetail')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  tone="danger"
+                  className="acp-persona-editor__close"
+                  onClick={closePersonaDoc}
+                  aria-label={t('nursery.template.closeDetail')}
+                  icon={<X size={13} />}
+                />
+              </Tooltip>
             </div>
             <div className="acp-persona-editor__body" data-bf-component="assistant-config-page" data-bf-part="editorBody">
               {error && <p className="acp-persona-editor__error" data-bf-component="assistant-config-page" data-bf-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
@@ -508,18 +506,18 @@ const AssistantConfigPage: React.FC = () => {
     >
       {/* Top bar — back only */}
       <div className="nursery-page__bar acp-page__bar" data-bf-component="assistant-config-page" data-bf-part="toolbar">
-        <IconButton
-          type="button"
-          size="small"
-          className="nursery-page__back"
-          data-bf-component="assistant-config-page"
-          data-bf-part="back"
-          onClick={openGallery}
-          aria-label={t('nursery.backToGallery')}
-          tooltip={t('nursery.backToGallery')}
-        >
-          <ArrowLeft size={13} />
-        </IconButton>
+        <Tooltip content={t('nursery.backToGallery')}>
+          <IconButton
+            type="button"
+            size="sm"
+            className="nursery-page__back"
+            data-bf-component="assistant-config-page"
+            data-bf-part="back"
+            onClick={openGallery}
+            aria-label={t('nursery.backToGallery')}
+            icon={<ArrowLeft size={13} />}
+          />
+        </Tooltip>
       </div>
 
       {/* Two-column layout */}
@@ -568,8 +566,8 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
+                    size="sm"
                   />
                 ) : (
                   <span
@@ -592,8 +590,8 @@ const AssistantConfigPage: React.FC = () => {
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
-                    size="small"
                     className="acp-left-header__meta-input"
+                    size="sm"
                   />
                 ) : (
                   <span

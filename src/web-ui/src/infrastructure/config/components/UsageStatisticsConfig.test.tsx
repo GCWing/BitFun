@@ -31,6 +31,7 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
   ConfigPageMessage: ({
     message,

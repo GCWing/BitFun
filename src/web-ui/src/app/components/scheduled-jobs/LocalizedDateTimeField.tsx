@@ -13,8 +13,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IconButton, Input } from '@bitfun/ui';
 import { CalendarDays } from 'lucide-react';
-import { IconButton, Input } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import DateTimePickerPopover from './DateTimePickerPopover';
 import {
@@ -124,9 +125,8 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
       data-bf-state={error ? 'error' : undefined}
     >
       <Input
-        size="small"
         value={text}
-        error={error}
+        invalid={error}
         disabled={disabled}
         inputMode="numeric"
         placeholder={dateTimeFormatHint(order)}
@@ -135,19 +135,20 @@ const LocalizedDateTimeField: React.FC<LocalizedDateTimeFieldProps> = ({
         onFocus={() => { editingRef.current = true; }}
         onChange={event => commitText(event.currentTarget.value)}
         onBlur={handleBlur}
+        size="sm"
       />
 
-      <IconButton
-        type="button"
-        size="xs"
-        disabled={disabled}
-        aria-label={t('dateTimeField.openPicker')}
-        tooltip={t('dateTimeField.openPicker')}
-        aria-expanded={pickerOpen}
-        onClick={() => setPickerOpen(open => !open)}
-      >
-        <CalendarDays size={14} />
-      </IconButton>
+      <Tooltip content={t('dateTimeField.openPicker')} disabled={disabled}>
+        <IconButton
+          type="button"
+          size="sm"
+          disabled={disabled}
+          aria-label={t('dateTimeField.openPicker')}
+          aria-expanded={pickerOpen}
+          icon={<CalendarDays />}
+          onClick={() => setPickerOpen(open => !open)}
+        />
+      </Tooltip>
 
       {pickerOpen && !disabled ? (
         <DateTimePickerPopover

@@ -116,16 +116,5 @@
 
   &__send {
     flex-shrink: 0;
-    border-radius: 7px !important;
-
-    &.icon-btn--success:not(:disabled) {
-      background: var(--bf-appearance-token-color-accent-500);
-      color: var(--bf-appearance-token-color-static-white);
-
-      &:hover {
-        background: var(--bf-appearance-token-color-accent-600);
-        color: var(--bf-appearance-token-color-static-white);
-      }
-    }
   }
 }

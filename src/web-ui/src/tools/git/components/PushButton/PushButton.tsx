@@ -1,9 +1,9 @@
 /** Push button with optional force-push dropdown. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ArrowUp, AlertTriangle } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './PushButton.scss';
 
@@ -37,8 +37,7 @@ function buttonVariant(variant: PushButtonProps['variant']): React.ComponentProp
 
 function iconButtonVariant(variant: PushButtonProps['variant']): React.ComponentProps<typeof IconButton>['variant'] {
   if (variant === 'primary' || variant === 'accent') return 'primary';
-  if (variant === 'ghost') return 'ghost';
-  return 'default';
+  return 'quiet';
 }
 
 export const PushButton: React.FC<PushButtonProps> = ({
@@ -102,17 +101,17 @@ export const PushButton: React.FC<PushButtonProps> = ({
     <div className={`bitfun-push-button ${className}`} ref={dropdownRef} data-bf-component="git-tool" data-bf-part="pushButton">
       <div className="bitfun-push-button__wrapper" ref={wrapperRef}>
         {iconOnly ? (
-          <IconButton
-            size={size}
-            variant={iconButtonVariant(variant)}
-            onClick={() => handlePush(false)}
-            disabled={disabled || loading}
-            isLoading={loading}
-            aria-label={t('actions.push')}
-            tooltip={t('actions.push')}
-          >
-            <ArrowUp size={14} />
-          </IconButton>
+          <Tooltip content={t('actions.push')}>
+            <IconButton
+              size={buttonSize(size)}
+              variant={iconButtonVariant(variant)}
+              onClick={() => handlePush(false)}
+              disabled={disabled || loading}
+              loading={loading}
+              aria-label={t('actions.push')}
+              icon={<ArrowUp size={14} />}
+            />
+          </Tooltip>
         ) : (
           <Button
             variant={buttonVariant(variant)}
@@ -126,19 +125,19 @@ export const PushButton: React.FC<PushButtonProps> = ({
           </Button>
         )}
 
-        <IconButton
-          size={size}
-          variant={iconButtonVariant(variant)}
-          onClick={handleToggleDropdown}
-          disabled={disabled || loading}
-          aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
-          tooltip={`${t('actions.push')} / ${t('actions.forcePush')}`}
-        >
-          <ChevronDown
-            size={14}
-            className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
+        <Tooltip content={`${t('actions.push')} / ${t('actions.forcePush')}`}>
+          <IconButton
+            size={buttonSize(size)}
+            variant={iconButtonVariant(variant)}
+            onClick={handleToggleDropdown}
+            disabled={disabled || loading}
+            aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
+            icon={<ChevronDown
+              size={14}
+              className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
+            />}
           />
-        </IconButton>
+        </Tooltip>
       </div>
 
       {showDropdown && (

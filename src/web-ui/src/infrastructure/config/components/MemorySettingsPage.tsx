@@ -1,15 +1,8 @@
-import { Switch } from '@bitfun/ui';
+import { Switch, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  IconButton,
-  NumberInput,
-  Select,
-  type SelectOption,
-} from '@/component-library';
+import { ConfigPageLoading, ConfirmDialog, NumberInput, Select, type SelectOption, Tooltip } from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -260,45 +253,40 @@ const MemorySettingsPage: React.FC = () => {
         subtitle={t('subtitle')}
         extra={(
           <>
-            <IconButton
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={() => void handleResetSettings()}
-              isLoading={actionBusy === 'reset-settings'}
-              disabled={actionBusy !== null}
-              tooltip={t('actions.resetSettings')}
-              tooltipPlacement="bottom"
-              aria-label={t('actions.resetSettings')}
-            >
-              <RotateCcw />
-            </IconButton>
-            <IconButton
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={() => void handleOpenMemoryDirectory()}
-              isLoading={actionBusy === 'open-directory'}
-              disabled={actionBusy !== null}
-              tooltip={t('actions.openDirectory')}
-              tooltipPlacement="bottom"
-              aria-label={t('actions.openDirectory')}
-            >
-              <FolderOpen />
-            </IconButton>
-            <IconButton
-              type="button"
-              variant="danger"
-              size="small"
-              onClick={() => setResetMemoryConfirmOpen(true)}
-              isLoading={actionBusy === 'reset-memory'}
-              disabled={actionBusy !== null}
-              tooltip={t('actions.resetMemory')}
-              tooltipPlacement="bottom"
-              aria-label={t('actions.resetMemory')}
-            >
-              <Trash2 />
-            </IconButton>
+            <Tooltip content={t('actions.resetSettings')} placement="bottom">
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={() => void handleResetSettings()}
+                loading={actionBusy === 'reset-settings'}
+                disabled={actionBusy !== null}
+                aria-label={t('actions.resetSettings')}
+                icon={<RotateCcw />}
+              />
+            </Tooltip>
+            <Tooltip content={t('actions.openDirectory')} placement="bottom">
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={() => void handleOpenMemoryDirectory()}
+                loading={actionBusy === 'open-directory'}
+                disabled={actionBusy !== null}
+                aria-label={t('actions.openDirectory')}
+                icon={<FolderOpen />}
+              />
+            </Tooltip>
+            <Tooltip content={t('actions.resetMemory')} placement="bottom">
+              <IconButton
+                type="button"
+                tone="danger"
+                size="sm"
+                onClick={() => setResetMemoryConfirmOpen(true)}
+                loading={actionBusy === 'reset-memory'}
+                disabled={actionBusy !== null}
+                aria-label={t('actions.resetMemory')}
+                icon={<Trash2 />}
+              />
+            </Tooltip>
           </>
         )}
       />

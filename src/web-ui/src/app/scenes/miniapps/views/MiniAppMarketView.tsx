@@ -12,16 +12,17 @@ import {
   Loader2,
   PackageCheck,
   RefreshCw,
+  Search as SearchIcon,
   ShieldCheck,
   Star,
 } from 'lucide-react';
 import {
   Badge,
   ConfirmDialog,
-  Search,
   Select,
   type SelectOption,
 } from '@/component-library';
+import { SearchField } from '@bitfun/ui';
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -279,11 +280,12 @@ const MiniAppMarketView: React.FC = () => {
             data-bf-component="miniapp-market-view"
             data-bf-part="headerActions"
           >
-            <Search
+            <SearchField
+              leadingIcon={<SearchIcon aria-hidden />}
               value={query}
-              onChange={setQuery}
+              onValueChange={setQuery}
               placeholder={t('market.search')}
-              size="small"
+              size="sm"
             />
             <MarketAccountControls
               loginOpen={loginOpen}

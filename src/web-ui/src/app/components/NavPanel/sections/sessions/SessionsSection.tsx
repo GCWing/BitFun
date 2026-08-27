@@ -6,10 +6,10 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
-import { IconButton, Input, PresenceBoundary, Tooltip } from '@/component-library';
+import { PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -1748,33 +1748,31 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   <Input
                     ref={editInputRef}
                     className="bitfun-nav-panel__inline-item-edit-field"
-                    variant="default"
-                    inputSize="small"
                     value={editingTitle}
                     onChange={e => setEditingTitle(e.target.value)}
                     onKeyDown={handleEditKeyDown}
                     onBlur={handleConfirmEdit}
+                    size="sm"
                   />
-                  <IconButton
-                    variant="success"
-                    size="xs"
-                    className="bitfun-nav-panel__inline-item-edit-btn confirm"
-                    onClick={e => { e.stopPropagation(); handleConfirmEdit(); }}
-                    tooltip={t('nav.sessions.confirmEdit')}
-                    tooltipPlacement="top"
-                  >
-                    <Check size={11} />
-                  </IconButton>
-                  <IconButton
-                    variant="default"
-                    size="xs"
-                    className="bitfun-nav-panel__inline-item-edit-btn cancel"
-                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleCancelEdit(); }}
-                    tooltip={t('nav.sessions.cancelEdit')}
-                    tooltipPlacement="top"
-                  >
-                    <X size={11} />
-                  </IconButton>
+                  <Tooltip content={t('nav.sessions.confirmEdit')} placement="top">
+                    <IconButton
+                      aria-label={t('nav.sessions.confirmEdit')}
+                      variant="primary"
+                      size="sm"
+                      className="bitfun-nav-panel__inline-item-edit-btn confirm"
+                      onClick={e => { e.stopPropagation(); handleConfirmEdit(); }}
+                      icon={<Check size={11} />}
+                    />
+                  </Tooltip>
+                  <Tooltip content={t('nav.sessions.cancelEdit')} placement="top">
+                    <IconButton
+                      aria-label={t('nav.sessions.cancelEdit')}
+                      size="sm"
+                      className="bitfun-nav-panel__inline-item-edit-btn cancel"
+                      onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleCancelEdit(); }}
+                      icon={<X size={11} />}
+                    />
+                  </Tooltip>
                 </div>
               ) : (
                 <>

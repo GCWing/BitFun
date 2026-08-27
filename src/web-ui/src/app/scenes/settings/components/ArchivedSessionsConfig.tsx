@@ -7,7 +7,7 @@
  * confirmation dialog.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2, RotateCcw, Inbox, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,6 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning, confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
-import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { SessionMetadata } from '@/shared/types/session-history';
@@ -305,12 +304,11 @@ const ArchivedSessionsConfig: React.FC = () => {
     <div data-bf-component="archived-sessions-config" data-bf-part="headerActions" className="archived-sessions-config__header-actions">
       <IconButton
         type="button"
-        size="small"
+        size="sm"
         onClick={() => { void loadArchived(); }}
         aria-label={t('actions.refresh')}
-      >
-        <RefreshCw size={13} />
-      </IconButton>
+        icon={<RefreshCw />}
+      />
       {hasEntries && (
         <Button
           size="sm"

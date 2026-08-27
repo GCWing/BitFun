@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton, Input, TabGroup } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { IconButton, Tabs, TabPane, Select, Checkbox, Input } from '@/component-library';
+import { Select, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -64,6 +64,29 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'user' | 'repository' | 'advanced'>('user');
   const { t } = useI18n('panels/git');
+  const tabItems = [
+    {
+      icon: <User size={16} />,
+      id: 'git-settings-user-tab',
+      label: t('settingsView.tabs.user'),
+      panelId: 'git-settings-user-panel',
+      value: 'user',
+    },
+    {
+      icon: <Globe size={16} />,
+      id: 'git-settings-repository-tab',
+      label: t('settingsView.tabs.repository'),
+      panelId: 'git-settings-repository-panel',
+      value: 'repository',
+    },
+    {
+      icon: <Key size={16} />,
+      id: 'git-settings-advanced-tab',
+      label: t('settingsView.tabs.advanced'),
+      panelId: 'git-settings-advanced-panel',
+      value: 'advanced',
+    },
+  ] as const;
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -349,14 +372,14 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         </div>
         
         <div data-bf-component="git-settings-view" data-bf-part="headerRight" className="bitfun-git-settings-view__header-right">
-          <IconButton 
+          <IconButton
+            aria-label={t('settingsView.refresh')}
             onClick={loadConfig}
             disabled={loading}
             title={t('settingsView.refresh')}
-            size="small"
-          >
-            <RefreshCw size={16} />
-          </IconButton>
+            size="sm"
+            icon={<RefreshCw size={16} />}
+          />
           
           <Button 
             onClick={saveConfig}
@@ -374,14 +397,13 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <div data-bf-component="git-settings-view" data-bf-part="status" data-bf-state="error" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--error">
           <X size={14} />
           <span>{error}</span>
-          <IconButton 
-            onClick={() => setError(null)} 
+          <IconButton
+            aria-label={t('settingsView.dismissError')}
+            onClick={() => setError(null)}
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
-          >
-            <X size={12} />
-          </IconButton>
+            size="sm"
+            icon={<X size={12} />}
+          />
         </div>
       )}
       
@@ -389,56 +411,32 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <div data-bf-component="git-settings-view" data-bf-part="status" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--success">
           <Check size={14} />
           <span>{success}</span>
-          <IconButton 
-            onClick={() => setSuccess(null)} 
+          <IconButton
+            aria-label={t('settingsView.dismissSuccess')}
+            onClick={() => setSuccess(null)}
             className="bitfun-git-settings-view__close-btn"
-            size="xs"
-            variant="ghost"
-          >
-            <X size={12} />
-          </IconButton>
+            size="sm"
+            icon={<X size={12} />}
+          />
         </div>
       )}
 
-      <div data-bf-component="git-settings-view" data-bf-part="tabs">
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key: string) => setActiveTab(key as 'user' | 'repository' | 'advanced')}
+      <div className="bitfun-git-settings-view__tabs" data-bf-component="git-settings-view" data-bf-part="tabs">
+        <TabGroup
+          className="bitfun-git-settings-view__tab-list"
+          items={tabItems}
+          onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+          value={activeTab}
+        />
+        <div
+          aria-labelledby={`git-settings-${activeTab}-tab`}
+          id={`git-settings-${activeTab}-panel`}
+          role="tabpanel"
         >
-        <TabPane 
-          tabKey="user"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <User size={16} />
-              {t('settingsView.tabs.user')}
-            </span>
-          }
-        >
-          {renderUserTab()}
-        </TabPane>
-        <TabPane 
-          tabKey="repository"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <Globe size={16} />
-              {t('settingsView.tabs.repository')}
-            </span>
-          }
-        >
-          {renderRepositoryTab()}
-        </TabPane>
-        <TabPane 
-          tabKey="advanced"
-          label={
-            <span className="bitfun-git-settings-view__tab-label">
-              <Key size={16} />
-              {t('settingsView.tabs.advanced')}
-            </span>
-          }
-        >
-          {renderAdvancedTab()}
-        </TabPane>
-        </Tabs>
+          {activeTab === 'user' && renderUserTab()}
+          {activeTab === 'repository' && renderRepositoryTab()}
+          {activeTab === 'advanced' && renderAdvancedTab()}
+        </div>
       </div>
     </div>
   );

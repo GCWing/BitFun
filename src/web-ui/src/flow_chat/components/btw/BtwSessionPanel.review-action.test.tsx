@@ -90,6 +90,7 @@ vi.mock('@/component-library', () => ({
       {children}
     </button>
   ),
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/shared/services/FileTabManager', () => ({

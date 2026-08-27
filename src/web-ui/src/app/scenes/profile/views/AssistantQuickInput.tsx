@@ -10,9 +10,10 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { IconButton } from '@bitfun/ui';
+import { ArrowUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Textarea } from '@/component-library';
+import { Textarea } from '@/component-library';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
@@ -116,18 +117,15 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           </div>
           <IconButton
             type="button"
-            variant="success"
-            size="small"
-            isLoading={sending}
+            variant="primary"
+            size="sm"
+            loading={sending}
             disabled={!value.trim() || sending}
             onClick={() => { void handleSend(); }}
             aria-label={t('actions.send')}
             className="aqi__send"
-          >
-            {sending
-              ? <Loader2 size={14} />
-              : <ArrowUp size={14} />}
-          </IconButton>
+            icon={<ArrowUp />}
+          />
         </div>
       </div>
     </div>

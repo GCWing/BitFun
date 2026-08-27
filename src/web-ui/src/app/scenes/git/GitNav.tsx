@@ -5,12 +5,13 @@
  */
 
 import React, { useCallback } from 'react';
+import { IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, Layers2, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { useGitSceneStore, type GitSceneView } from './gitSceneStore';
 import { useGitState } from '../../../tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import './GitNav.scss';
 
 const NAV_ITEMS: { id: GitSceneView; icon: React.ElementType; labelKey: string }[] = [
@@ -81,9 +82,14 @@ const GitNav: React.FC = () => {
             </div>
           )}
         <div className="bitfun-git-scene-nav__actions-row" data-bf-component="git-nav" data-bf-part="actions">
-            <IconButton size="xs" variant="ghost" onClick={() => refresh({ force: true })} tooltip={t('actions.refresh')}>
-              <RefreshCw size={14} />
-            </IconButton>
+            <Tooltip content={t('actions.refresh')}>
+              <IconButton
+                size="sm"
+                aria-label={t('actions.refresh')}
+                icon={<RefreshCw />}
+                onClick={() => refresh({ force: true })}
+              />
+            </Tooltip>
           </div>
         </div>
       )}

@@ -63,5 +63,9 @@ describe('NotificationItem accessibility', () => {
     ).find(button => button.textContent === 'Delete');
     expect(dangerAction?.getAttribute('data-bf-variant')).toBe('fill');
     expect(dangerAction?.getAttribute('data-bf-tone')).toBe('danger');
+    expect(
+      container.querySelector('[data-bf-part="itemClose"] [data-bf-component="icon-button"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('actions.close');
   });
 });

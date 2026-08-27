@@ -5,16 +5,10 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import {
-  IconButton,
-  Input,
-  Select,
-  Textarea,
-  confirmDanger,
-} from '@/component-library';
+import { Select, Textarea, confirmDanger, Tooltip } from '@/component-library';
 import {
   cronAPI,
   type CreateCronJobRequest,
@@ -669,16 +663,16 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                             aria-label={t('nav.scheduledJobs.actions.toggleEnabled')}
                           />
                         </div>
-                        <IconButton
-                          type="button"
-                          size="xs"
-                          variant="danger"
-                          aria-label={t('nav.scheduledJobs.actions.delete')}
-                          tooltip={t('nav.scheduledJobs.actions.delete')}
-                          onClick={e => { e.stopPropagation(); void handleDeleteJob(job); }}
-                        >
-                          <Trash2 size={13} />
-                        </IconButton>
+                        <Tooltip content={t('nav.scheduledJobs.actions.delete')}>
+                          <IconButton
+                            type="button"
+                            size="sm"
+                            tone="danger"
+                            aria-label={t('nav.scheduledJobs.actions.delete')}
+                            onClick={e => { e.stopPropagation(); void handleDeleteJob(job); }}
+                            icon={<Trash2 size={13} />}
+                          />
+                        </Tooltip>
                       </div>
                     </div>
                     <div className="asv__item-meta-row" data-bf-component="scheduled-jobs-view" data-bf-part="jobMeta">
@@ -736,15 +730,15 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           </div>
           <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <Input
-              size="small"
               value={draft.name}
               onChange={e => {
                 const name = e.currentTarget.value;
                 setValidationErrors(current => ({ ...current, name: false }));
                 setDraft(c => ({ ...c, name }));
               }}
-              error={validationErrors.name}
+              invalid={validationErrors.name}
               placeholder={t('nav.scheduledJobs.placeholders.name')}
+              size="sm"
             />
           </div>
         </div>
@@ -824,16 +818,16 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <div className="asv__control-grid asv__control-grid--interval">
                   <Input
-                    size="small"
                     type="number"
                     value={draft.everyValue}
-                    error={validationErrors.everyValue}
+                    invalid={validationErrors.everyValue}
                     onChange={e => {
                       const everyValue = e.currentTarget.value;
                       setValidationErrors(current => ({ ...current, everyValue: false }));
                       setDraft(c => ({ ...c, everyValue }));
                     }}
                     placeholder="1"
+                    size="sm"
                   />
                   <Select
                     size="small"
@@ -872,15 +866,15 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
-                  size="small"
                   value={draft.expr}
-                  error={validationErrors.cronExpr}
+                  invalid={validationErrors.cronExpr}
                   onChange={e => {
                     const expr = e.currentTarget.value;
                     setValidationErrors(current => ({ ...current, cronExpr: false }));
                     setDraft(c => ({ ...c, expr }));
                   }}
                   placeholder="0 8 * * *"
+                  size="sm"
                 />
                 <span className="asv__field-note">
                   {t('nav.scheduledJobs.hints.cronExpr')}
@@ -893,13 +887,13 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               </div>
               <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
                 <Input
-                  size="small"
                   value={draft.tz}
                   onChange={e => {
                     const tz = e.currentTarget.value;
                     setDraft(c => ({ ...c, tz }));
                   }}
                   placeholder={t('nav.scheduledJobs.placeholders.timezone')}
+                  size="sm"
                 />
               </div>
             </div>

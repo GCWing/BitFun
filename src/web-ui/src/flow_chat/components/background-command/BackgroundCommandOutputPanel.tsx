@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ClipboardCopy, Copy, Keyboard, Loader2, Terminal } from 'lucide-react';
-import { Checkbox, IconButton, Textarea, Tooltip } from '@/component-library';
+import { Checkbox, Textarea, Tooltip } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/infrastructure/api';
 import type {
@@ -303,38 +303,35 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
             </div>
           </div>
           <div data-bf-component="background-command-output-panel" data-bf-part="headerActions" className="background-command-output-panel__header-actions">
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={handleToggleInputEditor}
-              tooltip={canSendInput
+            <Tooltip content={canSendInput
                 ? t('backgroundCommandOutput.sendInput')
-                : t('backgroundCommandOutput.sendInputUnavailable')}
-              aria-label={t('backgroundCommandOutput.sendInput')}
-              disabled={!canSendInput}
-            >
-              <Keyboard size={14} aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={copyCommand}
-              tooltip={t('backgroundCommandOutput.copyCommand')}
-              aria-label={t('backgroundCommandOutput.copyCommand')}
-              disabled={!command}
-            >
-              <ClipboardCopy size={14} aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={copyOutput}
-              tooltip={t('backgroundCommandOutput.copy')}
-              aria-label={t('backgroundCommandOutput.copy')}
-              disabled={!displayedOutput}
-            >
-              <Copy size={14} aria-hidden="true" />
-            </IconButton>
+                : t('backgroundCommandOutput.sendInputUnavailable')}>
+              <IconButton
+                size="sm"
+                onClick={handleToggleInputEditor}
+                aria-label={t('backgroundCommandOutput.sendInput')}
+                disabled={!canSendInput}
+                icon={<Keyboard size={14} aria-hidden="true" />}
+              />
+            </Tooltip>
+            <Tooltip content={t('backgroundCommandOutput.copyCommand')}>
+              <IconButton
+                size="sm"
+                onClick={copyCommand}
+                aria-label={t('backgroundCommandOutput.copyCommand')}
+                disabled={!command}
+                icon={<ClipboardCopy size={14} aria-hidden="true" />}
+              />
+            </Tooltip>
+            <Tooltip content={t('backgroundCommandOutput.copy')}>
+              <IconButton
+                size="sm"
+                onClick={copyOutput}
+                aria-label={t('backgroundCommandOutput.copy')}
+                disabled={!displayedOutput}
+                icon={<Copy size={14} aria-hidden="true" />}
+              />
+            </Tooltip>
           </div>
         </header>
 

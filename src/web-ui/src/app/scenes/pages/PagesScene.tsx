@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, Input } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -21,14 +21,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import {
-  Input,
-  PresenceBoundary,
-  Select,
-  confirmDanger,
-  confirmWarning,
-  type SelectOption,
-} from '@/component-library';
+import { PresenceBoundary, Select, confirmDanger, confirmWarning, type SelectOption } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import {
   pageAPI,
@@ -922,7 +915,6 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       <span className="pages-scene__setting-label">{t('titleField.label')}</span>
                       <div className="pages-scene__title-control">
                         <Input
-                          size="small"
                           value={titleDraft}
                           maxLength={120}
                           disabled={pageBusy}
@@ -937,6 +929,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                             if (event.key === 'Enter') void saveTitle(page, pageOwnerEpoch);
                           }}
                           aria-label={t('titleField.inputAria', { slug: page.slug })}
+                          size="sm"
                         />
                         {(titleDirty || titleSaving) && (
                           <Button

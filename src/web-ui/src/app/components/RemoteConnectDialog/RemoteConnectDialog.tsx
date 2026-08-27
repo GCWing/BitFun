@@ -7,12 +7,12 @@
  * the Account group works without a workspace.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Input } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { Modal, Badge, Input, Select, Tooltip } from '@/component-library';
+import { Modal, Badge, Select, Tooltip } from '@/component-library';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -1089,7 +1089,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
             type="url"
             placeholder="https://relay.example.com:9700"
-            prefix={<span className="bitfun-remote-connect__field-prefix">{t('remoteConnect.serverUrl')}</span>}
+            leading={<span className="bitfun-remote-connect__field-prefix">{t('remoteConnect.serverUrl')}</span>}
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
           />
@@ -1165,7 +1165,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
               type="text"
               placeholder="123456:xxxxxxxxxxxxxxxxxxxxxxxx"
-              prefix={<span className="bitfun-remote-connect__field-prefix">Bot Token</span>}
+              leading={<span className="bitfun-remote-connect__field-prefix">Bot Token</span>}
               value={tgToken}
               onChange={(e) => setTgToken(e.target.value)}
             />
@@ -1210,7 +1210,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
               type="text"
               placeholder="cli_xxxxxxxx"
-              prefix={<span className="bitfun-remote-connect__field-prefix">App ID</span>}
+              leading={<span className="bitfun-remote-connect__field-prefix">App ID</span>}
               value={feishuAppId}
               onChange={(e) => setFeishuAppId(e.target.value)}
             />
@@ -1218,7 +1218,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
               type="password"
               placeholder="xxxxxxxxxxxxxxxx"
-              prefix={<span className="bitfun-remote-connect__field-prefix">App Secret</span>}
+              leading={<span className="bitfun-remote-connect__field-prefix">App Secret</span>}
               value={feishuAppSecret}
               onChange={(e) => setFeishuAppSecret(e.target.value)}
             />

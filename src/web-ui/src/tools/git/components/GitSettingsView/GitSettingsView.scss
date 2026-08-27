@@ -79,10 +79,16 @@ $opacity-high: 0.8 !default;
     }
   }
 
-  &__tab-label {
+  &__tabs {
     display: flex;
-    align-items: center;
-    gap: $size-gap-2;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  &__tab-list {
+    flex: 0 0 auto;
+    margin: $size-gap-3 $size-gap-4 0;
   }
 
   &__content {

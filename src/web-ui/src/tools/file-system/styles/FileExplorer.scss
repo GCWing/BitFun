@@ -41,22 +41,6 @@ $_indent-width: 8px;
     pointer-events: auto;
   }
   
-  .icon-btn {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    color: var(--bf-appearance-token-color-text-muted);
-    
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-color-overlay-white-08);
-    }
-    
-    svg {
-      width: 14px;
-      height: 14px;
-    }
-  }
 }
 
 .bitfun-file-explorer__empty {

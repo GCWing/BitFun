@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,13 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import {
-  Badge,
-  IconButton,
-  Modal,
-  confirmDanger,
-  type BadgeVariant,
-} from '@/component-library';
+import { Badge, Modal, confirmDanger, type BadgeVariant, Tooltip } from '@/component-library';
 import {
   speechAPI,
   workspaceAPI,
@@ -413,17 +407,16 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                 ) : null}
 
                 {isUsable ? (
-                  <IconButton
-                    aria-label={t('model.more')}
-                    tooltip={t('model.more')}
-                    variant="ghost"
-                    size="small"
-                    data-bf-component="voice-input-config"
-                    data-bf-part="modelMore"
-                    onClick={event => openMaintenanceMenu(event, model)}
-                  >
-                    <MoreHorizontal size={15} />
-                  </IconButton>
+                  <Tooltip content={t('model.more')}>
+                    <IconButton
+                      aria-label={t('model.more')}
+                      size="sm"
+                      data-bf-component="voice-input-config"
+                      data-bf-part="modelMore"
+                      onClick={event => openMaintenanceMenu(event, model)}
+                      icon={<MoreHorizontal size={15} />}
+                    />
+                  </Tooltip>
                 ) : null}
               </div>
             </div>
@@ -449,16 +442,15 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
       >
         <div className="voice-input-config__model-dialog-intro">
           <span>{t('localModels.description')}</span>
-          <IconButton
-            aria-label={t('model.refresh')}
-            tooltip={t('model.refresh')}
-            variant="ghost"
-            size="small"
-            onClick={() => void loadModels()}
-            disabled={loading || busyAction !== null || anyDownloading}
-          >
-            <RefreshCw size={14} />
-          </IconButton>
+          <Tooltip content={t('model.refresh')}>
+            <IconButton
+              aria-label={t('model.refresh')}
+              size="sm"
+              onClick={() => void loadModels()}
+              disabled={loading || busyAction !== null || anyDownloading}
+              icon={<RefreshCw size={14} />}
+            />
+          </Tooltip>
         </div>
         {content}
       </div>

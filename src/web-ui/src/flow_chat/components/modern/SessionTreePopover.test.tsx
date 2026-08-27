@@ -42,6 +42,7 @@ vi.mock('@/component-library', async () => {
     }, ref) => (
       <button ref={ref} type="button" title={tooltip} {...props}>{children}</button>
     )),
+    Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 

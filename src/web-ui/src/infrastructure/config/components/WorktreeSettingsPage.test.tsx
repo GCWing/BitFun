@@ -70,6 +70,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({
     children,
     disabled,

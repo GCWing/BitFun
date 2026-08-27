@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "b1e086d2457b5a3f9a2ac616be1a56f8108ce2c6f18906cff488cb388dcf2e14",
-  "fileCount": 366,
-  "interactionCount": 4412,
+  "digest": "b719c315ec5cd0e239cd76d60352781f297727d14bb8918d1768d2d582950fc5",
+  "fileCount": 365,
+  "interactionCount": 4421,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -247,7 +247,7 @@
     {
       "sourceFile": "src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx",
       "interactionCount": 76,
-      "digest": "d691f516f0377df2c9298c76c25d0f91b1288d7488ea0e5ec945d0dda6841666"
+      "digest": "ec8d877683ae423f5db3b0349a8c6bea124f913903c4053067146f1162a99ec0"
     },
     {
       "sourceFile": "src/web-ui/src/app/components/scheduled-jobs/DateTimePickerPopover.tsx",
@@ -351,8 +351,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx",
-      "interactionCount": 28,
-      "digest": "777a97bafadc293162bc5ffb668b10b03771a735cea284b4b35de18cf11f53b3"
+      "interactionCount": 27,
+      "digest": "3d6026e026246723e23ebfdfaf5296d07b07f979f43bd4dcbcf612adfc6de2ad"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/file-viewer/FileViewerNav.tsx",
@@ -361,23 +361,23 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/GitNav.tsx",
-      "interactionCount": 4,
-      "digest": "2b7d115bc658087afcabe87546363d2d178e6311b620d8deea358d65eaaeb8c9"
+      "interactionCount": 5,
+      "digest": "d05d081666dcd40e6555b661da66198bf6f633a78b83133167a367e3da86319b"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/GitScene.tsx",
-      "interactionCount": 5,
-      "digest": "a4eaf8269b3cb5fca171c29118a5dad980a3c753199736a94d5943b23b4e5417"
+      "interactionCount": 6,
+      "digest": "1fdc2936fa3c85f1e3f0a82c729bc150ecb1d8aa23d029569f9aff7bdae27a39"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/views/BranchesView.tsx",
-      "interactionCount": 14,
-      "digest": "3e139a4d1953eb5163a542a27520c9f805f1933ade0ff4d85d42603729bb7bcd"
+      "interactionCount": 19,
+      "digest": "32edf62991a83eefda6892aa85cfbe6f8718c6e58d830cccc66939bb16533c57"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/git/views/WorkingCopyView.tsx",
-      "interactionCount": 32,
-      "digest": "a2c2342fa9ae21f2a037f76551905ba9284ffd97c7d00d170f7e4d0cce1fd09c"
+      "interactionCount": 36,
+      "digest": "f4c7702241c517b8a0aea470e0e3052774b24fc57001bcfad605800fa0746fee"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/MiniAppGalleryScene.tsx",
@@ -421,13 +421,13 @@
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppGalleryView.tsx",
-      "interactionCount": 17,
-      "digest": "37da7fdf734fb71132373a26574fbee519fb0fa96788f68f834741810feb654e"
+      "interactionCount": 16,
+      "digest": "a5ad6f4e5ab83494d0dcec51b2580cfb9152e8ea1b62865ea83da6491b6478e6"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppMarketView.tsx",
-      "interactionCount": 23,
-      "digest": "bf5b59997c6a073f7b98f2aacda98857ba03cfa3a1d8771a61b603c62879dfa7"
+      "interactionCount": 22,
+      "digest": "77750b38e98968bff245b4dc085be6266a1888be513c639610dfb7e036b67c23"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/miniapps/views/MiniAppSubmissionsView.tsx",
@@ -503,11 +503,6 @@
       "sourceFile": "src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx",
       "interactionCount": 23,
       "digest": "1be232ca02b417e007e83b1a1193ed209ed4391164cf94632cfe00b09bb91195"
-    },
-    {
-      "sourceFile": "src/web-ui/src/app/scenes/settings/components/SettingsViewPage.tsx",
-      "interactionCount": 2,
-      "digest": "a0dca5a4044950973b7e917696bb15593f7ff8dfa5e739a1cf93c5b932abca48"
     },
     {
       "sourceFile": "src/web-ui/src/app/scenes/settings/settingsRegistry.ts",
@@ -751,8 +746,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/features/relay-deploy/RelayDeployWizard.tsx",
-      "interactionCount": 63,
-      "digest": "d480f91ba94d12d7ec863c504f6cf1e054371e5e7d91cd89b7072f3aef308a64"
+      "interactionCount": 62,
+      "digest": "cea148085f784d1519f56ee79baad908dc0a24d67450c3d5461da9c974384709"
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/ConfirmDialog.tsx",
@@ -776,8 +771,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/features/ssh-remote/SSHConnectionDialog.tsx",
-      "interactionCount": 91,
-      "digest": "5921d31e205fe8c7f72bfe76744cd593fa223334685709f909b0242bd717406e"
+      "interactionCount": 88,
+      "digest": "16a5c9205b2799ec0dd229cd48d2955c3d946b4626bfb6c27607983c655e5c79"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/AcpModeSelector.tsx",
@@ -787,7 +782,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInput.tsx",
       "interactionCount": 72,
-      "digest": "3bc3014007ebb954f0b4118133c0d5eb466e57589e77ddffc407f09d05b0952c"
+      "digest": "e651a27bb5f56afdfd959d347d30ffb5d77e11a53f483bd477c1bfc881c961d7"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/components/ChatInputApprovalBand.tsx",
@@ -1306,8 +1301,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearanceMarketDialog.tsx",
-      "interactionCount": 25,
-      "digest": "3634980a019236143cf7f5399bb3ddcdd5c46823d6c65f74ebb0e849ea25e766"
+      "interactionCount": 24,
+      "digest": "6f2d04cbf1a5a569edeffd58c065d50ff8af4930590b0088c39281139edba8eb"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/AppearanceMarketWorkflows.tsx",
@@ -1386,8 +1381,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx",
-      "interactionCount": 148,
-      "digest": "c2201029f5275b1c4ea023f57d2c32ec0f8b12bcf8e0d0d6cd4a1d625bbb760d"
+      "interactionCount": 152,
+      "digest": "32726de1185e90e8949c2eefe6491f2ae9e0b39fd4b2a148d24649a37cc0ac13"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/QuickActionsConfig.tsx",
@@ -1401,8 +1396,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ReasoningPresetEditor.tsx",
-      "interactionCount": 47,
-      "digest": "50b2c9e8543391a316c5eefe5e5ae231d88c8b51907fc32f10baed1f4d610f9f"
+      "interactionCount": 51,
+      "digest": "6e03893c800d5abd9894b88917fdbde426597065f84e7df75279a82aa6ba33ef"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ReviewCapacitySection.tsx",
@@ -1421,8 +1416,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/SkillsConfig.tsx",
-      "interactionCount": 26,
-      "digest": "0f5a33fa12ec57bf5a558eca74401abc16c885e04deefe5df9f8b672f1d063c4"
+      "interactionCount": 28,
+      "digest": "ba301345195596dac4cddf5147e066bcbf46f1956725b50471ca1a86c0c69307"
     },
     {
       "sourceFile": "src/web-ui/src/infrastructure/config/components/ToolJsonRepairSection.tsx",
@@ -1821,8 +1816,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/GitSettingsView/GitSettingsView.tsx",
-      "interactionCount": 25,
-      "digest": "2e98b16ceaa97c906869368bbd4a1181509465b0076ed0a26b6b2ad54f28adfc"
+      "interactionCount": 23,
+      "digest": "4719cf27649001d6c41468166afd3ad5b0288c64f1bfe917ef980323b704ebd8"
     },
     {
       "sourceFile": "src/web-ui/src/tools/git/components/PushButton/PushButton.tsx",

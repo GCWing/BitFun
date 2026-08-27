@@ -311,6 +311,8 @@
     "loadFailedTitle": "Failed to load settings",
     "retry": "Retry",
     "refresh": "Refresh settings",
+    "dismissError": "Dismiss error",
+    "dismissSuccess": "Dismiss success message",
     "saving": "Saving...",
     "save": "Save settings",
     "success": {

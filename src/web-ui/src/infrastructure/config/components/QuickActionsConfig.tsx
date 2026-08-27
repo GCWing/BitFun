@@ -1,14 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  IconButton,
-  Modal,
-  Input,
-  Textarea,
-} from '@/component-library';
+import { ConfigPageLoading, Modal, Textarea, Tooltip } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -174,28 +168,26 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
           checked={action.enabled}
           onChange={() => onToggle(action.id)}
         />
-        <IconButton
-          type="button"
-          size="small"
-          variant="ghost"
-          aria-label={t('edit.button')}
-          tooltip={t('edit.button')}
-          onClick={() => onEdit(action)}
-        >
-          <Pencil size={13} />
-        </IconButton>
-        {canDelete && (
+        <Tooltip content={t('edit.button')}>
           <IconButton
             type="button"
-            size="small"
-            variant="ghost"
-            aria-label={t('delete.button')}
-            tooltip={t('delete.button')}
-            onClick={() => onDelete(action.id)}
-            className="quick-actions-config__delete-btn"
-          >
-            <Trash2 size={13} />
-          </IconButton>
+            size="sm"
+            aria-label={t('edit.button')}
+            onClick={() => onEdit(action)}
+            icon={<Pencil size={13} />}
+          />
+        </Tooltip>
+        {canDelete && (
+          <Tooltip content={t('delete.button')}>
+            <IconButton
+              type="button"
+              size="sm"
+              aria-label={t('delete.button')}
+              onClick={() => onDelete(action.id)}
+              className="quick-actions-config__delete-btn"
+              icon={<Trash2 size={13} />}
+            />
+          </Tooltip>
         )}
       </div>
     </div>

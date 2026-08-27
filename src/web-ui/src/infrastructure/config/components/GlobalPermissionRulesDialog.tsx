@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
+import { Modal, Select, type SelectOption, Tooltip } from '@/component-library';
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -421,53 +421,50 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                       onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
                     />
                     <Input
-                      inputSize="small"
                       value={rule.resource}
                       placeholder={t('permissionPolicy.globalRulesResourcePlaceholder')}
                       aria-label={t('permissionPolicy.globalRulesResource')}
                       disabled={isSaving || exiting}
-                      error={!rule.resource.trim()}
+                      invalid={!rule.resource.trim()}
                       onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
+                      size="sm"
                     />
                     <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
-                      <IconButton
-                        type="button"
-                        size="small"
-                        variant="ghost"
-                        aria-label={t('permissionPolicy.moveGlobalRuleUp')}
-                        tooltip={t('permissionPolicy.moveGlobalRuleUp')}
-                        disabled={isSaving || exiting || activeIndex === 0}
-                        onClick={() => moveDraftRule(rule.localId, -1)}
-                      >
-                        <ArrowUp size={14} />
-                      </IconButton>
-                      <IconButton
-                        type="button"
-                        size="small"
-                        variant="ghost"
-                        aria-label={t('permissionPolicy.moveGlobalRuleDown')}
-                        tooltip={t('permissionPolicy.moveGlobalRuleDown')}
-                        disabled={
-                          isSaving
-                          || exiting
-                          || activeIndex === undefined
-                          || activeIndex === activeDraftRules.length - 1
-                        }
-                        onClick={() => moveDraftRule(rule.localId, 1)}
-                      >
-                        <ArrowDown size={14} />
-                      </IconButton>
-                      <IconButton
-                        type="button"
-                        size="small"
-                        variant="ghost"
-                        aria-label={t('permissionPolicy.removeGlobalRule')}
-                        tooltip={t('permissionPolicy.removeGlobalRule')}
-                        disabled={isSaving || exiting}
-                        onClick={() => handleRemoveRule(rule.localId)}
-                      >
-                        <Trash2 size={14} />
-                      </IconButton>
+                      <Tooltip content={t('permissionPolicy.moveGlobalRuleUp')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          aria-label={t('permissionPolicy.moveGlobalRuleUp')}
+                          disabled={isSaving || exiting || activeIndex === 0}
+                          onClick={() => moveDraftRule(rule.localId, -1)}
+                          icon={<ArrowUp size={14} />}
+                        />
+                      </Tooltip>
+                      <Tooltip content={t('permissionPolicy.moveGlobalRuleDown')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          aria-label={t('permissionPolicy.moveGlobalRuleDown')}
+                          disabled={
+                            isSaving
+                            || exiting
+                            || activeIndex === undefined
+                            || activeIndex === activeDraftRules.length - 1
+                          }
+                          onClick={() => moveDraftRule(rule.localId, 1)}
+                          icon={<ArrowDown size={14} />}
+                        />
+                      </Tooltip>
+                      <Tooltip content={t('permissionPolicy.removeGlobalRule')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          aria-label={t('permissionPolicy.removeGlobalRule')}
+                          disabled={isSaving || exiting}
+                          onClick={() => handleRemoveRule(rule.localId)}
+                          icon={<Trash2 size={14} />}
+                        />
+                      </Tooltip>
                     </div>
                   </div>
                 );

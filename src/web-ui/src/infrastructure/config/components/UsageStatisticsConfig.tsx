@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, CalendarRange, Search, X } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-  ConfigPageRefreshButton,
-  IconButton,
-  Input,
-  Select,
-} from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, Select, Tooltip } from '@/component-library';
 import {
   TokenUsageStatisticsUnavailableError,
   tokenUsageStatisticsApi,
@@ -24,6 +17,7 @@ import {
   ConfigPageLayout,
 } from './common';
 import './UsageStatisticsConfig.scss';
+import { IconButton, Input } from '@bitfun/ui';
 
 // ---------------------------------------------------------------------------
 // Chart palette — appearance tokens only (literal vars so the theme color
@@ -763,26 +757,25 @@ const UsageStatisticsConfig: React.FC = () => {
             />
             <Input
               className="bitfun-usage-stats__filter-input"
-              inputSize="small"
               value={filterInput}
               onChange={(event) => setFilterInput(event.target.value)}
               placeholder={t('filter.placeholder')}
               aria-label={t('filter.inputLabel')}
               data-testid="usage-filter-input"
               maxLength={100}
-              prefix={<Search size={14} aria-hidden />}
-              suffix={filterInput ? (
-                <IconButton
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  tooltip={t('filter.clear')}
-                  aria-label={t('filter.clear')}
-                  onClick={clearFilter}
-                >
-                  <X size={12} aria-hidden />
-                </IconButton>
+              leading={<Search size={14} aria-hidden />}
+              trailing={filterInput ? (
+                <Tooltip content={t('filter.clear')}>
+                  <IconButton
+                    type="button"
+                    size="sm"
+                    aria-label={t('filter.clear')}
+                    onClick={clearFilter}
+                    icon={<X size={12} aria-hidden />}
+                  />
+                </Tooltip>
               ) : undefined}
+              size="sm"
             />
           </div>
           <ConfigPageRefreshButton

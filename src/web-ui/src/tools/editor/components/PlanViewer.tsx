@@ -1,13 +1,13 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, FileText, Pencil, X, ChevronDown, Trash2, Plus } from 'lucide-react';
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { createLogger } from '@/shared/utils/logger';
-import { CubeLoading, IconButton } from '@/component-library';
+import { CubeLoading, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -538,66 +538,66 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       >
         <div className={toolbarClassName}>
           {isYamlEditingInPanel ? (
-            <IconButton
-              type="button"
-              size="xs"
-              onClick={closeYamlEditor}
-              tooltip={t('editor.planViewer.toggleYamlEditOff')}
-              aria-label={t('editor.planViewer.toggleYamlEditOff')}
-            >
-              <X size={14} />
-            </IconButton>
+            <Tooltip content={t('editor.planViewer.toggleYamlEditOff')}>
+              <IconButton
+                type="button"
+                size="sm"
+                onClick={closeYamlEditor}
+                aria-label={t('editor.planViewer.toggleYamlEditOff')}
+                icon={<X />}
+              />
+            </Tooltip>
           ) : isPanelEditing ? (
             <>
-              <IconButton
-                type="button"
-                size="xs"
-                onClick={addTodo}
-                tooltip={t('editor.common.add')}
-                aria-label={t('editor.common.add')}
-              >
-                <Plus size={14} />
-              </IconButton>
-              <IconButton
-                type="button"
-                size="xs"
-                variant="success"
-                onClick={saveEdit}
-                tooltip={t('editor.common.save')}
-                aria-label={t('editor.common.save')}
-              >
-                <Check size={14} />
-              </IconButton>
-              <IconButton
-                type="button"
-                size="xs"
-                onClick={cancelEdit}
-                tooltip={t('editor.common.cancel')}
-                aria-label={t('editor.common.cancel')}
-              >
-                <X size={14} />
-              </IconButton>
+              <Tooltip content={t('editor.common.add')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  onClick={addTodo}
+                  aria-label={t('editor.common.add')}
+                  icon={<Plus />}
+                />
+              </Tooltip>
+              <Tooltip content={t('editor.common.save')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant="primary"
+                  onClick={saveEdit}
+                  aria-label={t('editor.common.save')}
+                  icon={<Check />}
+                />
+              </Tooltip>
+              <Tooltip content={t('editor.common.cancel')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  onClick={cancelEdit}
+                  aria-label={t('editor.common.cancel')}
+                  icon={<X />}
+                />
+              </Tooltip>
             </>
           ) : (
             <>
-              <IconButton
-                type="button"
-                size="xs"
-                onClick={() => openYamlEditor(placement)}
-                tooltip={t('editor.planViewer.toggleYamlEditOn')}
-                aria-label={t('editor.planViewer.toggleYamlEditOn')}
-              >
-                <FileText size={14} />
-              </IconButton>
-              <IconButton
-                type="button"
-                size="xs"
-                onClick={startEdit}
-                tooltip={t('editor.common.edit')}
-                aria-label={t('editor.common.edit')}
-              >
-                <Pencil size={14} />
-              </IconButton>
+              <Tooltip content={t('editor.planViewer.toggleYamlEditOn')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  onClick={() => openYamlEditor(placement)}
+                  aria-label={t('editor.planViewer.toggleYamlEditOn')}
+                  icon={<FileText />}
+                />
+              </Tooltip>
+              <Tooltip content={t('editor.common.edit')}>
+                <IconButton
+                  type="button"
+                  size="sm"
+                  onClick={startEdit}
+                  aria-label={t('editor.common.edit')}
+                  icon={<Pencil />}
+                />
+              </Tooltip>
             </>
           )}
         </div>
@@ -644,16 +644,16 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                         }
                       }}
                     />
-                    <IconButton
-                      type="button"
-                      size="xs"
-                      variant="danger"
-                      onClick={() => deleteTodo(todo.id || String(index))}
-                      tooltip={t('editor.common.delete')}
-                      aria-label={t('editor.common.delete')}
-                    >
-                      <Trash2 size={13} />
-                    </IconButton>
+                    <Tooltip content={t('editor.common.delete')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        tone="danger"
+                        onClick={() => deleteTodo(todo.id || String(index))}
+                        aria-label={t('editor.common.delete')}
+                        icon={<Trash2 />}
+                      />
+                    </Tooltip>
                   </>
                 ) : (
                   <span className="todo-content">{todo.content}</span>

@@ -76,7 +76,7 @@ describe('Nursery gallery presentation', () => {
     expect(cardSection).not.toContain('&__new-session-btn {');
     expect(cardSection).not.toContain('&__set-primary-btn {');
     expect(cardSection).not.toContain('&__delete-btn {');
-    expect(source).toContain("import { Button } from '@bitfun/ui';");
+    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
     expect(source).toContain('leadingIcon={<Settings2 />}');
     expect(source).toContain('trailingIcon={<ChevronRight />}');
     expect(source).toContain('leadingIcon={<MessageSquarePlus />}');

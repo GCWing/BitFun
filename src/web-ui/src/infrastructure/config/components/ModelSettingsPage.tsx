@@ -1,8 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, SearchField } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
-import { Select, IconButton, NumberInput, Card, Modal, Input, Search, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
+import { Select, NumberInput, Card, Modal, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -1961,16 +1961,17 @@ const ModelSettingsPage: React.FC = () => {
             </div>
 
 
-            <Search
-              size="small"
+            <SearchField
+              leadingIcon={<SearchIcon aria-hidden />}
+              size="sm"
               className="bitfun-model-settings__provider-search"
               data-testid="settings-model-provider-search"
               data-bf-component="model-settings"
               data-bf-part="providerSearch"
               value={providerQuery}
               placeholder={t('providerSelection.searchProviders')}
-              inputAriaLabel={t('providerSelection.searchProviders')}
-              onChange={setProviderQuery}
+              aria-label={t('providerSelection.searchProviders')}
+              onValueChange={setProviderQuery}
               onSearch={() => {
                 const firstMatch = visibleProviders[0];
                 if (normalizedProviderQuery && firstMatch) handleSelectProvider(firstMatch.id);
@@ -2287,21 +2288,21 @@ const ModelSettingsPage: React.FC = () => {
                       )}
                     </div>
                     {!editingConfig.id && (
-                      <IconButton
-                        data-testid="settings-model-selected-remove-btn"
-                        data-model-id={draft.modelName}
-                        data-model-name={draft.modelName}
-                        variant="ghost"
-                        size="small"
-                        className="bitfun-model-settings__selected-model-remove"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSelectedModelDraft(draft.modelName);
-                        }}
-                        tooltip={t('providerSelection.removeModel')}
-                      >
-                        <X size={14} />
-                      </IconButton>
+                      <Tooltip content={t('providerSelection.removeModel')}>
+                        <IconButton
+                          aria-label={t('providerSelection.removeModel')}
+                          data-testid="settings-model-selected-remove-btn"
+                          data-model-id={draft.modelName}
+                          data-model-name={draft.modelName}
+                          size="sm"
+                          className="bitfun-model-settings__selected-model-remove"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSelectedModelDraft(draft.modelName);
+                          }}
+                          icon={<X size={14} />}
+                        />
+                      </Tooltip>
                     )}
                   </div>
                   {!isExpanded && (
@@ -2497,8 +2498,8 @@ const ModelSettingsPage: React.FC = () => {
             setEditingConfig(prev => ({ ...prev, api_key: e.target.value }));
           }}
           placeholder={t('form.apiKeyPlaceholder')}
-          inputSize="small"
-          suffix={apiKeySuffix}
+          trailing={apiKeySuffix}
+          size="sm"
         />
       </ConfigPageRow>
     );
@@ -2514,7 +2515,13 @@ const ModelSettingsPage: React.FC = () => {
             {isFromTemplate ? (
               <>
                 <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                  <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                  <Input
+                    data-testid="settings-model-provider-name-input"
+                    value={editingConfig.name || ''}
+                    onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={t('form.configNamePlaceholder')}
+                    size="sm"
+                  />
                 </ConfigPageRow>
                 {renderAuthRow()}
                 {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
@@ -2553,7 +2560,7 @@ const ModelSettingsPage: React.FC = () => {
                       }}
                       onFocus={(e) => e.target.select()}
                       placeholder={currentTemplate?.baseUrl}
-                      inputSize="small"
+                      size="sm"
                     />
                     {editingConfig.base_url && (
                       <div className="bitfun-model-settings__resolved-url">
@@ -2561,8 +2568,8 @@ const ModelSettingsPage: React.FC = () => {
                           value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
                           readOnly
                           onFocus={(e) => e.target.select()}
-                          inputSize="small"
                           className="bitfun-model-settings__resolved-url-input"
+                          size="sm"
                         />
                       </div>
                     )}
@@ -2625,7 +2632,7 @@ const ModelSettingsPage: React.FC = () => {
                           }
                         }}
                         placeholder={t('providerSelection.inputModelName')}
-                        inputSize="small"
+                        size="sm"
                       />
                       <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
@@ -2645,7 +2652,13 @@ const ModelSettingsPage: React.FC = () => {
                 {isProviderScopedEditing && (
                   <>
                     <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                      <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                      <Input
+                        data-testid="settings-model-provider-name-input"
+                        value={editingConfig.name || ''}
+                        onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder={t('form.configNamePlaceholder')}
+                        size="sm"
+                      />
                     </ConfigPageRow>
                     {renderAuthRow()}
                     {!authIsSubscription && renderApiKeyRow(`${t('form.apiKey')} *`)}
@@ -2665,7 +2678,7 @@ const ModelSettingsPage: React.FC = () => {
                           }}
                           onFocus={(e) => e.target.select()}
                           placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
-                          inputSize="small"
+                          size="sm"
                         />
                         {editingConfig.base_url && (
                           <div className="bitfun-model-settings__resolved-url">
@@ -2673,8 +2686,8 @@ const ModelSettingsPage: React.FC = () => {
                               value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
                               readOnly
                               onFocus={(e) => e.target.select()}
-                              inputSize="small"
                               className="bitfun-model-settings__resolved-url-input"
+                              size="sm"
                             />
                           </div>
                         )}
@@ -2737,7 +2750,7 @@ const ModelSettingsPage: React.FC = () => {
                           }
                         }}
                         placeholder={t('providerSelection.inputModelName')}
-                        inputSize="small"
+                        size="sm"
                       />
                       <Button data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
@@ -2855,9 +2868,28 @@ const ModelSettingsPage: React.FC = () => {
                     <div className="bitfun-model-settings__custom-headers">
                       {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
                         <div key={index} className="bitfun-model-settings__header-row">
-                          <Input value={key} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.keyPlaceholder')} inputSize="small" className="bitfun-model-settings__header-key" />
-                          <Input value={value} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.valuePlaceholder')} inputSize="small" className="bitfun-model-settings__header-value" />
-                          <IconButton variant="ghost" size="small" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} tooltip={t('actions.delete')}><X size={14} /></IconButton>
+                          <Input
+                            value={key}
+                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                            placeholder={t('advancedSettings.customHeaders.keyPlaceholder')}
+                            className="bitfun-model-settings__header-key"
+                            size="sm"
+                          />
+                          <Input
+                            value={value}
+                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                            placeholder={t('advancedSettings.customHeaders.valuePlaceholder')}
+                            className="bitfun-model-settings__header-value"
+                            size="sm"
+                          />
+                          <Tooltip content={t('actions.delete')}>
+                            <IconButton
+                              aria-label={t('actions.delete')}
+                              size="sm"
+                              onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }}
+                              icon={<X size={14} />}
+                            />
+                          </Tooltip>
                         </div>
                       ))}
                       <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn" leadingIcon={<Plus size={14} />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
@@ -3036,31 +3068,32 @@ const ModelSettingsPage: React.FC = () => {
             void handleToggleEnabled(config, e.target.checked);
           }}
         />
-        <IconButton
-          variant="ghost"
-          size="small"
-          isLoading={isTesting}
-          onClick={() => void handleTest(config)}
-          tooltip={t('actions.test')}
-        >
-          {isTesting ? <Loader size={14} /> : <Wifi size={14} />}
-        </IconButton>
-        <IconButton
-          variant="ghost"
-          size="small"
-          onClick={() => handleEdit(config)}
-          tooltip={t('actions.edit')}
-        >
-          <SquarePen size={14} />
-        </IconButton>
-        <IconButton
-          variant="danger"
-          size="small"
-          onClick={() => void handleDelete(config.id!)}
-          tooltip={t('actions.delete')}
-        >
-          <Trash2 size={14} />
-        </IconButton>
+        <Tooltip content={t('actions.test')}>
+          <IconButton
+            aria-label={t('actions.test')}
+            size="sm"
+            loading={isTesting}
+            onClick={() => void handleTest(config)}
+            icon={isTesting ? <Loader size={14} /> : <Wifi size={14} />}
+          />
+        </Tooltip>
+        <Tooltip content={t('actions.edit')}>
+          <IconButton
+            aria-label={t('actions.edit')}
+            size="sm"
+            onClick={() => handleEdit(config)}
+            icon={<SquarePen size={14} />}
+          />
+        </Tooltip>
+        <Tooltip content={t('actions.delete')}>
+          <IconButton
+            aria-label={t('actions.delete')}
+            tone="danger"
+            size="sm"
+            onClick={() => void handleDelete(config.id!)}
+            icon={<Trash2 size={14} />}
+          />
+        </Tooltip>
       </div>
     );
 
@@ -3161,16 +3194,15 @@ const ModelSettingsPage: React.FC = () => {
           title={t('subscriptionAuth.sectionTitle')}
           description={t('subscriptionAuth.sectionDescription')}
           extra={(
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={refreshSubscriptionAccounts}
-              tooltip={t('subscriptionAuth.rescan')}
-              aria-label={t('subscriptionAuth.rescan')}
-              disabled={isLoadingSubscriptions}
-            >
-              <RefreshCw size={16} className={isLoadingSubscriptions ? 'bitfun-model-settings__spin' : ''} />
-            </IconButton>
+            <Tooltip content={t('subscriptionAuth.rescan')}>
+              <IconButton
+                size="sm"
+                onClick={refreshSubscriptionAccounts}
+                aria-label={t('subscriptionAuth.rescan')}
+                disabled={isLoadingSubscriptions}
+                icon={<RefreshCw size={16} className={isLoadingSubscriptions ? 'bitfun-model-settings__spin' : ''} />}
+              />
+            </Tooltip>
           )}
         >
           <div className="bitfun-model-settings__cli-discovery" data-bf-component="model-settings" data-bf-part="subscriptionArea">
@@ -3436,14 +3468,14 @@ const ModelSettingsPage: React.FC = () => {
           title={tDefault('sections.providers')}
           description={t('subtitle')}
           extra={(
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={handleCreateNew}
-              tooltip={t('actions.addProvider')}
-            >
-              <Plus size={16} />
-            </IconButton>
+            <Tooltip content={t('actions.addProvider')}>
+              <IconButton
+                aria-label={t('actions.addProvider')}
+                size="sm"
+                onClick={handleCreateNew}
+                icon={<Plus size={16} />}
+              />
+            </Tooltip>
           )}
         >
           {aiModels.length === 0 ? (
@@ -3468,14 +3500,14 @@ const ModelSettingsPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="bitfun-model-settings__provider-group-actions" data-bf-component="model-settings" data-bf-part="providerGroupActions">
-                      <IconButton
-                        variant="ghost"
-                        size="small"
-                        onClick={() => handleEditProvider(group.models[0])}
-                        tooltip={t('actions.edit')}
-                      >
-                        <SquarePen size={14} />
-                      </IconButton>
+                      <Tooltip content={t('actions.edit')}>
+                        <IconButton
+                          aria-label={t('actions.edit')}
+                          size="sm"
+                          onClick={() => handleEditProvider(group.models[0])}
+                          icon={<SquarePen size={14} />}
+                        />
+                      </Tooltip>
                     </div>
                   </div>
                   <div className="bitfun-model-settings__provider-group-list" data-bf-component="model-settings" data-bf-part="providerGroupList">
@@ -3493,28 +3525,30 @@ const ModelSettingsPage: React.FC = () => {
           mouseGlowSurface={false}
           extra={(
             <div className="bitfun-model-settings__catalog-actions">
-              <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t('modelsDevCatalog.viewDetails')}
-                onClick={() => setShowModelsDevDetails(true)}
-              >
-                <Eye size={14} aria-hidden="true" />
-              </IconButton>
-              <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t(isRefreshingModelsDev
-                  ? 'modelsDevCatalog.refreshing'
-                  : 'modelsDevCatalog.refreshNow')}
-                onClick={() => void handleRefreshModelsDev()}
-                disabled={isRefreshingModelsDev}
-              >
-                <RefreshCw
-                  size={14}
-                  className={isRefreshingModelsDev ? 'bitfun-model-settings__spin' : ''}
+              <Tooltip content={t('modelsDevCatalog.viewDetails')}>
+                <IconButton
+                  aria-label={t('modelsDevCatalog.viewDetails')}
+                  size="sm"
+                  onClick={() => setShowModelsDevDetails(true)}
+                  icon={<Eye size={14} aria-hidden="true" />}
                 />
-              </IconButton>
+              </Tooltip>
+              <Tooltip content={t(isRefreshingModelsDev
+                  ? 'modelsDevCatalog.refreshing'
+                  : 'modelsDevCatalog.refreshNow')}>
+                <IconButton
+                  aria-label={t(isRefreshingModelsDev
+                    ? 'modelsDevCatalog.refreshing'
+                    : 'modelsDevCatalog.refreshNow')}
+                  size="sm"
+                  onClick={() => void handleRefreshModelsDev()}
+                  disabled={isRefreshingModelsDev}
+                  icon={<RefreshCw
+                    size={14}
+                    className={isRefreshingModelsDev ? 'bitfun-model-settings__spin' : ''}
+                  />}
+                />
+              </Tooltip>
             </div>
           )}
         >
@@ -3547,7 +3581,7 @@ const ModelSettingsPage: React.FC = () => {
               value={streamTtftTimeoutInput}
               onChange={(e) => setStreamTtftTimeoutInput(e.target.value)}
               placeholder={t('streamTtftTimeout.placeholder')}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow
@@ -3558,7 +3592,7 @@ const ModelSettingsPage: React.FC = () => {
               value={streamIdleTimeoutInput}
               onChange={(e) => setStreamIdleTimeoutInput(e.target.value)}
               placeholder={t('streamIdleTimeout.placeholder')}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -3589,7 +3623,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, url: e.target.value }))}
               placeholder={t('proxy.urlPlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('proxy.username')} align="center">
@@ -3598,7 +3632,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, username: e.target.value }))}
               placeholder={t('proxy.usernamePlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('proxy.password')} align="center">
@@ -3608,7 +3642,7 @@ const ModelSettingsPage: React.FC = () => {
               onChange={(e) => setProxyConfig(prev => ({ ...prev, password: e.target.value }))}
               placeholder={t('proxy.passwordPlaceholder')}
               disabled={!proxyConfig.enabled}
-              inputSize="small"
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -3640,19 +3674,19 @@ const ModelSettingsPage: React.FC = () => {
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="bitfun-model-settings__catalog-path">
               <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
-              <IconButton
-                variant="ghost"
-                size="small"
-                tooltip={t('modelsDevCatalog.reveal')}
-                onClick={() => {
-                  void aiApi.revealModelsDevCacheDirectory().catch((error) => {
-                    log.warn('Failed to reveal models.dev cache', { error });
-                    notification.error(t('modelsDevCatalog.revealFailed'));
-                  });
-                }}
-              >
-                <FolderOpen size={14} aria-hidden="true" />
-              </IconButton>
+              <Tooltip content={t('modelsDevCatalog.reveal')}>
+                <IconButton
+                  aria-label={t('modelsDevCatalog.reveal')}
+                  size="sm"
+                  onClick={() => {
+                    void aiApi.revealModelsDevCacheDirectory().catch((error) => {
+                      log.warn('Failed to reveal models.dev cache', { error });
+                      notification.error(t('modelsDevCatalog.revealFailed'));
+                    });
+                  }}
+                  icon={<FolderOpen size={14} aria-hidden="true" />}
+                />
+              </Tooltip>
             </div>
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">

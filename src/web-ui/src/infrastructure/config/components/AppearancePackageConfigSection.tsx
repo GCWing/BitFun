@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@bitfun/ui';
-import { IconButton, Tooltip, confirmDialog } from '@/component-library';
+import { Button, IconButton } from '@bitfun/ui';
+import { Tooltip, confirmDialog } from '@/component-library';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -82,13 +82,12 @@ export function AppearancePackageFailurePanel({
           )}
         </div>
         <IconButton
-          size="small"
+          size="sm"
           title={t('package.diagnostics.dismiss')}
           aria-label={t('package.diagnostics.dismiss')}
           onClick={onDismiss}
-        >
-          <X size={14} />
-        </IconButton>
+          icon={<X size={14} />}
+        />
       </div>
 
       {validationError ? (
@@ -337,23 +336,21 @@ export function AppearancePackageConfigSection() {
           {selectedAppearance && (
             <>
               <IconButton
-                size="small"
+                size="sm"
                 title={t('package.export')}
                 aria-label={t('package.export')}
                 disabled={busy}
                 onClick={() => void handleExport(selectedAppearance.id)}
-              >
-                <Download size={14} />
-              </IconButton>
+                icon={<Download size={14} />}
+              />
               <IconButton
-                size="small"
+                size="sm"
                 title={t('package.delete')}
                 aria-label={t('package.delete')}
                 disabled={busy}
                 onClick={() => void handleDelete(selectedAppearance.id, selectedAppearance.name)}
-              >
-                <Trash2 size={14} />
-              </IconButton>
+                icon={<Trash2 size={14} />}
+              />
             </>
           )}
         </div>

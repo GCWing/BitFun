@@ -1,7 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, Download, Loader2, Mic, VolumeX, X } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import type { ComposerVoiceInputController } from './useComposerVoiceInput';
 
 const VOICE_TIMELINE_SAMPLE_COUNT = 32;
@@ -139,19 +139,18 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             </span>
           ) : null}
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="dismiss">
-            <IconButton
-              aria-label={controller.setupCancelTooltip}
-              className="bitfun-chat-input__voice-setup-dismiss"
-              variant="ghost"
-              size="xs"
-              tooltip={controller.setupCancelTooltip}
-              onClick={(event) => {
-                event.stopPropagation();
-                controller.dismissSetup();
-              }}
-            >
-              <X size={14} />
-            </IconButton>
+            <Tooltip content={controller.setupCancelTooltip}>
+              <IconButton
+                aria-label={controller.setupCancelTooltip}
+                className="bitfun-chat-input__voice-setup-dismiss"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  controller.dismissSetup();
+                }}
+                icon={<X size={14} />}
+              />
+            </Tooltip>
           </span>
         </span>
       </span>
@@ -237,62 +236,60 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
           <span className="bitfun-chat-input__voice-pill-divider" data-bf-component="composer-voice-input" data-bf-part="divider" aria-hidden="true" />
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="cancel" data-bf-state={transcribing ? 'disabled' : undefined}>
-            <IconButton
-              aria-label={controller.cancelTooltip}
-              className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
-              variant="ghost"
-              size="xs"
-              disabled={transcribing}
-              tooltip={controller.cancelTooltip}
-              onClick={(event) => {
-                event.stopPropagation();
-                controller.cancel();
-              }}
-            >
-              <X size={16} />
-            </IconButton>
+            <Tooltip content={controller.cancelTooltip}>
+              <IconButton
+                aria-label={controller.cancelTooltip}
+                className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
+                size="sm"
+                disabled={transcribing}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  controller.cancel();
+                }}
+                icon={<X size={16} />}
+              />
+            </Tooltip>
           </span>
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="transcribe" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
-            <IconButton
-            aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
-            className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--transcribe"
-            variant="ghost"
-            size="xs"
-            disabled={controlsDisabled}
-            tooltip={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
-            onClick={(event) => {
-              event.stopPropagation();
-              controller.transcribe();
-            }}
-          >
-            {transcribing && controller.completionMode === 'transcribe' ? (
-              <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
-            ) : (
-              <Check size={16} />
-            )}
-            </IconButton>
+            <Tooltip content={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}>
+              <IconButton
+                aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
+                className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--transcribe"
+                size="sm"
+                disabled={controlsDisabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  controller.transcribe();
+                }}
+                icon={transcribing && controller.completionMode === 'transcribe' ? (
+                  <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
+                ) : (
+                  <Check size={16} />
+                )}
+              />
+            </Tooltip>
           </span>
 
           <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="send" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
-            <IconButton
-            aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}
-            className="bitfun-chat-input__voice-pill-send"
-            variant="danger"
-            size="xs"
-            disabled={controlsDisabled}
-            tooltip={controlsDisabled ? controller.tooltip : controller.sendTooltip}
-            onClick={(event) => {
-              event.stopPropagation();
-              controller.transcribeAndSend();
-            }}
-          >
-            {transcribing && controller.completionMode === 'send' ? (
-              <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
-            ) : (
-              <ArrowUp size={15} strokeWidth={2.5} />
-            )}
-            </IconButton>
+            <Tooltip content={controlsDisabled ? controller.tooltip : controller.sendTooltip}>
+              <IconButton
+                aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}
+                className="bitfun-chat-input__voice-pill-send"
+                tone="danger"
+                size="sm"
+                disabled={controlsDisabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  controller.transcribeAndSend();
+                }}
+                icon={transcribing && controller.completionMode === 'send' ? (
+                  <Loader2 size={15} className="bitfun-chat-input__voice-spinner" />
+                ) : (
+                  <ArrowUp size={15} strokeWidth={2.5} />
+                )}
+              />
+            </Tooltip>
           </span>
         </span>
       </span>
@@ -302,20 +299,19 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
   return (
     <span className="bitfun-chat-input__voice-cluster" data-bf-component="composer-voice-input" data-bf-part="root" data-bf-phase="idle">
       <span data-bf-component="composer-voice-input" data-bf-part="control" data-bf-state={controller.disabled ? 'disabled' : undefined}>
-        <IconButton
-        aria-label={controller.tooltip}
-        className="bitfun-chat-input__voice-control"
-        variant="ghost"
-        size="xs"
-        disabled={controller.disabled}
-        tooltip={controller.tooltip}
-        onClick={(event) => {
-          event.stopPropagation();
-          controller.toggle();
-        }}
-      >
-        <Mic size={14} />
-        </IconButton>
+        <Tooltip content={controller.tooltip}>
+          <IconButton
+            aria-label={controller.tooltip}
+            className="bitfun-chat-input__voice-control"
+            size="sm"
+            disabled={controller.disabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              controller.toggle();
+            }}
+            icon={<Mic size={14} />}
+          />
+        </Tooltip>
       </span>
     </span>
   );

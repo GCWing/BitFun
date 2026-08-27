@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
@@ -14,7 +14,7 @@ import {sessionToVirtualItems} from '../../store/modernFlowChatStore';
 import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../events/flowchatNavigation';
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
-import {IconButton, type LineRange} from '@/component-library';
+import { type LineRange, Tooltip } from '@/component-library';
 import {
   PRESENCE_BOUNDARY_MIN_EXIT_MS,
   PresenceBoundary,
@@ -1035,43 +1035,41 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               </div>
             )}
             {(viewKind === 'review-check' || childKind === 'review' || childKind === 'deep_review') && (
-              <IconButton
-                className="btw-session-panel__stop-button"
-                variant="ghost"
-                size="xs"
-                onClick={() => void handleStopReviewSession()}
-                disabled={!canStopReviewSession}
-                tooltip={stoppingReview
+              <Tooltip content={stoppingReview
                   ? stoppingReviewLabel
-                  : stopReviewLabel}
-                aria-label={stoppingReview
-                  ? stoppingReviewLabel
-                  : stopReviewLabel}
-                data-testid="btw-session-panel-stop-review"
-              >
-                {stoppingReview ? (
-                  <Loader2
-                    className="btw-session-panel__stop-spinner"
-                    size={11}
-                    data-testid="btw-session-panel-stop-spinner"
-                  />
-                ) : (
-                  <Square size={11} />
-                )}
-              </IconButton>
+                  : stopReviewLabel}>
+                <IconButton
+                  className="btw-session-panel__stop-button"
+                  size="sm"
+                  onClick={() => void handleStopReviewSession()}
+                  disabled={!canStopReviewSession}
+                  aria-label={stoppingReview
+                    ? stoppingReviewLabel
+                    : stopReviewLabel}
+                  data-testid="btw-session-panel-stop-review"
+                  icon={stoppingReview ? (
+                    <Loader2
+                      className="btw-session-panel__stop-spinner"
+                      size={11}
+                      data-testid="btw-session-panel-stop-spinner"
+                    />
+                  ) : (
+                    <Square size={11} />
+                  )}
+                />
+              </Tooltip>
             )}
             {canReturnToParentSession && (
-              <IconButton
-                className="btw-session-panel__origin-button"
-                variant="ghost"
-                size="xs"
-                onClick={handleReturnToParentSession}
-                tooltip={viewKind === 'review-check' ? returnToParentLabel : backTooltip}
-                aria-label={returnToParentLabel}
-                data-testid="btw-session-panel-origin-button"
-              >
-                <CornerUpLeft size={12} />
-              </IconButton>
+              <Tooltip content={viewKind === 'review-check' ? returnToParentLabel : backTooltip}>
+                <IconButton
+                  className="btw-session-panel__origin-button"
+                  size="sm"
+                  onClick={handleReturnToParentSession}
+                  aria-label={returnToParentLabel}
+                  data-testid="btw-session-panel-origin-button"
+                  icon={<CornerUpLeft size={12} />}
+                />
+              </Tooltip>
             )}
           </div>
         </div>

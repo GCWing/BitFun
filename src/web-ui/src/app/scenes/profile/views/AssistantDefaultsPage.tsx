@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, IconButton, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -15,7 +15,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { IconButton } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -1002,15 +1002,14 @@ const AssistantDefaultsPage: React.FC = () => {
       <div className="assistant-defaults" data-bf-component="assistant-defaults-page" data-bf-part="content">
         <header className="assistant-defaults__header" data-bf-component="assistant-defaults-page" data-bf-part="header">
           <div className="assistant-defaults__title-row" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={openGallery}
-              aria-label={t('nursery.backToGallery')}
-              tooltip={t('nursery.backToGallery')}
-            >
-              <ArrowLeft size={18} />
-            </IconButton>
+            <Tooltip content={t('nursery.backToGallery')}>
+              <IconButton
+                size="sm"
+                onClick={openGallery}
+                aria-label={t('nursery.backToGallery')}
+                icon={<ArrowLeft />}
+              />
+            </Tooltip>
             <h2>{t('nursery.template.title')}</h2>
             <span className="assistant-defaults__scope">{t('nursery.template.scopeLabel')}</span>
             <div className="assistant-defaults__header-actions">

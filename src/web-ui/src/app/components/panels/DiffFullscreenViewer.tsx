@@ -1,9 +1,9 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle } from 'lucide-react';
-import { IconButton, PresenceBoundary, Tooltip } from '@/component-library';
+import { PresenceBoundary, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { DiffEditor } from '../../../tools/editor';
 import './DiffFullscreenViewer.css';
@@ -134,12 +134,11 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
 
             <Tooltip content={t('tooltip.close')}>
               <IconButton
-                variant="ghost"
-                size="small"
+                size="sm"
+                aria-label={t('tooltip.close')}
+                icon={<X />}
                 onClick={onClose}
-              >
-                <X size={16} />
-              </IconButton>
+              />
             </Tooltip>
           </div>
         </div>

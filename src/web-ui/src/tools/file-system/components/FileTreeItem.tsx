@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronRight, FolderOpen, FileText, Loader2 } from 'lucide-react';
-import { Input } from '../../../component-library/components/Input';
+import { Input } from '@bitfun/ui';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
@@ -76,13 +76,12 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
     <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
       <Input
         type="text"
-        variant="filled"
-        inputSize="small"
+        size="sm"
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        prefix={node.isDirectory ? <FolderOpen size={14} /> : <FileText size={14} />}
+        leading={node.isDirectory ? <FolderOpen size={14} /> : <FileText size={14} />}
         autoFocus
       />
     </div>

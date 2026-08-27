@@ -1,16 +1,8 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
-import {
-  NumberInput,
-  IconButton,
-  ConfigPageLoading,
-  Modal,
-  Select,
-  confirmDanger,
-  type SelectOption,
-} from '@/component-library';
+import { NumberInput, ConfigPageLoading, Modal, Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import {
@@ -928,17 +920,16 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                   </span>
                 </span>
                 <span className="bitfun-runtime-settings__pet-actions" data-bf-component="runtime-settings" data-bf-part="petActions">
-                  <IconButton
-                    type="button"
-                    size="small"
-                    variant="ghost"
-                    onClick={() => void handleRefreshCompanionPets()}
-                    disabled={companionPetsLoading}
-                    aria-label={t('features.pet.refresh')}
-                    tooltip={t('features.pet.refresh')}
-                  >
-                    <RefreshCw size={14} />
-                  </IconButton>
+                  <Tooltip content={t('features.pet.refresh')}>
+                    <IconButton
+                      type="button"
+                      size="sm"
+                      onClick={() => void handleRefreshCompanionPets()}
+                      disabled={companionPetsLoading}
+                      aria-label={t('features.pet.refresh')}
+                      icon={<RefreshCw size={14} />}
+                    />
+                  </Tooltip>
                   <Button
                     size="sm"
                     variant="outline"
@@ -1054,18 +1045,18 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                                 <Check className="bitfun-runtime-settings__pet-select-check" size={14} aria-hidden />
                               )}
                               {isUserPet && IS_TAURI_DESKTOP && pet && (
-                                <IconButton
-                                  type="button"
-                                  size="small"
-                                  variant="danger"
-                                  className="bitfun-runtime-settings__pet-select-delete"
-                                  disabled={isDeleting}
-                                  aria-label={t('features.pet.delete')}
-                                  tooltip={t('features.pet.delete')}
-                                  onClick={(e) => void handleDeleteCompanionPet(e, pet)}
-                                >
-                                  <Trash2 size={14} />
-                                </IconButton>
+                                <Tooltip content={t('features.pet.delete')}>
+                                  <IconButton
+                                    type="button"
+                                    size="sm"
+                                    tone="danger"
+                                    className="bitfun-runtime-settings__pet-select-delete"
+                                    disabled={isDeleting}
+                                    aria-label={t('features.pet.delete')}
+                                    onClick={(e) => void handleDeleteCompanionPet(e, pet)}
+                                    icon={<Trash2 size={14} />}
+                                  />
+                                </Tooltip>
                               )}
                             </div>
                           </div>
@@ -1318,17 +1309,16 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
                       {computerUseAccessLabel}
                     </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
+                    <Tooltip content={t('computerUse.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('computerUse.refreshStatus')}
+                        disabled={computerUseBusy || computerUseStatusLoading}
+                        onClick={() => void refreshComputerUseStatus()}
+                        icon={<RefreshCw size={14} />}
+                      />
+                    </Tooltip>
                   </span>
                   {platform === 'macos' && (
                     <Button
@@ -1366,17 +1356,16 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
                       {computerUseScreenLabel}
                     </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('computerUse.refreshStatus')}
-                      tooltip={t('computerUse.refreshStatus')}
-                      disabled={computerUseBusy || computerUseStatusLoading}
-                      onClick={() => void refreshComputerUseStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
+                    <Tooltip content={t('computerUse.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('computerUse.refreshStatus')}
+                        disabled={computerUseBusy || computerUseStatusLoading}
+                        onClick={() => void refreshComputerUseStatus()}
+                        icon={<RefreshCw size={14} />}
+                      />
+                    </Tooltip>
                   </span>
                   {platform === 'macos' && (
                     <Button
@@ -1544,17 +1533,16 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     >
                       {browserStatusLabel}
                     </span>
-                    <IconButton
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      aria-label={t('browserControl.refreshStatus')}
-                      tooltip={t('browserControl.refreshStatus')}
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void refreshBrowserControlStatus()}
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
+                    <Tooltip content={t('browserControl.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('browserControl.refreshStatus')}
+                        disabled={browserControlBusy || browserStatusLoading}
+                        onClick={() => void refreshBrowserControlStatus()}
+                        icon={<RefreshCw size={14} />}
+                      />
+                    </Tooltip>
                   </span>
                   {!browserCdpAvailable && !browserDefaultCdpSupported && (
                     <Button

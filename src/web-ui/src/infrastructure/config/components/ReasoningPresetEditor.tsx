@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -12,15 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import {
-  IconButton,
-  Input,
-  NumberInput,
-  Select,
-  Textarea,
-  Tooltip,
-  type SelectOption,
-} from '@/component-library';
+import { NumberInput, Select, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -432,7 +424,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     className="bitfun-reasoning-preset-editor__models-dev-search-control"
                   >
                     <Input
-                      size="small"
                       value={modelsDevSearch}
                       disabled={disabled}
                       placeholder={t('reasoningPresets.catalogSearchPlaceholder')}
@@ -471,6 +462,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           if (result) selectModelsDevSearchResult(result);
                         }
                       }}
+                      size="sm"
                     />
                     {showModelsDevSearchResults && createPortal(
                       <div
@@ -687,7 +679,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       {expanded ? (
                         <div className="bitfun-reasoning-preset-editor__row-name-editor">
                           <Input
-                            size="small"
                             aria-label={t('reasoningPresets.label')}
                             value={preset.label ?? ''}
                             disabled={disabled}
@@ -695,6 +686,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                             onChange={(event) => updatePreset(presetIndex, {
                               label: event.target.value || undefined,
                             })}
+                            size="sm"
                           />
                         </div>
                       ) : (
@@ -727,29 +719,45 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                             : preset.actions,
                         })}
                       />
-                      <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveUp')} disabled={disabled || presetIndex === 0} onClick={() => movePreset(presetIndex, -1)}><ArrowUp size={14} /></IconButton>
-                      <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveDown')} disabled={disabled || presetIndex === presets.length - 1} onClick={() => movePreset(presetIndex, 1)}><ArrowDown size={14} /></IconButton>
-                      <IconButton
-                        size="small"
-                        variant="ghost"
-                        tooltip={t('reasoningPresets.remove')}
-                        disabled={disabled}
-                        onClick={() => {
-                          resetJsonDraftState();
-                          setExpandedPresetIndex(previous => {
-                            if (previous === null) return null;
-                            if (previous === presetIndex) return null;
-                            return previous > presetIndex ? previous - 1 : previous;
-                          });
-                          update({
-                            ...value,
-                            presets: presets.filter((_, index) => index !== presetIndex),
-                            default_preset: value.default_preset === preset.id ? undefined : value.default_preset,
-                          });
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </IconButton>
+                      <Tooltip content={t('reasoningPresets.moveUp')}>
+                        <IconButton
+                          aria-label={t('reasoningPresets.moveUp')}
+                          size="sm"
+                          disabled={disabled || presetIndex === 0}
+                          onClick={() => movePreset(presetIndex, -1)}
+                          icon={<ArrowUp size={14} />}
+                        />
+                      </Tooltip>
+                      <Tooltip content={t('reasoningPresets.moveDown')}>
+                        <IconButton
+                          aria-label={t('reasoningPresets.moveDown')}
+                          size="sm"
+                          disabled={disabled || presetIndex === presets.length - 1}
+                          onClick={() => movePreset(presetIndex, 1)}
+                          icon={<ArrowDown size={14} />}
+                        />
+                      </Tooltip>
+                      <Tooltip content={t('reasoningPresets.remove')}>
+                        <IconButton
+                          aria-label={t('reasoningPresets.remove')}
+                          size="sm"
+                          disabled={disabled}
+                          onClick={() => {
+                            resetJsonDraftState();
+                            setExpandedPresetIndex(previous => {
+                              if (previous === null) return null;
+                              if (previous === presetIndex) return null;
+                              return previous > presetIndex ? previous - 1 : previous;
+                            });
+                            update({
+                              ...value,
+                              presets: presets.filter((_, index) => index !== presetIndex),
+                              default_preset: value.default_preset === preset.id ? undefined : value.default_preset,
+                            });
+                          }}
+                          icon={<Trash2 size={14} />}
+                        />
+                      </Tooltip>
                     </div>
                   </div>
 
@@ -858,20 +866,36 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           data-bf-component="reasoning-preset-editor"
                           data-bf-part="actionControls"
                         >
-                          <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveUp')} disabled={disabled || actionIndex === 0} onClick={() => moveAction(presetIndex, actionIndex, -1)}><ArrowUp size={14} /></IconButton>
-                          <IconButton size="small" variant="ghost" tooltip={t('reasoningPresets.moveDown')} disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1} onClick={() => moveAction(presetIndex, actionIndex, 1)}><ArrowDown size={14} /></IconButton>
-                          <IconButton
-                            size="small"
-                            variant="ghost"
-                            tooltip={t('reasoningPresets.remove')}
-                            disabled={disabled || (preset.actions?.length ?? 0) <= 1}
-                            onClick={() => {
-                              resetJsonDraftState();
-                              updatePreset(presetIndex, { actions: preset.actions?.filter((_, index) => index !== actionIndex) });
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </IconButton>
+                          <Tooltip content={t('reasoningPresets.moveUp')}>
+                            <IconButton
+                              aria-label={t('reasoningPresets.moveUp')}
+                              size="sm"
+                              disabled={disabled || actionIndex === 0}
+                              onClick={() => moveAction(presetIndex, actionIndex, -1)}
+                              icon={<ArrowUp size={14} />}
+                            />
+                          </Tooltip>
+                          <Tooltip content={t('reasoningPresets.moveDown')}>
+                            <IconButton
+                              aria-label={t('reasoningPresets.moveDown')}
+                              size="sm"
+                              disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1}
+                              onClick={() => moveAction(presetIndex, actionIndex, 1)}
+                              icon={<ArrowDown size={14} />}
+                            />
+                          </Tooltip>
+                          <Tooltip content={t('reasoningPresets.remove')}>
+                            <IconButton
+                              aria-label={t('reasoningPresets.remove')}
+                              size="sm"
+                              disabled={disabled || (preset.actions?.length ?? 0) <= 1}
+                              onClick={() => {
+                                resetJsonDraftState();
+                                updatePreset(presetIndex, { actions: preset.actions?.filter((_, index) => index !== actionIndex) });
+                              }}
+                              icon={<Trash2 size={14} />}
+                            />
+                          </Tooltip>
                         </div>
                       </div>
                     );

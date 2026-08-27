@@ -4,14 +4,14 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { IconButton, CubeLoading } from '@/component-library';
+import { CubeLoading, Tooltip } from '@/component-library';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';
@@ -186,9 +186,20 @@ const GitScene: React.FC<GitSceneProps> = ({
       <div className="bitfun-git-scene bitfun-git-scene--loading" data-bf-scene="git" data-bf-part="root" data-bf-view="loading">
         <div className="bitfun-git-scene__content" data-bf-scene="git" data-bf-part="content">
           <div className="bitfun-git-scene__loading-actions">
-            <IconButton size="xs" variant="ghost" onClick={() => { setForceReset(true); setTimeout(() => { setForceReset(false); handleRefresh(); }, 100); }} tooltip={t('actions.forceRefresh')}>
-              <RefreshCw size={14} />
-            </IconButton>
+            <Tooltip content={t('actions.forceRefresh')}>
+              <IconButton
+                size="sm"
+                aria-label={t('actions.forceRefresh')}
+                icon={<RefreshCw />}
+                onClick={() => {
+                  setForceReset(true);
+                  setTimeout(() => {
+                    setForceReset(false);
+                    handleRefresh();
+                  }, 100);
+                }}
+              />
+            </Tooltip>
           </div>
           <div className="bitfun-git-scene__loading-state" data-bf-scene="git" data-bf-part="loading">
             <CubeLoading size="medium" text={t('loading.text')} />

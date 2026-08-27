@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -16,15 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
-import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-  ConfigPageRefreshButton,
-  ConfirmDialog,
-  IconButton,
-  Input,
-  NumberInput,
-} from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, ConfirmDialog, NumberInput, Tooltip } from '@/component-library';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { configAPI, worktreeAPI } from '@/infrastructure/api';
@@ -619,21 +611,21 @@ const WorktreeSettingsPage: React.FC = () => {
             )}
           </div>
           <div className="bitfun-worktree-settings__delete-control">
-            <IconButton
-              variant="danger"
-              size="small"
-              disabled={Boolean(blockCode) || deletingWorktreeId !== null}
-              isLoading={deletingWorktreeId === worktree.worktreeId}
-              tooltip={blockReason ?? t('management.delete.action')}
-              title={blockReason ?? undefined}
-              onClick={() => setDeleteTarget({
-                projectWorkspacePath: project.projectWorkspacePath,
-                worktree,
-              })}
-              aria-label={t('management.delete.actionLabel', { path: worktree.path })}
-            >
-              <Trash2 size={14} aria-hidden />
-            </IconButton>
+            <Tooltip content={blockReason ?? t('management.delete.action')}>
+              <IconButton
+                tone="danger"
+                size="sm"
+                disabled={Boolean(blockCode) || deletingWorktreeId !== null}
+                loading={deletingWorktreeId === worktree.worktreeId}
+                title={blockReason ?? undefined}
+                onClick={() => setDeleteTarget({
+                  projectWorkspacePath: project.projectWorkspacePath,
+                  worktree,
+                })}
+                aria-label={t('management.delete.actionLabel', { path: worktree.path })}
+                icon={<Trash2 size={14} aria-hidden />}
+              />
+            </Tooltip>
           </div>
         </div>
       </article>

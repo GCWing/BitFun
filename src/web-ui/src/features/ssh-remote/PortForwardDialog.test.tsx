@@ -39,6 +39,7 @@ vi.mock('@/shared/utils/logger', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Modal: ({ isOpen, children }: React.PropsWithChildren<{ isOpen: boolean }>) =>
     isOpen ? <div>{children}</div> : null,
   Button: ({

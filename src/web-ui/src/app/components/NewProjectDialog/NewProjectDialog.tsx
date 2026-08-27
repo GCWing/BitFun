@@ -2,7 +2,7 @@
  * New Project Dialog Component
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, Input } from '@bitfun/ui';
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   FolderPlus, 
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { Modal, Input } from '@/component-library';
+import { Modal } from '@/component-library';
 import './NewProjectDialog.scss';
 
 const log = createLogger('NewProjectDialog');

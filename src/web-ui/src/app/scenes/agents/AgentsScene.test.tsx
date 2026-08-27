@@ -93,6 +93,7 @@ vi.mock('@/component-library', () => ({
   Search: () => <input readOnly />,
   Select: () => <div />,
   Switch: () => <input type="checkbox" readOnly />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   confirmDanger: vi.fn(async () => false),
 }));
 
