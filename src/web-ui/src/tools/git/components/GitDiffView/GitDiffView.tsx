@@ -1,6 +1,6 @@
 /** Git diff view. */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -14,7 +14,7 @@ import {
   EyeOff,
   AlertCircle
 } from 'lucide-react';
-import { IconButton } from '@/component-library';
+
 import { gitService } from '../../services';
 import { createLogger } from '@/shared/utils/logger';
 import './GitDiffView.scss';
@@ -309,22 +309,20 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
         <div data-bf-component="git-diff-view" data-bf-part="headerRight" className="bitfun-git-diff-view__header-right">
           <div className="bitfun-git-diff-view__view-options">
             <IconButton
+              aria-label={allExpanded ? t('diffView.collapseAll') : t('diffView.expandAll')}
               onClick={toggleAllExpansion}
-              size="small"
-              variant="ghost"
+              size="sm"
               title={allExpanded ? t('diffView.collapseAll') : t('diffView.expandAll')}
-            >
-              {allExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
-            </IconButton>
+              icon={allExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
+            />
             <IconButton
+              aria-label={t('common.refresh')}
               onClick={loadDiff}
               disabled={loading}
-              size="small"
-              variant="ghost"
+              size="sm"
               title={t('common.refresh')}
-            >
-              <RefreshCw size={16} />
-            </IconButton>
+              icon={<RefreshCw size={16} />}
+            />
           </div>
         </div>
       </div>
