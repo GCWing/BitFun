@@ -5,6 +5,9 @@ import {CornerUpLeft, Link2, Loader2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {RuntimeStatusSlot} from '../modern/RuntimeStatusSlot';
+import {PermissionRequestPanel} from '../modern/PermissionRequestPanel';
+import {pendingPermissionToolCallIdsForSession} from '../modern/permissionRequestRouting';
+import {usePermissionRequests} from '../modern/usePermissionRequests';
 import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
@@ -153,6 +156,22 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const actionBarRef = useRef<HTMLDivElement>(null);
   const [actionBarHeight, setActionBarHeight] = useState(0);
   const shouldAutoScrollRef = useRef(true);
+
+  // BTW/review sessions render outside ModernFlowChatContainer, so they must
+  // own the same permission mailbox projection. Without this, a tool call can
+  // be waiting for runtime authorization while the embedded panel has no way
+  // to show or answer the request.
+  const {
+    requests: permissionRequests,
+    ownedRequests: ownedPermissionRequests,
+    ownedActiveBatch: activePermissionBatch,
+    respond: respondPermission,
+    respondBatch: respondPermissionBatch,
+  } = usePermissionRequests(childSessionId);
+  const pendingPermissionToolCallIds = useMemo(
+    () => pendingPermissionToolCallIdsForSession(permissionRequests, childSessionId),
+    [permissionRequests, childSessionId],
+  );
 
   useEffect(() => {
     return flowChatStore.subscribe(setFlowChatState);
@@ -372,7 +391,29 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   const volatileContextValue = useMemo(() => ({
     exploreGroupStates,
-  }), [exploreGroupStates]);
+    pendingPermissionToolCallIds,
+  }), [exploreGroupStates, pendingPermissionToolCallIds]);
+
+  const activePermissionPanelSnapshot = childSession && activePermissionBatch
+    ? {
+        ownerSessionId: childSession.sessionId,
+        batch: activePermissionBatch,
+        totalPendingCount: ownedPermissionRequests.length,
+        onRespond: respondPermission,
+        onRespondBatch: respondPermissionBatch,
+      }
+    : null;
+  const retainedPermissionPanelSnapshotRef = useRef(activePermissionPanelSnapshot);
+  let renderedPermissionPanelSnapshot = activePermissionPanelSnapshot;
+  if (activePermissionPanelSnapshot) {
+    retainedPermissionPanelSnapshotRef.current = activePermissionPanelSnapshot;
+  } else if (
+    retainedPermissionPanelSnapshotRef.current?.ownerSessionId === childSessionId
+  ) {
+    renderedPermissionPanelSnapshot = retainedPermissionPanelSnapshotRef.current;
+  } else {
+    retainedPermissionPanelSnapshotRef.current = null;
+  }
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
   const isTurnProcessing = isActiveReviewTurnStatus(lastDialogTurn?.status);
@@ -1059,6 +1100,19 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             )}
           </div>
         </div>
+
+        <PresenceBoundary active={activePermissionPanelSnapshot != null}>
+          {renderedPermissionPanelSnapshot ? (
+            <PermissionRequestPanel
+              key={`${renderedPermissionPanelSnapshot.batch.sessionId}:${renderedPermissionPanelSnapshot.batch.roundId}`}
+              requests={renderedPermissionPanelSnapshot.batch.requests}
+              totalPendingCount={renderedPermissionPanelSnapshot.totalPendingCount}
+              visible={activePermissionPanelSnapshot != null}
+              onRespond={renderedPermissionPanelSnapshot.onRespond}
+              onRespondBatch={renderedPermissionPanelSnapshot.onRespondBatch}
+            />
+          ) : null}
+        </PresenceBoundary>
 
         <div
           ref={scrollContainerRef}
