@@ -4975,36 +4975,8 @@ pub async fn cancel_search(
 }
 
 #[tauri::command]
-pub async fn reload_global_config() -> Result<String, String> {
-    match bitfun_core::service::config::reload_global_config().await {
-        Ok(_) => {
-            info!("Global config reloaded");
-            Ok("Configuration reloaded successfully".to_string())
-        }
-        Err(e) => {
-            error!("Failed to reload global config: {}", e);
-            Err(format!("Failed to reload configuration: {}", e))
-        }
-    }
-}
-
-#[tauri::command]
 pub async fn get_global_config_status() -> Result<bool, String> {
     Ok(bitfun_core::service::config::GlobalConfigManager::is_initialized())
-}
-
-#[tauri::command]
-pub async fn subscribe_config_updates() -> Result<(), String> {
-    if let Some(mut receiver) = bitfun_core::service::config::subscribe_config_updates() {
-        tokio::spawn(async move {
-            while let Ok(event) = receiver.recv().await {
-                debug!("Config update event: {:?}", event);
-            }
-        });
-        Ok(())
-    } else {
-        Err("Config update subscription not available".to_string())
-    }
 }
 
 #[tauri::command]

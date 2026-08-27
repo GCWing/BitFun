@@ -349,20 +349,6 @@ pub async fn reload_config(state: State<'_, AppState>) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn sync_config_to_global(_state: State<'_, AppState>) -> Result<String, String> {
-    match bitfun_core::service::config::reload_global_config().await {
-        Ok(_) => {
-            info!("Config synced to global service");
-            Ok("Configuration synced to global service".to_string())
-        }
-        Err(e) => {
-            error!("Failed to sync config to global service: {}", e);
-            Err(format!("Failed to sync config to global service: {}", e))
-        }
-    }
-}
-
-#[tauri::command]
 pub async fn get_global_config_health() -> Result<bool, String> {
     Ok(bitfun_core::service::config::GlobalConfigManager::is_initialized())
 }

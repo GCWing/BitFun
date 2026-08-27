@@ -7,7 +7,7 @@ use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
     initialize_snapshot_manager_for_workspace, open_snapshot_manager_for_view, FileChangeEntry,
-    OperationType, SnapshotConfig, SnapshotManager,
+    OperationType, SnapshotManager,
 };
 use bitfun_runtime_ports::{AgentSessionWorkspaceLocation, SessionStoragePathRequest};
 use log::{info, warn};
@@ -51,33 +51,6 @@ async fn ensure_local_runtime_ownership(
         })
         .await
         .map_err(|error| error.to_string())
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotInitRequest {
-    #[serde(alias = "workspacePath")]
-    pub workspace_path: String,
-    pub config: Option<SnapshotConfig>,
-    #[serde(flatten)]
-    pub remote_scope: SnapshotRemoteScope,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecordFileChangeRequest {
-    #[serde(alias = "sessionId")]
-    pub session_id: String,
-    #[serde(alias = "turnIndex")]
-    pub turn_index: usize,
-    #[serde(alias = "filePath")]
-    pub file_path: String,
-    #[serde(alias = "operationType")]
-    pub operation_type: String, // "Create", "Modify", "Delete", "Rename"
-    #[serde(alias = "toolName")]
-    pub tool_name: String,
-    #[serde(alias = "workspacePath")]
-    pub workspace_path: String,
-    #[serde(flatten)]
-    pub remote_scope: SnapshotRemoteScope,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,48 +211,6 @@ pub struct SnapshotWorkspaceRequest {
     pub workspace_path: String,
     #[serde(flatten)]
     pub remote_scope: SnapshotRemoteScope,
-}
-
-#[tauri::command]
-pub async fn initialize_snapshot(
-    app_handle: AppHandle,
-    runtime: State<'_, DesktopRuntimeContext>,
-    request: SnapshotInitRequest,
-) -> Result<serde_json::Value, String> {
-    // Remote workspaces don't support snapshot system
-    if request.remote_scope.declares_remote() || is_remote_path(&request.workspace_path).await {
-        return Ok(serde_json::json!({
-            "success": true,
-            "message": "Snapshot system skipped for remote workspace"
-        }));
-    }
-    ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
-
-    let workspace_dir = PathBuf::from(&request.workspace_path);
-
-    if !workspace_dir.exists() {
-        return Err(format!(
-            "Workspace directory does not exist: {}",
-            request.workspace_path
-        ));
-    }
-
-    initialize_snapshot_manager_for_workspace(workspace_dir, request.config)
-        .await
-        .map_err(|e| format!("Failed to initialize snapshot system: {}", e))?;
-
-    let _ = app_handle.emit(
-        "snapshot_initialized",
-        serde_json::json!({
-            "workspace_path": request.workspace_path,
-            "timestamp": chrono::Utc::now().to_rfc3339()
-        }),
-    );
-
-    Ok(serde_json::json!({
-        "success": true,
-        "message": "Snapshot system initialized"
-    }))
 }
 
 async fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> {
@@ -477,88 +408,6 @@ async fn begin_snapshot_history_mutation(
         _mutation: mutation,
         _storage_path: storage_path,
     })
-}
-
-async fn begin_snapshot_record_mutation(
-    runtime: &DesktopRuntimeContext,
-    workspace_path: &str,
-    session_id: &str,
-) -> Result<CoreSessionMutationPermit, String> {
-    let compatibility = runtime.session_application().compatibility();
-    let storage_path = compatibility
-        .resolve_persisted_session_storage_path(SessionStoragePathRequest {
-            workspace_path: PathBuf::from(workspace_path),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-        })
-        .await
-        .map_err(|error| {
-            format!("Failed to resolve session storage before snapshot recording: {error}")
-        })?;
-    let mutation = compatibility
-        .begin_persisted_session_mutation(&storage_path, session_id)
-        .await
-        .map_err(|error| format!("Failed to lock snapshot recording: {error}"))?;
-    compatibility
-        .ensure_snapshot_record_allowed(&mutation)
-        .await
-        .map_err(|error| format!("Failed to admit snapshot recording: {error}"))?;
-    Ok(mutation)
-}
-
-#[tauri::command]
-pub async fn record_file_change(
-    app_handle: AppHandle,
-    runtime: State<'_, DesktopRuntimeContext>,
-    request: RecordFileChangeRequest,
-) -> Result<String, String> {
-    ensure_local_snapshot_mutation_path(&request.workspace_path, &request.remote_scope).await?;
-    ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
-    let manager =
-        ensure_snapshot_manager_ready_for(&request.workspace_path, "record_file_change").await?;
-
-    let operation_type = match request.operation_type.as_str() {
-        "Create" => OperationType::Create,
-        "Modify" => OperationType::Modify,
-        "Delete" => OperationType::Delete,
-        "Rename" => OperationType::Rename,
-        _ => {
-            return Err(format!(
-                "Unknown operation type: {}",
-                request.operation_type
-            ));
-        }
-    };
-
-    let _record_mutation = begin_snapshot_record_mutation(
-        runtime.inner(),
-        &request.workspace_path,
-        &request.session_id,
-    )
-    .await?;
-
-    let snapshot_id = manager
-        .record_file_change(
-            &request.session_id,
-            request.turn_index,
-            PathBuf::from(&request.file_path),
-            operation_type,
-            request.tool_name.clone(),
-        )
-        .await
-        .map_err(|e| format!("Failed to record file change: {}", e))?;
-
-    let _ = app_handle.emit(
-        "file_change_recorded",
-        serde_json::json!({
-            "session_id": request.session_id,
-            "turn_index": request.turn_index,
-            "file_path": request.file_path,
-            "snapshot_id": snapshot_id,
-        }),
-    );
-
-    Ok(snapshot_id)
 }
 
 #[tauri::command]
@@ -1484,15 +1333,6 @@ mod tests {
             !targeted_rollback.contains("begin_snapshot_history_mutation"),
             "targeted rollback must not reacquire the Session mutation owned by the Agent Session transaction"
         );
-
-        let record = source
-            .split_once("pub async fn record_file_change")
-            .expect("record_file_change remains present")
-            .1
-            .split_once("pub async fn rollback_session")
-            .expect("rollback_session remains present")
-            .0;
-        assert!(record.contains("begin_snapshot_record_mutation"));
     }
 
     #[tokio::test]

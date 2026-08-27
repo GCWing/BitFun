@@ -308,8 +308,6 @@ mod tests {
         }
 
         for mutation in [
-            "pub async fn initialize_snapshot",
-            "pub async fn record_file_change",
             "pub async fn rollback_session",
             "pub async fn rollback_session_to_turn",
             "pub async fn accept_session",

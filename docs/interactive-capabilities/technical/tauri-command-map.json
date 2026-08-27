@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
-  "commandCount": 653,
+  "commandCount": 642,
   "coverage": {
-    "commandCount": 653,
+    "commandCount": 642,
     "documentedCommandCount": 615,
-    "implementationCommandCount": 38,
-    "implementationDigest": "965d441b20c0092bc25c1dd48db3e31f72a977479fe9d1ff7c788d8e17d7395b"
+    "implementationCommandCount": 27,
+    "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
   },
   "commands": [
     {
@@ -1278,34 +1278,6 @@
       "rustPath": "cleanup_invalid_workspaces",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn cleanup_invalid_workspaces( state: State<'_, AppState>, app: tauri::AppHandle, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<usize, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "cleanup_storage",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "cleanup_storage",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn cleanup_storage(state: State<'_, AppState>) -> Result<CleanupResult, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "cleanup_storage_with_policy",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "cleanup_storage_with_policy",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn cleanup_storage_with_policy( state: State<'_, AppState>, policy: CleanupPolicy, ) -> Result<CleanupResult, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -3498,20 +3470,6 @@
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
-      "id": "get_project_storage_paths",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "get_project_storage_paths",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn get_project_storage_paths( state: State<'_, AppState>, workspace_path: String, ) -> Result<ProjectStoragePathsInfo, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
       "id": "get_readonly_tools_info",
       "moduleId": "tool",
       "capabilityId": "feature.agents",
@@ -3797,34 +3755,6 @@
       "rustPath": "get_statistics",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_statistics( state: State<'_, AppState>, ) -> Result<crate::api::AppStatistics, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "get_storage_paths",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "get_storage_paths",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn get_storage_paths(state: State<'_, AppState>) -> Result<StoragePathsInfo, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "get_storage_statistics",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "get_storage_statistics",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn get_storage_statistics(state: State<'_, AppState>) -> Result<StorageStats, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -4671,34 +4601,6 @@
       "rustPath": "api::mcp_api::initialize_mcp_servers_non_destructive",
       "sourceFile": "src/apps/desktop/src/api/mcp_api.rs",
       "signature": "fn initialize_mcp_servers_non_destructive( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "initialize_project_storage",
-      "moduleId": "storage_commands",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "initialize_project_storage",
-      "sourceFile": "src/apps/desktop/src/api/storage_commands.rs",
-      "signature": "fn initialize_project_storage( state: State<'_, AppState>, workspace_path: String, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "initialize_snapshot",
-      "moduleId": "snapshot_service",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "initialize_snapshot",
-      "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
-      "signature": "fn initialize_snapshot( app_handle: AppHandle, runtime: State<'_, DesktopRuntimeContext>, request: SnapshotInitRequest, ) -> Result<serde_json::Value, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -6681,20 +6583,6 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "record_file_change",
-      "moduleId": "snapshot_service",
-      "capabilityId": "feature.files-editor",
-      "capabilityIds": [
-        "feature.files-editor"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "record_file_change",
-      "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
-      "signature": "fn record_file_change( app_handle: AppHandle, runtime: State<'_, DesktopRuntimeContext>, request: RecordFileChangeRequest, ) -> Result<String, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
       "id": "recover_interrupted_dialog_turn",
       "moduleId": "agentic",
       "capabilityId": "feature.ai-assistant",
@@ -6931,20 +6819,6 @@
       "rustPath": "reload_custom_agents",
       "sourceFile": "src/apps/desktop/src/api/custom_agent_api.rs",
       "signature": "fn reload_custom_agents( state: State<'_, AppState>, request: ReloadCustomAgentsRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "reload_global_config",
-      "moduleId": "commands",
-      "capabilityId": "feature.projects",
-      "capabilityIds": [
-        "feature.projects"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "reload_global_config",
-      "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn reload_global_config() -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -9625,20 +9499,6 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "subscribe_config_updates",
-      "moduleId": "commands",
-      "capabilityId": "feature.projects",
-      "capabilityIds": [
-        "feature.projects"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "subscribe_config_updates",
-      "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn subscribe_config_updates() -> Result<(), String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
       "id": "subscribe_permission_requests",
       "moduleId": "agentic",
       "capabilityId": "feature.ai-assistant",
@@ -9653,20 +9513,6 @@
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn subscribe_permission_requests( app: AppHandle, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
-    },
-    {
-      "id": "sync_config_to_global",
-      "moduleId": "config",
-      "capabilityId": "setting.application.general",
-      "capabilityIds": [
-        "setting.application.general"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "sync_config_to_global",
-      "sourceFile": "src/apps/desktop/src/api/config_api.rs",
-      "signature": "fn sync_config_to_global(_state: State<'_, AppState>) -> Result<String, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
       "id": "terminal_ack",

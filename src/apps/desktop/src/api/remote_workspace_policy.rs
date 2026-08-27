@@ -303,11 +303,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "cleanup_invalid_workspaces",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    ("cleanup_storage", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "cleanup_storage_with_policy",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     (
         "clear_mcp_remote_auth",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -704,10 +699,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
-        "get_project_storage_paths",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
         "get_readonly_tools_info",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
@@ -761,11 +752,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("get_statistics", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("get_storage_paths", RemoteWorkspacePolicy::LegacyUnaudited),
-    (
-        "get_storage_statistics",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     (
         "get_subagent_detail",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -873,14 +859,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     (
         "initialize_mcp_servers_non_destructive",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
-        "initialize_project_storage",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
-        "initialize_snapshot",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
@@ -1260,7 +1238,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("read_file_content", RemoteWorkspacePolicy::LegacyUnaudited),
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
@@ -1302,10 +1279,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("reload_config", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "reload_custom_agents",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
-        "reload_global_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
@@ -1848,14 +1821,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "submit_user_answers",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
-    (
-        "subscribe_config_updates",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
-    (
-        "sync_config_to_global",
-        RemoteWorkspacePolicy::LegacyUnaudited,
-    ),
     ("terminal_ack", RemoteWorkspacePolicy::RemoteRouted),
     ("terminal_close", RemoteWorkspacePolicy::RemoteRouted),
     ("terminal_create", RemoteWorkspacePolicy::RemoteRouted),
@@ -2200,8 +2165,6 @@ mod tests {
         "check_git_isolation",
         "check_path_exists",
         "cleanup_invalid_workspaces",
-        "cleanup_storage",
-        "cleanup_storage_with_policy",
         "clear_mcp_remote_auth",
         "clear_session_thread_goal",
         "close_workspace",
@@ -2283,7 +2246,6 @@ mod tests {
         "get_opened_workspaces",
         "get_operation_diff",
         "get_operation_summary",
-        "get_project_storage_paths",
         "get_readonly_tools_info",
         "get_recent_workspaces",
         "get_runtime_capabilities",
@@ -2299,8 +2261,6 @@ mod tests {
         "get_snapshot_sessions",
         "get_snapshot_system_stats",
         "get_statistics",
-        "get_storage_paths",
-        "get_storage_statistics",
         "get_subagent_detail",
         "get_tool_info",
         "get_turn_files",
@@ -2313,8 +2273,6 @@ mod tests {
         "initialize_ai",
         "initialize_mcp_servers",
         "initialize_mcp_servers_non_destructive",
-        "initialize_project_storage",
-        "initialize_snapshot",
         "initialize_workspace_startup_state",
         "install_acp_client_cli",
         "list_agent_companion_pets",
@@ -2379,13 +2337,11 @@ mod tests {
         "read_background_command_output",
         "read_file_content",
         "read_mcp_resource",
-        "record_file_change",
         "refresh_model_client",
         "reject_file",
         "reject_operation",
         "reload_config",
         "reload_custom_agents",
-        "reload_global_config",
         "reload_subagents",
         "remove_recent_workspace",
         "rename_file",
@@ -2442,8 +2398,6 @@ mod tests {
         "submit_acp_permission_response",
         "submit_mcp_interaction_response",
         "submit_user_answers",
-        "subscribe_config_updates",
-        "sync_config_to_global",
         "terminal_get",
         "terminal_get_shells",
         "terminal_list",
