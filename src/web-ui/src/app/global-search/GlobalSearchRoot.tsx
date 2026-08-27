@@ -8,7 +8,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { ActionItem, Button, KeyHint, Modal, SearchField } from '@bitfun/ui';
+import { ActionCard, Button, KeyHint, Modal, SearchField } from '@bitfun/ui';
 import {
   BarChart3,
   Blocks,
@@ -607,16 +607,16 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
 
                     if (variant === 'modal' && itemVariant === 'action') {
                       return (
-                        <ActionItem
+                        <ActionCard
                           key={item.id}
                           id={`${instanceId}-option-${item.id}`}
                           data-search-result-id={item.id}
                           role="option"
                           aria-selected={selected}
-                          className={`global-search__result global-search__result--action${selected ? ' is-selected' : ''}`}
-                          triggerClassName="global-search__result-trigger"
+                          className="global-search__action-card"
                           onClick={() => void activateItem(item)}
                           data-bf-state={selected ? 'selected' : undefined}
+                          description={item.subtitle && !defaultActionGroup ? item.subtitle : undefined}
                           leading={(
                             <span
                               className="global-search__action-icon"
@@ -626,34 +626,38 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                               <ItemIcon size={20} strokeWidth={1.75} />
                             </span>
                           )}
+                          selected={selected}
+                          size="sm"
                         >
-                          {resultCopy}
-                        </ActionItem>
+                          <span className="global-search__action-card-title-row">
+                            <span>{item.title}</span>
+                            {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
+                          </span>
+                        </ActionCard>
                       );
                     }
 
                     if (variant === 'modal' && entity) {
                       return (
-                        <ActionItem
+                        <ActionCard
                           key={item.id}
                           id={`${instanceId}-option-${item.id}`}
                           data-search-result-id={item.id}
                           role="option"
                           aria-selected={selected}
-                          className={`global-search__result global-search__result--entity${selected ? ' is-selected' : ''}`}
-                          triggerClassName="global-search__result-trigger"
+                          className="global-search__action-card"
                           onClick={() => void activateItem(item)}
                           data-bf-state={selected ? 'selected' : undefined}
+                          description={item.subtitle}
                           leading={<ItemIcon size={20} strokeWidth={1.65} />}
-                          shortcut={(
-                            <span className="global-search__result-tools">
-                              <Pin size={14} strokeWidth={1.55} />
-                              <MoreHorizontal size={16} strokeWidth={1.8} />
-                            </span>
-                          )}
+                          selected={selected}
+                          size="md"
                         >
-                          {resultCopy}
-                        </ActionItem>
+                          <span className="global-search__action-card-title-row">
+                            <span>{item.title}</span>
+                            {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
+                          </span>
+                        </ActionCard>
                       );
                     }
 

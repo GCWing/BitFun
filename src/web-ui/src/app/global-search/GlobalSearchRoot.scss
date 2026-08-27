@@ -884,8 +884,7 @@
       box-shadow: none;
     }
 
-    &:focus-visible,
-    &:has(.global-search__result-trigger:focus-visible) {
+    &:focus-visible {
       outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
       outline-offset: var(--bf-focus-offset);
     }
@@ -903,20 +902,15 @@
     }
   }
 
-  .global-search__result-trigger {
-    min-height: inherit;
-    gap: var(--bf-space-3);
+  .global-search__action-card-title-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--bf-space-2);
   }
 
-  .global-search__result--action [data-bf-part='leading'],
-  .global-search__result--entity [data-bf-part='leading'] {
-    width: var(--bf-space-5);
-    height: var(--bf-space-5);
-    color: var(--bf-color-content-secondary);
-  }
-
-  // Reference-specific command colors belong to this modal presentation only.
-  // ActionItem, the product action catalog, and embedded search remain neutral.
+  // Command colors belong to this modal presentation only. ActionCard, the
+  // product action catalog, and embedded search remain neutral.
   .global-search__action-icon {
     display: inline-flex;
     color: inherit;
@@ -1067,12 +1061,6 @@
       gap: var(--bf-space-3);
     }
 
-    .global-search__result--action,
-    .global-search__result--entity {
-      min-height: 68px;
-      padding: 0 var(--bf-space-4);
-    }
-
     .global-search__footer {
       flex-basis: var(--bf-control-height-md);
       min-height: var(--bf-control-height-md);
@@ -1097,15 +1085,6 @@
 
     .global-search__results {
       margin-top: var(--bf-space-4);
-    }
-
-    .global-search__result--action {
-      min-height: var(--bf-control-height-lg);
-      padding: 0 var(--bf-space-4);
-    }
-
-    .global-search__result--entity {
-      min-height: calc(var(--bf-control-height-lg) + var(--bf-space-2));
     }
 
     .global-search__footer {
