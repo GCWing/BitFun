@@ -4,6 +4,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useId } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './Search.scss';
 
 function SearchGlyph() {
@@ -141,6 +142,7 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
   const [isHovered, setIsHovered] = useState(false);
   
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const compositionActiveRef = useRef(false);
 
   const setForwardedRef = useCallback((node: HTMLInputElement | null) => {
     if (typeof ref === 'function') {
@@ -185,6 +187,13 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
   }, [onChange, onClear]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      (e.key === 'Enter' || e.key === 'Escape')
+      && isImeOwnedKeyboardEvent(e, compositionActiveRef.current)
+    ) {
+      e.stopPropagation();
+      return;
+    }
     onKeyDownProp?.(e);
     if (e.defaultPrevented) {
       return;
@@ -253,6 +262,12 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
           maxLength={maxLength}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            compositionActiveRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            compositionActiveRef.current = false;
+          }}
           onFocus={handleFocus}
           onBlur={handleBlur}
           aria-label={inputAriaLabel ?? t('search.placeholder')}

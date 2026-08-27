@@ -12,7 +12,7 @@
  *   deduped via `steeringId`.
  */
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pencil,
@@ -33,6 +33,7 @@ import { interruptedTurnRecoveryGate } from '../services/interruptedTurnRecovery
 import { insertSteeringItemIfAbsent } from '../services/flow-chat-manager/EventHandlerModule';
 import { notificationService } from '../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import type { QueuedMessage, SteeringImage } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
 import './PendingQueuePanel.scss';
@@ -47,6 +48,7 @@ interface PendingQueuePanelProps {
 
 export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelProps): JSX.Element | null {
   const { t } = useTranslation('flow-chat');
+  const editorCompositionActiveRef = useRef(false);
   useSyncExternalStore(
     interruptedTurnRecoveryGate.subscribe,
     interruptedTurnRecoveryGate.getSnapshot,
@@ -256,6 +258,13 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                       rows={Math.min(6, Math.max(2, editingDraft.split('\n').length))}
                       onChange={e => setEditingDraft(e.target.value)}
                       onKeyDown={e => {
+                        if (
+                          (e.key === 'Enter' || e.key === 'Escape')
+                          && isImeOwnedKeyboardEvent(e, editorCompositionActiveRef.current)
+                        ) {
+                          e.stopPropagation();
+                          return;
+                        }
                         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                           e.preventDefault();
                           handleEditSave(item);
@@ -263,6 +272,12 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
                           e.preventDefault();
                           handleEditCancel();
                         }
+                      }}
+                      onCompositionStart={() => {
+                        editorCompositionActiveRef.current = true;
+                      }}
+                      onCompositionEnd={() => {
+                        editorCompositionActiveRef.current = false;
                       }}
                     />
                     <div className="bitfun-pending-queue-panel__editor-hint">

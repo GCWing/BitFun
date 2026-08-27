@@ -2,6 +2,7 @@
 import type { ShortcutConfig, ShortcutScope } from '@/shared/types/shortcut';
 import { compareShortcutScope, NON_USER_CUSTOMIZABLE_SHORTCUT_IDS } from '@/shared/constants/shortcuts';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 const log = createLogger('ShortcutManager');
 
@@ -342,7 +343,7 @@ export class ShortcutManager {
 
   private isImeOwnedKey(event: KeyboardEvent): boolean {
     return (event.key === 'Escape' || event.key === 'Enter')
-      && (event.isComposing || event.keyCode === 229);
+      && isImeOwnedKeyboardEvent(event);
   }
 
   /**

@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useRef } from 'react';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 export interface ImeOwnedKeyGuard {
   isImeOwnedKey: (event: React.KeyboardEvent) => boolean;
@@ -26,10 +27,7 @@ export function useImeOwnedKeyGuard(): ImeOwnedKeyGuard {
   }, []);
 
   const isImeOwnedKey = useCallback((event: React.KeyboardEvent) => {
-    const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-    return isImeComposingRef.current
-      || nativeEvent?.isComposing === true
-      || nativeEvent?.keyCode === 229;
+    return isImeOwnedKeyboardEvent(event, isImeComposingRef.current);
   }, []);
 
   return { isImeOwnedKey, handleCompositionStart, handleCompositionEnd };

@@ -104,6 +104,19 @@ describe('askUserQuestionDraftStore', () => {
     });
   });
 
+  it('preserves the Other marker for transient blank IME composition values', () => {
+    const key = askUserQuestionDraftKey('session-a', 'tool-ime');
+    const store = askUserQuestionDraftStore.getState();
+
+    store.setSingleAnswer(key, 0, 'Other');
+    store.setOtherInput(key, 0, '', true);
+
+    expect(askUserQuestionDraftStore.getState().drafts[key]).toMatchObject({
+      answers: { 0: 'Other' },
+      otherInputs: { 0: '' },
+    });
+  });
+
   it('cleans up deleted sessions and discarded surfaces without disturbing others', () => {
     const removedSessionKey = askUserQuestionDraftKey('session-a', 'tool-a');
     const retainedSessionKey = askUserQuestionDraftKey('session-b', 'tool-b');

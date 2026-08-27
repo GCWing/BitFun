@@ -12,6 +12,7 @@ import { PopupCloseButton } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import {
   RefreshCw,
   Folder,
@@ -98,6 +99,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   const [pathInputValue, setPathInputValue] = useState(initialPath);
   const [isEditingPath, setIsEditingPath] = useState(false);
   const pathInputRef = useRef<HTMLInputElement>(null);
+  const textInputCompositionActiveRef = useRef(false);
   const [entries, setEntries] = useState<RemoteFileEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +177,13 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   };
 
   const handlePathInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      (e.key === 'Enter' || e.key === 'Escape')
+      && isImeOwnedKeyboardEvent(e, textInputCompositionActiveRef.current)
+    ) {
+      e.stopPropagation();
+      return;
+    }
     if (e.key === 'Enter') {
       const val = pathInputValue.trim();
       if (val) {
@@ -415,6 +424,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               value={pathInputValue}
               onChange={(e) => setPathInputValue(e.target.value)}
               onKeyDown={handlePathInputKeyDown}
+              onCompositionStart={() => {
+                textInputCompositionActiveRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                textInputCompositionActiveRef.current = false;
+              }}
               onBlur={handlePathInputBlur}
               autoFocus
               spellCheck={false}
@@ -639,8 +654,21 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 className="remote-file-browser__dialog-input"
                 autoFocus
                 onKeyDown={(e) => {
+                  if (
+                    (e.key === 'Enter' || e.key === 'Escape')
+                    && isImeOwnedKeyboardEvent(e, textInputCompositionActiveRef.current)
+                  ) {
+                    e.stopPropagation();
+                    return;
+                  }
                   if (e.key === 'Enter') handleRename();
                   if (e.key === 'Escape') setRenameEntry(null);
+                }}
+                onCompositionStart={() => {
+                  textInputCompositionActiveRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  textInputCompositionActiveRef.current = false;
                 }}
               />
               <div className="remote-file-browser__dialog-actions">

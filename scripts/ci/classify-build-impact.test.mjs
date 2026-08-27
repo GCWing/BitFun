@@ -109,6 +109,10 @@ test('maps representative changes to the smallest predictive validation', () => 
       result: expected({ rustRequired: false, reason: 'frontend-only' }),
     },
     {
+      paths: ['design-system/packages/ui/src/components/Input/Input.tsx'],
+      result: expected({ rustRequired: false, reason: 'frontend-only' }),
+    },
+    {
       paths: [
         'src/apps/mobile/android/app/src/main/kotlin/com/bitfun/MainActivity.kt',
         'src/apps/mobile/shared/core-feature/src/commonMain/kotlin/Feature.kt',

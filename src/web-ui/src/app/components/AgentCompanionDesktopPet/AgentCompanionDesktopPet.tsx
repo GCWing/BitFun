@@ -13,6 +13,7 @@ import type {
 } from '@/flow_chat/utils/agentCompanionActivity';
 import type { AgentCompanionPetCommand } from '@/app/services/agentCompanionPetCommands';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
@@ -134,6 +135,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const bubblesRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
+  const composerCompositionActiveRef = useRef(false);
   const outputRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
   const lastActivitySequenceRef = useRef(0);
   const lastActivityEmittedAtRef = useRef(0);
@@ -679,6 +681,13 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [composerValue, isSendingComposer, overlay, sendPetCommand]);
 
   const onComposerKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      (event.key === 'Enter' || event.key === 'Escape')
+      && isImeOwnedKeyboardEvent(event, composerCompositionActiveRef.current)
+    ) {
+      event.stopPropagation();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       cancelBubbleComposer();
@@ -971,6 +980,12 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                             aria-label={t('agentCompanion.composer.ariaLabel')}
                             onChange={event => setComposerValue(event.target.value)}
                             onKeyDown={onComposerKeyDown}
+                            onCompositionStart={() => {
+                              composerCompositionActiveRef.current = true;
+                            }}
+                            onCompositionEnd={() => {
+                              composerCompositionActiveRef.current = false;
+                            }}
                           />
                           <button
                             type="button"

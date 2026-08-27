@@ -5,9 +5,9 @@
   "roots": [
     "src/web-ui/src"
   ],
-  "digest": "b719c315ec5cd0e239cd76d60352781f297727d14bb8918d1768d2d582950fc5",
+  "digest": "58d766fcc65df497d6de40113bf8bbbc2cdc0b216df7355ee9e90c1a98c9e677",
   "fileCount": 365,
-  "interactionCount": 4421,
+  "interactionCount": 4423,
   "files": [
     {
       "sourceFile": "src/web-ui/src/app/components/AboutDialog/AboutDialog.tsx",
@@ -626,8 +626,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/Input/Input.tsx",
-      "interactionCount": 1,
-      "digest": "37c2810a30e7352a856980ebc8ec6e1c2ee396fcaccb0d89e7b6da1f3b215742"
+      "interactionCount": 2,
+      "digest": "2e5b03618ea9b9e61264f32fd6d1d3359714c63d687aa900467275d0ad9b5dd9"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/InputDialog/InputDialog.tsx",
@@ -681,8 +681,8 @@
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/Textarea/Textarea.tsx",
-      "interactionCount": 2,
-      "digest": "a6babb495854c3d0e7344818b3121bd142e382e828bc0b518f001aca74ffe6a8"
+      "interactionCount": 3,
+      "digest": "2616e59f775203d7f1c7ee62d150ab122b1e4c413d6880539fad8eb228d4c4b6"
     },
     {
       "sourceFile": "src/web-ui/src/component-library/components/WindowControls/WindowControls.tsx",
@@ -1092,7 +1092,7 @@
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/AskUserQuestionCard.tsx",
       "interactionCount": 23,
-      "digest": "51d4a6e5c3c649963ab4b6c13624c135ffebfcd4db2db2a4a91c47530987e9f9"
+      "digest": "6a66aac2f6d2f544f1ac30b49daf8eac1112c4dadf1f1110307091f6d8e51389"
     },
     {
       "sourceFile": "src/web-ui/src/flow_chat/tool-cards/BaseToolCard.tsx",
