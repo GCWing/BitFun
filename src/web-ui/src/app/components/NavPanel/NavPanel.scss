@@ -1779,12 +1779,6 @@ $_section-header-height: 22px;
   line-height: 1;
 }
 
-.bitfun-nav-panel__footer-device-status-tip {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 // Footer notification: yellow only when there are unread messages (BellDot)
 .bitfun-nav-panel__footer .bitfun-notification-btn .bitfun-notification-btn__icon--has-message {
   color: var(--bf-appearance-token-color-warning);

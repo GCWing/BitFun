@@ -11,7 +11,6 @@ import {
   Smartphone,
   Undo2,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -142,38 +141,6 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const attachedGroups = useMemo(() => selectAttachedGroups(overview), [overview]);
   const accessibleSummary = [overview.currentWorkDeviceName, ...activityLines].join(' · ');
 
-  const labelRef = useRef<HTMLSpanElement>(null);
-  const [labelClipped, setLabelClipped] = useState(false);
-
-  useEffect(() => {
-    const label = labelRef.current;
-    if (!label) return undefined;
-    const measure = () => setLabelClipped(label.scrollWidth > label.clientWidth + 1);
-
-    measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
-    observer.observe(label);
-    return () => observer.disconnect();
-  }, [overview.currentWorkDeviceName]);
-
-  // Hover is where the detail belongs: the trigger itself stays glanceable, so
-  // the tooltip carries the name the layout had to clip and the sentence the
-  // device-kind badges only imply.
-  const hoverDetail = useMemo(() => {
-    const lines = [
-      ...(labelClipped ? [overview.currentWorkDeviceName] : []),
-      ...(overview.mode === 'local' ? [] : activityLines),
-    ];
-    if (lines.length === 0) return null;
-    if (lines.length === 1) return lines[0];
-    return (
-      <span className="bitfun-nav-panel__footer-device-status-tip">
-        {lines.map(line => <span key={line}>{line}</span>)}
-      </span>
-    );
-  }, [activityLines, labelClipped, overview.currentWorkDeviceName, overview.mode]);
-
   const deviceActivity = useCallback((device: DeviceOverviewDevice) => {
     const parts: string[] = [];
     if (device.activities.includes('current-use')) {
@@ -212,53 +179,44 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
   return (
     <>
-      <Tooltip
-        content={hoverDetail}
-        placement="top"
-        disabled={open || hoverDetail === null}
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`bitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
+        aria-label={accessibleSummary}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(!open)}
+        data-testid="nav-footer-device-status"
+        data-bf-component="nav-panel"
+        data-bf-part="deviceStatus"
+        data-bf-state={overview.mode}
       >
-        <button
-          ref={triggerRef}
-          type="button"
-          className={`bitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
-          aria-label={accessibleSummary}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          onClick={() => onOpenChange(!open)}
-          data-testid="nav-footer-device-status"
-          data-bf-component="nav-panel"
-          data-bf-part="deviceStatus"
-          data-bf-state={overview.mode}
-        >
-          <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
+        <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
+        <span className="bitfun-nav-panel__footer-device-status-label">
+          {overview.currentWorkDeviceName}
+        </span>
+        {attachedGroups.length > 0 && (
           <span
-            ref={labelRef}
-            className="bitfun-nav-panel__footer-device-status-label"
+            className="bitfun-nav-panel__footer-device-status-attached"
+            aria-hidden="true"
           >
-            {overview.currentWorkDeviceName}
+            {attachedGroups.map(group => (
+              <span
+                className="bitfun-nav-panel__footer-device-status-attached-group"
+                key={group.kind}
+              >
+                <DeviceIcon kind={group.kind} size={13} />
+                {group.count > 1 && (
+                  <span className="bitfun-nav-panel__footer-device-status-attached-count">
+                    {group.count}
+                  </span>
+                )}
+              </span>
+            ))}
           </span>
-          {attachedGroups.length > 0 && (
-            <span
-              className="bitfun-nav-panel__footer-device-status-attached"
-              aria-hidden="true"
-            >
-              {attachedGroups.map(group => (
-                <span
-                  className="bitfun-nav-panel__footer-device-status-attached-group"
-                  key={group.kind}
-                >
-                  <DeviceIcon kind={group.kind} size={13} />
-                  {group.count > 1 && (
-                    <span className="bitfun-nav-panel__footer-device-status-attached-count">
-                      {group.count}
-                    </span>
-                  )}
-                </span>
-              ))}
-            </span>
-          )}
-        </button>
-      </Tooltip>
+        )}
+      </button>
 
       {open && createPortal(
         <>
