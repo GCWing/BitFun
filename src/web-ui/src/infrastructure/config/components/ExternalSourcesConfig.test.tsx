@@ -2886,7 +2886,7 @@ describe('ExternalSourcesConfig', () => {
     expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('policy.resetConfirmTitle');
 
-    const dialog = document.body.querySelector('[role="dialog"]');
+    const dialog = document.body.querySelector('[role="alertdialog"]');
     const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) =>
       button.textContent === 'policy.backupAndReset');
     await act(async () => confirm?.click());
