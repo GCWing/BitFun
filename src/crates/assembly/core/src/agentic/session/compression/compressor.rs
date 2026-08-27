@@ -7,8 +7,9 @@ use super::fallback::{
     CompressionSummaryArtifact,
 };
 use crate::agentic::core::{
-    render_system_reminder, CompressionContract, CompressionEntry, CompressionPayload,
-    InternalReminderKind, Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
+    render_system_reminder, CompressedTodoSnapshot, CompressionContract, CompressionEntry,
+    CompressionPayload, InternalReminderKind, Message, MessageContent, MessageHelper, MessageRole,
+    MessageSemanticKind,
 };
 use crate::service::session::TranscriptLineRange;
 use crate::util::errors::BitFunResult;
@@ -66,6 +67,13 @@ pub struct CompressionPlan {
     pub recent_tail_tokens: usize,
     pub cutoff_message_index: usize,
     pub next_recent_target_tokens: Option<usize>,
+    pub(crate) current_turn_todo_checkpoint: Option<CurrentTurnTodoCheckpoint>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CurrentTurnTodoCheckpoint {
+    turn_id: String,
+    snapshot: CompressedTodoSnapshot,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -93,6 +101,40 @@ impl ContextCompressor {
     pub fn plan_compression(
         &self,
         session_id: &str,
+        runtime_messages: &[Message],
+        context_window: usize,
+        recent_target_tokens: usize,
+    ) -> BitFunResult<Option<CompressionPlan>> {
+        self.plan_compression_internal(
+            session_id,
+            None,
+            runtime_messages,
+            context_window,
+            recent_target_tokens,
+        )
+    }
+
+    pub(crate) fn plan_compression_for_turn(
+        &self,
+        session_id: &str,
+        current_turn_id: &str,
+        runtime_messages: &[Message],
+        context_window: usize,
+        recent_target_tokens: usize,
+    ) -> BitFunResult<Option<CompressionPlan>> {
+        self.plan_compression_internal(
+            session_id,
+            Some(current_turn_id),
+            runtime_messages,
+            context_window,
+            recent_target_tokens,
+        )
+    }
+
+    fn plan_compression_internal(
+        &self,
+        session_id: &str,
+        current_turn_id: Option<&str>,
         runtime_messages: &[Message],
         context_window: usize,
         recent_target_tokens: usize,
@@ -171,6 +213,16 @@ impl ContextCompressor {
             .iter()
             .map(|message| message.estimate_tokens_with_reasoning(true))
             .sum();
+        let current_turn_todo_checkpoint = current_turn_id.and_then(|turn_id| {
+            Self::latest_successful_todo_snapshot_for_turn(conversation, turn_id).and_then(
+                |(source_message_index, snapshot)| {
+                    (source_message_index < cutoff).then(|| CurrentTurnTodoCheckpoint {
+                        turn_id: turn_id.to_string(),
+                        snapshot,
+                    })
+                },
+            )
+        });
         let mut summary_request_messages = runtime_messages[..system_message_count].to_vec();
         summary_request_messages.extend(summary_messages.clone());
 
@@ -202,7 +254,76 @@ impl ContextCompressor {
             recent_tail_tokens,
             cutoff_message_index: cutoff,
             next_recent_target_tokens,
+            current_turn_todo_checkpoint,
         }))
+    }
+
+    fn latest_successful_todo_snapshot_for_turn(
+        messages: &[Message],
+        current_turn_id: &str,
+    ) -> Option<(usize, CompressedTodoSnapshot)> {
+        let mut latest = None;
+
+        for (message_index, message) in messages.iter().enumerate() {
+            if let Some(payload) = message.metadata.compression_payload.as_ref() {
+                for entry in &payload.entries {
+                    if let CompressionEntry::Turn {
+                        turn_id: Some(turn_id),
+                        todo: Some(todo),
+                        ..
+                    } = entry
+                    {
+                        if turn_id == current_turn_id {
+                            latest = Some((message_index, todo.clone()));
+                        }
+                    }
+                }
+            }
+
+            if message.role != MessageRole::Assistant
+                || message.metadata.turn_id.as_deref() != Some(current_turn_id)
+            {
+                continue;
+            }
+            let MessageContent::Mixed { tool_calls, .. } = &message.content else {
+                continue;
+            };
+
+            for tool_call in tool_calls {
+                if tool_call.tool_name != "TodoWrite" || tool_call.is_error {
+                    continue;
+                }
+                let Some(result) = messages[message_index + 1..]
+                    .iter()
+                    .take_while(|candidate| candidate.role == MessageRole::Tool)
+                    .find_map(|candidate| match &candidate.content {
+                        MessageContent::ToolResult {
+                            tool_id,
+                            result,
+                            is_error,
+                            ..
+                        } if tool_id == &tool_call.tool_id
+                            && !*is_error
+                            && result.get("success").and_then(serde_json::Value::as_bool)
+                                != Some(false) =>
+                        {
+                            Some(result)
+                        }
+                        _ => None,
+                    })
+                else {
+                    continue;
+                };
+
+                if let Some(snapshot) = MessageHelper::todo_snapshot_from_value(result)
+                    .or_else(|| MessageHelper::todo_snapshot_from_value(&tool_call.arguments))
+                {
+                    latest = Some((message_index, snapshot));
+                }
+            }
+        }
+
+        latest
     }
 
     fn atomic_message_units(messages: &[Message]) -> Vec<AtomicMessageUnit> {
@@ -261,10 +382,13 @@ impl ContextCompressor {
     ) -> BitFunResult<CompressionResult> {
         let turns = MessageHelper::group_messages_by_turns(plan.summary_messages);
         let turns = turns.into_iter().map(TurnWithTokens::new).collect();
-        let summary_artifact = match model_summary {
+        let mut summary_artifact = match model_summary {
             Some(summary) => self.build_model_summary_artifact(summary, contract),
             None => self.build_fallback_summary_artifact(turns, context_window, contract),
         };
+        if let Some(checkpoint) = plan.current_turn_todo_checkpoint {
+            Self::append_current_turn_todo_checkpoint(&mut summary_artifact, checkpoint);
+        }
         let has_model_summary = summary_artifact.used_model_summary;
         let summary_message = self.create_summary_message(summary_artifact);
         let mut messages = plan.retained_user_messages;
@@ -284,6 +408,64 @@ impl ContextCompressor {
             messages,
             has_model_summary,
         })
+    }
+
+    fn append_current_turn_todo_checkpoint(
+        summary_artifact: &mut CompressionSummaryArtifact,
+        checkpoint: CurrentTurnTodoCheckpoint,
+    ) {
+        let rendered = Self::render_current_turn_todo_checkpoint(&checkpoint.snapshot);
+        summary_artifact.summary_text = format!(
+            "{}\n\nCurrent task state at the compaction boundary (authoritative; overrides any conflicting task status in the generated summary):\n<todo>\n{}\n</todo>",
+            summary_artifact.summary_text.trim_end(),
+            rendered
+        );
+
+        for entry in &mut summary_artifact.payload.entries {
+            if let CompressionEntry::Turn { turn_id, todo, .. } = entry {
+                if turn_id.as_deref() == Some(checkpoint.turn_id.as_str()) {
+                    *todo = None;
+                }
+            }
+        }
+        summary_artifact.payload.entries.retain(|entry| {
+            !matches!(
+                entry,
+                CompressionEntry::Turn { messages, todo, .. }
+                    if messages.is_empty() && todo.is_none()
+            )
+        });
+        summary_artifact
+            .payload
+            .entries
+            .push(CompressionEntry::Turn {
+                turn_id: Some(checkpoint.turn_id),
+                messages: Vec::new(),
+                todo: Some(checkpoint.snapshot),
+            });
+    }
+
+    fn render_current_turn_todo_checkpoint(snapshot: &CompressedTodoSnapshot) -> String {
+        if snapshot.todos.is_empty() {
+            return snapshot
+                .summary
+                .clone()
+                .unwrap_or_else(|| "The current-turn task list is empty.".to_string());
+        }
+
+        snapshot
+            .todos
+            .iter()
+            .map(|todo| {
+                let id = todo
+                    .id
+                    .as_deref()
+                    .map(|id| format!(" ({id})"))
+                    .unwrap_or_default();
+                format!("- [{}]{} {}", todo.status, id, todo.content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn append_transcript_reference(
@@ -432,8 +614,9 @@ IMPORTANT: This is a summary-only turn. Do not call tools or perform additional 
 mod tests {
     use super::ContextCompressor;
     use crate::agentic::core::{
-        render_system_reminder, CompressionEntry, CompressionPayload, InternalReminderKind,
-        Message, MessageContent, MessageSemanticKind, ToolCall, ToolResult,
+        render_system_reminder, CompressedTodoItem, CompressedTodoSnapshot, CompressionEntry,
+        CompressionPayload, InternalReminderKind, Message, MessageContent, MessageSemanticKind,
+        ToolCall, ToolResult,
     };
     use crate::service::session::TranscriptLineRange;
 
@@ -463,6 +646,36 @@ mod tests {
             result: serde_json::json!({"success": true}),
             result_for_assistant: None,
             is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        })
+    }
+
+    fn todo_call_with(tool_id: &str, todos: serde_json::Value) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: "TodoWrite".to_string(),
+            arguments: serde_json::json!({ "todos": todos }),
+            raw_arguments: None,
+            is_error: false,
+            parse_error: None,
+            recovered_from_truncation: false,
+            repair_kind: Default::default(),
+        }
+    }
+
+    fn todo_result_with(tool_id: &str, todos: serde_json::Value, is_error: bool) -> Message {
+        Message::tool_result(ToolResult {
+            tool_id: tool_id.to_string(),
+            tool_name: "TodoWrite".to_string(),
+            effective_tool_name: None,
+            result: serde_json::json!({
+                "success": !is_error,
+                "todos": todos,
+                "merge": false
+            }),
+            result_for_assistant: None,
+            is_error,
             duration_ms: None,
             image_attachments: None,
         })
@@ -582,6 +795,306 @@ mod tests {
         assert!(too_small.recent_tail_messages.is_empty());
         assert_eq!(exact.recent_tail_messages[0].id, assistant.id);
         assert_eq!(exact.recent_tail_messages[1].id, result.id);
+    }
+
+    #[test]
+    fn current_turn_todo_outside_recent_tail_is_checkpointed() {
+        let compressor = ContextCompressor::new(Default::default());
+        let todos = serde_json::json!([
+            {"id": "todo-1", "content": "Implement checkpoint", "status": "in_progress"},
+            {"id": "todo-2", "content": "Run focused tests", "status": "pending"}
+        ]);
+        let todo_assistant = Message::assistant_with_tools(
+            "Tracking work".to_string(),
+            vec![todo_call_with("todo-current", todos.clone())],
+        )
+        .with_turn_id("turn-current".to_string());
+        let todo_result =
+            todo_result_with("todo-current", todos, false).with_turn_id("turn-current".to_string());
+        let recent = Message::assistant("Latest implementation evidence".to_string())
+            .with_turn_id("turn-current".to_string());
+        let recent_target = recent.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Older request".to_string()).with_turn_id("turn-old".to_string()),
+            Message::assistant("Older answer".to_string()).with_turn_id("turn-old".to_string()),
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            todo_assistant,
+            todo_result,
+            recent.clone(),
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(plan.current_turn_todo_checkpoint.is_some());
+        assert_eq!(plan.recent_tail_messages.len(), 1);
+        assert_eq!(plan.recent_tail_messages[0].id, recent.id);
+
+        let result = compressor
+            .compress_plan_with_contract(
+                "session",
+                128_000,
+                plan,
+                None,
+                Some("Earlier work summary".to_string()),
+            )
+            .expect("compression succeeds");
+        let summary = result
+            .messages
+            .iter()
+            .find(|message| {
+                message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary)
+            })
+            .expect("summary exists");
+        let MessageContent::Text(summary_text) = &summary.content else {
+            panic!("expected summary text");
+        };
+        assert!(summary_text.contains("Current task state at the compaction boundary"));
+        assert!(summary_text.contains("(todo-1) Implement checkpoint"));
+        assert!(summary_text.contains("(todo-2) Run focused tests"));
+        assert!(summary
+            .metadata
+            .compression_payload
+            .as_ref()
+            .expect("payload exists")
+            .entries
+            .iter()
+            .any(|entry| matches!(
+                entry,
+                CompressionEntry::Turn {
+                    turn_id: Some(turn_id),
+                    todo: Some(todo),
+                    ..
+                } if turn_id == "turn-current" && todo.todos.len() == 2
+            )));
+    }
+
+    #[test]
+    fn historical_turn_todo_is_not_checkpointed_for_current_turn() {
+        let compressor = ContextCompressor::new(Default::default());
+        let todos = serde_json::json!([
+            {"id": "old-todo", "content": "Historical task", "status": "pending"}
+        ]);
+        let old_assistant = Message::assistant_with_tools(
+            "Old planning".to_string(),
+            vec![todo_call_with("todo-old", todos.clone())],
+        )
+        .with_turn_id("turn-old".to_string());
+        let old_result =
+            todo_result_with("todo-old", todos, false).with_turn_id("turn-old".to_string());
+        let recent = Message::assistant("Current evidence".to_string())
+            .with_turn_id("turn-current".to_string());
+        let recent_target = recent.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Old request".to_string()).with_turn_id("turn-old".to_string()),
+            old_assistant,
+            old_result,
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            recent,
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(plan.current_turn_todo_checkpoint.is_none());
+    }
+
+    #[test]
+    fn current_turn_todo_already_in_recent_tail_is_not_duplicated() {
+        let compressor = ContextCompressor::new(Default::default());
+        let todos = serde_json::json!([
+            {"id": "todo-tail", "content": "Stay in tail", "status": "in_progress"}
+        ]);
+        let todo_assistant = Message::assistant_with_tools(
+            "Tail planning".to_string(),
+            vec![todo_call_with("todo-tail", todos.clone())],
+        )
+        .with_turn_id("turn-current".to_string());
+        let todo_result =
+            todo_result_with("todo-tail", todos, false).with_turn_id("turn-current".to_string());
+        let recent_target = todo_assistant.estimate_tokens_with_reasoning(true)
+            + todo_result.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Old request".to_string()).with_turn_id("turn-old".to_string()),
+            Message::assistant("Old answer".to_string()).with_turn_id("turn-old".to_string()),
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            todo_assistant,
+            todo_result,
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(plan.current_turn_todo_checkpoint.is_none());
+        assert_eq!(plan.recent_tail_messages.len(), 2);
+    }
+
+    #[test]
+    fn current_turn_empty_todo_checkpoint_prevents_historical_state_resurrection() {
+        let compressor = ContextCompressor::new(Default::default());
+        let cleared_assistant = Message::assistant_with_tools(
+            "Clearing completed work".to_string(),
+            vec![todo_call_with("todo-clear", serde_json::json!([]))],
+        )
+        .with_turn_id("turn-current".to_string());
+        let cleared_result = todo_result_with("todo-clear", serde_json::json!([]), false)
+            .with_turn_id("turn-current".to_string());
+        let recent = Message::assistant("Continue after clearing".to_string())
+            .with_turn_id("turn-current".to_string());
+        let recent_target = recent.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            cleared_assistant,
+            cleared_result,
+            recent,
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let result = compressor
+            .compress_plan_with_contract(
+                "session",
+                128_000,
+                plan,
+                None,
+                Some("A historical task was pending.".to_string()),
+            )
+            .expect("compression succeeds");
+        let summary = result
+            .messages
+            .iter()
+            .find(|message| {
+                message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary)
+            })
+            .expect("summary exists");
+
+        assert!(summary.content.to_string().contains("explicitly cleared"));
+        assert!(summary
+            .metadata
+            .compression_payload
+            .as_ref()
+            .expect("payload exists")
+            .entries
+            .iter()
+            .any(|entry| matches!(
+                entry,
+                CompressionEntry::Turn {
+                    turn_id: Some(turn_id),
+                    todo: Some(todo),
+                    ..
+                } if turn_id == "turn-current" && todo.todos.is_empty()
+            )));
+    }
+
+    #[test]
+    fn failed_current_turn_todo_does_not_replace_the_last_successful_snapshot() {
+        let compressor = ContextCompressor::new(Default::default());
+        let successful_todos = serde_json::json!([
+            {"id": "todo-good", "content": "Keep successful state", "status": "in_progress"}
+        ]);
+        let successful_assistant = Message::assistant_with_tools(
+            "Valid update".to_string(),
+            vec![todo_call_with("todo-good", successful_todos.clone())],
+        )
+        .with_turn_id("turn-current".to_string());
+        let successful_result = todo_result_with("todo-good", successful_todos, false)
+            .with_turn_id("turn-current".to_string());
+        let failed_todos = serde_json::json!([
+            {"id": "todo-bad", "content": "Must not replace state", "status": "pending"}
+        ]);
+        let failed_assistant = Message::assistant_with_tools(
+            "Invalid update".to_string(),
+            vec![todo_call_with("todo-bad", failed_todos.clone())],
+        )
+        .with_turn_id("turn-current".to_string());
+        let failed_result = todo_result_with("todo-bad", failed_todos, true)
+            .with_turn_id("turn-current".to_string());
+        let recent = Message::assistant("Continue working".to_string())
+            .with_turn_id("turn-current".to_string());
+        let recent_target = recent.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            successful_assistant,
+            successful_result,
+            failed_assistant,
+            failed_result,
+            recent,
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let checkpoint = plan
+            .current_turn_todo_checkpoint
+            .as_ref()
+            .expect("successful checkpoint remains");
+
+        assert_eq!(checkpoint.snapshot.todos.len(), 1);
+        assert_eq!(
+            checkpoint.snapshot.todos[0].id.as_deref(),
+            Some("todo-good")
+        );
+    }
+
+    #[test]
+    fn current_turn_todo_checkpoint_survives_recompression_from_payload() {
+        let compressor = ContextCompressor::new(Default::default());
+        let prior_summary = Message::user(render_system_reminder("Earlier compressed context"))
+            .with_semantic_kind(MessageSemanticKind::CompressionSummary)
+            .with_compression_payload(CompressionPayload {
+                entries: vec![CompressionEntry::Turn {
+                    turn_id: Some("turn-current".to_string()),
+                    messages: Vec::new(),
+                    todo: Some(CompressedTodoSnapshot {
+                        todos: vec![CompressedTodoItem {
+                            id: Some("todo-recompact".to_string()),
+                            content: "Survive recompression".to_string(),
+                            status: "in_progress".to_string(),
+                        }],
+                        summary: None,
+                    }),
+                }],
+            });
+        let recent = Message::assistant("New evidence after first compaction".to_string())
+            .with_turn_id("turn-current".to_string());
+        let recent_target = recent.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Older request".to_string()).with_turn_id("turn-old".to_string()),
+            Message::assistant("Older answer".to_string()).with_turn_id("turn-old".to_string()),
+            Message::user("Current request".to_string()).with_turn_id("turn-current".to_string()),
+            prior_summary,
+            recent,
+        ];
+
+        let plan = compressor
+            .plan_compression_for_turn("session", "turn-current", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let checkpoint = plan
+            .current_turn_todo_checkpoint
+            .as_ref()
+            .expect("payload checkpoint survives");
+
+        assert_eq!(checkpoint.snapshot.todos.len(), 1);
+        assert_eq!(
+            checkpoint.snapshot.todos[0].id.as_deref(),
+            Some("todo-recompact")
+        );
     }
 
     #[test]
