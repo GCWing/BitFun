@@ -1,4 +1,4 @@
-import { Button, Input } from '@bitfun/ui';
+import { Button, Input, Select, type SelectOption } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -21,7 +21,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { PresenceBoundary, Select, type SelectOption } from '@/component-library';
+import { PresenceBoundary } from '@/component-library';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import {
@@ -951,16 +951,16 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       <span className="pages-scene__setting-label">{t('visibility.label')}</span>
                       <div className="pages-scene__visibility-control">
                         <Select
-                          size="small"
+                          size="sm"
                           value={page.visibility}
                           options={visibilityOptions}
                           disabled={pageBusy}
-                          onChange={(value) => void changeVisibility(
+                          onValueChange={(value) => void changeVisibility(
                             page,
                             pageOwnerEpoch,
                             String(value) as PageVisibility,
                           )}
-                          triggerAriaLabel={t('visibility.changeAria', { title: page.title || page.slug })}
+                          aria-label={t('visibility.changeAria', { title: page.title || page.slug })}
                         />
                         <span className="pages-scene__visibility-hint">
                           <VisibilityIcon size={12} aria-hidden="true" />

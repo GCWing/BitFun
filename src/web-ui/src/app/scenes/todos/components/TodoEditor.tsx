@@ -6,7 +6,7 @@
  * scheduled without knowing which workspace it runs in.
  */
 
-import { Button, Switch, Input } from '@bitfun/ui';
+import { Button, Switch, Input, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bot,
@@ -18,7 +18,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
-import { Select, Textarea } from '@/component-library';
+import { Select as LegacySelect, Textarea } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -245,7 +245,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 <Folder size={16} aria-hidden="true" />
                 {t('shared:features.workspace')}
               </span>
-              <Select
+              <LegacySelect
                 size="medium"
                 className="bf-todos__field-control"
                 options={workspaceSelectOptions}
@@ -282,15 +282,15 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                   {t('editor.fields.agentType')}
                 </span>
                 <Select
-                  size="medium"
+                  size="md"
                   className="bf-todos__field-control"
                   options={agentTypeOptions}
                   value={draft.agentType}
-                  error={validationErrors.agentType}
+                  invalid={validationErrors.agentType}
                   disabled={isAssistantWorkspace}
                   placeholder={t('editor.placeholders.agentType')}
-                  triggerAriaLabel={t('editor.fields.agentType')}
-                  onChange={(value) => {
+                  aria-label={t('editor.fields.agentType')}
+                  onValueChange={(value) => {
                     clearError('agentType');
                     updateDraft({ agentType: String(value) });
                   }}
@@ -304,7 +304,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 {t('editor.fields.scheduleKind')}
               </span>
               <Select
-                size="medium"
+                size="md"
                 className="bf-todos__field-control"
                 value={draft.scheduleKind}
                 options={[
@@ -312,8 +312,8 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                   { value: 'every', label: t('schedule.kinds.every') },
                   { value: 'cron', label: t('schedule.kinds.cron') },
                 ]}
-                triggerAriaLabel={t('editor.fields.scheduleKind')}
-                onChange={handleScheduleKindChange}
+                aria-label={t('editor.fields.scheduleKind')}
+                onValueChange={handleScheduleKindChange}
                 data-testid="todos-editor-schedule-kind"
               />
             </div>
@@ -366,15 +366,15 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                     size="md"
                   />
                   <Select
-                    size="medium"
+                    size="md"
                     className="bf-todos__field-control"
                     value={draft.everyUnit}
                     options={INTERVAL_UNIT_OPTIONS.map((unit) => ({
                       value: unit,
                       label: t(`schedule.intervalUnits.${unit}`),
                     }))}
-                    triggerAriaLabel={t('editor.fields.every')}
-                    onChange={(value) => updateDraft({ everyUnit: value as IntervalUnit })}
+                    aria-label={t('editor.fields.every')}
+                    onValueChange={(value) => updateDraft({ everyUnit: value as IntervalUnit })}
                   />
                 </div>
               ) : null}
