@@ -1,9 +1,9 @@
  
 
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import { NumberInput, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -370,18 +370,18 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={fontFamilyOptions}
               value={getPrimaryFont(config.fontFamily)}
-              onChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
+              onValueChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
               placeholder={t('appearance.font')}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.fontWeight')} align="center">
             <Select
               options={fontWeightOptionsTranslated}
               value={config.fontWeight}
-              onChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
+              onValueChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
               placeholder={t('appearance.fontWeight')}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.fontSize')} align="center">
@@ -410,16 +410,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={cursorStyleOptionsTranslated}
               value={config.cursorStyle}
-              onChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
-              size="small"
+              onValueChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.cursorBlinking')} align="center">
             <Select
               options={cursorBlinkingOptionsTranslated}
               value={config.cursorBlinking}
-              onChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
-              size="small"
+              onValueChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -447,16 +447,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={wordWrapOptionsTranslated}
               value={config.wordWrap}
-              onChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
-              size="small"
+              onValueChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.lineNumbers')} align="center">
             <Select
               options={lineNumbersOptionsTranslated}
               value={config.lineNumbers}
-              onChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
-              size="small"
+              onValueChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.smoothScrolling')} description={t('behavior.smoothScrollingDesc')} align="center">
@@ -489,16 +489,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
                 <Select
                   options={minimapSideOptionsTranslated}
                   value={config.minimap.side}
-                  onChange={(v) => updateMinimapConfig('side', v as string)}
-                  size="small"
+                  onValueChange={(v) => updateMinimapConfig('side', v as string)}
+                  size="sm"
                 />
               </ConfigPageRow>
               <ConfigPageRow label={t('display.minimapSize')} align="center">
                 <Select
                   options={minimapSizeOptionsTranslated}
                   value={config.minimap.size}
-                  onChange={(v) => updateMinimapConfig('size', v as string)}
-                  size="small"
+                  onValueChange={(v) => updateMinimapConfig('size', v as string)}
+                  size="sm"
                 />
               </ConfigPageRow>
             </>
@@ -507,16 +507,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={renderWhitespaceOptionsTranslated}
               value={config.renderWhitespace}
-              onChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
-              size="small"
+              onValueChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('display.lineHighlight')} align="center">
             <Select
               options={renderLineHighlightOptionsTranslated}
               value={config.renderLineHighlight}
-              onChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
-              size="small"
+              onValueChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
