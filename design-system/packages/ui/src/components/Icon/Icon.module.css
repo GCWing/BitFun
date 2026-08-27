@@ -1,0 +1,75 @@
+@layer bf.components {
+  .icon {
+    display: inline-block;
+    flex: 0 0 auto;
+    inline-size: var(--_icon-size);
+    block-size: var(--_icon-size);
+    color: inherit;
+    background-color: currentColor;
+    vertical-align: -0.125em;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+
+  .icon[data-size="2xs"] {
+    --_icon-size: var(--bf-control-icon-size2xs);
+  }
+
+  .icon[data-size="xs"] {
+    --_icon-size: var(--bf-control-icon-size-xs);
+  }
+
+  .icon[data-size="sm"] {
+    --_icon-size: var(--bf-control-icon-size-sm);
+  }
+
+  .icon[data-size="md"] {
+    --_icon-size: var(--bf-control-icon-size-md);
+  }
+
+  .icon[data-size="lg"] {
+    --_icon-size: var(--bf-control-icon-size-lg);
+  }
+
+  .icon[data-bf-tone="primary"] {
+    color: var(--bf-color-content-primary);
+  }
+
+  .icon[data-bf-tone="secondary"] {
+    color: var(--bf-color-content-secondary);
+  }
+
+  .icon[data-bf-tone="muted"] {
+    color: var(--bf-color-content-muted);
+  }
+
+  .icon[data-bf-tone="disabled"] {
+    color: var(--bf-color-content-disabled);
+  }
+
+  .icon[data-bf-tone="info"] {
+    color: var(--bf-color-status-info-content);
+  }
+
+  .icon[data-bf-tone="success"] {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .icon[data-bf-tone="warning"] {
+    color: var(--bf-color-status-warning-content);
+  }
+
+  .icon[data-bf-tone="danger"] {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  @media (forced-colors: active) {
+    .icon {
+      color: CanvasText;
+    }
+  }
+}

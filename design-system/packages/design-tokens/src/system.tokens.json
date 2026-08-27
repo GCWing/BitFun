@@ -67,6 +67,14 @@
     "relaxed": { "$value": 1.6 }
   },
   "control": {
+    "icon": {
+      "$type": "dimension",
+      "size2xs": { "$value": "8px" },
+      "sizeXs": { "$value": "12px" },
+      "sizeSm": { "$value": "14px" },
+      "sizeMd": { "$value": "16px" },
+      "sizeLg": { "$value": "24px" }
+    },
     "height": {
       "$type": "dimension",
       "sm": { "$value": "32px" },

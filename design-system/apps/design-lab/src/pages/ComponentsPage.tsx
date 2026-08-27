@@ -32,6 +32,7 @@ import {
   FieldGroup,
   FieldRow,
   FormSection,
+  Icon,
   IconButton,
   Input,
   KeyHint,
@@ -81,6 +82,7 @@ const componentIcons = {
   Card: Rows3,
   Composer: ArrowUp,
   Field: Rows3,
+  Icon: SearchIcon,
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
@@ -164,6 +166,14 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         >
           <Switch tabIndex={-1} />
         </Field>
+      );
+    case "Icon":
+      return (
+        <Stack align="center" direction="horizontal" gap="3">
+          <Icon name="search" tone="primary" />
+          <Icon name="folder" tone="secondary" />
+          <Icon name="check-circle" tone="success" />
+        </Stack>
       );
     case "IconButton":
       return (

@@ -3546,6 +3546,35 @@ input.lab-force-focus {
   max-inline-size: 760px;
 }
 
+.component-icon-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--bf-space-2);
+  inline-size: 100%;
+  padding: var(--bf-space-5);
+}
+
+.component-icon-catalog__item {
+  display: grid;
+  min-block-size: 88px;
+  place-items: center;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-3);
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-md);
+  color: var(--bf-color-content-primary);
+  background: var(--bf-color-surface-default);
+}
+
+.component-icon-catalog__item code {
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .component-preview-matrix {
   display: grid;
   align-items: stretch;

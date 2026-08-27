@@ -77,6 +77,14 @@ export {
   type FormSectionHeading,
   type FormSectionProps,
 } from "./components/FieldGroup";
+export {
+  Icon,
+  iconNames,
+  type IconName,
+  type IconProps,
+  type IconSize,
+  type IconTone,
+} from "./components/Icon";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";

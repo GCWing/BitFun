@@ -120,6 +120,22 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
 });
 
+test("Icon preview exposes the complete named catalog and semantic controls", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Icon"/);
+  assert.match(detail, /iconNames\.map\(\(name\)/);
+  assert.match(detail, /setIconName/);
+  assert.match(detail, /setIconSize/);
+  assert.match(detail, /setIconTone/);
+  assert.match(detail, /translateOptions=\{false\}/);
+  assert.match(styles, /\.component-icon-catalog\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(132px, 1fr\)\)/s);
+});
+
 test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 

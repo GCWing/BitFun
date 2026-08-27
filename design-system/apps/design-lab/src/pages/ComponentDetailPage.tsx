@@ -42,7 +42,9 @@ import {
   FieldGroup,
   FieldRow,
   FormSection,
+  Icon,
   IconButton,
+  iconNames,
   Input,
   KeyHint,
   Menu,
@@ -68,6 +70,9 @@ import {
   type ConfirmDialogType,
   type ContrastMode,
   type DensityMode,
+  type IconName,
+  type IconSize,
+  type IconTone,
   type ActivityItemAppearance,
   type ActionCardSize,
   type CardContentAlignment,
@@ -112,6 +117,8 @@ const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
 const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
 const activityItemAppearances = ["inline", "surface"] as const;
 const actionCardSizes = ["sm", "md"] as const;
+const iconSizes = ["2xs", "xs", "sm", "md", "lg"] as const;
+const iconTones = ["inherit", "primary", "secondary", "muted", "disabled", "info", "success", "warning", "danger"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
@@ -170,11 +177,13 @@ function InspectorSelect({
   label,
   onChange,
   options,
+  translateOptions = true,
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
   options: readonly string[];
+  translateOptions?: boolean;
   value: string;
 }) {
   const { t } = useI18n();
@@ -185,7 +194,7 @@ function InspectorSelect({
       <select onChange={(event) => onChange(event.target.value)} value={value}>
         {options.map((option) => (
           <option key={option} value={option}>
-            {t(optionLabelKeys[option] ?? "detail.option.default")}
+            {translateOptions ? t(optionLabelKeys[option] ?? "detail.option.default") : option}
           </option>
         ))}
       </select>
@@ -226,6 +235,9 @@ export function ComponentDetailPage({
   const { t } = useI18n();
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
+  const [iconName, setIconName] = useState<IconName>("search");
+  const [iconSize, setIconSize] = useState<IconSize>("lg");
+  const [iconTone, setIconTone] = useState<IconTone>("inherit");
   const [size, setSize] = useState<PreviewSize>("md");
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
   const [fieldShowLabelAction, setFieldShowLabelAction] = useState(false);
@@ -287,6 +299,7 @@ export function ComponentDetailPage({
       case "SearchField":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
       case "Field":
+      case "Icon":
       case "KeyHint":
       case "Modal":
       case "PageHeader":
@@ -352,6 +365,9 @@ export function ComponentDetailPage({
     }
     if (component.name === "ConfirmDialog") {
       return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  isOpen={open}\n  message="${t("components.preview.confirmMessage")}"\n  onClose={() => setOpen(false)}\n  onConfirm={() => deleteItem()}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
+    }
+    if (component.name === "Icon") {
+      return `import { Icon } from "@bitfun/ui";\n\n<Icon name="${iconName}" size="${iconSize}" tone="${iconTone}" />`;
     }
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -429,6 +445,9 @@ export function ComponentDetailPage({
     fieldShowControlTrailing,
     fieldShowLabelAction,
     iconButtonVariant,
+    iconName,
+    iconSize,
+    iconTone,
     inspectorDisabled,
     inspectorLoading,
     menuShowScrollbar,
@@ -624,6 +643,10 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "Icon") {
+      return <Icon name={iconName} size={iconSize} tone={iconTone} />;
+    }
+
     if (component.name === "ActionCard") {
       return (
         <ActionCard
@@ -1404,6 +1427,15 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
+              ) : component.name === "Icon" ? (
+                <div className="component-icon-catalog">
+                  {iconNames.map((name) => (
+                    <div className="component-icon-catalog__item" key={name}>
+                      <Icon name={name} size="lg" />
+                      <code>{name}</code>
+                    </div>
+                  ))}
+                </div>
               ) : component.name === "IconButton" ? (
                 <div
                   className="component-preview-matrix"
@@ -1615,6 +1647,33 @@ export function ComponentDetailPage({
                       onChange={(value) => setPageHeaderAlign(value as PageHeaderAlign)}
                       options={pageHeaderAlignments}
                       value={pageHeaderAlign}
+                    />
+                  )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.name")}
+                      onChange={(value) => setIconName(value as IconName)}
+                      options={iconNames}
+                      translateOptions={false}
+                      value={iconName}
+                    />
+                  )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setIconSize(value as IconSize)}
+                      options={iconSizes}
+                      translateOptions={false}
+                      value={iconSize}
+                    />
+                  )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setIconTone(value as IconTone)}
+                      options={iconTones}
+                      translateOptions={false}
+                      value={iconTone}
                     />
                   )}
                   {component.name === "Card" && (

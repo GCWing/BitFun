@@ -39,6 +39,14 @@ test("Switch geometry preserves the compact reference contract", () => {
   assert.equal(tokens["control.switch.thumbTravelReverse"], "-12px");
 });
 
+test("Icon geometry exposes every catalog size without product semantics", () => {
+  assert.equal(tokens["control.icon.size2xs"], "8px");
+  assert.equal(tokens["control.icon.sizeXs"], "12px");
+  assert.equal(tokens["control.icon.sizeSm"], "14px");
+  assert.equal(tokens["control.icon.sizeMd"], "16px");
+  assert.equal(tokens["control.icon.sizeLg"], "24px");
+});
+
 test("TabGroup geometry preserves the capsule selected and outline contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
