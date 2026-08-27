@@ -796,15 +796,16 @@ mod tests {
     #[test]
     fn apply_edit_matches_curly_quotes_after_multibyte_content() {
         // Quote normalization maps one char to one char but changes byte
-        // length, so a match that sits behind multibyte text has to be located
-        // by char offset, not byte offset.
-        let content = "// \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \u{201c}hello\u{201d}\n";
+        // length. The curly quotes before the match therefore make the byte
+        // offset differ between quoted_file and normalized_file, so the match
+        // has to be located by char offset rather than byte offset.
+        let content = "// \u{201c}prefix\u{201d} \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \u{201c}hello\u{201d}\n";
         let result = apply_edit_to_content(content, "msg := \"hello\"", "msg := \"hi\"", false)
             .expect("curly-quote edit after multibyte content should succeed");
 
         assert_eq!(
             result.new_content,
-            "// \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \"hi\"\n"
+            "// \u{201c}prefix\u{201d} \u{5909}\u{6570}\u{306e}\u{8aac}\u{660e} \u{2014} \u{3b1}\u{3b2}\u{3b3}\nmsg := \"hi\"\n"
         );
     }
 
