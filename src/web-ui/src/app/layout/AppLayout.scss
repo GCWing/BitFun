@@ -71,12 +71,6 @@ html, body {
     box-sizing: border-box;
   }
 
-  *:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: 2px;
-    border-radius: $size-radius-sm;
-  }
-
   // ==================== Startup mode ====================
   &--startup-mode {
     background: var(--bf-appearance-token-color-bg-primary);

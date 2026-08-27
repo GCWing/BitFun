@@ -12,6 +12,7 @@ import {
   Loader2,
   PackageCheck,
   RefreshCw,
+  Search as SearchIcon,
   ShieldCheck,
   Star,
 } from 'lucide-react';
@@ -280,6 +281,7 @@ const MiniAppMarketView: React.FC = () => {
             data-bf-part="headerActions"
           >
             <SearchField
+              leadingIcon={<SearchIcon aria-hidden />}
               value={query}
               onValueChange={setQuery}
               placeholder={t('market.search')}

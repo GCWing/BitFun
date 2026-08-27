@@ -8,6 +8,7 @@ import {
   Image,
   PackageCheck,
   RefreshCw,
+  Search as SearchIcon,
   Store,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -508,6 +509,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               data-bf-part="marketToolbar"
             >
               <SearchField
+                leadingIcon={<SearchIcon aria-hidden />}
                 value={query}
                 onValueChange={setQuery}
                 onSearch={value => setSubmittedQuery(value.trim())}

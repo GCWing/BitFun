@@ -32,6 +32,10 @@ describe('design-system Vite integration', () => {
       path.resolve(__dirname, '../../app/styles/global.scss'),
       'utf8',
     );
+    const appLayoutStyles = readFileSync(
+      path.resolve(__dirname, '../../app/layout/AppLayout.scss'),
+      'utf8',
+    );
     const layerContract = readFileSync(
       path.resolve(
         __dirname,
@@ -69,6 +73,10 @@ describe('design-system Vite integration', () => {
     expect(globalStyles).not.toMatch(
       /\*\s*,\s*\*::before\s*,\s*\*::after\s*\{[\s\S]*?padding:\s*0;/,
     );
+    expect(globalStyles).toMatch(
+      /@layer\s+bf\.base\s*\{[\s\S]*?:focus-visible\s*\{/,
+    );
+    expect(appLayoutStyles).not.toMatch(/^\s*\*:focus-visible\s*\{/m);
     expect(layerContract).toMatch(
       /@layer\s+bf\.tokens\.system,\s*bf\.tokens\.theme,\s*bf\.reset,\s*bf\.base,\s*bf\.components,\s*bf\.overrides\s*;/,
     );

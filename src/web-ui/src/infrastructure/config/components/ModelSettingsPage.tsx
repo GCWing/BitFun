@@ -1,7 +1,7 @@
 import { Button, Switch, IconButton, Input, SearchField } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen } from 'lucide-react';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
 import { Select, NumberInput, Card, Modal, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
@@ -1962,6 +1962,7 @@ const ModelSettingsPage: React.FC = () => {
 
 
             <SearchField
+              leadingIcon={<SearchIcon aria-hidden />}
               size="sm"
               className="bitfun-model-settings__provider-search"
               data-testid="settings-model-provider-search"

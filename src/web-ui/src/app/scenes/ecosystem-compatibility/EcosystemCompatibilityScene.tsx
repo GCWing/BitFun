@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, SearchField, Switch } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -15,6 +15,7 @@ import {
   PawPrint,
   Puzzle,
   RefreshCw,
+  Search as SearchIcon,
   Server,
   Settings,
   Terminal,
@@ -22,7 +23,6 @@ import {
   Wrench,
 } from 'lucide-react';
 import { Textarea } from '@/component-library';
-import { SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -761,6 +761,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       >
         <div className="ecosystem-compatibility__sidebar-header">
           <SearchField
+            leadingIcon={<SearchIcon aria-hidden />}
             size="sm"
             value={searchQuery}
             onValueChange={setSearchQuery}

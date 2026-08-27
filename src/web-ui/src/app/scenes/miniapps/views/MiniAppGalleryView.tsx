@@ -4,6 +4,7 @@ import {
   FolderPlus,
   LayoutGrid,
   PackagePlus,
+  Search as SearchIcon,
   Sparkles,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -372,7 +373,13 @@ const MiniAppGalleryView: React.FC = () => {
         subtitle={t('subtitle')}
         actions={(
           <>
-            <SearchField value={search} onValueChange={setSearch} placeholder={t('searchPlaceholder')} size="sm" />
+            <SearchField
+              leadingIcon={<SearchIcon aria-hidden />}
+              onValueChange={setSearch}
+              placeholder={t('searchPlaceholder')}
+              size="sm"
+              value={search}
+            />
             <span className="miniapp-gallery__import-anchor">
               <IconButton
                 ref={importTriggerRef}
