@@ -9,6 +9,8 @@ export const workbenchAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'navDivider' },
     { id: 'sceneArea' },
     { id: 'sceneSurface' },
+    { id: 'topBar' },
+    { id: 'sceneActions' },
     { id: 'viewport' },
     { id: 'viewportClip' },
     { id: 'scene' },

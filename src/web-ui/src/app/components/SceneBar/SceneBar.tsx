@@ -5,29 +5,16 @@
  * AI Agent tab shows the current session title as a subtitle.
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
-import { WindowControls } from '@/component-library';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsPageTitle } from '../../hooks/useCurrentSettingsPageTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { createLogger } from '@/shared/utils/logger';
-import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import type { SceneTabId } from './types';
 import './SceneBar.scss';
-
-const log = createLogger('SceneBar');
-
-const INTERACTIVE_SELECTOR =
-  'button, input, textarea, select, a, [role="button"], [contenteditable="true"], .window-controls';
-
-function blocksWindowChromeInteraction(target: HTMLElement): boolean {
-  const interactive = target.closest<HTMLElement>(INTERACTIVE_SELECTOR);
-  return interactive !== null && interactive.getAttribute('role') !== 'tab';
-}
 
 function getSceneIdFromTabTarget(target: EventTarget | null): SceneTabId | undefined {
   if (!(target instanceof HTMLElement)) return undefined;
@@ -38,18 +25,10 @@ function getSceneIdFromTabTarget(target: EventTarget | null): SceneTabId | undef
 
 interface SceneBarProps {
   className?: string;
-  onMinimize?: () => void;
-  onMaximize?: () => void;
-  onClose?: () => void;
-  isMaximized?: boolean;
 }
 
 const SceneBar: React.FC<SceneBarProps> = ({
   className = '',
-  onMinimize,
-  onMaximize,
-  onClose,
-  isMaximized = false,
 }) => {
   const {
     openTabs,
@@ -62,11 +41,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const sessionTitle = useCurrentSessionTitle();
   const settingsPageTitle = useCurrentSettingsPageTitle();
   const { t } = useI18n('common');
-  const hasWindowControls = !!(onMinimize && onMaximize && onClose);
-  const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
-  const isSingleTab = openTabs.length <= 1;
-  const canDragWindow = supportsNativeWindowDragging();
-  const lastMouseDownTimeRef = useRef<number>(0);
+  const sceneBarClassName = `bitfun-scene-bar ${className}`.trim();
   const {
     tabRegionRef,
     tabsRef,
@@ -101,38 +76,6 @@ const SceneBar: React.FC<SceneBarProps> = ({
     e.stopPropagation();
     closeScene(sceneId);
   }, [closeScene, tabDefs]);
-
-  const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!canDragWindow) return;
-    if (!isSingleTab) return;
-
-    const now = Date.now();
-    const timeSinceLastMouseDown = now - lastMouseDownTimeRef.current;
-    lastMouseDownTimeRef.current = now;
-
-    if (e.button !== 0) return;
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (blocksWindowChromeInteraction(target)) return;
-    if (timeSinceLastMouseDown < 500 && timeSinceLastMouseDown > 50) return;
-
-    void (async () => {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().startDragging();
-      } catch (error) {
-        log.debug('startDragging failed', error);
-      }
-    })();
-  }, [canDragWindow, isSingleTab]);
-
-  const handleBarDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (!isSingleTab) return;
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (blocksWindowChromeInteraction(target)) return;
-    onMaximize?.();
-  }, [isSingleTab, onMaximize]);
 
   const tabItems = openTabs.reduce<TabGroupItem[]>((items, tab) => {
     const def = tabDefs.find(candidate => candidate.id === tab.id);
@@ -181,8 +124,6 @@ const SceneBar: React.FC<SceneBarProps> = ({
   return (
     <div data-bf-component="scene-bar" data-bf-part="root"
       className={sceneBarClassName}
-      onMouseDown={handleBarMouseDown}
-      onDoubleClick={handleBarDoubleClick}
     >
       <div
         ref={tabRegionRef}
@@ -236,16 +177,6 @@ const SceneBar: React.FC<SceneBarProps> = ({
         )}
       </div>
 
-      {hasWindowControls && (
-        <div className="bitfun-scene-bar__controls" data-bf-component="scene-bar" data-bf-part="controls">
-          <WindowControls
-            onMinimize={onMinimize!}
-            onMaximize={onMaximize!}
-            onClose={onClose!}
-            isMaximized={isMaximized}
-          />
-        </div>
-      )}
     </div>
   );
 };

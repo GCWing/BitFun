@@ -10,20 +10,40 @@
   justify-content: space-between;
   gap: $size-gap-1;
   padding: 0 $size-gap-3;
-  border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
-  // Opaque bar stacked above the message list, so message geometry stays
+  // Opaque bar stacked above the transcript, so transcript geometry stays
   // independent of the header.
   background: var(--bf-appearance-token-color-bg-scene);
 
   height: 36px;
   min-height: 36px;
   flex-shrink: 0;
-  transition:
-    background-color $motion-base $easing-standard,
-    border-color $motion-base $easing-standard;
+  transition: background-color $motion-base $easing-standard;
   position: relative;
   z-index: 10;
+
+  &__chrome-actions {
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    max-width: 100%;
+  }
+
+  &__chrome-actions &__actions {
+    min-width: 0;
+
+    &--left {
+      margin-right: $size-gap-1;
+    }
+  }
+
+  &__chrome-actions &__search {
+    width: clamp(180px, 30cqi, 420px);
+    min-width: 0;
+    max-width: 420px;
+  }
 
   &__btw-back {
     flex: 0 0 auto;
@@ -602,57 +622,6 @@
     text-overflow: ellipsis;
   }
 
-  // ==================== Center message ====================
-  &__message {
-    position: absolute;
-    left: calc(var(--bf-appearance-token-flowchat-header-side-width) + #{$size-gap-5});
-    right: calc(var(--bf-appearance-token-flowchat-header-side-width) + #{$size-gap-5});
-    min-width: 0;
-    padding: 0 $size-gap-3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: $size-gap-2;
-    overflow: hidden;
-    cursor: pointer;
-    border-radius: $size-radius-base;
-    transition: background $motion-base $easing-standard;
-
-    &:hover {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 70%, transparent);
-    }
-
-    &:focus-visible {
-      outline: none;
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
-      box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
-    }
-  }
-
-  &__turn-badge {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 0 auto;
-    max-width: 100%;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: flow-type.$support-size;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  &__message-text {
-    min-width: 0;
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-  }
-
   // ==================== Actions ====================
   &__actions {
     position: relative;
@@ -673,5 +642,23 @@
       min-width: min(220px, 52vw);
       max-width: min(300px, 56vw);
     }
+  }
+}
+
+@container scene-top-bar (max-width: 820px) {
+  .flowchat-header__chrome-actions {
+    &:has(.flowchat-header__search) .flowchat-header__actions--left {
+      display: none;
+    }
+
+    .flowchat-header__search {
+      width: min(220px, 30cqi);
+    }
+  }
+}
+
+@container scene-top-bar (max-width: 680px) {
+  .flowchat-header__chrome-actions .flowchat-header__search {
+    width: min(180px, 27cqi);
   }
 }

@@ -1328,7 +1328,6 @@
     "searchNext": "Next match",
     "searchClose": "Close search",
     "searchOpen": "Search messages",
-    "jumpToCurrentTurn": "Jump to Turn {{turn}}",
     "sessionOverview": "Session overview",
     "sessionOverviewActive": "Session overview, activity in progress",
     "sessionOverviewAgentsUnavailable": "No active session",

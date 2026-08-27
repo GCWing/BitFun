@@ -6,7 +6,7 @@
  *     NavBar        (35px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
- *     SceneBar      (scene tab strip inside the scene surface)
+ *     SceneTopBar   (scene tabs + active-scene chrome + WindowControls)
  *     SceneViewport (flex:1 — active scene content)
  */
 
@@ -14,10 +14,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { NavBar } from '../components/NavBar';
 import NavPanel from '../components/NavPanel/NavPanel';
-import { SceneBar } from '../components/SceneBar';
+import { SceneChromeProvider, SceneTopBar } from '../components/SceneTopBar';
 import { SceneViewport } from '../scenes';
 import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
 import { useApp } from '../hooks/useApp';
+import { useSceneStore } from '../stores/sceneStore';
 import './WorkspaceBody.scss';
 
 const NAV_DEFAULT_WIDTH = 300;
@@ -48,6 +49,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
 }) => {
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   const { state, toggleLeftPanel } = useApp();
+  const activeSceneId = useSceneStore(sceneState => sceneState.activeTabId);
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
   const navAreaRef = useRef<HTMLDivElement>(null);
@@ -180,16 +182,18 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           data-bf-scene="workbench"
           data-bf-part="sceneSurface"
         >
-          <SceneBar
-            onMinimize={onMinimize}
-            onMaximize={onMaximize}
-            onClose={onClose}
-            isMaximized={isMaximized}
-          />
-          <SceneViewport
-            workspacePath={currentWorkspace?.rootPath}
-            isEntering={isEntering}
-          />
+          <SceneChromeProvider activeSceneId={activeSceneId}>
+            <SceneTopBar
+              onMinimize={onMinimize}
+              onMaximize={onMaximize}
+              onClose={onClose}
+              isMaximized={isMaximized}
+            />
+            <SceneViewport
+              workspacePath={currentWorkspace?.rootPath}
+              isEntering={isEntering}
+            />
+          </SceneChromeProvider>
         </div>
         {sceneOverlay}
       </div>

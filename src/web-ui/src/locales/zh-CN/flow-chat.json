@@ -1328,7 +1328,6 @@
     "searchNext": "下一个匹配结果",
     "searchClose": "关闭搜索",
     "searchOpen": "搜索消息",
-    "jumpToCurrentTurn": "跳转到第 {{turn}} 轮",
     "sessionOverview": "会话概览",
     "sessionOverviewActive": "会话概览，有活动正在进行",
     "sessionOverviewAgentsUnavailable": "当前没有可用会话",

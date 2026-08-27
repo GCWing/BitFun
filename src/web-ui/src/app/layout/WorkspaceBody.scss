@@ -93,7 +93,7 @@ $_resize-target-width: 6px;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: $size-gap-5;
+  gap: 0;
   min-width: 0;
   min-height: 0;
   padding: $size-gap-4 $size-gap-4 0;
@@ -141,7 +141,7 @@ $_resize-target-width: 6px;
 
 // The compact toolbar remains reachable when the navigation panel is hidden.
 .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-workspace-body__scene-surface .bitfun-scene-bar {
+  .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
   }
 }
@@ -151,7 +151,7 @@ $_resize-target-width: 6px;
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-workspace-body__scene-surface .bitfun-scene-bar {
+  .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1} + 72px);
   }
 }
