@@ -12,6 +12,57 @@ pub enum RequestReasoningTokenPolicy {
 }
 
 impl MessageHelper {
+    pub(crate) fn todo_snapshot_from_value(
+        value: &serde_json::Value,
+    ) -> Option<CompressedTodoSnapshot> {
+        let todos = value.get("todos")?.as_array()?;
+        if todos.is_empty() {
+            return Some(CompressedTodoSnapshot {
+                todos: Vec::new(),
+                summary: Some("The current-turn task list was explicitly cleared.".to_string()),
+            });
+        }
+
+        let mut compressed_todos = Vec::new();
+        for todo in todos {
+            let Some(todo_object) = todo.as_object() else {
+                continue;
+            };
+            let Some(content) = todo_object
+                .get("content")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|content| !content.is_empty())
+            else {
+                continue;
+            };
+
+            let status = todo_object
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("pending");
+            let id = todo_object
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+
+            compressed_todos.push(CompressedTodoItem {
+                id,
+                content: content.to_string(),
+                status: status.to_string(),
+            });
+        }
+
+        if compressed_todos.is_empty() {
+            return None;
+        }
+
+        Some(CompressedTodoSnapshot {
+            todos: compressed_todos,
+            summary: None,
+        })
+    }
+
     pub fn convert_messages(messages: &[Message]) -> Vec<AIMessage> {
         messages.iter().map(AIMessage::from).collect()
     }
@@ -144,46 +195,9 @@ impl MessageHelper {
                         continue;
                     }
 
-                    let todos = tool_call.arguments.get("todos")?.as_array()?;
-                    let mut compressed_todos = Vec::new();
-
-                    for todo in todos {
-                        let Some(todo_object) = todo.as_object() else {
-                            continue;
-                        };
-                        let Some(content) = todo_object
-                            .get("content")
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::trim)
-                            .filter(|content| !content.is_empty())
-                        else {
-                            continue;
-                        };
-
-                        let status = todo_object
-                            .get("status")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("pending");
-                        let id = todo_object
-                            .get("id")
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::to_string);
-
-                        compressed_todos.push(CompressedTodoItem {
-                            id,
-                            content: content.to_string(),
-                            status: status.to_string(),
-                        });
+                    if let Some(snapshot) = Self::todo_snapshot_from_value(&tool_call.arguments) {
+                        return Some(snapshot);
                     }
-
-                    if compressed_todos.is_empty() {
-                        continue;
-                    }
-
-                    return Some(CompressedTodoSnapshot {
-                        todos: compressed_todos,
-                        summary: None,
-                    });
                 }
             }
         }
