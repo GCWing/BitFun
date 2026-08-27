@@ -188,6 +188,15 @@
       "rowPaddingBlock": { "$value": "{space.4}" },
       "rowPaddingInline": { "$value": "{space.5}" }
     },
+    "confirmDialog": {
+      "contentGap": { "$value": "{space.4}" },
+      "messageGap": { "$value": "{space.3}" },
+      "iconSize": { "$value": "32px" },
+      "iconGlyphSize": { "$value": "18px" },
+      "previewPaddingBlock": { "$value": "{space.3}" },
+      "previewPaddingInline": { "$value": "{space.4}" },
+      "previewRadius": { "$value": "{radius.base}" }
+    },
     "card": {
       "paddingSm": { "$value": "{space.3}" },
       "paddingMd": { "$value": "{space.5}" },

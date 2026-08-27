@@ -37,6 +37,7 @@ import {
   ComposerContextBar,
   ComposerDivider,
   ComposerToolbar,
+  ConfirmDialog,
   Field,
   FieldGroup,
   FieldRow,
@@ -64,6 +65,7 @@ import {
   ToolbarGroup,
   ToolbarSeparator,
   type ColorScheme,
+  type ConfirmDialogType,
   type ContrastMode,
   type DensityMode,
   type ActivityItemAppearance,
@@ -124,6 +126,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
+  info: "detail.option.info",
   horizontal: "detail.option.horizontal",
   hidden: "detail.option.hidden",
   inline: "detail.option.inline",
@@ -139,6 +142,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
+  pending: "detail.option.pending",
   md: "detail.option.md",
   none: "detail.option.none",
   off: "detail.option.off",
@@ -153,10 +157,13 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   start: "detail.option.start",
   surface: "detail.option.surface",
   subtle: "detail.option.subtle",
+  success: "detail.option.success",
   text: "detail.option.text",
   media: "detail.option.media",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
+  warning: "detail.option.warning",
+  error: "detail.option.error",
 };
 
 function InspectorSelect({
@@ -272,6 +279,8 @@ export function ComponentDetailPage({
         return ["default", "hover", "active", "disabled"] as const;
       case "Composer":
         return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
+      case "ConfirmDialog":
+        return ["info", "warning", "error", "success", "pending"] as const;
       case "Card":
         return ["raised", "subtle", "media"] as const;
       case "Input":
@@ -340,6 +349,9 @@ export function ComponentDetailPage({
         ? `\n  toolbar={<ComposerToolbar\n    leading={<IconButton aria-label="${t("components.preview.composerAdd")}" icon={<Plus />} />}\n    trailing={<><Button variant="text">${t("components.preview.composerModel")}</Button><IconButton aria-label="${t("components.preview.composerSend")}" icon={<ArrowUp />} variant="primary" /></>}\n  />}`
         : "";
       return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\nimport { ArrowUp, Plus } from "lucide-react";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
+    }
+    if (component.name === "ConfirmDialog") {
+      return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  isOpen={open}\n  message="${t("components.preview.confirmMessage")}"\n  onClose={() => setOpen(false)}\n  onConfirm={() => deleteItem()}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
     }
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -1032,6 +1044,31 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "ConfirmDialog") {
+      const confirmType = state === "pending" ? "warning" : state as ConfirmDialogType;
+      return (
+        <ConfirmDialog
+          cancelText={t("components.preview.modalCancel")}
+          confirmDanger={confirmType === "error"}
+          confirmText={confirmType === "error"
+            ? t("components.preview.confirmDelete")
+            : t("components.preview.modalSave")}
+          dialogClassName="component-confirm-dialog-preview-dialog"
+          isOpen
+          message={t("components.preview.confirmMessage")}
+          onClose={() => undefined}
+          onConfirm={() => undefined}
+          overlayClassName="component-confirm-dialog-preview-overlay"
+          pendingAction={state === "pending" ? "confirm" : null}
+          portalled={false}
+          preventScroll={false}
+          preview="/workspace/project"
+          title={t("components.preview.confirmTitle")}
+          type={confirmType}
+        />
+      );
+    }
+
     if (component.name === "Modal") {
       return (
         <Button onClick={() => setModalOpen(true)} variant="fill">
@@ -1289,7 +1326,14 @@ export function ComponentDetailPage({
               density={density}
               tokenOverrides={tokenOverrides}
             >
-              {component.name === "Modal" ? (
+              {component.name === "ConfirmDialog" ? (
+                <div className="component-confirm-dialog-preview-stage">
+                  <span className="component-confirm-dialog-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Modal" ? (
                 <div className="component-modal-preview-stage">
                   {renderModalExample(false)}
                   <div className="component-modal-preview-stage__actions">

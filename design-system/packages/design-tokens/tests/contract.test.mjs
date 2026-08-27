@@ -182,6 +182,20 @@ test("Form grouping tokens preserve section, surface, and row composition", asyn
   assert.equal(systemDocument.layout.fieldGroup.radius.$value, "{radius.lg}");
 });
 
+test("ConfirmDialog tokens preserve semantic content and preview composition", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.confirmDialog.contentGap"], "16px");
+  assert.equal(tokens["layout.confirmDialog.messageGap"], "12px");
+  assert.equal(tokens["layout.confirmDialog.iconSize"], "32px");
+  assert.equal(tokens["layout.confirmDialog.iconGlyphSize"], "18px");
+  assert.equal(tokens["layout.confirmDialog.previewPaddingBlock"], "12px");
+  assert.equal(tokens["layout.confirmDialog.previewPaddingInline"], "16px");
+  assert.equal(tokens["layout.confirmDialog.previewRadius"], "8px");
+  assert.equal(systemDocument.layout.confirmDialog.contentGap.$value, "{space.4}");
+  assert.equal(systemDocument.layout.confirmDialog.previewRadius.$value, "{radius.base}");
+});
+
 test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

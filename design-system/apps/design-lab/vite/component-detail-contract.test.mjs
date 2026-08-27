@@ -183,6 +183,24 @@ test("Modal preview exposes a direct anatomy specimen and a separate interaction
   assert.match(styles, /\.component-modal-preview-dialog\s*\{[^}]*block-size:\s*700px/s);
 });
 
+test("ConfirmDialog preview exposes semantic, destructive, preview, and pending contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ConfirmDialog"/);
+  assert.match(detail, /case "ConfirmDialog":\s*return \["info", "warning", "error", "success", "pending"\] as const/);
+  assert.match(detail, /<ConfirmDialog/);
+  assert.match(detail, /confirmDanger=\{confirmType === "error"\}/);
+  assert.match(detail, /pendingAction=\{state === "pending" \? "confirm" : null\}/);
+  assert.match(detail, /preview="\/workspace\/project"/);
+  assert.match(detail, /portalled=\{false\}/);
+  assert.match(styles, /\.component-confirm-dialog-preview-overlay\s*\{[^}]*position:\s*relative/s);
+  assert.match(styles, /\.component-confirm-dialog-preview-dialog\s*\{[^}]*animation:\s*none/s);
+});
+
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 

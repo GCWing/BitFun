@@ -4,6 +4,7 @@ import { activityItemMeta } from "./components/ActivityItem/ActivityItem.meta";
 import { buttonMeta } from "./components/Button/Button.meta";
 import { cardMeta } from "./components/Card/Card.meta";
 import { composerMeta } from "./components/Composer/Composer.meta";
+import { confirmDialogMeta } from "./components/ConfirmDialog/ConfirmDialog.meta";
 import { fieldMeta } from "./components/Field/Field.meta";
 import { fieldGroupMeta } from "./components/FieldGroup/FieldGroup.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
@@ -33,6 +34,7 @@ export const componentRegistry = [
   buttonMeta,
   cardMeta,
   composerMeta,
+  confirmDialogMeta,
   fieldMeta,
   fieldGroupMeta,
   iconButtonMeta,

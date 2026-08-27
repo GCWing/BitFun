@@ -1,0 +1,105 @@
+@layer bf.components {
+  .content,
+  .messageRow,
+  .icon,
+  .message,
+  .preview {
+    box-sizing: border-box;
+  }
+
+  .content {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-layout-confirm-dialog-content-gap);
+  }
+
+  .messageRow {
+    display: flex;
+    min-inline-size: 0;
+    align-items: flex-start;
+    gap: var(--bf-layout-confirm-dialog-message-gap);
+  }
+
+  .icon {
+    display: inline-flex;
+    flex: 0 0 var(--bf-layout-confirm-dialog-icon-size);
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-layout-confirm-dialog-icon-size);
+    block-size: var(--bf-layout-confirm-dialog-icon-size);
+    border-radius: var(--bf-radius-pill);
+    color: var(--bf-color-status-info-content);
+    background: var(--bf-color-status-info-surface);
+  }
+
+  .icon > svg {
+    inline-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
+    block-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
+  }
+
+  .icon[data-bf-status="success"] {
+    color: var(--bf-color-status-success-content);
+    background: var(--bf-color-status-success-surface);
+  }
+
+  .icon[data-bf-status="warning"] {
+    color: var(--bf-color-status-warning-content);
+    background: var(--bf-color-status-warning-surface);
+  }
+
+  .icon[data-bf-status="danger"] {
+    color: var(--bf-color-status-danger-content);
+    background: var(--bf-color-status-danger-surface);
+  }
+
+  .message {
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-body);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-body);
+  }
+
+  .message > :first-child {
+    margin-block-start: 0;
+  }
+
+  .message > :last-child {
+    margin-block-end: 0;
+  }
+
+  .preview {
+    overflow: auto;
+    min-inline-size: 0;
+    padding-block: var(--bf-layout-confirm-dialog-preview-padding-block);
+    padding-inline: var(--bf-layout-confirm-dialog-preview-padding-inline);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-layout-confirm-dialog-preview-radius);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-subtle);
+    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .preview pre {
+    margin: 0;
+    color: inherit;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-caption);
+    line-height: var(--bf-line-height-base);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @media (forced-colors: active) {
+    .icon,
+    .preview {
+      border: var(--bf-border-width-default) solid CanvasText;
+      color: CanvasText;
+      background: Canvas;
+    }
+  }
+}

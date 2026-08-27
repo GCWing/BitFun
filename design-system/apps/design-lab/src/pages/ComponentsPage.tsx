@@ -216,6 +216,12 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           </FieldGroup>
         </FormSection>
       );
+    case "ConfirmDialog":
+      return (
+        <Button leadingIcon={<AppWindow aria-hidden="true" />} size="sm" variant="fill">
+          {t("components.preview.confirmDelete")}
+        </Button>
+      );
     case "Composer":
       return (
         <Composer

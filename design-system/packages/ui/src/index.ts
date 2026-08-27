@@ -50,6 +50,13 @@ export {
   type ComposerProps,
 } from "./components/Composer";
 export {
+  ConfirmDialog,
+  type ConfirmDialogAction,
+  type ConfirmDialogCloseReason,
+  type ConfirmDialogProps,
+  type ConfirmDialogType,
+} from "./components/ConfirmDialog";
+export {
   Field,
   type FieldControlWidth,
   type FieldHorizontalGap,
