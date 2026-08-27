@@ -19,7 +19,8 @@ crate.
 - Prefer `bitfun-core-types` for shared DTOs and `bitfun-runtime-ports` for
   cross-layer traits.
 - Keep dependency features explicit and keep `default = []`. The coarse service
-  capability owners are `diagnostics` (diagnostic-log redaction), `diff`
+  capability owners are `credential-vault` (prompt-free encrypted local
+  credential files), `diagnostics` (diagnostic-log redaction), `diff`
   (local text diff calculation), `filesystem` (local file operations/search),
   `json-io` (generic locked and atomic JSON file IO), `local-storage`
   (JSON/session/usage persistence), `process-runtime` (command
@@ -72,6 +73,7 @@ target. Representative stable entry points are:
 
 ```bash
 cargo check -p bitfun-services-core --no-default-features
+cargo test -p bitfun-services-core --no-default-features --features credential-vault --lib credential_vault::tests::
 cargo check -p bitfun-services-core --no-default-features --features filesystem
 cargo test -p bitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::
 cargo test -p bitfun-services-core --no-default-features --features diff --lib diff::contract_tests::
