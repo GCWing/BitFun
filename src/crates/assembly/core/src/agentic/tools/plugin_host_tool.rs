@@ -2,7 +2,10 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_events::ToolExecutionProgressInfo;
-use bitfun_opencode_plugin_host::{PluginGenerationLease, PluginHostClient};
+use bitfun_runtime_ports::{
+    PluginRuntimeInvocationPort, PluginToolCancellationRequest, PluginToolInvocationRequest,
+    PortErrorKind,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -12,8 +15,10 @@ use std::time::Duration;
 
 #[derive(Clone)]
 struct PluginHostToolRoute {
-    client: PluginHostClient,
-    lease: PluginGenerationLease,
+    invoker: Arc<dyn PluginRuntimeInvocationPort>,
+    instance_id: String,
+    generation_key: String,
+    revision: String,
     registration_id: String,
     description: String,
     parameters: Value,
@@ -68,7 +73,7 @@ impl PluginHostToolMux {
         }
     }
     fn set_route(&self, workspace_scope: String, route: PluginHostToolRoute) {
-        let generation_key = route.lease.generation_key.clone();
+        let generation_key = route.generation_key.clone();
         self.routes
             .write()
             .expect("plugin tool route lock poisoned")
@@ -86,7 +91,7 @@ impl PluginHostToolMux {
     }
     fn routes_for_scope(&self, workspace_scope: &str) -> Vec<PluginHostToolRoute> {
         if self.hook_registry.source_activation_for_workspace(
-            bitfun_agent_runtime::native_hooks::RuntimeHookSource::OpenCodePlugin,
+            bitfun_agent_runtime::native_hooks::RuntimeHookSource::Plugin,
             Some(workspace_scope),
         ) != bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready
         {
@@ -190,7 +195,7 @@ impl Tool for PluginHostToolMux {
             "agent": context.agent_type.clone().unwrap_or_default(),
             "callID": context.tool_call_id,
         });
-        let execution_key = (route.lease.instance_id.clone(), execution_id.clone());
+        let execution_key = (route.instance_id.clone(), execution_id.clone());
         executions().insert(
             execution_key.clone(),
             PluginToolExecutionRoute {
@@ -198,37 +203,83 @@ impl Tool for PluginHostToolMux {
                 dialog_turn_id: context.dialog_turn_id.clone().unwrap_or_default(),
                 agent: context.agent_type.clone().unwrap_or_default(),
                 tool_name: self.id.clone(),
-                generation_key: route.lease.generation_key.clone(),
-                revision: route.lease.revision.clone(),
+                generation_key: route.generation_key.clone(),
+                revision: route.revision.clone(),
             },
         );
-        let call = route.client.execute_tool(
-            &route.lease,
-            &execution_id,
-            &route.registration_id,
-            input.clone(),
-            rpc_context,
+        let call = route.invoker.invoke_tool(
+            PluginToolInvocationRequest {
+                instance_id: route.instance_id.clone(),
+                generation_key: route.generation_key.clone(),
+                revision: route.revision.clone(),
+                execution_id: execution_id.clone(),
+                registration_id: route.registration_id.clone(),
+                args: input.clone(),
+                context: rpc_context,
+            },
             Duration::from_secs(120),
         );
         let result = if let Some(token) = context.cancellation_token() {
             tokio::select! {
                 value = call => value,
                 _ = token.cancelled() => {
-                    let _ = route.client.cancel_tool(&route.lease, &execution_id, Some("cancelled"), Duration::from_secs(5)).await;
+                    let cancelled = match route.invoker.cancel_tool(
+                        PluginToolCancellationRequest {
+                            instance_id: route.instance_id.clone(),
+                            generation_key: route.generation_key.clone(),
+                            revision: route.revision.clone(),
+                            execution_id: execution_id.clone(),
+                            reason: Some("cancelled".to_string()),
+                        },
+                        Duration::from_secs(5),
+                    ).await {
+                        Ok(cancelled) => cancelled,
+                        Err(error) => {
+                            crate::plugin_host::fault_configured_plugin_host(
+                                "plugin tool cancellation failed",
+                            ).await;
+                            return Err(BitFunError::OutcomeUnknown(error.to_string()));
+                        }
+                    };
                     executions().remove(&execution_key);
-                    return Err(BitFunError::Cancelled("OpenCode plugin tool cancelled".to_string()));
+                    return if cancelled {
+                        Err(BitFunError::Cancelled("OpenCode plugin tool cancelled".to_string()))
+                    } else {
+                        crate::plugin_host::fault_configured_plugin_host(
+                            "plugin tool cancellation was not confirmed",
+                        )
+                        .await;
+                        Err(BitFunError::OutcomeUnknown("OpenCode plugin tool cancellation was not confirmed".to_string()))
+                    };
                 }
             }
         } else {
             call.await
         };
         executions().remove(&execution_key);
-        let result = result.map_err(|error| {
-            BitFunError::service(format!(
+        let result = result.map_err(|error| match error.kind {
+            // A timed-out/cancelled side-effecting plugin call may still have
+            // completed in the Host. Preserve this distinction so the tool
+            // pipeline never retries it as a transient service failure.
+            PortErrorKind::OutcomeUnknown => BitFunError::OutcomeUnknown(format!(
+                "OpenCode plugin tool '{}' outcome is unknown: {}",
+                self.id, error.message
+            )),
+            PortErrorKind::Cancelled => BitFunError::Cancelled(error.message),
+            PortErrorKind::Timeout => BitFunError::Timeout(error.message),
+            PortErrorKind::PermissionDenied => BitFunError::Validation(error.message),
+            _ => BitFunError::service(format!(
                 "OpenCode plugin tool '{}' failed: {error}",
                 self.id
-            ))
-        })?;
+            )),
+        });
+        if matches!(result, Err(BitFunError::OutcomeUnknown(_))) {
+            crate::plugin_host::fault_configured_plugin_host(
+                "plugin tool invocation outcome is unknown",
+            )
+            .await;
+        }
+        let result = result?;
         if result
             .get("attachments")
             .and_then(Value::as_array)
@@ -485,7 +536,7 @@ fn muxes() -> &'static RwLock<BTreeMap<String, Arc<PluginHostToolMux>>> {
 pub(crate) async fn register_workspace_tool(
     workspace_scope: &str,
     workspace_root: &std::path::Path,
-    client: PluginHostClient,
+    invoker: Arc<dyn PluginRuntimeInvocationPort>,
     instance_id: &str,
     generation_key: &str,
     revision: &str,
@@ -521,12 +572,10 @@ pub(crate) async fn register_workspace_tool(
     mux.set_route(
         workspace_scope.to_string(),
         PluginHostToolRoute {
-            client,
-            lease: PluginGenerationLease {
-                instance_id: instance_id.to_string(),
-                generation_key: generation_key.to_string(),
-                revision: revision.to_string(),
-            },
+            invoker,
+            instance_id: instance_id.to_string(),
+            generation_key: generation_key.to_string(),
+            revision: revision.to_string(),
             registration_id: registration_id.to_string(),
             description: description.to_string(),
             parameters,
@@ -606,13 +655,17 @@ mod tests {
         client: bitfun_opencode_plugin_host::PluginHostClient,
         instance_id: &str,
     ) -> PluginHostToolRoute {
+        let instance_id = instance_id.to_string();
         PluginHostToolRoute {
-            client,
-            lease: bitfun_opencode_plugin_host::PluginGenerationLease {
-                instance_id: instance_id.to_string(),
-                generation_key: "generation-test".to_string(),
-                revision: "revision-test".to_string(),
-            },
+            invoker: bitfun_opencode_plugin_host::invocation_port(
+                client,
+                instance_id.clone(),
+                "generation-test",
+                "revision-test",
+            ),
+            instance_id: instance_id.clone(),
+            generation_key: "generation-test".to_string(),
+            revision: "revision-test".to_string(),
             registration_id: format!("registration-{instance_id}"),
             description: format!("description-{instance_id}"),
             parameters: json!({"type": "object", "title": instance_id}),
@@ -629,6 +682,9 @@ mod tests {
             )),
             None,
             None,
+            None,
+            None,
+            None,
             &Default::default(),
             &Default::default(),
         )
@@ -640,7 +696,7 @@ mod tests {
         let registry = bitfun_agent_runtime::native_hooks::RuntimeHookRegistry::default();
         for scope in ["C:/workspace-a", "D:/workspace-b"] {
             registry.set_source_activation_for_workspace(
-                bitfun_agent_runtime::native_hooks::RuntimeHookSource::OpenCodePlugin,
+                bitfun_agent_runtime::native_hooks::RuntimeHookSource::Plugin,
                 Some(scope),
                 bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready,
             );
@@ -656,7 +712,6 @@ mod tests {
             mux.routes_for_scope("C:/workspace-a")
                 .pop()
                 .unwrap()
-                .lease
                 .instance_id,
             "instance-a"
         );
@@ -664,7 +719,6 @@ mod tests {
             mux.routes_for_scope("D:/workspace-b")
                 .pop()
                 .unwrap()
-                .lease
                 .instance_id,
             "instance-b"
         );
@@ -674,7 +728,6 @@ mod tests {
             mux.routes_for_scope("D:/workspace-b")
                 .pop()
                 .unwrap()
-                .lease
                 .instance_id,
             "instance-b"
         );
@@ -692,7 +745,7 @@ mod tests {
             route(client().await, "instance-gated"),
         );
         registry.set_source_activation_for_workspace(
-            RuntimeHookSource::OpenCodePlugin,
+            RuntimeHookSource::Plugin,
             Some("C:/workspace-gated"),
             RuntimeHookActivation::Unavailable,
         );
@@ -700,12 +753,12 @@ mod tests {
         assert!(mux.routes_for_scope("C:/workspace-gated").is_empty());
 
         registry.set_source_activation_for_workspace(
-            RuntimeHookSource::OpenCodePlugin,
+            RuntimeHookSource::Plugin,
             Some("C:/workspace-gated"),
             RuntimeHookActivation::Ready,
         );
         assert!(!mux.routes_for_scope("C:/workspace-gated").is_empty());
-        registry.clear_source_workspace(RuntimeHookSource::OpenCodePlugin, "C:/workspace-gated");
+        registry.clear_source_workspace(RuntimeHookSource::Plugin, "C:/workspace-gated");
     }
 
     #[tokio::test]
@@ -719,17 +772,17 @@ mod tests {
         let generation_b_agent = "external_subagent_runtime:opencode-plugin:generation-b-agent";
         let registry = bitfun_agent_runtime::native_hooks::RuntimeHookRegistry::default();
         registry.set_source_activation_for_workspace(
-            RuntimeHookSource::OpenCodePlugin,
+            RuntimeHookSource::Plugin,
             Some(&scope),
             RuntimeHookActivation::Ready,
         );
         let mux = PluginHostToolMux::new("generation-tool".to_string(), registry.clone());
         let client = client().await;
         let mut route_a = route(client.clone(), "instance-a");
-        route_a.lease.generation_key = "generation-a".to_string();
+        route_a.generation_key = "generation-a".to_string();
         route_a.allowed_runtime_agent_keys = BTreeSet::from([generation_a_agent.to_string()]);
         let mut route_b = route(client, "instance-b");
-        route_b.lease.generation_key = "generation-b".to_string();
+        route_b.generation_key = "generation-b".to_string();
         route_b.allowed_runtime_agent_keys = BTreeSet::from([generation_b_agent.to_string()]);
         mux.set_route(scope.clone(), route_a);
         mux.set_route(scope.clone(), route_b);
@@ -738,14 +791,12 @@ mod tests {
         assert_eq!(
             mux.route_for(Some(&context(&workspace_text, generation_a_agent)))
                 .expect("generation A route")
-                .lease
                 .instance_id,
             "instance-a"
         );
         assert_eq!(
             mux.route_for(Some(&context(&workspace_text, generation_b_agent)))
                 .expect("generation B route")
-                .lease
                 .instance_id,
             "instance-b"
         );
@@ -759,7 +810,7 @@ mod tests {
             .route_for(Some(&context(&workspace_text, "Agentic")))
             .is_none());
 
-        registry.clear_source_workspace(RuntimeHookSource::OpenCodePlugin, &scope);
+        registry.clear_source_workspace(RuntimeHookSource::Plugin, &scope);
     }
 
     #[tokio::test]

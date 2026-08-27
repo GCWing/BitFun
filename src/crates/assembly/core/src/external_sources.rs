@@ -17,20 +17,20 @@ pub use bitfun_product_domains::external_source_control::{
 use bitfun_product_domains::external_sources::native_prompt_command_group_fingerprint;
 pub use bitfun_product_domains::external_sources::{
     native_prompt_command_conflict_key, prompt_command_conflict_key, EcosystemId,
-    ExpandedPromptCommand, ExternalIntegrationCapabilityId, ExternalMcpActivationState,
-    ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
-    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity,
-    ExternalSourceHostCapabilities, ExternalSourceLifecycleState, ExternalSourceOperationError,
-    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
-    ExternalToolActivationState, ExternalToolApprovalRequest, ExternalToolCapability,
-    ExternalToolCatalogEntry, ExternalToolConflict, ExternalToolConflictCandidateKind,
-    ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
-    NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
-    NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandExecutionTarget,
-    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
-    PromptCommandShellReviewPlan, SourceKey,
+    ExpandedPromptCommand, ExternalExecutableActivationReview, ExternalExecutableSourceIdentity,
+    ExternalIntegrationCapabilityId, ExternalMcpActivationState, ExternalMcpApprovalRequest,
+    ExternalMcpCatalogEntry, ExternalMcpConflict, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot,
+    ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceHostCapabilities,
+    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalToolActivationState,
+    ExternalToolApprovalRequest, ExternalToolCapability, ExternalToolCatalogEntry,
+    ExternalToolConflict, ExternalToolConflictCandidateKind, ExternalToolRuntimeKind,
+    NativePromptCommandConflictProjection, NativePromptCommandConflictSnapshot,
+    NativePromptCommandDescriptor, NativePromptCommandReconfirmationProjection,
+    PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandDefinition,
+    PromptCommandExecutionTarget, PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
+    PromptCommandShellReviewMode, PromptCommandShellReviewPlan, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
@@ -144,6 +144,78 @@ const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
 /// ecosystems, but the cap keeps a corrupted or hostile file from growing
 /// without limit.
 const MAX_ACKNOWLEDGED_ECOSYSTEMS: usize = 256;
+const EXTERNAL_EXECUTABLE_ACTIVATION_SCHEMA_VERSION: u32 = 1;
+const MAX_APPROVED_EXECUTABLE_ACTIVATIONS: usize = 128;
+
+fn executable_activation_calculated_fingerprint(
+    review: &ExternalExecutableActivationReview,
+) -> String {
+    let mut canonical = review.clone();
+    canonical.approval_fingerprint.clear();
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(&canonical).unwrap_or_default(),
+    ))
+}
+
+fn executable_activation_scope_key(review: &ExternalExecutableActivationReview) -> String {
+    executable_activation_scope_key_parts(
+        review.schema_version,
+        &review.ecosystem_id,
+        &review.execution_domain_id,
+        &review.workspace_scope,
+    )
+}
+
+fn executable_activation_scope_key_parts(
+    schema_version: u32,
+    ecosystem_id: &str,
+    execution_domain_id: &str,
+    workspace_scope: &str,
+) -> String {
+    let digest = Sha256::digest(
+        format!(
+            "{}\u{1f}{}\u{1f}{}\u{1f}{}",
+            schema_version, ecosystem_id, execution_domain_id, workspace_scope
+        )
+        .as_bytes(),
+    );
+    format!("external_executable_activation:{}", hex::encode(digest))
+}
+
+fn validate_executable_activation_review(
+    review: &ExternalExecutableActivationReview,
+) -> Result<(), String> {
+    let valid_digest =
+        |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
+    if review.schema_version != EXTERNAL_EXECUTABLE_ACTIVATION_SCHEMA_VERSION
+        || review.ecosystem_id.is_empty()
+        || review.execution_domain_id.is_empty()
+        || review.workspace_scope.is_empty()
+        || review.phase.is_empty()
+        || review.source_identities.is_empty()
+        || !valid_digest(&review.prepared_digest)
+        || !valid_digest(&review.permission_summary_digest)
+        || !valid_digest(&review.approval_fingerprint)
+        || review.approval_fingerprint != executable_activation_calculated_fingerprint(review)
+        || review.source_identities.iter().any(|source| {
+            source.plugin_id.is_empty()
+                || source.source_kind.is_empty()
+                || source.canonical_source.is_empty()
+                || source.declaration_digest.len() != 64
+                || !valid_digest(&source.declaration_digest)
+                || source
+                    .content_digest
+                    .as_deref()
+                    .is_some_and(|digest| !valid_digest(digest))
+                || (!review.requires_install && source.content_digest.is_none())
+        })
+    {
+        return Err(invalid_operation_error(
+            "External executable activation review is invalid",
+        ));
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedPromptCommandShell {
@@ -938,6 +1010,10 @@ struct ExternalSourcesConfig {
     /// re-announce the same application.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     acknowledged_ecosystems: BTreeSet<String>,
+    /// Exact, workspace-scoped approvals for executable external source
+    /// envelopes. Legacy files omit this field and remain safely unapproved.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    approved_executable_activations: BTreeMap<String, ExternalExecutableActivationReview>,
     /// Preserves fields written by a newer preferences schema.
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, serde_json::Value>,
@@ -988,6 +1064,13 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
             .field("acknowledged_ecosystems", &self.acknowledged_ecosystems)
+            .field(
+                "approved_executable_activations",
+                &self
+                    .approved_executable_activations
+                    .keys()
+                    .collect::<Vec<_>>(),
+            )
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -4834,6 +4917,100 @@ async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String>
     ExternalSourcePreferenceStore::global()?.read().await
 }
 
+/// Returns whether the exact executable activation envelope has been
+/// explicitly approved. A missing, malformed, or stale envelope is never
+/// treated as approved.
+pub async fn is_executable_activation_approved(
+    review: &ExternalExecutableActivationReview,
+) -> Result<bool, String> {
+    validate_executable_activation_review(review)?;
+    let config = read_external_sources_config().await?;
+    Ok(config
+        .approved_executable_activations
+        .get(&executable_activation_scope_key(review))
+        .is_some_and(|approved| approved == review))
+}
+
+/// Persist or revoke one exact executable activation envelope. The caller
+/// must provide the current control-plane preference revision, so a grant
+/// cannot race a policy or other external-source decision update.
+pub async fn set_executable_activation_approval(
+    review: ExternalExecutableActivationReview,
+    approved: bool,
+    expected_preference_revision: u64,
+) -> Result<u64, String> {
+    validate_executable_activation_review(&review)?;
+    let scope_key = executable_activation_scope_key(&review);
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if approved {
+                if config.approved_executable_activations.len()
+                    >= MAX_APPROVED_EXECUTABLE_ACTIVATIONS
+                    && !config.approved_executable_activations.contains_key(&scope_key)
+                {
+                    return false;
+                }
+                config
+                    .approved_executable_activations
+                    .insert(scope_key, review);
+            } else {
+                config.approved_executable_activations.remove(&scope_key);
+            }
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config.preference_revision).ok_or_else(|| {
+                stale_operation_error(
+                    "Executable activation approvals changed or reached their storage limit; refresh before retrying",
+                )
+            })
+        })
+}
+
+/// Revoke an executable approval by its authority scope without requiring the
+/// executable source to remain readable or eligible. Revocation must continue
+/// to work in safe mode and after a plugin was removed or became invalid.
+pub async fn revoke_executable_activation_approval(
+    ecosystem_id: &str,
+    execution_domain_id: &str,
+    workspace_scope: &str,
+    expected_preference_revision: u64,
+) -> Result<u64, String> {
+    if ecosystem_id.is_empty() || execution_domain_id.is_empty() || workspace_scope.is_empty() {
+        return Err(invalid_operation_error(
+            "Executable activation revocation scope is invalid",
+        ));
+    }
+    let scope_key = executable_activation_scope_key_parts(
+        EXTERNAL_EXECUTABLE_ACTIVATION_SCHEMA_VERSION,
+        ecosystem_id,
+        execution_domain_id,
+        workspace_scope,
+    );
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            config.approved_executable_activations.remove(&scope_key);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied
+                .then_some(config.preference_revision)
+                .ok_or_else(|| {
+                    stale_operation_error(
+                        "Executable activation approvals changed; refresh before retrying",
+                    )
+                })
+        })
+}
+
 fn acknowledged_ecosystem_key(execution_domain_id: &str, ecosystem_id: &str) -> String {
     format!("{execution_domain_id}\u{1f}{ecosystem_id}")
 }
@@ -7402,6 +7579,48 @@ mod tests {
     };
     use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn executable_activation_review() -> ExternalExecutableActivationReview {
+        let mut review = ExternalExecutableActivationReview {
+            schema_version: EXTERNAL_EXECUTABLE_ACTIVATION_SCHEMA_VERSION,
+            ecosystem_id: "opencode".to_string(),
+            execution_domain_id: "local-user".to_string(),
+            workspace_scope: "c:/workspace".to_string(),
+            phase: "opencode-plugin-host".to_string(),
+            source_identities: vec![ExternalExecutableSourceIdentity {
+                plugin_id: "fixture".to_string(),
+                source_kind: "file".to_string(),
+                canonical_source: "c:/plugins/fixture.ts".to_string(),
+                declaration_digest: "4".repeat(64),
+                content_digest: Some("1".repeat(64)),
+            }],
+            prepared_digest: "2".repeat(64),
+            permission_summary_digest: "3".repeat(64),
+            policy_revision: 7,
+            requires_install: false,
+            approval_fingerprint: String::new(),
+        };
+        review.approval_fingerprint = executable_activation_calculated_fingerprint(&review);
+        review
+    }
+
+    #[test]
+    fn executable_activation_review_rejects_tampered_envelopes() {
+        let mut review = executable_activation_review();
+        validate_executable_activation_review(&review).unwrap();
+        review.workspace_scope.push_str("/other");
+        assert!(validate_executable_activation_review(&review).is_err());
+    }
+
+    #[test]
+    fn legacy_external_source_preferences_default_to_no_executable_approvals() {
+        let config: ExternalSourcesConfig = serde_json::from_value(serde_json::json!({
+            "preferenceRevision": 4
+        }))
+        .unwrap();
+        assert!(config.approved_executable_activations.is_empty());
+        assert_eq!(config.preference_revision, 4);
+    }
 
     #[test]
     fn runtime_reason_projection_preserves_known_codes_and_hides_raw_errors() {

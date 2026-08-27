@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use std::collections::BTreeSet;
 use std::io::IsTerminal;
@@ -13,6 +13,10 @@ use bitfun_core::external_sources::{
     ExternalIntegrationPolicyStatus, ExternalSourceCatalogSnapshot,
     ExternalSourceOperationErrorCode, EXTERNAL_CAPABILITY_COMMAND, EXTERNAL_CAPABILITY_MCP,
     EXTERNAL_CAPABILITY_SUBAGENT, EXTERNAL_CAPABILITY_TOOL,
+};
+use bitfun_core::plugin_host::{
+    approve_configured_plugin_activation, review_configured_plugin_activation,
+    revoke_configured_plugin_activation, PluginHostLaunchPolicy,
 };
 
 use crate::{
@@ -782,6 +786,50 @@ async fn handle_external_config_action(action: ExternalConfigAction) -> Result<(
                 .await
                 .map_err(external_cli_operation_error)?;
             print_external_policy_status(&snapshot);
+        }
+        ExternalConfigAction::ReviewActivation => {
+            let workspace = std::env::current_dir().context("Failed to resolve current workspace")?;
+            let review = review_configured_plugin_activation(
+                PluginHostLaunchPolicy::Enabled,
+                workspace,
+            )
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?;
+            let Some(review) = review else {
+                println!("No configured OpenCode plugins require activation.");
+                return Ok(());
+            };
+            println!("OpenCode plugin activation review");
+            println!("Fingerprint: {}", review.approval_fingerprint);
+            println!("Execution domain: {}", review.execution_domain_id);
+            println!("Workspace: {}", review.workspace_scope);
+            println!("Prepared digest: {}", review.prepared_digest);
+            println!("Install required: {}", review.requires_install);
+            println!(
+                "Approve with: bitfun config external approve-activation {}",
+                review.approval_fingerprint
+            );
+        }
+        ExternalConfigAction::ApproveActivation { fingerprint } => {
+            let workspace = std::env::current_dir().context("Failed to resolve current workspace")?;
+            let review = review_configured_plugin_activation(
+                PluginHostLaunchPolicy::Enabled,
+                workspace,
+            )
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?
+            .ok_or_else(|| anyhow!("No configured OpenCode plugins require activation"))?;
+            approve_configured_plugin_activation(review, &fingerprint)
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
+            println!("Configured OpenCode plugin activation approved for this exact review envelope.");
+        }
+        ExternalConfigAction::RevokeActivation => {
+            let workspace = std::env::current_dir().context("Failed to resolve current workspace")?;
+            revoke_configured_plugin_activation(workspace)
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
+            println!("Configured OpenCode plugin activation revoked.");
         }
         ExternalConfigAction::SetEnabled { enabled, scope } => {
             update_external_policy(

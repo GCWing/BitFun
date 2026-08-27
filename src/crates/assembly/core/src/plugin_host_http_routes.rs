@@ -562,6 +562,7 @@ mod tests {
             project_id: project_id.to_string(),
             created_at_ms: 1,
             instance_id: instance_id.to_string(),
+            host_generation: 1,
             generation_key: "generation-test".to_string(),
             revision: "revision-test".to_string(),
             open_result: json!({}),

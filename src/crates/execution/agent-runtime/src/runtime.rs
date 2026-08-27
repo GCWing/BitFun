@@ -2730,6 +2730,7 @@ mod tests {
                 AgentSessionCreateRequest {
                     session_name: "Fixed session".to_string(),
                     agent_type: "agentic".to_string(),
+                    agent_route_key: None,
                     workspace_path: Some("/workspace/project".to_string()),
                     project_workspace_path: None,
                     execution_target: None,
@@ -2761,6 +2762,7 @@ mod tests {
                 AgentSessionCreateRequest {
                     session_name: "Fixed session".to_string(),
                     agent_type: "agentic".to_string(),
+                    agent_route_key: None,
                     workspace_path: Some("/workspace/project".to_string()),
                     project_workspace_path: None,
                     execution_target: None,
@@ -3364,6 +3366,7 @@ mod tests {
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: "session_1".to_string(),
                 mode_id: "plan".to_string(),
+                agent_route_key: None,
             })
             .await
             .expect("update session mode");
@@ -3373,6 +3376,7 @@ mod tests {
             &[AgentSessionModeUpdateRequest {
                 session_id: "session_1".to_string(),
                 mode_id: "plan".to_string(),
+                agent_route_key: None,
             }]
         );
     }
@@ -3389,6 +3393,7 @@ mod tests {
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: "session_1".to_string(),
                 mode_id: "plan".to_string(),
+                agent_route_key: None,
             })
             .await
             .unwrap_err();

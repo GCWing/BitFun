@@ -416,6 +416,7 @@ impl AgentHookSettings {
     /// Converts parsed command handlers into the executable registrations used
     /// by the shared runtime registry. Parsing remains independent from
     /// registry publication so callers can inspect issues before publishing.
+    #[cfg(feature = "native-hook-runtime")]
     pub fn registrations(&self) -> Vec<crate::native_hooks::RuntimeHookRegistration> {
         let mut registrations = Vec::new();
         for (event, rules) in &self.rules {

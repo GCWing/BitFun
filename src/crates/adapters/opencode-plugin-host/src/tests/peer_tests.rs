@@ -119,7 +119,11 @@ async fn client_opens_a_typed_plugin_instance() {
             &json!({
                 "jsonrpc": "2.0",
                 "id": request["id"],
-                "result": {"instanceID": "bitfun:test-instance"}
+                "result": {
+                    "instanceID": "bitfun:test-instance",
+                    "generationKey": "generation-fixture",
+                    "revision": "revision-fixture"
+                }
             }),
             DEFAULT_MAX_FRAME_BYTES,
         )
@@ -131,6 +135,8 @@ async fn client_opens_a_typed_plugin_instance() {
         .open_instance(
             PluginInstanceOpenRequest {
                 instance_id: "bitfun:test-instance".to_string(),
+                generation_key: "generation-fixture".to_string(),
+                revision: "revision-fixture".to_string(),
                 project: json!({"id": "project", "worktree": "C:/workspace"}),
                 config: serde_json::Map::new(),
                 directory: "C:/workspace".to_string(),
@@ -141,6 +147,8 @@ async fn client_opens_a_typed_plugin_instance() {
                     base_directory: None,
                 }],
                 configuration_fingerprint: Some("fixture-open".to_string()),
+                expected_content_digests: None,
+                expected_review_digest: None,
             },
             Duration::from_secs(1),
         )
@@ -171,7 +179,13 @@ async fn client_prepares_typed_plugins() {
             &json!({
                 "jsonrpc": "2.0",
                 "id": request["id"],
-                "result": {"prepared": [], "failed": [], "diagnostics": []}
+                "result": {
+                    "reviewDigest": "0".repeat(64),
+                    "reviewed": [],
+                    "prepared": [],
+                    "failed": [],
+                    "diagnostics": []
+                }
             }),
             DEFAULT_MAX_FRAME_BYTES,
         )
@@ -189,6 +203,7 @@ async fn client_prepares_typed_plugins() {
                 }],
                 configuration_fingerprint: Some("fixture-prewarm".to_string()),
                 default_base_directory: None,
+                allow_install: Some(false),
             },
             Duration::from_secs(1),
         )

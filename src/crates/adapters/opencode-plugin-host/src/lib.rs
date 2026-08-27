@@ -25,7 +25,9 @@ pub use http::{
     HostStreamReadError, HttpRouteError, HttpRouteMatch, OpenCodeClientRoute, StreamDescriptor,
     MAX_HTTP_BODY_BYTES, MAX_STREAM_CHUNK_BYTES,
 };
-pub use peer::{JsonRpcPeer, PluginHostClient, RpcHandlerError};
+pub use peer::{
+    invocation_port, JsonRpcPeer, OpenCodePluginRuntimeInvoker, PluginHostClient, RpcHandlerError,
+};
 pub use stream_registry::{
     PluginHostStreamRegistry, StreamCancelParams, StreamCancelResult, StreamReadParams,
     StreamReadResult, StreamRegistryError,
@@ -35,6 +37,8 @@ const PROTOCOL_VERSION: u64 = 1;
 const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
+const STARTUP_TERMINATE_GRACE: Duration = Duration::from_millis(500);
+const MIN_NEGOTIATED_FRAME_BYTES: usize = 1024;
 pub const CONFIG_CONTRIBUTORS_V1: &str = "config-contributors-v1";
 pub const CONFIG_CONTRIBUTIONS_V2: &str = "config-contributions-v2";
 pub const GENERATION_FENCING_V1: &str = "generation-fencing-v1";
@@ -111,6 +115,8 @@ pub struct PluginPrepareRequest {
     pub configuration_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_base_directory: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_install: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,6 +133,10 @@ pub struct PluginInstanceOpenRequest {
     pub plugins: Vec<PluginDeclaration>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configuration_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_content_digests: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_review_digest: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -159,6 +169,15 @@ pub enum PluginHostError {
     ShuttingDown,
     #[error("plugin host JSON-RPC request timed out: method={method}, request_id={request_id}")]
     RequestTimeout { method: String, request_id: String },
+    #[error("plugin tool execution stopped after its deadline: execution_id={execution_id}")]
+    ToolStoppedAfterTimeout { execution_id: String },
+    #[error(
+        "plugin tool execution outcome is unknown: execution_id={execution_id}, reason={reason}"
+    )]
+    ToolOutcomeUnknown {
+        execution_id: String,
+        reason: String,
+    },
     #[error("plugin host JSON-RPC returned an error: code={code}, message={message}")]
     Rpc {
         code: i64,
@@ -216,6 +235,13 @@ pub struct PluginHostShutdownReport {
 
 impl PluginHost {
     pub async fn start(config: PluginHostConfig) -> Result<Self, PluginHostError> {
+        Self::start_with_timeout(config, STARTUP_TIMEOUT).await
+    }
+
+    pub async fn start_with_timeout(
+        config: PluginHostConfig,
+        startup_timeout: Duration,
+    ) -> Result<Self, PluginHostError> {
         validate_config(&config)?;
         tokio::fs::create_dir_all(&config.cache_directory)
             .await
@@ -247,11 +273,23 @@ impl PluginHost {
             .await
             .map_err(PluginHostError::PrepareLog)?;
 
-        let (mut stream, _) = tokio::time::timeout(STARTUP_TIMEOUT, listener.accept())
-            .await
-            .map_err(|_| PluginHostError::StartupTimeout)?
-            .map_err(PluginHostError::Io)?;
-        let negotiation = complete_handshake(&mut stream, &token, &config.cache_directory).await?;
+        let connection = accept_authenticated_connection(
+            &listener,
+            &token,
+            &config.cache_directory,
+            startup_timeout,
+        )
+        .await;
+        let (stream, negotiation) = match connection {
+            Ok(connection) => connection,
+            Err(error) => {
+                if let Err(cleanup_error) = child.terminate(STARTUP_TERMINATE_GRACE).await {
+                    log::error!("Plugin host startup cleanup failed: {cleanup_error}");
+                }
+                let _ = host_log.flush(Duration::from_secs(1)).await;
+                return Err(error);
+            }
+        };
         let generation = NEXT_CONNECTION_GENERATION.fetch_add(1, Ordering::Relaxed);
         let peer = JsonRpcPeer::start_with_capabilities(
             stream,
@@ -425,6 +463,21 @@ impl PluginHost {
     }
 }
 
+async fn accept_authenticated_connection(
+    listener: &TcpListener,
+    token: &str,
+    cache_directory: &Path,
+    startup_timeout: Duration,
+) -> Result<(TcpStream, HandshakeNegotiation), PluginHostError> {
+    tokio::time::timeout(startup_timeout, async {
+        let (mut stream, _) = listener.accept().await.map_err(PluginHostError::Io)?;
+        let negotiation = complete_handshake(&mut stream, token, cache_directory).await?;
+        Ok((stream, negotiation))
+    })
+    .await
+    .map_err(|_| PluginHostError::StartupTimeout)?
+}
+
 fn shutdown_report(
     generation: u64,
     disposition: PluginHostShutdownDisposition,
@@ -507,7 +560,7 @@ async fn complete_handshake(
     }
     let max_frame_bytes = requested_frame_bytes
         .unwrap_or(DEFAULT_MAX_FRAME_BYTES)
-        .min(DEFAULT_MAX_FRAME_BYTES)
+        .max(MIN_NEGOTIATED_FRAME_BYTES)
         .min(MAX_FRAME_BYTES);
     let negotiated = [
         CONFIG_CONTRIBUTORS_V1,

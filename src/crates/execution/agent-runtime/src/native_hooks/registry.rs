@@ -351,13 +351,13 @@ impl RuntimeHookRegistry {
         let plugin_activation = state
             .source_activation
             .get(&(
-                RuntimeHookSource::OpenCodePlugin,
+                RuntimeHookSource::Plugin,
                 workspace_scope.map(str::to_string),
             ))
             .or_else(|| {
                 state
                     .source_activation
-                    .get(&(RuntimeHookSource::OpenCodePlugin, None))
+                    .get(&(RuntimeHookSource::Plugin, None))
             })
             .copied()
             .unwrap_or(RuntimeHookActivation::Unavailable);
@@ -372,7 +372,7 @@ impl RuntimeHookRegistry {
                         (None, _) => true,
                         (Some(_), None) => false,
                     };
-                    let plugin_generation_matches = if !entry.plan.source().is_open_code_plugin() {
+                    let plugin_generation_matches = if !entry.plan.source().is_plugin() {
                         true
                     } else if plugin_activation != RuntimeHookActivation::Ready {
                         false
@@ -432,7 +432,7 @@ impl RuntimeHookRegistry {
             .or_else(|| state.source_activation.get(&(source, None)))
             .copied()
             .unwrap_or_else(|| {
-                if source.is_open_code_plugin() {
+                if source.is_plugin() {
                     RuntimeHookActivation::Unavailable
                 } else {
                     RuntimeHookActivation::Ready
@@ -481,10 +481,7 @@ impl RuntimeHookRegistry {
             state.active_plugin_generations.remove(workspace_scope);
         }
         state.source_activation.insert(
-            (
-                RuntimeHookSource::OpenCodePlugin,
-                Some(workspace_scope.to_string()),
-            ),
+            (RuntimeHookSource::Plugin, Some(workspace_scope.to_string())),
             RuntimeHookActivation::Ready,
         );
     }
@@ -493,10 +490,7 @@ impl RuntimeHookRegistry {
         let mut state = self.inner.write().expect("hook registry lock poisoned");
         state.active_plugin_generations.remove(workspace_scope);
         state.source_activation.insert(
-            (
-                RuntimeHookSource::OpenCodePlugin,
-                Some(workspace_scope.to_string()),
-            ),
+            (RuntimeHookSource::Plugin, Some(workspace_scope.to_string())),
             RuntimeHookActivation::Unavailable,
         );
     }
@@ -519,7 +513,7 @@ impl RuntimeHookRegistry {
         state
             .source_activation
             .remove(&(source, workspace_scope.map(str::to_string)));
-        if source == RuntimeHookSource::OpenCodePlugin {
+        if source == RuntimeHookSource::Plugin {
             if let Some(workspace_scope) = workspace_scope {
                 state.active_plugin_generations.remove(workspace_scope);
             }
@@ -564,7 +558,7 @@ fn plugin_batch_identity(
 ) -> Result<(String, String, String, String), RuntimeHookRegistryError> {
     let mut identity = None::<(String, String, String, String)>;
     for entry in entries {
-        if entry.plan.source() != RuntimeHookSource::OpenCodePlugin {
+        if entry.plan.source() != RuntimeHookSource::Plugin {
             return Err(RuntimeHookRegistryError::InvalidPluginBatch);
         }
         let HookHandler::Plugin {

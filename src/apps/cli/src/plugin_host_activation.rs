@@ -36,17 +36,11 @@ pub(crate) async fn ensure_configured_plugin_execution_supported() -> BitFunResu
     let config_service = bitfun_core::service::config::get_global_config_service().await?;
     let config: bitfun_core::service::config::GlobalConfig =
         config_service.get_config(None).await?;
-    let has_configured_plugins = config.has_configured_plugins();
-    if has_configured_plugins
-        && crate::PLUGIN_HOST_LAUNCH_POLICY
-            == bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled
-    {
-        return Err(bitfun_core::BitFunError::NotImplemented(
-            "Configured Plugin Host execution is not enabled; plugin definitions were not imported or executed"
-            .to_string(),
-        ));
-    }
-    Ok(has_configured_plugins)
+    // A plugin declaration is itself the user's explicit opt-in.  External
+    // integration policy and activation approval are no longer prerequisites
+    // for starting the configured Plugin Host; they remain independent
+    // controls for other external-source features.
+    Ok(config.has_configured_plugins())
 }
 
 pub(crate) async fn ensure_plugin_workspace_ready(
@@ -111,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_enables_configured_plugin_execution() {
+    fn cli_enables_configured_plugin_execution_after_core_authorization() {
         assert_eq!(
             crate::PLUGIN_HOST_LAUNCH_POLICY,
             bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled

@@ -45,6 +45,194 @@ pub struct PluginHostClient {
     state: Arc<PeerState>,
 }
 
+/// Adapter-owned live binding. The OpenCode generation lease remains private
+/// to this crate while capability owners use the neutral invocation port.
+#[derive(Clone)]
+pub struct OpenCodePluginRuntimeInvoker {
+    client: PluginHostClient,
+    lease: PluginGenerationLease,
+}
+
+impl OpenCodePluginRuntimeInvoker {
+    pub fn new(client: PluginHostClient, lease: PluginGenerationLease) -> Self {
+        Self { client, lease }
+    }
+}
+
+pub fn invocation_port(
+    client: PluginHostClient,
+    instance_id: impl Into<String>,
+    generation_key: impl Into<String>,
+    revision: impl Into<String>,
+) -> Arc<dyn bitfun_runtime_ports::PluginRuntimeInvocationPort> {
+    Arc::new(OpenCodePluginRuntimeInvoker::new(
+        client,
+        PluginGenerationLease {
+            instance_id: instance_id.into(),
+            generation_key: generation_key.into(),
+            revision: revision.into(),
+        },
+    ))
+}
+
+fn map_invocation_error(
+    error: PluginHostError,
+    side_effect: bool,
+) -> bitfun_runtime_ports::PortError {
+    use bitfun_runtime_ports::{PortError, PortErrorKind};
+    let kind = match error {
+        PluginHostError::ToolStoppedAfterTimeout { .. } => PortErrorKind::Timeout,
+        PluginHostError::ToolOutcomeUnknown { .. } => PortErrorKind::OutcomeUnknown,
+        PluginHostError::RequestTimeout { .. } if side_effect => PortErrorKind::OutcomeUnknown,
+        PluginHostError::RequestTimeout { .. } => PortErrorKind::Timeout,
+        PluginHostError::ShuttingDown => PortErrorKind::CleanupRequired,
+        PluginHostError::ConnectionClosed(_) => PortErrorKind::OutcomeUnknown,
+        PluginHostError::Rpc { code, .. } if code == -32003 => PortErrorKind::PermissionDenied,
+        PluginHostError::Rpc { .. } => PortErrorKind::Backend,
+        _ => PortErrorKind::Backend,
+    };
+    PortError::new(kind, error.to_string())
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::PluginRuntimeInvocationPort for OpenCodePluginRuntimeInvoker {
+    async fn invoke_tool(
+        &self,
+        request: bitfun_runtime_ports::PluginToolInvocationRequest,
+        deadline: Duration,
+    ) -> bitfun_runtime_ports::PortResult<Value> {
+        if request.instance_id != self.lease.instance_id
+            || request.generation_key != self.lease.generation_key
+            || request.revision != self.lease.revision
+        {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "plugin tool invocation generation lease does not match the adapter binding",
+            ));
+        }
+        let result = self
+            .client
+            .execute_tool(
+                &self.lease,
+                &request.execution_id,
+                &request.registration_id,
+                request.args,
+                request.context,
+                deadline,
+            )
+            .await;
+        match result {
+            Ok(result) => Ok(result),
+            Err(PluginHostError::RequestTimeout { .. }) => {
+                const CANCEL_CONFIRM_TIMEOUT: Duration = Duration::from_secs(5);
+                match self
+                    .client
+                    .cancel_tool(
+                        &self.lease,
+                        &request.execution_id,
+                        Some("deadline_exceeded"),
+                        CANCEL_CONFIRM_TIMEOUT,
+                    )
+                    .await
+                {
+                    Ok(result)
+                        if result.get("cancelled").and_then(Value::as_bool) == Some(true) =>
+                    {
+                        Err(map_invocation_error(
+                            PluginHostError::ToolStoppedAfterTimeout {
+                                execution_id: request.execution_id,
+                            },
+                            true,
+                        ))
+                    }
+                    Ok(_) => {
+                        let reason =
+                            "plugin host did not confirm cancellation after the tool deadline";
+                        self.client.close(reason).await;
+                        Err(map_invocation_error(
+                            PluginHostError::ToolOutcomeUnknown {
+                                execution_id: request.execution_id,
+                                reason: reason.to_string(),
+                            },
+                            true,
+                        ))
+                    }
+                    Err(cancel_error) => {
+                        let reason = format!(
+                            "plugin host cancellation failed after the tool deadline: {cancel_error}"
+                        );
+                        self.client.close(reason.clone()).await;
+                        Err(map_invocation_error(
+                            PluginHostError::ToolOutcomeUnknown {
+                                execution_id: request.execution_id,
+                                reason,
+                            },
+                            true,
+                        ))
+                    }
+                }
+            }
+            Err(error) => Err(map_invocation_error(error, true)),
+        }
+    }
+
+    async fn invoke_hook(
+        &self,
+        request: bitfun_runtime_ports::PluginHookInvocationRequest,
+        deadline: Duration,
+    ) -> bitfun_runtime_ports::PortResult<Value> {
+        if request.instance_id != self.lease.instance_id
+            || request.generation_key != self.lease.generation_key
+            || request.revision != self.lease.revision
+        {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "plugin hook invocation generation lease does not match the adapter binding",
+            ));
+        }
+        self.client
+            .call_hook(
+                &self.lease,
+                &request.hook_name,
+                request.input,
+                request.output,
+                deadline,
+            )
+            .await
+            .map_err(|error| map_invocation_error(error, false))
+    }
+
+    async fn cancel_tool(
+        &self,
+        request: bitfun_runtime_ports::PluginToolCancellationRequest,
+        deadline: Duration,
+    ) -> bitfun_runtime_ports::PortResult<bool> {
+        if request.instance_id != self.lease.instance_id
+            || request.generation_key != self.lease.generation_key
+            || request.revision != self.lease.revision
+        {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "plugin cancellation generation lease does not match the adapter binding",
+            ));
+        }
+        let result = self
+            .client
+            .cancel_tool(
+                &self.lease,
+                &request.execution_id,
+                request.reason.as_deref(),
+                deadline,
+            )
+            .await
+            .map_err(|error| map_invocation_error(error, true))?;
+        Ok(result
+            .get("cancelled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
+    }
+}
+
 impl PluginHostClient {
     pub fn generation(&self) -> u64 {
         self.state.generation

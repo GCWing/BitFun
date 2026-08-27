@@ -20,10 +20,12 @@ default = []
 native-hook-settings = ["dep:regex", "dep:serde_json"]
 native-hook-runtime = [
     "native-hook-settings",
+    "dep:async-trait",
     "dep:log",
     "dep:serde",
     "dep:serde_json",
     "dep:tokio",
+    "dep:thiserror",
     "tokio/io-util",
     "tokio/macros",
     "tokio/process",

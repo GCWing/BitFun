@@ -29,9 +29,19 @@ export function installNpmPlugin(input: Parameters<NpmInstaller>[0]): Promise<In
   )
   const pending = installs.get(directory)
   if (pending) return pending
+  if (input.allowInstall === false) return reviewCachedNpmPlugin(input, directory)
   const operation = installNpmPluginAt(input, directory).finally(() => installs.delete(directory))
   installs.set(directory, operation)
   return operation
+}
+
+async function reviewCachedNpmPlugin(input: Parameters<NpmInstaller>[0], directory: string) {
+  const existing = await installedPackage(directory, input.packageName)
+  if (existing) {
+    logEvent("plugin.prepare.cache_hit", { plugin: input.spec, target: existing }, "debug")
+    return { target: existing, cache: "hit" as const }
+  }
+  throw new Error(`Plugin ${input.spec} is not cached; activation review requires installation approval`)
 }
 
 async function installNpmPluginAt(input: Parameters<NpmInstaller>[0], directory: string) {

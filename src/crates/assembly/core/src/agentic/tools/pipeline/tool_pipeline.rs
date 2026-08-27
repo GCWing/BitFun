@@ -402,6 +402,9 @@ const ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE: &str =
     "Tool execution cancelled because a pending round injection requested running-tool preemption for this turn.";
 
 fn should_retry_tool_error(error: &BitFunError) -> bool {
+    if matches!(error, BitFunError::OutcomeUnknown(_)) {
+        return false;
+    }
     matches!(
         error,
         BitFunError::Timeout(_)
