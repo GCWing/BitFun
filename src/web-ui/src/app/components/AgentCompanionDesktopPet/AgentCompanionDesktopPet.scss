@@ -95,7 +95,9 @@
     /* Intentionally no backdrop-filter: adding a blurred layer on right-click
        re-composites the other blurred surfaces and flashes the whole window.
        All remaining chrome still comes from FloatingSurface. */
-    color: var(--bitfun-agent-companion-bubble-fg);
+    /* The floating surface follows the active appearance, so its foreground
+       must do the same instead of inheriting the always-dark bubble copy. */
+    color: var(--bf-appearance-token-color-text-primary);
     pointer-events: auto;
 
     /* Context menus are placed at the cursor. */
@@ -119,7 +121,7 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: inherit;
+    color: var(--bf-appearance-token-color-text-secondary);
     font: inherit;
     font-size: 11px;
     line-height: 1.3;
@@ -128,9 +130,17 @@
     white-space: normal;
     overflow-wrap: anywhere;
     cursor: pointer;
+    transition:
+      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
     &:hover {
-      background: var(--bf-appearance-token-color-overlay-slate-08);
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &:active {
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     &:focus-visible {
