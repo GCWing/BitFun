@@ -169,6 +169,16 @@ pub struct SessionConfig {
     pub enable_tools: bool,
     pub safe_mode: bool,
     pub max_turns: usize,
+    /// Read-only migration marker for sessions written by the retired Harness
+    /// Profile implementation. New session data never serializes this field.
+    #[serde(
+        default,
+        rename = "execution_profile",
+        alias = "executionProfile",
+        deserialize_with = "deserialize_legacy_minimal_agent",
+        skip_serializing
+    )]
+    pub legacy_minimal_agent: bool,
     pub enable_context_compression: bool,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
     /// without changing the desktop's foreground workspace.
@@ -235,6 +245,18 @@ pub struct SessionConfig {
     pub agent_route_owner: SessionAgentRouteOwner,
 }
 
+fn deserialize_legacy_minimal_agent<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .get("harnessProfileId")
+        .or_else(|| value.get("harness_profile_id"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| id.eq_ignore_ascii_case("minimal")))
+}
+
 fn is_reusable_continuation_policy(policy: &SessionContinuationPolicy) -> bool {
     *policy == SessionContinuationPolicy::Reusable
 }
@@ -255,6 +277,7 @@ impl Default for SessionConfig {
             enable_tools: true,
             safe_mode: true,
             max_turns: 200,
+            legacy_minimal_agent: false,
             enable_context_compression: true,
             workspace_path: None,
             project_workspace_path: None,
@@ -629,5 +652,21 @@ mod tests {
                 "runtime_state": "Idle"
             })
         );
+    }
+
+    #[test]
+    fn legacy_minimal_profile_is_read_once_and_never_written_again() {
+        let mut serialized = serde_json::to_value(SessionConfig::default()).expect("serialize");
+        serialized["execution_profile"] = serde_json::json!({
+            "harnessProfileId": "minimal",
+            "schemaVersion": 1,
+            "selectedBy": "user"
+        });
+        let restored: SessionConfig =
+            serde_json::from_value(serialized).expect("legacy config should deserialize");
+        assert!(restored.legacy_minimal_agent);
+
+        let rewritten = serde_json::to_value(restored).expect("serialize migrated config");
+        assert!(rewritten.get("execution_profile").is_none());
     }
 }

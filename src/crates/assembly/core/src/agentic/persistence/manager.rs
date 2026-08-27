@@ -2325,10 +2325,14 @@ impl PersistenceManager {
         stored_state: Option<StoredSessionStateFile>,
         turns: &[DialogTurnData],
     ) -> Session {
+        let legacy_minimal = stored_state
+            .as_ref()
+            .is_some_and(|value| value.config.legacy_minimal_agent);
         let mut config = stored_state
             .as_ref()
             .map(|value| value.config.clone())
             .unwrap_or_default();
+        config.legacy_minimal_agent = false;
         if config.workspace_path.is_none() {
             config.workspace_path = metadata.workspace_path.clone();
         }
@@ -2357,7 +2361,11 @@ impl PersistenceManager {
         Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
-            agent_type: metadata.agent_type.clone(),
+            agent_type: if legacy_minimal {
+                "minimal".to_string()
+            } else {
+                metadata.agent_type.clone()
+            },
             last_user_dialog_agent_type: stored_state
                 .as_ref()
                 .and_then(|value| value.last_user_dialog_agent_type.clone())
@@ -2679,21 +2687,26 @@ impl PersistenceManager {
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
         for metadata in metadata_list {
-            let (state, reasoning_preset) = self
+            let (state, reasoning_preset, legacy_minimal) = self
                 .load_stored_session_state(workspace_path, &metadata.session_id)
                 .await?
                 .map(|value| {
                     (
                         sanitize_persisted_session_state(&value.runtime_state),
                         value.config.reasoning_preset,
+                        value.config.legacy_minimal_agent,
                     )
                 })
-                .unwrap_or((SessionState::Idle, None));
+                .unwrap_or((SessionState::Idle, None, false));
 
             summaries.push(SessionSummary {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
-                agent_type: metadata.agent_type,
+                agent_type: if legacy_minimal {
+                    "minimal".to_string()
+                } else {
+                    metadata.agent_type
+                },
                 model_id: (!metadata.model_name.trim().is_empty()).then_some(metadata.model_name),
                 reasoning_preset,
                 last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
@@ -4282,9 +4295,12 @@ mod tests {
         build_turn_catalog, context_snapshot_payload_stats, current_unix_secs,
         is_well_formed_turn_catalog, placeholder_turn_catalog_entry, truncate_turn_catalog_preview,
         turn_catalog_entry, PendingSessionDirectory, PersistenceManager, StoredDialogTurnFile,
-        SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT, SESSION_TURN_CATALOG_PREVIEW_CHAR_LIMIT,
+        StoredSessionStateFile, SESSION_REFERENCE_TRANSCRIPT_CHAR_LIMIT,
+        SESSION_TURN_CATALOG_PREVIEW_CHAR_LIMIT,
     };
-    use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
+    use crate::agentic::core::{
+        CompressionState, Message, Session, SessionConfig, SessionKind, SessionState, ToolResult,
+    };
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
     use crate::agentic::session::revert::{
         SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
@@ -4334,6 +4350,37 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn legacy_minimal_profile_restores_as_minimal_mode_and_clears_the_marker() {
+        let metadata = SessionMetadata::new(
+            "legacy-minimal".to_string(),
+            "Legacy Minimal".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        let stored_state = StoredSessionStateFile {
+            schema_version: 1,
+            config: SessionConfig {
+                legacy_minimal_agent: true,
+                ..SessionConfig::default()
+            },
+            snapshot_session_id: None,
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            compression_state: CompressionState::default(),
+            runtime_state: SessionState::Idle,
+        };
+
+        let restored = PersistenceManager::build_session_from_persisted_parts(
+            metadata,
+            Some(stored_state),
+            &[],
+        );
+
+        assert_eq!(restored.agent_type, "minimal");
+        assert!(!restored.config.legacy_minimal_agent);
     }
 
     #[tokio::test]
