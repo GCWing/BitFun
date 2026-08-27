@@ -93,6 +93,12 @@ function sessionOn(deviceId: string, id: string, title: string): RemoteSession {
   return item;
 }
 
+function sessionIn(deviceId: string, path: string, id: string, title: string): RemoteSession {
+  const item = sessionOn(deviceId, id, title);
+  item.workspacePath = path;
+  return item;
+}
+
 export default function deviceDirectoryUnitTest() {
   describe('ConcurrentWorkspaceListing', () => {
     it('keeps merge order independent of batch width', 0, async () => {
@@ -265,6 +271,14 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
+      state.setWorkspaceExpanded('desk-other', '/workspace/project/', true);
+      state.setWorkspaceStatus('desk-other', '/workspace/project', 'loading');
+      viewModel.syncDevices([
+        { deviceId: 'desk-active', deviceName: 'Active', online: true },
+        { deviceId: 'desk-other', deviceName: 'Other', online: true }
+      ]);
+      expect(state.workspaceExpanded('desk-other', '/workspace/project')).assertTrue();
+      expect(state.workspaceStatus('desk-other', '/workspace/project/')).assertEqual('loading');
       expect(state.selectedDeviceId).assertEqual('desk-active');
       await viewModel.selectDevice('desk-other');
       expect(state.selectedDeviceId).assertEqual('desk-other');
@@ -317,13 +331,18 @@ export default function deviceDirectoryUnitTest() {
       await pending;
       expect(state.find('desk-other')?.status).assertEqual('ready');
       expect(state.find('desk-other')?.workspaces.length).assertEqual(1);
-      expect(state.find('desk-other')?.sessions.length).assertEqual(1);
+      expect(state.find('desk-other')?.sessions.length).assertEqual(0);
+      expect(source.listedWorkspacePaths.length).assertEqual(0);
     });
 
-    it('shows workspaces while session listing is still in flight', 0, async () => {
+    it('loads only the workspace whose disclosure was opened', 0, async () => {
       const source = new GatedAccountDeviceDirectory();
-      source.workspacesByDevice.set('desk-other', [workspace('/other', 'Other')]);
+      source.workspacesByDevice.set('desk-other', [
+        workspace('/other', 'Other'),
+        workspace('/sibling', 'Sibling')
+      ]);
       source.sessionsByDevicePath.set('desk-other:/other', [sessionOn('desk-other', 's1', 'S1')]);
+      source.sessionsByDevicePath.set('desk-other:/sibling', [sessionOn('desk-other', 's2', 'S2')]);
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {
         credentials: () => undefined,
@@ -334,16 +353,22 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-active', deviceName: 'Active', online: true },
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
-      const pending = viewModel.selectDevice('desk-other');
+      const catalogPending = viewModel.selectDevice('desk-other');
       source.releaseWorkspaces();
-      await source.workspacesListed;
-      expect(state.find('desk-other')?.status).assertEqual('loading');
-      expect(state.find('desk-other')?.workspaces.length).assertEqual(1);
-      expect(state.find('desk-other')?.sessions.length).assertEqual(0);
-      source.releaseSessions();
-      await pending;
+      await catalogPending;
       expect(state.find('desk-other')?.status).assertEqual('ready');
+      expect(state.find('desk-other')?.workspaces.length).assertEqual(2);
+      expect(state.find('desk-other')?.sessions.length).assertEqual(0);
+
+      const sessionPending = viewModel.loadWorkspaceSessions('desk-other', '/other');
+      await source.workspacesListed;
+      expect(source.listedWorkspacePaths.length).assertEqual(0);
+      source.releaseSessions();
+      await sessionPending;
+      expect(source.listedWorkspacePaths.length).assertEqual(1);
+      expect(source.listedWorkspacePaths[0]).assertEqual('desk-other:/other');
       expect(state.find('desk-other')?.sessions[0].id).assertEqual('s1');
+      expect(state.find('desk-other')?.sessions[0].workspacePath || '').assertEqual('/other');
     });
 
     it('does not move the cold-start last-device pointer when persisting an observed catalog', 0, async () => {
@@ -363,6 +388,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-other', deviceName: 'Other', online: true }
       ]);
       await viewModel.selectDevice('desk-other');
+      await viewModel.loadWorkspaceSessions('desk-other', '/other');
       expect(state.find('desk-other')?.status).assertEqual('ready');
       expect(store.lists.get('desk-other')?.sessions.length).assertEqual(1);
       expect(store.lastDeviceKey).assertEqual('desk-active');
@@ -394,6 +420,7 @@ export default function deviceDirectoryUnitTest() {
       expect(source.listedDeviceIds[0]).assertEqual('desk-other');
       expect(state.find('desk-other')?.status).assertEqual('ready');
       expect(state.find('desk-other')?.workspaces[0].path).assertEqual('/live');
+      await viewModel.loadWorkspaceSessions('desk-other', '/live');
       expect(state.find('desk-other')?.sessions[0].id).assertEqual('live');
     });
 
@@ -442,6 +469,30 @@ export default function deviceDirectoryUnitTest() {
       viewModel.captureLive('desk-a', [], []);
       expect(state.find('desk-a')?.sessions.length).assertEqual(1);
       expect(state.find('desk-a')?.workspaces.length).assertEqual(1);
+    });
+
+    it('refreshes one live workspace without dropping cached siblings', 0, () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'desk-a',
+        activeDeviceConnected: () => true
+      });
+      viewModel.syncDevices([
+        { deviceId: 'desk-a', deviceName: 'Alpha', online: true }
+      ]);
+      viewModel.captureLive('desk-a', [workspace('/a', 'A'), workspace('/b', 'B')], [
+        sessionIn('desk-a', '/a', 'a-old', 'Old A'),
+        sessionIn('desk-a', '/b', 'b-cached', 'Cached B')
+      ]);
+      viewModel.captureWorkspaceSessions('desk-a', '/a', [
+        sessionIn('desk-a', '/a', 'a-new', 'New A')
+      ]);
+      const sessions = state.find('desk-a')?.sessions || [];
+      expect(sessions.length).assertEqual(2);
+      expect(sessions.some((item: RemoteSession): boolean => item.id === 'a-old')).assertFalse();
+      expect(sessions.some((item: RemoteSession): boolean => item.id === 'a-new')).assertTrue();
+      expect(sessions.some((item: RemoteSession): boolean => item.id === 'b-cached')).assertTrue();
     });
   });
 

@@ -6,6 +6,7 @@ import {
   mergeUniqueSessions
 } from './ConcurrentWorkspaceListing';
 import { RemoteLogger } from './RemoteLogger';
+import { stampRemoteSessionsWorkspace } from './RemoteSessionIdentity';
 
 export interface DeviceDirectoryCatalog {
   workspaces: RecentWorkspaceEntry[];
@@ -53,16 +54,21 @@ export class DeviceDirectoryCoordinator {
     const groups = await mapInConcurrentBatches(
       workspaces,
       (entry: RecentWorkspaceEntry): Promise<RemoteSession[]> => {
-        return this.sessionsForWorkspace(deviceId, entry.path);
+        return this.safeSessionsForWorkspace(deviceId, entry.path);
       },
       this.concurrency
     );
     return mergeUniqueSessions(groups);
   }
 
-  private async sessionsForWorkspace(deviceId: string, path: string): Promise<RemoteSession[]> {
+  /** One explicit workspace listing; used by the lazy sidebar disclosure. */
+  async loadWorkspaceSessions(deviceId: string, path: string): Promise<RemoteSession[]> {
+    return stampRemoteSessionsWorkspace(await this.directory.listSessions(deviceId, path), path);
+  }
+
+  private async safeSessionsForWorkspace(deviceId: string, path: string): Promise<RemoteSession[]> {
     try {
-      return await this.directory.listSessions(deviceId, path);
+      return await this.loadWorkspaceSessions(deviceId, path);
     } catch (err) {
       // One unreadable workspace is not a reason to lose the other twenty.
       RemoteLogger.warn(`load workspace sessions failed device=${deviceId} path=${path}: ${String(err)}`);

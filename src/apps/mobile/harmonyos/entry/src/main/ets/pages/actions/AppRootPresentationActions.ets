@@ -61,11 +61,13 @@ export interface RemoteHomePresentationActions {
   readonly create: (agentType: string) => void;
   readonly createInPlace: (agentType: string) => void;
   readonly createAssistant: () => void;
+  readonly openCreateInWorkspace: (path: string, deviceId?: string) => void;
   readonly createInWorkspace: (path: string, agentType: string, deviceId?: string) => void;
   readonly createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string) => void;
   readonly selectDirectoryDevice: (deviceId: string) => void;
   readonly addDirectoryWorkspace: (deviceId: string) => void;
   readonly retryDirectoryDevice: (deviceId: string) => void;
+  readonly loadWorkspaceSessions: (deviceId: string, path: string) => Promise<void>;
   readonly openSession: (session: RemoteSession) => void;
   readonly openSessionInPlace: (session: RemoteSession) => void;
   readonly deleteSession: (session: RemoteSession) => void;
@@ -79,6 +81,8 @@ export interface SidebarPresentationActions {
   readonly scanDesktop: () => void;
   /** Opens the QR scanner from the device-section add button. */
   readonly addDesktop: () => void;
+  /** Refreshes account device presence from the relay. */
+  readonly refreshDevices: () => void;
   readonly settings: () => void;
   readonly openAccount: () => void;
   readonly openSession: (session: RemoteSession) => void;
@@ -132,9 +136,10 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       refresh: () => {}, showWorkspaces: () => {}, showAssistants: () => {}, selectWorkspace: () => {},
       selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
       search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
-      create: () => {}, createInPlace: () => {}, createAssistant: () => {}, createInWorkspace: () => {},
+      create: () => {}, createInPlace: () => {}, createAssistant: () => {}, openCreateInWorkspace: () => {},
+      createInWorkspace: () => {},
       createInWorkspaceInPlace: () => {}, selectDirectoryDevice: () => {}, addDirectoryWorkspace: () => {},
-      retryDirectoryDevice: () => {},
+      retryDirectoryDevice: () => {}, loadWorkspaceSessions: async () => {},
       openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
     },
     onRemoteCreate: {
@@ -144,7 +149,7 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
     },
     onSidebar: {
       close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},
-      settings: () => {}, openAccount: () => {},
+      refreshDevices: () => {}, settings: () => {}, openAccount: () => {},
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
     onSettings: {

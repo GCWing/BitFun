@@ -1,4 +1,4 @@
-import { RecentWorkspaceEntry, RemoteSession, WorkspaceInfo } from '../../model/RemoteModels';
+import { RecentWorkspaceEntry, WorkspaceInfo } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteWorkspaceCoordinator } from '../../services/RemoteWorkspaceCoordinator';
@@ -10,7 +10,6 @@ export interface RemoteWorkspaceViewModelHooks {
   readonly onBusy: (isBusy: boolean) => void;
   readonly onStatus: (statusText: string) => void;
   readonly onWorkspaceSelected: (workspace: WorkspaceInfo) => void;
-  readonly onSessionsDiscovered: (sessions: RemoteSession[]) => void;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onConnectionFailure: (error: Object) => void;
 }
@@ -79,10 +78,6 @@ export class RemoteWorkspaceViewModel {
         }
       });
       this.pageState.setRecentWorkspaces(allWorkspaces);
-      const sessions = await this.coordinator.sessionsForWorkspaces(
-        allWorkspaces.map((item: RecentWorkspaceEntry) => item.path)
-      );
-      this.hooks.onSessionsDiscovered(sessions);
     } catch (err) {
       RemoteLogger.warn(`background recent workspace load failed: ${String(err)}`);
     }

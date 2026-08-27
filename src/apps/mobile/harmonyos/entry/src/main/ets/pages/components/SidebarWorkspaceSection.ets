@@ -3,6 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   DeviceDirectoryEntry,
   DeviceDirectoryState,
+  WorkspaceDirectoryStatus,
   emptyDeviceDirectoryEntry
 } from '../state/DeviceDirectoryState';
 import { SidebarDirectoryPreviewPolicy } from '../policy/SidebarDirectoryPreviewPolicy';
@@ -13,9 +14,10 @@ import {
   SettingsSheetKind
 } from '../policy/SettingsPlacementPolicy';
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
-import { GREEN, INK, MUTED, PAGE_BG, SOFT, SUBTLE } from './Theme';
+import { GREEN, INK, MUTED, SUBTLE } from './Theme';
 import { SidebarDeviceGroup } from './SidebarDeviceGroup';
 import { SidebarWorkspacePicker } from './SidebarWorkspacePicker';
+import { RemoteUiState } from '../../services/RemoteUiState';
 
 /**
  * Flat device selector followed by the selected device's workspace tree.
@@ -47,9 +49,13 @@ export struct SidebarWorkspaceSection {
     (_deviceId: string, _path: string) => {};
   @Event onOpenWorkspace: (deviceId: string, path: string) => void =
     (_deviceId: string, _path: string) => {};
+  @Event onExpandWorkspace: (deviceId: string, path: string) => Promise<void> =
+    async (_deviceId: string, _path: string) => {};
   @Event onSelectDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onRetryDevice: (deviceId: string) => void = (_deviceId: string) => {};
   @Event onAddWorkspace: (deviceId: string) => void = (_deviceId: string) => {};
+  @Event onRefreshDevices: () => void = () => {};
+  @Event onAddDevice: () => void = () => {};
   @Local visibleDeviceCount: number = SidebarDirectoryPreviewPolicy.PREVIEW_COUNT;
   @Local showWorkspacePicker: boolean = false;
   @Local workspacePickerDeviceId: string = '';
@@ -78,80 +84,93 @@ export struct SidebarWorkspaceSection {
 
   @Builder
   private DeviceSectionHeader() {
-    Text(RemoteI18n.t('sidebar.devices'))
-      .id('sidebar-workspace-section')
-      .fontSize(14)
-      .fontWeight(FontWeight.Medium)
-      .fontColor(MUTED)
-      .width('100%')
+    Row() {
+      Text(RemoteI18n.t('sidebar.devices'))
+        .id('sidebar-workspace-section')
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(MUTED)
+      Blank()
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+          .fontSize(18)
+          .fontColor([MUTED])
+      }
+      .width(34)
       .height(38)
-      .textAlign(TextAlign.Start)
+      .accessibilityText(RemoteI18n.t('common.refresh'))
+      .onClick(() => {
+        this.onRefreshDevices();
+      })
+      Stack({ alignContent: Alignment.Center }) {
+        SymbolGlyph($r('sys.symbol.plus'))
+          .fontSize(18)
+          .fontColor([INK])
+      }
+      .width(34)
+      .height(38)
+      .accessibilityText(RemoteI18n.t('sidebar.addConnection'))
+      .onClick(() => {
+        this.onAddDevice();
+      })
+    }
+    .width('100%')
+    .height(42)
+    .alignItems(VerticalAlign.Center)
   }
 
   @Builder
   private DeviceRow(entry: DeviceDirectoryEntry) {
-    Row({ space: 12 }) {
+    Row({ space: 10 }) {
       Stack({ alignContent: Alignment.Center }) {
         SymbolGlyph($r('sys.symbol.desktop'))
-          .fontSize(21)
+          .fontSize(19)
           .fontColor([entry.online ? INK : SUBTLE])
           .hitTestBehavior(HitTestMode.None)
       }
-      .width(28)
-      .height(32)
+      .width(24)
+      .height(24)
       .hitTestBehavior(HitTestMode.None)
-      Column({ space: 2 }) {
-        Text(entry.deviceName)
-          .fontSize(15)
-          .fontWeight(this.isSelected(entry) ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(entry.online ? INK : SUBTLE)
-          .width('100%')
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .hitTestBehavior(HitTestMode.None)
-        Row({ space: 6 }) {
-          if (entry.online) {
-            Text('')
-              .width(7)
-              .height(7)
-              .backgroundColor(GREEN)
-              .borderRadius(4)
-              .hitTestBehavior(HitTestMode.None)
-          }
-          Text(RemoteI18n.t(entry.online ? 'sidebar.deviceOnline' : 'sidebar.deviceOffline'))
-            .fontSize(12)
-            .fontColor(entry.online ? GREEN : SUBTLE)
-            .hitTestBehavior(HitTestMode.None)
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      Text(entry.deviceName)
+        .fontSize(15)
+        .fontWeight(this.isSelected(entry) ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(entry.online ? INK : SUBTLE)
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .hitTestBehavior(HitTestMode.None)
       if (entry.status === 'loading') {
         LoadingProgress()
-          .width(14)
-          .height(14)
+          .width(13)
+          .height(13)
           .color(MUTED)
+          .hitTestBehavior(HitTestMode.None)
+      } else {
+        Text('')
+          .width(8)
+          .height(8)
+          .backgroundColor(entry.online ? GREEN : SUBTLE)
+          .borderRadius(4)
           .hitTestBehavior(HitTestMode.None)
       }
       Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.chevron_right'))
+        SymbolGlyph(this.isSelected(entry) ?
+          $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
           .fontSize(13)
-          .fontColor([MUTED])
+          .fontColor([entry.online ? INK : SUBTLE])
           .hitTestBehavior(HitTestMode.None)
       }
-      .width(16)
-      .height(20)
+      .width(20)
+      .height(24)
       .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
-    .height(66)
-    .padding({ left: 10, right: 8 })
+    .height(52)
+    .padding({ left: 8, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.isSelected(entry) ? SOFT : PAGE_BG)
-    .borderRadius(16)
-    .opacity(entry.online ? 1 : 0.72)
+    .opacity(entry.online ? 1 : 0.58)
+    .accessibilityText(`${entry.deviceName}, ${RemoteI18n.t(entry.online ?
+      'sidebar.deviceOnline' : 'sidebar.deviceOffline')}`)
     .onClick(() => {
       this.onSelectDevice(entry.deviceId);
     })
@@ -188,6 +207,7 @@ export struct SidebarWorkspaceSection {
 
       SidebarDeviceGroup({
         device: entry,
+        directoryState: this.directoryState,
         sessions: this.sessionsForDevice(entry),
         recentWorkspaces: this.workspacesForDevice(entry),
         workspaceName: this.liveWorkspaceName(entry),
@@ -210,6 +230,15 @@ export struct SidebarWorkspaceSection {
         },
         onOpenWorkspace: (path: string) => {
           this.onOpenWorkspace(entry.deviceId, path);
+        },
+        onExpandWorkspace: async (path: string): Promise<void> => {
+          await this.onExpandWorkspace(entry.deviceId, path);
+        },
+        onWorkspaceExpandedChange: (path: string, expanded: boolean): void => {
+          this.directoryState.setWorkspaceExpanded(entry.deviceId, path, expanded);
+        },
+        onWorkspaceLoadStatusChange: (path: string, status: WorkspaceDirectoryStatus): void => {
+          this.directoryState.setWorkspaceStatus(entry.deviceId, path, status);
         }
       })
     }
@@ -344,7 +373,8 @@ export struct SidebarWorkspaceSection {
   }
 
   private sessionsForDevice(entry: DeviceDirectoryEntry): RemoteSession[] {
-    return this.usesLiveDirectory(entry) ? this.sessions : entry.sessions;
+    return this.usesLiveDirectory(entry) ?
+      RemoteUiState.mergeSessions(this.sessions, entry.sessions) : entry.sessions;
   }
 
   private workspacesForDevice(entry: DeviceDirectoryEntry): RecentWorkspaceEntry[] {

@@ -2,6 +2,9 @@ import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
 import { CommandStatusResponse, RemoteCommand } from '../model/RemoteModels';
 import { RelayHttpClient } from './RelayHttpClient';
 
+/** Interactive directory rows must fail fast enough to leave a usable retry. */
+export const INTERACTIVE_DIRECTORY_TIMEOUT_MS: number = 15000;
+
 export interface RemoteCommandTransport {
   send<T extends CommandStatusResponse>(command: RemoteCommand, timeoutMs?: number): Promise<T>;
   reset(): void;

@@ -758,6 +758,10 @@ export default function conversationStateUnitTest() {
       expect(blocks[3].type).assertEqual('code');
       expect(blocks[3].language).assertEqual('ts');
       expect(blocks[4].type).assertEqual('table');
+      expect(blocks[4].tableRows.length).assertEqual(2);
+      expect(blocks[4].tableRows[0].header).assertTrue();
+      expect(blocks[4].tableRows[0].cells.length).assertEqual(2);
+      expect(blocks[4].tableRows[1].cells[1].text).assertEqual('2');
     });
 
     it('formats inline code, emphasis, and links without markdown control text', 0, () => {
@@ -771,6 +775,78 @@ export default function conversationStateUnitTest() {
       expect(blocks[0].inlines[3].type).assertEqual('strong');
       expect(blocks[0].inlines[5].type).assertEqual('link');
       expect(blocks[0].inlines[5].url).assertEqual('https://example.test');
+    });
+
+    it('parses GFM table cells, alignment, escaped pipes, and inline formatting', 0, () => {
+      const blocks = MarkdownParser.parse(
+        '**Name** | Status | Note\n:--- | :---: | ---:\nBitFun | ~~old~~ | a \\| b'
+      );
+
+      expect(blocks.length).assertEqual(1);
+      expect(blocks[0].type).assertEqual('table');
+      expect(blocks[0].tableRows.length).assertEqual(2);
+      expect(blocks[0].tableRows[0].cells[0].inlines[0].type).assertEqual('strong');
+      expect(blocks[0].tableRows[0].cells[0].text).assertEqual('Name');
+      expect(blocks[0].tableRows[1].cells[1].inlines[0].type).assertEqual('delete');
+      expect(blocks[0].tableRows[1].cells[1].inlines[0].text).assertEqual('old');
+      expect(blocks[0].tableRows[1].cells[2].text).assertEqual('a | b');
+      expect(blocks[0].tableRows[0].cells[0].alignment).assertEqual('left');
+      expect(blocks[0].tableRows[0].cells[1].alignment).assertEqual('center');
+      expect(blocks[0].tableRows[0].cells[2].alignment).assertEqual('right');
+    });
+
+    it('parses task state, nested list depth, extended headings, fences, and autolinks', 0, () => {
+      const blocks = MarkdownParser.parse(
+        '##### Detail\n\nSetext title\n---\n\n- [x] done\n  - [ ] child\n\n~~~rust extra\nlet value = 1;\n~~~\n\nSee https://example.test/docs.'
+      );
+
+      expect(blocks[0].type).assertEqual('heading');
+      expect(blocks[0].level).assertEqual(5);
+      expect(blocks[1].type).assertEqual('heading');
+      expect(blocks[1].level).assertEqual(2);
+      expect(blocks[2].items[0].checked).assertEqual(1);
+      expect(blocks[2].items[1].checked).assertEqual(0);
+      expect(blocks[2].items[1].depth).assertEqual(1);
+      expect(blocks[3].type).assertEqual('code');
+      expect(blocks[3].language).assertEqual('rust');
+      expect(blocks[4].inlines[1].type).assertEqual('link');
+      expect(blocks[4].inlines[1].url).assertEqual('https://example.test/docs');
+    });
+
+    it('renders angle-bracket autolinks without their delimiters', 0, () => {
+      const blocks = MarkdownParser.parse('Open <https://example.test/docs> now.');
+
+      expect(blocks[0].text).assertEqual('Open https://example.test/docs now.');
+      expect(blocks[0].inlines.length).assertEqual(3);
+      expect(blocks[0].inlines[1].type).assertEqual('link');
+      expect(blocks[0].inlines[1].text).assertEqual('https://example.test/docs');
+      expect(blocks[0].inlines[1].url).assertEqual('https://example.test/docs');
+    });
+
+    it('handles soft and hard line breaks, escapes, and multi-backtick code spans', 0, () => {
+      const blocks = MarkdownParser.parse(
+        'soft\nline\n\nhard  \nbreak\n\nescaped \\*literal\\* and ``code ` span``'
+      );
+
+      expect(blocks[0].text).assertEqual('soft line');
+      expect(blocks[1].text).assertEqual('hard\nbreak');
+      expect(blocks[2].inlines[0].text).assertEqual('escaped *literal* and ');
+      expect(blocks[2].inlines[1].type).assertEqual('code');
+      expect(blocks[2].inlines[1].text).assertEqual('code ` span');
+    });
+
+    it('preserves nested quote and list presentation levels plus list continuation text', 0, () => {
+      const blocks = MarkdownParser.parse(
+        '> outer\n>> nested\n> outer again\n\n- first\n  continuation\n    - nested item'
+      );
+
+      expect(blocks[0].type).assertEqual('quote');
+      expect(blocks[0].level).assertEqual(1);
+      expect(blocks[1].level).assertEqual(2);
+      expect(blocks[1].text).assertEqual('nested');
+      expect(blocks[2].level).assertEqual(1);
+      expect(blocks[3].items[0].text).assertEqual('first continuation');
+      expect(blocks[3].items[1].depth).assertEqual(1);
     });
   });
 

@@ -874,11 +874,13 @@ export class RemoteSessionProjectionRecord {
 export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
   messageResults: SessionMessagesResult[] = [];
   messageRequests: string[] = [];
+  messageResolvers: Array<(result: SessionMessagesResult) => void> = [];
   sendRequests: string[] = [];
   cancelRequests: string[] = [];
   renameRequests: string[] = [];
   turnId: string = 'turn-1';
   shouldFailMessages: boolean = false;
+  deferMessages: boolean = false;
   shouldFailSend: boolean = false;
   shouldFailCancel: boolean = false;
   shouldFailRename: boolean = false;
@@ -888,11 +890,24 @@ export class FakeRemoteChatCommandClient implements RemoteChatCommandClient {
     if (this.shouldFailMessages) {
       throw new Error('Expected message load failure.');
     }
+    if (this.deferMessages) {
+      return new Promise<SessionMessagesResult>((resolve: (result: SessionMessagesResult) => void) => {
+        this.messageResolvers.push(resolve);
+      });
+    }
     const result = this.messageResults.shift();
     if (!result) {
       throw new Error('Missing fake session messages result.');
     }
     return result;
+  }
+
+  resolveNextMessages(result: SessionMessagesResult): void {
+    const resolve = this.messageResolvers.shift();
+    if (!resolve) {
+      throw new Error('Missing deferred message request.');
+    }
+    resolve(result);
   }
 
   async sendMessage(sessionId: string, text: string, agentType?: string): Promise<string> {

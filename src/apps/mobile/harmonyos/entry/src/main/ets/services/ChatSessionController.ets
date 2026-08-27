@@ -34,11 +34,17 @@ export interface ChatSessionControllerCallbacks {
   canPoll: (sessionId: string) => boolean;
 }
 
+export interface ChatSessionControllerOptions {
+  /** Stabilization window before the first idle poll after selecting a session. */
+  initialPollDelayMs: number;
+}
+
 // Mobile streaming is projected from poll_session.active_turn snapshots.
 // The relay protocol remains request/response HTTP, not token-level SSE.
 export class ChatSessionController {
   private readonly sessionManager: RemoteSessionManager;
   private readonly callbacks: ChatSessionControllerCallbacks;
+  private readonly initialPollDelayMs: number;
   private sessionId: string = '';
   private cursor: ChatSessionCursor = {
     pollVersion: 0,
@@ -58,9 +64,14 @@ export class ChatSessionController {
   private readonly idleIntervalMs: number = 10000;
   private readonly turnEndedGracePeriodMs: number = 5000;
 
-  constructor(sessionManager: RemoteSessionManager, callbacks: ChatSessionControllerCallbacks) {
+  constructor(
+    sessionManager: RemoteSessionManager,
+    callbacks: ChatSessionControllerCallbacks,
+    options?: ChatSessionControllerOptions
+  ) {
     this.sessionManager = sessionManager;
     this.callbacks = callbacks;
+    this.initialPollDelayMs = options ? Math.max(0, options.initialPollDelayMs) : 0;
   }
 
   start(sessionId: string, cursor: ChatSessionCursor, activeTurn?: ChatMessage): void {
@@ -76,7 +87,10 @@ export class ChatSessionController {
     this.turnJustEndedAt = 0;
     this.stopped = false;
     RemoteLogger.info(`poller start session=${ChatSessionController.shortId(sessionId)} active=${this.activeTurn ? this.activeTurn.id : ''}`);
-    this.scheduleNext(0);
+    // A subsequent selection cancels this timer in stop(). This small window
+    // keeps rapid cached-session taps from each putting an obsolete poll on the
+    // desktop's serial RPC queue. Explicit nudge() remains immediate.
+    this.scheduleNext(this.initialPollDelayMs);
   }
 
   stop(clearActiveTurn: boolean = true): void {

@@ -1,10 +1,13 @@
 import { KeyboardAvoidMode } from '@kit.ArkUI';
+import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import { ChatSurface } from '../state/ChatSurface';
+import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 import { ChatStatusBar } from './ChatStatusBar';
 import { ChatTimeline } from './ChatTimeline';
 import { ConversationLoadingState } from './ConversationLoadingState';
@@ -19,6 +22,7 @@ import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
 import { FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
+import { RemoteCreateContextControls } from './RemoteCreateContextControls';
 
 @ComponentV2
 export struct ConversationView {
@@ -61,7 +65,15 @@ export struct ConversationView {
   @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
   @Param composerInputId: string = 'conversation-composer-input';
   @Param hoverOperateMode: boolean = false;
-  @BuilderParam aboveComposer: () => void = this.EmptyBuilder;
+  @Param showRemoteCreateContext: boolean = false;
+  @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
+  @Event onToggleCreateDeviceMenu: () => void = () => {};
+  @Event onToggleCreateWorkspaceMenu: () => void = () => {};
+  @Event onSelectCreateDevice: (device: CloudAccountDevice) => void = (_device: CloudAccountDevice) => {};
+  @Event onSelectCreateWorkspace: (workspace?: RecentWorkspaceEntry) => void =
+    (_workspace?: RecentWorkspaceEntry) => {};
+  @Event onSelectCreateHarness: (profile: RemoteHarnessProfile) => void =
+    (_profile: RemoteHarnessProfile) => {};
   @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onBack: () => void = () => {};
@@ -157,12 +169,7 @@ export struct ConversationView {
     if (this.shouldShowStatusBar()) {
       this.ExecutionStatusBar()
     }
-    if (this.isLoadingConversation) {
-      ConversationLoadingState({
-        maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
-      })
-        .layoutWeight(1)
-    } else if (this.surface === ChatSurface.Create) {
+    if (this.surface === ChatSurface.Create) {
       Blank()
         .layoutWeight(1)
         .width('100%')
@@ -172,7 +179,27 @@ export struct ConversationView {
     } else if (this.shouldCenterInlineStatus()) {
       this.CenteredInlineStatus()
     } else {
-      this.MessageList()
+      // Keep the list subtree alive while a slow transcript is loading. The
+      // former top-level conditional destroyed and rebuilt ChatTimeline every
+      // time the 140 ms loading gate opened, losing its scroll state and making
+      // rapid session switches visibly flash.
+      Stack() {
+        Column() {
+          this.MessageList()
+        }
+        .width('100%')
+        .height('100%')
+        if (this.isLoadingConversation) {
+          ConversationLoadingState({
+            maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 800 : 0
+          })
+            .width('100%')
+            .height('100%')
+            .backgroundColor(PAGE_BG)
+        }
+      }
+      .layoutWeight(1)
+      .width('100%')
     }
     if (this.inlineStatusText.length > 0 && !this.shouldCenterInlineStatus()) {
       Text(this.inlineStatusText)
@@ -295,7 +322,17 @@ export struct ConversationView {
   @Builder
   Composer() {
     Column() {
-      this.aboveComposer()
+      if (this.showRemoteCreateContext) {
+        RemoteCreateContextControls({
+          state: this.remoteCreateState,
+          presentation: this.composerPresentation,
+          onToggleDeviceMenu: this.onToggleCreateDeviceMenu,
+          onToggleWorkspaceMenu: this.onToggleCreateWorkspaceMenu,
+          onSelectDevice: this.onSelectCreateDevice,
+          onSelectWorkspace: this.onSelectCreateWorkspace,
+          onSelectHarness: this.onSelectCreateHarness
+        })
+      }
       ComposerBar({
       presentation: this.composerPresentation,
       capabilities: this.composerCapabilities,
@@ -332,10 +369,6 @@ export struct ConversationView {
       })
     }
     .width('100%')
-  }
-
-  @Builder
-  private EmptyBuilder() {
   }
 
   @Builder

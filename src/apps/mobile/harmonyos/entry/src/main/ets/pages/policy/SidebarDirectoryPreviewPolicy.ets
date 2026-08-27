@@ -21,12 +21,25 @@ export class SidebarDirectoryPreviewPolicy {
   }
 
   /**
-   * A device header means the user just opened that desktop. Keep its
-   * workspaces folded so the next tap opens one workspace's session preview.
-   * A flattened unpaired row has no device tap, so workspaces start open.
+   * Session trees are lazy at every surface: a workspace starts folded and
+   * its session RPC begins only after the user explicitly opens that row.
    */
-  static workspaceExpandedByDefault(deviceHeaderVisible: boolean): boolean {
-    return !deviceHeaderVisible;
+  static workspaceExpandedByDefault(_deviceHeaderVisible: boolean): boolean {
+    return false;
+  }
+
+  /**
+   * ArkUI keeps a ForEach child's local state by key. Use the device plus a
+   * canonical remote path so two devices never share disclosure state and a
+   * harmless trailing slash does not destroy and recreate the row.
+   */
+  static workspaceKey(deviceId: string, path: string): string {
+    let normalizedPath = path.trim();
+    while (normalizedPath.length > 1 &&
+      (normalizedPath.endsWith('/') || normalizedPath.endsWith('\\'))) {
+      normalizedPath = normalizedPath.slice(0, normalizedPath.length - 1);
+    }
+    return `${deviceId.trim()}:${normalizedPath}`;
   }
 }
 

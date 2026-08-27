@@ -10,6 +10,21 @@ export interface ParsedMarkdownListItem {
   marker: string;
   text: string;
   inlines: ParsedMarkdownInline[];
+  depth: number;
+  checked: number;
+}
+
+export interface ParsedMarkdownTableCell {
+  id: string;
+  text: string;
+  inlines: ParsedMarkdownInline[];
+  alignment: string;
+}
+
+export interface ParsedMarkdownTableRow {
+  id: string;
+  header: boolean;
+  cells: ParsedMarkdownTableCell[];
 }
 
 export interface ParsedMarkdownBlock {
@@ -20,6 +35,7 @@ export interface ParsedMarkdownBlock {
   text: string;
   items: ParsedMarkdownListItem[];
   inlines: ParsedMarkdownInline[];
+  tableRows: ParsedMarkdownTableRow[];
 }
 
 export class MarkdownParseCache {
@@ -52,14 +68,19 @@ export class MarkdownParser {
         continue;
       }
 
-      if (trimmed.indexOf('```') === 0) {
+      if (MarkdownParser.isFence(trimmed)) {
         index = MarkdownParser.readCodeBlock(lines, index, blocks);
+      } else if (MarkdownParser.isSetextHeading(lines, index)) {
+        const level = /^=+\s*$/.test(lines[index + 1].trim()) ? 1 : 2;
+        MarkdownParser.pushBlock(blocks, 'heading', level, '', trimmed, []);
+        index += 2;
       } else if (MarkdownParser.isDivider(trimmed)) {
         MarkdownParser.pushBlock(blocks, 'divider', 0, '', '', []);
         index += 1;
       } else if (MarkdownParser.isHeading(trimmed)) {
         const level = MarkdownParser.headingLevel(trimmed);
-        MarkdownParser.pushBlock(blocks, 'heading', level, '', trimmed.slice(level).trim(), []);
+        const headingText = trimmed.slice(level).trim().replace(/\s+#+\s*$/, '');
+        MarkdownParser.pushBlock(blocks, 'heading', level, '', headingText, []);
         index += 1;
       } else if (MarkdownParser.isQuote(trimmed)) {
         index = MarkdownParser.readQuoteBlock(lines, index, blocks);
@@ -82,9 +103,11 @@ export class MarkdownParser {
   static formatInlineText(value: string): string {
     let text = value;
     text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+    text = text.replace(/<(https?:\/\/|computer:\/\/|file:\/\/)([^\s<>]+)>/g, '$1$2');
     text = text.replace(/`([^`]+)`/g, '$1');
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
     text = text.replace(/__([^_]+)__/g, '$1');
+    text = text.replace(/~~([^~]+)~~/g, '$1');
     text = text.replace(/\*([^*]+)\*/g, '$1');
     text = text.replace(/_([^_]+)_/g, '$1');
     return text;
@@ -92,12 +115,14 @@ export class MarkdownParser {
 
   private static readCodeBlock(lines: string[], start: number, blocks: ParsedMarkdownBlock[]): number {
     const opening = lines[start].trim();
-    const language = opening.slice(3).trim();
+    const fence = MarkdownParser.fenceMarker(opening);
+    const info = opening.slice(fence.length).trim();
+    const language = info.split(/\s+/)[0] || '';
     const body: string[] = [];
     let index = start + 1;
     while (index < lines.length) {
       const trimmed = lines[index].trim();
-      if (trimmed.indexOf('```') === 0) {
+      if (MarkdownParser.isClosingFence(trimmed, fence)) {
         index += 1;
         break;
       }
@@ -111,15 +136,27 @@ export class MarkdownParser {
   private static readQuoteBlock(lines: string[], start: number, blocks: ParsedMarkdownBlock[]): number {
     const body: string[] = [];
     let index = start;
+    let level = 0;
     while (index < lines.length) {
       const trimmed = lines[index].trim();
       if (!MarkdownParser.isQuote(trimmed)) {
         break;
       }
-      body.push(trimmed.slice(1).trim());
+      const currentLevel = MarkdownParser.quoteDepth(trimmed);
+      if (level === 0) {
+        level = currentLevel;
+      }
+      if (currentLevel !== level) {
+        MarkdownParser.pushBlock(blocks, 'quote', level, '', MarkdownParser.joinFlowLines(body), []);
+        body.length = 0;
+        level = currentLevel;
+      }
+      body.push(MarkdownParser.quoteText(trimmed, currentLevel));
       index += 1;
     }
-    MarkdownParser.pushBlock(blocks, 'quote', 0, '', body.join('\n'), []);
+    if (body.length > 0) {
+      MarkdownParser.pushBlock(blocks, 'quote', level, '', MarkdownParser.joinFlowLines(body), []);
+    }
     return index;
   }
 
@@ -127,37 +164,62 @@ export class MarkdownParser {
     const items: ParsedMarkdownListItem[] = [];
     let index = start;
     while (index < lines.length) {
-      const trimmed = lines[index].trim();
+      const raw = lines[index];
+      const trimmed = raw.trim();
       if (!MarkdownParser.isListLine(trimmed)) {
         break;
       }
       const marker = MarkdownParser.listMarker(trimmed);
-      const text = MarkdownParser.listText(trimmed);
+      const firstLineText = MarkdownParser.listText(trimmed);
+      const taskMatch = firstLineText.match(/^\[([ xX])\]\s+(.*)$/);
+      let text = taskMatch ? taskMatch[2] : firstLineText;
+      let nextIndex = index + 1;
+      const currentIndent = MarkdownParser.leadingIndentWidth(raw);
+      while (nextIndex < lines.length) {
+        const continuation = lines[nextIndex];
+        const continuationTrimmed = continuation.trim();
+        if (continuationTrimmed.length === 0 || MarkdownParser.isListLine(continuationTrimmed) ||
+          MarkdownParser.leadingIndentWidth(continuation) <= currentIndent) {
+          break;
+        }
+        text += ' ' + continuationTrimmed;
+        nextIndex += 1;
+      }
       const item: ParsedMarkdownListItem = {
         id: `li-${start}-${items.length}`,
         marker,
         text: MarkdownParser.formatInlineText(text),
-        inlines: MarkdownParser.parseInlineText(text, `li-${start}-${items.length}`)
+        inlines: MarkdownParser.parseInlineText(text, `li-${start}-${items.length}`),
+        depth: MarkdownParser.listDepth(raw),
+        checked: taskMatch ? (taskMatch[1].toLowerCase() === 'x' ? 1 : 0) : -1
       };
       items.push(item);
-      index += 1;
+      index = nextIndex;
     }
     MarkdownParser.pushBlock(blocks, 'list', 0, '', '', items);
     return index;
   }
 
   private static readTableBlock(lines: string[], start: number, blocks: ParsedMarkdownBlock[]): number {
-    const rows: string[] = [];
-    let index = start;
+    const sourceRows: string[] = [lines[start].trim(), lines[start + 1].trim()];
+    const headerCells = MarkdownParser.splitTableRow(lines[start]);
+    const separatorCells = MarkdownParser.splitTableRow(lines[start + 1]);
+    const alignments: string[] = separatorCells.map((cell: string) => MarkdownParser.tableAlignment(cell));
+    const rows: ParsedMarkdownTableRow[] = [];
+    rows.push(MarkdownParser.buildTableRow(headerCells, alignments, true, start, 0));
+    let index = start + 2;
     while (index < lines.length) {
       const trimmed = lines[index].trim();
       if (!MarkdownParser.hasTablePipes(trimmed)) {
         break;
       }
-      rows.push(trimmed);
+      sourceRows.push(trimmed);
+      rows.push(MarkdownParser.buildTableRow(
+        MarkdownParser.splitTableRow(lines[index]), alignments, false, start, rows.length
+      ));
       index += 1;
     }
-    MarkdownParser.pushBlock(blocks, 'table', 0, '', rows.join('\n'), []);
+    MarkdownParser.pushBlock(blocks, 'table', 0, '', sourceRows.join('\n'), [], rows);
     return index;
   }
 
@@ -167,7 +229,8 @@ export class MarkdownParser {
     while (index < lines.length) {
       const trimmed = lines[index].trim();
       if (trimmed.length === 0 ||
-        trimmed.indexOf('```') === 0 ||
+        MarkdownParser.isFence(trimmed) ||
+        MarkdownParser.isSetextHeading(lines, index) ||
         MarkdownParser.isDivider(trimmed) ||
         MarkdownParser.isHeading(trimmed) ||
         MarkdownParser.isQuote(trimmed) ||
@@ -175,10 +238,10 @@ export class MarkdownParser {
         MarkdownParser.isTableStart(lines, index)) {
         break;
       }
-      body.push(trimmed);
+      body.push(lines[index].replace(/^\s+/, ''));
       index += 1;
     }
-    MarkdownParser.pushBlock(blocks, 'paragraph', 0, '', body.join('\n'), []);
+    MarkdownParser.pushBlock(blocks, 'paragraph', 0, '', MarkdownParser.joinFlowLines(body), []);
     return index;
   }
 
@@ -188,7 +251,8 @@ export class MarkdownParser {
     level: number,
     language: string,
     text: string,
-    items: ParsedMarkdownListItem[]
+    items: ParsedMarkdownListItem[],
+    tableRows: ParsedMarkdownTableRow[] = []
   ): void {
     const block: ParsedMarkdownBlock = {
       id: `md-${blocks.length}-${type}`,
@@ -197,7 +261,8 @@ export class MarkdownParser {
       language,
       text: MarkdownParser.shouldParseInline(type) ? MarkdownParser.formatInlineText(text) : text,
       items,
-      inlines: MarkdownParser.shouldParseInline(type) ? MarkdownParser.parseInlineText(text, `md-${blocks.length}-${type}`) : []
+      inlines: MarkdownParser.shouldParseInline(type) ? MarkdownParser.parseInlineText(text, `md-${blocks.length}-${type}`) : [],
+      tableRows
     };
     blocks.push(block);
   }
@@ -208,11 +273,11 @@ export class MarkdownParser {
     while (index < value.length) {
       const next = MarkdownParser.nextInlineMarker(value, index);
       if (next < 0) {
-        MarkdownParser.pushInline(inlines, prefix, 'text', value.slice(index), '');
+        MarkdownParser.pushTextWithAutoLinks(inlines, prefix, value.slice(index));
         break;
       }
       if (next > index) {
-        MarkdownParser.pushInline(inlines, prefix, 'text', value.slice(index, next), '');
+        MarkdownParser.pushTextWithAutoLinks(inlines, prefix, value.slice(index, next));
       }
       const consumed = MarkdownParser.readInlineAt(value, next, prefix, inlines);
       if (consumed <= next) {
@@ -227,10 +292,19 @@ export class MarkdownParser {
 
   private static readInlineAt(value: string, start: number, prefix: string, inlines: ParsedMarkdownInline[]): number {
     if (value.charAt(start) === '`') {
-      const end = value.indexOf('`', start + 1);
-      if (end > start + 1) {
-        MarkdownParser.pushInline(inlines, prefix, 'code', value.slice(start + 1, end), '');
-        return end + 1;
+      let markerLength = 1;
+      while (value.charAt(start + markerLength) === '`') {
+        markerLength += 1;
+      }
+      const marker = '`'.repeat(markerLength);
+      const end = value.indexOf(marker, start + markerLength);
+      if (end > start + markerLength) {
+        let code = value.slice(start + markerLength, end).replace(/\s+/g, ' ');
+        if (code.startsWith(' ') && code.endsWith(' ') && code.trim().length > 0) {
+          code = code.slice(1, -1);
+        }
+        MarkdownParser.pushInline(inlines, prefix, 'code', code, '');
+        return end + markerLength;
       }
     }
     if (value.slice(start, start + 2) === '**') {
@@ -247,6 +321,13 @@ export class MarkdownParser {
         return end + 2;
       }
     }
+    if (value.slice(start, start + 2) === '~~') {
+      const end = value.indexOf('~~', start + 2);
+      if (end > start + 2) {
+        MarkdownParser.pushInline(inlines, prefix, 'delete', value.slice(start + 2, end), '');
+        return end + 2;
+      }
+    }
     if (value.charAt(start) === '[') {
       const labelEnd = value.indexOf(']', start + 1);
       if (labelEnd > start + 1 && value.charAt(labelEnd + 1) === '(') {
@@ -254,6 +335,16 @@ export class MarkdownParser {
         if (urlEnd > labelEnd + 2) {
           MarkdownParser.pushInline(inlines, prefix, 'link', value.slice(start + 1, labelEnd), value.slice(labelEnd + 2, urlEnd));
           return urlEnd + 1;
+        }
+      }
+    }
+    if (value.charAt(start) === '<') {
+      const end = value.indexOf('>', start + 1);
+      if (end > start + 1) {
+        const url = value.slice(start + 1, end);
+        if (/^(https?:\/\/|computer:\/\/|file:\/\/)[^\s<>]+$/.test(url)) {
+          MarkdownParser.pushInline(inlines, prefix, 'link', url, url);
+          return end + 1;
         }
       }
     }
@@ -275,12 +366,15 @@ export class MarkdownParser {
   }
 
   private static nextInlineMarker(value: string, start: number): number {
-    const markers: string[] = ['`', '**', '__', '[', '*', '_'];
+    const markers: string[] = ['`', '**', '__', '~~', '[', '<', '*', '_'];
     let next = -1;
     markers.forEach((marker: string) => {
-      const index = value.indexOf(marker, start);
-      if (index >= 0 && (next < 0 || index < next)) {
-        next = index;
+      let markerIndex = value.indexOf(marker, start);
+      while (markerIndex >= 0 && MarkdownParser.isEscaped(value, markerIndex)) {
+        markerIndex = value.indexOf(marker, markerIndex + marker.length);
+      }
+      if (markerIndex >= 0 && (next < 0 || markerIndex < next)) {
+        next = markerIndex;
       }
     });
     return next;
@@ -302,33 +396,125 @@ export class MarkdownParser {
     inlines.push(inline);
   }
 
+  private static pushTextWithAutoLinks(
+    inlines: ParsedMarkdownInline[],
+    prefix: string,
+    text: string
+  ): void {
+    const pattern = /(https?:\/\/|computer:\/\/|file:\/\/)[^\s<>]+/g;
+    let cursor = 0;
+    let match: RegExpExecArray | null = pattern.exec(text);
+    while (match) {
+      if (match.index > cursor) {
+        MarkdownParser.pushInline(
+          inlines, prefix, 'text', MarkdownParser.unescapeText(text.slice(cursor, match.index)), ''
+        );
+      }
+      let url = match[0];
+      let suffix = '';
+      while (url.length > 0 && /[.,;:!?]$/.test(url)) {
+        suffix = url.slice(-1) + suffix;
+        url = url.slice(0, -1);
+      }
+      MarkdownParser.pushInline(inlines, prefix, 'link', url, url);
+      if (suffix.length > 0) {
+        MarkdownParser.pushInline(inlines, prefix, 'text', suffix, '');
+      }
+      cursor = match.index + match[0].length;
+      match = pattern.exec(text);
+    }
+    if (cursor < text.length) {
+      MarkdownParser.pushInline(inlines, prefix, 'text', MarkdownParser.unescapeText(text.slice(cursor)), '');
+    }
+  }
+
+  private static unescapeText(value: string): string {
+    const escapable = '\\`*{}[]()#+-.!_>~|';
+    let result = '';
+    let index = 0;
+    while (index < value.length) {
+      if (value.charAt(index) === '\\' && index + 1 < value.length &&
+        escapable.indexOf(value.charAt(index + 1)) >= 0) {
+        result += value.charAt(index + 1);
+        index += 2;
+      } else {
+        result += value.charAt(index);
+        index += 1;
+      }
+    }
+    return result;
+  }
+
+  private static isEscaped(value: string, index: number): boolean {
+    let slashCount = 0;
+    let cursor = index - 1;
+    while (cursor >= 0 && value.charAt(cursor) === '\\') {
+      slashCount += 1;
+      cursor -= 1;
+    }
+    return slashCount % 2 === 1;
+  }
+
   private static shouldParseInline(type: string): boolean {
     return type === 'paragraph' || type === 'heading' || type === 'quote';
   }
 
   private static isHeading(line: string): boolean {
-    return /^#{1,4}\s+/.test(line);
+    return /^#{1,6}\s+/.test(line);
   }
 
   private static headingLevel(line: string): number {
-    const match = line.match(/^#{1,4}/);
+    const match = line.match(/^#{1,6}/);
     return match ? match[0].length : 1;
   }
 
   private static isDivider(line: string): boolean {
-    return /^(-{3,}|\*{3,}|_{3,})$/.test(line);
+    return /^(?:\*\s*){3,}$/.test(line) || /^(?:_\s*){3,}$/.test(line) || /^(?:-\s*){3,}$/.test(line);
   }
 
   private static isQuote(line: string): boolean {
     return line.indexOf('>') === 0;
   }
 
+  private static quoteDepth(line: string): number {
+    let depth = 0;
+    let index = 0;
+    while (index < line.length) {
+      if (line.charAt(index) !== '>') {
+        break;
+      }
+      depth += 1;
+      index += 1;
+      if (line.charAt(index) === ' ') {
+        index += 1;
+      }
+    }
+    return Math.max(1, depth);
+  }
+
+  private static quoteText(line: string, depth: number): string {
+    let index = 0;
+    let consumed = 0;
+    while (index < line.length && consumed < depth) {
+      if (line.charAt(index) === '>') {
+        consumed += 1;
+        index += 1;
+        if (line.charAt(index) === ' ') {
+          index += 1;
+        }
+      } else {
+        break;
+      }
+    }
+    return line.slice(index);
+  }
+
   private static isListLine(line: string): boolean {
-    return /^[-*+]\s+/.test(line) || /^\d+\.\s+/.test(line);
+    return /^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
   }
 
   private static listMarker(line: string): string {
-    const ordered = line.match(/^(\d+)\.\s+/);
+    const ordered = line.match(/^(\d+)[.)]\s+/);
     if (ordered) {
       return `${ordered[1]}.`;
     }
@@ -336,7 +522,74 @@ export class MarkdownParser {
   }
 
   private static listText(line: string): string {
-    return line.replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '');
+    return line.replace(/^[-*+]\s+/, '').replace(/^\d+[.)]\s+/, '');
+  }
+
+  private static listDepth(line: string): number {
+    const width = MarkdownParser.leadingIndentWidth(line);
+    return width > 0 ? Math.ceil(width / 4) : 0;
+  }
+
+  private static leadingIndentWidth(line: string): number {
+    let width = 0;
+    let index = 0;
+    while (index < line.length) {
+      const character = line.charAt(index);
+      if (character === ' ') {
+        width += 1;
+      } else if (character === '\t') {
+        width += 4;
+      } else {
+        break;
+      }
+      index += 1;
+    }
+    return width;
+  }
+
+  private static isFence(line: string): boolean {
+    return /^`{3,}[^`]*$/.test(line) || /^~{3,}.*$/.test(line);
+  }
+
+  private static fenceMarker(line: string): string {
+    const match = line.match(/^(`{3,}|~{3,})/);
+    return match ? match[1] : '```';
+  }
+
+  private static isClosingFence(line: string, opening: string): boolean {
+    if (line.length < opening.length || line.charAt(0) !== opening.charAt(0)) {
+      return false;
+    }
+    let count = 0;
+    while (count < line.length && line.charAt(count) === opening.charAt(0)) {
+      count += 1;
+    }
+    return count >= opening.length && line.slice(count).trim().length === 0;
+  }
+
+  private static isSetextHeading(lines: string[], index: number): boolean {
+    if (index + 1 >= lines.length || lines[index].trim().length === 0) {
+      return false;
+    }
+    return /^(=+|-+)\s*$/.test(lines[index + 1].trim());
+  }
+
+  private static joinFlowLines(lines: string[]): string {
+    let result = '';
+    lines.forEach((line: string, index: number) => {
+      if (index === 0) {
+        result = line;
+        return;
+      }
+      if (/ {2,}$/.test(result)) {
+        result = result.replace(/ {2,}$/, '') + '\n' + line;
+      } else if (result.endsWith('\\')) {
+        result = result.slice(0, -1) + '\n' + line;
+      } else {
+        result += ' ' + line;
+      }
+    });
+    return result.replace(/\s+$/, '');
   }
 
   private static isTableStart(lines: string[], index: number): boolean {
@@ -349,6 +602,89 @@ export class MarkdownParser {
   }
 
   private static hasTablePipes(line: string): boolean {
-    return line.indexOf('|') >= 0 && line.lastIndexOf('|') > line.indexOf('|');
+    let inCode = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line.charAt(index);
+      if (character === '`' && !MarkdownParser.isEscaped(line, index)) {
+        inCode = !inCode;
+      } else if (character === '|' && !inCode && !MarkdownParser.isEscaped(line, index)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static splitTableRow(line: string): string[] {
+    let source = line.trim();
+    if (source.startsWith('|')) {
+      source = source.slice(1);
+    }
+    if (source.endsWith('|') && !MarkdownParser.isEscaped(source, source.length - 1)) {
+      source = source.slice(0, -1);
+    }
+    const cells: string[] = [];
+    let current = '';
+    let inCode = false;
+    let index = 0;
+    while (index < source.length) {
+      const character = source.charAt(index);
+      if (character === '\\' && source.charAt(index + 1) === '|') {
+        current += '|';
+        index += 2;
+        continue;
+      }
+      if (character === '`') {
+        inCode = !inCode;
+        current += character;
+        index += 1;
+        continue;
+      }
+      if (character === '|' && !inCode) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += character;
+      }
+      index += 1;
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  private static tableAlignment(separator: string): string {
+    const value = separator.trim();
+    if (value.startsWith(':') && value.endsWith(':')) {
+      return 'center';
+    }
+    if (value.endsWith(':')) {
+      return 'right';
+    }
+    return 'left';
+  }
+
+  private static buildTableRow(
+    values: string[],
+    alignments: string[],
+    header: boolean,
+    start: number,
+    rowIndex: number
+  ): ParsedMarkdownTableRow {
+    const cells: ParsedMarkdownTableCell[] = [];
+    const columnCount = Math.max(values.length, alignments.length);
+    for (let column = 0; column < columnCount; column += 1) {
+      const text = column < values.length ? values[column] : '';
+      const id = `table-${start}-${rowIndex}-${column}`;
+      cells.push({
+        id,
+        text: MarkdownParser.formatInlineText(text),
+        inlines: MarkdownParser.parseInlineText(text, id),
+        alignment: column < alignments.length ? alignments[column] : 'left'
+      });
+    }
+    return {
+      id: `table-${start}-row-${rowIndex}`,
+      header,
+      cells
+    };
   }
 }

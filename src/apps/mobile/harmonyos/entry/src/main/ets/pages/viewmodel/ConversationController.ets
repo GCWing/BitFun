@@ -188,6 +188,9 @@ export class ConversationController {
     await this.createFlow.createRemoteSession(agentType, inPlace);
   }
   openRemoteCreateSession(): void { this.createFlow.openRemoteCreateSession(); }
+  async openRemoteCreateSessionInWorkspace(path: string, deviceId?: string): Promise<void> {
+    await this.createFlow.openRemoteCreateSessionInWorkspace(path, deviceId);
+  }
   closeRemoteCreateSession(): void { this.createFlow.closeRemoteCreateSession(); }
   async loadRemoteCreateChoices(): Promise<void> { await this.createFlow.loadRemoteCreateChoices(); }
   async loadRemoteCreateModelCatalog(): Promise<void> { await this.createFlow.loadRemoteCreateModelCatalog(); }

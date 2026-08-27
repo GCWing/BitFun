@@ -52,6 +52,13 @@ export class RemoteChatCommandController {
   private readonly client: RemoteChatCommandClient;
   private readonly callbacks: RemoteChatCommandCallbacks;
   private readonly cache: RemoteChatCache;
+  // A transcript RPC already accepted by the desktop cannot be cancelled, and
+  // device RPCs are handled one at a time. Keep at most that one unavoidable
+  // request in flight; callers waiting behind it re-check the generation and
+  // only the latest selected session is allowed to send the next request.
+  private initialLoadGeneration: number = 0;
+  private initialLoadInFlight?: Promise<void>;
+  private initialLoadSessionId: string = '';
 
   constructor(
     client: RemoteChatCommandClient,
@@ -88,7 +95,14 @@ export class RemoteChatCommandController {
     if (sessionId.length === 0) {
       return;
     }
+    const generation = ++this.initialLoadGeneration;
     const cached = await this.cache.load(sessionId);
+    if (generation !== this.initialLoadGeneration) {
+      RemoteLogger.info(
+        `message load superseded after cache session=${RemoteChatCommandController.shortId(sessionId)}`
+      );
+      return;
+    }
     if (cached.length > 0) {
       if (!canApply(sessionId)) {
         return;
@@ -107,7 +121,59 @@ export class RemoteChatCommandController {
       this.callbacks.onStatusText(RemoteI18n.t('status.messagesRestored'));
       return;
     }
-    await this.reloadMessages(sessionId, canApply);
+    await this.loadLatestMessages(sessionId, canApply, generation);
+  }
+
+  /**
+   * Serializes initial transcript misses without turning every rapid tap into a
+   * desktop RPC. The request already on the wire is still cached when it lands;
+   * all selections made while it is running race only in memory, and the last
+   * one wins the right to issue the next request.
+   */
+  private async loadLatestMessages(
+    sessionId: string,
+    canApply: (sessionId: string) => boolean,
+    generation: number
+  ): Promise<void> {
+    while (this.initialLoadInFlight !== undefined) {
+      const inFlight = this.initialLoadInFlight;
+      if (this.initialLoadSessionId === sessionId) {
+        RemoteLogger.info(
+          `message load joined session=${RemoteChatCommandController.shortId(sessionId)}`
+        );
+        await inFlight;
+        return;
+      }
+      RemoteLogger.info(
+        `message load waiting session=${RemoteChatCommandController.shortId(sessionId)} ` +
+          `behind=${RemoteChatCommandController.shortId(this.initialLoadSessionId)}`
+      );
+      await inFlight;
+      if (generation !== this.initialLoadGeneration) {
+        RemoteLogger.info(
+          `message load superseded before request session=${RemoteChatCommandController.shortId(sessionId)}`
+        );
+        return;
+      }
+    }
+    if (generation !== this.initialLoadGeneration) {
+      RemoteLogger.info(
+        `message load superseded before start session=${RemoteChatCommandController.shortId(sessionId)}`
+      );
+      return;
+    }
+
+    const request = this.reloadMessages(sessionId, canApply);
+    this.initialLoadInFlight = request;
+    this.initialLoadSessionId = sessionId;
+    try {
+      await request;
+    } finally {
+      if (this.initialLoadInFlight === request) {
+        this.initialLoadInFlight = undefined;
+        this.initialLoadSessionId = '';
+      }
+    }
   }
 
   /**

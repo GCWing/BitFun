@@ -210,14 +210,19 @@ export struct WideConversationHost {
       workspacePickerPlacement: this.sessionDetailsPlacement,
       onOpenSession: this.actions.onRemoteHome.openSessionInPlace,
       onCreateInWorkspace: (deviceId: string, path: string) => {
-        this.actions.onRemoteHome.createInWorkspaceInPlace(path, 'code', deviceId);
+        this.actions.onRemoteHome.openCreateInWorkspace(path, deviceId);
       },
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);
       },
+      onExpandWorkspace: async (deviceId: string, path: string): Promise<void> => {
+        await this.actions.onRemoteHome.loadWorkspaceSessions(deviceId, path);
+      },
       onSelectDevice: this.actions.onRemoteHome.selectDirectoryDevice,
       onRetryDevice: this.actions.onRemoteHome.retryDirectoryDevice,
-      onAddWorkspace: this.actions.onRemoteHome.addDirectoryWorkspace
+      onAddWorkspace: this.actions.onRemoteHome.addDirectoryWorkspace,
+      onRefreshDevices: this.actions.onSidebar.refreshDevices,
+      onAddDevice: this.actions.onSidebar.addDesktop
     })
   }
 

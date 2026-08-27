@@ -178,12 +178,23 @@ export default function architectureUnitTest() {
       expect(SidebarDirectoryPreviewPolicy.nextVisibleCount(8, 8)).assertEqual(8);
       expect(SidebarDirectoryPreviewPolicy.hiddenCount(2, 3)).assertEqual(0);
       expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(true)).assertFalse();
-      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(false)).assertTrue();
+      expect(SidebarDirectoryPreviewPolicy.workspaceExpandedByDefault(false)).assertFalse();
+    });
+
+    it('keeps workspace disclosure identity stable and device scoped', 0, () => {
+      expect(SidebarDirectoryPreviewPolicy.workspaceKey('device-a', '/repo/bitfun/'))
+        .assertEqual('device-a:/repo/bitfun');
+      expect(SidebarDirectoryPreviewPolicy.workspaceKey('device-a', '/repo/bitfun'))
+        .assertEqual('device-a:/repo/bitfun');
+      expect(SidebarDirectoryPreviewPolicy.workspaceKey('device-b', '/repo/bitfun'))
+        .assertEqual('device-b:/repo/bitfun');
+      expect(SidebarDirectoryPreviewPolicy.workspaceKey('device-a', '/repo/other'))
+        .assertEqual('device-a:/repo/other');
     });
   });
 
   describe('SettingsPlacementPolicy', () => {
-    it('keeps a portrait phone and a folded cover on a large bottom sheet', 0, () => {
+    it('keeps settings on a large bottom sheet at every width and fold posture', 0, () => {
       const phone = SettingsPlacementPolicy.resolve(
         placementInput(390, 844, false, false, false, [], []),
         SettingsSheetKind.Settings
@@ -196,11 +207,27 @@ export default function architectureUnitTest() {
         AdaptiveLayoutInput.empty(),
         SettingsSheetKind.Settings
       );
+      const wideFold = SettingsPlacementPolicy.resolve(
+        placementInput(
+          707.2,
+          706.56,
+          false,
+          true,
+          true,
+          [new ConversationLayoutCrease(340.48, 54.72)],
+          [],
+          true,
+          3
+        ),
+        SettingsSheetKind.Settings
+      );
       expect(phone.mode).assertEqual(SettingsPlacementMode.Bottom);
       expect(phone.width).assertEqual(0);
       expect(phone.height).assertEqual(0);
       expect(folded.mode).assertEqual(SettingsPlacementMode.Bottom);
       expect(empty.mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(wideFold.mode).assertEqual(SettingsPlacementMode.Bottom);
+      expect(wideFold.width).assertEqual(0);
       expect(SettingsPlacementPolicy.compactBottom().mode).assertEqual(SettingsPlacementMode.Bottom);
       expect(SettingsPlacementPolicy.compactBottom(SettingsSheetKind.RemoteViewSettings).height)
         .assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);
@@ -210,14 +237,14 @@ export default function architectureUnitTest() {
     it('uses a 45 percent side sheet when a narrow window is landscape', 0, () => {
       const placement = SettingsPlacementPolicy.resolve(
         placementInput(844, 390, false, false, false, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
       expect(placement.width).assertEqual(Math.round(844 * 0.45));
       expect(placement.height).assertEqual(SettingsPlacementPolicy.SIDE_MIN_HEIGHT);
       expect(SettingsPlacementPolicy.resolve(
         placementInput(590, 300, false, false, false, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       ).mode).assertEqual(SettingsPlacementMode.Bottom);
       assertSheetMissesCreases(placement, [], 844);
     });
@@ -225,7 +252,7 @@ export default function architectureUnitTest() {
     it('clamps a crease-free tablet sheet between 400 and 520', 0, () => {
       const pad = SettingsPlacementPolicy.resolve(
         placementInput(1440, 960, false, false, true, [], [], false, 0),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       const narrowWide = SettingsPlacementPolicy.resolve(
         placementInput(1000, 800, false, false, true, [], []),
@@ -233,7 +260,7 @@ export default function architectureUnitTest() {
       );
       const huge = SettingsPlacementPolicy.resolve(
         placementInput(2000, 1200, false, false, true, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       expect(pad.mode).assertEqual(SettingsPlacementMode.Side);
       expect(pad.width).assertEqual(461);
@@ -242,15 +269,15 @@ export default function architectureUnitTest() {
       expect(huge.width).assertEqual(SettingsPlacementPolicy.TABLET_MAX_WIDTH);
       expect(SettingsPlacementPolicy.resolve(
         placementInput(700, 900, false, false, false, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       ).mode).assertEqual(SettingsPlacementMode.Side);
       expect(SettingsPlacementPolicy.resolve(
         placementInput(0, 0, false, false, true, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       ).mode).assertEqual(SettingsPlacementMode.Bottom);
       expect(SettingsPlacementPolicy.resolve(
         placementInput(1440, 0, false, false, true, [], []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       ).height).assertEqual(SettingsPlacementPolicy.SIDE_MAX_HEIGHT);
       assertSheetMissesCreases(pad, [], 1440);
     });
@@ -259,7 +286,7 @@ export default function architectureUnitTest() {
       const crease = new ConversationLayoutCrease(352, 16);
       const placement = SettingsPlacementPolicy.resolve(
         placementInput(680, 740, false, false, true, [crease], [], true, 1),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
       expect(placement.width).assertEqual(312);
@@ -288,7 +315,7 @@ export default function architectureUnitTest() {
       const crease = new ConversationLayoutCrease(590, 8);
       const placement = SettingsPlacementPolicy.resolve(
         placementInput(630, 700, false, false, true, [crease], [], true, 1),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
       expect(placement.width).assertEqual(32);
@@ -308,7 +335,7 @@ export default function architectureUnitTest() {
       );
       const overflow = SettingsPlacementPolicy.resolve(
         placementInput(390, 844, false, false, false, illegal, []),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
       expect(placement.width).assertEqual(SettingsPlacementPolicy.TABLET_MIN_WIDTH);
@@ -385,7 +412,7 @@ export default function architectureUnitTest() {
           true,
           3
         ),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       const missing = SettingsPlacementPolicy.resolve(
         placementInput(390, 844, false, true, false, [], [], true, 3),
@@ -423,7 +450,7 @@ export default function architectureUnitTest() {
           true,
           3
         ),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       const rtlTriFold = SettingsPlacementPolicy.resolve(
         placementInput(
@@ -441,7 +468,7 @@ export default function architectureUnitTest() {
           11,
           true
         ),
-        SettingsSheetKind.Settings
+        SettingsSheetKind.Connect
       );
       const remote = SettingsPlacementPolicy.resolve(
         placementInput(

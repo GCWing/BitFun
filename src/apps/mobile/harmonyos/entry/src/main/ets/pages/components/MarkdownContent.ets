@@ -3,7 +3,9 @@ import {
   MarkdownParseCache,
   ParsedMarkdownBlock,
   ParsedMarkdownInline,
-  ParsedMarkdownListItem
+  ParsedMarkdownListItem,
+  ParsedMarkdownTableCell,
+  ParsedMarkdownTableRow
 } from '../../services/MarkdownParser';
 import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
@@ -34,12 +36,12 @@ export struct MarkdownContent {
         this.InlineText(block.inlines, 13, 18, MUTED, false)
       }
         .width('100%')
-        .padding({ left: 9 })
+        .padding({ left: 9 + Math.max(0, block.level - 1) * 10 })
         .border({ width: { left: 2 }, color: LINE })
     } else if (block.type === 'list') {
       this.MarkdownList(block.items)
     } else if (block.type === 'table') {
-      this.MarkdownTable(block.text)
+      this.MarkdownTable(block.tableRows)
     } else if (block.type === 'divider') {
       Text('')
         .width('100%')
@@ -79,6 +81,11 @@ export struct MarkdownContent {
         .fontFamily('monospace')
         .fontWeight(bold ? FontWeight.Bold : FontWeight.Regular)
         .fontColor(INK)
+    } else if (inline.type === 'delete') {
+      Span(inline.text)
+        .fontWeight(bold ? FontWeight.Bold : FontWeight.Regular)
+        .fontColor(color)
+        .decoration({ type: TextDecorationType.LineThrough, color })
     } else if (inline.type === 'link') {
       Span(inline.text)
         .fontWeight(bold ? FontWeight.Bold : FontWeight.Regular)
@@ -99,18 +106,34 @@ export struct MarkdownContent {
     Column({ space: 4 }) {
       ForEach(items, (item: ParsedMarkdownListItem) => {
         Row({ space: 7 }) {
-          Text(item.marker)
-            .width(20)
-            .fontSize(14)
-            .lineHeight(21)
-            .fontColor(MUTED)
-            .textAlign(TextAlign.End)
+          if (item.checked >= 0) {
+            Stack({ alignContent: Alignment.Center }) {
+              Text(item.checked === 1 ? '✓' : '')
+                .fontSize(11)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(MUTED)
+                .textAlign(TextAlign.Center)
+            }
+            .width(16)
+            .height(16)
+            .margin({ left: 2, right: 2, top: 2 })
+            .border({ width: 1, color: LINE })
+            .borderRadius(4)
+          } else {
+            Text(item.marker)
+              .width(20)
+              .fontSize(14)
+              .lineHeight(21)
+              .fontColor(MUTED)
+              .textAlign(TextAlign.End)
+          }
           Column() {
             this.InlineText(item.inlines, 14, 21, INK, false)
           }
             .layoutWeight(1)
         }
         .width('100%')
+        .padding({ left: item.depth * 16 })
         .alignItems(VerticalAlign.Top)
       }, (item: ParsedMarkdownListItem) => item.id)
     }
@@ -118,22 +141,47 @@ export struct MarkdownContent {
   }
 
   @Builder
-  MarkdownTable(text: string) {
+  MarkdownTable(rows: ParsedMarkdownTableRow[]) {
     Scroll() {
-      Text(text)
-        .fontSize(10)
-        .lineHeight(15)
-        .fontColor(INK)
-        .fontFamily('monospace')
+      Column() {
+        ForEach(rows, (row: ParsedMarkdownTableRow) => {
+          Row() {
+            ForEach(row.cells, (cell: ParsedMarkdownTableCell) => {
+              this.MarkdownTableCell(cell, row.header)
+            }, (cell: ParsedMarkdownTableCell) => cell.id)
+          }
+        }, (row: ParsedMarkdownTableRow) => row.id)
+      }
         .constraintSize({ minWidth: '100%' })
     }
     .scrollable(ScrollDirection.Horizontal)
     .scrollBar(BarState.Off)
     .width('100%')
-    .padding({ left: 9, right: 9, top: 8, bottom: 8 })
-    .backgroundColor(SOFT)
-    .borderRadius(12)
+    .backgroundColor(CARD)
+    .borderRadius(10)
     .border({ width: 1, color: LINE })
+  }
+
+  @Builder
+  MarkdownTableCell(cell: ParsedMarkdownTableCell, header: boolean) {
+    Column() {
+      Text() {
+        ForEach(cell.inlines, (inline: ParsedMarkdownInline) => {
+          this.InlineSpan(inline, INK, header)
+        }, (inline: ParsedMarkdownInline) => inline.id)
+      }
+      .width('100%')
+      .fontSize(12)
+      .lineHeight(18)
+      .fontColor(INK)
+      .textAlign(this.tableTextAlign(cell.alignment))
+    }
+    .width(132)
+    .constraintSize({ minHeight: 38 })
+    .padding({ left: 10, right: 10, top: 9, bottom: 9 })
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(header ? SOFT : CARD)
+    .border({ width: { right: 1, bottom: 1 }, color: LINE })
   }
 
   @Builder
@@ -195,5 +243,15 @@ export struct MarkdownContent {
       return 20;
     }
     return 20;
+  }
+
+  private tableTextAlign(alignment: string): TextAlign {
+    if (alignment === 'center') {
+      return TextAlign.Center;
+    }
+    if (alignment === 'right') {
+      return TextAlign.End;
+    }
+    return TextAlign.Start;
   }
 }
