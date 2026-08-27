@@ -1262,7 +1262,7 @@ function findFinishingTurnForBackendIdle(
 }
 
 /**
- * Handle session title generated event (AI or fallback auto-generation)
+ * Handle session title changes delivered through the compatible title event.
  */
 function handleSessionTitleGenerated(event: any): void {
   const { sessionId, title } = event;

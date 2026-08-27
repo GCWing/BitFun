@@ -18,20 +18,21 @@ use bitfun_agent_runtime::session_control::{
     session_control_agent_type_or_default, session_control_cancel_result_message,
     session_control_cancel_status, session_control_created_result_message,
     session_control_creator_marker, session_control_deleted_result_message,
-    session_control_session_name_or_default, validate_session_control_input, validate_session_id,
-    SessionControlAction, SessionControlCancelRoute, SessionControlInput,
-    SessionControlValidationContext, SessionControlValidationResult,
+    session_control_renamed_result_message, session_control_session_name_or_default,
+    validate_session_control_input, validate_session_id, SessionControlAction,
+    SessionControlCancelRoute, SessionControlInput, SessionControlValidationContext,
+    SessionControlValidationResult,
 };
 use bitfun_core_types::SessionExecutionTarget;
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionSource, AgentTurnCancellationRequest,
+    AgentSessionRenameRequest, AgentSessionSummary, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
 };
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// SessionControl tool - create, cancel, delete, or list persisted sessions
+/// SessionControl tool - create, cancel, delete, rename, or list persisted sessions
 pub struct SessionControlTool;
 
 const CANCEL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
@@ -101,7 +102,9 @@ impl SessionControlTool {
         runtime: &AgentRuntime,
     ) -> BitFunResult<SessionControlWorkspaceTarget> {
         match action {
-            SessionControlAction::Cancel | SessionControlAction::Delete => {
+            SessionControlAction::Cancel
+            | SessionControlAction::Delete
+            | SessionControlAction::Rename => {
                 let session_id = session_id.ok_or_else(|| {
                     BitFunError::tool(format!("session_id is required for {}", action.as_str()))
                 })?;
@@ -165,6 +168,20 @@ impl SessionControlTool {
             workspace_id: binding.workspace_id,
             remote_connection_id: binding.remote_connection_id,
             remote_ssh_host: binding.remote_ssh_host,
+        }
+    }
+
+    fn rename_request(
+        workspace: &SessionControlWorkspaceTarget,
+        session_id: &str,
+        session_name: &str,
+    ) -> AgentSessionRenameRequest {
+        AgentSessionRenameRequest {
+            workspace_path: workspace.project_workspace.clone(),
+            session_id: session_id.to_string(),
+            session_name: session_name.to_string(),
+            remote_connection_id: workspace.remote_connection_id.clone(),
+            remote_ssh_host: workspace.remote_ssh_host.clone(),
         }
     }
 
@@ -271,23 +288,24 @@ Actions:
 - "create": Create a new session. You may optionally provide session_name and agent_type.
 - "cancel": Cancel the target session's currently running dialog turn. This does not delete the session or clear any queued messages that may still run later.
 - "delete": Delete an existing session by session_id.
+- "rename": Rename an existing session by session_id using session_name as the new title.
 - "list": List all sessions.
 
 Arguments:
-- "workspace": Absolute workspace path. Required for create and list. Ignored for cancel and delete.
-- "session_name": Only used by create. Defaults to "New Session".
+- "workspace": Absolute workspace path. Required for create and list. Ignored for cancel, delete, and rename.
+- "session_name": Used by create (defaults to "New Session") and required as the new title for rename.
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
   - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
   - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
   - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
-- "session_id": Required for cancel and delete."#
+- "session_id": Required for cancel, delete, and rename."#
                 .to_string(),
         )
     }
 
     fn short_description(&self) -> String {
-        "Create, list, cancel, and delete persisted agent sessions.".to_string()
+        "Create, list, rename, cancel, and delete persisted agent sessions.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {
@@ -300,20 +318,20 @@ Arguments:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["create", "cancel", "delete", "list"],
+                    "enum": ["create", "cancel", "delete", "rename", "list"],
                     "description": "The session action to perform."
                 },
                 "workspace": {
                     "type": "string",
-                    "description": "Required absolute workspace path for create and list. Ignored for cancel and delete."
+                    "description": "Required absolute workspace path for create and list. Ignored for cancel, delete, and rename."
                 },
                 "session_id": {
                     "type": "string",
-                    "description": "Required for cancel and delete."
+                    "description": "Required for cancel, delete, and rename."
                 },
                 "session_name": {
                     "type": "string",
-                    "description": "Optional display name when creating a session."
+                    "description": "Optional display name when creating a session; required as the new title when renaming."
                 },
                 "agent_type": {
                     "type": "string",
@@ -571,6 +589,67 @@ Arguments:
                     image_attachments: None,
                 }])
             }
+            SessionControlAction::Rename => {
+                let session_id = params.session_id.as_deref().ok_or_else(|| {
+                    BitFunError::tool("session_id is required for rename".to_string())
+                })?;
+                validate_session_id(session_id).map_err(BitFunError::tool)?;
+                let session_name = params
+                    .session_name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "session_name is required and must not be empty for rename".to_string(),
+                        )
+                    })?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::Rename,
+                        Some(session_id),
+                        context,
+                        &runtime,
+                    )
+                    .await?;
+                if self.current_workspace_session(context, &workspace.display_workspace)
+                    == Some(session_id)
+                {
+                    return Err(BitFunError::tool(
+                        "cannot rename the current session from SessionControl".to_string(),
+                    ));
+                }
+
+                // Reuse the same rename channel as the frontend
+                // renameChatSessionTitle (AgentSessionManagementPort::rename_session)
+                // so the persisted title stays consistent with the desktop/frontend.
+                runtime
+                    .rename_session(Self::rename_request(&workspace, session_id, session_name))
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!(
+                            "cannot rename session '{session_id}': {}",
+                            CoreServiceAgentRuntime::runtime_error_message(error)
+                        ))
+                    })?;
+
+                let result_for_assistant = session_control_renamed_result_message(
+                    session_id,
+                    &workspace.display_workspace,
+                    session_name,
+                );
+                Ok(vec![ToolResult::Result {
+                    data: json!({
+                        "success": true,
+                        "action": "rename",
+                        "workspace": workspace.display_workspace.clone(),
+                        "session_id": session_id,
+                        "session_name": session_name,
+                    }),
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }])
+            }
             SessionControlAction::List => {
                 let workspace = self
                     .resolve_effective_workspace(
@@ -689,6 +768,24 @@ mod tests {
         assert_eq!(PathBuf::from(target.display_workspace), worktree_path);
         assert_eq!(PathBuf::from(target.project_workspace), project_path);
         assert_eq!(target.execution_target, Some(execution_target));
+    }
+
+    #[test]
+    fn worktree_rename_uses_project_scope_for_persistence() {
+        let target = SessionControlWorkspaceTarget {
+            display_workspace: "/worktrees/wt-1".to_string(),
+            project_workspace: "/repo".to_string(),
+            execution_target: None,
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        let request = SessionControlTool::rename_request(&target, "session-1", "Renamed");
+
+        assert_eq!(request.workspace_path, "/repo");
+        assert_eq!(request.session_id, "session-1");
+        assert_eq!(request.session_name, "Renamed");
     }
 
     #[tokio::test]
@@ -824,5 +921,65 @@ mod tests {
         );
 
         assert_eq!(message, "Cancel active turn for session worker_1");
+    }
+
+    #[tokio::test]
+    async fn validate_rename_requires_session_name() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "rename",
+                    "session_id": "worker_1",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_name is required for rename")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_rename_requires_session_id() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "rename",
+                    "session_name": "new-title",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_id is required for rename")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_rename_accepts_session_id_and_name() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "rename",
+                    "session_id": "worker_1",
+                    "session_name": "new-title",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
     }
 }
