@@ -41,7 +41,29 @@ describe("plugin loader", () => {
     expect(result.diagnostics).toEqual([])
     expect(result.declarations).toHaveLength(1)
     expect(result.declarations[0]?.options).toEqual({ order: 2 })
+    expect(result.declarations[0]?.optionsDigest).toMatch(/^[0-9a-f]{64}$/)
     expect(result.declarations[0]?.resolvedSpec).toBe(pathToFileURL(await realpath(plugin)).href)
+  })
+
+  test("binds normalized source and declaration options into stable review facts", async () => {
+    const directory = await temporaryDirectory()
+    const plugin = path.join(directory, "plugin.ts")
+    await Bun.write(plugin, 'export default { id: "fixture.review", server: async () => ({}) }\n')
+
+    const first = await normalizePluginDeclarations([
+      { spec: "./plugin.ts", baseDirectory: directory, options: { nested: { right: 2, left: 1 } } },
+    ])
+    const reordered = await normalizePluginDeclarations([
+      { spec: pathToFileURL(plugin).href, baseDirectory: directory, options: { nested: { left: 1, right: 2 } } },
+    ])
+    const changed = await normalizePluginDeclarations([
+      { spec: "./plugin.ts", baseDirectory: directory, options: { nested: { left: 1, right: 3 } } },
+    ])
+
+    expect(first.declarations[0]?.identity).toBe(reordered.declarations[0]?.identity)
+    expect(first.declarations[0]?.resolvedSpec).toBe(reordered.declarations[0]?.resolvedSpec)
+    expect(first.declarations[0]?.optionsDigest).toBe(reordered.declarations[0]?.optionsDigest)
+    expect(first.declarations[0]?.optionsDigest).not.toBe(changed.declarations[0]?.optionsDigest)
   })
 
   test("prefers the default object-form plugin and exposes entrypoints without executing them", async () => {
@@ -318,6 +340,31 @@ describe("plugin loader", () => {
     expect(target.cache).toBe("installed")
     expect(await Bun.file(path.join(target.target, "package.json")).exists()).toBe(true)
     expect(await Bun.file(marker).exists()).toBe(false)
+  })
+
+  test("review preparation forwards the non-installing contract to npm resolution", async () => {
+    const directory = await temporaryDirectory()
+    let allowInstall: boolean | undefined
+    const result = await preparePlugins({
+      declarations: ["fixture-review@1.0.0"],
+      cacheDirectory: path.join(directory, "cache"),
+      allowInstall: false,
+      install: async (input) => {
+        allowInstall = input.allowInstall
+        throw new Error("activation review requires installation approval")
+      },
+    })
+
+    expect(allowInstall).toBe(false)
+    expect(result.reviewed[0]).toMatchObject({
+      spec: "fixture-review@1.0.0",
+      source: "npm",
+      identity: "npm:fixture-review",
+    })
+    expect(result.reviewed[0]?.optionsDigest).toMatch(/^[0-9a-f]{64}$/)
+    expect(result.prepared).toEqual([])
+    expect(result.diagnostics[0]?.stage).toBe("install")
+    expect(result.diagnostics[0]?.message).toContain("approval")
   })
 
   test("reuses an installed npm package directory without reinstalling it", async () => {

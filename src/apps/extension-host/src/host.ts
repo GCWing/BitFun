@@ -1,5 +1,6 @@
 import path from "node:path"
 import { realpath } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import type {
   AuthHook,
   AuthOAuthResult,
@@ -137,7 +138,7 @@ type Instance = {
   workspaces: Map<string, WorkspaceRegistration>
   flows: Map<string, OAuthFlow>
   fetches: Map<string, AuthFetch>
-  activeTools: Map<string, AbortController>
+  activeTools: Map<string, { controller: AbortController; done: Promise<void> }>
   activeFetches: Map<string, ActiveAuthFetch>
   openDone: Promise<void>
   finishOpen(): void
@@ -156,12 +157,15 @@ export type InstanceOpenInput = {
   config: WireValue
   plugins: PluginDeclaration[]
   configurationFingerprint?: string
+  expectedContentDigests?: Record<string, string>
+  expectedReviewDigest?: string
 }
 
 export type PluginsPrepareInput = {
   plugins: PluginDeclaration[]
   configurationFingerprint?: string
   defaultBaseDirectory?: string
+  allowInstall?: boolean
 }
 
 export class ExtensionHost {
@@ -201,17 +205,28 @@ export class ExtensionHost {
       declarations: input.plugins,
       defaultBaseDirectory: input.defaultBaseDirectory,
       configurationFingerprint: input.configurationFingerprint,
+      allowInstall: input.allowInstall,
     })
-    return HostMethodSchemas["host.plugins.prepare"].result.parse({
+    const result = {
       ...(input.configurationFingerprint
         ? { configurationFingerprint: input.configurationFingerprint }
         : {}),
+      reviewed: prepared.reviewed.map((plugin) => ({
+        spec: plugin.spec,
+        source: plugin.source,
+        identity: plugin.identity,
+        canonicalSource: plugin.resolvedSpec,
+        baseDirectory: plugin.baseDirectory,
+        optionsDigest: plugin.optionsDigest,
+      })),
       prepared: prepared.prepared.map((plugin) => ({
         spec: plugin.spec,
+        identity: plugin.identity,
         source: plugin.source,
         target: plugin.target,
         entry: plugin.entry,
         cache: plugin.cache,
+        ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
         ...(typeof plugin.package?.manifest.version === "string"
           ? { version: plugin.package.manifest.version }
           : {}),
@@ -222,6 +237,10 @@ export class ExtensionHost {
         message: diagnostic.message,
       })),
       diagnostics: prepared.diagnostics.map(protocolDiagnostic),
+    }
+    return HostMethodSchemas["host.plugins.prepare"].result.parse({
+      ...result,
+      reviewDigest: preparationReviewDigest(result),
     })
   }
 
@@ -300,7 +319,59 @@ export class ExtensionHost {
           declarations: input.plugins,
           defaultBaseDirectory: input.directory,
           configurationFingerprint: input.configurationFingerprint,
+          allowInstall: true,
         })
+        if (input.expectedReviewDigest) {
+          const reviewDigest = preparationReviewDigest({
+            ...(input.configurationFingerprint
+              ? { configurationFingerprint: input.configurationFingerprint }
+              : {}),
+            reviewed: prepared.reviewed.map((plugin) => ({
+              spec: plugin.spec,
+              source: plugin.source,
+              identity: plugin.identity,
+              canonicalSource: plugin.resolvedSpec,
+              baseDirectory: plugin.baseDirectory,
+              optionsDigest: plugin.optionsDigest,
+            })),
+            prepared: prepared.prepared.map((plugin) => ({
+              spec: plugin.spec,
+              identity: plugin.identity,
+              source: plugin.source,
+              target: plugin.target,
+              entry: plugin.entry,
+              ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
+              ...(typeof plugin.package?.manifest.version === "string"
+                ? { version: plugin.package.manifest.version }
+                : {}),
+            })),
+            failed: prepared.diagnostics.map((diagnostic) => ({
+              spec: diagnostic.spec,
+              stage: diagnostic.stage,
+            })),
+          })
+          if (reviewDigest !== input.expectedReviewDigest) {
+            throw new ExtensionHostError(-32004, "Plugin preparation changed before import", {
+              kind: "prepared_review_changed",
+            })
+          }
+        }
+        if (input.expectedContentDigests) {
+          for (const plugin of prepared.prepared) {
+            const expected = input.expectedContentDigests[plugin.identity]
+            if (!expected || !plugin.contentHash || expected !== plugin.contentHash) {
+              throw new ExtensionHostError(-32004, `Plugin ${plugin.spec} content changed before import`, {
+                kind: "prepared_content_changed",
+                plugin: plugin.spec,
+              })
+            }
+          }
+          if (prepared.prepared.length !== Object.keys(input.expectedContentDigests).length) {
+            throw new ExtensionHostError(-32004, "Prepared plugin graph changed before import", {
+              kind: "prepared_graph_changed",
+            })
+          }
+        }
         const loaded = await loadPreparedPlugins(prepared)
         this.#assertOpening(instance)
         diagnostics.push(...loaded.diagnostics)
@@ -432,6 +503,7 @@ export class ExtensionHost {
     declarations: readonly PluginDeclaration[]
     defaultBaseDirectory?: string
     configurationFingerprint?: string
+    allowInstall?: boolean
   }) {
     const key = preparationKey(input)
     const pending = this.#preparations.get(key)
@@ -455,6 +527,7 @@ export class ExtensionHost {
       cacheDirectory: this.#cacheDirectory,
       defaultBaseDirectory: input.defaultBaseDirectory,
       compatibilityVersion: OPENCODE_VERSION,
+      allowInstall: input.allowInstall,
     })
       .then((result) => {
         for (const diagnostic of result.diagnostics) {
@@ -567,7 +640,8 @@ export class ExtensionHost {
     }
 
     const controller = new AbortController()
-    instance.activeTools.set(input.executionID, controller)
+    const completed = Promise.withResolvers<void>()
+    instance.activeTools.set(input.executionID, { controller, done: completed.promise })
     try {
       const args = validateToolArguments(registration.definition.args, cloneWireValue(input.args, "args"))
       const result = await registration.definition.execute(args as never, {
@@ -610,16 +684,18 @@ export class ExtensionHost {
       throw pluginError(registration.plugin, `tool:${registration.id}`, error)
     } finally {
       instance.activeTools.delete(input.executionID)
+      completed.resolve()
     }
   }
 
-  cancelTool(input: { instanceID: string; generationKey?: string; revision?: string; executionID: string; reason?: string }) {
+  async cancelTool(input: { instanceID: string; generationKey?: string; revision?: string; executionID: string; reason?: string }) {
     const instance = this.#instance(input.instanceID)
     assertGeneration(instance, input.generationKey, input.revision)
-    const controller = instance.activeTools.get(input.executionID)
-    if (!controller) return { cancelled: false }
-    controller.abort(input.reason)
-    return { cancelled: true }
+    const active = instance.activeTools.get(input.executionID)
+    if (!active) return { cancelled: false }
+    active.controller.abort(input.reason)
+    await active.done
+    return { cancelled: !instance.activeTools.has(input.executionID) }
   }
 
   evaluateAuthPrompt(input: {
@@ -900,7 +976,10 @@ export class ExtensionHost {
   }
 
   async #disposeInstance(instance: Instance) {
-    for (const controller of instance.activeTools.values()) controller.abort("Instance closed")
+    const activeToolDrains = [...instance.activeTools.values()].map((active) => {
+      active.controller.abort("Instance closed")
+      return active.done
+    })
     for (const active of instance.activeFetches.values()) {
       active.controller.abort("Instance closed")
       void active.body?.cancel("Instance closed").catch(() => {})
@@ -908,6 +987,23 @@ export class ExtensionHost {
         void this.#streams.cancelRemote?.(instance.id, active.descriptor, "Instance closed").catch(() => {})
       }
     }
+    // Do not forget active calls after aborting them. A plugin may ignore the
+    // signal, so the host must keep the instance fenced until every call has
+    // settled; the Rust owner will terminate the process when this bounded
+    // dispose phase exceeds its deadline.
+    await promiseWithDeadline(
+      Promise.allSettled(activeToolDrains).then(() => undefined),
+      2_000,
+      "Plugin tool drain timed out",
+    ).catch(async (error) => {
+      await publishDiagnostic(this.#rpc, {
+        level: "error",
+        message: `Instance ${instance.id} active tool drain failed`,
+        instanceID: instance.id,
+        operation: "dispose",
+        error: errorData(error),
+      }).catch(() => {})
+    })
     instance.activeTools.clear()
     instance.activeFetches.clear()
     try {
@@ -930,7 +1026,7 @@ export class ExtensionHost {
         instance.disposed.add(retained)
         if (!retained.hooks.dispose) continue
         try {
-          await Promise.resolve(retained.hooks.dispose())
+          await promiseWithDeadline(Promise.resolve(retained.hooks.dispose()), 2_000, "Plugin dispose timed out")
         } catch (error) {
           await publishDiagnostic(this.#rpc, {
             level: "error",
@@ -1051,6 +1147,20 @@ export class ExtensionHost {
   }
 }
 
+async function promiseWithDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 function openResult(
   instance: Instance,
   config: WireValue,
@@ -1154,15 +1264,67 @@ function preparationKey(input: {
   declarations: readonly PluginDeclaration[]
   defaultBaseDirectory?: string
   configurationFingerprint?: string
+  allowInstall?: boolean
 }) {
   const needsDefaultBaseDirectory = input.declarations.some(
     ({ spec, baseDirectory }) => !baseDirectory && (spec.startsWith(".") || spec.startsWith("file:")),
   )
   return JSON.stringify({
     configurationFingerprint: input.configurationFingerprint,
+    allowInstall: input.allowInstall ?? true,
     declarations: input.declarations,
     ...(needsDefaultBaseDirectory ? { defaultBaseDirectory: input.defaultBaseDirectory } : {}),
   })
+}
+
+function preparationReviewDigest(input: {
+  configurationFingerprint?: string
+  reviewed: Array<{
+    spec: string
+    source: string
+    identity: string
+    canonicalSource: string
+    baseDirectory: string
+    optionsDigest: string
+  }>
+  prepared: Array<{
+    spec: string
+    identity: string
+    source: string
+    target: string
+    entry: string
+    contentHash?: string
+    version?: string
+  }>
+  failed: Array<{ spec: string; stage: string }>
+}) {
+  // Project only stable approval facts. Cache hit/installed state and
+  // diagnostic prose are operational details and must not make the same
+  // executable graph require a different approval at open time.
+  const material = {
+    ...(input.configurationFingerprint
+      ? { configurationFingerprint: input.configurationFingerprint }
+      : {}),
+    reviewed: input.reviewed.map((plugin) => ({
+      spec: plugin.spec,
+      source: plugin.source,
+      identity: plugin.identity,
+      canonicalSource: plugin.canonicalSource,
+      baseDirectory: plugin.baseDirectory,
+      optionsDigest: plugin.optionsDigest,
+    })),
+    prepared: input.prepared.map((plugin) => ({
+      spec: plugin.spec,
+      identity: plugin.identity,
+      source: plugin.source,
+      target: plugin.target,
+      entry: plugin.entry,
+      ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
+      ...(plugin.version ? { version: plugin.version } : {}),
+    })),
+    failed: input.failed.map((failure) => ({ spec: failure.spec, stage: failure.stage })),
+  }
+  return createHash("sha256").update(JSON.stringify(material)).digest("hex")
 }
 
 function findRegistration<T extends { registrationID: string }>(map: Map<string, T>, registrationID: string) {

@@ -17,16 +17,20 @@ pub enum RuntimeHookKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RuntimeHookSource {
-    Builtin { priority: u16 },
+    Builtin {
+        priority: u16,
+    },
     UserCommand,
     ProjectCommand,
     ImportedCommand,
-    OpenCodePlugin,
+    /// Executable plugin contribution. The concrete ecosystem is owned by an
+    /// adapter; the portable runtime only models trust/source precedence.
+    Plugin,
 }
 
 impl RuntimeHookSource {
-    pub const fn is_open_code_plugin(self) -> bool {
-        matches!(self, Self::OpenCodePlugin)
+    pub const fn is_plugin(self) -> bool {
+        matches!(self, Self::Plugin)
     }
 }
 
@@ -37,7 +41,7 @@ impl fmt::Display for RuntimeHookSource {
             Self::UserCommand => f.write_str("user-command"),
             Self::ProjectCommand => f.write_str("project-command"),
             Self::ImportedCommand => f.write_str("imported-command"),
-            Self::OpenCodePlugin => f.write_str("opencode-plugin"),
+            Self::Plugin => f.write_str("plugin"),
         }
     }
 }

@@ -5,21 +5,21 @@ use bitfun_agent_runtime::native_hooks::{
     RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistration, RuntimeHookRegistry,
     RuntimeHookSource,
 };
-use bitfun_opencode_plugin_host::{PluginGenerationLease, PluginHostClient};
+use bitfun_runtime_ports::{PluginHookInvocationRequest, PluginRuntimeInvocationPort};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) struct PluginHostHookExecutor {
-    client: PluginHostClient,
+    invoker: Arc<dyn PluginRuntimeInvocationPort>,
     deadline: Duration,
 }
 
 impl PluginHostHookExecutor {
-    pub(crate) fn new(client: PluginHostClient) -> Self {
+    pub(crate) fn new(invoker: Arc<dyn PluginRuntimeInvocationPort>) -> Self {
         Self {
-            client,
+            invoker,
             deadline: Duration::from_secs(30),
         }
     }
@@ -29,16 +29,16 @@ impl PluginHostHookExecutor {
 impl PluginHookExecutor for PluginHostHookExecutor {
     async fn execute(&self, call: PluginHookCall) -> Result<PluginHookResult, String> {
         let result = self
-            .client
-            .call_hook(
-                &PluginGenerationLease {
+            .invoker
+            .invoke_hook(
+                PluginHookInvocationRequest {
                     instance_id: call.instance_id.clone(),
                     generation_key: call.generation_key.clone(),
                     revision: call.revision.clone(),
+                    hook_name: call.hook_name.clone(),
+                    input: call.input,
+                    output: call.output,
                 },
-                &call.hook_name,
-                call.input,
-                call.output,
                 self.deadline,
             )
             .await
@@ -65,7 +65,32 @@ impl PluginHookExecutor for PluginHostHookExecutor {
 pub(crate) fn register_plugin_hooks(
     registry: &RuntimeHookRegistry,
     workspace_scope: &str,
-    client: PluginHostClient,
+    client: bitfun_opencode_plugin_host::PluginHostClient,
+    instance_id: &str,
+    generation_key: &str,
+    revision: &str,
+    hook_names: &[String],
+) -> Result<Option<RuntimeHookCommitToken>, String> {
+    register_plugin_hooks_with_invoker(
+        registry,
+        workspace_scope,
+        bitfun_opencode_plugin_host::invocation_port(
+            client,
+            instance_id.to_string(),
+            generation_key.to_string(),
+            revision.to_string(),
+        ),
+        instance_id,
+        generation_key,
+        revision,
+        hook_names,
+    )
+}
+
+pub(crate) fn register_plugin_hooks_with_invoker(
+    registry: &RuntimeHookRegistry,
+    workspace_scope: &str,
+    invoker: Arc<dyn PluginRuntimeInvocationPort>,
     instance_id: &str,
     generation_key: &str,
     revision: &str,
@@ -77,7 +102,7 @@ pub(crate) fn register_plugin_hooks(
         instance_id,
         hook_names.len()
     );
-    let executor: Arc<dyn PluginHookExecutor> = Arc::new(PluginHostHookExecutor::new(client));
+    let executor: Arc<dyn PluginHookExecutor> = Arc::new(PluginHostHookExecutor::new(invoker));
     let entries = hook_names
         .iter()
         .map(|hook_name| {
@@ -88,7 +113,7 @@ pub(crate) fn register_plugin_hooks(
                 RuntimeHookPlan::new(
                     id,
                     RuntimeHookKind::PluginHook(hook_name.clone()),
-                    RuntimeHookSource::OpenCodePlugin,
+                    RuntimeHookSource::Plugin,
                 ),
                 hook_name,
                 instance_id,
@@ -207,10 +232,8 @@ mod tests {
         assert!(token.is_none());
         commit_plugin_generation(&registry, "C:/workspace", token.as_ref());
         assert_eq!(
-            registry.source_activation_for_workspace(
-                RuntimeHookSource::OpenCodePlugin,
-                Some("C:/workspace")
-            ),
+            registry
+                .source_activation_for_workspace(RuntimeHookSource::Plugin, Some("C:/workspace")),
             RuntimeHookActivation::Ready
         );
     }
@@ -241,10 +264,8 @@ mod tests {
         )
         .is_err());
         assert_eq!(
-            registry.source_activation_for_workspace(
-                RuntimeHookSource::OpenCodePlugin,
-                Some("C:/workspace")
-            ),
+            registry
+                .source_activation_for_workspace(RuntimeHookSource::Plugin, Some("C:/workspace")),
             RuntimeHookActivation::Ready
         );
     }

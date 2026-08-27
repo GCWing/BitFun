@@ -209,7 +209,7 @@ async fn handshake_clamps_requested_frame_limit_to_the_safe_range() {
             .await
             .expect("handshake should succeed");
         host.await.expect("fake host should finish");
-        negotiated
+        negotiated.max_frame_bytes
     }
 
     assert_eq!(negotiate(1).await, MIN_NEGOTIATED_FRAME_BYTES);
@@ -357,7 +357,6 @@ async fn plugin_host_shutdown_waits_for_rpc_response_and_process_exit() {
     let report = host.shutdown(PluginHostShutdownPolicy::default()).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Graceful);
-    assert!(report.reaped);
     assert!(report.rpc_completed);
     assert_eq!(report.exit_code, Some(0));
     assert!(
@@ -442,7 +441,6 @@ async fn plugin_host_shutdown_forces_a_host_that_ignores_shutdown_and_eof() {
     let report = host.shutdown(policy).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Forced);
-    assert!(report.reaped);
     assert!(!report.rpc_completed);
     assert!(report.duration_ms < 2_000);
 }

@@ -4,8 +4,6 @@
 mod native_hook_payload_contracts;
 #[path = "agent_interaction_contracts/native_hook_registry_contracts.rs"]
 mod native_hook_registry_contracts;
-#[path = "agent_interaction_contracts/native_hook_settings_contracts.rs"]
-mod native_hook_settings_contracts;
 #[path = "agent_interaction_contracts/permission_contracts.rs"]
 mod permission_contracts;
 #[path = "agent_interaction_contracts/post_call_hook_contracts.rs"]

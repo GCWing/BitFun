@@ -645,8 +645,19 @@ enum ConfigAction {
 enum ExternalConfigAction {
     /// Show effective global and project compatibility settings
     Status,
+    /// Preview the exact configured OpenCode executable activation envelope
+    ReviewActivation,
+    /// Approve the exact activation envelope identified by its fingerprint
+    ApproveActivation {
+        /// Fingerprint printed by `review-activation`
+        fingerprint: String,
+    },
+    /// Revoke the current configured OpenCode executable activation envelope
+    RevokeActivation,
     /// Enable or disable external compatibility
     SetEnabled {
+        /// Whether external compatibility is enabled
+        #[arg(action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
         enabled: bool,
         #[arg(long, value_enum, default_value = "project")]
         scope: ExternalPolicyScopeArg,
@@ -1837,6 +1848,28 @@ mod external_config_command_tests {
             Some(Commands::Config {
                 action: ConfigAction::External {
                     action: ExternalConfigAction::Status
+                }
+            })
+        ));
+
+        let enabled = Cli::try_parse_from([
+            "bitfun",
+            "config",
+            "external",
+            "set-enabled",
+            "true",
+            "--scope",
+            "global",
+        ])
+        .expect("parse external enabled value");
+        assert!(matches!(
+            enabled.command,
+            Some(Commands::Config {
+                action: ConfigAction::External {
+                    action: ExternalConfigAction::SetEnabled {
+                        enabled: true,
+                        scope: ExternalPolicyScopeArg::Global,
+                    }
                 }
             })
         ));

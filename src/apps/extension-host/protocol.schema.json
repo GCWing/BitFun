@@ -296,6 +296,9 @@
         },
         "defaultBaseDirectory": {
           "type": "string"
+        },
+        "allowInstall": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -343,6 +346,55 @@
           "type": "string",
           "minLength": 1
         },
+        "reviewDigest": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "reviewed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "npm"
+                ]
+              },
+              "identity": {
+                "type": "string",
+                "minLength": 1
+              },
+              "canonicalSource": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseDirectory": {
+                "type": "string",
+                "minLength": 1
+              },
+              "optionsDigest": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "spec",
+              "source",
+              "identity",
+              "canonicalSource",
+              "baseDirectory",
+              "optionsDigest"
+            ],
+            "additionalProperties": false
+          }
+        },
         "prepared": {
           "type": "array",
           "items": {
@@ -350,6 +402,10 @@
             "properties": {
               "spec": {
                 "type": "string"
+              },
+              "identity": {
+                "type": "string",
+                "minLength": 1
               },
               "source": {
                 "type": "string",
@@ -372,12 +428,18 @@
                   "validated"
                 ]
               },
+              "contentHash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              },
               "version": {
                 "type": "string"
               }
             },
             "required": [
               "spec",
+              "identity",
               "source",
               "target",
               "entry",
@@ -458,6 +520,8 @@
         }
       },
       "required": [
+        "reviewDigest",
+        "reviewed",
         "prepared",
         "failed",
         "diagnostics"
@@ -561,6 +625,22 @@
         "configurationFingerprint": {
           "type": "string",
           "minLength": 1
+        },
+        "expectedContentDigests": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          }
+        },
+        "expectedReviewDigest": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
         }
       },
       "required": [
@@ -2856,7 +2936,7 @@
         },
         "maxFrameBytes": {
           "type": "integer",
-          "minimum": 65536,
+          "exclusiveMinimum": 0,
           "maximum": 67108864
         },
         "capabilities": {
@@ -2884,7 +2964,7 @@
         },
         "maxFrameBytes": {
           "type": "integer",
-          "minimum": 65536,
+          "exclusiveMinimum": 0,
           "maximum": 67108864
         },
         "cacheDirectory": {

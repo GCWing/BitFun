@@ -1294,7 +1294,9 @@ dependencies = [
 name = "bitfun-opencode-plugin-host"
 version = "0.2.19"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
+ "bitfun-runtime-ports",
  "bitfun-services-core",
  "log",
  "rand 0.8.7",

@@ -53,6 +53,60 @@ describe("ExtensionHost lifecycle and hooks", () => {
     expect(prepareCalls).toBe(1)
   })
 
+  test("rejects a declaration that changes after activation review", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "review-fence")
+    const plugin = path.join(harness.root, "review-fence.ts")
+    const plugins = [{ spec: plugin, options: { permission: "ask" } }]
+    await Bun.write(plugin, 'export default { id: "fixture.review-fence", server: async () => ({}) }\n')
+
+    const prepared = await harness.host.prepare({ plugins, configurationFingerprint: "review-fence" })
+    expect(prepared.reviewDigest).toMatch(/^[0-9a-f]{64}$/)
+
+    await expect(
+      harness.host.open({
+        instanceID: "review-fence",
+        project: {},
+        directory,
+        worktree: directory,
+        config: {},
+        plugins: [{ spec: plugin, options: { permission: "auto" } }],
+        configurationFingerprint: "review-fence",
+        expectedReviewDigest: prepared.reviewDigest,
+      }),
+    ).rejects.toMatchObject({ data: { kind: "prepared_review_changed" } })
+  })
+
+  test("uses the normalized plugin graph when duplicate declarations are reviewed", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "review-dedupe")
+    const plugin = path.join(harness.root, "review-dedupe.ts")
+    await Bun.write(plugin, 'export default { id: "fixture.review-dedupe", server: async () => ({}) }\n')
+    const plugins = [
+      { spec: plugin, options: { selected: false } },
+      { spec: plugin, options: { selected: true } },
+    ]
+
+    const prepared = await harness.host.prepare({ plugins, configurationFingerprint: "review-dedupe" })
+    expect(prepared.reviewed).toHaveLength(1)
+    expect(prepared.prepared).toHaveLength(1)
+
+    const opened = await harness.host.open({
+      instanceID: "review-dedupe",
+      project: {},
+      directory,
+      worktree: directory,
+      config: {},
+      plugins,
+      configurationFingerprint: "review-dedupe",
+      expectedReviewDigest: prepared.reviewDigest,
+      expectedContentDigests: Object.fromEntries(
+        prepared.prepared.map((entry) => [entry.identity, entry.contentHash!]),
+      ),
+    })
+    expect(opened.instanceID).toBe("review-dedupe")
+  })
+
   test("isolates config and dispose failures while preserving shared sequential mutations", async () => {
     const harness = await createHarness()
     const directory = await projectDirectory(harness.root, "project")
@@ -226,9 +280,13 @@ describe("ExtensionHost tools", () => {
       args: { value: "wait", waitForAbort: true },
       context: { sessionID: "session", messageID: "message", agent: "agent" },
     })
+    const cancelledResult = pending.then(
+      () => undefined,
+      (error) => error,
+    )
     await waitFor(() => harness.rpc.requests.some((request) => request.params.executionID === "execute-2"))
-    expect(harness.host.cancelTool({ instanceID: "tools", executionID: "execute-2" })).toEqual({ cancelled: true })
-    await expect(pending).rejects.toMatchObject({
+    await expect(harness.host.cancelTool({ instanceID: "tools", executionID: "execute-2" })).resolves.toEqual({ cancelled: true })
+    await expect(cancelledResult).resolves.toMatchObject({
       code: -32003,
       data: expect.objectContaining({ operation: "tool:fixture.echo" }),
     })

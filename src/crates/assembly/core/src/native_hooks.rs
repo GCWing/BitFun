@@ -195,8 +195,7 @@ pub(crate) struct PluginToolAfterOutput {
 
 #[cfg(feature = "opencode-plugin-host")]
 pub(crate) fn clear_plugin_hook_workspace(workspace_scope: &str) {
-    runtime_hook_registry()
-        .clear_source_workspace(RuntimeHookSource::OpenCodePlugin, workspace_scope);
+    runtime_hook_registry().clear_source_workspace(RuntimeHookSource::Plugin, workspace_scope);
 }
 
 /// Everything a dispatch site knows about the running session.

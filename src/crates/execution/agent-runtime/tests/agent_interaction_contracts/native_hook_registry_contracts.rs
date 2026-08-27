@@ -49,7 +49,7 @@ fn plugin_registration_for_generation(
         RuntimeHookPlan::new(
             id,
             RuntimeHookKind::PluginHook("tool.execute.before".to_string()),
-            RuntimeHookSource::OpenCodePlugin,
+            RuntimeHookSource::Plugin,
         ),
         "tool.execute.before",
         instance_id,
@@ -71,10 +71,7 @@ fn activation_gate_hides_plugin_snapshot_until_ready() {
             "plugin-a",
         )])
         .unwrap();
-    registry.set_source_activation(
-        RuntimeHookSource::OpenCodePlugin,
-        RuntimeHookActivation::Preparing,
-    );
+    registry.set_source_activation(RuntimeHookSource::Plugin, RuntimeHookActivation::Preparing);
     assert!(registry
         .registrations_for_workspace(
             RuntimeHookKind::PluginHook("tool.execute.before".to_string()),
