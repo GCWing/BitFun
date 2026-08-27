@@ -26,6 +26,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({
     children,
     disabled,

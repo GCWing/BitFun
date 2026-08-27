@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,7 +17,7 @@ import {
   Server,
   Terminal,
 } from 'lucide-react';
-import { IconButton, Input, Select, Textarea } from '@/component-library';
+import { Input, Select, Textarea, Tooltip } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1638,19 +1638,18 @@ const AcpAgentsConfig: React.FC = () => {
                           >
                             {t('remote.refreshDetection')}
                           </Button>
-                          <IconButton
-                            variant="ghost"
-                            size="small"
-                            aria-label={t('remote.hideConnection', {
+                          <Tooltip content={t('remote.hideConnection', {
                               name: connection.name || connection.id,
-                            })}
-                            tooltip={t('remote.hideConnection', {
-                              name: connection.name || connection.id,
-                            })}
-                            onClick={() => hideRemoteConnection(connection)}
-                          >
-                            <EyeOff size={14} />
-                          </IconButton>
+                            })}>
+                            <IconButton
+                              size="sm"
+                              aria-label={t('remote.hideConnection', {
+                                name: connection.name || connection.id,
+                              })}
+                              onClick={() => hideRemoteConnection(connection)}
+                              icon={<EyeOff size={14} />}
+                            />
+                          </Tooltip>
                         </div>
                       </div>
                       <div
@@ -1843,19 +1842,18 @@ const AcpAgentsConfig: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <IconButton
-                        variant="ghost"
-                        size="small"
-                        aria-label={t('remote.restoreConnection', {
+                      <Tooltip content={t('remote.restoreConnection', {
                           name: connection.name || connection.id,
-                        })}
-                        tooltip={t('remote.restoreConnection', {
-                          name: connection.name || connection.id,
-                        })}
-                        onClick={() => restoreRemoteConnection(connection)}
-                      >
-                        <Eye size={14} />
-                      </IconButton>
+                        })}>
+                        <IconButton
+                          size="sm"
+                          aria-label={t('remote.restoreConnection', {
+                            name: connection.name || connection.id,
+                          })}
+                          onClick={() => restoreRemoteConnection(connection)}
+                          icon={<Eye size={14} />}
+                        />
+                      </Tooltip>
                     </div>
                   );
                 })}

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Select, Input, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
+import { Select, Input, Search, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -221,9 +221,14 @@ const SkillsConfig: React.FC = () => {
       <div className="bitfun-collection-form" data-bf-component="skills-config" data-bf-part="form">
         <div className="bitfun-collection-form__header">
           <h3>{t('form.title')}</h3>
-          <IconButton variant="ghost" size="small" onClick={resetForm} tooltip={t('form.closeTooltip')}>
-            <X size={14} />
-          </IconButton>
+          <Tooltip content={t('form.closeTooltip')}>
+            <IconButton
+              aria-label={t('form.closeTooltip')}
+              size="sm"
+              onClick={resetForm}
+              icon={<X size={14} />}
+            />
+          </Tooltip>
         </div>
         <div className="bitfun-collection-form__body" data-bf-component="skills-config" data-bf-part="formBody">
           <Select
@@ -253,9 +258,14 @@ const SkillsConfig: React.FC = () => {
               onChange={(e) => setFormPath(e.target.value)}
               variant="outlined"
             />
-            <IconButton variant="default" size="medium" onClick={handleBrowse} tooltip={t('form.path.browseTooltip')}>
-              <FolderOpen size={16} />
-            </IconButton>
+            <Tooltip content={t('form.path.browseTooltip')}>
+              <IconButton
+                aria-label={t('form.path.browseTooltip')}
+                size="md"
+                onClick={handleBrowse}
+                icon={<FolderOpen size={16} />}
+              />
+            </Tooltip>
           </div>
           <div className="bitfun-skills-config__path-hint">{t('form.path.hint')}</div>
           {isValidating && <div className="bitfun-skills-config__validating">{t('form.validating')}</div>}
@@ -523,28 +533,29 @@ const SkillsConfig: React.FC = () => {
   };
 
   const refreshExtra = (
-    <IconButton
-      variant="ghost"
-      size="small"
-      onClick={() => loadSkills(true)}
-      tooltip={t('toolbar.refreshTooltip')}
-    >
-      <RefreshCw size={16} />
-    </IconButton>
+    <Tooltip content={t('toolbar.refreshTooltip')}>
+      <IconButton
+        aria-label={t('toolbar.refreshTooltip')}
+        size="sm"
+        onClick={() => loadSkills(true)}
+        icon={<RefreshCw size={16} />}
+      />
+    </Tooltip>
   );
 
   const makeAddExtra = (level: SkillLevel) => (
     <>
       {level === 'user' && refreshExtra}
-      <IconButton
-        variant="primary"
-        size="small"
-        onClick={() => { setFormLevel(level); setShowAddForm(true); }}
-        tooltip={t('toolbar.addTooltip')}
-        disabled={level === 'project' && !hasWorkspace}
-      >
-        <Plus size={16} />
-      </IconButton>
+      <Tooltip content={t('toolbar.addTooltip')}>
+        <IconButton
+          aria-label={t('toolbar.addTooltip')}
+          variant="primary"
+          size="sm"
+          onClick={() => { setFormLevel(level); setShowAddForm(true); }}
+          disabled={level === 'project' && !hasWorkspace}
+          icon={<Plus size={16} />}
+        />
+      </Tooltip>
     </>
   );
 
@@ -634,14 +645,14 @@ const SkillsConfig: React.FC = () => {
           title={t('market.title')}
           description={t('market.subtitle')}
           extra={(
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={() => loadMarketSkills(marketKeyword)}
-              tooltip={t('market.refreshTooltip')}
-            >
-              <RefreshCw size={16} />
-            </IconButton>
+            <Tooltip content={t('market.refreshTooltip')}>
+              <IconButton
+                aria-label={t('market.refreshTooltip')}
+                size="sm"
+                onClick={() => loadMarketSkills(marketKeyword)}
+                icon={<RefreshCw size={16} />}
+              />
+            </Tooltip>
           )}
         >
           <div className="bitfun-skills-config__market-toolbar" data-bf-component="skills-config" data-bf-part="marketToolbar">
