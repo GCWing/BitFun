@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { IconButton, Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { Input, MarkdownRenderer, Modal, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1291,29 +1291,29 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     if (itemCount <= 0 || (page.totalPages <= 1 && !page.hasNext && page.pageIndex === 0)) return null;
     return (
       <div data-bf-component="review-platform" data-bf-part="pagination" className="review-platform__pagination review-platform__detail-pagination">
-        <IconButton
-          className="review-platform__icon-button"
-          size="xs"
-          variant="ghost"
-          tooltip={`Previous ${label} page`}
-          disabled={page.pageIndex === 0}
-          onClick={() => onPageChange(page.pageIndex - 1)}
-        >
-          <ChevronLeft size={14} />
-        </IconButton>
+        <Tooltip content={`Previous ${label} page`}>
+          <IconButton
+            aria-label={`Previous ${label} page`}
+            className="review-platform__icon-button"
+            size="sm"
+            disabled={page.pageIndex === 0}
+            onClick={() => onPageChange(page.pageIndex - 1)}
+            icon={<ChevronLeft size={14} />}
+          />
+        </Tooltip>
         <span>
           {label}: {page.start}-{page.end} of {page.totalLabel}
         </span>
-        <IconButton
-          className="review-platform__icon-button"
-          size="xs"
-          variant="ghost"
-          tooltip={`Next ${label} page`}
-          disabled={!page.hasNext && page.pageIndex >= page.totalPages - 1}
-          onClick={() => onPageChange(page.pageIndex + 1)}
-        >
-          <ChevronRight size={14} />
-        </IconButton>
+        <Tooltip content={`Next ${label} page`}>
+          <IconButton
+            aria-label={`Next ${label} page`}
+            className="review-platform__icon-button"
+            size="sm"
+            disabled={!page.hasNext && page.pageIndex >= page.totalPages - 1}
+            onClick={() => onPageChange(page.pageIndex + 1)}
+            icon={<ChevronRight size={14} />}
+          />
+        </Tooltip>
       </div>
     );
   }, []);
@@ -1892,38 +1892,38 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 </span>
               </Tooltip>
             )}
-            <IconButton
-              className="review-platform__icon-button"
-              size="xs"
-              variant="ghost"
-              tooltip={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
-              disabled={!selectedRemote || selectedRemote.platform === 'unknown' || loading || authSaving}
-              onClick={handleOpenAuthModal}
-            >
-              <KeyRound size={14} />
-            </IconButton>
-            {account?.authSource === 'stored' && (
+            <Tooltip content={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}>
               <IconButton
+                aria-label={selectedRemote?.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
                 className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Clear token"
-                disabled={!selectedRemote || loading || authSaving}
-                onClick={handleClearAuthToken}
-              >
-                <Trash2 size={14} />
-              </IconButton>
+                size="sm"
+                disabled={!selectedRemote || selectedRemote.platform === 'unknown' || loading || authSaving}
+                onClick={handleOpenAuthModal}
+                icon={<KeyRound size={14} />}
+              />
+            </Tooltip>
+            {account?.authSource === 'stored' && (
+              <Tooltip content="Clear token">
+                <IconButton
+                  aria-label="Clear token"
+                  className="review-platform__icon-button"
+                  size="sm"
+                  disabled={!selectedRemote || loading || authSaving}
+                  onClick={handleClearAuthToken}
+                  icon={<Trash2 size={14} />}
+                />
+              </Tooltip>
             )}
-            <IconButton
-              className="review-platform__icon-button"
-              size="xs"
-              variant="ghost"
-              tooltip="Refresh"
-              onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
-              isLoading={loading}
-            >
-              <RefreshCw size={14} />
-            </IconButton>
+            <Tooltip content="Refresh">
+              <IconButton
+                aria-label="Refresh"
+                className="review-platform__icon-button"
+                size="sm"
+                onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}
+                loading={loading}
+                icon={<RefreshCw size={14} />}
+              />
+            </Tooltip>
           </div>
         </div>
       )}
@@ -1957,7 +1957,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               onChange={event => setQuery(event.target.value)}
               placeholder="Search pull requests"
               prefix={<Search size={14} />}
-              suffix={query ? <IconButton className="review-platform__icon-button" size="xs" variant="ghost" onClick={() => setQuery('')}><XCircle size={14} /></IconButton> : undefined}
+              suffix={query ? <IconButton
+                aria-label="Clear search"
+                className="review-platform__icon-button"
+                size="sm"
+                onClick={() => setQuery('')}
+                icon={<XCircle size={14} />}
+              /> : undefined}
             />
             {!isGithubUserList && (
               <div className="review-platform__state-filters" data-bf-component="review-platform" data-bf-part="filters">
@@ -2040,29 +2046,29 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           </div>
           {!loading && !error && (totalPages > 1 || pagination.hasNext) && (
             <div className="review-platform__pagination" data-bf-component="review-platform" data-bf-part="pagination">
-              <IconButton
-                className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Previous page"
-                disabled={currentPageIndex === 0}
-                onClick={() => handlePageChange(currentPageIndex - 1)}
-              >
-                <ChevronLeft size={14} />
-              </IconButton>
+              <Tooltip content="Previous page">
+                <IconButton
+                  aria-label="Previous page"
+                  className="review-platform__icon-button"
+                  size="sm"
+                  disabled={currentPageIndex === 0}
+                  onClick={() => handlePageChange(currentPageIndex - 1)}
+                  icon={<ChevronLeft size={14} />}
+                />
+              </Tooltip>
               <span>
                 {pageStart}-{pageEnd} of {totalCount ?? `${pageEnd}+`}
               </span>
-              <IconButton
-                className="review-platform__icon-button"
-                size="xs"
-                variant="ghost"
-                tooltip="Next page"
-                disabled={!pagination.hasNext && currentPageIndex >= totalPages - 1}
-                onClick={() => handlePageChange(currentPageIndex + 1)}
-              >
-                <ChevronRight size={14} />
-              </IconButton>
+              <Tooltip content="Next page">
+                <IconButton
+                  aria-label="Next page"
+                  className="review-platform__icon-button"
+                  size="sm"
+                  disabled={!pagination.hasNext && currentPageIndex >= totalPages - 1}
+                  onClick={() => handlePageChange(currentPageIndex + 1)}
+                  icon={<ChevronRight size={14} />}
+                />
+              </Tooltip>
             </div>
           )}
         </aside>
@@ -2181,28 +2187,28 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     Open
                   </Button>
                   {detailOnly && selectedRemote && selectedRemote.platform !== 'unknown' && (
-                    <IconButton
-                      className="review-platform__icon-button"
-                      size="xs"
-                      variant="ghost"
-                      tooltip={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
-                      onClick={handleOpenAuthModal}
-                      disabled={authSaving}
-                    >
-                      <KeyRound size={14} />
-                    </IconButton>
+                    <Tooltip content={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}>
+                      <IconButton
+                        aria-label={selectedRemote.platform === 'github' ? 'GitHub CLI authentication' : account?.authSource === 'stored' ? 'Update token' : 'Add token'}
+                        className="review-platform__icon-button"
+                        size="sm"
+                        onClick={handleOpenAuthModal}
+                        disabled={authSaving}
+                        icon={<KeyRound size={14} />}
+                      />
+                    </Tooltip>
                   )}
-                  <IconButton
-                    className="review-platform__icon-button"
-                    size="xs"
-                    variant="ghost"
-                    tooltip="Refresh pull request"
-                    disabled={detailLoading}
-                    onClick={handleRefreshDetail}
-                    isLoading={detailLoading}
-                  >
-                    <RefreshCw size={14} />
-                  </IconButton>
+                  <Tooltip content="Refresh pull request">
+                    <IconButton
+                      aria-label="Refresh pull request"
+                      className="review-platform__icon-button"
+                      size="sm"
+                      disabled={detailLoading}
+                      onClick={handleRefreshDetail}
+                      loading={detailLoading}
+                      icon={<RefreshCw size={14} />}
+                    />
+                  </Tooltip>
                 </div>
               </div>
 
@@ -2318,38 +2324,38 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                   {ciItemStatusText(item)}
                                 </span>
                                 {expandable && (
-                                  <IconButton
-                                    className="review-platform__icon-button review-platform__ci-action"
-                                    size="xs"
-                                    variant="ghost"
-                                    tooltip={isCiExpanded ? 'Collapse details' : 'Expand details'}
-                                    onClick={() => toggleCiExpanded(item)}
-                                    disabled={ciLogLoading}
-                                    aria-busy={ciLogLoading}
-                                  >
-                                    {isCiExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                                  </IconButton>
+                                  <Tooltip content={isCiExpanded ? 'Collapse details' : 'Expand details'}>
+                                    <IconButton
+                                      aria-label={isCiExpanded ? 'Collapse details' : 'Expand details'}
+                                      className="review-platform__icon-button review-platform__ci-action"
+                                      size="sm"
+                                      onClick={() => toggleCiExpanded(item)}
+                                      disabled={ciLogLoading}
+                                      aria-busy={ciLogLoading}
+                                      icon={isCiExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                    />
+                                  </Tooltip>
                                 )}
-                                <IconButton
-                                  className="review-platform__icon-button review-platform__ci-action"
-                                  size="xs"
-                                  variant="ghost"
-                                  tooltip="Add this result to chat"
-                                  onClick={() => void handleAddCiItemContext(item)}
-                                  disabled={!selectedPr}
-                                >
-                                  <MessageSquareText size={13} />
-                                </IconButton>
-                                {item.webUrl && (
+                                <Tooltip content="Add this result to chat">
                                   <IconButton
+                                    aria-label="Add this result to chat"
                                     className="review-platform__icon-button review-platform__ci-action"
-                                    size="xs"
-                                    variant="ghost"
-                                    tooltip="Open result in provider"
-                                    onClick={() => void handleOpenCiUrl(item.webUrl)}
-                                  >
-                                    <Link2 size={12} />
-                                  </IconButton>
+                                    size="sm"
+                                    onClick={() => void handleAddCiItemContext(item)}
+                                    disabled={!selectedPr}
+                                    icon={<MessageSquareText size={13} />}
+                                  />
+                                </Tooltip>
+                                {item.webUrl && (
+                                  <Tooltip content="Open result in provider">
+                                    <IconButton
+                                      aria-label="Open result in provider"
+                                      className="review-platform__icon-button review-platform__ci-action"
+                                      size="sm"
+                                      onClick={() => void handleOpenCiUrl(item.webUrl)}
+                                      icon={<Link2 size={12} />}
+                                    />
+                                  </Tooltip>
                                 )}
                               </div>
                             </div>
