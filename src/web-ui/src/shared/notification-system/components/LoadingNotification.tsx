@@ -1,8 +1,8 @@
  
 
 import React from 'react';
+import { IconButton } from '@bitfun/ui';
 import { X, Loader2 } from 'lucide-react';
-import { IconButton } from '@/component-library/components/IconButton';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -57,13 +57,12 @@ export const LoadingNotification: React.FC<LoadingNotificationProps> = ({ notifi
       {cancellable && status === 'active' && (
         <IconButton
           type="button"
-          size="xs"
+          size="sm"
           className="loading-notification__cancel"
           onClick={handleCancel}
           aria-label={t('actions.cancel')}
-        >
-          <X size={14} />
-        </IconButton>
+          icon={<X />}
+        />
       )}
     </div>
   );
