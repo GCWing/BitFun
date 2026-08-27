@@ -188,6 +188,22 @@ describe('WorkspaceListSection layout styles', () => {
       .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-status-dot'));
   });
 
+  it('anchors remote workspace icons to the primary title line', () => {
+    const stylesheet = readWorkspaceListStylesheet();
+    const workspaceCard = extractBlock(stylesheet, '&__workspace-item-card');
+    const collapseButton = extractBlock(stylesheet, '&__workspace-item-collapse-btn');
+    const remoteCollapseButton = extractBlock(
+      stylesheet,
+      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn",
+    );
+
+    expect(workspaceCard).toContain('align-items: center;');
+    expect(collapseButton).toContain('min-height: 30px;');
+    expect(remoteCollapseButton).toContain('align-self: flex-start;');
+    expect(remoteCollapseButton).toContain('align-items: flex-start;');
+    expect(remoteCollapseButton).toContain('padding-top: 2px;');
+  });
+
   it('uses stable BitFun semantics for grouped entries without a redundant aggregate header', () => {
     const itemSource = readWorkspaceItemSource();
     const listSource = readWorkspaceListSource();
