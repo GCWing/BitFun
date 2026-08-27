@@ -1,3 +1,5 @@
+import { inputMethod } from '@kit.IMEKit';
+import { window } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MobileDesignGeometry, MobileDesignMotion } from '../../generated/MobileDesignTokens';
 import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
@@ -48,6 +50,7 @@ export struct ComposerBar {
   @Param selectedModelId: string = '';
   @Local showModelSelectorSheet: boolean = false;
   @Local showModelSelectorPopover: boolean = false;
+  @Local isPreparingModelSelectorPopover: boolean = false;
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   @Event onSend: () => void = () => {};
@@ -201,7 +204,7 @@ export struct ComposerBar {
     })
     .onClick(() => {
       if (this.presentation === ComposerPresentation.Floating) {
-        this.showModelSelectorPopover = !this.showModelSelectorPopover;
+        this.toggleModelSelectorPopover();
       } else {
         this.showModelSelectorSheet = true;
       }
@@ -558,7 +561,7 @@ export struct ComposerBar {
   }
 
   private isModelSelectorExpanded(): boolean {
-    return this.showModelSelectorSheet || this.showModelSelectorPopover;
+    return this.showModelSelectorSheet || this.showModelSelectorPopover || this.isPreparingModelSelectorPopover;
   }
 
   private shouldShowModelControl(): boolean {
@@ -601,6 +604,66 @@ export struct ComposerBar {
   private closeModelSelector(): void {
     this.showModelSelectorSheet = false;
     this.showModelSelectorPopover = false;
+    this.isPreparingModelSelectorPopover = false;
+  }
+
+  private async toggleModelSelectorPopover(): Promise<void> {
+    if (this.showModelSelectorPopover) {
+      this.closeModelSelector();
+      return;
+    }
+    if (this.isPreparingModelSelectorPopover) {
+      return;
+    }
+
+    // Keep the expanded composer and its model-control anchor mounted while the
+    // IME releases the window. Opening the popup before this completes makes its
+    // viewport and hit-testing inherit the keyboard-constrained layout.
+    this.isPreparingModelSelectorPopover = true;
+    await this.releaseKeyboardForModelSelector();
+
+    if (!this.isPreparingModelSelectorPopover || this.presentation !== ComposerPresentation.Floating) {
+      return;
+    }
+    this.showModelSelectorPopover = true;
+    this.isPreparingModelSelectorPopover = false;
+  }
+
+  private async releaseKeyboardForModelSelector(): Promise<void> {
+    const hostContext = this.getUIContext().getHostContext();
+    if (!hostContext) {
+      this.getUIContext().getFocusController().clearFocus();
+      return;
+    }
+
+    try {
+      const appWindow = await window.getLastWindow(hostContext);
+      const keyboardArea = appWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
+      if (!keyboardArea.visible) {
+        this.getUIContext().getFocusController().clearFocus();
+        return;
+      }
+
+      const keyboardDidHide = new Promise<void>((resolve) => {
+        const onKeyboardDidHide = (_keyboardInfo: window.KeyboardInfo): void => {
+          appWindow.off('keyboardDidHide', onKeyboardDidHide);
+          resolve();
+        };
+        appWindow.on('keyboardDidHide', onKeyboardDidHide);
+      });
+      try {
+        await inputMethod.getController().hideTextInput();
+      } catch (_error) {
+        // Clearing text focus is the platform-native close request when no IME
+        // controller session is attached to the focused editor.
+        this.getUIContext().getFocusController().clearFocus();
+      }
+      await keyboardDidHide;
+    } catch (_error) {
+      // A draft can keep the composer expanded without an active keyboard or
+      // window event. Releasing focus still leaves the model anchor mounted.
+    }
+    this.getUIContext().getFocusController().clearFocus();
   }
 
   private modelSelectorSheetOptions(): SheetOptions {
