@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { TabPane, Tabs } from '@/component-library';
+import { TabGroup } from '@bitfun/ui';
 import { useSettingsStore } from '../settingsStore';
 import type { SettingsPageProps, SettingsViewId } from '../settingsTypes';
 import './SettingsViewPage.scss';
@@ -25,6 +25,13 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
   const allowedViewIds = useMemo(() => new Set(views.map((view) => view.id)), [views]);
   const requestedViewId = viewId && allowedViewIds.has(viewId) ? viewId : defaultViewId;
   const [activeViewId, setActiveViewId] = useState<SettingsViewId>(requestedViewId);
+  const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
+  const tabItems = views.map((view) => ({
+    id: `settings-view-${view.id}-tab`,
+    label: view.label,
+    panelId: `settings-view-${view.id}-panel`,
+    value: view.id,
+  }));
 
   useEffect(() => {
     setActiveViewId(requestedViewId);
@@ -44,15 +51,20 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
       data-bf-part="root"
       data-bf-view={activeViewId}
     >
-      <Tabs
-        activeKey={activeViewId}
-        onChange={handleChange}
-        type="pill"
-        size="small"
-        className="bitfun-settings-view-page__tabs"
-      >
-        {views.map((view) => (
-          <TabPane key={view.id} tabKey={view.id} label={view.label}>
+      <div className="bitfun-settings-view-page__tabs">
+        <TabGroup
+          className="bitfun-settings-view-page__tab-list"
+          items={tabItems}
+          onValueChange={handleChange}
+          value={activeViewId}
+        />
+        {activeView && (
+          <div
+            aria-labelledby={`settings-view-${activeView.id}-tab`}
+            className="bitfun-settings-view-page__tab-content"
+            id={`settings-view-${activeView.id}-panel`}
+            role="tabpanel"
+          >
             <Suspense fallback={(
               <div
                 className="bitfun-settings-view-page__loading"
@@ -66,11 +78,11 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
                 <span className="bitfun-settings-view-page__loading-block" data-bf-component="settings-view-page" data-bf-part="loadingBlock" />
               </div>
             )}>
-              {view.content}
+              {activeView.content}
             </Suspense>
-          </TabPane>
-        ))}
-      </Tabs>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
