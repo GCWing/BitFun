@@ -142,15 +142,6 @@ impl CoordinationStore {
         })?
     }
 
-    pub(crate) async fn agent_id_for_session(
-        &self,
-        parent_session_id: &str,
-        child_session_id: &str,
-    ) -> BitFunResult<String> {
-        self.agent_id_for_session_with_requested_id(parent_session_id, child_session_id, None)
-            .await
-    }
-
     pub(crate) async fn agent_id_for_session_with_requested_id(
         &self,
         parent_session_id: &str,
@@ -1813,7 +1804,7 @@ mod tests {
             .await
             .expect("register first source agent");
         store
-            .agent_id_for_session("source", "child-2")
+            .agent_id_for_session_with_requested_id("source", "child-2", None)
             .await
             .expect("reserve second source agent");
         store

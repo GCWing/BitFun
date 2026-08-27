@@ -31,7 +31,7 @@ pub struct TranslateRequest {
 
 pub(crate) async fn apply_language_runtime_effects(
     app: &tauri::AppHandle,
-    state: &AppState,
+    _state: &AppState,
     language: &str,
 ) -> Result<(), String> {
     let Some(locale_id) = LocaleId::from_str(language) else {
@@ -54,13 +54,13 @@ pub(crate) async fn apply_language_runtime_effects(
 
     #[cfg(target_os = "macos")]
     {
-        let has_workspace = state.workspace_path.read().await.is_some();
+        let has_workspace = _state.workspace_path.read().await.is_some();
         let mode = if has_workspace {
             crate::macos_menubar::MenubarMode::Workspace
         } else {
             crate::macos_menubar::MenubarMode::Startup
         };
-        let edit_mode = *state.macos_edit_menu_mode.read().await;
+        let edit_mode = *_state.macos_edit_menu_mode.read().await;
         crate::macos_menubar::set_macos_menubar_with_mode(app, language, mode, edit_mode)
             .map_err(|error| format!("Failed to rebuild the localized menu: {error}"))?;
     }

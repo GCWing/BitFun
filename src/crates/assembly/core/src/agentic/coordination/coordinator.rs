@@ -11617,16 +11617,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
-    pub(crate) async fn agent_id_for_subagent_session(
-        &self,
-        parent_session_id: &str,
-        subagent_session_id: &str,
-    ) -> BitFunResult<String> {
-        self.background_subagent_outcomes
-            .agent_id_for_session(parent_session_id, subagent_session_id)
-            .await
-    }
-
     pub(crate) async fn agent_id_for_subagent_session_with_requested_id(
         &self,
         parent_session_id: &str,
@@ -17790,19 +17780,19 @@ mod tests {
         let (coordinator, _) = test_coordinator();
 
         let first_agent = coordinator
-            .agent_id_for_subagent_session("parent-1", "subagent-session-1")
+            .agent_id_for_subagent_session_with_requested_id("parent-1", "subagent-session-1", None)
             .await
             .expect("allocate first agent id");
         let repeated_agent = coordinator
-            .agent_id_for_subagent_session("parent-1", "subagent-session-1")
+            .agent_id_for_subagent_session_with_requested_id("parent-1", "subagent-session-1", None)
             .await
             .expect("reuse first agent id");
         let second_agent = coordinator
-            .agent_id_for_subagent_session("parent-1", "subagent-session-2")
+            .agent_id_for_subagent_session_with_requested_id("parent-1", "subagent-session-2", None)
             .await
             .expect("allocate second agent id");
         let other_parent_agent = coordinator
-            .agent_id_for_subagent_session("parent-2", "subagent-session-3")
+            .agent_id_for_subagent_session_with_requested_id("parent-2", "subagent-session-3", None)
             .await
             .expect("allocate agent id for another parent");
 
