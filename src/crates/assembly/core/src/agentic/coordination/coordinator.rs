@@ -12521,6 +12521,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .update_session_title(session_id, &normalized)
             .await?;
 
+        self.emit_event(AgenticEvent::SessionTitleGenerated {
+            session_id: session_id.to_string(),
+            title: normalized.clone(),
+            method: "manual".to_string(),
+        })
+        .await;
+
         Ok(normalized)
     }
 
@@ -18497,6 +18504,15 @@ mod tests {
                 .session_name,
             "Renamed"
         );
+        let events = coordinator.event_queue.dequeue_batch(10).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::SessionTitleGenerated {
+                session_id,
+                title,
+                method,
+            } if session_id == &created.session_id && title == "Renamed" && method == "manual"
+        )));
 
         AgentSessionManagementPort::archive_session(
             &coordinator,
