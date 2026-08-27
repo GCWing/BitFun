@@ -796,9 +796,66 @@ impl ToolPipeline {
         Ok(receivers)
     }
 
+    async fn non_relaxable_original_input_rejection(
+        &self,
+        task: &ToolTask,
+        updated_input: &serde_json::Value,
+    ) -> Option<bitfun_agent_tools::ValidationResult> {
+        if updated_input == &task.original_effective_arguments {
+            return None;
+        }
+
+        let tool = {
+            let registry = self.tool_registry.read().await;
+            registry
+                .get_tool(task.effective_tool_name())
+                .and_then(|tool| {
+                    resolve_contextual_tool(
+                        tool,
+                        task.context
+                            .workspace
+                            .as_ref()
+                            .map(|workspace| workspace.root_path()),
+                        task.context
+                            .workspace
+                            .as_ref()
+                            .is_some_and(|workspace| workspace.is_remote()),
+                    )
+                })
+        }?;
+        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
+        tool.validate_non_relaxable_input(&task.original_effective_arguments, Some(&tool_context))
+            .await
+            .filter(bitfun_agent_tools::ValidationResult::blocks_input_rewrite)
+    }
+
+    async fn apply_hook_input_rewrite(
+        &self,
+        task: &ToolTask,
+        updated_input: serde_json::Value,
+    ) -> bool {
+        let rejection = self
+            .non_relaxable_original_input_rejection(task, &updated_input)
+            .await;
+        let blocked = rejection.is_some();
+        if self.state_manager.apply_hook_input_rewrite(
+            &task.tool_call.tool_id,
+            updated_input,
+            rejection,
+        ) {
+            info!(
+                "PreToolUse hook rewrote tool arguments: tool_name={}, tool_id={}, blocked_by_original_input={}",
+                task.effective_tool_name(),
+                task.tool_call.tool_id,
+                blocked
+            );
+        }
+        blocked
+    }
+
     /// Run PreToolUse hooks for every valid task and record their decisions
-    /// as pre-seeded permission plans. `updatedInput` rewrites the stored
-    /// task arguments before validation and permission planning observe them.
+    /// as pre-seeded permission plans. `updatedInput` becomes the final input,
+    /// but cannot relax non-relaxable validation of the original input.
     async fn apply_pre_tool_use_hooks(&self, task_ids: &[String]) {
         for task_id in task_ids {
             let Some(task) = self.state_manager.get_task(task_id) else {
@@ -819,14 +876,15 @@ impl ToolPipeline {
             )
             .await;
             if let Some(updated_input) = decision.updated_input {
-                if self
-                    .state_manager
-                    .update_task_arguments(task_id, updated_input)
-                {
+                if self.apply_hook_input_rewrite(&task, updated_input).await {
                     info!(
-                        "PreToolUse hook rewrote tool arguments: tool_name={}, tool_id={}",
+                        "PreToolUse hook rewrite was rejected by original-input constraints: tool_name={}, tool_id={}",
                         tool_name, task_id
                     );
+                    // A hook allow decision cannot override this internal
+                    // rejection. Execution reports the stored validation
+                    // reason without invoking the tool.
+                    continue;
                 }
             }
             if let Some(reason) = decision.deny_reason {
@@ -851,6 +909,49 @@ impl ToolPipeline {
                 self.hook_preapprovals.lock().await.insert(task_id.clone());
             }
         }
+    }
+
+    async fn concurrency_flags_for_final_inputs(
+        &self,
+        task_ids: &[String],
+        subagent_call_count: usize,
+        subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+    ) -> Vec<bool> {
+        let registry = self.tool_registry.read().await;
+        task_ids
+            .iter()
+            .map(|task_id| {
+                let Some(task) = self.state_manager.get_task(task_id) else {
+                    return false;
+                };
+                if task.invocation_resolution_error.is_some() {
+                    return false;
+                }
+                let tool_is_concurrency_safe = registry
+                    .get_tool(task.effective_tool_name())
+                    .and_then(|tool| {
+                        resolve_contextual_tool(
+                            tool,
+                            task.context
+                                .workspace
+                                .as_ref()
+                                .map(|workspace| workspace.root_path()),
+                            task.context
+                                .workspace
+                                .as_ref()
+                                .is_some_and(|workspace| workspace.is_remote()),
+                        )
+                    })
+                    .map(|tool| tool.is_concurrency_safe(Some(task.effective_arguments())))
+                    .unwrap_or(false);
+                tool_call_concurrency_safe_for_batch(
+                    task.effective_tool_name(),
+                    tool_is_concurrency_safe,
+                    subagent_call_count,
+                    subagent_batch_execution_policy,
+                )
+            })
+            .collect()
     }
 
     /// Run PostToolUse hooks for a completed tool call and fold blocking
@@ -913,6 +1014,9 @@ impl ToolPipeline {
             let Some(task) = self.state_manager.get_task(task_id) else {
                 continue;
             };
+            if task.input_rewrite_rejection.is_some() {
+                continue;
+            }
             let tool_name = task.invocation.effective_tool_name.clone();
             if task.invocation_resolution_error.is_some()
                 || task.tool_call.tool_name.is_empty()
@@ -1334,43 +1438,6 @@ impl ToolPipeline {
             })
             .count();
 
-        // Determine concurrency safety for each tool call
-        let concurrency_flags: Vec<bool> = {
-            let registry = self.tool_registry.read().await;
-            resolved_tool_calls
-                .iter()
-                .map(|(_, invocation, resolution_error)| {
-                    if resolution_error.is_some() {
-                        return false;
-                    }
-                    let tool_is_concurrency_safe = registry
-                        .get_tool(&invocation.effective_tool_name)
-                        .and_then(|tool| {
-                            resolve_contextual_tool(
-                                tool,
-                                context
-                                    .workspace
-                                    .as_ref()
-                                    .map(|workspace| workspace.root_path()),
-                                context
-                                    .workspace
-                                    .as_ref()
-                                    .is_some_and(|workspace| workspace.is_remote()),
-                            )
-                        })
-                        .map(|tool| tool.is_concurrency_safe(Some(&invocation.effective_arguments)))
-                        .unwrap_or(false);
-                    tool_call_concurrency_safe_for_batch(
-                        &invocation.effective_tool_name,
-                        tool_is_concurrency_safe,
-                        subagent_call_count,
-                        options.subagent_batch_execution_policy,
-                    )
-                })
-                .collect()
-        };
-        let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
-
         // Create tasks for all tool calls
         let mut task_ids = Vec::with_capacity(resolved_tool_calls.len());
         for (tool_call_order, (tool_call, invocation, resolution_error)) in
@@ -1392,6 +1459,17 @@ impl ToolPipeline {
         // (deny / pre-approve / rewritten input) is visible to the planner
         // and no permission prompt is raised for calls a hook already decided.
         self.apply_pre_tool_use_hooks(&task_ids).await;
+
+        // Hook rewrites can change whether a command is concurrency-safe.
+        // Resolve scheduling from the final arguments.
+        let concurrency_flags = self
+            .concurrency_flags_for_final_inputs(
+                &task_ids,
+                subagent_call_count,
+                options.subagent_batch_execution_policy,
+            )
+            .await;
+        let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
 
         if let Err(error) = self.prepare_permission_plans(&task_ids).await {
             self.cleanup_permission_plans(&task_ids, "Permission planning failed".to_string())
@@ -1607,6 +1685,30 @@ impl ToolPipeline {
                 )
                 .await;
 
+            return Err(BitFunError::Validation(error_msg));
+        }
+
+        if let Some(rejection) = task.input_rewrite_rejection.as_ref() {
+            let error_msg = rejection.message.clone().unwrap_or_else(|| {
+                format!(
+                    "PreToolUse input rewrite cannot relax validation constraints for tool '{}'",
+                    tool_name
+                )
+            });
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg.clone(),
+                        is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
+                    },
+                )
+                .await;
             return Err(BitFunError::Validation(error_msg));
         }
 
@@ -2658,6 +2760,13 @@ mod tests {
             true
         }
 
+        fn is_concurrency_safe(&self, input: Option<&serde_json::Value>) -> bool {
+            input
+                .and_then(|input| input.get("city"))
+                .and_then(serde_json::Value::as_str)
+                != Some("unsafe")
+        }
+
         fn input_schema(&self) -> serde_json::Value {
             json!({
                 "type": "object",
@@ -2679,12 +2788,43 @@ mod tests {
                 .and_then(serde_json::Value::as_str)
                 .is_some()
                 && input.as_object().is_some_and(|object| object.len() == 1);
+            if !valid {
+                return ValidationResult {
+                    result: false,
+                    message: Some("city must be the only target argument".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+            if input.get("city").and_then(serde_json::Value::as_str) == Some("protected") {
+                return ValidationResult {
+                    result: false,
+                    message: Some("the original target is protected".to_string()),
+                    error_code: Some(403),
+                    meta: Some(json!({ "blocks_input_rewrite": true })),
+                };
+            }
             ValidationResult {
-                result: valid,
-                message: (!valid).then(|| "city must be the only target argument".to_string()),
-                error_code: (!valid).then_some(400),
+                result: true,
+                message: None,
+                error_code: None,
                 meta: None,
             }
+        }
+
+        async fn validate_non_relaxable_input(
+            &self,
+            input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> Option<ValidationResult> {
+            (input.get("city").and_then(serde_json::Value::as_str) == Some("protected")).then(
+                || ValidationResult {
+                    result: false,
+                    message: Some("the original target is protected".to_string()),
+                    error_code: Some(403),
+                    meta: Some(json!({ "blocks_input_rewrite": true })),
+                },
+            )
         }
 
         async fn call_impl(
@@ -2806,6 +2946,20 @@ mod tests {
     fn test_tool_task(tool_id: &str, tool_name: &str) -> ToolTask {
         ToolTask::new(
             test_tool_call(tool_id, tool_name),
+            test_tool_execution_context(),
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    fn test_tool_task_with_arguments(
+        tool_id: &str,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> ToolTask {
+        let mut tool_call = test_tool_call(tool_id, tool_name);
+        tool_call.arguments = arguments;
+        ToolTask::new(
+            tool_call,
             test_tool_execution_context(),
             ToolExecutionOptions::default(),
         )
@@ -3144,6 +3298,162 @@ mod tests {
                 Some(ToolExecutionState::Rejected { .. })
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_cannot_hide_a_non_relaxable_original_input_rejection() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-protected-original",
+            "get_weather",
+            json!({ "city": "protected", "legacy_shape_error": true }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "copy" }))
+                .await
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert_eq!(
+            persisted.original_effective_arguments,
+            json!({ "city": "protected", "legacy_shape_error": true })
+        );
+        assert_eq!(persisted.effective_arguments(), &json!({ "city": "copy" }));
+        assert!(persisted
+            .input_rewrite_rejection
+            .as_ref()
+            .is_some_and(ValidationResult::blocks_input_rewrite));
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected original input must block execution");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_can_repair_an_ordinary_validation_failure() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-repairable-original",
+            "get_weather",
+            json!({ "legacy_city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "Paris" }))
+                .await
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert_eq!(
+            persisted.original_effective_arguments,
+            json!({ "legacy_city": "Paris" })
+        );
+        assert_eq!(persisted.effective_arguments(), &json!({ "city": "Paris" }));
+        assert!(persisted.input_rewrite_rejection.is_none());
+
+        pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect("repaired input should execute");
+        assert_eq!(
+            *received_arguments
+                .lock()
+                .expect("capturing tool argument lock"),
+            Some(json!({ "city": "Paris" }))
+        );
+    }
+
+    #[tokio::test]
+    async fn final_validation_rejects_a_hook_rewrite_into_a_protected_input() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-protected-final",
+            "get_weather",
+            json!({ "city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "protected" }))
+                .await
+        );
+        assert!(pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task")
+            .input_rewrite_rejection
+            .is_none());
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected final input must fail final validation");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_recomputes_concurrency_from_final_input() {
+        let pipeline = test_tool_pipeline();
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::new(Mutex::new(None))).await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-concurrency",
+            "get_weather",
+            json!({ "city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .concurrency_flags_for_final_inputs(
+                    std::slice::from_ref(&tool_id),
+                    0,
+                    SubagentBatchExecutionPolicy::SafeOnly,
+                )
+                .await[0]
+        );
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "unsafe" }))
+                .await
+        );
+        assert!(
+            !pipeline
+                .concurrency_flags_for_final_inputs(
+                    std::slice::from_ref(&tool_id),
+                    0,
+                    SubagentBatchExecutionPolicy::SafeOnly,
+                )
+                .await[0]
+        );
     }
 
     /// A PreToolUse hook approval waives the interactive permission prompt.

@@ -6,6 +6,7 @@ use super::types::ToolTask;
 use crate::agentic::core::ToolExecutionState;
 use crate::agentic::events::AgenticEvent;
 use bitfun_agent_stream::StreamEventSink;
+use bitfun_agent_tools::ValidationResult;
 use dashmap::DashMap;
 use log::debug;
 use std::sync::Arc;
@@ -91,12 +92,17 @@ impl ToolStateManager {
         self.tasks.get(tool_id).map(|t| t.clone())
     }
 
-    /// Replace a task's effective tool arguments before execution.
-    /// Used by PreToolUse hook `updatedInput` rewrites; later readers
-    /// (validation, permission planning, execution) observe the new value.
-    pub fn update_task_arguments(&self, tool_id: &str, arguments: serde_json::Value) -> bool {
+    /// Apply a PreToolUse `updatedInput` proposal and preserve any rejection
+    /// raised by non-relaxable validation of the original effective input.
+    pub fn apply_hook_input_rewrite(
+        &self,
+        tool_id: &str,
+        arguments: serde_json::Value,
+        rejection: Option<ValidationResult>,
+    ) -> bool {
         if let Some(mut task) = self.tasks.get_mut(tool_id) {
-            task.invocation.effective_arguments = arguments;
+            task.invocation.replace_effective_arguments(arguments);
+            task.input_rewrite_rejection = rejection;
             true
         } else {
             false
@@ -429,6 +435,96 @@ mod tests {
         );
         assert_eq!(identity.effective_name(), "CreatePlan");
         assert_eq!(params, &wire_arguments);
+    }
+
+    #[tokio::test]
+    async fn direct_started_event_uses_hook_rewritten_arguments() {
+        let mut task = test_task("tool-direct-rewrite");
+        task.tool_call.arguments = serde_json::json!({ "command": "old" });
+        task.invocation = bitfun_agent_tools::ResolvedToolInvocation::direct(
+            "Bash",
+            task.tool_call.arguments.clone(),
+        );
+        task.original_effective_arguments = task.invocation.effective_arguments.clone();
+
+        let sink = Arc::new(CapturingEventSink::default());
+        let manager = ToolStateManager::new(sink.clone());
+        let tool_id = manager.create_task(task).await;
+        assert!(manager.apply_hook_input_rewrite(
+            &tool_id,
+            serde_json::json!({ "command": "new" }),
+            None,
+        ));
+        manager
+            .update_state(
+                &tool_id,
+                ToolExecutionState::Running {
+                    started_at: std::time::SystemTime::now(),
+                    progress: None,
+                },
+            )
+            .await;
+
+        let events = sink.events.lock().await;
+        let AgenticEvent::ToolEvent {
+            tool_event: bitfun_events::ToolEventData::Started { params, .. },
+            ..
+        } = &events[0]
+        else {
+            panic!("expected started event");
+        };
+        assert_eq!(params, &serde_json::json!({ "command": "new" }));
+    }
+
+    #[tokio::test]
+    async fn deferred_started_event_uses_hook_rewritten_inner_arguments() {
+        let wire_arguments = serde_json::json!({
+            "tool_name": "CreatePlan",
+            "args": { "name": "old" }
+        });
+        let mut task = test_task("tool-deferred-rewrite");
+        task.tool_call.tool_name = bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string();
+        task.tool_call.arguments = wire_arguments.clone();
+        task.invocation = bitfun_agent_tools::ResolvedToolInvocation::from_wire_call(
+            bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+            wire_arguments,
+        )
+        .expect("valid deferred invocation");
+        task.original_effective_arguments = task.invocation.effective_arguments.clone();
+
+        let sink = Arc::new(CapturingEventSink::default());
+        let manager = ToolStateManager::new(sink.clone());
+        let tool_id = manager.create_task(task).await;
+        assert!(manager.apply_hook_input_rewrite(
+            &tool_id,
+            serde_json::json!({ "name": "new" }),
+            None,
+        ));
+        manager
+            .update_state(
+                &tool_id,
+                ToolExecutionState::Running {
+                    started_at: std::time::SystemTime::now(),
+                    progress: None,
+                },
+            )
+            .await;
+
+        let events = sink.events.lock().await;
+        let AgenticEvent::ToolEvent {
+            tool_event: bitfun_events::ToolEventData::Started { params, .. },
+            ..
+        } = &events[0]
+        else {
+            panic!("expected started event");
+        };
+        assert_eq!(
+            params,
+            &serde_json::json!({
+                "tool_name": "CreatePlan",
+                "args": { "name": "new" }
+            })
+        );
     }
 }
 

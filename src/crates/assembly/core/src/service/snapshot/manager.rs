@@ -690,6 +690,16 @@ impl Tool for WrappedTool {
         original_validation
     }
 
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<crate::agentic::tools::framework::ValidationResult> {
+        self.original_tool
+            .validate_non_relaxable_input(input, context)
+            .await
+    }
+
     fn render_result_for_assistant(&self, output: &Value) -> String {
         let original_render = self.original_tool.render_result_for_assistant(output);
         format!(

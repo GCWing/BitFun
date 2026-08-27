@@ -159,6 +159,16 @@ Output is only what was produced during this tool call's wait window."#
         true
     }
 
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let context = context?;
+        let chars = input.get("chars").and_then(Value::as_str)?;
+        crate::agentic::execution::edit_constraint_guard::check_bash_command(context, chars)
+    }
+
     async fn validate_input(
         &self,
         input: &Value,

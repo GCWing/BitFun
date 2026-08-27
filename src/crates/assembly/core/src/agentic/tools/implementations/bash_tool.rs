@@ -138,6 +138,40 @@ impl BashTool {
         context.resolve_workspace_tool_path(trimmed).map(Some)
     }
 
+    async fn guard_working_directory(
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<String> {
+        if let Some(requested) = Self::resolve_working_directory(input, context)? {
+            return Ok(requested);
+        }
+
+        let workspace_path = context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path_string())
+            .ok_or_else(|| BitFunError::tool("workspace_path is required for Bash tool"))?;
+        if context.is_remote() {
+            return Ok(workspace_path);
+        }
+
+        let Some(chat_session_id) = context.session_id.as_deref() else {
+            return Ok(workspace_path);
+        };
+        let Ok(terminal_api) = TerminalApi::from_singleton() else {
+            return Ok(workspace_path);
+        };
+        let binding = terminal_api.session_manager().binding();
+        let Some(primary_session_id) = binding.get(chat_session_id) else {
+            return Ok(workspace_path);
+        };
+        Ok(terminal_api
+            .get_session(&primary_session_id)
+            .await
+            .map(|session| session.cwd)
+            .unwrap_or(workspace_path))
+    }
+
     async fn is_existing_workspace_directory(
         context: &ToolUseContext,
         resolved_dir: &str,
@@ -371,7 +405,7 @@ Usage notes:
     fn permission_intents(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<PermissionIntent>> {
         let command = input
             .get("command")
@@ -379,10 +413,29 @@ Usage notes:
             .map(str::trim)
             .filter(|command| !command.is_empty())
             .ok_or_else(|| BitFunError::validation("command is required".to_string()))?;
+        let working_directory = Self::resolve_working_directory(input, context)?;
         Ok(vec![PermissionIntent::new(
             "bash",
-            vec![command.to_string()],
+            vec![command_for_working_directory(
+                command,
+                working_directory.as_deref(),
+            )],
         )])
+    }
+
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let context = context?;
+        let command = input.get("command").and_then(Value::as_str)?;
+        let working_directory = Self::guard_working_directory(input, context).await.ok();
+        crate::agentic::execution::edit_constraint_guard::check_bash_command_in_directory(
+            context,
+            command,
+            working_directory.as_deref(),
+        )
     }
 
     async fn validate_input(
@@ -497,10 +550,12 @@ Usage notes:
             };
         }
 
+        let guard_working_directory = Self::guard_working_directory(input, context).await.ok();
         if let Some(rejection) =
-            crate::agentic::execution::edit_constraint_guard::check_bash_command(
+            crate::agentic::execution::edit_constraint_guard::check_bash_command_in_directory(
                 context,
                 command.unwrap_or_default(),
+                guard_working_directory.as_deref(),
             )
         {
             return rejection;
@@ -1406,6 +1461,109 @@ impl BashTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::execution::edit_constraint_guard::{
+        ConstraintMatcher, ConstraintOperationScope, ConstraintSource, EditConstraintState,
+        ExtractedConstraint, TEST_EDIT_CONSTRAINT_STATE_KEY,
+    };
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
+    use std::collections::HashMap;
+
+    fn local_tool_context(workspace: &Path) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: Some("bash-cwd-test".to_string()),
+            agent_type: Some("agentic".to_string()),
+            session_id: Some("bash-cwd-session".to_string()),
+            dialog_turn_id: Some("bash-cwd-turn".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, workspace.to_path_buf())),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    fn protect_tests(context: &mut ToolUseContext) {
+        let state = EditConstraintState {
+            constraints: vec![ExtractedConstraint {
+                id: "test:no-tests".to_string(),
+                description: "don't touch tests".to_string(),
+                operation_scope: ConstraintOperationScope::All,
+                matcher: ConstraintMatcher::TestFiles,
+                source: ConstraintSource::Legacy,
+                source_text: None,
+            }],
+            ..Default::default()
+        };
+        context.custom_data.insert(
+            TEST_EDIT_CONSTRAINT_STATE_KEY.to_string(),
+            serde_json::to_value(state).expect("test constraint state"),
+        );
+    }
+
+    #[test]
+    fn permission_intent_includes_requested_working_directory() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let tests_dir = workspace.path().join("tests");
+        std::fs::create_dir(&tests_dir).expect("tests directory");
+        let context = local_tool_context(workspace.path());
+        let tests_dir_text = tests_dir.to_string_lossy().to_string();
+
+        let intents = BashTool::new()
+            .permission_intents(
+                &json!({
+                    "command": "touch helper.rs",
+                    "working_directory": "tests"
+                }),
+                &context,
+            )
+            .expect("permission intent");
+
+        assert_eq!(
+            intents[0].resources,
+            vec![command_for_working_directory(
+                "touch helper.rs",
+                Some(&tests_dir_text),
+            )]
+        );
+    }
+
+    #[tokio::test]
+    async fn command_guard_rejects_when_only_bash_working_directory_changes() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        std::fs::create_dir(workspace.path().join("tests")).expect("tests directory");
+        let mut context = local_tool_context(workspace.path());
+        protect_tests(&mut context);
+
+        assert!(
+            BashTool::new()
+                .validate_non_relaxable_input(
+                    &json!({
+                        "command": "touch helper.rs",
+                        "working_directory": "."
+                    }),
+                    Some(&context),
+                )
+                .await
+                .is_none(),
+            "the command is allowed from the workspace root"
+        );
+
+        let rejection = BashTool::new()
+            .validate_non_relaxable_input(
+                &json!({
+                    "command": "touch helper.rs",
+                    "working_directory": "tests"
+                }),
+                Some(&context),
+            )
+            .await
+            .expect("Bash command in tests must be rejected");
+
+        assert!(rejection.blocks_input_rewrite());
+    }
 
     #[test]
     fn checkpoint_detection_flags_mutating_bash_commands() {

@@ -26,6 +26,11 @@ agent 返回可解释的拒绝原因。约束属于用户会话状态，必须�
 网络出口、仓库历史净化和评测审计属于评测管道。产品工具保持普通用户预期的 Web 与 Git
 能力，guard 代码不得出现 benchmark 名称或站点黑名单。
 
+`updatedInput` 依然通过 BitFun 工具管道执行，因此可由本设计守住。Native hook handler
+命令本身是一个外部进程；如果 handler 绕过 `updatedInput` 直接写文件，该副作用不会进入工具
+`validate_input`。这类 hook 的信任、启用和进程隔离属于 Native hook 安全边界；严格评测
+环境应禁用不可信 hook 或在外层 sandbox 中限制它，不应把外部进程副作用误认为工具守卫可见。
+
 ## 模块与职责
 
 | 模块 | 职责 |
@@ -71,8 +76,17 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
    guard 状态，也不触发 metadata 重写。抽取失败单独记录，执行阶段 fail open。
 4. 文件工具在 `validate_input` 中调用统一检查；shell、WriteStdin 和 Git 工具先将可静态识别的
    变更目标解析为路径。存在 active constraint 时，无法解析目标的高风险变更命令 fail closed。
-5. 命中约束时返回 403 和结构化 `edit_constraint_guard` 元数据，不执行写入。
-6. 设置 `BITFUN_EDIT_CONSTRAINT_TELEMETRY=1` 后，guard 决策和成功的直接文件工具操作写入
+5. Native `PreToolUse` hook 是可扩展重写层，不是约束所有者。只要 hook 返回
+   `updatedInput`，pipeline 就对 hook 前的原始有效参数执行一次不可放宽约束检查，并对
+   hook 后的最终参数继续执行完整 `validate_input`。任一组参数命中不可放宽约束时都拒绝
+   执行；hook 的 allow 或路径重写不能洗掉用户约束。格式修复等未标记为不可放宽的普通
+   validation 失败仍可由 hook 修复。
+6. hook 重写不改变新建测试辅助文件豁免的语义：原始目标本来就是新测试文件时
+   可按现有 provenance 规则通过；从已受保护文件重写到一个新副本则仍因原始参数命中
+   约束而被拒绝。
+7. 命中约束时返回 403 和结构化 `edit_constraint_guard` 元数据，并标记该失败不可被
+   input rewrite 放宽，不执行写入。
+8. 设置 `BITFUN_EDIT_CONSTRAINT_TELEMETRY=1` 后，guard 决策和成功的直接文件工具操作写入
    session-scoped JSONL，用于产品诊断；默认不创建 JSONL。该开关不影响 AI provider 请求审计。
 
 撤销只接受当前 active constraint id，且只有真实用户提交的 turn 可以授权撤销。含糊表达、
@@ -96,6 +110,8 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
 - 无 active constraint 时，guard 不改变普通编辑、Web 或 Git 行为，也不执行路径/远程存在性检查。
 - 同一 dialog turn 和消息 hash 不重复抽取。
 - 未知撤销 id 永远不删除约束。
+- Native hook 只能缩紧、修复或保持用户约束，不能通过 `updatedInput` 将原本受保护的
+  写入改到新路径后执行。
 - session restore 与 fork 后的 active constraints 与父会话一致。
 - rollback 后不能保留来自已删除 turn 的约束或 agent-created 豁免。
 - 拒绝发生在写入前，递归删除不会出现部分删除后才发现受保护文件。
@@ -108,6 +124,8 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
 - matcher 规则和 operation scope；
 - 确定性抽取、模型解析失败、合法与非法撤销；
 - 新建测试辅助文件、已有测试文件和 delete-only 的差异；
+- `PreToolUse updatedInput` 修复仅含普通格式错误的参数、从同时带有普通格式错误的受保护
+  原始目标重写到新副本、从合法原始目标重写到受保护目标，以及 hook allow 不能覆盖不可放宽拒绝；
 - shell 重定向、`tee`、`cp`、`mv`、`rm`、in-place `sed/perl`、Python、Node、WriteStdin、
   Git pathspec 与无法解析目标的高风险命令；
 - 递归删除、符号链接、远程工作区检查失败；

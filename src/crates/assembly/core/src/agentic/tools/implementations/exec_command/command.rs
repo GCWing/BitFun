@@ -40,6 +40,7 @@ use tool_runtime::exec_command::{
     ExecCommandLifecycleStatus, ExecCommandResultData, ExecCommandResultFields,
     ExecCommandShellMetadata, REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS,
 };
+use tool_runtime::shell::command_for_working_directory;
 
 #[derive(Debug, Clone)]
 struct RemoteShell {
@@ -114,6 +115,22 @@ impl ExecCommandTool {
             )));
         }
         Ok(path)
+    }
+
+    fn guard_workdir(input: &Value, context: &ToolUseContext) -> Option<String> {
+        let raw = input
+            .get("workdir")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|workdir| !workdir.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path_string())
+            })?;
+        context.resolve_workspace_tool_path(&raw).ok()
     }
 
     async fn resolve_remote_workdir(
@@ -617,17 +634,39 @@ Output:
     fn permission_intents(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<PermissionIntent>> {
         let command = exec_command_run_input_from_input(input)
             .map(|parsed| parsed.cmd.trim().to_string())
             .filter(|command| !command.is_empty())
             .ok_or_else(|| BitFunError::validation("cmd is required".to_string()))?;
-        Ok(vec![PermissionIntent::new("bash", vec![command])])
+        let working_directory = Self::guard_workdir(input, context);
+        Ok(vec![PermissionIntent::new(
+            "bash",
+            vec![command_for_working_directory(
+                &command,
+                working_directory.as_deref(),
+            )],
+        )])
     }
 
     fn manages_own_execution_timeout(&self) -> bool {
         true
+    }
+
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let context = context?;
+        let parsed = exec_command_run_input_from_input(input)?;
+        let working_directory = Self::guard_workdir(input, context);
+        crate::agentic::execution::edit_constraint_guard::check_bash_command_in_directory(
+            context,
+            parsed.cmd,
+            working_directory.as_deref(),
+        )
     }
 
     async fn validate_input(
@@ -644,9 +683,12 @@ Output:
             };
         }
         if let (Some(context), Some(parsed)) = (context, exec_command_run_input_from_input(input)) {
+            let working_directory = Self::guard_workdir(input, context);
             if let Some(rejection) =
-                crate::agentic::execution::edit_constraint_guard::check_bash_command(
-                    context, parsed.cmd,
+                crate::agentic::execution::edit_constraint_guard::check_bash_command_in_directory(
+                    context,
+                    parsed.cmd,
+                    working_directory.as_deref(),
                 )
             {
                 return rejection;
@@ -779,6 +821,10 @@ mod tests {
     use super::super::env_snapshot::RemoteEnvSnapshot;
     use super::ExecCommandTool;
     use super::{parse_remote_shell_probe_output, RemoteShell};
+    use crate::agentic::execution::edit_constraint_guard::{
+        ConstraintMatcher, ConstraintOperationScope, ConstraintSource, EditConstraintState,
+        ExtractedConstraint, TEST_EDIT_CONSTRAINT_STATE_KEY,
+    };
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::WorkspaceBinding;
@@ -792,6 +838,103 @@ mod tests {
     use tool_runtime::exec_command::{
         remote_exec_shell_login_args, EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX,
     };
+
+    fn local_tool_context(workspace: &Path) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: Some("exec-cwd-test".to_string()),
+            agent_type: Some("agentic".to_string()),
+            session_id: Some("exec-cwd-session".to_string()),
+            dialog_turn_id: Some("exec-cwd-turn".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, workspace.to_path_buf())),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    fn protect_tests(context: &mut ToolUseContext) {
+        let state = EditConstraintState {
+            constraints: vec![ExtractedConstraint {
+                id: "test:no-tests".to_string(),
+                description: "don't touch tests".to_string(),
+                operation_scope: ConstraintOperationScope::All,
+                matcher: ConstraintMatcher::TestFiles,
+                source: ConstraintSource::Legacy,
+                source_text: None,
+            }],
+            ..Default::default()
+        };
+        context.custom_data.insert(
+            TEST_EDIT_CONSTRAINT_STATE_KEY.to_string(),
+            serde_json::to_value(state).expect("test constraint state"),
+        );
+    }
+
+    #[test]
+    fn permission_intent_includes_exec_workdir() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let tests_dir = workspace.path().join("tests");
+        std::fs::create_dir(&tests_dir).expect("tests directory");
+        let context = local_tool_context(workspace.path());
+        let tests_dir_text = tests_dir.to_string_lossy().to_string();
+
+        let intents = ExecCommandTool::new()
+            .permission_intents(
+                &json!({
+                    "cmd": "touch helper.rs",
+                    "workdir": tests_dir.to_string_lossy().to_string()
+                }),
+                &context,
+            )
+            .expect("permission intent");
+
+        assert_eq!(
+            intents[0].resources,
+            vec![tool_runtime::shell::command_for_working_directory(
+                "touch helper.rs",
+                Some(&tests_dir_text),
+            )]
+        );
+    }
+
+    #[tokio::test]
+    async fn command_guard_rejects_when_only_exec_workdir_changes() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let tests_dir = workspace.path().join("tests");
+        std::fs::create_dir(&tests_dir).expect("tests directory");
+        let mut context = local_tool_context(workspace.path());
+        protect_tests(&mut context);
+
+        assert!(
+            ExecCommandTool::new()
+                .validate_non_relaxable_input(
+                    &json!({
+                        "cmd": "touch helper.rs",
+                        "workdir": workspace.path().to_string_lossy().to_string()
+                    }),
+                    Some(&context),
+                )
+                .await
+                .is_none(),
+            "the command is allowed from the workspace root"
+        );
+
+        let rejection = ExecCommandTool::new()
+            .validate_non_relaxable_input(
+                &json!({
+                    "cmd": "touch helper.rs",
+                    "workdir": tests_dir.to_string_lossy().to_string()
+                }),
+                Some(&context),
+            )
+            .await
+            .expect("ExecCommand in tests must be rejected");
+
+        assert!(rejection.blocks_input_rewrite());
+    }
 
     #[derive(Debug)]
     struct ShellProbeRemoteExecPort {

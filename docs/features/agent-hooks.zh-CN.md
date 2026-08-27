@@ -208,6 +208,9 @@ sys.exit(0)
 - **Hook 只能收紧权限策略，永远无法放宽。** `PreToolUse` 的
   `permissionDecision: "allow"` 只免去交互式确认；被权限规则拒绝的工具调用依然
   会被拒绝。
+- `PreToolUse updatedInput` 在执行前会用最终参数重新校验。它可以修复普通的
+  参数格式错误，但不能放宽已经拒绝原始参数的不可放宽内部约束（例如用户
+  明确提出的编辑限制）。
 - `suppressOutput` 会被解析，但当前被忽略。
 - `continue: false` 对 `PreToolUse` 和 `UserPromptSubmit` 生效；其他事件请使用
   `decision: "block"`。
@@ -223,6 +226,9 @@ Hook 是以你的用户权限运行的任意代码，且每次对应事件触发
 
 - 启用任何非你本人编写的 Hook 之前先审阅它。
 - 除非你信任所有能向仓库提交代码的人，否则保持项目级 Hooks 关闭。
+- Hook 命令如果直接写文件，会绕过工具管道及其 `validate_input` 检查。工具参数重写
+  应使用 `updatedInput`；无法接受外部进程副作用时，应禁用不可信命令 Hook 或将其
+  放入 sandbox。
 - 载荷中的值（提示词、工具参数、文件路径）是模型和用户提供的文本。请按 JSON 解析，
   不要拼接进 shell 命令 —— 上面的示例正是为此用 `jq` / `json.load` 读取字段。
 - 不要在 `SessionStart`、`UserPromptSubmit`、`SubagentStart` 中把密钥打印到

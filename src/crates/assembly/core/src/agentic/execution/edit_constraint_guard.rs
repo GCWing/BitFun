@@ -36,6 +36,8 @@ use shell_targets::ShellMutationOperation;
 use shell_targets::{explicit_bash_mutation_targets, has_unresolved_bash_mutation};
 
 pub const EDIT_CONSTRAINT_METADATA_KEY: &str = "editConstraintGuard";
+#[cfg(test)]
+pub(crate) const TEST_EDIT_CONSTRAINT_STATE_KEY: &str = "__bitfun_test_edit_constraint_state";
 const EDIT_CONSTRAINT_SCHEMA_VERSION: u32 = 6;
 const MAX_PROMPT_CHARS: usize = 8_000;
 const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
@@ -812,6 +814,24 @@ fn resolved_path(context: &ToolUseContext, file_path: &str) -> Option<String> {
         .map(|resolved| resolved.resolved_path)
 }
 
+fn current_edit_constraint_state(context: Option<&ToolUseContext>) -> Option<EditConstraintState> {
+    #[cfg(test)]
+    if let Some(state) = context
+        .and_then(|value| value.custom_data.get(TEST_EDIT_CONSTRAINT_STATE_KEY))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+    {
+        return Some(state);
+    }
+
+    context
+        .and_then(|value| value.session_id.as_deref())
+        .and_then(|session_id| {
+            get_global_coordinator()?
+                .get_session_manager()
+                .edit_constraint_state(session_id)
+        })
+}
+
 fn decision_result(
     context: Option<&ToolUseContext>,
     tool_name: &str,
@@ -862,6 +882,7 @@ fn decision_result(
         error_code,
         meta: Some(json!({
             "failure_kind": "edit_constraint_guard",
+            "blocks_input_rewrite": true,
             "guard_decision_id": decision_id,
             "guard_decision": decision,
             "constraint_id": violation.map(|constraint| constraint.id.as_str()),
@@ -882,27 +903,33 @@ pub fn check(
     file_path: &str,
     force_requested: bool,
 ) -> Option<ValidationResult> {
-    let state = context
-        .and_then(|value| value.session_id.as_deref())
-        .and_then(|session_id| {
-            get_global_coordinator()?
-                .get_session_manager()
-                .edit_constraint_state(session_id)
-        });
+    let state = current_edit_constraint_state(context);
 
+    check_with_state(
+        context,
+        tool_name,
+        operation,
+        file_path,
+        force_requested,
+        state.as_ref(),
+    )
+}
+
+fn check_with_state(
+    context: Option<&ToolUseContext>,
+    tool_name: &str,
+    operation: &str,
+    file_path: &str,
+    force_requested: bool,
+    state: Option<&EditConstraintState>,
+) -> Option<ValidationResult> {
     if !force_requested
         && !edit_constraint_telemetry_enabled()
-        && state
-            .as_ref()
-            .is_none_or(|state| !state.has_enforceable_constraints())
+        && state.is_none_or(|state| !state.has_enforceable_constraints())
     {
         return None;
     }
-    if !force_requested
-        && state
-            .as_ref()
-            .is_none_or(|state| !state.has_enforceable_constraints())
-    {
+    if !force_requested && state.is_none_or(|state| !state.has_enforceable_constraints()) {
         if edit_constraint_telemetry_enabled() {
             decision_result(
                 context,
@@ -911,7 +938,7 @@ pub fn check(
                 file_path,
                 "allow_no_active_constraint",
                 false,
-                state.as_ref(),
+                state,
                 None,
                 None,
                 None,
@@ -928,7 +955,7 @@ pub fn check(
             file_path,
             "force_denied",
             true,
-            state.as_ref(),
+            state,
             None,
             Some(
                 "`force` cannot override constraints stated by the user. Reconsider the source-code approach without modifying the protected file."
@@ -939,7 +966,7 @@ pub fn check(
     }
 
     let paths = candidate_paths(context, file_path);
-    let violation = state.as_ref().and_then(|state| {
+    let violation = state.and_then(|state| {
         paths
             .iter()
             .find_map(|path| find_violation_for_operation(&state.constraints, path, operation))
@@ -952,28 +979,19 @@ pub fn check(
             file_path,
             "deny",
             false,
-            state.as_ref(),
+            state,
             Some(violation),
             Some(violation_message(file_path, violation)),
             Some(403),
         );
     }
 
-    let decision = match state.as_ref().and_then(EditConstraintState::latest_status) {
+    let decision = match state.and_then(EditConstraintState::latest_status) {
         Some(ExtractionStatus::Failed) | None => "allow_extraction_unavailable",
         _ => "allow",
     };
     decision_result(
-        context,
-        tool_name,
-        operation,
-        file_path,
-        decision,
-        false,
-        state.as_ref(),
-        None,
-        None,
-        None,
+        context, tool_name, operation, file_path, decision, false, state, None, None, None,
     );
     None
 }
@@ -1154,44 +1172,61 @@ pub fn check_delete(
 /// remain dynamic or implicit are rejected before execution; ordinary build,
 /// test, and read-only commands retain the normal shell path.
 pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<ValidationResult> {
-    let has_active_constraints = context.session_id.as_deref().is_some_and(|session_id| {
-        get_global_coordinator()
-            .and_then(|coordinator| {
-                coordinator
-                    .get_session_manager()
-                    .edit_constraint_state(session_id)
-            })
-            .is_some_and(|state| state.has_enforceable_constraints())
-    });
-    if !has_active_constraints {
-        return None;
-    }
+    check_bash_command_in_directory(context, command, None)
+}
+
+pub fn check_bash_command_in_directory(
+    context: &ToolUseContext,
+    command: &str,
+    working_directory: Option<&str>,
+) -> Option<ValidationResult> {
+    let state = current_edit_constraint_state(Some(context));
+    check_bash_command_with_state(context, command, working_directory, state.as_ref())
+}
+
+fn command_target_path(
+    context: &ToolUseContext,
+    target: &str,
+    working_directory: Option<&str>,
+) -> String {
+    let Some(working_directory) = working_directory else {
+        return target.to_string();
+    };
+    bitfun_agent_tools::resolve_workspace_tool_path(
+        target,
+        Some(working_directory),
+        context.is_remote(),
+    )
+    .unwrap_or_else(|_| target.to_string())
+}
+
+fn check_bash_command_with_state(
+    context: &ToolUseContext,
+    command: &str,
+    working_directory: Option<&str>,
+    state: Option<&EditConstraintState>,
+) -> Option<ValidationResult> {
+    let state = state.filter(|state| state.has_enforceable_constraints())?;
     let targets = explicit_bash_mutation_targets(command);
     for target in &targets {
-        if let Some(rejection) = check(
+        let target_path = command_target_path(context, &target.path, working_directory);
+        if let Some(rejection) = check_with_state(
             Some(context),
             "Bash",
             target.operation.guard_operation(),
-            &target.path,
+            &target_path,
             false,
+            Some(state),
         ) {
             return Some(rejection);
         }
     }
     if has_unresolved_bash_mutation(command, &targets) {
-        let state = context.session_id.as_deref().and_then(|session_id| {
-            get_global_coordinator()?
-                .get_session_manager()
-                .edit_constraint_state(session_id)
-        });
-        if let Some((state, constraint)) = state.and_then(|state| {
-            let constraint = state
-                .constraints
-                .iter()
-                .find(|constraint| constraint.matcher.enforceable())?
-                .clone();
-            Some((state, constraint))
-        }) {
+        if let Some(constraint) = state
+            .constraints
+            .iter()
+            .find(|constraint| constraint.matcher.enforceable())
+        {
             return decision_result(
                 Some(context),
                 "Bash",
@@ -1199,8 +1234,8 @@ pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<Val
                 "<dynamic shell target>",
                 "deny_unresolved_target",
                 false,
-                Some(&state),
-                Some(&constraint),
+                Some(state),
+                Some(constraint),
                 Some(
                     "This command may modify files through a dynamic or implicit target while an edit constraint is active. Use a direct file tool or a command with explicit literal paths so the protected scope can be checked before execution."
                         .to_string(),
@@ -1217,12 +1252,21 @@ pub fn check_git_command(
     operation: &str,
     arguments: &str,
 ) -> Option<ValidationResult> {
+    check_git_command_in_directory(context, operation, arguments, None)
+}
+
+pub fn check_git_command_in_directory(
+    context: &ToolUseContext,
+    operation: &str,
+    arguments: &str,
+    working_directory: Option<&str>,
+) -> Option<ValidationResult> {
     let command = if arguments.trim().is_empty() {
         format!("git {operation}")
     } else {
         format!("git {operation} {}", arguments.trim())
     };
-    check_bash_command(context, &command)
+    check_bash_command_in_directory(context, &command, working_directory)
 }
 
 /// Checks the target and every non-symlink descendant before recursive delete.

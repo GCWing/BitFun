@@ -1199,7 +1199,7 @@ When creating commits, use this format for the commit message:
     fn permission_intents(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<PermissionIntent>> {
         let normalized = Self::normalize_git_input(input.clone());
         let operation = normalized
@@ -1211,11 +1211,32 @@ When creating commits, use this format for the commit message:
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|args| !args.is_empty());
+        let working_directory = normalized.get("working_directory").and_then(Value::as_str);
+        let repo_path = Self::get_repo_path(working_directory, context)?;
         let resource = match args {
-            Some(args) => format!("git {operation} {args}"),
-            None => format!("git {operation}"),
+            Some(args) => format!("git -C {} {operation} {args}", Self::sh_quote(&repo_path)),
+            None => format!("git -C {} {operation}", Self::sh_quote(&repo_path)),
         };
         Ok(vec![PermissionIntent::new("git", vec![resource])])
+    }
+
+    async fn validate_non_relaxable_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> Option<ValidationResult> {
+        let context = context?;
+        let input = Self::normalize_git_input(input.clone());
+        let operation = input.get("operation").and_then(Value::as_str)?;
+        let args = input.get("args").and_then(Value::as_str).unwrap_or("");
+        let working_directory = input.get("working_directory").and_then(Value::as_str);
+        let repo_path = Self::get_repo_path(working_directory, context).ok();
+        crate::agentic::execution::edit_constraint_guard::check_git_command_in_directory(
+            context,
+            operation,
+            args,
+            repo_path.as_deref(),
+        )
     }
 
     async fn validate_input(
@@ -1259,9 +1280,14 @@ When creating commits, use this format for the commit message:
         let args = input.get("args").and_then(|v| v.as_str()).unwrap_or("");
 
         if let Some(context) = context {
+            let working_directory = input.get("working_directory").and_then(Value::as_str);
+            let repo_path = Self::get_repo_path(working_directory, context).ok();
             if let Some(rejection) =
-                crate::agentic::execution::edit_constraint_guard::check_git_command(
-                    context, operation, args,
+                crate::agentic::execution::edit_constraint_guard::check_git_command_in_directory(
+                    context,
+                    operation,
+                    args,
+                    repo_path.as_deref(),
                 )
             {
                 return rejection;
@@ -1483,11 +1509,116 @@ impl Default for GitTool {
 
 #[cfg(test)]
 mod tests {
-    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::execution::edit_constraint_guard::{
+        ConstraintMatcher, ConstraintOperationScope, ConstraintSource, EditConstraintState,
+        ExtractedConstraint, TEST_EDIT_CONSTRAINT_STATE_KEY,
+    };
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
 
     use super::{git_operation_needs_light_checkpoint, CheckoutPlan, GitTool, ParsedDiffArgs};
     use serde_json::json;
+    use std::collections::HashMap;
     use std::{fs, path::Path};
+
+    fn local_tool_context(workspace: &Path) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: Some("git-cwd-test".to_string()),
+            agent_type: Some("agentic".to_string()),
+            session_id: Some("git-cwd-session".to_string()),
+            dialog_turn_id: Some("git-cwd-turn".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, workspace.to_path_buf())),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    fn protect_tests(context: &mut ToolUseContext) {
+        let state = EditConstraintState {
+            constraints: vec![ExtractedConstraint {
+                id: "test:no-tests".to_string(),
+                description: "don't touch tests".to_string(),
+                operation_scope: ConstraintOperationScope::All,
+                matcher: ConstraintMatcher::TestFiles,
+                source: ConstraintSource::Legacy,
+                source_text: None,
+            }],
+            ..Default::default()
+        };
+        context.custom_data.insert(
+            TEST_EDIT_CONSTRAINT_STATE_KEY.to_string(),
+            serde_json::to_value(state).expect("test constraint state"),
+        );
+    }
+
+    #[test]
+    fn permission_intent_includes_git_working_directory() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let tests_dir = workspace.path().join("tests");
+        fs::create_dir(&tests_dir).expect("tests directory");
+        let context = local_tool_context(workspace.path());
+
+        let intents = GitTool::new()
+            .permission_intents(
+                &json!({
+                    "operation": "add",
+                    "args": "helper.rs",
+                    "working_directory": "tests"
+                }),
+                &context,
+            )
+            .expect("permission intent");
+
+        assert_eq!(
+            intents[0].resources,
+            vec![format!(
+                "git -C {} add helper.rs",
+                GitTool::sh_quote(&tests_dir.to_string_lossy())
+            )]
+        );
+    }
+
+    #[tokio::test]
+    async fn command_guard_rejects_when_only_git_working_directory_changes() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        fs::create_dir(workspace.path().join("tests")).expect("tests directory");
+        let mut context = local_tool_context(workspace.path());
+        protect_tests(&mut context);
+
+        assert!(
+            GitTool::new()
+                .validate_non_relaxable_input(
+                    &json!({
+                        "operation": "restore",
+                        "args": "helper.rs",
+                        "working_directory": "."
+                    }),
+                    Some(&context),
+                )
+                .await
+                .is_none(),
+            "the command is allowed from the workspace root"
+        );
+
+        let rejection = GitTool::new()
+            .validate_non_relaxable_input(
+                &json!({
+                    "operation": "restore",
+                    "args": "helper.rs",
+                    "working_directory": "tests"
+                }),
+                Some(&context),
+            )
+            .await
+            .expect("Git command in tests must be rejected");
+
+        assert!(rejection.blocks_input_rewrite());
+    }
 
     fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
         let mut command = crate::util::create_test_command("git");

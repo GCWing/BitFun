@@ -501,6 +501,69 @@ fn find_violation_returns_first_match() {
 }
 
 #[test]
+fn guard_rejections_are_non_relaxable_by_input_rewrites() {
+    let protected = constraint("don't touch tests", ConstraintMatcher::TestFiles);
+    let rejection = decision_result(
+        None,
+        "Write",
+        "write",
+        "tests/existing_test.rs",
+        "deny",
+        false,
+        None,
+        Some(&protected),
+        Some("protected test file".to_string()),
+        Some(403),
+    )
+    .expect("guard rejection");
+
+    assert!(rejection.blocks_input_rewrite());
+    assert_eq!(rejection.error_code, Some(403));
+}
+
+#[test]
+fn command_guard_resolves_relative_targets_from_actual_working_directory() {
+    let context = ToolUseContext {
+        tool_call_id: Some("tool-call-cwd".to_string()),
+        agent_type: Some("agentic".to_string()),
+        session_id: None,
+        dialog_turn_id: Some("turn-cwd".to_string()),
+        workspace: Some(WorkspaceBinding::new(None, "/workspace".into())),
+        loaded_deferred_tool_specs: Vec::new(),
+        primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+        custom_data: HashMap::new(),
+        computer_use_host: None,
+        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+        runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+    };
+    let state = EditConstraintState {
+        constraints: vec![constraint(
+            "don't touch tests",
+            ConstraintMatcher::TestFiles,
+        )],
+        ..Default::default()
+    };
+
+    assert!(check_bash_command_with_state(
+        &context,
+        "touch helper.rs",
+        Some("/workspace"),
+        Some(&state),
+    )
+    .is_none());
+    let rejection = check_bash_command_with_state(
+        &context,
+        "touch helper.rs",
+        Some("/workspace/tests"),
+        Some(&state),
+    )
+    .expect("the same command in tests must be rejected");
+
+    assert!(rejection.blocks_input_rewrite());
+    assert_eq!(rejection.error_code, Some(403));
+}
+
+#[test]
 fn new_files_are_exempt_only_from_test_file_constraints() {
     let test_only = EditConstraintState {
         constraints: vec![constraint(
