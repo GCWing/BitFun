@@ -25,7 +25,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';
 import { cleanRemoteUserInput } from '../../utils/userInputText';
-import { effectiveToolInvocation, getEffectiveToolName } from '../../utils/toolInvocationIdentity';
+import { getEffectiveToolName } from '../../utils/toolInvocationIdentity';
 import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
 import type {
   DeepReviewQueueStateChangedEvent,
@@ -55,7 +55,6 @@ import { useBackgroundCommandActivityStore } from '../../store/backgroundCommand
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import type { TabCreationOptions } from '@/shared/utils/tabUtils';
-import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
 import {
   clearHistorySessionOpenTransition,
@@ -1170,11 +1169,6 @@ function finalizeTurnCompletionState(
     stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED);
   } else {
     log.debug('Skipping FINISHING_SETTLED transition', { currentState, sessionId, turnId });
-  }
-
-  const dialogTurn = store.getState().sessions.get(sessionId)?.dialogTurns.find(t => t.id === turnId);
-  if (dialogTurn) {
-    appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
   }
 
   if (!runtimeOwnsTurnPersistence) {
@@ -2893,11 +2887,6 @@ function handleDialogTurnCancelled(
   });
   reconcileBackgroundSubagentSession(sessionId);
    
-  const dialogTurn = session.dialogTurns.find(t => t.id === turnId);
-  if (dialogTurn) {
-    appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
-  }
-  
   if (!runtimeOwnsTurnPersistence) {
     saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
       log.warn('Failed to save cancelled dialog turn', { sessionId, turnId, error: err });
@@ -3108,71 +3097,4 @@ export function projectDialogTurnRecovered(
       });
   }
   return true;
-}
-
-/**
- * Detect .plan.md files modified by Edit/Write in dialog turn
- */
-function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
-  const planFiles: string[] = [];
-  const createPlanFiles = new Set<string>();
-  
-  for (const round of dialogTurn.modelRounds) {
-    for (const item of round.items) {
-      if (item.type !== 'tool') continue;
-      const toolItem = item as FlowToolItem;
-      const effective = effectiveToolInvocation(toolItem.toolName, toolItem.toolCall?.input);
-      
-      if (effective.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
-        const planPath = toolItem.toolResult.result?.plan_file_path;
-        if (planPath) createPlanFiles.add(planPath);
-      }
-      
-      if (['Edit', 'Write'].includes(effective.toolName) && toolItem.toolResult?.success) {
-        const input = effective.input as any;
-        const filePath = splitFilePathAndContent(input?.payload)?.filePath
-          || input?.file_path
-          || input?.target_file
-          || '';
-        if (filePath.endsWith('.plan.md')) {
-          planFiles.push(filePath);
-        }
-      }
-    }
-  }
-  
-  return [...new Set(planFiles)].filter(f => !createPlanFiles.has(f));
-}
-
-/**
- * Append PlanDisplay tool items if plan files were modified
- */
-function appendPlanDisplayItemsIfNeeded(
-  context: FlowChatContext,
-  sessionId: string,
-  turnId: string,
-  dialogTurn: DialogTurn
-): void {
-  const modifiedPlanFiles = detectModifiedPlanFiles(dialogTurn);
-  if (modifiedPlanFiles.length === 0) return;
-  
-  const lastRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
-  if (!lastRound) return;
-  
-  for (const planFilePath of modifiedPlanFiles) {
-    const planToolItem: FlowToolItem = {
-      id: `plan-display-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      type: 'tool',
-      toolName: 'CreatePlan',
-      toolCall: { input: {}, id: '' },
-      toolResult: {
-        result: { plan_file_path: planFilePath },
-        success: true
-      },
-      timestamp: Date.now(),
-      status: 'completed'
-    };
-    
-    context.flowChatStore.addModelRoundItem(sessionId, turnId, planToolItem, lastRound.id);
-  }
 }

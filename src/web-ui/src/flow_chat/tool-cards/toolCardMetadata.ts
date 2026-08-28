@@ -249,7 +249,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.git
   },
 
-  // CreatePlan tool
+  // Legacy CreatePlan history remains displayable after runtime tool removal.
   'CreatePlan': {
     toolName: 'CreatePlan',
     displayName: 'Create Plan',

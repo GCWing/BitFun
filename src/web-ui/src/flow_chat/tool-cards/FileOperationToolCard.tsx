@@ -51,6 +51,7 @@ import {
 import { extractFilePathFromJsonBuffer, splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
 import { useFlowChatContext } from '../components/modern/FlowChatContext';
+import { WritePlanDisplay } from './WritePlanDisplay';
 import {
   getHistorySessionOpenTransitionSnapshot,
   subscribeHistorySessionOpenTransition,
@@ -100,11 +101,49 @@ function resolveOpenFilePath(filePath: string, workspacePath?: string): string {
   return workspacePath ? path.join(workspacePath, filePath) : filePath;
 }
 
+function fileOperationPath(toolItem: ToolCardProps['toolItem']): string {
+  const result = toolItem.toolResult?.result;
+  const resultPath = stringPath(result?.file_path) || stringPath(result?.filePath);
+  if (resultPath) return resultPath;
+
+  const resultLocationPath = pathFromAcpLocations(result?.locations);
+  if (resultLocationPath) return resultLocationPath;
+
+  const params = objectValue(toolItem.partialParams || toolItem.toolCall?.input);
+  if (!params || Object.keys(params).length === 0) return '';
+
+  const combinedParts = splitFilePathAndContent(params.payload);
+  return combinedParts?.filePath || firstStringValue(params, [
+    'file_path',
+    'filePath',
+    'filepath',
+    'target_file',
+    'targetFile',
+    'path',
+    'filename',
+  ]) || extractFilePathFromJsonBuffer(toolItem._paramsBuffer || '');
+}
+
+function writeOperationContent(toolItem: ToolCardProps['toolItem']): string {
+  const params = objectValue(toolItem.partialParams || toolItem.toolCall?.input);
+  if (!params) return '';
+  const combinedParts = splitFilePathAndContent(params.payload);
+  if (combinedParts) return combinedParts.content;
+  return stringPath(params.content) || stringPath(params.contents);
+}
+
+function isFailedFileOperation(toolItem: ToolCardProps['toolItem']): boolean {
+  return toolItem.toolResult?.success === false
+    || toolItem.status === 'error'
+    || toolItem.status === 'cancelled'
+    || toolItem.status === 'rejected';
+}
+
 interface FileOperationToolCardProps extends ToolCardProps {
   sessionId?: string;
 }
 
-export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
+const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   toolItem,
   config,
   sessionId,
@@ -1270,4 +1309,27 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       />
     </div>
   );
+};
+
+export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = (props) => {
+  const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const targetPath = fileOperationPath(props.toolItem);
+  const planFilePath = resolveOpenFilePath(targetPath, currentWorkspace?.rootPath);
+  const isPlanWrite = props.toolItem.toolName === 'Write'
+    && !isFailedFileOperation(props.toolItem)
+    && planFilePath.replace(/\\/g, '/').toLowerCase().endsWith('.plan.md');
+
+  if (isPlanWrite) {
+    return (
+      <WritePlanDisplay
+        toolItem={props.toolItem}
+        planFilePath={planFilePath}
+        initialContent={writeOperationContent(props.toolItem)}
+        workspacePath={currentWorkspace?.rootPath}
+        remoteConnectionId={currentWorkspace?.connectionId}
+      />
+    );
+  }
+
+  return <GenericFileOperationToolCard {...props} />;
 };

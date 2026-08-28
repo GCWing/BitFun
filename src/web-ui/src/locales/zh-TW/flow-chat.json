@@ -1795,6 +1795,8 @@
     },
     "plan": {
       "loadingPlan": "正在載入計劃...",
+      "invalidFormat": "計劃格式無效",
+      "invalidFormatDescription": "請開啟計劃檔案，檢查並修正 YAML 檔頭或 Markdown 內文。",
       "generating": "生成中...",
       "clickToOpenPlan": "點擊開啟計劃檔案",
       "saveToProject": "儲存到專案",

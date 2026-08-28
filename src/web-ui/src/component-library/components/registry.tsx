@@ -29,7 +29,6 @@ import { ContextCompressionDisplay } from '@/flow_chat/tool-cards/ContextCompres
 import { SkillDisplay } from '@/flow_chat/tool-cards/SkillDisplay';
 import { AskUserQuestionCard } from '@/flow_chat/tool-cards/AskUserQuestionCard';
 import { GitToolDisplay } from '@/flow_chat/tool-cards/GitToolDisplay';
-import { CreatePlanDisplay } from '@/flow_chat/tool-cards/CreatePlanDisplay';
 import { InitMiniAppDisplay } from '@/flow_chat/tool-cards/MiniAppToolDisplay';
 import type { FlowToolItem, FlowThinkingItem } from '@/flow_chat/types/flow-chat';
 import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards/toolCardMetadata';
@@ -1434,66 +1433,30 @@ console.log(user.greet());`);
         ),
       },
       {
-        id: 'create-plan-card',
-        name: 'CreatePlan - 计划创建',
-        description: '计划创建卡片',
+        id: 'write-plan-card',
+        name: 'Write .plan.md - 计划创建',
+        description: 'Write 工具创建计划文件时的专用卡片',
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginBottom: '8px' }}>Create Plan - Streaming</h3>
-            <CreatePlanDisplay
-              toolItem={createMockToolItem('CreatePlan',
-                {
-                  name: 'Plan Name',
-                  overview: 'Plan overview...'
-                },
-                null,
-                'streaming'
-              )}
-              config={TOOL_CARD_CONFIGS['CreatePlan']}
+            <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginBottom: '8px' }}>Write Plan - Streaming</h3>
+            <FileOperationToolCard
+              toolItem={createMockToolItem('Write', {
+                payload: '+++ .bitfun/plans/refactor-module.plan.md\n---\nname: Refactor Module\noverview: Refactor the module safely.\ntodos: []\n---\n\n# Refactor Module\n\nPlan details...',
+              }, undefined, 'streaming')}
+              config={TOOL_CARD_CONFIGS.Write}
               sessionId="preview-session"
             />
 
             <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginTop: '16px', marginBottom: '8px' }}>创建计划 - 已完成</h3>
-            <CreatePlanDisplay
-              toolItem={createMockToolItem('CreatePlan',
-                {},
-                {
-                  plan_file_path: '<bitfun-home>/projects/project-slug/plans/refactor-user-module.plan.md',
-                  name: 'Refactor Module',
-                  overview: 'Plan overview',
-                  todos: [
-                    { id: 'todo-1', content: 'Task 1', status: 'completed' },
-                    { id: 'todo-2', content: 'Task 2', status: 'completed' },
-                    { id: 'todo-3', content: 'Task 3', status: 'in_progress' },
-                    { id: 'todo-4', content: 'Add CRUD operations', status: 'pending' },
-                    { id: 'todo-5', content: 'Task 5', status: 'pending' },
-                    { id: 'todo-6', content: 'API integration', status: 'pending' }
-                  ]
-                },
-                'completed'
-              )}
-              config={TOOL_CARD_CONFIGS['CreatePlan']}
-              sessionId="preview-session"
-            />
-
-            <h3 style={{ color: 'var(--bf-appearance-token-color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Create Plan - Dark Mode</h3>
-            <CreatePlanDisplay
-              toolItem={createMockToolItem('CreatePlan',
-                {},
-                {
-                  plan_file_path: '<bitfun-home>/projects/project-slug/plans/add-dark-mode.plan.md',
-                  name: 'Dark Mode',
-                  overview: 'Add dark mode support',
-                  todos: [
-                    { id: 'dm-1', content: 'Add CSS variables', status: 'completed' },
-                    { id: 'dm-2', content: 'Update components', status: 'completed' },
-                    { id: 'dm-3', content: 'Diagram 3', status: 'completed' }
-                  ]
-                },
-                'completed'
-              )}
-              config={TOOL_CARD_CONFIGS['CreatePlan']}
+            <FileOperationToolCard
+              toolItem={createMockToolItem('Write', {
+                payload: '+++ .bitfun/plans/refactor-module.plan.md\n---\nname: Refactor Module\noverview: Refactor the module safely.\ntodos:\n  - id: update-api\n    content: Update the API\n    status: in_progress\n    dependencies: []\n  - id: add-tests\n    content: Add focused tests\n    status: pending\n    dependencies:\n      - update-api\n---\n\n# Refactor Module\n\nImplement the refactor in focused steps.',
+              }, {
+                file_path: '.bitfun/plans/refactor-module.plan.md',
+                success: true,
+              }, 'completed')}
+              config={TOOL_CARD_CONFIGS.Write}
               sessionId="preview-session"
             />
           </div>

@@ -583,7 +583,6 @@ mod tests {
             "get_goal",
             "create_goal",
             "update_goal",
-            "CreatePlan",
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
@@ -797,7 +796,6 @@ mod tests {
             registry.get_deferred_tool_names(),
             vec![
                 "ListModels",
-                "CreatePlan",
                 "GetFileDiff",
                 "SessionControl",
                 "SessionMessage",
@@ -848,7 +846,6 @@ mod tests {
                 "AskUserQuestion",
                 "TodoWrite",
                 "get_goal",
-                "CreatePlan",
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",

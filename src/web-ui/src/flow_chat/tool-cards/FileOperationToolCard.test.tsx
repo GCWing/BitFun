@@ -15,7 +15,7 @@ import {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
-  currentWorkspace: undefined as undefined | { rootPath: string },
+  currentWorkspace: undefined as undefined | { rootPath: string; connectionId?: string },
   createDiffEditorTab: vi.fn(),
   openFile: vi.fn(),
   codePreviewProps: [] as Array<Record<string, unknown>>,
@@ -29,6 +29,14 @@ const mocks = vi.hoisted(() => ({
     isRepository: false,
   })),
   typewriterMode: 'passthrough' as 'passthrough' | 'partial',
+  writePlanDisplayProps: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('./WritePlanDisplay', () => ({
+  WritePlanDisplay: (props: Record<string, unknown>) => {
+    mocks.writePlanDisplayProps.push(props);
+    return <div data-testid="write-plan-display" />;
+  },
 }));
 
 vi.mock('../hooks/useTypewriter', () => ({
@@ -167,6 +175,7 @@ describe('FileOperationToolCard', () => {
     mocks.codePreviewProps = [];
     mocks.inlineDiffPreviewProps = [];
     mocks.typewriterMode = 'passthrough';
+    mocks.writePlanDisplayProps = [];
     mocks.useGitState.mockClear();
     mocks.useGitState.mockReturnValue({
       isRepository: false,
@@ -177,6 +186,154 @@ describe('FileOperationToolCard', () => {
       modifiedContent: '',
       anchorLine: undefined,
     });
+  });
+
+  it('routes only successful Write calls for .plan.md files to the plan display', async () => {
+    mocks.currentWorkspace = {
+      rootPath: 'D:/workspace/project',
+      connectionId: 'remote-1',
+    };
+    const content = '---\nname: Plan\noverview: Test the plan card.\ntodos: []\n---\n\n# Plan\n\nDetails.';
+    const toolItem: FlowToolItem = {
+      id: 'tool-plan',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-plan',
+        name: 'Write',
+        input: {
+          payload: `+++ .bitfun/plans/test.plan.md\n${content}`,
+        },
+      },
+      toolResult: {
+        success: true,
+        result: { file_path: '.bitfun/plans/test.plan.md' },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={{} as ToolCardConfig}
+          sessionId="session-1"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="write-plan-display"]')).not.toBeNull();
+    expect(mocks.writePlanDisplayProps).toHaveLength(1);
+    expect(mocks.writePlanDisplayProps[0]).toMatchObject({
+      planFilePath: 'D:/workspace/project/.bitfun/plans/test.plan.md',
+      initialContent: content,
+      workspacePath: 'D:/workspace/project',
+      remoteConnectionId: 'remote-1',
+    });
+  });
+
+  it('keeps Edit calls for .plan.md files on the normal file operation card', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-plan-edit',
+      type: 'tool',
+      toolName: 'Edit',
+      status: 'completed',
+      toolCall: {
+        id: 'call-plan-edit',
+        name: 'Edit',
+        input: {
+          file_path: '.bitfun/plans/test.plan.md',
+          old_string: 'Old',
+          new_string: 'New',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: { file_path: '.bitfun/plans/test.plan.md' },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={{} as ToolCardConfig}
+          sessionId="session-1"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="write-plan-display"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')).not.toBeNull();
+  });
+
+  it('keeps failed .plan.md writes on the normal error card', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-plan-error',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'error',
+      toolCall: {
+        id: 'call-plan-error',
+        name: 'Write',
+        input: {
+          payload: '+++ .bitfun/plans/test.plan.md\npartial',
+        },
+      },
+      toolResult: {
+        success: false,
+        error: 'Write failed',
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={{} as ToolCardConfig}
+          sessionId="session-1"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="write-plan-display"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')).not.toBeNull();
+  });
+
+  it('does not treat a successful fallback write as a completed plan', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-plan-fallback',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-plan-fallback',
+        name: 'Write',
+        input: {
+          payload: '+++ .bitfun/plans/test.plan.md\npartial',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: '.bitfun/tmp/write-callplanfallback.txt',
+          used_fallback_path: true,
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={{} as ToolCardConfig}
+          sessionId="session-1"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="write-plan-display"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-file-change-card"]')).not.toBeNull();
   });
 
   it('does not trigger passive git refresh while historical restore is pending', async () => {

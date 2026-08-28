@@ -45,7 +45,6 @@ const PRODUCT_TOOL_REGISTRATION_ORDER: &[&str] = &[
     "get_goal",
     "create_goal",
     "update_goal",
-    "CreatePlan",
     "submit_code_review",
     "GetToolSpec",
     "CallDeferredTool",
@@ -145,7 +144,6 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "UpdateCanvas" => Some(Arc::new(UpdateCanvasTool::new())),
             #[cfg(feature = "tools-canvas")]
             "PatchCanvas" => Some(Arc::new(PatchCanvasTool::new())),
-            "CreatePlan" => Some(Arc::new(CreatePlanTool::new())),
             "submit_code_review" => Some(Arc::new(CodeReviewTool::new())),
             "GetToolSpec" => Some(Arc::new(GetToolSpecTool::new())),
             "CallDeferredTool" => Some(Arc::new(CallDeferredTool::new())),

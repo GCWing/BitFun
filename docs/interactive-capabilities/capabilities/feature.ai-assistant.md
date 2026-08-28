@@ -39,7 +39,7 @@ Work with AI in project context, create sessions, continue tasks, answer permiss
   - Inspect, create, complete, or block the current session goal
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 编辑目标说明或清除当前会话目标
   - Edit the goal objective or clear the current session goal
-- **由专用 Agent 工具控制 / Delegated Agent tool** · `TodoWrite` / `CreatePlan` / `AskUserQuestion` · 让 Agent 维护任务清单、生成实施计划并按需向用户提问
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `TodoWrite` / `AskUserQuestion` · 让 Agent 维护任务清单、生成实施计划并按需向用户提问
   - Let an agent maintain a task list, produce an implementation plan, and ask the user when needed
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看单个会话的请求、Token 与成本用量报告
   - View request, token, and cost usage for an individual session

@@ -1795,6 +1795,8 @@
     },
     "plan": {
       "loadingPlan": "Loading plan...",
+      "invalidFormat": "Invalid plan format",
+      "invalidFormatDescription": "Open the plan file to inspect and correct its YAML frontmatter or Markdown body.",
       "generating": "Generating...",
       "clickToOpenPlan": "Click to open plan file",
       "saveToProject": "Save to Project",
