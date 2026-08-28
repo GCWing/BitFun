@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { INK, LINE, MUTED, PAGE_BG, SOFT } from './Theme';
 
@@ -22,7 +23,7 @@ export struct ChatStatusBar {
           .backgroundColor(this.color)
           .borderRadius(4)
         Text(this.statusLabel())
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(this.canStop ? MUTED : this.color)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -33,7 +34,7 @@ export struct ChatStatusBar {
         Text(RemoteI18n.t('chat.stop'))
           .width(68)
           .height(34)
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .textAlign(TextAlign.Center)

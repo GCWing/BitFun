@@ -2,7 +2,7 @@ import {
   RemoteImageContext,
   RemoteQuestionAnswerPayload
 } from '../../model/RemoteModels';
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatTimelineItem } from '../../model/ChatTimelineModels';
 import { ChatTimelineState, ChatTimelineStore } from '../../services/ChatTimelineStore';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { RemoteChatPollingCursor, RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';

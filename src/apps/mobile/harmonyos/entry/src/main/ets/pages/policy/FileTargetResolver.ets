@@ -1,5 +1,5 @@
-import { FilePreviewTarget, FilePreviewTargetContext } from '../model/FilePreviewTarget';
-import { RemoteUiState } from './RemoteUiState';
+import { FilePreviewTarget, FilePreviewTargetContext } from '../../model/FilePreviewTarget';
+import { RemoteUiState } from '../../services/RemoteUiState';
 
 export enum FileReferenceKind {
   RemoteWorkspaceFile = 'remote_workspace_file',
@@ -49,7 +49,7 @@ export class FileTargetResolver {
       return new FileReferenceResolution(FileReferenceKind.UnsupportedScheme);
     }
 
-    const remotePath = RemoteUiState.normalizeRemoteFilePath(range.path);
+    const remotePath: string = RemoteUiState.normalizeRemoteFilePath(range.path);
     if (remotePath.length === 0 || remotePath === '/') {
       return new FileReferenceResolution(FileReferenceKind.Invalid);
     }

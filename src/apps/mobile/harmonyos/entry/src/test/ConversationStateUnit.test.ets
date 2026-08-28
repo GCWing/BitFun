@@ -3,6 +3,7 @@ import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
 import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
 import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
+import { ChatTimelineRevisionTracker } from '../main/ets/model/ChatTimelineModels';
 import { ChatTimelineStore } from '../main/ets/services/ChatTimelineStore';
 import { ConversationEvent } from '../main/ets/services/ConversationEvent';
 import { AsyncLifecycleGate } from '../main/ets/services/AsyncLifecycleGate';
@@ -234,7 +235,7 @@ export default function conversationStateUnitTest() {
       expect(afterFinal[1].type).assertEqual('assistant_message');
     });
 
-    it('updates active turn item id when visible content changes', 0, () => {
+    it('keeps active turn identity stable when visible content changes', 0, () => {
       const first = activeChatMessage('turn-stable-1', 'abc', 'active', 1);
       const second = activeChatMessage('turn-stable-1', 'abcdef', 'active', 2);
       const firstItems = ChatTimelineProjector.project([], [], first, false);
@@ -242,9 +243,26 @@ export default function conversationStateUnitTest() {
 
       expect(firstItems.length).assertEqual(1);
       expect(secondItems.length).assertEqual(1);
-      expect(firstItems[0].id.indexOf('active-turn-stable-1-')).assertEqual(0);
-      expect(secondItems[0].id.indexOf('active-turn-stable-1-')).assertEqual(0);
-      expect(secondItems[0].id === firstItems[0].id).assertFalse();
+      expect(firstItems[0].id).assertEqual('active-turn-stable-1');
+      expect(secondItems[0].id).assertEqual('active-turn-stable-1');
+      expect(ChatTimelineRevisionTracker.itemKey(firstItems[0]))
+        .assertEqual(ChatTimelineRevisionTracker.itemKey(secondItems[0]));
+      expect(ChatTimelineRevisionTracker.itemSignature(firstItems[0]) ===
+        ChatTimelineRevisionTracker.itemSignature(secondItems[0])).assertFalse();
+    });
+
+    it('keeps assistant row identity stable from live turn to persisted completion', 0, () => {
+      const activeTurn = activeChatMessage('turn-row-1', 'Streaming', 'active', 1);
+      const finalMessage = chatMessage('assistant-random-id', 'assistant', 'Completed');
+      finalMessage.turnId = 'turn-row-1';
+      finalMessage.status = 'completed';
+      const activeItems = ChatTimelineProjector.project([], [], activeTurn, false);
+      const finalItems = ChatTimelineProjector.project([finalMessage], [], activeTurn, false);
+
+      expect(activeItems.length).assertEqual(1);
+      expect(finalItems.length).assertEqual(1);
+      expect(ChatTimelineRevisionTracker.itemKey(activeItems[0]))
+        .assertEqual(ChatTimelineRevisionTracker.itemKey(finalItems[0]));
     });
 
     it('hides active turn when final assistant id matches turn id', 0, () => {
@@ -848,6 +866,29 @@ export default function conversationStateUnitTest() {
       expect(blocks[3].items[0].text).assertEqual('first continuation');
       expect(blocks[3].items[1].depth).assertEqual(1);
     });
+
+    it('changes the render key when a streaming markdown block grows', 0, () => {
+      const firstCode = MarkdownParser.parse('```text\nline 1');
+      const secondCode = MarkdownParser.parse('```text\nline 1\nline 2');
+      const firstParagraph = MarkdownParser.parse('streaming');
+      const secondParagraph = MarkdownParser.parse('streaming content');
+
+      expect(firstCode[0].id).assertEqual(secondCode[0].id);
+      expect(firstCode[0].renderKey === secondCode[0].renderKey).assertFalse();
+      expect(firstParagraph[0].id).assertEqual(secondParagraph[0].id);
+      expect(firstParagraph[0].renderKey === secondParagraph[0].renderKey).assertFalse();
+    });
+
+    it('keeps completed markdown block render keys stable while the active block grows', 0, () => {
+      const first = MarkdownParser.parse('Completed paragraph.\n\n```text\nline 1');
+      const second = MarkdownParser.parse('Completed paragraph.\n\n```text\nline 1\nline 2');
+
+      expect(first.length).assertEqual(2);
+      expect(second.length).assertEqual(2);
+      expect(first[0].renderKey).assertEqual(second[0].renderKey);
+      expect(first[1].id).assertEqual(second[1].id);
+      expect(first[1].renderKey === second[1].renderKey).assertFalse();
+    });
   });
 
   describe('ConversationController', () => {
@@ -1021,6 +1062,43 @@ export default function conversationStateUnitTest() {
       expect(state.activeTurnMessage.text).assertEqual('Hello');
       expect(state.activeTurnMessage.renderVersion || 0).assertEqual(2);
       expect(state.hasRunningActiveTurn()).assertTrue();
+    });
+
+    it('retains observable timeline rows while streaming content changes', 0, () => {
+      const state = new GeneralChatPageState();
+      const firstMessage = activeChatMessage('turn-observable-1', '', 'active', 1);
+      const firstItems: ChatTimelineItem[] = [{
+        id: 'active-turn-observable-1',
+        type: 'assistant_live_turn',
+        message: firstMessage,
+        isStreaming: true,
+        isFinalizing: false
+      }];
+
+      state.setTimelineProjection([], [], firstMessage, false, firstItems);
+      const retainedRow = state.timelineItems[0];
+      const retainedMessage = retainedRow.message;
+
+      state.setTimelineProjection([], [], firstMessage, false, firstItems);
+      expect(state.timelineItems[0] === retainedRow).assertTrue();
+      expect(state.timelineItems[0].message === retainedMessage).assertTrue();
+
+      const completedMessage = activeChatMessage('turn-observable-1', 'UI NOW WORKS', 'completed', 2);
+      const completedItems: ChatTimelineItem[] = [{
+        id: 'active-turn-observable-1',
+        type: 'assistant_live_turn',
+        message: completedMessage,
+        isStreaming: false,
+        isFinalizing: true
+      }];
+
+      state.setTimelineProjection([], [], completedMessage, false, completedItems);
+
+      expect(state.timelineItems[0] === retainedRow).assertTrue();
+      expect(state.timelineItems[0].message?.text || '').assertEqual('UI NOW WORKS');
+      expect(state.timelineItems[0].message?.status || '').assertEqual('completed');
+      expect(state.timelineItems[0].isStreaming).assertFalse();
+      expect(state.timelineItems[0].isFinalizing).assertTrue();
     });
 
     it('owns ordinary chat composer projection', 0, () => {

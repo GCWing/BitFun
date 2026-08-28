@@ -1,22 +1,110 @@
-import { ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, toConversationUiMessage } from '../state/ConversationUiModels';
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
+import {
+  ConversationUiMessage,
+  ConversationUiMessageItem,
+  ConversationUiQuestionAnswer,
+  ObservableConversationUiMessage,
+  toConversationUiMessage
+} from '../state/ConversationUiModels';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ChatTimelineItem, ChatTimelineRevisionTracker } from '../../services/ChatTimelineProjector';
+import {
+  ChatTimelineItem,
+  ChatTimelineRevisionTracker,
+  ObservableChatTimelineItem
+} from '../../model/ChatTimelineModels';
 import { ChatSurface } from '../state/ChatSurface';
 import { CARD, INK, LINE, MUTED, RED } from './Theme';
-import { ChatMessageBubble } from './ChatMessageBubble';
+import { ChatMessageBubble, ChatUserMessageRow } from './ChatMessageBubble';
 import { RemoteLogger } from '../../services/RemoteLogger';
+
+/**
+ * Repeat retains this adapter by row identity while the observed row mutates.
+ * Mapping the protocol message inside a normal component build keeps the
+ * presentation leaf independent from transport DTOs without snapshotting a
+ * temporary mapped object in Repeat's item builder.
+ */
+@ReusableV2
+@ComponentV2
+struct ChatAssistantTimelineRow {
+  @Param row: ObservableChatTimelineItem = new ObservableChatTimelineItem({
+    id: '',
+    type: 'empty_state',
+    isStreaming: false,
+    isFinalizing: false
+  });
+  @Param isBusy: boolean = false;
+  @Param downloadingFilePath: string = '';
+  @Param downloadedFilePath: string = '';
+  @Param fileDownloadStatus: string = '';
+  @Param activeFilePreviewPath: string = '';
+  @Param activeFilePreviewLoading: boolean = false;
+  @Local uiMessage: ObservableConversationUiMessage = new ObservableConversationUiMessage();
+  @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
+    (_toolId: string, _updatedInput?: Object) => {};
+  @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
+    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onCopyMessage: (text: string) => void = (_text: string) => {};
+  @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void = (_path: string, _label: string) => {};
+  @Event onDownloadFile: (path: string) => void = (_path: string) => {};
+
+  aboutToAppear(): void {
+    this.synchronizeMessage();
+  }
+
+  @Monitor('row.message')
+  private onMessageChanged(): void {
+    this.synchronizeMessage();
+  }
+
+  build() {
+    if (this.row.message) {
+      ChatMessageBubble({
+        item: this.uiMessage,
+        isStreaming: this.row.isStreaming,
+        isFinalizing: this.row.isFinalizing,
+        showRetryAction: this.row.showRetryAction,
+        isBusy: this.isBusy,
+        downloadingFilePath: this.downloadingFilePath,
+        downloadedFilePath: this.downloadedFilePath,
+        fileDownloadStatus: this.fileDownloadStatus,
+        activeFilePreviewPath: this.activeFilePreviewPath,
+        activeFilePreviewLoading: this.activeFilePreviewLoading,
+        onApproveTool: this.onApproveTool,
+        onRejectTool: this.onRejectTool,
+        onCancelTool: this.onCancelTool,
+        onAnswerQuestion: this.onAnswerQuestion,
+        onCopyMessage: this.onCopyMessage,
+        onRetryMessage: this.onRetryMessage,
+        onOpenFilePreview: this.onOpenFilePreview,
+        onDownloadFile: this.onDownloadFile
+      })
+    }
+  }
+
+  private synchronizeMessage(): void {
+    if (this.row.message) {
+      this.uiMessage.updateFrom(toConversationUiMessage(this.row.message));
+    }
+  }
+}
 
 @ComponentV2
 export struct ChatTimeline {
   private readonly listScroller: Scroller = new Scroller();
+  private followTimerId: number = 0;
+  private followedActiveTurnKey: string = '';
+  private userScrollActive: boolean = false;
   // Whether new content should pull the viewport down with it. True until the
   // user scrolls up to read back through the transcript: at that point taking
   // the viewport away from them would be worse than letting the reply grow off
   // screen, and the chevron button below gives them the way back.
   @Local stickToBottom: boolean = true;
   @Param surface: ChatSurface = ChatSurface.Remote;
-  @Param timelineItems: ChatTimelineItem[] = [];
+  @Param timelineItems: ObservableChatTimelineItem[] = [];
   @Param timelineRevision: number = 0;
   @Param hasMoreMessages: boolean = false;
   @Param isBusy: boolean = false;
@@ -50,17 +138,25 @@ export struct ChatTimeline {
 
   aboutToDisappear(): void {
     RemoteLogger.info(`chat timeline disposed items=${this.timelineItems.length}`);
+    this.clearFollowTimer();
   }
 
-  // `stackFromEnd` covers content that grows inside the last item, but a whole
-  // new bubble arriving is a layout change the list does not chase on its own.
+  // A new turn means the user has just sent a message and expects to follow its
+  // answer even if opening the keyboard changed the List viewport. Subsequent
+  // revisions keep following only until the user deliberately scrolls away.
   @Monitor('timelineRevision')
   onTimelineChanged(): void {
     this.logTimelineProjection('revision');
-    if (!this.stickToBottom) {
-      return;
+    const activeTurnKey = this.activeTurnKey();
+    if (activeTurnKey.length > 0 && activeTurnKey !== this.followedActiveTurnKey) {
+      this.followedActiveTurnKey = activeTurnKey;
+      this.userScrollActive = false;
+      this.stickToBottom = true;
+      RemoteLogger.info(
+        `chat timeline follow start revision=${this.timelineRevision} turn=${activeTurnKey}`
+      );
     }
-    this.listScroller.scrollEdge(Edge.Bottom);
+    this.requestFollowToBottom('revision');
   }
 
   build() {
@@ -69,7 +165,7 @@ export struct ChatTimeline {
         if (this.hasMoreMessages) {
           ListItem() {
             Text(this.isBusy ? RemoteI18n.t('common.loading') : RemoteI18n.t('chat.loadOlder'))
-              .fontSize(13)
+              .fontSize(MobileDesignTypography.bodySmall.size)
               .fontColor(MUTED)
               .textAlign(TextAlign.Center)
               .width('100%')
@@ -79,9 +175,80 @@ export struct ChatTimeline {
               })
           }
         }
-        ForEach(this.timelineItems, (item: ChatTimelineItem) => {
-          this.TimelineItem(item)
-        }, (item: ChatTimelineItem) => ChatTimelineRevisionTracker.itemSignature(item))
+        Repeat<ObservableChatTimelineItem>(this.historyTimelineItems())
+          .virtualScroll()
+          .each((repeatItem: RepeatItem<ObservableChatTimelineItem>) => {
+            // Repeat must own the reusable row directly. Routing its item
+            // through an @Builder snapshots the nested component subtree on
+            // current ArkUI builds, so streaming message params never update.
+            if (repeatItem.item.type === 'empty_state') {
+              ListItem() {
+                this.EmptyChatState()
+              }
+              .onAppear(() => {
+                this.logRenderedItem(repeatItem.item);
+              })
+            } else if (repeatItem.item.message && this.shouldRenderTimelineMessage(repeatItem.item)) {
+              ListItem() {
+                if (repeatItem.item.message!.role === 'user') {
+                  ChatUserMessageRow({
+                    item: toConversationUiMessage(repeatItem.item.message!),
+                    showRetryAction: repeatItem.item.showRetryAction === true,
+                    onRetryMessage: (text: string) => {
+                      this.onRetryMessage(text);
+                    }
+                  })
+                  .reuse({ reuseId: () => 'chat_user' })
+                } else {
+                  ChatAssistantTimelineRow({
+                    row: repeatItem.item,
+                    isBusy: this.isBusy,
+                    downloadingFilePath: this.downloadingFilePath,
+                    downloadedFilePath: this.downloadedFilePath,
+                    fileDownloadStatus: this.fileDownloadStatus,
+                    activeFilePreviewPath: this.activeFilePreviewPath,
+                    activeFilePreviewLoading: this.activeFilePreviewLoading,
+                    onApproveTool: (toolId: string, updatedInput?: Object) => {
+                      this.onApproveTool(toolId, updatedInput);
+                    },
+                    onRejectTool: (toolId: string) => {
+                      this.onRejectTool(toolId);
+                    },
+                    onCancelTool: (toolId: string) => {
+                      this.onCancelTool(toolId);
+                    },
+                    onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
+                      this.onAnswerQuestion(toolId, answers);
+                    },
+                    onCopyMessage: (text: string) => {
+                      this.onCopyMessage(text);
+                    },
+                    onRetryMessage: (text: string) => {
+                      this.onRetryMessage(text);
+                    },
+                    onOpenFilePreview: (path: string, label: string) => {
+                      this.onOpenFilePreview(path, label);
+                    },
+                    onDownloadFile: (path: string) => {
+                      this.onDownloadFile(path);
+                    }
+                  })
+                  .reuse({ reuseId: () => 'chat_assistant' })
+                }
+              }
+              .onAppear(() => {
+                this.logRenderedItem(repeatItem.item);
+              })
+            }
+          })
+          .key((item: ObservableChatTimelineItem, _index: number) => ChatTimelineRevisionTracker.itemKey(item))
+
+        // Keep the single volatile row outside Repeat.virtualScroll(). A stable
+        // key preserves its StreamingMarkdownContent timer and rendered prefix;
+        // replacement @Param values then update that live component in place.
+        ForEach(this.activeTimelineItems(), (item: ObservableChatTimelineItem) => {
+          this.ActiveTimelineItem(item)
+        }, (item: ObservableChatTimelineItem) => ChatTimelineRevisionTracker.itemKey(item))
       }
       .width('100%')
       .height('100%')
@@ -93,11 +260,20 @@ export struct ChatTimeline {
       // Keeps the read position when older messages are prepended above.
       .maintainVisibleContentPosition(true)
       .scrollBar(BarState.Off)
+      .cachedCount(4)
+      .onWillScroll((_scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
+        if (this.isUserScrollSource(scrollSource)) {
+          this.userScrollActive = true;
+        }
+      })
       .onDidScroll((_scrollOffset: number, scrollState: ScrollState) => {
         if (this.listScroller.isAtEnd()) {
           this.stickToBottom = true;
-        } else if (scrollState !== ScrollState.Idle) {
+        } else if (this.userScrollActive) {
           this.stickToBottom = false;
+        }
+        if (scrollState === ScrollState.Idle) {
+          this.userScrollActive = false;
         }
       })
 
@@ -115,7 +291,8 @@ export struct ChatTimeline {
         .margin({ bottom: 4 })
         .onClick(() => {
           this.stickToBottom = true;
-          this.listScroller.scrollEdge(Edge.Bottom);
+          this.userScrollActive = false;
+          this.requestFollowToBottom('jump-button');
         })
       }
     }
@@ -131,7 +308,7 @@ export struct ChatTimeline {
       Text(this.emptyChatIcon())
         .width(38)
         .height(38)
-        .fontSize(18)
+        .fontSize(MobileDesignTypography.headlineSmall.size)
         .fontColor(this.connectionState === 'failed' ? RED : MUTED)
         .textAlign(TextAlign.Center)
         .backgroundColor(CARD)
@@ -139,12 +316,12 @@ export struct ChatTimeline {
         .border({ width: 1, color: LINE })
       Column({ space: 5 }) {
         Text(this.emptyChatTitle())
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
         Text(this.emptyChatText())
-          .fontSize(13)
-          .lineHeight(18)
+          .fontSize(MobileDesignTypography.bodySmall.size)
+          .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
           .fontColor(MUTED)
       }
       .layoutWeight(1)
@@ -158,22 +335,97 @@ export struct ChatTimeline {
   }
 
   @Builder
-  TimelineItem(item: ChatTimelineItem) {
-    if (item.type === 'empty_state') {
+  ActiveTimelineItem(item: ObservableChatTimelineItem) {
+    if (item.message && this.shouldRenderTimelineMessage(item)) {
       ListItem() {
-        this.EmptyChatState()
+        ChatMessageBubble({
+          item: toConversationUiMessage(item.message),
+          renderRevision: this.timelineRevision,
+          isStreaming: item.isStreaming,
+          isFinalizing: item.isFinalizing,
+          showRetryAction: item.showRetryAction === true,
+          isBusy: this.isBusy,
+          downloadingFilePath: this.downloadingFilePath,
+          downloadedFilePath: this.downloadedFilePath,
+          fileDownloadStatus: this.fileDownloadStatus,
+          activeFilePreviewPath: this.activeFilePreviewPath,
+          activeFilePreviewLoading: this.activeFilePreviewLoading,
+          onApproveTool: this.onApproveTool,
+          onRejectTool: this.onRejectTool,
+          onCancelTool: this.onCancelTool,
+          onAnswerQuestion: this.onAnswerQuestion,
+          onCopyMessage: this.onCopyMessage,
+          onRetryMessage: this.onRetryMessage,
+          onOpenFilePreview: this.onOpenFilePreview,
+          onDownloadFile: this.onDownloadFile
+        })
       }
       .onAppear(() => {
         this.logRenderedItem(item);
       })
-    } else if (item.message && this.shouldRenderTimelineMessage(item)) {
-      ListItem() {
-        this.MessageBubble(item)
-      }
-      .onAppear(() => {
-        this.logRenderedItem(item);
+      .onAreaChange((oldArea: Area, newArea: Area) => {
+        if (Math.abs(this.areaLength(newArea.height) - this.areaLength(oldArea.height)) > 0.5) {
+          this.requestFollowToBottom('active-height');
+        }
       })
     }
+  }
+
+  private historyTimelineItems(): ObservableChatTimelineItem[] {
+    return this.timelineItems.filter((item: ObservableChatTimelineItem) => !this.isVolatileItem(item));
+  }
+
+  private activeTimelineItems(): ObservableChatTimelineItem[] {
+    return this.timelineItems.filter((item: ObservableChatTimelineItem) => this.isVolatileItem(item));
+  }
+
+  private isVolatileItem(item: ChatTimelineItem): boolean {
+    return item.type === 'assistant_live_turn' && (item.isStreaming || item.isFinalizing);
+  }
+
+  private activeTurnKey(): string {
+    const activeItems = this.activeTimelineItems();
+    if (activeItems.length === 0) {
+      return '';
+    }
+    return ChatTimelineRevisionTracker.itemKey(activeItems[activeItems.length - 1]);
+  }
+
+  private requestFollowToBottom(reason: string): void {
+    if (!this.stickToBottom || this.followTimerId !== 0) {
+      return;
+    }
+    this.followTimerId = setTimeout(() => {
+      this.followTimerId = 0;
+      if (!this.stickToBottom) {
+        return;
+      }
+      const wasAtEnd = this.listScroller.isAtEnd();
+      this.listScroller.scrollEdge(Edge.Bottom);
+      if (!wasAtEnd || reason === 'jump-button') {
+        RemoteLogger.info(
+          `chat timeline follow apply reason=${reason} revision=${this.timelineRevision} ` +
+          `wasAtEnd=${wasAtEnd ? 1 : 0}`
+        );
+      }
+    }, 0);
+  }
+
+  private clearFollowTimer(): void {
+    if (this.followTimerId !== 0) {
+      clearTimeout(this.followTimerId);
+      this.followTimerId = 0;
+    }
+  }
+
+  private isUserScrollSource(source: ScrollSource): boolean {
+    return source === ScrollSource.DRAG || source === ScrollSource.FLING ||
+      source === ScrollSource.EDGE_EFFECT || source === ScrollSource.OTHER_USER_INPUT;
+  }
+
+  private areaLength(value: Object): number {
+    const parsed = Number.parseFloat(`${value}`);
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
 
   private logRenderedItem(item: ChatTimelineItem): void {
@@ -209,46 +461,6 @@ export struct ChatTimeline {
       return summary.substring(0, 80);
     }
     return summary;
-  }
-
-  @Builder
-  MessageBubble(item: ChatTimelineItem) {
-    ChatMessageBubble({
-      item: toConversationUiMessage(item.message!),
-      isStreaming: item.isStreaming,
-      isFinalizing: item.isFinalizing,
-      showRetryAction: item.showRetryAction === true,
-      isBusy: this.isBusy,
-      downloadingFilePath: this.downloadingFilePath,
-      downloadedFilePath: this.downloadedFilePath,
-      fileDownloadStatus: this.fileDownloadStatus,
-      activeFilePreviewPath: this.activeFilePreviewPath,
-      activeFilePreviewLoading: this.activeFilePreviewLoading,
-      onApproveTool: (toolId: string, updatedInput?: Object) => {
-        this.onApproveTool(toolId, updatedInput);
-      },
-      onRejectTool: (toolId: string) => {
-        this.onRejectTool(toolId);
-      },
-      onCancelTool: (toolId: string) => {
-        this.onCancelTool(toolId);
-      },
-      onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => {
-        this.onAnswerQuestion(toolId, answers);
-      },
-      onCopyMessage: (text: string) => {
-        this.onCopyMessage(text);
-      },
-      onRetryMessage: (text: string) => {
-        this.onRetryMessage(text);
-      },
-      onOpenFilePreview: (path: string, label: string) => {
-        this.onOpenFilePreview(path, label);
-      },
-      onDownloadFile: (path: string) => {
-        this.onDownloadFile(path);
-      }
-    })
   }
 
   private shouldRenderTimelineMessage(item: ChatTimelineItem): boolean {

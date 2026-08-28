@@ -5,7 +5,7 @@ import {
   SessionSummary
 } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatTimelineItem } from '../../model/ChatTimelineModels';
 import { VoiceInputRouteSnapshot } from '../../services/VoiceInputLifecycleController';
 import { AppRootRouteState } from '../navigation/AppRootRouteState';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';

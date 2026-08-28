@@ -29,6 +29,18 @@ Do not edit generated files by hand. Native components remain responsible for
 safe areas, keyboard behavior, accessibility bridges, navigation gestures, and
 platform presentation primitives.
 
+## Typography
+
+- Product text consumes the semantic roles in `tokens/mobile-tokens.json`;
+  native components must not introduce literal text sizes.
+- Keep the hierarchy shallow: display and page titles use the display/headline
+  roles, row titles use title roles, reading text uses body roles, and compact
+  metadata uses label roles. The smallest product-text role is `label_small`
+  at 12 units; icon glyph sizing is independent of text sizing.
+- Native hosts follow the system font-size preference with a documented maximum
+  scale. Validate the standard size and at least one enlarged accessibility size
+  without changing display zoom, and prefer wrapping or ellipsis over clipping.
+
 ## Simulator captures
 
 The native galleries can be launched without changing the normal app path:

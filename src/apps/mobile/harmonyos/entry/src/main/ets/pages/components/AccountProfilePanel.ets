@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
@@ -70,14 +71,14 @@ export struct AccountProfilePanel {
       DefaultAccountAvatar({ avatarSize: 46 })
       Column({ space: 4 }) {
         Text(RemoteI18n.t('settings.account.current'))
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .width('100%')
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.shortProfileIdentifier())
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(MUTED)
           .width('100%')
           .maxLines(1)
@@ -87,7 +88,7 @@ export struct AccountProfilePanel {
       .alignItems(HorizontalAlign.Start)
       Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.accountSignedIn') :
         RemoteI18n.t('remote.settings.accountNotSignedIn'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.isAccountAuthenticated() ? GREEN : MUTED)
     }
@@ -103,7 +104,8 @@ export struct AccountProfilePanel {
   @Builder
   private EmbeddedSectionTitle(title: string) {
     Text(title)
-      .fontSize(18)
+      .fontSize(MobileDesignTypography.titleSmall.size)
+      .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
@@ -126,7 +128,7 @@ export struct AccountProfilePanel {
       .accessibilityText(RemoteI18n.t('common.back'))
       .onClick(() => this.onBack())
       Text(RemoteI18n.t('remote.settings.profile'))
-        .fontSize(20)
+        .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
         .layoutWeight(1)
@@ -143,7 +145,7 @@ export struct AccountProfilePanel {
     Column({ space: 10 }) {
       DefaultAccountAvatar({ avatarSize: 70 })
       Text(this.profileName())
-        .fontSize(22)
+        .fontSize(MobileDesignTypography.headlineLarge.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
         .width('88%')
@@ -151,7 +153,7 @@ export struct AccountProfilePanel {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Text(this.profileIdentifier())
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
         .width('88%')
         .textAlign(TextAlign.Center)
@@ -170,20 +172,20 @@ export struct AccountProfilePanel {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Text(RemoteI18n.t('remote.settings.account'))
-          .fontSize(17)
+          .fontSize(MobileDesignTypography.titleMedium.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
         Blank()
         Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.accountSignedIn') :
           RemoteI18n.t('remote.settings.accountNotSignedIn'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(this.isAccountAuthenticated() ? GREEN : MUTED)
       }
       .width('100%')
 
       Text(this.accountStatusBody())
-        .fontSize(14)
-        .lineHeight(20)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
         .fontColor(MUTED)
         .width('100%')
     }
@@ -200,7 +202,8 @@ export struct AccountProfilePanel {
       Row() {
         Text(this.embeddedInSettings ? RemoteI18n.t('settings.devices.section') :
           RemoteI18n.t('remote.settings.deviceManagement'))
-          .fontSize(18)
+          .fontSize(MobileDesignTypography.titleSmall.size)
+          .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
           .fontWeight(FontWeight.Medium)
           .fontColor(MUTED)
         Blank()
@@ -228,13 +231,13 @@ export struct AccountProfilePanel {
       Column({ space: 4 }) {
         if (!this.isAccountAuthenticated()) {
           Text(RemoteI18n.t('remote.settings.deviceLoginRequired'))
-            .fontSize(13).lineHeight(18).fontColor(MUTED).width('100%')
+            .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(MUTED).width('100%')
         } else if (this.accountDevicesBusy && this.accountDevices.length === 0) {
           Text(RemoteI18n.t('remote.settings.deviceLoading'))
-            .fontSize(13).fontColor(MUTED).width('100%')
+            .fontSize(MobileDesignTypography.bodySmall.size).fontColor(MUTED).width('100%')
         } else if (this.desktopDevices().length === 0) {
           Text(this.accountDevicesError || RemoteI18n.t('remote.settings.deviceEmpty'))
-            .fontSize(13).lineHeight(18).fontColor(MUTED).width('100%')
+            .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(MUTED).width('100%')
         } else {
           ForEach(this.desktopDevices(), (device: CloudAccountDevice) => {
             this.AccountDeviceRow(device)
@@ -243,7 +246,7 @@ export struct AccountProfilePanel {
         }
         if (this.accountDevicesError.length > 0 && this.desktopDevices().length > 0) {
           Text(this.accountDevicesError)
-            .fontSize(13).lineHeight(18).fontColor(RED).width('100%')
+            .fontSize(MobileDesignTypography.bodySmall.size).lineHeight(MobileDesignTypography.bodySmall.lineHeight).fontColor(RED).width('100%')
         }
       }
       .width('100%')
@@ -268,17 +271,17 @@ export struct AccountProfilePanel {
       .height(28)
       Column({ space: 2 }) {
         Text(device.deviceName || device.deviceId)
-          .fontSize(15).fontWeight(FontWeight.Medium).fontColor(INK)
+          .fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium).fontColor(INK)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.deviceStatus(device))
-          .fontSize(13).fontColor(device.online ? GREEN : MUTED)
+          .fontSize(MobileDesignTypography.bodySmall.size).fontColor(device.online ? GREEN : MUTED)
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
       if (this.shouldShowDeviceConnectAction(device)) {
         Text(this.switchingDeviceId === device.deviceId ?
           RemoteI18n.t('remote.settings.deviceConnecting') : RemoteI18n.t('connect.connect'))
-          .fontSize(14).fontColor(INK)
+          .fontSize(MobileDesignTypography.bodyMedium.size).fontColor(INK)
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
           .backgroundColor(SOFT).borderRadius(14)
       }
@@ -298,7 +301,8 @@ export struct AccountProfilePanel {
   @Builder
   private ProfileDetails() {
     Text(RemoteI18n.t('remote.settings.profileDetails'))
-      .fontSize(18)
+      .fontSize(MobileDesignTypography.titleSmall.size)
+      .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
       .fontWeight(FontWeight.Bold)
       .fontColor(MUTED)
       .width('100%')
@@ -317,10 +321,10 @@ export struct AccountProfilePanel {
   @Builder
   private ProfileDetailRow(label: string, value: string) {
     Row({ space: 16 }) {
-      Text(label).fontSize(16).fontColor(INK)
+      Text(label).fontSize(MobileDesignTypography.bodyLarge.size).fontColor(INK)
       Blank()
       Text(value)
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -344,7 +348,7 @@ export struct AccountProfilePanel {
         .fontSize(22).fontColor([RED]).width(24).height(24)
       Text(this.logoutBusy ? RemoteI18n.t('remote.settings.accountLoggingOut') :
         RemoteI18n.t('remote.settings.accountLogout'))
-        .fontSize(17).fontWeight(FontWeight.Medium).fontColor(RED)
+        .fontSize(MobileDesignTypography.titleMedium.size).fontWeight(FontWeight.Medium).fontColor(RED)
     }
     .width('100%')
     .height(62)

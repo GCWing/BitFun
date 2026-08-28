@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
 import { ACCENT, CARD, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
@@ -40,7 +41,7 @@ export struct ToolConfirmationPanel {
       }
       Row({ space: 8 }) {
         Text(RemoteI18n.t('chat.approve'))
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelMedium.size)
           .fontColor(PRIMARY_ACTION_TEXT)
           .textAlign(TextAlign.Center)
           .height(32)
@@ -49,7 +50,7 @@ export struct ToolConfirmationPanel {
           .borderRadius(16)
           .onClick(() => this.approve())
         Text(RemoteI18n.t('chat.reject'))
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelMedium.size)
           .fontColor(INK)
           .textAlign(TextAlign.Center)
           .height(32)
@@ -69,10 +70,10 @@ export struct ToolConfirmationPanel {
   private InputEditor() {
     Column({ space: 6 }) {
       Row() {
-        Text(RemoteI18n.t('chat.toolInput')).fontSize(11).fontColor(MUTED)
+        Text(RemoteI18n.t('chat.toolInput')).fontSize(MobileDesignTypography.labelSmall.size).fontColor(MUTED)
         Blank()
         Text(RemoteI18n.t('chat.reset'))
-          .fontSize(11)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .onClick(() => {
             this.inputText = this.defaultInputText;
@@ -82,9 +83,9 @@ export struct ToolConfirmationPanel {
       .width('100%')
       TextArea({ placeholder: RemoteI18n.t('chat.editJsonInput'), text: this.inputText })
         .height(96)
-        .fontSize(12)
+        .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(INK)
-        .lineHeight(17)
+        .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
         .backgroundColor(SOFT)
         .borderRadius(14)
         .padding(10)
@@ -96,7 +97,7 @@ export struct ToolConfirmationPanel {
           this.inputError = '';
         })
       if (this.inputError.length > 0) {
-        Text(this.inputError).fontSize(11).fontColor(RED)
+        Text(this.inputError).fontSize(MobileDesignTypography.labelSmall.size).fontColor(RED)
       }
     }
     .width('100%')
@@ -158,7 +159,8 @@ export struct ToolQuestionAnswerPanel {
       }, (question: QuestionInput, index: number) => `${index}:${question.header}:${question.question}`)
       Row() {
         Text(RemoteI18n.t('chat.submitAnswer'))
-          .fontSize(12).fontColor(this.canSubmit() ? PRIMARY_ACTION_TEXT : MUTED)
+          .fontSize(MobileDesignTypography.labelMedium.size)
+          .fontColor(this.canSubmit() ? PRIMARY_ACTION_TEXT : MUTED)
           .textAlign(TextAlign.Center)
           .height(32)
           .layoutWeight(1)
@@ -177,13 +179,16 @@ export struct ToolQuestionAnswerPanel {
   private Question(question: QuestionInput, index: number) {
     Column({ space: 6 }) {
       Text(question.header.length > 0 ? `${question.header}  ${question.question}` : question.question)
-        .fontSize(12).lineHeight(17).fontColor(INK).width('100%')
+        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
+        .fontColor(INK)
+        .width('100%')
       ForEach(question.options, (option: QuestionOption) => {
         this.OptionRow(option, index, question.multiSelect === true)
       }, (option: QuestionOption) => option.label)
       if (this.isOtherSelected(index)) {
         TextArea({ placeholder: RemoteI18n.t('chat.answerPlaceholder'), text: this.customAnswers.get(index) || '' })
-          .height(64).fontSize(12).backgroundColor(CARD).borderRadius(10).padding(10)
+          .height(64).fontSize(MobileDesignTypography.labelSmall.size).backgroundColor(CARD).borderRadius(10).padding(10)
           .border({ width: 1, color: LINE }).defaultFocus(false).enabled(!this.isBusy)
           .onChange((value: string) => {
             const next = new Map<number, string>(this.customAnswers);
@@ -209,14 +214,14 @@ export struct ToolQuestionAnswerPanel {
         .width(20)
       Column({ space: 3 }) {
         Text(option.label)
-          .fontSize(12)
-          .lineHeight(17)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
+          .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
           .fontColor(INK)
           .width('100%')
         if (option.description && option.description.length > 0) {
           Text(option.description)
-            .fontSize(11)
-            .lineHeight(15)
+            .fontSize(MobileDesignTypography.bodySmall.size)
+            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
             .fontColor(MUTED)
             .maxLines(3)
             .textOverflow({ overflow: TextOverflow.Ellipsis })

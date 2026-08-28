@@ -7,6 +7,7 @@ import {
 
 export enum SettingsPlacementMode {
   Bottom = 'bottom',
+  Center = 'center',
   Side = 'side',
   FoldOperate = 'fold_operate'
 }
@@ -45,6 +46,7 @@ export class SettingsPlacementPolicy {
   static readonly TABLET_MIN_WIDTH: number = 400;
   static readonly TABLET_MAX_WIDTH: number = 520;
   static readonly TABLET_WIDTH_RATIO: number = 0.32;
+  static readonly CONNECT_CENTER_WIDTH_RATIO: number = 0.72;
   static readonly LANDSCAPE_WIDTH_RATIO: number = 0.45;
   static readonly SIDE_MAX_HEIGHT: number = 760;
   static readonly SIDE_MIN_HEIGHT: number = 560;
@@ -61,6 +63,19 @@ export class SettingsPlacementPolicy {
     // full-width bottom sheet at every width, even when it crosses a fold.
     if (kind === SettingsSheetKind.Settings) {
       return SettingsPlacementPolicy.bottomPlacement(kind);
+    }
+    if (kind === SettingsSheetKind.Connect &&
+      input.isExpandedFoldable &&
+      !input.isFolded &&
+      SettingsPlacementPolicy.canUseSideSheet(input)) {
+      const horizontal = SettingsPlacementPolicy.firstUsableHorizontalCrease(
+        input.viewportHeight,
+        input.horizontalCreases
+      );
+      if (input.isHoverOperate && horizontal) {
+        return SettingsPlacementPolicy.foldOperatePlacement(input, kind, horizontal);
+      }
+      return SettingsPlacementPolicy.connectCenterPlacement(input);
     }
     if (input.isHoverOperate) {
       return SettingsPlacementPolicy.hoverPlacement(input, kind);
@@ -127,6 +142,22 @@ export class SettingsPlacementPolicy {
     const width = Math.min(input.viewportWidth, clamped);
     const height = SettingsPlacementPolicy.kindSideHeight(input.viewportHeight, kind);
     return new SettingsPlacement(SettingsPlacementMode.Side, width, height, 0);
+  }
+
+  private static connectCenterPlacement(input: AdaptiveLayoutInput): SettingsPlacement {
+    const ratioWidth = Math.round(
+      input.viewportWidth * SettingsPlacementPolicy.CONNECT_CENTER_WIDTH_RATIO
+    );
+    const clamped = Math.min(
+      SettingsPlacementPolicy.TABLET_MAX_WIDTH,
+      Math.max(SettingsPlacementPolicy.TABLET_MIN_WIDTH, ratioWidth)
+    );
+    const width = Math.min(input.viewportWidth, clamped);
+    const height = SettingsPlacementPolicy.kindSideHeight(
+      input.viewportHeight,
+      SettingsSheetKind.Connect
+    );
+    return new SettingsPlacement(SettingsPlacementMode.Center, width, height, 0);
   }
 
   private static landscapeSidePlacement(

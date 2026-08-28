@@ -1,33 +1,49 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { ConversationUiImage, ConversationUiMessage, ConversationUiMessageItem, ConversationUiQuestionAnswer, ConversationUiToolStatus } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ActivityGroupPolicy, ActivityThinkingPart } from '../policy/ActivityGroupPolicy';
+import { ChatMessageStructurePolicy, StructuredRenderGroup } from '../policy/ChatMessageStructurePolicy';
 import { AssistantProcessLayoutPolicy } from '../policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
 import { ACCENT, INK, LINE, RED } from './Theme';
-import { MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
+import { MessageBodyMarkdown, MessageFileCards, MessageImageGallery, MessageMarkdown } from './ChatMessageContent';
 import { ChatMessageRetryAction, ChatTypingDots, ChatUserMessageBubble } from './ChatMessageChrome';
 import { SubagentTaskCard } from './SubagentTaskCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolStatusList } from './ToolStatusList';
-import { MessageFileReference, MessageFileReferenceProjectionCache } from '../../services/MessageFileReferenceProjector';
+import { MessageFileReference, MessageFileReferenceProjectionCache } from '../policy/MessageFileReferenceProjector';
 
-interface SubagentTaskInput {
-  description?: string;
-  title?: string;
-  prompt?: string;
-}
-interface StructuredRenderGroup {
-  type: string;
-  items: ConversationUiMessageItem[];
-  itemStatuses: string[];
-  itemStreaming: boolean[];
-  itemChildActiveScopes: boolean[];
-  tools: ConversationUiToolStatus[];
-  key: string;
-  path: string;
+class MessageTextBuilderParams {
+  text: string = '';
+  active: boolean = false;
+  streamKey: string = '';
+  renderRevision: number = 0;
 }
 
+@ReusableV2
+@ComponentV2
+export struct ChatUserMessageRow {
+  @Param item: ConversationUiMessage = {
+    id: '',
+    role: 'user',
+    text: '',
+    status: '',
+    detail: ''
+  };
+  @Param showRetryAction: boolean = false;
+  @Event onRetryMessage: (text: string) => void = (_text: string) => {};
+
+  build() {
+    ChatUserMessageBubble({
+      item: this.item,
+      showRetryAction: this.showRetryAction,
+      onRetryMessage: this.onRetryMessage
+    })
+  }
+}
+
+@ReusableV2
 @ComponentV2
 export struct ChatMessageBubble {
   @Param item: ConversationUiMessage = {
@@ -37,6 +53,7 @@ export struct ChatMessageBubble {
     status: '',
     detail: ''
   };
+  @Param renderRevision: number = 0;
   @Param isStreaming: boolean = false;
   @Param isFinalizing: boolean = false;
   @Param showRetryAction: boolean = false;
@@ -60,15 +77,7 @@ export struct ChatMessageBubble {
     new MessageFileReferenceProjectionCache();
 
   build() {
-    if (this.item.role === 'user') {
-      ChatUserMessageBubble({
-        item: this.item,
-        showRetryAction: this.showRetryAction,
-        onRetryMessage: this.onRetryMessage
-      })
-    } else {
-      this.AssistantBubble()
-    }
+    this.AssistantBubble()
   }
 
   @Builder
@@ -76,9 +85,9 @@ export struct ChatMessageBubble {
     Row() {
       Column({ space: 10 }) {
         if (this.shouldRenderFinalOnly(this.item)) {
-          this.FinalContent(this.item)
+          this.FinalContent()
         } else {
-          this.ProcessContent(this.item)
+          this.ProcessContent()
         }
         if (this.item.images && this.item.images.length > 0) {
           this.MessageImages(this.item.images)
@@ -110,16 +119,16 @@ export struct ChatMessageBubble {
   AssistantFailure(errorText: string, retryText: string) {
     Column({ space: 6 }) {
       Text(RemoteI18n.t('chat.responseFailed'))
-        .fontSize(12)
+        .fontSize(MobileDesignTypography.labelSmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(RED)
       Text(errorText.trim())
-        .fontSize(13)
-        .lineHeight(19)
+        .fontSize(MobileDesignTypography.bodySmall.size)
+        .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(INK)
       if (retryText.trim().length > 0) {
         Text(RemoteI18n.t('common.retry'))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(ACCENT)
           .height(28)
@@ -134,47 +143,60 @@ export struct ChatMessageBubble {
   }
 
   @Builder
-  FinalContent(item: ConversationUiMessage) {
-    this.MessageText(this.finalMessageText(item), false, `${item.id}-final`)
-    if (this.fileReferences(this.finalMessageText(item)).length > 0) {
-      this.FileCards(this.finalMessageText(item))
+  FinalContent() {
+    this.MessageText({
+      text: this.finalMessageText(this.item),
+      active: false,
+      streamKey: `${this.item.id}-final`,
+      renderRevision: this.renderRevision
+    })
+    if (this.fileReferences(this.finalMessageText(this.item)).length > 0) {
+      this.FileCards(this.finalMessageText(this.item))
     }
   }
 
   @Builder
-  ProcessContent(item: ConversationUiMessage) {
-    if (this.leadingThinkingText(item).length > 0) {
+  ProcessContent() {
+    if (this.leadingThinkingText(this.item).length > 0) {
       this.Thinking(
-        this.leadingThinkingText(item),
-        this.leadingThinkingStatus(item),
-        `${item.id}-thinking`,
-        ThinkingPresentationPolicy.isRunning(this.leadingThinkingStatus(item))
+        this.leadingThinkingText(this.item),
+        this.leadingThinkingStatus(this.item),
+        `${this.item.id}-thinking`,
+        ThinkingPresentationPolicy.isRunning(this.leadingThinkingStatus(this.item))
       )
     }
-    if (this.shouldRenderStructuredItems(item)) {
-      this.StructuredItems(item.items || [], this.shouldOmitStructuredThinking(item))
-      if (this.uncoveredTools(item).length > 0) {
-        this.Tools(this.uncoveredTools(item))
+    if (this.shouldRenderStructuredItems(this.item)) {
+      this.StructuredItems(this.item.items || [], this.shouldOmitStructuredThinking(this.item))
+      if (this.uncoveredTools(this.item).length > 0) {
+        this.Tools(this.uncoveredTools(this.item))
       }
     } else {
-      if (item.tools && item.tools.length > 0) {
-        this.Tools(item.tools)
+      if (this.item.tools && this.item.tools.length > 0) {
+        this.Tools(this.item.tools)
       }
-      if (this.shouldShowTypingDots(item)) {
+      if (this.shouldShowTypingDots(this.item)) {
         ChatTypingDots()
       }
-      if (item.role !== 'user' && this.visibleMessageText(item).length > 0 && this.visibleMessageText(item) !== item.thinking) {
-        this.MessageText(this.visibleMessageText(item), this.isStreamingAssistant(), `${item.id}-body`)
-        if (this.fileReferences(this.visibleMessageText(item)).length > 0) {
-          this.FileCards(this.visibleMessageText(item))
+      if (this.item.role !== 'user' && this.visibleMessageText(this.item).length > 0 &&
+        this.visibleMessageText(this.item) !== this.item.thinking) {
+        MessageBodyMarkdown({
+          text: this.item.text,
+          renderRevision: this.renderRevision,
+          active: this.isStreamingAssistant(),
+          streamKey: `${this.item.id}-body`,
+          onCopyText: this.onCopyMessage,
+          onOpenLink: this.onOpenFilePreview
+        })
+        if (this.fileReferences(this.visibleMessageText(this.item)).length > 0) {
+          this.FileCards(this.visibleMessageText(this.item))
         }
       }
     }
-    if (this.pinnedThinkingText(item).length > 0) {
+    if (this.pinnedThinkingText(this.item).length > 0) {
       this.Thinking(
-        this.pinnedThinkingText(item),
-        item.status,
-        `${item.id}-pinned-thinking`,
+        this.pinnedThinkingText(this.item),
+        this.item.status,
+        `${this.item.id}-pinned-thinking`,
         this.isStreamingAssistant()
       )
     }
@@ -206,7 +228,7 @@ export struct ChatMessageBubble {
             group.itemChildActiveScopes[index] || false
           )
         }, (entry: ConversationUiMessageItem, index: number) => {
-          return this.structuredItemKey(entry, `${group.path}-adjacent-${index}`);
+          return ChatMessageStructurePolicy.structuredItemKey(entry, `${group.path}-adjacent-${index}`);
         })
       }
     } else if (group.items.length > 0) {
@@ -265,7 +287,12 @@ export struct ChatMessageBubble {
           streaming
         )
       } else if (this.isTextEntry(entry)) {
-        this.MessageText(entry.content || '', streaming, `${this.item.id}-${path}-text`)
+        this.MessageText({
+          text: entry.content || '',
+          active: streaming,
+          streamKey: `${this.item.id}-${path}-text`,
+          renderRevision: this.renderRevision
+        })
         if (this.fileReferences(entry.content || '').length > 0) {
           this.FileCards(entry.content || '')
         }
@@ -346,11 +373,12 @@ export struct ChatMessageBubble {
   }
 
   @Builder
-  MessageText(text: string, active: boolean = false, streamKey: string = '') {
+  MessageText($$: MessageTextBuilderParams) {
     MessageMarkdown({
-      text,
-      active,
-      streamKey,
+      text: $$.text,
+      renderRevision: $$.renderRevision,
+      active: $$.active,
+      streamKey: $$.streamKey,
       onCopyText: this.onCopyMessage,
       onOpenLink: this.onOpenFilePreview
     })
@@ -388,16 +416,15 @@ export struct ChatMessageBubble {
   }
 
   private isStreamingAssistant(): boolean {
-    return this.item.role !== 'user' && (this.isStreaming || (this.item.status || '').toLowerCase() === 'active');
+    return this.item.role !== 'user' &&
+      (this.isStreaming || (this.item.status || '').toLowerCase() === 'active');
   }
 
   private shouldRenderStructuredItems(item: ConversationUiMessage): boolean {
     if (item.role === 'user' || !item.items || item.items.length === 0) {
       return false;
     }
-    return item.items.some((entry: ConversationUiMessageItem) => {
-      return this.isRenderableStructuredEntry(entry);
-    });
+    return ChatMessageStructurePolicy.requiresStructuredRendering(item.items);
   }
 
   private uncoveredTools(item: ConversationUiMessage): ConversationUiToolStatus[] {
@@ -540,29 +567,8 @@ export struct ChatMessageBubble {
   }
 
   private hasVisibleProcessAttention(item: ConversationUiMessage): boolean {
-    return this.hasAttentionTools(item.tools || []) || this.hasAttentionItems(item.items || []);
-  }
-
-  private hasAttentionItems(items: ConversationUiMessageItem[]): boolean {
-    return items.some((entry: ConversationUiMessageItem) => {
-      if (entry.tool && this.isAttentionTool(entry.tool)) {
-        return true;
-      }
-      return !!entry.subItems && this.hasAttentionItems(entry.subItems);
-    });
-  }
-
-  private hasAttentionTools(tools: ConversationUiToolStatus[]): boolean {
-    return tools.some((tool: ConversationUiToolStatus) => {
-      return this.isAttentionTool(tool);
-    });
-  }
-
-  private isAttentionTool(tool: ConversationUiToolStatus): boolean {
-    return this.hasToolError(tool) ||
-      this.isPendingTool(tool) ||
-      this.isRunningTool(tool) ||
-      this.isQuestionTool(tool);
+    return ChatMessageStructurePolicy.hasAttentionTools(item.tools || []) ||
+      ChatMessageStructurePolicy.hasAttentionItems(item.items || []);
   }
 
   private structuredGroups(
@@ -570,466 +576,71 @@ export struct ChatMessageBubble {
     prefix: string,
     activeScope: boolean = this.isStreamingAssistant()
   ): StructuredRenderGroup[] {
-    const groups: StructuredRenderGroup[] = [];
-    let toolBuffer: ConversationUiToolStatus[] = [];
-    let toolStart = 0;
-    let activityItems: ConversationUiMessageItem[] = [];
-    let activityStatuses: string[] = [];
-    let activityStreaming: boolean[] = [];
-    let activityChildScopes: boolean[] = [];
-    let activityStart = 0;
-    let activityHasThinking = false;
-    const activeItemIndex = activeScope ? this.lastRenderableItemIndex(items) : -1;
-
-    const flushTools = () => {
-      if (toolBuffer.length === 0) {
-        return;
-      }
-      groups.push({
-        type: 'tool_group',
-        items: [],
-        itemStatuses: [],
-        itemStreaming: [],
-        itemChildActiveScopes: [],
-        tools: toolBuffer,
-        key: `${prefix}-tools-${toolStart}-${toolBuffer.length}-${this.stableToolHash(toolBuffer)}`,
-        path: `${prefix}-tools-${toolStart}`
-      });
-      toolBuffer = [];
-    };
-
-    const flushActivity = () => {
-      if (activityItems.length === 0) {
-        return;
-      }
-      if (!activityHasThinking) {
-        activityItems.forEach((entry: ConversationUiMessageItem, offset: number) => {
-          if (entry.tool) {
-            if (toolBuffer.length === 0) {
-              toolStart = activityStart + offset;
-            }
-            toolBuffer.push(entry.tool);
-          }
-        });
-      } else if (activityItems.length === 1) {
-        const entry = activityItems[0];
-        // Tools buffered before this group ran before it, so they have to be
-        // emitted first; otherwise they would render below it.
-        flushTools();
-        groups.push({
-          type: 'item',
-          items: [entry],
-          itemStatuses: [activityStatuses[0] || ''],
-          itemStreaming: [activityStreaming[0] || false],
-          itemChildActiveScopes: [activityChildScopes[0] || false],
-          tools: [],
-          key: this.structuredItemKey(entry, `${prefix}-${activityStart}`),
-          path: `${prefix}-${activityStart}`
-        });
-      } else {
-        flushTools();
-        groups.push({
-          type: 'activity_group',
-          items: activityItems,
-          itemStatuses: activityStatuses,
-          itemStreaming: activityStreaming,
-          itemChildActiveScopes: activityChildScopes,
-          tools: [],
-          key: this.activityGroupKey(activityItems, `${prefix}-activity-${activityStart}`),
-          path: `${prefix}-activity-${activityStart}`
-        });
-      }
-      activityItems = [];
-      activityStatuses = [];
-      activityStreaming = [];
-      activityChildScopes = [];
-      activityHasThinking = false;
-    };
-
-    items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      if (this.shouldFoldIntoActivityGroup(entry)) {
-        if (activityItems.length === 0) {
-          activityStart = index;
-        }
-        activityItems.push(entry);
-        activityStatuses.push(this.itemStatusForEntry(entry, index, activeItemIndex));
-        activityStreaming.push(this.itemShouldStream(entry, index, activeItemIndex));
-        activityChildScopes.push(this.itemChildActiveScope(entry, index, activeItemIndex));
-        activityHasThinking = activityHasThinking || this.isThinkingEntry(entry);
-        return;
-      }
-
-      flushActivity();
-      if (entry.tool) {
-        if (toolBuffer.length === 0) {
-          toolStart = index;
-        }
-        toolBuffer.push(entry.tool);
-        return;
-      }
-
-      flushTools();
-      groups.push({
-        type: 'item',
-        items: [entry],
-        itemStatuses: [this.itemStatusForEntry(entry, index, activeItemIndex)],
-        itemStreaming: [this.itemShouldStream(entry, index, activeItemIndex)],
-        itemChildActiveScopes: [this.itemChildActiveScope(entry, index, activeItemIndex)],
-        tools: [],
-        key: this.structuredItemKey(entry, `${prefix}-${index}`),
-        path: `${prefix}-${index}`
-      });
-    });
-
-    flushActivity();
-    flushTools();
-    return groups;
-  }
-
-  private lastRenderableItemIndex(items: ConversationUiMessageItem[]): number {
-    for (let index = items.length - 1; index >= 0; index--) {
-      const entry = items[index];
-      if (this.isRenderableStructuredEntry(entry)) {
-        return index;
-      }
-    }
-    return -1;
-  }
-
-  private itemStatusForEntry(entry: ConversationUiMessageItem, index: number, activeItemIndex: number): string {
-    if (this.isThinkingEntry(entry) && index === activeItemIndex && this.isStreamingAssistant()) {
-      return this.item.status || 'active';
-    }
-    if (this.isThinkingEntry(entry)) {
-      return 'done';
-    }
-    return '';
-  }
-
-  private itemShouldStream(entry: ConversationUiMessageItem, index: number, activeItemIndex: number): boolean {
-    if (index !== activeItemIndex || !this.isStreamingAssistant()) {
-      return false;
-    }
-    return this.isThinkingEntry(entry) || this.isTextEntry(entry) ||
-      (this.isSubagentEntry(entry) && (!entry.subItems || entry.subItems.length === 0));
-  }
-
-  private itemChildActiveScope(entry: ConversationUiMessageItem, index: number, activeItemIndex: number): boolean {
-    return index === activeItemIndex && this.isStreamingAssistant() &&
-      !!entry.subItems && entry.subItems.length > 0;
-  }
-
-  private shouldFoldIntoActivityGroup(entry: ConversationUiMessageItem): boolean {
-    return ActivityGroupPolicy.shouldFoldEntry(
-      this.isThinkingEntry(entry),
-      this.isSubagentEntry(entry),
-      entry.tool
+    return ChatMessageStructurePolicy.structuredGroups(
+      items,
+      prefix,
+      activeScope,
+      this.item.status || 'active'
     );
   }
 
   private activityGroupTools(group: StructuredRenderGroup): ConversationUiToolStatus[] {
-    const tools: ConversationUiToolStatus[] = [];
-    group.items.forEach((entry: ConversationUiMessageItem) => {
-      if (entry.tool) {
-        tools.push(entry.tool);
-      }
-    });
-    return tools;
+    return ChatMessageStructurePolicy.activityGroupTools(group);
   }
 
   private activityThinkingParts(group: StructuredRenderGroup): ActivityThinkingPart[] {
-    const raw: ActivityThinkingPart[] = [];
-    let toolsSeen = 0;
-    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      if (this.isThinkingEntry(entry)) {
-        raw.push({
-          beforeToolIndex: toolsSeen,
-          text: entry.content || '',
-          status: group.itemStatuses[index] || '',
-          streaming: group.itemStreaming[index] || false,
-          streamKey: `${this.item.id}-${group.path}-thinking-${index}`
-        });
-        return;
-      }
-      if (entry.tool) {
-        toolsSeen += 1;
-      }
-    });
-    return ActivityGroupPolicy.mergeThinkingParts(raw);
+    return ChatMessageStructurePolicy.activityThinkingParts(group, this.item.id);
   }
 
   private activityThinkingCount(group: StructuredRenderGroup): number {
-    let count = 0;
-    group.items.forEach((entry: ConversationUiMessageItem) => {
-      if (this.isThinkingEntry(entry)) {
-        count += 1;
-      }
-    });
-    return count;
+    return ChatMessageStructurePolicy.activityThinkingCount(group);
   }
 
   private activityThinkingText(group: StructuredRenderGroup): string {
-    const parts: string[] = [];
-    group.items.forEach((entry: ConversationUiMessageItem) => {
-      if (this.isThinkingEntry(entry)) {
-        parts.push(entry.content || '');
-      }
-    });
-    return ThinkingPresentationPolicy.mergedText(parts);
+    return ChatMessageStructurePolicy.activityThinkingText(group);
   }
 
   private activityThinkingStatus(group: StructuredRenderGroup): string {
-    const statuses: string[] = [];
-    const streamings: boolean[] = [];
-    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      if (this.isThinkingEntry(entry)) {
-        statuses.push(group.itemStatuses[index] || '');
-        streamings.push(group.itemStreaming[index] || false);
-      }
-    });
-    return ThinkingPresentationPolicy.mergedStatusValue(statuses, streamings);
+    return ChatMessageStructurePolicy.activityThinkingStatus(group);
   }
 
   private activityThinkingStreaming(group: StructuredRenderGroup): boolean {
-    const streamings: boolean[] = [];
-    group.items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      if (this.isThinkingEntry(entry)) {
-        streamings.push(group.itemStreaming[index] || false);
-      }
-    });
-    return ThinkingPresentationPolicy.mergedStreaming(streamings);
-  }
-
-  private stableToolHash(tools: ConversationUiToolStatus[]): string {
-    const parts: string[] = [];
-    tools.forEach((tool: ConversationUiToolStatus) => {
-      parts.push(`${tool.id || ''}:${tool.name || ''}:${tool.status || ''}`);
-    });
-    return this.stableTextHash(parts.join('|'));
+    return ChatMessageStructurePolicy.activityThinkingStreaming(group);
   }
 
   private toolsNotCoveredByItems(
     tools: ConversationUiToolStatus[],
     items: ConversationUiMessageItem[]
   ): ConversationUiToolStatus[] {
-    const coveredTools = this.itemToolCoverageGroups(items);
-    const matched: boolean[] = coveredTools.map((_keys: string[]) => false);
-    return tools.filter((tool: ConversationUiToolStatus) => {
-      const matchIndex = this.matchCoveredToolIndex(this.toolCoverageKeys(tool), coveredTools, matched);
-      if (matchIndex >= 0) {
-        matched[matchIndex] = true;
-        return false;
-      }
-      return true;
-    });
-  }
-
-  private itemToolCoverageGroups(items: ConversationUiMessageItem[]): string[][] {
-    const groups: string[][] = [];
-    items.forEach((entry: ConversationUiMessageItem) => {
-      if (entry.tool) {
-        groups.push(this.toolCoverageKeys(entry.tool));
-      }
-      if (entry.subItems) {
-        this.itemToolCoverageGroups(entry.subItems).forEach((keys: string[]) => {
-          groups.push(keys);
-        });
-      }
-    });
-    return groups;
-  }
-
-  private matchCoveredToolIndex(keys: string[], groups: string[][], matched: boolean[]): number {
-    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-      if (matched[groupIndex]) {
-        continue;
-      }
-      const group = groups[groupIndex];
-      for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
-        if (group.indexOf(keys[keyIndex]) >= 0) {
-          return groupIndex;
-        }
-      }
-    }
-    return -1;
-  }
-
-  private toolCoverageKeys(tool: ConversationUiToolStatus): string[] {
-    const keys: string[] = [];
-    const toolId = tool.id || '';
-    if (toolId.length > 0) {
-      keys.push(`id:${toolId}`);
-    }
-    keys.push(`full:${this.toolFingerprint(tool, true)}`);
-    if (toolId.length === 0 || this.hasToolFingerprintData(tool)) {
-      keys.push(`stable:${this.toolFingerprint(tool, false)}`);
-    }
-    return keys;
-  }
-
-  private toolFingerprint(tool: ConversationUiToolStatus, includeStatus: boolean): string {
-    const parts: string[] = [
-      this.normalizedToolName(tool),
-      includeStatus ? (tool.status || '') : '',
-      tool.input_preview || '',
-      tool.result_preview || '',
-      tool.error_preview || '',
-      tool.stdout || '',
-      tool.stderr || '',
-      `${tool.exit_code || 0}`,
-      this.objectSignature(tool.tool_input),
-      this.objectSignature(tool.tool_output)
-    ];
-    return this.stableTextHash(parts.join('|'));
-  }
-
-  private hasToolFingerprintData(tool: ConversationUiToolStatus): boolean {
-    return (tool.input_preview || '').length > 0 ||
-      (tool.result_preview || '').length > 0 ||
-      (tool.error_preview || '').length > 0 ||
-      (tool.stdout || '').length > 0 ||
-      (tool.stderr || '').length > 0 ||
-      !!tool.tool_input ||
-      !!tool.tool_output;
-  }
-
-  private objectSignature(value?: Object): string {
-    if (!value) {
-      return '';
-    }
-    try {
-      return JSON.stringify(value);
-    } catch (_err) {
-      return 'object';
-    }
+    return ChatMessageStructurePolicy.toolsNotCoveredByItems(tools, items);
   }
 
   private isRenderableStructuredEntry(entry: ConversationUiMessageItem): boolean {
-    if (this.isThinkingEntry(entry) || this.isTextEntry(entry) || this.isSubagentEntry(entry) || !!entry.tool) {
-      return true;
-    }
-    return !!entry.subItems && entry.subItems.some((child: ConversationUiMessageItem) => {
-      return this.isRenderableStructuredEntry(child);
-    });
+    return ChatMessageStructurePolicy.isRenderableStructuredEntry(entry);
   }
 
   private isThinkingEntry(entry: ConversationUiMessageItem): boolean {
-    return (entry.type || '').toLowerCase() === 'thinking' && (entry.content || '').trim().length > 0;
+    return ChatMessageStructurePolicy.isThinkingEntry(entry);
   }
 
   private isTextEntry(entry: ConversationUiMessageItem): boolean {
-    return this.isMainTextEntry(entry);
+    return ChatMessageStructurePolicy.isTextEntry(entry);
   }
 
   private isMainTextEntry(entry: ConversationUiMessageItem): boolean {
-    const type = (entry.type || '').toLowerCase();
-    if ((entry.content || '').trim().length === 0) {
-      return false;
-    }
-    if (entry.tool || this.isThinkingEntry(entry) || this.isSubagentEntry(entry)) {
-      return false;
-    }
-    return type === 'text' || type === 'message' || type.length === 0;
+    return ChatMessageStructurePolicy.isTextEntry(entry);
   }
 
   private isSubagentEntry(entry: ConversationUiMessageItem): boolean {
-    const type = (entry.type || '').toLowerCase();
-    return entry.is_subagent === true || type === 'subagent' || type === 'agent' ||
-      (!!entry.tool && this.normalizedToolName(entry.tool) === 'task');
+    return ChatMessageStructurePolicy.isSubagentEntry(entry);
   }
 
   private subagentTitle(entry: ConversationUiMessageItem): string {
-    const content = (entry.content || '').trim();
-    if (content.length > 0 && content.length <= 80) {
-      return content;
-    }
-    if (entry.tool && this.normalizedToolName(entry.tool) === 'task') {
-      const title = this.subagentTaskTitle(entry.tool);
-      if (title.length > 0) {
-        return title;
-      }
-    }
-    if (entry.tool && entry.tool.name) {
-      return entry.tool.name;
-    }
-    return 'Subagent';
-  }
-
-  private subagentTaskTitle(tool: ConversationUiToolStatus): string {
-    const raw = tool.input_preview || '';
-    if (raw.length > 0) {
-      try {
-        const input = JSON.parse(raw) as SubagentTaskInput;
-        const title = input.description || input.title || '';
-        if (title.trim().length > 0) {
-          return title.trim();
-        }
-      } catch (_err) {
-      }
-    }
-    return '';
-  }
-
-  private structuredItemKey(entry: ConversationUiMessageItem, path: string): string {
-    if (this.isThinkingEntry(entry)) {
-      return `${path}-thinking`;
-    }
-    if (entry.tool && entry.tool.id) {
-      return `${path}-tool-${entry.tool.id}`;
-    }
-    const content = entry.content || '';
-    const childCount = entry.subItems ? entry.subItems.length : 0;
-    return `${path}-${entry.type || 'item'}-${entry.is_subagent === true ? 'subagent' : 'main'}-${content.length}-${this.stableTextHash(content)}-${childCount}`;
-  }
-
-  private stableTextHash(text: string): string {
-    let hash = 0;
-    for (let index = 0; index < text.length; index++) {
-      hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
-    }
-    return Math.abs(hash).toString(36);
-  }
-
-  private activityGroupKey(items: ConversationUiMessageItem[], path: string): string {
-    const parts: string[] = [];
-    items.forEach((entry: ConversationUiMessageItem, index: number) => {
-      const tool = entry.tool;
-      const thinking = this.isThinkingEntry(entry);
-      parts.push([
-        `${index}`,
-        entry.type || '',
-        thinking ? 'thinking' : `${(entry.content || '').length}:${this.stableTextHash(entry.content || '')}`,
-        tool ? `${tool.id || ''}:${tool.name || ''}:${tool.status || ''}` : ''
-      ].join(':'));
-    });
-    return `${path}-${items.length}-${this.stableTextHash(parts.join('|'))}`;
-  }
-
-  private normalizedToolName(tool: ConversationUiToolStatus): string {
-    return (tool.name || 'Tool').replace(/[\s-]/g, '_').toLowerCase();
+    return ChatMessageStructurePolicy.subagentTitle(entry);
   }
 
   private isRunningTool(tool: ConversationUiToolStatus): boolean {
-    const normalized = (tool.status || '').toLowerCase();
-    return normalized === 'running' || normalized === 'active';
-  }
-
-  private isPendingTool(tool: ConversationUiToolStatus): boolean {
-    const normalized = (tool.status || '').toLowerCase();
-    return normalized === 'pending' || normalized === 'queued' ||
-      normalized === 'pending_confirmation' || normalized === 'needs_confirmation';
-  }
-
-  private hasToolError(tool: ConversationUiToolStatus): boolean {
-    const normalized = (tool.status || '').toLowerCase();
-    return normalized === 'failed' || normalized === 'error' || normalized === 'timeout' ||
-      (tool.error_preview || '').length > 0;
-  }
-
-  private isQuestionTool(tool: ConversationUiToolStatus): boolean {
-    const normalized = this.normalizedToolName(tool);
-    return (tool.name || '') === 'AskUserQuestion' || normalized === 'askuserquestion' ||
-      normalized === 'ask_user_question';
+    return (tool.status || '').toLowerCase() === 'running' || (tool.status || '').toLowerCase() === 'active';
   }
 
 }

@@ -42,7 +42,7 @@ export struct AppSidebarSurface {
       accountUserId: this.remotePageState.accountUserId,
       showViewSettingsButton: false,
       showWorkspaceSection: true,
-      showConversationSection: false,
+      showConversationSection: true,
       contentSlot: () => {
         this.WorkspaceContent()
       },

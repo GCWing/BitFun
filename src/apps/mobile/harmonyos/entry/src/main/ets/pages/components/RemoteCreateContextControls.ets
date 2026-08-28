@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
@@ -63,7 +64,7 @@ export struct RemoteCreateContextControls {
     Row({ space: 7 }) {
       this.HarnessDensityMark(density, profile === this.state.selectedHarnessProfile)
       Text(RemoteI18n.t(`remote.create.harness.${profile}`))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(profile === this.state.selectedHarnessProfile ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(profile === this.state.selectedHarnessProfile ? INK : MUTED)
     }
@@ -108,7 +109,7 @@ export struct RemoteCreateContextControls {
           (this.state.selectedDeviceName || RemoteI18n.t('remote.create.noDevice')) :
           (this.state.selectedWorkspaceName || RemoteI18n.t('remote.create.chat'))))
         .constraintSize({ maxWidth: '74%' })
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(loading ? MUTED : INK)
         .maxLines(1)
@@ -194,7 +195,7 @@ export struct RemoteCreateContextControls {
       SymbolGlyph($r('sys.symbol.desktop')).fontSize(22).fontColor([MUTED]).width(27).height(27)
       Text(device.deviceName)
         .layoutWeight(1)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(INK)
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -215,7 +216,7 @@ export struct RemoteCreateContextControls {
       Row({ space: 12 }) {
         this.SelectionMark(this.state.selectedWorkspacePath.length === 0)
         SymbolGlyph($r('sys.symbol.message')).fontSize(22).fontColor([MUTED]).width(27).height(27)
-        Text(RemoteI18n.t('remote.create.chat')).layoutWeight(1).fontSize(16).fontColor(INK)
+        Text(RemoteI18n.t('remote.create.chat')).layoutWeight(1).fontSize(MobileDesignTypography.bodyLarge.size).fontColor(INK)
       }
       .width('100%')
       .height(58)
@@ -260,10 +261,10 @@ export struct RemoteCreateContextControls {
       SymbolGlyph($r('sys.symbol.folder')).fontSize(22).fontColor([MUTED]).width(27).height(27)
       Column({ space: 2 }) {
         Text(workspace.name)
-          .width('100%').fontSize(16).fontColor(INK).maxLines(1)
+          .width('100%').fontSize(MobileDesignTypography.bodyLarge.size).fontColor(INK).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(workspace.path)
-          .width('100%').fontSize(11).fontColor(MUTED).maxLines(1)
+          .width('100%').fontSize(MobileDesignTypography.labelSmall.size).fontColor(MUTED).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       .layoutWeight(1)
@@ -295,7 +296,7 @@ export struct RemoteCreateContextControls {
     Text(message)
       .width('100%')
       .padding({ left: 20, right: 20, top: 18, bottom: 18 })
-      .fontSize(13)
+      .fontSize(MobileDesignTypography.bodySmall.size)
       .fontColor(MUTED)
   }
 
@@ -304,7 +305,7 @@ export struct RemoteCreateContextControls {
     Column() {
       Row() {
         Text(this.state.openMenu === 'devices' ? RemoteI18n.t('remote.device') : RemoteI18n.t('remote.workspace'))
-          .layoutWeight(1).fontSize(16).fontWeight(FontWeight.Medium).fontColor(INK)
+          .layoutWeight(1).fontSize(MobileDesignTypography.bodyLarge.size).fontWeight(FontWeight.Medium).fontColor(INK)
         Stack({ alignContent: Alignment.Center }) {
           SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([MUTED])
         }

@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
@@ -87,7 +88,7 @@ export struct SidebarWorkspaceSection {
     Row() {
       Text(RemoteI18n.t('sidebar.devices'))
         .id('sidebar-workspace-section')
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
       Blank()
@@ -132,7 +133,7 @@ export struct SidebarWorkspaceSection {
       .height(24)
       .hitTestBehavior(HitTestMode.None)
       Text(entry.deviceName)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(this.isSelected(entry) ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(entry.online ? INK : SUBTLE)
         .layoutWeight(1)
@@ -181,7 +182,7 @@ export struct SidebarWorkspaceSection {
     Column() {
       Row() {
         Text(RemoteI18n.t('sidebar.workspaces'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(MUTED)
         Blank()
@@ -250,11 +251,11 @@ export struct SidebarWorkspaceSection {
   private MoreDevicesRow() {
     Row({ space: 8 }) {
       Text('···')
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(RemoteI18n.f('sidebar.moreDevices',
         String(this.deviceEntries().length - this.visibleDeviceCount)))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')

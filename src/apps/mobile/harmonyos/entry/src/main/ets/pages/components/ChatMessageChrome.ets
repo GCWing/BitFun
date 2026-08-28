@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ConversationUiMessage } from '../state/ConversationUiModels';
 import { MessageImageGallery } from './ChatMessageContent';
@@ -27,7 +28,7 @@ export struct ChatTypingDots {
         Text('•')
           .width(6)
           .height(18)
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontColor(MUTED)
           .opacity(this.phase === index ? 1.0 : 0.34)
           .animation({ duration: 180, curve: Curve.EaseInOut })
@@ -47,10 +48,10 @@ export struct ChatMessageRetryAction {
   build() {
     Row({ space: 8 }) {
       Text(this.assistant ? RemoteI18n.t('generalChat.replyInterrupted') : RemoteI18n.t('chat.sendFailed'))
-        .fontSize(12)
+        .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(RED)
       Text(RemoteI18n.t('common.retry'))
-        .fontSize(12)
+        .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(PRIMARY_ACTION_TEXT)
         .height(28)
         .padding({ left: 10, right: 10 })
@@ -83,7 +84,7 @@ export struct ChatUserMessageBubble {
               MessageImageGallery({ images: this.item.images, userStyle: true })
             }
             if (this.visibleText().length > 0) {
-              Text(this.visibleText()).fontSize(14).lineHeight(20).fontColor(INK)
+              Text(this.visibleText()).fontSize(MobileDesignTypography.bodyMedium.size).lineHeight(MobileDesignTypography.bodyMedium.lineHeight).fontColor(INK)
             }
           }
           .padding({ left: 10, right: 10, top: 10, bottom: 10 })

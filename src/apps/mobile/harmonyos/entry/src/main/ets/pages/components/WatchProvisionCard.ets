@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { WatchProvisionPhase, WatchProvisionState } from '../state/WatchProvisionState';
 import { CARD, GREEN, INK, LINE, MODAL_SCRIM, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
@@ -31,21 +32,21 @@ export struct WatchProvisionCard {
 
         Column({ space: 18 }) {
           Text(RemoteI18n.t('watchProvision.title'))
-            .fontSize(23)
+            .fontSize(MobileDesignTypography.headlineLarge.size)
             .fontWeight(FontWeight.Bold)
             .fontColor(INK)
             .width('100%')
 
           Column({ space: 6 }) {
             Text(this.state.deviceName)
-              .fontSize(18)
+              .fontSize(MobileDesignTypography.headlineSmall.size)
               .fontWeight(FontWeight.Medium)
               .fontColor(INK)
               .width('100%')
               .maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
             Text(RemoteI18n.f('watchProvision.deviceId', this.state.deviceIdLabel))
-              .fontSize(14)
+              .fontSize(MobileDesignTypography.bodyMedium.size)
               .fontColor(MUTED)
               .width('100%')
           }
@@ -56,8 +57,8 @@ export struct WatchProvisionCard {
 
           if (this.state.phase === WatchProvisionPhase.Asking) {
             Text(RemoteI18n.t('watchProvision.body'))
-              .fontSize(16)
-              .lineHeight(23)
+              .fontSize(MobileDesignTypography.bodyLarge.size)
+              .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
               .fontColor(MUTED)
               .width('100%')
           } else if (this.state.phase === WatchProvisionPhase.Working) {
@@ -67,16 +68,16 @@ export struct WatchProvisionCard {
                 .height(20)
                 .color(MUTED)
               Text(RemoteI18n.t('watchProvision.working'))
-                .fontSize(16)
-                .lineHeight(23)
+                .fontSize(MobileDesignTypography.bodyLarge.size)
+                .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
                 .fontColor(MUTED)
                 .layoutWeight(1)
             }
             .width('100%')
           } else {
             Text(this.state.message)
-              .fontSize(16)
-              .lineHeight(23)
+              .fontSize(MobileDesignTypography.bodyLarge.size)
+              .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
               .fontColor(this.state.phase === WatchProvisionPhase.Done ? GREEN : RED)
               .width('100%')
           }
@@ -86,7 +87,7 @@ export struct WatchProvisionCard {
               Button(RemoteI18n.t('watchProvision.reject'))
                 .layoutWeight(1)
                 .height(56)
-                .fontSize(18)
+                .fontSize(MobileDesignTypography.labelLarge.size)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(INK)
                 .backgroundColor(SOFT)
@@ -95,7 +96,7 @@ export struct WatchProvisionCard {
               Button(RemoteI18n.t('watchProvision.approve'))
                 .layoutWeight(1)
                 .height(56)
-                .fontSize(18)
+                .fontSize(MobileDesignTypography.labelLarge.size)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(PRIMARY_ACTION_TEXT)
                 .backgroundColor(PRIMARY_ACTION)
@@ -107,7 +108,7 @@ export struct WatchProvisionCard {
             Button(RemoteI18n.t('watchProvision.gotIt'))
               .width('100%')
               .height(56)
-              .fontSize(18)
+              .fontSize(MobileDesignTypography.labelLarge.size)
               .fontWeight(FontWeight.Bold)
               .fontColor(PRIMARY_ACTION_TEXT)
               .backgroundColor(PRIMARY_ACTION)

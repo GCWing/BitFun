@@ -1,4 +1,4 @@
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ObservableChatTimelineItem } from '../../model/ChatTimelineModels';
 import {
   GeneralChatServiceStatus
 } from '../../services/general-chat/GeneralChatServiceState';
@@ -38,7 +38,7 @@ export class ConversationViewState {
   isLoadingConversation: boolean = false;
   canStop: boolean = false;
   hasMoreMessages: boolean = false;
-  timelineItems: ChatTimelineItem[] = [];
+  timelineItems: ObservableChatTimelineItem[] = [];
   timelineRevision: number = 0;
   showSuggestionsWhenEmpty: boolean = false;
   modelCatalog: ConversationUiModelCatalog = toConversationUiModelCatalog(RemoteUiState.emptyModelCatalog());

@@ -38,6 +38,20 @@ The following constraints are enforced incrementally by
 8. Keep files focused by ownership, not by a hard line count. When a file
    starts mixing unrelated concerns, extract the new owner. Do not cram or
    flatten structure just to stay under a number.
+9. Components must not import permission, scanner, input-method, or other
+   side-effectful platform kits directly. Put platform lifecycle and error
+   handling behind a service or a focused platform leaf component, then expose
+   typed state and events to the presentation tree.
+10. Long, unbounded timelines use `Repeat.virtualScroll()` with stable identity
+    keys. V2 message rows must remain reusable, and mutable render content must
+    not be embedded in the identity key.
+11. CPU-bound native work must not execute synchronously on the ArkTS caller
+    thread. Expose it through Node-API async work (or an equivalent TaskPool /
+    Worker owner), return a Promise, and bound the ArkTS wait with an explicit
+    timeout.
+12. `ConversationView` consumes grouped presentation state/options and emits a
+    typed `ConversationIntent`. Do not reintroduce one public parameter or event
+    per projected field/action.
 
 User-facing copy lives in `entry/src/main/ets/i18n`. Keep `zh-CN` and `en-US`
 catalogs in key lockstep, use canonical locale ids, and route language changes

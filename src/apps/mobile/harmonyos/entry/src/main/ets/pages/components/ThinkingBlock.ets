@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ThinkingPresentationPolicy } from '../policy/ThinkingPresentationPolicy';
 import { MUTED } from './Theme';
@@ -44,8 +45,8 @@ export struct ThinkingBlock {
         this.HeaderRow()
         if (this.expanded && this.hasBody()) {
           Text(this.text)
-            .fontSize(14)
-            .lineHeight(21)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
+            .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
             .fontColor(MUTED)
             .width('100%')
         }
@@ -76,7 +77,7 @@ export struct ThinkingBlock {
           .height(16)
         }
         Text(this.isRunning() ? RemoteI18n.t('chat.thinkingInProgress') : RemoteI18n.t('chat.thinkingComplete'))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(MUTED)
           .layoutWeight(1)
@@ -106,21 +107,21 @@ export struct ThinkingBlock {
       Text('•')
         .width(6)
         .height(18)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(0))
         .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
         .width(6)
         .height(18)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(1))
         .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
         .width(6)
         .height(18)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(2))
         .animation({ duration: 180, curve: Curve.EaseInOut })

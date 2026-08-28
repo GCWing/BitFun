@@ -29,6 +29,17 @@ export class AdaptiveSheetOptions {
         dragBar: false
       };
     }
+    if (placement.mode === SettingsPlacementMode.Center) {
+      return {
+        height: placement.height,
+        width: placement.width,
+        preferType: SheetType.CENTER,
+        backgroundColor: '#00000000',
+        maskColor: '#44000000',
+        showClose: false,
+        dragBar: false
+      };
+    }
     if (placement.height > 0) {
       return {
         height: placement.height,
