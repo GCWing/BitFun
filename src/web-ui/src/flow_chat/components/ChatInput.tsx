@@ -191,6 +191,7 @@ import {
   isSlashAddressableSkillName,
   replaceLeadingSlashCommandWithSkillToken,
 } from '../utils/skillPromptReference';
+import { resolveChatInputQuickSkillShortcuts } from '../utils/chatInputQuickSkills';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockReviewCommand } from '../utils/deepReviewCommandGuard';
@@ -451,14 +452,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const boostTriggerRef = useRef<HTMLSpanElement>(null);
   const boostMenuRef = useRef<HTMLDivElement>(null);
   const slashCommandPickerRef = useRef<HTMLDivElement>(null);
-  const boostMenuLayout = useAnchoredPopoverPosition({
-    open: modeState.dropdownOpen,
-    anchorRef: boostTriggerRef,
-    popoverRef: boostMenuRef,
-    preferredPlacement: 'top',
-    alignment: 'start',
-    gap: 6,
-  });
   const isImeComposingRef = useRef(false);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
@@ -1424,6 +1417,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }),
     [effectiveSendAgentType, isSubagentInputTarget, targetSkillToolAgents],
   );
+  const quickSkillShortcuts = useMemo(
+    () => canUseSkillsForTarget
+      ? resolveChatInputQuickSkillShortcuts(resolvedModeSkills)
+      : [],
+    [canUseSkillsForTarget, resolvedModeSkills],
+  );
+  const boostMenuLayoutRevision = quickSkillShortcuts
+    .map(shortcut => shortcut.id)
+    .join('|');
+  const boostMenuLayout = useAnchoredPopoverPosition({
+    open: modeState.dropdownOpen,
+    anchorRef: boostTriggerRef,
+    popoverRef: boostMenuRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 6,
+    layoutRevision: boostMenuLayoutRevision,
+  });
 
   const confirmPromptCacheGuardIfNeeded = useCallback(async () => {
     const nextMode = effectiveSendAgentType.trim();
@@ -5951,6 +5962,41 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         visibility: boostMenuLayout ? 'visible' : 'hidden',
                       }}
                     >
+                      {quickSkillShortcuts.length > 0 && (
+                        <>
+                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
+                            {quickSkillShortcuts.map(shortcut => (
+                              <div
+                                key={shortcut.id}
+                                role="menuitem"
+                                tabIndex={0}
+                                className="bitfun-chat-input__boost-context-row"
+                                data-bf-component="chat-input"
+                                data-bf-part="boostItem"
+                                data-bf-boost-item-kind="skill"
+                                data-testid={`chat-input-quick-skill-${shortcut.id}`}
+                                title={shortcut.skill.description || shortcut.label}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  insertSkillIntoInput(shortcut.skill.name);
+                                }}
+                                onKeyDown={event => {
+                                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  insertSkillIntoInput(shortcut.skill.name);
+                                }}
+                              >
+                                <Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
+                                <span>{shortcut.label}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                        </>
+                      )}
+
                       {canSwitchModes && showStandardExecutionOptions && (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">

@@ -218,6 +218,23 @@ describe('status track layout', () => {
     expect(chatInput).toContain('executionLevelPolicy.userConfigurable ? (');
   });
 
+  it('keeps enabled workflow Skills as shortcuts at the top of the add menu', () => {
+    const chatInput = readLocalFile('ChatInput.tsx');
+    const quickSkillsIndex = chatInput.indexOf('{quickSkillShortcuts.length > 0 && (');
+    const reviewIndex = chatInput.indexOf('data-bf-agent-id="Review"');
+    const contextIndex = chatInput.indexOf('onClick={handleBoostOpenAtContext}');
+
+    expect(quickSkillsIndex).toBeGreaterThan(-1);
+    expect(reviewIndex).toBeGreaterThan(quickSkillsIndex);
+    expect(contextIndex).toBeGreaterThan(reviewIndex);
+    expect(chatInput).toContain(
+      'resolveChatInputQuickSkillShortcuts(resolvedModeSkills)',
+    );
+    expect(chatInput).toContain('layoutRevision: boostMenuLayoutRevision');
+    expect(chatInput).toContain('insertSkillIntoInput(shortcut.skill.name)');
+    expect(chatInput).toContain('data-testid={`chat-input-quick-skill-${shortcut.id}`}');
+  });
+
   it('carries the Harness gear and the model pair inside the capsule', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
