@@ -20,9 +20,9 @@ Current component folders include:
 - **Dialogs & overlays**: `Modal`, `InputDialog`, `ConfirmDialog`, `Tooltip`
 - **Form inputs**: `Input`, `NumberInput`, `Search`, `Select`, `Checkbox`, `Textarea`
 - **Display & content**: `Alert`, `Tag`, `Avatar`, `Card`, `Empty`, `Markdown`, `Tabs`
-- **Editors & text**: `CodeEditor`, `StreamText`
-- **Visual utilities**: `CubeLoading`, `CubeLogo`, `DotMatrixLoader`, `TextStrokeEffect`
-- **Feature-specific UI**: `ConfigPage`, `FilterPill`, `FlowChatCards`
+- **Editors & text**: `CodeEditor`
+- **Visual utilities**: `CubeLoading`, `DotMatrixLoader`
+- **Feature-specific UI**: `ConfigPage`, `FlowChatCards`
 
 ## Exports and Previews
 

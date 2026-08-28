@@ -20,9 +20,9 @@ BitFun 组件库目录，承载可复用 UI 组件与可预览的演示注册。
 - **弹窗与浮层**：`Modal`、`InputDialog`、`ConfirmDialog`、`Tooltip`
 - **表单输入**：`Input`、`NumberInput`、`Search`、`Select`、`Checkbox`、`Textarea`
 - **展示与内容**：`Alert`、`Tag`、`Avatar`、`Card`、`Empty`、`Markdown`、`Tabs`
-- **编辑与文本**：`CodeEditor`、`StreamText`
-- **视觉辅助**：`CubeLoading`、`CubeLogo`、`DotMatrixLoader`、`TextStrokeEffect`
-- **业务型 UI**：`ConfigPage`、`FilterPill`、`FlowChatCards`
+- **编辑与文本**：`CodeEditor`
+- **视觉辅助**：`CubeLoading`、`DotMatrixLoader`
+- **业务型 UI**：`ConfigPage`、`FlowChatCards`
 
 ## 导出与预览
 

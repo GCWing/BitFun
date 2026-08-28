@@ -14,14 +14,10 @@ import { codeEditorAppearanceDescriptor } from '@/component-library/components/C
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
-import { cubeLogoAppearanceDescriptor } from '@/component-library/components/CubeLogo/appearance';
 import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';
 import { emptyAppearanceDescriptor } from '@/component-library/components/Empty/appearance';
-import { filterPillAppearanceDescriptor } from '@/component-library/components/FilterPill/appearance';
 import { inputDialogAppearanceDescriptor } from '@/component-library/components/InputDialog/appearance';
-import { streamTextAppearanceDescriptor } from '@/component-library/components/StreamText/appearance';
 import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
-import { textStrokeEffectAppearanceDescriptor } from '@/component-library/components/TextStrokeEffect/appearance';
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
 import { markdownAppearanceDescriptor } from '@/component-library/components/Markdown/appearance';
 import { flowChatCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/appearance';
@@ -307,14 +303,10 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)
     .registerComponent(cubeLoadingAppearanceDescriptor)
-    .registerComponent(cubeLogoAppearanceDescriptor)
     .registerComponent(dotMatrixLoaderAppearanceDescriptor)
     .registerComponent(emptyAppearanceDescriptor)
-    .registerComponent(filterPillAppearanceDescriptor)
     .registerComponent(inputDialogAppearanceDescriptor)
-    .registerComponent(streamTextAppearanceDescriptor)
     .registerComponent(taskRunningIndicatorAppearanceDescriptor)
-    .registerComponent(textStrokeEffectAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)
     .registerComponent(markdownAppearanceDescriptor)
     .registerComponent(flowChatCardAppearanceDescriptor)

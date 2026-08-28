@@ -16,7 +16,6 @@ import { Avatar, AvatarGroup } from '@components/Avatar';
 import { Empty } from '@components/Empty';
 import { Markdown } from '@components/Markdown';
 import { CodeEditor } from '@components/CodeEditor';
-import { StreamText } from '@components/StreamText';
 import { TodoWriteDisplay } from '@/flow_chat/tool-cards/TodoWriteDisplay';
 import { TaskToolDisplay } from '@/flow_chat/tool-cards/TaskToolDisplay';
 import { WebSearchCard as RealWebSearchCard } from '@/flow_chat/tool-cards/WebSearchCard';
@@ -301,45 +300,6 @@ export const componentRegistry: ComponentCategory[] = [
             <Alert type="info" message="Info message" showIcon />
           </div>
         ),
-      },
-      {
-        id: 'stream-text-demo',
-        name: 'StreamText - 流式文本演示',
-        description: 'AI 流式文本打字机效果',
-        category: 'feedback',
-        component: () => {
-          const [key, setKey] = React.useState(0);
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-              <div style={{
-                fontSize: '15px',
-                lineHeight: '1.8',
-                minHeight: '120px',
-                padding: '20px',
-                background: 'var(--bf-appearance-token-color-overlay-white-04)',
-                borderRadius: '8px',
-                border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                maxWidth: '700px'
-              }}>
-                <StreamText
-                  key={key}
-                  text="Streaming AI demo text."
-                  effect="smooth"
-                  speed={30}
-                  showCursor={true}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setKey(prev => prev + 1)}
-              >
-                重新播放
-              </Button>
-            </div>
-          );
-        },
       },
     ],
   },

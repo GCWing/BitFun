@@ -27,12 +27,8 @@ export * from './Avatar';
 export * from './Empty';
 export * from './Markdown';
 export * from './Card';
-export * from './FilterPill';
 export * from './ConfigPage';
 
-export * from './StreamText';
-export * from './TextStrokeEffect';
-export * from './CubeLogo';
 export * from './CubeLoading';
 export * from './DotMatrixLoader';
 export * from './TaskRunningIndicator';
