@@ -39,6 +39,7 @@ import com.bitfun.mobile.app.ui.common.CircleControl
 import com.bitfun.mobile.app.ui.shell.MENU_TEST_TAG
 import com.bitfun.mobile.app.viewmodel.PairingViewModel
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.connection.connectionPhase
 import com.bitfun.mobile.core.feature.pairing.ConnectionLiveness
 import com.bitfun.mobile.core.feature.pairing.PairedWorkspace
@@ -60,14 +61,21 @@ import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 @Composable
 internal fun PairingScreen(
     modifier: Modifier,
+    settingsPlacement: SettingsPlacement,
+    sessionDetailsPlacement: SettingsPlacement,
+    viewSettingsPlacement: SettingsPlacement,
+    onOpenRemoteSettings: () -> Unit,
     onOpenSidebar: (() -> Unit)? = null,
     onBack: () -> Unit = {},
+    onOpenAccount: () -> Unit = {},
     compact: Boolean = true,
     requestedSessionId: String? = null,
     creatingSession: Boolean = false,
     onOpenSession: (String) -> Unit = {},
     onCreateSession: () -> Unit = {},
     onRemoteHome: () -> Unit = {},
+    startScanning: Boolean = false,
+    onScanStarted: () -> Unit = {},
     viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -87,8 +95,14 @@ internal fun PairingScreen(
                 remoteState = remoteState,
                 workspaceState = workspaceState,
                 phase = current.connectionPhase(),
+                settingsPlacement = settingsPlacement,
+                sessionDetailsPlacement = sessionDetailsPlacement,
+                viewSettingsPlacement = viewSettingsPlacement,
+                onOpenRemoteSettings = onOpenRemoteSettings,
                 deviceId = current.workspace.roomLabel,
+                createDevices = emptyList(),
                 desktopName = "",
+                onCreateDevicePick = {},
                 onSessionIntent = viewModel::dispatchSession,
                 onWorkspaceIntent = viewModel::dispatchWorkspace,
                 onOpenSidebar = onOpenSidebar,
@@ -115,6 +129,9 @@ internal fun PairingScreen(
             onSubmit = viewModel::dispatch,
             onDismiss = { viewModel.dispatch(PairingIntent.Dismiss) },
             onBack = onBack,
+            onOpenAccount = onOpenAccount,
+            startScanning = startScanning,
+            onScanStarted = onScanStarted,
             modifier = modifier,
         )
     }
@@ -127,8 +144,14 @@ internal fun AccountRemoteScreen(
     workspaceState: RemoteWorkspaceUiState,
     deviceId: String,
     deviceName: String,
+    createDevices: List<CreateDeviceChoice>,
     accountUsername: String,
     phase: ConnectionPhase,
+    settingsPlacement: SettingsPlacement,
+    sessionDetailsPlacement: SettingsPlacement,
+    viewSettingsPlacement: SettingsPlacement,
+    onOpenRemoteSettings: () -> Unit,
+    onCreateDevicePick: (String) -> Unit,
     onSessionIntent: (com.bitfun.mobile.core.feature.session.RemoteSessionIntent) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
     onOpenSidebar: (() -> Unit)? = null,
@@ -144,8 +167,14 @@ internal fun AccountRemoteScreen(
         remoteState = remoteState,
         workspaceState = workspaceState,
         phase = phase,
+        settingsPlacement = settingsPlacement,
+        sessionDetailsPlacement = sessionDetailsPlacement,
+        viewSettingsPlacement = viewSettingsPlacement,
+        onOpenRemoteSettings = onOpenRemoteSettings,
         deviceId = deviceId,
+        createDevices = createDevices,
         desktopName = deviceName,
+        onCreateDevicePick = onCreateDevicePick,
         onSessionIntent = onSessionIntent,
         onWorkspaceIntent = onWorkspaceIntent,
         onOpenSidebar = onOpenSidebar,
@@ -167,8 +196,14 @@ private fun RemoteConnectedScreen(
     remoteState: RemoteSessionUiState,
     workspaceState: RemoteWorkspaceUiState,
     phase: ConnectionPhase,
+    settingsPlacement: SettingsPlacement,
+    sessionDetailsPlacement: SettingsPlacement,
+    viewSettingsPlacement: SettingsPlacement,
+    onOpenRemoteSettings: () -> Unit,
     deviceId: String,
+    createDevices: List<CreateDeviceChoice>,
     desktopName: String,
+    onCreateDevicePick: (String) -> Unit,
     onSessionIntent: (com.bitfun.mobile.core.feature.session.RemoteSessionIntent) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
     onOpenSidebar: (() -> Unit)?,
@@ -189,6 +224,7 @@ private fun RemoteConnectedScreen(
         ConversationView(
             state = conversation,
             phase = phase,
+            settingsPlacement = settingsPlacement,
             onBack = onRemoteHome,
             onOpenSidebar = onOpenSidebar,
             onIntent = onSessionIntent,
@@ -227,6 +263,9 @@ private fun RemoteConnectedScreen(
             workspaceState = workspaceState,
             phase = phase,
             deviceId = deviceId,
+            devices = createDevices,
+            compact = compact,
+            onDevicePick = onCreateDevicePick,
             onBack = onRemoteHome,
             onCreated = onOpenSession,
             onWorkspaceIntent = onWorkspaceIntent,
@@ -239,14 +278,18 @@ private fun RemoteConnectedScreen(
             desktopName = desktopName,
             onOpenSidebar = onOpenSidebar,
             onCreate = onCreateSession,
+            onOpenRemoteSettings = onOpenRemoteSettings,
             modifier = modifier,
         )
     } else {
         Column(modifier = modifier.fillMaxSize()) {
-            RemoteShellHeader(onOpenSidebar)
+            RemoteShellHeader(onOpenSidebar, onOpenRemoteSettings = onOpenRemoteSettings)
             RemoteSessionListView(
                 state = remoteState,
                 workspaceState = workspaceState,
+                compact = compact,
+                sessionDetailsPlacement = sessionDetailsPlacement,
+                viewSettingsPlacement = viewSettingsPlacement,
                 connectionDetails = connectionDetails,
                 onIntent = onSessionIntent,
                 onWorkspaceIntent = onWorkspaceIntent,
@@ -264,6 +307,7 @@ private fun RemoteCompactHome(
     desktopName: String,
     onOpenSidebar: (() -> Unit)?,
     onCreate: () -> Unit,
+    onOpenRemoteSettings: () -> Unit,
     modifier: Modifier,
 ) {
     val ready = remoteState as? RemoteSessionUiState.Ready
@@ -282,7 +326,7 @@ private fun RemoteCompactHome(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        RemoteShellHeader(onOpenSidebar, desktopName)
+        RemoteShellHeader(onOpenSidebar, desktopName, onOpenRemoteSettings)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -326,7 +370,11 @@ private fun RemoteCompactHome(
 }
 
 @Composable
-private fun RemoteShellHeader(onOpenSidebar: (() -> Unit)?, subtitle: String = "") {
+private fun RemoteShellHeader(
+    onOpenSidebar: (() -> Unit)?,
+    subtitle: String = "",
+    onOpenRemoteSettings: () -> Unit,
+) {
     val hasSubtitle = subtitle.isNotBlank()
     Row(
         modifier = Modifier
@@ -366,7 +414,13 @@ private fun RemoteShellHeader(onOpenSidebar: (() -> Unit)?, subtitle: String = "
                 )
             }
         }
-        Box(Modifier.size(44.dp))
+        CircleControl(
+            icon = R.drawable.ic_symbol_gearshape,
+            glyphSize = 19,
+            contentDescription = stringResource(R.string.remote_settings_title),
+            onClick = onOpenRemoteSettings,
+            modifier = Modifier,
+        )
     }
 }
 

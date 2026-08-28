@@ -124,6 +124,7 @@ private val DarkScheme = darkColorScheme(
  */
 internal data class BitFunColors(
     val success: Color,
+    val modalScrim: Color,
     val heroBackground: Color,
     val heroSurface: Color,
     val heroAccent: Color,
@@ -154,6 +155,7 @@ internal data class CodeSyntaxColors(
 
 private val LightExtras = BitFunColors(
     success = LightTokens.Green,
+    modalScrim = LightTokens.ModalScrim,
     heroBackground = LightTokens.ConnectHeroBg,
     heroSurface = LightTokens.ConnectHeroSurface,
     heroAccent = LightTokens.ConnectHeroAccent,
@@ -174,6 +176,7 @@ private val LightExtras = BitFunColors(
 
 private val DarkExtras = BitFunColors(
     success = DarkTokens.Green,
+    modalScrim = DarkTokens.ModalScrim,
     heroBackground = DarkTokens.ConnectHeroBg,
     heroSurface = DarkTokens.ConnectHeroSurface,
     heroAccent = DarkTokens.ConnectHeroAccent,

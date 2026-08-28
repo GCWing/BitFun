@@ -17,8 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -30,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
@@ -44,14 +49,25 @@ import com.bitfun.mobile.app.ui.common.CircleControl
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.CreateSessionPresenter
+import com.bitfun.mobile.core.feature.session.ModelOption
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.session.createModelOptions
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 
 internal const val CREATE_SESSION_TEST_TAG: String = "create-session"
 internal const val CREATE_SESSION_BACK_TEST_TAG: String = "create-session-back"
 internal const val CREATE_SESSION_WORKSPACE_TEST_TAG: String = "create-session-workspace"
+
+internal data class CreateDeviceChoice(
+    val id: String,
+    val name: String,
+    val online: Boolean,
+    val selected: Boolean,
+)
+
+private enum class CreateSelectionKind { DEVICE, WORKSPACE }
 
 /**
  * [CreateSessionScreen] plus the one thing it cannot decide for itself: when the
@@ -68,6 +84,9 @@ internal fun CreateSessionRoute(
     workspaceState: RemoteWorkspaceUiState,
     phase: ConnectionPhase,
     deviceId: String,
+    devices: List<CreateDeviceChoice>,
+    compact: Boolean,
+    onDevicePick: (String) -> Unit,
     onBack: () -> Unit,
     onCreated: (String) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
@@ -75,6 +94,7 @@ internal fun CreateSessionRoute(
     modifier: Modifier,
 ) {
     val ready = sessionState as? RemoteSessionUiState.Ready
+    val modelOptions = ready?.createModelOptions(stringResource(R.string.models_unnamed)).orEmpty()
     val baseline = rememberSaveable { mutableStateOf(ready?.selectedSessionId) }
     val created = ready?.selectedSessionId
     val hasTimeline = ready?.timeline != null
@@ -86,6 +106,10 @@ internal fun CreateSessionRoute(
         workspaceState = workspaceState,
         phase = phase,
         deviceId = deviceId,
+        devices = devices,
+        modelOptions = modelOptions,
+        compact = compact,
+        onDevicePick = onDevicePick,
         // Anything other than a settled list means the store is mid-request or
         // has nothing to create against, and either way the send would be lost.
         busy = ready?.busy ?: true,
@@ -116,18 +140,54 @@ internal fun CreateSessionScreen(
     phase: ConnectionPhase,
     /** The desktop this would run on. Empty means there is nothing to create on. */
     deviceId: String,
+    devices: List<CreateDeviceChoice>,
+    modelOptions: List<ModelOption> = emptyList(),
+    compact: Boolean,
     busy: Boolean,
     onBack: () -> Unit,
+    onDevicePick: (String) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
     onIntent: (RemoteSessionIntent) -> Unit,
     modifier: Modifier,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var workspacePath by rememberSaveable { mutableStateOf("") }
+    var selectedModelId by rememberSaveable { mutableStateOf<String?>(null) }
     // Not saveable: an open sheet is a finger part-way through a gesture.
-    var pickerOpen by remember { mutableStateOf(false) }
+    var pickerKind by remember { mutableStateOf<CreateSelectionKind?>(null) }
     val focusManager = LocalFocusManager.current
     val ready = workspaceState as? RemoteWorkspaceUiState.Ready
+    LaunchedEffect(modelOptions) {
+        if (modelOptions.none { it.id == selectedModelId }) {
+            selectedModelId = modelOptions.firstOrNull { it.selected }?.id ?: modelOptions.firstOrNull()?.id
+        }
+    }
+    val selectedModel = modelOptions.firstOrNull { it.id == selectedModelId }
+        ?: modelOptions.firstOrNull { it.selected }
+        ?: modelOptions.firstOrNull()
+    LaunchedEffect(ready?.selected?.kind, ready?.assistants, workspacePath) {
+        if (workspacePath.isEmpty() && ready?.selected?.kind != ASSISTANT_KIND) {
+            ready?.assistants?.firstOrNull()?.let {
+                onWorkspaceIntent(RemoteWorkspaceIntent.SelectAssistant(it.path))
+            }
+        }
+    }
+    val selectWorkspace: (String) -> Unit = { path ->
+        workspacePath = path
+        // Applied now rather than at send: `set_workspace` is a round trip to
+        // the desktop, so the settled selection can be shown while the draft is
+        // still being written. Chat selects the assistant workspace; projects
+        // select their concrete workspace.
+        if (path.isEmpty()) {
+            if (ready?.selected?.kind != ASSISTANT_KIND) {
+                ready?.assistants?.firstOrNull()?.let {
+                    onWorkspaceIntent(RemoteWorkspaceIntent.SelectAssistant(it.path))
+                }
+            }
+        } else {
+            onWorkspaceIntent(RemoteWorkspaceIntent.SelectWorkspace(path))
+        }
+    }
 
     val voiceInput = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -165,25 +225,91 @@ internal fun CreateSessionScreen(
             )
         }
 
-        ContextRow(
-            glyph = if (workspacePath.isEmpty()) {
-                R.drawable.ic_symbol_message
-            } else {
-                R.drawable.ic_symbol_folder
-            },
-            label = when {
-                workspaceState is RemoteWorkspaceUiState.Loading -> stringResource(R.string.sessions_loading)
-                workspacePath.isEmpty() -> stringResource(R.string.create_chat)
-                else -> ready?.workspaces?.firstOrNull { it.path == workspacePath }?.name.orEmpty()
-                    .ifEmpty { workspacePath }
-            },
-            enabled = !busy,
-            onClick = {
-                focusManager.clearFocus()
-                pickerOpen = true
-            },
-            modifier = Modifier.testTag(CREATE_SESSION_WORKSPACE_TEST_TAG),
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (!compact && devices.isNotEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ContextRow(
+                        glyph = R.drawable.ic_symbol_desktop,
+                        label = devices.firstOrNull { it.selected }?.name
+                            ?.ifBlank { deviceId }
+                            ?: deviceId,
+                        expanded = pickerKind == CreateSelectionKind.DEVICE,
+                        enabled = !busy,
+                        onClick = {
+                            focusManager.clearFocus()
+                            pickerKind = CreateSelectionKind.DEVICE
+                        },
+                        modifier = Modifier,
+                    )
+                    DropdownMenu(
+                        expanded = pickerKind == CreateSelectionKind.DEVICE,
+                        onDismissRequest = { pickerKind = null },
+                        modifier = Modifier.width(340.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 18.dp,
+                    ) {
+                        DevicePicker(
+                            devices = devices,
+                            onPick = { id ->
+                                pickerKind = null
+                                onDevicePick(id)
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                ContextRow(
+                glyph = if (workspacePath.isEmpty()) {
+                    R.drawable.ic_symbol_message
+                } else {
+                    R.drawable.ic_symbol_folder
+                },
+                label = when {
+                    workspaceState is RemoteWorkspaceUiState.Loading -> stringResource(R.string.sessions_loading)
+                    workspacePath.isEmpty() -> stringResource(R.string.create_chat)
+                    else -> ready?.workspaces?.firstOrNull { it.path == workspacePath }?.name.orEmpty()
+                        .ifEmpty { workspacePath }
+                },
+                expanded = pickerKind == CreateSelectionKind.WORKSPACE,
+                enabled = !busy,
+                onClick = {
+                    focusManager.clearFocus()
+                    pickerKind = CreateSelectionKind.WORKSPACE
+                },
+                    modifier = Modifier.testTag(CREATE_SESSION_WORKSPACE_TEST_TAG),
+                )
+                if (!compact) {
+                    DropdownMenu(
+                    expanded = pickerKind == CreateSelectionKind.WORKSPACE,
+                    onDismissRequest = { pickerKind = null },
+                    modifier = Modifier.width(340.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 18.dp,
+                    ) {
+                        WorkspacePicker(
+                        workspaces = ready?.workspaces.orEmpty().map {
+                            WorkspaceChoice(path = it.path, name = it.name)
+                        },
+                        selectedPath = workspacePath,
+                        showHeader = false,
+                        onDismiss = { pickerKind = null },
+                        onPick = { path ->
+                            pickerKind = null
+                            selectWorkspace(path)
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
 
         ComposerBar(
             draft = draft,
@@ -196,13 +322,15 @@ internal fun CreateSessionScreen(
             // comes back, and the source blocks only the send too.
             phase = if (deviceId.isEmpty()) ConnectionPhase.DISCONNECTED else phase,
             // There is no session yet, so there is no per-session model to swap.
-            model = null,
+            model = selectedModel,
+            modelOptions = modelOptions,
             capabilities = ChatComposerCapabilities.RemoteCreate,
             placeholder = stringResource(R.string.create_placeholder),
             onDraftChange = { draft = it },
             onRemoveImage = {},
             onAttach = {},
             onOpenModels = {},
+            onSelectModel = { selectedModelId = it },
             onVoice = {
                 voiceInput.launch(
                     Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -220,7 +348,7 @@ internal fun CreateSessionScreen(
                             agentType = CreateSessionPresenter.agentType(workspacePath),
                             title = "",
                             instruction = draft,
-                            modelId = null,
+                            modelId = selectedModelId,
                         ),
                     )
                     draft = ""
@@ -231,35 +359,24 @@ internal fun CreateSessionScreen(
         )
     }
 
-    if (pickerOpen) {
-        ModalBottomSheet(onDismissRequest = { pickerOpen = false }) {
+    if (compact && pickerKind == CreateSelectionKind.WORKSPACE) {
+        ModalBottomSheet(onDismissRequest = { pickerKind = null }) {
             WorkspacePicker(
                 workspaces = ready?.workspaces.orEmpty().map {
                     WorkspaceChoice(path = it.path, name = it.name)
                 },
                 selectedPath = workspacePath,
+                showHeader = true,
+                onDismiss = { pickerKind = null },
                 onPick = { path ->
-                    pickerOpen = false
-                    workspacePath = path
-                    // Applied now rather than at send: `set_workspace` is a round
-                    // trip to the desktop, and doing it here means the row can
-                    // show what the desktop actually settled on while the user is
-                    // still typing. The source binds the same two workspaces —
-                    // a project for code, the assistant's own for chat.
-                    if (path.isEmpty()) {
-                        if (ready?.selected?.kind != ASSISTANT_KIND) {
-                            ready?.assistants?.firstOrNull()?.let {
-                                onWorkspaceIntent(RemoteWorkspaceIntent.SelectAssistant(it.path))
-                            }
-                        }
-                    } else {
-                        onWorkspaceIntent(RemoteWorkspaceIntent.SelectWorkspace(path))
-                    }
+                    pickerKind = null
+                    selectWorkspace(path)
                 },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
             )
         }
     }
+
 }
 
 /** What the desktop calls the workspace it keeps its chat sessions in. */
@@ -300,6 +417,7 @@ private fun DismissFiller(focusManager: FocusManager, modifier: Modifier) {
 private fun ContextRow(
     @DrawableRes glyph: Int,
     label: String,
+    expanded: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
@@ -328,11 +446,33 @@ private fun ContextRow(
             modifier = Modifier.weight(1f, fill = false),
         )
         Icon(
-            painterResource(R.drawable.ic_symbol_chevron_right),
+            painterResource(
+                if (expanded) R.drawable.ic_symbol_chevron_up
+                else R.drawable.ic_symbol_chevron_down,
+            ),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(14.dp),
         )
+    }
+}
+
+@Composable
+private fun DevicePicker(
+    devices: List<CreateDeviceChoice>,
+    onPick: (String) -> Unit,
+    modifier: Modifier,
+) {
+    Column(modifier = modifier) {
+        devices.forEach { device ->
+            PickerRow(
+                title = device.name.ifBlank { device.id },
+                subtitle = stringResource(if (device.online) R.string.account_online else R.string.account_offline),
+                selected = device.selected,
+                enabled = device.online || device.selected,
+                onClick = { onPick(device.id) },
+            )
+        }
     }
 }
 
@@ -346,15 +486,32 @@ private fun ContextRow(
 private fun WorkspacePicker(
     workspaces: List<WorkspaceChoice>,
     selectedPath: String,
+    showHeader: Boolean,
+    onDismiss: () -> Unit,
     onPick: (String) -> Unit,
     modifier: Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(
-            stringResource(R.string.create_workspace_picker),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
+        if (showHeader) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(52.dp).padding(start = 18.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.create_workspace_picker),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        painterResource(R.drawable.ic_symbol_xmark),
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
         PickerRow(
             title = stringResource(R.string.create_chat),
             subtitle = "",
@@ -388,12 +545,14 @@ private fun PickerRow(
     title: String,
     subtitle: String,
     selected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .alpha(if (enabled) 1f else 0.55f)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

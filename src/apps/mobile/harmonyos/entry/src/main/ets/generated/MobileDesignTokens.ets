@@ -52,6 +52,42 @@ export class MobileDesignGeometry {
   static readonly composerExpandedHeight: number = 126;
   static readonly composerCollapsedRadius: number = 26;
   static readonly composerExpandedRadius: number = 18;
+  static readonly composerModelSelectorWidth: number = 330;
+  static readonly composerModelSelectorRadius: number = 14;
+  static readonly composerModelSelectorRowHeight: number = 48;
+  static readonly composerModelSelectorRowRadius: number = 9;
+  static readonly composerModelSelectorRowGap: number = 6;
+  static readonly sheetTopRadius: number = 34;
+  static readonly sheetSideRadius: number = 34;
+  static readonly sheetHorizontalPadding: number = 20;
+  static readonly sheetHeaderHeight: number = 56;
+  static readonly sheetActionHeight: number = 46;
+  static readonly selectionTopRadius: number = 20;
+  static readonly selectionRowHeight: number = 64;
+  static readonly selectionCloseSize: number = 32;
+  static readonly popoverWidth: number = 292;
+  static readonly popoverRadius: number = 16;
+  static readonly popoverPadding: number = 12;
+  static readonly popoverVerticalPadding: number = 10;
+  static readonly popoverActionHeight: number = 48;
+  static readonly popoverShadowRadius: number = 18;
+  static readonly compactPopoverWidth: number = 150;
+  static readonly compactPopoverRadius: number = 14;
+  static readonly compactPopoverActionHeight: number = 42;
+  static readonly settingsCompactCardRadius: number = 8;
+  static readonly settingsCardRadius: number = 24;
+  static readonly settingsProminentCardRadius: number = 28;
+  static readonly modelCurrentRowHeight: number = 64;
+  static readonly modelSourceRowHeight: number = 62;
+  static readonly modelAccountRowHeight: number = 56;
+  static readonly modelAccountRowGap: number = 6;
+  static readonly modelSectionGap: number = 20;
+  static readonly modelOverviewTopPadding: number = 16;
+  static readonly modelOverviewBottomPadding: number = 24;
+  static readonly modelListTopPadding: number = 10;
+  static readonly modelListBottomPadding: number = 16;
+  static readonly modelEmptyAccountHeight: number = 80;
+  static readonly modelEditorHeight: number = 560;
 }
 
 export class MobileDesignBreakpoints {

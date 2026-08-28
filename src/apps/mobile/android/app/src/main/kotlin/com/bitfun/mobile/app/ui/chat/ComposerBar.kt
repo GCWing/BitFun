@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,18 +27,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,14 +59,20 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.theme.BitFunEaseOut
 import com.bitfun.mobile.app.ui.theme.MotionQuickMillis
 import com.bitfun.mobile.app.ui.theme.MotionStructureMillis
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignBreakpoints
 import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
@@ -83,6 +90,9 @@ internal const val MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX: String = "composer-mod
 
 /** The relay refuses more than this, and refusing here is a better error. */
 internal const val MAX_COMPOSER_IMAGES: Int = 4
+
+internal fun composerIsWide(screenWidthDp: Int): Boolean =
+    screenWidthDp >= MobileDesignBreakpoints.Wide
 
 // The measurements come straight from `ComposerBar.ets`, which sizes the bar in
 // vp — the same unit as dp. Naming them keeps the two files diffable.
@@ -119,6 +129,13 @@ internal fun ComposerBar(
     phase: ConnectionPhase,
     model: ModelOption?,
     modelOptions: List<ModelOption> = emptyList(),
+    /**
+     * Whether the model catalog command failed and left no selectable models.
+     * When true the bar still offers the model control so the settings sheet can
+     * explain the failure and offer Retry, instead of silently dropping the
+     * control and hiding the only route to that explanation.
+     */
+    modelCatalogFailed: Boolean = false,
     capabilities: ChatComposerCapabilities,
     /**
      * What the empty field says. Every surface asks for something different —
@@ -298,7 +315,7 @@ internal fun ComposerBar(
                         }
                         // The model belongs to the session, but it is chosen
                         // here: it is the one setting a user changes mid-turn.
-                        if (model != null) {
+                        if (model != null || modelOptions.isNotEmpty() || modelCatalogFailed) {
                             ModelControl(
                                 model = model,
                                 enabled = !busy,
@@ -390,7 +407,7 @@ private fun AddButton(enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .size(ActionSize)
             .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(role = Role.Button, enabled = enabled, onClick = onClick),
     ) {
         Icon(
             painterResource(R.drawable.ic_symbol_plus),
@@ -410,7 +427,7 @@ private fun AddButton(enabled: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModelControl(
-    model: ModelOption,
+    model: ModelOption?,
     enabled: Boolean,
     modelOptions: List<ModelOption>,
     onClick: () -> Unit,
@@ -419,7 +436,9 @@ private fun ModelControl(
     onSelectorDismiss: () -> Unit,
 ) {
     val label = stringResource(R.string.models_title)
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val displayModel = model ?: modelOptions.firstOrNull { it.selected }
+    val displayLabel = displayModel?.primaryLabel ?: label
+    val wide = composerIsWide(LocalConfiguration.current.screenWidthDp)
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -431,10 +450,13 @@ private fun ModelControl(
                 .clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 4.dp)
                 .testTag(MODEL_CONTROL_TEST_TAG)
-                .semantics { contentDescription = "$label · ${model.primaryLabel}" },
+                .semantics {
+                    contentDescription = "$label · $displayLabel"
+                    role = Role.Button
+                },
         ) {
             Text(
-                model.primaryLabel,
+                displayLabel,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -451,11 +473,21 @@ private fun ModelControl(
             )
         }
         if (wide) {
-            DropdownMenu(expanded = selectorOpen, onDismissRequest = onSelectorDismiss) {
+            DropdownMenu(
+                expanded = selectorOpen,
+                onDismissRequest = onSelectorDismiss,
+                modifier = Modifier.width(MobileDesignGeometry.ComposerModelSelectorWidth),
+                shape = RoundedCornerShape(MobileDesignGeometry.ComposerModelSelectorRadius),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 0.dp,
+                shadowElevation = MobileDesignGeometry.PopoverShadowRadius,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
                 ModelSelectorContent(
                     options = modelOptions,
                     onSelect = onSelectModel,
                     compact = true,
+                    onDismiss = onSelectorDismiss,
                 )
             }
         }
@@ -465,8 +497,18 @@ private fun ModelControl(
             onDismissRequest = onSelectorDismiss,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(
+                topStart = MobileDesignGeometry.SelectionTopRadius,
+                topEnd = MobileDesignGeometry.SelectionTopRadius,
+            ),
+            dragHandle = null,
         ) {
-            ModelSelectorContent(options = modelOptions, onSelect = onSelectModel, compact = false)
+            ModelSelectorContent(
+                options = modelOptions,
+                onSelect = onSelectModel,
+                compact = false,
+                onDismiss = onSelectorDismiss,
+            )
         }
     }
 }
@@ -476,67 +518,137 @@ private fun ModelSelectorContent(
     options: List<ModelOption>,
     onSelect: (String) -> Unit,
     compact: Boolean,
+    onDismiss: () -> Unit,
 ) {
+    val selectorOptions = remember(options) {
+        options.filter(ModelOption::selected) + options.filterNot(ModelOption::selected)
+    }
+    val visibleRows = selectorOptions.size.coerceAtMost(7)
+    val listHeight = if (visibleRows == 0) {
+        MobileDesignGeometry.ComposerModelSelectorRowHeight
+    } else {
+        MobileDesignGeometry.ComposerModelSelectorRowHeight * visibleRows +
+            MobileDesignGeometry.ComposerModelSelectorRowGap * (visibleRows - 1)
+    }
     Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
-            .then(if (compact) Modifier.width(300.dp) else Modifier.fillMaxWidth())
-            .padding(vertical = if (compact) 4.dp else 12.dp)
+            .fillMaxWidth()
+            // Material's anchored menu reserves 8dp vertically around its
+            // content. Add only the remaining 2dp there so both the popover
+            // and the sheet expose the HarmonyOS 10dp inner inset.
+            .padding(horizontal = 10.dp, vertical = if (compact) 2.dp else 10.dp)
             .testTag(MODEL_SELECTOR_TEST_TAG),
     ) {
-        Text(
-            stringResource(R.string.model_selector_title),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-        )
-        if (options.isEmpty()) {
+        if (!compact) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().height(32.dp),
+            ) {
+                Text(
+                    stringResource(R.string.model_selector_title),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(MobileDesignGeometry.SelectionCloseSize)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClick = onDismiss),
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_symbol_xmark),
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+        }
+        if (selectorOptions.isEmpty()) {
             Text(
                 stringResource(R.string.model_selector_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MobileDesignGeometry.ComposerModelSelectorRowHeight)
+                    .padding(horizontal = 10.dp, vertical = 14.dp),
             )
         } else {
-            options.forEachIndexed { index, option ->
-                DropdownMenuItem(
-                    modifier = Modifier.testTag(MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX + option.id),
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(option.primaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(
+                    MobileDesignGeometry.ComposerModelSelectorRowGap,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(listHeight)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                selectorOptions.forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(MobileDesignGeometry.ComposerModelSelectorRowHeight)
+                            .clip(
+                                RoundedCornerShape(
+                                    MobileDesignGeometry.ComposerModelSelectorRowRadius,
+                                ),
+                            )
+                            .background(
+                                if (option.selected) MaterialTheme.colorScheme.surfaceVariant
+                                else Color.Transparent,
+                            )
+                            .clickable { onSelect(option.id) }
+                            .semantics {
+                                contentDescription =
+                                    "${option.primaryLabel} · ${option.secondaryLabel}"
+                                role = Role.Button
+                                selected = option.selected
+                            }
+                            .padding(horizontal = 10.dp)
+                            .testTag(MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX + option.id),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(20.dp),
+                        ) {
+                            if (option.selected) {
+                                Icon(
+                                    painterResource(R.drawable.ic_symbol_checkmark_circle),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                option.primaryLabel,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text(
                                 option.secondaryLabel,
-                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                    },
-                    leadingIcon = {
-                        Icon(
-                            painterResource(
-                                if (option.secondaryLabel == stringResource(R.string.model_selector_local)) {
-                                    R.drawable.ic_symbol_gearshape
-                                } else {
-                                    R.drawable.ic_symbol_cloud
-                                },
-                            ),
-                            contentDescription = null,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    },
-                    trailingIcon = if (option.selected) {
-                        {
-                            Icon(
-                                painterResource(R.drawable.ic_symbol_checkmark_circle_fill),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        }
-                    } else null,
-                    onClick = { onSelect(option.id) },
-                )
-                if (!compact && index != options.lastIndex) HorizontalDivider()
+                    }
+                }
             }
         }
     }
@@ -569,6 +681,7 @@ private fun PrimaryActionButton(
             R.string.message_voice_input
         else -> R.string.message_send
     }
+    val actionDescription = stringResource(description)
 
     Box(
         contentAlignment = Alignment.Center,
@@ -584,6 +697,10 @@ private fun PrimaryActionButton(
                     else -> Unit
                 }
             }
+            .semantics {
+                contentDescription = actionDescription
+                role = Role.Button
+            }
             .testTag(COMPOSER_SEND_TEST_TAG),
     ) {
         when (action) {
@@ -598,7 +715,7 @@ private fun PrimaryActionButton(
 
             ComposerPrimaryAction.VOICE, ComposerPrimaryAction.VOICE_BLOCKED -> Icon(
                 painterResource(R.drawable.ic_symbol_mic),
-                contentDescription = stringResource(description),
+                contentDescription = null,
                 tint = colors.onSurface,
                 modifier = Modifier.size(22.dp).alpha(
                     if (action == ComposerPrimaryAction.VOICE) 1f else DimmedAlpha,
@@ -607,7 +724,7 @@ private fun PrimaryActionButton(
 
             else -> Icon(
                 painterResource(R.drawable.ic_symbol_arrow_up),
-                contentDescription = stringResource(description),
+                contentDescription = null,
                 tint = colors.onSurface,
                 modifier = Modifier.size(23.dp).alpha(
                     if (action == ComposerPrimaryAction.SEND) 1f else DimmedAlpha,
@@ -669,7 +786,7 @@ private fun AttachmentStrip(
                         .size(32.dp)
                         .clip(CircleShape)
                         .background(BadgeScrim)
-                        .clickable(enabled = enabled) { onRemove(image.id) }
+                        .clickable(role = Role.Button, enabled = enabled) { onRemove(image.id) }
                         .semantics { contentDescription = removeLabel },
                 ) {
                     Text(

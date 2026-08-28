@@ -18,3 +18,7 @@ Use the matching generated native preview gallery and the same scenario id.
 Captures can also be selected directly from each column in the browser. Local
 captures are visual evidence and should not be committed unless they are being
 reviewed as deliberate regression fixtures.
+
+Android capture evidence is produced by on-device instrumentation tests, not
+committed PNGs. HarmonyOS captures remain unproven until a device and toolchain
+are available.

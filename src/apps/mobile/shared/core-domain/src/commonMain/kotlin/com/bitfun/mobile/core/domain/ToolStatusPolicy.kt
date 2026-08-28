@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * Ported from the predicates at the bottom of `pages/components/ToolStatusList.ets`.
  * The relay has never narrowed this field to an enum — different agents spell the
- * same state `completed` / `done` / `sent`, and confirmation arrives as either
+ * same state `completed` / `done` / `sent` / `success` (with legacy `finished`), and confirmation arrives as either
  * `pending_confirmation` or `needs_confirmation` — so the vocabulary is matched
  * here once instead of at every call site.
  */
@@ -25,8 +25,22 @@ public object ToolStatusPolicy {
     public fun isRunning(tool: RemoteToolStatusResponse): Boolean =
         tool.status.normalized() in RUNNING
 
+    /** Whether the tool has completed, including `success` and legacy `finished`. */
     public fun isCompleted(tool: RemoteToolStatusResponse): Boolean =
         tool.status.normalized() in COMPLETED
+
+    /** Whether the tool has a status-driven expandable card, regardless of preview content. */
+    public fun isExpandable(tool: RemoteToolStatusResponse): Boolean =
+        isFailed(tool) || isPendingConfirmation(tool) || isQuestion(tool) || isRunning(tool) ||
+            isCompleted(tool) || isCancelled(tool)
+
+    /**
+     * Whether the tool has content to reveal. This is separate from [isExpandable]:
+     * expandability is a status-driven typed domain fact, not a preview-driven one,
+     * for a later Android UI consumer (P3).
+     */
+    public fun hasPreview(tool: RemoteToolStatusResponse): Boolean =
+        inputText(tool).isNotEmpty() || outputText(tool).isNotEmpty()
 
     public fun isCancelled(tool: RemoteToolStatusResponse): Boolean =
         tool.status.normalized() in CANCELLED
@@ -113,7 +127,7 @@ public object ToolStatusPolicy {
     private const val OUTPUT_CAP = 480
     private val PENDING = setOf("pending_confirmation", "needs_confirmation")
     private val RUNNING = setOf("running", "active")
-    private val COMPLETED = setOf("completed", "done", "sent")
+    private val COMPLETED = setOf("completed", "done", "sent", "success", "finished")
     private val CANCELLED = setOf("cancelled", "canceled", "rejected")
     private val FAILED = setOf("failed", "error")
     private val QUESTION_TERMINAL = setOf("completed", "done") + CANCELLED + FAILED

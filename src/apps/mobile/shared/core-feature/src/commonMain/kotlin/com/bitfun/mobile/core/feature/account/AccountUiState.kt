@@ -11,6 +11,13 @@ public enum class AccountFailureReason {
     SECURE_STORAGE,
 }
 
+public enum class AccountFailureStage {
+    RESTORE,
+    AUTHENTICATION,
+    DEVICE_LIST,
+    SECURE_STORAGE,
+}
+
 public data class AccountDeviceUi public constructor(
     public val id: String,
     public val name: String,
@@ -60,6 +67,7 @@ public sealed interface AccountUiState {
     public data class Failed public constructor(
         public val reason: AccountFailureReason,
         public val canRetry: Boolean,
+        public val stage: AccountFailureStage,
     ) : AccountUiState
 }
 
@@ -82,6 +90,9 @@ public sealed interface AccountIntent {
      * again, and this is that something.
      */
     public data object RefreshDevices : AccountIntent
+
+    /** Retry the failed device-list stage with the authenticated session already in memory. */
+    public data object Retry : AccountIntent
     public data object Logout : AccountIntent
     public data object Stop : AccountIntent
 }

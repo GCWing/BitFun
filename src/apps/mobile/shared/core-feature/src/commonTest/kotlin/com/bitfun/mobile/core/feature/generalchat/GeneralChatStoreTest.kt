@@ -86,6 +86,52 @@ class GeneralChatStoreTest {
     }
 
     @Test
+    fun secureReadFailureDuringConstructionIsFailClosedWithoutMutatingStorage() = runTest {
+        val sessionId = "existing-session"
+        val chats = MemoryChats().apply {
+            sessions += PersistedChatSession(
+                sessionId = sessionId,
+                title = "Existing conversation",
+                agentType = "general_chat",
+                status = "ready",
+                updatedAt = "2026-01-02T00:00:00Z",
+                createdAt = "2026-01-01T00:00:00Z",
+                messageCount = 1,
+                pinned = false,
+            )
+            messages += PersistedChatMessage(
+                messageId = "message-1",
+                sessionId = sessionId,
+                role = "user",
+                text = "restored message",
+                status = "sent",
+                timestamp = "2026-01-01T00:00:00Z",
+                thinking = null,
+                payloadJson = "{}",
+            )
+        }
+        val drafts = MemoryDrafts(
+            mutableMapOf("general-chat-composer:$sessionId" to "restored draft"),
+        )
+        val secure = FailingReadSecure()
+
+        val store = store(this, drafts = drafts, chats = chats, secure = secure)
+
+        val state = store.state.value
+        assertFalse(state.configured)
+        assertEquals(GeneralChatConfigUi("", "", false), state.config)
+        assertEquals(GeneralChatConfigFailure.SECURE_STORAGE, state.configFailure)
+        assertEquals(emptyList(), state.models)
+        assertEquals("", state.activeModelId)
+        assertEquals(sessionId, state.sessionId)
+        assertEquals("restored draft", state.draft)
+        assertEquals(listOf("restored message"), state.timeline.persistedMessages.map { it.text })
+        assertEquals(1, secure.reads)
+        assertEquals(0, secure.writes)
+        assertEquals(0, secure.deletes)
+    }
+
+    @Test
     fun sendPersistsComposerStateAndProjectsStreamedReply() = runTest {
         val drafts = MemoryDrafts()
         var recorded: GeneralChatStreamRequest? = null
@@ -561,6 +607,25 @@ private class MemoryDrafts(
 
     override fun delete(draftId: String) {
         values.remove(draftId)
+    }
+}
+
+private class FailingReadSecure : SecureStore {
+    var reads = 0
+    var writes = 0
+    var deletes = 0
+
+    override fun read(key: String): ByteArray? {
+        reads += 1
+        error("keystore unavailable")
+    }
+
+    override fun write(key: String, value: ByteArray) {
+        writes += 1
+    }
+
+    override fun delete(key: String) {
+        deletes += 1
     }
 }
 

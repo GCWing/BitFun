@@ -6,7 +6,7 @@ struct MobileDesignGallery: View {
 
     init(scenario: MobilePreviewScenario) {
         self.scenario = scenario
-        let session = ChatSession(id: UUID(), title: scenario.headerTitle, updatedLabel: "刚刚")
+        let session = ChatSession(id: UUID().uuidString, title: scenario.headerTitle, updatedLabel: "刚刚")
         let previewModel = MobileAppModel(
             sessions: [session],
             selectedSessionID: session.id,
@@ -30,7 +30,11 @@ struct MobileDesignGallery: View {
     var body: some View {
         VStack(spacing: 0) {
             platformLabel
-            ConversationHeader(model: model, contextTitle: scenario.headerSubtitle)
+            ConversationHeader(
+                model: model,
+                actionsOpen: .constant(false),
+                contextTitle: scenario.headerSubtitle
+            )
             ChatTimelineView(model: model)
             ComposerBar(model: model)
         }
@@ -39,10 +43,10 @@ struct MobileDesignGallery: View {
 
     private var platformLabel: some View {
         HStack(spacing: 8) {
-            Text("iOS")
+            Text(verbatim: "iOS")
                 .font(MobileDesignTypography.labelMedium.font)
                 .fontWeight(.medium)
-            Text("NATIVE")
+            Text(verbatim: "NATIVE")
                 .font(MobileDesignTypography.labelSmall.font)
                 .foregroundStyle(BitFunTheme.muted)
                 .padding(.horizontal, 8)
@@ -50,7 +54,7 @@ struct MobileDesignGallery: View {
                 .background(BitFunTheme.soft)
                 .clipShape(Capsule())
             Spacer()
-            Text("\(Int(scenario.viewportWidth)) × \(Int(scenario.viewportHeight))")
+            Text(verbatim: "\(Int(scenario.viewportWidth)) × \(Int(scenario.viewportHeight))")
                 .font(MobileDesignTypography.labelSmall.font)
                 .foregroundStyle(BitFunTheme.muted)
         }

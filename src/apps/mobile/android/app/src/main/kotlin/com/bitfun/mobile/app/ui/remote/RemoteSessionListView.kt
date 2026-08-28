@@ -26,10 +26,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -49,6 +50,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.state.SessionViewSettings
@@ -56,7 +58,9 @@ import com.bitfun.mobile.app.ui.settings.SessionViewSettingsSheet
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TOGGLE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.statusText
 import com.bitfun.mobile.app.ui.shell.sidebar.SidebarCircleButton
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.bitfun.mobile.core.feature.session.RelativeTime
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.session.RemoteSessionFailureReason
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
@@ -71,8 +75,9 @@ import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import kotlinx.coroutines.delay
 
 internal const val SESSION_LIST_TEST_TAG: String = "session-list"
-internal const val SESSION_CREATE_TEST_TAG: String = "session-create"
 internal const val SESSION_PROJECTS_TEST_TAG: String = "session-projects"
+internal const val SESSION_PROJECT_CREATE_TEST_TAG_PREFIX: String = "session-project-create:"
+internal const val SESSION_CHAT_CREATE_TEST_TAG: String = "session-chat-create"
 internal const val SESSION_SHOW_MORE_TEST_TAG_PREFIX: String = "session-show-more:"
 internal const val SESSION_SEARCH_TOGGLE_TEST_TAG: String = "session-search-toggle"
 internal const val SESSION_SEARCH_FIELD_TEST_TAG: String = "session-search-field"
@@ -87,6 +92,9 @@ internal const val SESSION_SEARCH_FIELD_TEST_TAG: String = "session-search-field
 internal fun RemoteSessionListView(
     state: RemoteSessionUiState,
     workspaceState: RemoteWorkspaceUiState,
+    compact: Boolean,
+    sessionDetailsPlacement: SettingsPlacement,
+    viewSettingsPlacement: SettingsPlacement,
     connectionDetails: @Composable () -> Unit,
     onIntent: (RemoteSessionIntent) -> Unit,
     onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
@@ -103,7 +111,11 @@ internal fun RemoteSessionListView(
         RemoteSessionListContent(
             state = state,
             workspaceState = workspaceState,
+            compact = compact,
+            sessionDetailsPlacement = sessionDetailsPlacement,
+            viewSettingsPlacement = viewSettingsPlacement,
             onIntent = onIntent,
+            onWorkspaceIntent = onWorkspaceIntent,
             onOpen = onOpen,
             onCreate = onCreate,
             connectionDetails = connectionDetails,
@@ -130,7 +142,11 @@ internal fun RemoteSessionListView(
 internal fun RemoteSessionListContent(
     state: RemoteSessionUiState,
     workspaceState: RemoteWorkspaceUiState,
+    compact: Boolean,
+    sessionDetailsPlacement: SettingsPlacement,
+    viewSettingsPlacement: SettingsPlacement,
     onIntent: (RemoteSessionIntent) -> Unit,
+    onWorkspaceIntent: (RemoteWorkspaceIntent) -> Unit,
     onOpen: (String) -> Unit,
     /** Opens the longer create route, where the first message is written. */
     onCreate: () -> Unit,
@@ -140,13 +156,16 @@ internal fun RemoteSessionListContent(
     var search by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var actionsFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var actionAnchor by remember { mutableStateOf<IntRect?>(null) }
     var detailsFor by rememberSaveable { mutableStateOf<String?>(null) }
     var viewSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var collapsedSectionKeys by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
     var revealedSectionKeys by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
     // Not saveable, like the delete confirmation: an open menu is a finger
     // half-way through a gesture, not a place to come back to.
-    var createMenuOpen by remember { mutableStateOf(false) }
+    var projectCreateMenuPath by remember { mutableStateOf<String?>(null) }
+    var pendingProjectCreate by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var pendingAssistantCreate by remember { mutableStateOf(false) }
     var viewSettings by rememberSaveable(stateSaver = SessionViewSettings.Saver) {
         mutableStateOf(SessionViewSettings.Default)
     }
@@ -161,12 +180,44 @@ internal fun RemoteSessionListContent(
             onIntent(RemoteSessionIntent.Search(search))
         }
     }
+    LaunchedEffect(workspaceState, pendingProjectCreate, pendingAssistantCreate) {
+        when (workspaceState) {
+            is RemoteWorkspaceUiState.Ready -> {
+                pendingProjectCreate?.let { pending ->
+                    if (workspaceState.selected?.path == pending.first) {
+                        pendingProjectCreate = null
+                        onIntent(RemoteSessionIntent.CreateSession(pending.second))
+                    }
+                }
+                if (pendingAssistantCreate && workspaceState.selected?.kind == ASSISTANT_WORKSPACE_KIND) {
+                    pendingAssistantCreate = false
+                    onIntent(RemoteSessionIntent.CreateSession("Claw"))
+                }
+            }
+            is RemoteWorkspaceUiState.Failed -> {
+                pendingProjectCreate = null
+                pendingAssistantCreate = false
+            }
+            else -> Unit
+        }
+    }
+    val createAssistantSession = {
+        val workspaceReady = workspaceState as? RemoteWorkspaceUiState.Ready
+        if (workspaceReady?.selected?.kind == ASSISTANT_WORKSPACE_KIND) {
+            onIntent(RemoteSessionIntent.CreateSession("Claw"))
+        } else {
+            val assistant = workspaceReady?.assistants?.firstOrNull()
+            if (assistant == null) {
+                onCreate()
+            } else {
+                pendingAssistantCreate = true
+                onWorkspaceIntent(RemoteWorkspaceIntent.SelectAssistant(assistant.path))
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         RemoteSessionListHeader(
-            searchOpen = searchOpen,
-            busy = ready?.busy == true,
-            createMenuOpen = createMenuOpen,
             onToggleViewSettings = { viewSettingsOpen = true },
             onToggleSearch = {
                 searchOpen = !searchOpen
@@ -174,13 +225,6 @@ internal fun RemoteSessionListContent(
                     search = ""
                     onIntent(RemoteSessionIntent.Search(""))
                 }
-            },
-            onToggleCreateMenu = { createMenuOpen = !createMenuOpen },
-            onDismissCreateMenu = { createMenuOpen = false },
-            onCreate = onCreate,
-            onCreateAgent = { agentType ->
-                createMenuOpen = false
-                onIntent(RemoteSessionIntent.CreateSession(agentType))
             },
         )
         if (searchOpen) {
@@ -236,6 +280,34 @@ internal fun RemoteSessionListContent(
                         SectionHeader(
                             section = section,
                             collapsed = collapsed,
+                            createMenuOpen = section is SessionListSection.Project &&
+                                projectCreateMenuPath == section.path,
+                            onToggleCreateMenu = if (section is SessionListSection.Project) {
+                                {
+                                    projectCreateMenuPath = if (projectCreateMenuPath == section.path) {
+                                        null
+                                    } else {
+                                        section.path
+                                    }
+                                }
+                            } else null,
+                            onDismissCreateMenu = { projectCreateMenuPath = null },
+                            onCreateAgent = if (section is SessionListSection.Project) {
+                                { agentType ->
+                                    projectCreateMenuPath = null
+                                    val selectedPath = (workspaceState as? RemoteWorkspaceUiState.Ready)
+                                        ?.selected?.path
+                                    if (selectedPath == section.path) {
+                                        onIntent(RemoteSessionIntent.CreateSession(agentType))
+                                    } else {
+                                        pendingProjectCreate = section.path to agentType
+                                        onWorkspaceIntent(RemoteWorkspaceIntent.SelectWorkspace(section.path))
+                                    }
+                                }
+                            } else null,
+                            onCreateAssistant = if (section is SessionListSection.Chat) {
+                                createAssistantSession
+                            } else null,
                             onToggle = {
                                 collapsedSectionKeys = if (collapsed) {
                                     collapsedSectionKeys - sectionKey
@@ -263,7 +335,10 @@ internal fun RemoteSessionListContent(
                                     onIntent(RemoteSessionIntent.Open(session.id))
                                     onOpen(session.id)
                                 },
-                                onActions = { actionsFor = session.id },
+                                onActions = { anchor ->
+                                    actionAnchor = anchor
+                                    actionsFor = session.id
+                                },
                             )
                         }
                         if (!collapsed && batch.nextCount > 0) {
@@ -292,22 +367,32 @@ internal fun RemoteSessionListContent(
                 // the old copy would show a title the list no longer has. If the
                 // session is gone entirely the sheet closes with it.
                 rows.firstOrNull { it.id == actionsFor }?.let { session ->
-                    SessionActionSheet(
+                    val capabilities = SessionActionPolicy.resolve(
+                        SessionActionScope.REMOTE,
+                        session.agentType,
+                        state.busy,
+                    )
+                    val dismissActions = {
+                        actionsFor = null
+                        actionAnchor = null
+                    }
+                    val openDetails = { detailsFor = session.id }
+                    val delete = { onIntent(RemoteSessionIntent.DeleteSession(session.id)) }
+                    if (compact || actionAnchor == null) SessionActionSheet(
                         title = session.title,
                         status = session.status,
-                        capabilities = SessionActionPolicy.resolve(
-                            SessionActionScope.REMOTE,
-                            session.agentType,
-                            state.busy,
-                        ),
-                        onViewDetails = { detailsFor = session.id },
-                        // Archive and export are local-storage operations, so
-                        // the policy never offers them for a REMOTE scope and
-                        // these cannot be reached from this list.
-                        onArchive = {},
-                        onExport = {},
-                        onDelete = { onIntent(RemoteSessionIntent.DeleteSession(session.id)) },
-                        onDismiss = { actionsFor = null },
+                        capabilities = capabilities,
+                        onViewDetails = openDetails,
+                        onDelete = delete,
+                        onDismiss = dismissActions,
+                    ) else SessionActionPopup(
+                        anchorBounds = actionAnchor!!,
+                        title = session.title,
+                        status = session.status,
+                        capabilities = capabilities,
+                        onViewDetails = openDetails,
+                        onDelete = delete,
+                        onDismiss = dismissActions,
                     )
                 }
                 rows.firstOrNull { it.id == detailsFor }?.let { session ->
@@ -320,6 +405,7 @@ internal fun RemoteSessionListContent(
                         createdAt = session.createdAt,
                         updatedAt = session.updatedAt,
                         messageCount = session.messageCount,
+                        placement = sessionDetailsPlacement,
                         onDismiss = { detailsFor = null },
                     )
                 }
@@ -331,13 +417,12 @@ internal fun RemoteSessionListContent(
 
     if (viewSettingsOpen && ready != null) {
         val workspace = workspaceState.asSessionContext()
-        ModalBottomSheet(
+        com.bitfun.mobile.app.ui.common.AdaptiveModalSurface(
+            visible = true,
+            placement = viewSettingsPlacement,
             onDismissRequest = { viewSettingsOpen = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.background,
-            dragHandle = null,
-        ) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        ) { surfaceModifier ->
+            Column(surfaceModifier.verticalScroll(rememberScrollState())) {
                 SessionViewSettingsSheet(
                     settings = viewSettings,
                     workspaces = remember(ready.sessions, workspace) {
@@ -360,15 +445,8 @@ internal fun RemoteSessionListContent(
 
 @Composable
 private fun RemoteSessionListHeader(
-    searchOpen: Boolean,
-    busy: Boolean,
-    createMenuOpen: Boolean,
     onToggleViewSettings: () -> Unit,
     onToggleSearch: () -> Unit,
-    onToggleCreateMenu: () -> Unit,
-    onDismissCreateMenu: () -> Unit,
-    onCreate: () -> Unit,
-    onCreateAgent: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -396,46 +474,6 @@ private fun RemoteSessionListHeader(
             onClick = onToggleSearch,
             modifier = Modifier.testTag(SESSION_SEARCH_TOGGLE_TEST_TAG),
         )
-        Box {
-            SidebarCircleButton(
-                icon = R.drawable.ic_symbol_square_and_pencil,
-                contentDescription = stringResource(R.string.sidebar_new_chat),
-                diameter = 38,
-                onClick = onToggleCreateMenu,
-                modifier = Modifier,
-            )
-            DropdownMenu(
-                expanded = createMenuOpen,
-                onDismissRequest = onDismissCreateMenu,
-                modifier = Modifier.width(150.dp),
-                shape = RoundedCornerShape(14.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp,
-                shadowElevation = 18.dp,
-            ) {
-                CompactCreateMenuItem(
-                    label = stringResource(R.string.create_title),
-                    enabled = !busy,
-                    onClick = {
-                        onDismissCreateMenu()
-                        onCreate()
-                    },
-                    modifier = Modifier.testTag(SESSION_CREATE_TEST_TAG),
-                )
-                CompactCreateMenuItem(
-                    label = stringResource(R.string.sessions_filter_code),
-                    enabled = !busy,
-                    onClick = { onCreateAgent("code") },
-                    modifier = Modifier,
-                )
-                CompactCreateMenuItem(
-                    label = stringResource(R.string.sessions_filter_cowork),
-                    enabled = !busy,
-                    onClick = { onCreateAgent("cowork") },
-                    modifier = Modifier,
-                )
-            }
-        }
     }
 }
 
@@ -452,7 +490,7 @@ private fun CompactCreateMenuItem(
         },
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(42.dp),
+        modifier = modifier.height(MobileDesignGeometry.CompactPopoverActionHeight),
     )
 }
 
@@ -555,6 +593,11 @@ private fun ProjectTreeHeader(projectCount: Int) {
 private fun SectionHeader(
     section: SessionListSection,
     collapsed: Boolean,
+    createMenuOpen: Boolean,
+    onToggleCreateMenu: (() -> Unit)?,
+    onDismissCreateMenu: () -> Unit,
+    onCreateAgent: ((String) -> Unit)?,
+    onCreateAssistant: (() -> Unit)?,
     onToggle: () -> Unit,
 ) {
     val label = when (section) {
@@ -601,6 +644,16 @@ private fun SectionHeader(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            ProjectCreateControl(
+                path = section.path,
+                expanded = createMenuOpen,
+                onToggle = { onToggleCreateMenu?.invoke() },
+                onDismiss = onDismissCreateMenu,
+                onCreateAgent = { onCreateAgent?.invoke(it) },
+            )
+        }
+        if (section is SessionListSection.Chat) {
+            ChatCreateControl(onCreate = { onCreateAssistant?.invoke() })
         }
         Icon(
             painterResource(
@@ -614,6 +667,68 @@ private fun SectionHeader(
     }
 }
 
+@Composable
+internal fun ChatCreateControl(onCreate: () -> Unit) {
+    IconButton(
+        onClick = onCreate,
+        modifier = Modifier.size(40.dp).testTag(SESSION_CHAT_CREATE_TEST_TAG),
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_symbol_square_and_pencil),
+            contentDescription = stringResource(R.string.sidebar_new_chat),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+internal fun ProjectCreateControl(
+    path: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onDismiss: () -> Unit,
+    onCreateAgent: (String) -> Unit,
+) {
+    Box {
+        IconButton(
+            onClick = onToggle,
+            modifier = Modifier
+                .size(36.dp)
+                .testTag(SESSION_PROJECT_CREATE_TEST_TAG_PREFIX + path),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_symbol_square_and_pencil),
+                contentDescription = stringResource(R.string.sidebar_new_chat),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.width(MobileDesignGeometry.CompactPopoverWidth),
+            shape = RoundedCornerShape(MobileDesignGeometry.CompactPopoverRadius),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 18.dp,
+        ) {
+            CompactCreateMenuItem(
+                label = stringResource(R.string.sessions_filter_code),
+                enabled = true,
+                onClick = { onCreateAgent("code") },
+                modifier = Modifier,
+            )
+            CompactCreateMenuItem(
+                label = stringResource(R.string.sessions_filter_cowork),
+                enabled = true,
+                onClick = { onCreateAgent("Cowork") },
+                modifier = Modifier,
+            )
+        }
+    }
+}
+
 private fun sectionKey(section: SessionListSection): String = when (section) {
     is SessionListSection.Chat -> "chat"
     is SessionListSection.Project -> "project:" + section.path
@@ -621,6 +736,8 @@ private fun sectionKey(section: SessionListSection): String = when (section) {
     is SessionListSection.Yesterday -> "yesterday"
     is SessionListSection.Earlier -> "earlier"
 }
+
+private const val ASSISTANT_WORKSPACE_KIND = "assistant"
 
 /**
  * One session in the list, from `RemoteSessionList.ets#SessionRow`.
@@ -652,8 +769,9 @@ private fun SessionRow(
     selected: Boolean,
     enabled: Boolean,
     onOpen: () -> Unit,
-    onActions: () -> Unit,
+    onActions: (IntRect) -> Unit,
 ) {
+    var anchorBounds by remember { mutableStateOf(IntRect.Zero) }
     val now = remember(updatedAt) { System.currentTimeMillis() }
     val relative = remember(updatedAt, now) { SessionTimePresentation.relative(updatedAt, now) }
     val metadata = listOfNotNull(
@@ -670,10 +788,13 @@ private fun SessionRow(
             .background(
                 if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
             )
+            .onGloballyPositioned { coordinates ->
+                anchorBounds = coordinates.boundsInWindow().toIntRect()
+            }
             .combinedClickable(
                 enabled = enabled,
                 onClick = onOpen,
-                onLongClick = onActions,
+                onLongClick = { onActions(anchorBounds) },
             )
             .padding(start = if (projectChild) 28.dp else 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -699,7 +820,7 @@ private fun SessionRow(
         // The overflow keeps the destructive actions one deliberate tap away,
         // as `SessionMoreButton` does. Two permanent buttons under every row
         // made destroying a session as reachable as opening one.
-        IconButton(onClick = onActions) {
+        IconButton(onClick = { onActions(anchorBounds) }) {
             Icon(
                 painterResource(R.drawable.ic_symbol_ellipsis),
                 contentDescription = stringResource(R.string.session_actions),
@@ -709,6 +830,13 @@ private fun SessionRow(
         }
     }
 }
+
+private fun Rect.toIntRect(): IntRect = IntRect(
+    left = left.toInt(),
+    top = top.toInt(),
+    right = right.toInt(),
+    bottom = bottom.toInt(),
+)
 
 /** Null when the desktop sent nothing readable — see [SessionRowLabel]. */
 @Composable

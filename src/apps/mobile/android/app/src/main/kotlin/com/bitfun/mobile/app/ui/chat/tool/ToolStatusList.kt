@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.ToolAction
 import com.bitfun.mobile.core.feature.session.ToolCard
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.ToolOperation
 import com.bitfun.mobile.core.feature.session.ToolPhase
 import com.bitfun.mobile.core.feature.session.ToolRow
@@ -43,6 +44,7 @@ private const val CANCEL_REASON = "Cancelled from the Android client"
 
 internal const val TOOL_ROW_TEST_TAG: String = "tool-row"
 internal const val TOOL_GROUP_TEST_TAG: String = "tool-group"
+internal const val TOOL_EXPAND_TEST_TAG: String = "tool-expand"
 
 /** The indent that lines a row's detail up under its label rather than its icon. */
 private val DETAIL_INDENT = 28.dp
@@ -64,6 +66,7 @@ internal fun ToolStatusList(
     onReject: (String, String) -> Unit,
     onCancel: (String, String) -> Unit,
     onAnswer: (String, String) -> Unit,
+    onAnswerStructured: (String, List<QuestionAnswer>) -> Unit,
     onOpenFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
@@ -81,6 +84,7 @@ internal fun ToolStatusList(
                     onReject = { reason -> onReject(row.tool.id, reason) },
                     onCancel = { reason -> onCancel(row.tool.id, reason) },
                     onAnswer = { answer -> onAnswer(row.tool.id, answer) },
+                    onAnswerStructured = { answers -> onAnswerStructured(row.tool.id, answers) },
                     onOpenFile = onOpenFile,
                     modifier = Modifier,
                 )
@@ -147,6 +151,7 @@ private fun CollapsedToolGroup(
                     onReject = {},
                     onCancel = {},
                     onAnswer = {},
+                    onAnswerStructured = {},
                     onOpenFile = onOpenFile,
                     modifier = Modifier,
                 )
@@ -170,13 +175,14 @@ internal fun ToolStatusRow(
     onReject: (String) -> Unit,
     onCancel: (String) -> Unit,
     onAnswer: (String) -> Unit,
+    onAnswerStructured: (List<QuestionAnswer>) -> Unit,
     onOpenFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
     var expanded by remember(tool.id) { mutableStateOf(false) }
     val blocking = tool.actions.isNotEmpty()
     val emphasized = expanded || blocking || tool.phase == ToolPhase.FAILED
-    val canExpand = tool.input.isNotEmpty() || tool.output.isNotEmpty()
+    val canExpand = tool.expandable
     val openable = tool.filePath.isNotEmpty()
 
     Column(
@@ -232,6 +238,7 @@ internal fun ToolStatusRow(
                 Box(
                     modifier = Modifier
                         .size(width = 32.dp, height = 28.dp)
+                        .testTag(TOOL_EXPAND_TEST_TAG)
                         .clickable { expanded = !expanded },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -271,13 +278,22 @@ internal fun ToolStatusRow(
         }
 
         if (ToolAction.ANSWER in tool.actions) {
-            ToolQuestionAnswerPanel(
-                toolId = tool.id,
-                // The agent did not always send a prompt to quote, so we ask in ours.
-                prompt = tool.question ?: stringResource(R.string.tool_question_default),
-                enabled = enabled,
-                onSubmit = onAnswer,
-            )
+            if (tool.questions.isNotEmpty()) {
+                ToolStructuredQuestionPanel(
+                    toolId = tool.id,
+                    questions = tool.questions,
+                    enabled = enabled,
+                    onSubmit = onAnswerStructured,
+                )
+            } else {
+                ToolQuestionAnswerPanel(
+                    toolId = tool.id,
+                    // The agent did not always send a prompt to quote, so we ask in ours.
+                    prompt = tool.question ?: stringResource(R.string.tool_question_default),
+                    enabled = enabled,
+                    onSubmit = onAnswer,
+                )
+            }
         }
 
         if (ToolAction.CANCEL in tool.actions) {

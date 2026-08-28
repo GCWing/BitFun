@@ -5,11 +5,70 @@ import com.bitfun.mobile.core.protocol.ChatMessageItemResponse
 import com.bitfun.mobile.core.protocol.ChatMessageResponse
 import com.bitfun.mobile.core.protocol.RemoteToolStatusResponse
 import com.bitfun.mobile.core.protocol.SessionItemResponse
+import com.bitfun.mobile.core.domain.ChatTimelineStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RemoteResponseMapperTest {
+    @Test
+    fun activeTurnCarriesPollVersionAsRenderVersion() {
+        val turn = ActiveTurnSnapshotResponse(turnId = "turn-version", status = "active")
+
+        assertEquals(7, RemoteResponseMapper.activeTurn(turn, renderVersion = 7).renderVersion)
+        // A mapper-only call has no poll cursor, so its documented default is zero.
+        assertEquals(0, RemoteResponseMapper.activeTurn(turn).renderVersion)
+    }
+
+    @Test
+    fun lowerVersionPollSnapshotDoesNotRegressHigherVersionContent() {
+        val turn = ActiveTurnSnapshotResponse(turnId = "turn-order", status = "active")
+        val newer = RemoteResponseMapper.activeTurn(
+            turn.copy(items = listOf(ChatMessageItemResponse(type = "text", content = "newer"))),
+            renderVersion = 5,
+        )
+        val stale = RemoteResponseMapper.activeTurn(
+            turn.copy(items = listOf(ChatMessageItemResponse(type = "text", content = "stale"))),
+            renderVersion = 2,
+        )
+        val store = ChatTimelineStore().also { it.reset("session-f2") }
+
+        store.setActiveTurn(newer)
+        store.setActiveTurn(stale)
+
+        assertEquals("newer", store.snapshot().activeTurn?.items?.firstOrNull()?.content)
+    }
+
+    @Test
+    fun lowerVersionPollSnapshotDoesNotRegressTextItemsOrTools() {
+        val turn = ActiveTurnSnapshotResponse(turnId = "turn-order-all", status = "active")
+        val newer = RemoteResponseMapper.activeTurn(
+            turn.copy(
+                text = "newer text",
+                items = listOf(ChatMessageItemResponse(type = "text", content = "newer item")),
+                tools = listOf(RemoteToolStatusResponse(id = "tool-1", name = "read_file", status = "completed")),
+            ),
+            renderVersion = 5,
+        )
+        val stale = RemoteResponseMapper.activeTurn(
+            turn.copy(
+                text = "stale text",
+                items = listOf(ChatMessageItemResponse(type = "text", content = "stale item")),
+                tools = listOf(RemoteToolStatusResponse(id = "tool-1", name = "read_file", status = "running")),
+            ),
+            renderVersion = 2,
+        )
+        val store = ChatTimelineStore().also { it.reset("session-f2-all") }
+
+        store.setActiveTurn(newer)
+        store.setActiveTurn(stale)
+
+        val active = store.snapshot().activeTurn
+        assertEquals("newer text", active?.text)
+        assertEquals("newer item", active?.items?.firstOrNull()?.content)
+        assertEquals("completed", active?.tools?.firstOrNull()?.status)
+    }
+
     @Test
     fun mapsAssistantMessagesAndNestedTools() {
         val message = RemoteResponseMapper.chatMessage(

@@ -25,13 +25,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -53,11 +49,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitfun.mobile.app.R
-import com.bitfun.mobile.app.ui.session.RenameSessionDialog
 import com.bitfun.mobile.app.ui.common.CircleControl
+import com.bitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.bitfun.mobile.app.ui.settings.ModelServiceScreen
 import com.bitfun.mobile.app.viewmodel.GeneralChatViewModel
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatFailureReason
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatIntent
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
@@ -91,6 +88,7 @@ private const val MAX_GENERAL_CHAT_IMAGE_BYTES = 8 * 1024 * 1024
 @Composable
 internal fun GeneralChatScreen(
     modifier: Modifier,
+    modelServicePlacement: SettingsPlacement,
     onOpenSidebar: (() -> Unit)? = null,
     viewModel: GeneralChatViewModel = viewModel(factory = GeneralChatViewModel.Factory),
 ) {
@@ -101,7 +99,6 @@ internal fun GeneralChatScreen(
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var showModelService by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf(false) }
-    var confirmDelete by rememberSaveable { mutableStateOf(false) }
 
     val untitled = stringResource(R.string.sidebar_untitled)
     val userLabel = stringResource(R.string.general_chat_role_user)
@@ -112,6 +109,7 @@ internal fun GeneralChatScreen(
         ?.title
         ?.takeIf(String::isNotBlank)
         ?: stringResource(R.string.app_name)
+    var renameDraft by rememberSaveable(title) { mutableStateOf(title) }
     val visibleRows = remember(rows) { rows.filter { it.kind != ConversationRowKind.EMPTY } }
     val uploadedFileCount = visibleRows.sumOf { it.images.size }
     // Read in composition, not in the menu callback -- see `ConversationView`.
@@ -216,6 +214,7 @@ internal fun GeneralChatScreen(
                     .weight(1f)
                     .padding(horizontal = 8.dp)
                     .clickable(enabled = state.sessions.any { it.id == state.sessionId }) {
+                        renameDraft = title
                         renaming = true
                     },
                 textAlign = TextAlign.Center,
@@ -273,7 +272,7 @@ internal fun GeneralChatScreen(
                                 },
                             ),
                             BitFunHeaderAction(
-                                icon = R.drawable.ic_symbol_archivebox,
+                                icon = R.drawable.ic_symbol_folder,
                                 label = stringResource(
                                     if (archived) R.string.session_unarchive else R.string.session_archive,
                                 ),
@@ -284,10 +283,12 @@ internal fun GeneralChatScreen(
                                 },
                             ),
                             BitFunHeaderAction(
-                                icon = R.drawable.ic_symbol_trash,
+                                icon = R.drawable.ic_symbol_gearshape,
                                 label = stringResource(R.string.session_delete),
                                 enabled = stored,
-                                onClick = { confirmDelete = true },
+                                onClick = {
+                                    viewModel.dispatch(GeneralChatIntent.DeleteSession(state.sessionId))
+                                },
                             ),
                         ),
                     )
@@ -295,6 +296,19 @@ internal fun GeneralChatScreen(
             } else {
                 Box(Modifier.size(44.dp))
             }
+        }
+
+        if (renaming) {
+            TitleEditor(
+                draft = renameDraft,
+                enabled = !state.busy,
+                onDraftChange = { renameDraft = it },
+                onSave = {
+                    viewModel.dispatch(GeneralChatIntent.RenameSession(state.sessionId, renameDraft.trim()))
+                    renaming = false
+                },
+                onCancel = { renaming = false },
+            )
         }
 
         if (visibleRows.isEmpty()) {
@@ -330,6 +344,7 @@ internal fun GeneralChatScreen(
                         onRejectTool = { _, _ -> },
                         onCancelTool = { _, _ -> },
                         onAnswerTool = { _, _ -> },
+                        onAnswerToolStructured = { _, _ -> },
                         onRetry = { text ->
                             viewModel.dispatch(GeneralChatIntent.UpdateDraft(text))
                             viewModel.dispatch(GeneralChatIntent.Send)
@@ -406,20 +421,11 @@ internal fun GeneralChatScreen(
             viewModel.dispatch(GeneralChatIntent.ClearConfigFailure)
             viewModel.dispatch(GeneralChatIntent.ClearConnectionTest)
         }
-        ModalBottomSheet(
+        AdaptiveModalSurface(
+            visible = true,
+            placement = modelServicePlacement,
             onDismissRequest = dismissModelService,
-            // Straight to full height. Material's default opens a tall sheet at
-            // half height first, which would show this panel's header over a
-            // blank half and hide the rows it exists to show until the user
-            // dragged it — the source's sheet has one height and arrives at it.
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            // The panel brings its own header with the close button in it, and a
-            // handle above that header would be a second way out drawn over the
-            // first — the source's sheet has none either.
-            dragHandle = null,
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        ) {
+        ) { surfaceModifier ->
             ModelServiceScreen(
                 config = state.config,
                 models = state.models,
@@ -435,51 +441,11 @@ internal fun GeneralChatScreen(
                     viewModel.state.value.configFailure == null
                 },
                 onClose = dismissModelService,
-                // The source's `height('78%')`: tall enough for the form and the
-                // keyboard under it, short enough that the conversation it was
-                // opened from is still visible above.
-                //
-                // Measured off the screen rather than asked of the parent: a
-                // sheet hands its content an unbounded height, so a fraction of
-                // it is a fraction of nothing and the panel would collapse onto
-                // whatever its rows happen to add up to.
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.78f),
+                modifier = surfaceModifier,
             )
         }
     }
 
-    if (renaming) {
-        RenameSessionDialog(
-            currentTitle = state.sessions.firstOrNull { it.id == state.sessionId }?.title.orEmpty(),
-            onConfirm = { viewModel.dispatch(GeneralChatIntent.RenameSession(state.sessionId, it)) },
-            onDismiss = { renaming = false },
-        )
-    }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.session_delete)) },
-            text = { Text(stringResource(R.string.general_chat_delete_confirm)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.dispatch(GeneralChatIntent.DeleteSession(state.sessionId))
-                        confirmDelete = false
-                    },
-                ) {
-                    Text(stringResource(R.string.session_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-        )
-    }
 }
 
 /** Shown above the transcript rather than instead of it: an unconfigured provider

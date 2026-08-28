@@ -1,20 +1,47 @@
 package com.bitfun.mobile.core.protocol
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 
 /** Permission modes the desktop peer accepts for a session. */
-@Serializable
+@Serializable(with = RemotePermissionModeSerializer::class)
 public enum class RemotePermissionMode {
-    @SerialName("ask")
     Ask,
-
-    @SerialName("auto")
     Auto,
-
-    @SerialName("full_access")
     FullAccess,
+    Unknown,
+}
+
+public object RemotePermissionModeSerializer : KSerializer<RemotePermissionMode> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor(
+        "com.bitfun.mobile.core.protocol.RemotePermissionMode",
+        PrimitiveKind.STRING,
+    )
+
+    override fun serialize(encoder: Encoder, value: RemotePermissionMode) {
+        encoder.encodeString(
+            when (value) {
+                RemotePermissionMode.Ask -> "ask"
+                RemotePermissionMode.Auto -> "auto"
+                RemotePermissionMode.FullAccess -> "full_access"
+                RemotePermissionMode.Unknown -> "unknown"
+            },
+        )
+    }
+
+    override fun deserialize(decoder: Decoder): RemotePermissionMode = when (decoder.decodeString()) {
+        "ask" -> RemotePermissionMode.Ask
+        "auto" -> RemotePermissionMode.Auto
+        "full_access" -> RemotePermissionMode.FullAccess
+        else -> RemotePermissionMode.Unknown
+    }
 }
 
 /**
@@ -49,6 +76,13 @@ public data class RemoteCommand(
     @SerialName("known_model_catalog_version") val knownModelCatalogVersion: Long? = null,
     @SerialName("turn_id") val turnId: String? = null,
     @SerialName("tool_id") val toolId: String? = null,
+    /**
+     * The desktop confirm_tool handler accepts only tool_id today. This client
+     * never sends updated_input until a peer advertises support, and the
+     * core-feature store gates edited approvals to an explicit unsupported state
+     * so an edit is never silently dropped.
+     */
+    @SerialName("updated_input") val updatedInput: JsonElement? = null,
     @SerialName("model_id") val modelId: String? = null,
     @SerialName("reason") val reason: String? = null,
     @SerialName("mode") val mode: RemotePermissionMode? = null,

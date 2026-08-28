@@ -22,6 +22,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -118,12 +121,16 @@ private fun SidebarSearchField(query: String, onQueryChange: (String) -> Unit) {
  */
 @Composable
 internal fun SidebarSignedOutHeader(onNewChat: () -> Unit) {
+    val newChatLabel = stringResource(R.string.sidebar_signed_out_new_chat)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onNewChat)
+            .clickable(role = Role.Button, onClick = onNewChat)
+            .semantics(mergeDescendants = true) {
+                contentDescription = newChatLabel
+            }
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -135,7 +142,7 @@ internal fun SidebarSignedOutHeader(onNewChat: () -> Unit) {
             modifier = Modifier.size(22.dp),
         )
         Text(
-            stringResource(R.string.sidebar_signed_out_new_chat),
+            newChatLabel,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,

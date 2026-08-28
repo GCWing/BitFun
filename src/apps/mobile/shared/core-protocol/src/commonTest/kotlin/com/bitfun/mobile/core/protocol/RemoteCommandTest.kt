@@ -4,6 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.assertTrue
 
 class RemoteCommandTest {
@@ -28,6 +30,26 @@ class RemoteCommandTest {
     }
 
     @Test
+    fun permissionModeToleratesFutureWireValues() {
+        val future = RelayJson.decodeFromString(
+            PermissionModeResponse.serializer(),
+            """{"resp":"ok","mode":"future_mode"}""",
+        )
+        val ask = RelayJson.decodeFromString(
+            PermissionModeResponse.serializer(),
+            """{"resp":"ok","mode":"ask"}""",
+        )
+        val encoded = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(cmd = "set_permission_mode", mode = RemotePermissionMode.Unknown),
+        )
+
+        assertEquals(RemotePermissionMode.Unknown, future.mode)
+        assertEquals(RemotePermissionMode.Ask, ask.mode)
+        assertEquals("""{"cmd":"set_permission_mode","mode":"unknown"}""", encoded)
+    }
+
+    @Test
     fun messageImagesUseDesktopImageContextsField() {
         val encoded = RelayJson.encodeToString(
             RemoteCommand.serializer(),
@@ -44,6 +66,87 @@ class RemoteCommandTest {
             """{"cmd":"send_message","session_id":"s1","content":"look","image_contexts":[{"id":"image-1","data_url":"data:image/png;base64,abc","mime_type":"image/png"}]}""",
             encoded,
         )
+    }
+
+    @Test
+    fun updatedInputRoundTripsAndOldPeerPayloadDefaultsToNull() {
+        val encoded = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(
+                cmd = "confirm_tool",
+                toolId = "t",
+                updatedInput = buildJsonObject { put("command", "ls") },
+            ),
+        )
+        val decoded = RelayJson.decodeFromString(
+            RemoteCommand.serializer(),
+            """{"cmd":"confirm_tool","tool_id":"t"}""",
+        )
+
+        assertTrue("\"updated_input\":{" in encoded, encoded)
+        assertEquals("t", decoded.toolId)
+        assertNull(decoded.updatedInput)
+    }
+
+    @Test
+    fun sessionMessageCursorAndMoreFieldsKeepWireContract() {
+        val encoded = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(cmd = "get_session_messages", sessionId = "s", limit = 100, beforeMessageId = "m9"),
+        )
+        val trueResponse = RelayJson.decodeFromString(
+            SessionMessagesResponse.serializer(),
+            """{"resp":"ok","has_more":true}""",
+        )
+        val falseResponse = RelayJson.decodeFromString(
+            SessionMessagesResponse.serializer(),
+            """{"resp":"ok","has_more":false}""",
+        )
+        val absentResponse = RelayJson.decodeFromString(
+            SessionMessagesResponse.serializer(),
+            """{"resp":"ok"}""",
+        )
+
+        assertTrue("\"before_message_id\":\"m9\"" in encoded, encoded)
+        assertTrue(trueResponse.hasMore)
+        assertFalse(falseResponse.hasMore)
+        assertFalse(absentResponse.hasMore)
+        assertTrue(absentResponse.messages.isEmpty())
+    }
+
+    @Test
+    fun sendMessageImagesKeepMimeAndLegacyImageFields() {
+        val encoded = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(
+                cmd = "send_message",
+                images = listOf(ImageAttachment("n", "data:image/png;base64,abc")),
+                imageContexts = listOf(RemoteImageContext("i", null, "data:image/png;base64,abc", "image/png", null)),
+            ),
+        )
+
+        assertTrue("\"mime_type\":\"image/png\"" in encoded, encoded)
+        assertTrue("\"images\":[{\"name\":\"n\",\"data_url\":\"data:image/png;base64,abc\"}]" in encoded, encoded)
+    }
+
+    @Test
+    fun provisionPeerDeviceIsAnExplicitlyUnsupportedCommand() {
+        val provision = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(cmd = "provision_peer_device"),
+        )
+        val request = RelayJson.encodeToString(
+            RemoteCommand.serializer(),
+            RemoteCommand(cmd = "x", requestId = "r1"),
+        )
+
+        assertEquals("""{"cmd":"provision_peer_device"}""", provision)
+        assertFalse("device_id" in provision)
+        assertFalse("device_name" in provision)
+        assertFalse("request_id" in provision)
+        assertTrue("\"_request_id\":\"r1\"" in request, request)
+        assertFalse("\"request_id\"" in request, request)
+        assertEquals(ProvisionPeerDeviceSupport.UNSUPPORTED, ProvisionPeerDeviceContract.support)
     }
 
     @Test

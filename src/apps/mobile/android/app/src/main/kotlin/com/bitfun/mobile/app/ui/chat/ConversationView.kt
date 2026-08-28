@@ -8,12 +8,14 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,19 +29,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.settings.RemoteSettingsSheet
+import com.bitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ComposerImage
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
+import com.bitfun.mobile.core.feature.session.RemoteSessionIntent.AnswerStructuredQuestion
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.bitfun.mobile.core.feature.session.conversationRows
+import com.bitfun.mobile.core.feature.session.modelOptions
 import com.bitfun.mobile.core.feature.session.selectedModelOption
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import java.util.UUID
 
 internal const val CONVERSATION_TEST_TAG: String = "conversation"
 internal const val CONVERSATION_BACK_TEST_TAG: String = "conversation-back"
+internal const val CONVERSATION_LOADING_TEST_TAG: String = "conversation-loading"
 
 /**
  * The transcript itself, tagged so a test can scroll it to a row.
@@ -51,6 +59,16 @@ internal const val CONVERSATION_LIST_TEST_TAG: String = "conversation-list"
 
 /** The relay refuses anything larger, and refusing here is a better error. */
 private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/**
+ * Joins a dictated fragment onto whatever the composer already holds.
+ *
+ * Extracted so the voice path and its merge policy are unit-testable. It keeps
+ * the single-space join the previous in-composition draft used: a blank side is
+ * dropped rather than leaving a doubled or leading space.
+ */
+internal fun mergeComposerDraft(existing: String, spoken: String): String =
+    listOf(existing.trim(), spoken.trim()).filter(String::isNotEmpty).joinToString(" ")
 
 /**
  * One open session: the transcript and the composer, ported from
@@ -66,6 +84,7 @@ private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
 internal fun ConversationView(
     state: RemoteSessionUiState.Ready,
     phase: ConnectionPhase,
+    settingsPlacement: SettingsPlacement,
     onBack: () -> Unit,
     onOpenSidebar: (() -> Unit)? = null,
     onIntent: (RemoteSessionIntent) -> Unit,
@@ -90,9 +109,10 @@ internal fun ConversationView(
     onDownloadFile: (String, String) -> Unit,
     modifier: Modifier,
 ) {
-    val timeline = state.timeline ?: return
+    val timeline = state.timeline
+    val activeTurn = timeline?.activeTurn
     val sessionId = state.selectedSessionId.orEmpty()
-    val rows = remember(timeline) { timeline.conversationRows() }
+    val rows = remember(timeline) { timeline?.conversationRows().orEmpty() }
     val visibleRows = remember(rows) { rows.filter { it.kind != ConversationRowKind.EMPTY } }
     val uploadedFileCount = rows.sumOf { it.images.size }
     // Resolved here rather than inside the click: a Toast is raised from a
@@ -103,7 +123,10 @@ internal fun ConversationView(
     } else {
         stringResource(R.string.session_uploaded_files_empty)
     }
-    var draft by rememberSaveable(sessionId) { mutableStateOf("") }
+    // The remote composer's single source of truth is the store's draft. Typing,
+    // voice, and send all round-trip through `state.draft` so a half-written
+    // message survives session switches and process restarts via DraftStore.
+    val draft = state.draft
     var images by remember(sessionId) { mutableStateOf<List<ComposerImage>>(emptyList()) }
     var showSettings by rememberSaveable(sessionId) { mutableStateOf(false) }
     val context = LocalContext.current
@@ -125,7 +148,7 @@ internal fun ConversationView(
         if (result.resultCode == Activity.RESULT_OK) {
             val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
             if (text.isNotBlank()) {
-                draft = listOf(draft.trim(), text.trim()).filter(String::isNotEmpty).joinToString(" ")
+                onIntent(RemoteSessionIntent.UpdateDraft(mergeComposerDraft(state.draft, text)))
             }
         }
     }
@@ -134,7 +157,7 @@ internal fun ConversationView(
         ConversationHeader(
             title = state.sessions.firstOrNull { it.id == sessionId }?.title.orEmpty(),
             contextTitle = contextTitle,
-            canStop = timeline.activeTurn != null,
+            canStop = activeTurn != null,
             enabled = !state.busy && sessionId.isNotEmpty(),
             onBack = onBack,
             onOpenSidebar = onOpenSidebar,
@@ -145,7 +168,7 @@ internal fun ConversationView(
                 Toast.makeText(context, uploadedFilesMessage, Toast.LENGTH_SHORT).show()
             },
             onStop = {
-                onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+                onIntent(RemoteSessionIntent.CancelTurn(sessionId, activeTurn?.turnId))
             },
             modifier = Modifier,
         )
@@ -153,53 +176,69 @@ internal fun ConversationView(
         if (phase != ConnectionPhase.CONNECTED) {
             ChatStatusBar(
                 phase = phase,
-                canStop = timeline.activeTurn != null,
+                canStop = activeTurn != null,
                 onStop = {
-                    onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+                    onIntent(RemoteSessionIntent.CancelTurn(sessionId, activeTurn?.turnId))
                 },
             )
         }
 
-        ConversationTimelineView(
-            rows = visibleRows,
-            enabled = !state.busy,
-            onApproveTool = { toolId ->
-                onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
-            },
-            onRejectTool = { toolId, reason ->
-                onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
-            },
-            onCancelTool = { toolId, reason ->
-                onIntent(RemoteSessionIntent.CancelTool(sessionId, toolId, reason))
-            },
-            onAnswerTool = { toolId, answer ->
-                onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
-            },
-            onRetry = { text ->
-                onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
-            },
-            onOpenFile = onOpenFile,
-            previewingRemotePath = previewingRemotePath,
-            previewLoading = previewLoading,
-            download = download,
-            onDownloadFile = onDownloadFile,
-            downloadEnabled = !state.busy && phase == ConnectionPhase.CONNECTED,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        )
+        if (timeline == null) {
+            ConversationLoadingState(modifier = Modifier.weight(1f).fillMaxWidth())
+        } else if (visibleRows.isEmpty()) {
+            ConversationEmptyState(modifier = Modifier.weight(1f).fillMaxWidth())
+        } else {
+            ConversationTimelineView(
+                rows = visibleRows,
+                hasMoreMessages = state.hasMoreMessages,
+                onLoadOlder = { onIntent(RemoteSessionIntent.LoadOlderMessages) },
+                enabled = !state.busy,
+                onApproveTool = { toolId ->
+                    onIntent(RemoteSessionIntent.ApproveTool(sessionId, toolId))
+                },
+                onRejectTool = { toolId, reason ->
+                    onIntent(RemoteSessionIntent.RejectTool(sessionId, toolId, reason))
+                },
+                onCancelTool = { toolId, reason ->
+                    onIntent(RemoteSessionIntent.CancelTool(sessionId, toolId, reason))
+                },
+                onAnswerTool = { toolId, answer ->
+                    onIntent(RemoteSessionIntent.AnswerQuestion(sessionId, toolId, answer))
+                },
+                onAnswerToolStructured = { toolId, answers ->
+                    onIntent(AnswerStructuredQuestion(sessionId, toolId, answers))
+                },
+                onRetry = { text ->
+                    onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
+                },
+                onOpenFile = onOpenFile,
+                previewingRemotePath = previewingRemotePath,
+                previewLoading = previewLoading,
+                download = download,
+                onDownloadFile = onDownloadFile,
+                downloadEnabled = !state.busy && phase == ConnectionPhase.CONNECTED,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
 
         ComposerBar(
             draft = draft,
             images = images,
             // An empty session id would send nowhere, so it reads as busy.
             busy = state.busy || sessionId.isEmpty(),
-            streaming = timeline.activeTurn != null,
+            streaming = activeTurn != null,
             phase = phase,
-            model = timeline.selectedModelOption(stringResource(R.string.models_unnamed)),
+            model = timeline?.selectedModelOption(stringResource(R.string.models_unnamed)),
+            modelOptions = timeline?.modelOptions(stringResource(R.string.models_unnamed)) ?: emptyList(),
+            modelCatalogFailed = state.modelCatalogFailure != null,
             capabilities = ChatComposerCapabilities.RemoteChat,
             placeholder = stringResource(R.string.message_input_label),
-            onDraftChange = { draft = it },
+            onDraftChange = { onIntent(RemoteSessionIntent.UpdateDraft(it)) },
             onRemoveImage = { id -> images = images.filterNot { it.id == id } },
             onOpenModels = { showSettings = true },
+            onSelectModel = { modelId ->
+                onIntent(RemoteSessionIntent.SelectModel(sessionId, modelId))
+            },
             modifier = Modifier,
             onAttach = {
                 photoPicker.launch(
@@ -224,23 +263,38 @@ internal fun ConversationView(
                         images.takeIf { it.isNotEmpty() },
                     ),
                 )
-                draft = ""
                 images = emptyList()
             },
             onStop = {
-                onIntent(RemoteSessionIntent.CancelTurn(sessionId, timeline.activeTurn?.turnId))
+                onIntent(RemoteSessionIntent.CancelTurn(sessionId, activeTurn?.turnId))
             },
         )
     }
 
     if (showSettings) {
-        ModalBottomSheet(onDismissRequest = { showSettings = false }) {
+        AdaptiveModalSurface(
+            visible = true,
+            placement = settingsPlacement,
+            onDismissRequest = { showSettings = false },
+        ) { surfaceModifier ->
             RemoteSettingsSheet(
                 state = state,
                 sessionId = sessionId,
                 onIntent = onIntent,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = surfaceModifier.padding(16.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun ConversationLoadingState(modifier: Modifier) {
+    Column(
+        modifier = modifier.testTag(CONVERSATION_LOADING_TEST_TAG),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator()
+        Text(text = stringResource(R.string.chat_empty_loading))
     }
 }
