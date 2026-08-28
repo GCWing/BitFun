@@ -222,18 +222,17 @@ describe('ChatInput Agent and directive projection', () => {
       ]),
     ).toEqual([
       { id: 'Cowork' },
-      { id: 'Plan' },
       { id: 'PlannerPlus' },
     ]);
   });
 
-  it('keeps Plan as the only per-task directive and ignores retired peer modes', () => {
+  it('does not project retired peer modes as per-task directives', () => {
     expect(resolveChatInputDirectiveModes([
       { id: 'agentic' },
       { id: 'Plan' },
       { id: 'Cowork' },
       { id: 'Multitask' },
-    ])).toEqual([{ id: 'Plan' }]);
+    ])).toEqual([]);
     expect(canonicalChatInputDirectiveId(' plan ')).toBe('Plan');
     expect(canonicalChatInputDirectiveId('MULTITASK')).toBeNull();
     expect(canonicalChatInputDirectiveId('DeepResearch')).toBeNull();
@@ -637,14 +636,14 @@ describe('resolveAvailableChatInputMode', () => {
     ).toBe('agentic');
   });
 
-  it('does not restore legacy Multitask as a new-session main Agent default', () => {
+  it.each(['Multitask', 'Plan'])('does not restore retired %s as a new-session main Agent default', (retiredMode) => {
     expect(
       resolveAvailableChatInputMode({
         currentMode: 'agentic',
         isAssistantWorkspace: false,
         sessionMode: undefined,
-        userDefaultModeId: 'Multitask',
-        availableModeIds: ['agentic', 'Multitask'],
+        userDefaultModeId: retiredMode,
+        availableModeIds: ['agentic', retiredMode],
       }),
     ).toBeNull();
   });

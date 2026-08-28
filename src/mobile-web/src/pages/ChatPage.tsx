@@ -2158,8 +2158,8 @@ const ReasoningPresetPill: React.FC<{
 
 // ─── Agent Mode ─────────────────────────────────────────────────────────────
 
-type AgentMode = 'agentic' | 'Plan' | 'debug';
-const AGENT_MODE_ORDER: AgentMode[] = ['agentic', 'Plan', 'debug'];
+type AgentMode = 'agentic' | 'debug';
+const AGENT_MODE_ORDER: AgentMode[] = ['agentic', 'debug'];
 
 // ─── ChatPage ───────────────────────────────────────────────────────────────
 
@@ -2180,7 +2180,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const { isDark, toggleTheme } = useTheme();
   const modeOptions: { id: AgentMode; label: string }[] = useMemo(() => ([
     { id: 'agentic', label: t('chat.modeAgentic') },
-    { id: 'Plan', label: t('chat.modePlan') },
     { id: 'debug', label: t('chat.modeDebug') },
   ]), [t]);
   const messages = getMessages(sessionId);

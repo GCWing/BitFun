@@ -7,8 +7,9 @@ const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
   'claw',
   'creative',
   'minimal',
-  // Retired built-in mode that may still be advertised by an older peer.
+  // Retired built-in modes that may still be advertised by an older peer.
   'multitask',
+  'plan',
   'ultra',
 ]);
 
@@ -297,11 +298,11 @@ export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   );
 }
 
-/** Plan is intentionally dual-use: it is both a main Agent and a directive. */
+/** Built-in planning is now provided by the plan Skill, not an Agent-derived directive. */
 export function resolveChatInputDirectiveModes<TMode extends { id: string }>(
-  availableModes: Iterable<TMode>,
+  _availableModes: Iterable<TMode>,
 ): TMode[] {
-  return Array.from(availableModes).filter(mode => isChatInputDirectiveModeId(mode.id));
+  return [];
 }
 
 export function resolveChatInputSendAgentType(params: {
@@ -432,8 +433,8 @@ export function resolveAvailableChatInputMode(params: {
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
     normalizedUserDefaultModeId
-      // Do not restore the retired Multitask Agent from older user config.
-      && normalizeModeLookupId(normalizedUserDefaultModeId) !== 'multitask'
+      // Do not restore retired built-in Agents from older user config.
+      && !['multitask', 'plan'].includes(normalizeModeLookupId(normalizedUserDefaultModeId) ?? '')
       && availableModeIds.has(normalizedUserDefaultModeId)
       ? normalizedUserDefaultModeId
       : null;

@@ -110,7 +110,6 @@ fn headless_agent_hosts_keep_explore_code_agents_without_product_workflow_agents
         for code_agent in [
             "minimal",
             "agentic",
-            "Plan",
             "Explore",
             "GeneralPurpose",
             "Ultra",

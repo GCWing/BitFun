@@ -99,6 +99,11 @@ const ENABLE_COORDINATION: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Enable,
 };
 
+const ENABLE_PLANNING: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::Planning),
+    effect: PolicyEffect::Enable,
+};
+
 const OPEN_META_ONLY_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Disable,
     rules: &[ENABLE_META],
@@ -122,7 +127,12 @@ const CREATIVE_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Disable,
-    rules: &[ENABLE_OFFICE, ENABLE_META, ENABLE_COORDINATION],
+    rules: &[
+        ENABLE_OFFICE,
+        ENABLE_META,
+        ENABLE_COORDINATION,
+        ENABLE_PLANNING,
+    ],
 };
 
 const DEEP_RESEARCH_POLICY: ModeSkillPolicy = ModeSkillPolicy {
@@ -175,7 +185,6 @@ mod tests {
     fn agent_browser_defaults_off_in_every_mode() {
         for mode_id in [
             "agentic",
-            "Plan",
             "coding_shared",
             "Claw",
             "Creative",
@@ -210,7 +219,7 @@ mod tests {
 
     #[test]
     fn evidence_debugging_replaces_debug_mode_in_coding_workflows() {
-        for mode_id in ["agentic", "Plan", "coding_shared", "Claw"] {
+        for mode_id in ["agentic", "coding_shared", "Claw"] {
             assert_eq!(
                 resolve_builtin_default_enabled("evidence-debugging", mode_id),
                 Some(true),
@@ -231,7 +240,6 @@ mod tests {
     fn multitask_skill_replaces_multitask_mode_in_coding_workflows() {
         for mode_id in [
             "agentic",
-            "Plan",
             "coding_shared",
             "Claw",
             "Cowork",
@@ -255,11 +263,29 @@ mod tests {
     }
 
     #[test]
+    fn plan_skill_replaces_plan_mode_in_writable_skill_workflows() {
+        for mode_id in ["agentic", "coding_shared", "Claw", "Cowork", "Creative"] {
+            assert_eq!(
+                resolve_builtin_default_enabled("plan", mode_id),
+                Some(true),
+                "plan should be available in {mode_id}"
+            );
+        }
+
+        for mode_id in ["ComputerUse", "DeepResearch", "SomeUnknownMode"] {
+            assert_eq!(
+                resolve_builtin_default_enabled("plan", mode_id),
+                Some(false),
+                "plan should remain opt-in or unavailable in {mode_id}"
+            );
+        }
+    }
+
+    #[test]
     fn product_creation_skills_default_only_in_creative_mode() {
         for skill in ["miniapp-dev", "bitfun-frontend-dev"] {
             for mode_id in [
                 "agentic",
-                "Plan",
                 "coding_shared",
                 "Claw",
                 "Creative",

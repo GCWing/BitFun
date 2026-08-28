@@ -9,7 +9,6 @@ import {
 
 const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
   agentic: 'Agentic',
-  plan: 'Plan',
   cowork: 'Cowork',
   computeruse: 'ComputerUse',
   deepresearch: 'DeepResearch',

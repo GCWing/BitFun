@@ -1818,7 +1818,7 @@ mod tests {
     fn previous_session_update_failure_is_not_reported_as_a_success() {
         let status = previous_session_update_status(
             "mode",
-            "Plan",
+            "Cowork",
             &SessionUpdateApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
         );
 

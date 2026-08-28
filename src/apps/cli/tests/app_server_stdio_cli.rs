@@ -269,7 +269,7 @@ async fn app_server_stdio_fails_closed_on_scope_and_allowlist() {
         .request(
             3,
             "config/setConfig",
-            json!({ "configId": "mode", "value": "Plan" }),
+            json!({ "configId": "mode", "value": "Cowork" }),
         )
         .await;
     assert_eq!(denied_method.pointer("/error/code"), Some(&json!(-32601)));

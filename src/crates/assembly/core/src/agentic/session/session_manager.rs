@@ -12948,7 +12948,7 @@ mod tests {
         let session_id = session.session_id.clone();
         let update_task = tokio::spawn(async move {
             manager_for_update
-                .update_session_agent_type(&session_id, "Plan")
+                .update_session_agent_type(&session_id, "Cowork")
                 .await
         });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -13106,7 +13106,7 @@ mod tests {
             .expect("session should create");
 
         manager
-            .update_session_agent_type(&session.session_id, "Plan")
+            .update_session_agent_type(&session.session_id, "Cowork")
             .await
             .expect("mode update should persist without a turn");
         let metadata = persistence_manager
@@ -13114,14 +13114,14 @@ mod tests {
             .await
             .expect("metadata should load")
             .expect("metadata should exist");
-        assert_eq!(metadata.agent_type, "Plan");
+        assert_eq!(metadata.agent_type, "Cowork");
 
         manager.evict_loaded_session_for_test(&session.session_id);
         let restored = manager
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("session should restore");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
     }
 
     #[tokio::test]
@@ -13179,7 +13179,7 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "Plan",
+                "Cowork",
                 SessionAgentRouteOwner::External,
             )
             .await
@@ -13189,7 +13189,7 @@ mod tests {
             .load_session_with_turns(workspace.path(), &session.session_id)
             .await
             .expect("persisted session should load");
-        assert_eq!(persisted.agent_type, "Plan");
+        assert_eq!(persisted.agent_type, "Cowork");
         assert_eq!(
             persisted.config.agent_route_owner,
             SessionAgentRouteOwner::External
@@ -13200,7 +13200,7 @@ mod tests {
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("external route should restore fail-closed");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
         assert_eq!(
             restored.config.agent_route_owner,
             SessionAgentRouteOwner::External,
@@ -13229,7 +13229,7 @@ mod tests {
         persistence_manager.fail_next_session_state_write_for_test(&session.session_id);
 
         manager
-            .update_session_agent_type(&session.session_id, "Plan")
+            .update_session_agent_type(&session.session_id, "Cowork")
             .await
             .expect("mode updates must not depend on rewriting runtime state");
         manager.evict_loaded_session_for_test(&session.session_id);
@@ -13238,7 +13238,7 @@ mod tests {
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("metadata-only mode update should remain restorable");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
     }
 
     #[tokio::test]
@@ -14898,7 +14898,7 @@ mod tests {
             turn.agent_type = Some(if index == 0 {
                 "agentic".to_string()
             } else {
-                "Plan".to_string()
+                "Cowork".to_string()
             });
             persistence_manager
                 .save_dialog_turn(workspace.path(), &turn)
@@ -14916,7 +14916,7 @@ mod tests {
                 "turn-1".to_string(),
                 "turn-2".to_string(),
             ];
-            active.last_user_dialog_agent_type = Some("Plan".to_string());
+            active.last_user_dialog_agent_type = Some("Cowork".to_string());
         }
         persistence_manager
             .save_turn_context_snapshot(
@@ -15727,7 +15727,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Rollback empty history".to_string(),
-                "Plan".to_string(),
+                "Cowork".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -15747,7 +15747,7 @@ mod tests {
                 metadata: None,
             },
         );
-        turn.agent_type = Some("Plan".to_string());
+        turn.agent_type = Some("Cowork".to_string());
         persistence_manager
             .save_dialog_turn(workspace.path(), &turn)
             .await
@@ -15759,7 +15759,7 @@ mod tests {
                 .get_mut(&session.session_id)
                 .expect("session should be active");
             active.dialog_turn_ids = vec!["turn-0".to_string()];
-            active.last_user_dialog_agent_type = Some("Plan".to_string());
+            active.last_user_dialog_agent_type = Some("Cowork".to_string());
         }
 
         manager
@@ -15770,7 +15770,7 @@ mod tests {
         let active = manager
             .get_session(&session.session_id)
             .expect("session should remain in memory");
-        assert_eq!(active.agent_type, "Plan");
+        assert_eq!(active.agent_type, "Cowork");
         assert_eq!(active.last_user_dialog_agent_type, None);
     }
 
