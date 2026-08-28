@@ -8,12 +8,12 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
-pub const MAX_HTTP_BODY_BYTES: usize = 1024 * 1024;
-pub const MAX_STREAM_CHUNK_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_HTTP_BODY_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_STREAM_CHUNK_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BackendHttpRequest {
+pub(crate) struct BackendHttpRequest {
     #[serde(rename = "instanceID")]
     pub instance_id: String,
     #[serde(rename = "requestID")]
@@ -26,7 +26,7 @@ pub struct BackendHttpRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamDescriptor {
+pub(crate) struct StreamDescriptor {
     #[serde(rename = "streamID")]
     pub stream_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -35,7 +35,7 @@ pub struct StreamDescriptor {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct BackendHttpResponse {
+pub(crate) struct BackendHttpResponse {
     pub status: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status_text: Option<String>,
@@ -158,23 +158,14 @@ impl OpenCodeClientRoute {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HttpRouteMatch {
+pub(crate) struct HttpRouteMatch {
     pub route: OpenCodeClientRoute,
     pub path: String,
     pub query: HashMap<String, Vec<String>>,
 }
 
-impl HttpRouteMatch {
-    pub fn query_first(&self, key: &str) -> Option<&str> {
-        self.query
-            .get(key)
-            .and_then(|values| values.first())
-            .map(String::as_str)
-    }
-}
-
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
-pub enum HttpRouteError {
+pub(crate) enum HttpRouteError {
     #[error("request path is invalid")]
     InvalidPath,
     #[error("OpenCode client route was not found")]
@@ -183,7 +174,7 @@ pub enum HttpRouteError {
     MethodNotAllowed,
 }
 
-pub fn match_http_route(
+pub(crate) fn match_http_route(
     method: &str,
     path_and_query: &str,
 ) -> Result<HttpRouteMatch, HttpRouteError> {
@@ -378,7 +369,7 @@ fn is_known_adapted_path(path: &str, segments: &[String]) -> bool {
 }
 
 #[derive(Debug, Error)]
-pub enum HostStreamReadError {
+pub(crate) enum HostStreamReadError {
     #[error("request body exceeds the maximum allowed size")]
     BodyTooLarge,
     #[error("host stream returned invalid base64 data: {0}")]
@@ -389,7 +380,7 @@ pub enum HostStreamReadError {
     InvalidResponse,
 }
 
-pub async fn read_host_stream(
+pub(crate) async fn read_host_stream(
     client: &PluginHostClient,
     instance_id: &str,
     descriptor: &StreamDescriptor,
@@ -472,7 +463,7 @@ async fn cancel_host_stream(
         .await;
 }
 
-pub fn json_error_body(code: &str, message: &str, route: &str) -> Vec<u8> {
+pub(crate) fn json_error_body(code: &str, message: &str, route: &str) -> Vec<u8> {
     serde_json::to_vec(&json!({
         "error": {
             "code": code,
@@ -656,7 +647,14 @@ mod tests {
 
         assert_eq!(matched.route, OpenCodeClientRoute::ProjectCurrent);
         assert_eq!(matched.path, "/project/current");
-        assert_eq!(matched.query_first("directory"), Some("C:\\workspace"));
+        assert_eq!(
+            matched
+                .query
+                .get("directory")
+                .and_then(|values| values.first())
+                .map(String::as_str),
+            Some("C:\\workspace")
+        );
         assert_eq!(
             matched.query.get("directory"),
             Some(&vec![

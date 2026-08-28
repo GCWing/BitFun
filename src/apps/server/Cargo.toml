@@ -26,7 +26,7 @@ axum = { workspace = true, features = ["ws"] }
 tower-http = { workspace = true, features = ["cors"] }
 
 # Inherited from workspace
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

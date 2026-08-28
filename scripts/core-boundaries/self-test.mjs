@@ -1990,6 +1990,46 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('OpenCode adapter source guard must allow only the reviewed core composition file');
   }
+  const opencodeHostWireRule = forbiddenContentUnderRules.find((rule) =>
+    rule.reason.includes('OpenCode backend wire parsing'),
+  );
+  if (opencodeHostWireRule?.path !== 'src/crates/assembly/core/src') {
+    throw new Error('OpenCode Host wire guard must scan the complete core source tree');
+  }
+  const opencodeHostWireRegexes = opencodeHostWireRule.patterns.map((pattern) => pattern.regex);
+  for (const sample of [
+    'let request: BackendHttpRequest = decode(params)?;',
+    'let params: StreamCancelParams = decode(params)?;',
+    'let error = RpcHandlerError::new(-32602, message);',
+    'client.register_handler("backend.http.request", handler);',
+    'const METHOD: &str = "backend.stream.read";',
+    'const METHOD: &str = "backend.stream.cancel";',
+    'const METHOD: &str = "backend.diagnostic.publish";',
+  ]) {
+    if (!opencodeHostWireRegexes.some((regex) => regex.test(sample))) {
+      throw new Error(`OpenCode Host wire guard missed fixture: ${sample}`);
+    }
+  }
+  if (
+    [
+      'impl OpenCodeBackendHandler for CoreOpenCodeBackend {}',
+      'let request: BackendRouteRequest = request;',
+      'let event: BackendDiagnosticEvent = event;',
+    ].some((sample) => opencodeHostWireRegexes.some((regex) => regex.test(sample)))
+  ) {
+    throw new Error('OpenCode Host wire guard must allow the typed adapter callback');
+  }
+  const rawHandlerVisibilityRule = forbiddenContentUnderRules.find((rule) =>
+    rule.reason.includes('raw OpenCode RPC handler registration'),
+  );
+  const rawHandlerVisibilityRegex = rawHandlerVisibilityRule?.patterns?.[0]?.regex;
+  if (
+    rawHandlerVisibilityRule?.path !== 'src/crates/adapters/opencode-plugin-host/src' ||
+    !rawHandlerVisibilityRegex?.test('pub async fn register_handler() {}') ||
+    rawHandlerVisibilityRegex.test('pub(crate) async fn register_handler() {}')
+  ) {
+    throw new Error('OpenCode raw handler visibility guard must keep registration crate-private');
+  }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',
   );

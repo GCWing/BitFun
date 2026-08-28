@@ -1,13 +1,14 @@
-use crate::external_sources::{
-    ExternalExecutableActivationReview, ExternalExecutableSourceIdentity,
-};
 use bitfun_agent_runtime::native_hooks::RuntimeHookCommitToken;
 use bitfun_opencode_plugin_host::{
-    invocation_port, PluginDeclaration, PluginHost, PluginHostConfig, PluginHostShutdownPolicy,
-    PluginHostShutdownReport, PluginInstanceOpenRequest, PluginPrepareRequest, RpcHandlerError,
-    CONFIG_CONTRIBUTIONS_V2, CONFIG_CONTRIBUTORS_V1, GENERATION_FENCING_V1,
+    BackendDiagnosticError, BackendDiagnosticEvent, PluginDeclaration, PluginHost,
+    PluginHostConfig, PluginHostShutdownPolicy, PluginHostShutdownReport, PluginPrepareRequest,
+    GENERATION_FENCING_V1,
 };
-use serde::{Deserialize, Serialize};
+use bitfun_runtime_ports::{
+    HookFunctionDisposeRequest, HookFunctionGeneration, HookFunctionPluginDeclaration,
+    HookFunctionRegistrationBatch, HookFunctionRegistrationSink, HookFunctionRuntime,
+    HookFunctionStartRequest, PortError, PortErrorKind, PortResult,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -24,14 +25,51 @@ use std::sync::Arc;
 use terminal_core::{CloseSessionRequest, TerminalApi};
 use tokio::sync::{Mutex, Notify, OnceCell};
 
+#[derive(Default)]
+struct CapturedPluginGeneration {
+    batch: std::sync::Mutex<Option<HookFunctionRegistrationBatch>>,
+}
+
+#[async_trait::async_trait]
+impl HookFunctionRegistrationSink for CapturedPluginGeneration {
+    async fn publish_generation(&self, batch: HookFunctionRegistrationBatch) -> PortResult<()> {
+        let mut slot = self.batch.lock().expect("plugin generation lock poisoned");
+        if slot.is_some() {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                "plugin runtime published more than one registration batch for a generation",
+            ));
+        }
+        *slot = Some(batch);
+        Ok(())
+    }
+}
+
+impl CapturedPluginGeneration {
+    fn take(&self) -> crate::BitFunResult<HookFunctionRegistrationBatch> {
+        self.batch
+            .lock()
+            .expect("plugin generation lock poisoned")
+            .take()
+            .ok_or_else(|| {
+                crate::BitFunError::ProcessError(
+                    "Plugin runtime started without publishing its registration batch".to_string(),
+                )
+            })
+    }
+}
+
 const BUN_HOST_ENTRY_ENV: &str = "BITFUN_OPENCODE_BUN_HOST_ENTRY";
 const BUN_COMMAND_ENV: &str = "BITFUN_BUN_COMMAND";
 static PLUGIN_HOST: OnceCell<Mutex<Option<PluginHost>>> = OnceCell::const_new();
+static PLUGIN_HOST_LIFECYCLE_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
 static PLUGIN_HOST_SHUTDOWN_REPORT: OnceCell<Mutex<Option<PluginHostShutdownReport>>> =
     OnceCell::const_new();
 static PLUGIN_HOST_SHUTDOWN_NOTIFY: OnceCell<Notify> = OnceCell::const_new();
+static PLUGIN_HOST_ACTIVE_ENSURE_NOTIFY: OnceCell<Notify> = OnceCell::const_new();
 static PLUGIN_HOST_SHUTDOWN_STARTED: AtomicBool = AtomicBool::new(false);
 static PLUGIN_HOST_SHUTDOWN_COMPLETE: AtomicBool = AtomicBool::new(false);
+static PLUGIN_HOST_ACTIVE_ENSURES: AtomicU64 = AtomicU64::new(0);
 static PLUGIN_HOST_INSTANCES: OnceCell<Mutex<HashMap<String, PluginHostInstance>>> =
     OnceCell::const_new();
 static PLUGIN_HOST_ENSURE_LOCKS: OnceCell<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
@@ -39,6 +77,45 @@ static PLUGIN_HOST_ENSURE_LOCKS: OnceCell<Mutex<HashMap<String, Arc<Mutex<()>>>>
 static PLUGIN_HOST_PTY_OWNERS: OnceCell<Mutex<HashMap<String, String>>> = OnceCell::const_new();
 static NEXT_INSTANCE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const MAX_PLUGIN_HOST_DIAGNOSTICS: usize = 100;
+
+struct PluginHostEnsureLease;
+
+impl Drop for PluginHostEnsureLease {
+    fn drop(&mut self) {
+        if PLUGIN_HOST_ACTIVE_ENSURES.fetch_sub(1, Ordering::AcqRel) == 1 {
+            if let Some(notify) = PLUGIN_HOST_ACTIVE_ENSURE_NOTIFY.get() {
+                notify.notify_waiters();
+            }
+        }
+    }
+}
+
+async fn acquire_plugin_host_ensure_lease() -> crate::BitFunResult<PluginHostEnsureLease> {
+    let lifecycle_lock = PLUGIN_HOST_LIFECYCLE_LOCK
+        .get_or_init(|| async { Mutex::new(()) })
+        .await;
+    let _guard = lifecycle_lock.lock().await;
+    if PLUGIN_HOST_SHUTDOWN_STARTED.load(Ordering::Acquire) {
+        return Err(crate::BitFunError::ProcessError(
+            "Plugin host is shutting down".to_string(),
+        ));
+    }
+    PLUGIN_HOST_ACTIVE_ENSURES.fetch_add(1, Ordering::AcqRel);
+    Ok(PluginHostEnsureLease)
+}
+
+async fn wait_for_plugin_host_ensure_leases() {
+    let notify = PLUGIN_HOST_ACTIVE_ENSURE_NOTIFY
+        .get_or_init(|| async { Notify::new() })
+        .await;
+    loop {
+        let notified = notify.notified();
+        if PLUGIN_HOST_ACTIVE_ENSURES.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        notified.await;
+    }
+}
 
 async fn plugin_host_workspace_lock(scope: &str) -> Arc<Mutex<()>> {
     let locks = PLUGIN_HOST_ENSURE_LOCKS
@@ -49,266 +126,6 @@ async fn plugin_host_workspace_lock(scope: &str) -> Arc<Mutex<()>> {
         .entry(scope.to_string())
         .or_insert_with(|| Arc::new(Mutex::new(())))
         .clone()
-}
-
-fn opencode_execution_authorized(
-    safe_mode: bool,
-    policy: &bitfun_product_domains::external_integration_policy::ExternalIntegrationPolicySnapshot,
-) -> bool {
-    if safe_mode || !policy.status.is_compatible() || !policy.effective.enabled {
-        return false;
-    }
-    policy
-        .effective
-        .ecosystems
-        .iter()
-        .find(|(ecosystem, _)| ecosystem.as_str() == "opencode")
-        .is_some_and(|(_, policy)| {
-            matches!(
-                policy.mode,
-                bitfun_product_domains::external_integration_policy::ExternalIntegrationMode::Recommended
-                    | bitfun_product_domains::external_integration_policy::ExternalIntegrationMode::Custom
-            )
-        })
-}
-
-fn digest_json(value: &Value) -> String {
-    hex::encode(Sha256::digest(
-        serde_json::to_vec(value).unwrap_or_default(),
-    ))
-}
-
-fn stable_prepared_digest(prepared: &Value) -> String {
-    prepared
-        .get("reviewDigest")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string()
-}
-
-fn opencode_activation_review(
-    workspace_scope: &str,
-    execution_domain_id: &str,
-    _declarations: &[PluginDeclaration],
-    prepared: &Value,
-    policy: &bitfun_product_domains::external_integration_policy::ExternalIntegrationPolicySnapshot,
-    policy_revision: u64,
-) -> ExternalExecutableActivationReview {
-    let prepared_entries = prepared
-        .get("prepared")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let reviewed_entries = prepared
-        .get("reviewed")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let failed_entries = prepared
-        .get("failed")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let identities = reviewed_entries
-        .iter()
-        .map(|reviewed_entry| {
-            let spec = reviewed_entry
-                .get("spec")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let identity = reviewed_entry
-                .get("identity")
-                .and_then(Value::as_str)
-                .unwrap_or(spec);
-            let match_entry = prepared_entries
-                .iter()
-                .find(|entry| entry.get("identity").and_then(Value::as_str) == Some(identity));
-            ExternalExecutableSourceIdentity {
-                plugin_id: identity.to_string(),
-                source_kind: reviewed_entry
-                    .get("source")
-                    .or_else(|| match_entry.and_then(|entry| entry.get("source")))
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown")
-                    .to_string(),
-                canonical_source: reviewed_entry
-                    .get("canonicalSource")
-                    .and_then(Value::as_str)
-                    .or_else(|| {
-                        match_entry
-                            .and_then(|entry| entry.get("target").or_else(|| entry.get("entry")))
-                            .and_then(Value::as_str)
-                    })
-                    .unwrap_or(spec)
-                    .to_string(),
-                declaration_digest: reviewed_entry
-                    .get("optionsDigest")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string(),
-                content_digest: match_entry
-                    .and_then(|entry| entry.get("contentHash"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
-            }
-        })
-        .collect::<Vec<_>>();
-    let mut review = ExternalExecutableActivationReview {
-        schema_version: 1,
-        ecosystem_id: "opencode".to_string(),
-        execution_domain_id: execution_domain_id.to_string(),
-        workspace_scope: workspace_scope.to_string(),
-        phase: "opencode-plugin-host".to_string(),
-        source_identities: identities,
-        prepared_digest: stable_prepared_digest(prepared),
-        permission_summary_digest: digest_json(
-            &serde_json::to_value(policy).unwrap_or_else(|_| Value::Null),
-        ),
-        policy_revision,
-        requires_install: failed_entries
-            .iter()
-            .any(|entry| entry.get("stage").and_then(Value::as_str) == Some("install")),
-        approval_fingerprint: String::new(),
-    };
-    let material = serde_json::to_vec(&review).unwrap_or_default();
-    review.approval_fingerprint = hex::encode(Sha256::digest(material));
-    review
-}
-
-/// Produce the exact, non-importing activation envelope for a workspace. This
-/// is used by product surfaces to display a fingerprint before persisting a
-/// grant. npm cache misses are represented as an install-plan review and do
-/// not run `bun add`.
-pub async fn review_configured_plugin_activation(
-    launch_policy: PluginHostLaunchPolicy,
-    directory: PathBuf,
-) -> crate::BitFunResult<Option<ExternalExecutableActivationReview>> {
-    use crate::service::config::{get_global_config_service, GlobalConfig};
-
-    if launch_policy == PluginHostLaunchPolicy::Disabled {
-        return Ok(None);
-    }
-    if !matches!(
-        initialize_configured_plugin_host(launch_policy).await?,
-        PluginHostStartup::Disabled
-            | PluginHostStartup::Started
-            | PluginHostStartup::AlreadyStarted
-    ) {
-        return Ok(None);
-    }
-    let canonical_directory = dunce::canonicalize(&directory).map_err(|error| {
-        crate::BitFunError::Io(std::io::Error::other(format!(
-            "Failed to canonicalize plugin activation workspace {}: {error}",
-            directory.display()
-        )))
-    })?;
-    let workspace_scope = comparable_instance_directory(&canonical_directory.to_string_lossy());
-    let surface = crate::external_sources::get_external_source_control_snapshot(
-        Some(&canonical_directory),
-        true,
-        crate::external_sources::ExternalSourceHostCapabilities::read_write(),
-    )
-    .await
-    .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
-    if !opencode_execution_authorized(
-        surface.control.safe_mode,
-        &surface.catalog.integration_policy,
-    ) {
-        return Err(crate::BitFunError::NotImplemented(
-            "Configured OpenCode Plugin Host execution is not eligible for activation review"
-                .to_string(),
-        ));
-    }
-    let config_service = get_global_config_service().await?;
-    let global_config: GlobalConfig = config_service.get_config(None).await?;
-    let declarations = global_config
-        .plugin
-        .iter()
-        .filter_map(plugin_declaration)
-        .collect::<Vec<_>>();
-    if declarations.is_empty() {
-        return Ok(None);
-    }
-    let client = {
-        let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
-        host_state
-            .lock()
-            .await
-            .as_ref()
-            .map(PluginHost::client)
-            .ok_or_else(|| {
-                crate::BitFunError::ProcessError(
-                    "Configured plugin host is not running".to_string(),
-                )
-            })?
-    };
-    let prepared = client
-        .prepare_plugins(
-            PluginPrepareRequest {
-                plugins: declarations.clone(),
-                configuration_fingerprint: Some(plugin_config_fingerprint(&global_config)?),
-                default_base_directory: Some(canonical_directory.to_string_lossy().into_owned()),
-                allow_install: Some(false),
-            },
-            std::time::Duration::from_secs(30),
-        )
-        .await
-        .map_err(|error| crate::BitFunError::ProcessError(error.to_string()))?;
-    Ok(Some(opencode_activation_review(
-        &workspace_scope,
-        surface.control.execution_domain_id.as_str(),
-        &declarations,
-        &prepared,
-        &surface.catalog.integration_policy,
-        surface.control.preference_revision,
-    )))
-}
-
-pub async fn approve_configured_plugin_activation(
-    review: ExternalExecutableActivationReview,
-    expected_fingerprint: &str,
-) -> crate::BitFunResult<()> {
-    if review.approval_fingerprint != expected_fingerprint {
-        return Err(crate::BitFunError::Validation(
-            "Plugin activation confirmation does not match the current review fingerprint"
-                .to_string(),
-        ));
-    }
-    crate::external_sources::set_executable_activation_approval(
-        review.clone(),
-        true,
-        review.policy_revision,
-    )
-    .await
-    .map_err(crate::BitFunError::Validation)?;
-    Ok(())
-}
-
-pub async fn revoke_configured_plugin_activation(directory: PathBuf) -> crate::BitFunResult<()> {
-    let canonical_directory = dunce::canonicalize(&directory).map_err(|error| {
-        crate::BitFunError::Io(std::io::Error::other(format!(
-            "Failed to canonicalize plugin activation workspace {}: {error}",
-            directory.display()
-        )))
-    })?;
-    let workspace_scope = comparable_instance_directory(&canonical_directory.to_string_lossy());
-    let surface = crate::external_sources::get_external_source_control_snapshot(
-        Some(&canonical_directory),
-        false,
-        crate::external_sources::ExternalSourceHostCapabilities::read_write(),
-    )
-    .await
-    .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
-    crate::external_sources::revoke_executable_activation_approval(
-        "opencode",
-        surface.control.execution_domain_id.as_str(),
-        &workspace_scope,
-        surface.control.preference_revision,
-    )
-    .await
-    .map_err(crate::BitFunError::Validation)?;
-    withdraw_configured_plugin_workspace(&canonical_directory).await;
-    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -322,7 +139,7 @@ pub(crate) struct PluginHostInstance {
     pub(crate) host_generation: u64,
     pub(crate) generation_key: String,
     pub(crate) revision: String,
-    pub(crate) open_result: Value,
+    pub(crate) registration_batch: Option<HookFunctionRegistrationBatch>,
     pub(crate) ready: bool,
     pub(crate) hook_commit_token: Option<RuntimeHookCommitToken>,
     pub(crate) transformed_config_health_snapshot: Option<Value>,
@@ -332,31 +149,17 @@ pub(crate) struct PluginHostInstance {
     pub(crate) retirement_scheduled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PluginHostDiagnostic {
-    severity: String,
-    code: String,
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    plugin: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    method: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PluginHostDiagnosticPublishParams {
-    #[serde(rename = "instanceID")]
-    instance_id: Option<String>,
-    diagnostic: PluginHostDiagnostic,
-}
-
 impl PluginHostInstance {
     pub(crate) fn is_ready(&self) -> bool {
         self.ready
+    }
+
+    fn generation(&self) -> HookFunctionGeneration {
+        HookFunctionGeneration {
+            instance_id: self.instance_id.clone(),
+            generation_key: self.generation_key.clone(),
+            revision: self.revision.clone(),
+        }
     }
 }
 
@@ -419,9 +222,24 @@ pub async fn initialize_configured_plugin_host_with_log_file(
     }
     let config_service = get_global_config_service().await?;
     let config: GlobalConfig = config_service.get_config(None).await?;
+    initialize_configured_plugin_host_from_config(launch_policy, log_file, &config).await
+}
+
+async fn initialize_configured_plugin_host_from_config(
+    launch_policy: PluginHostLaunchPolicy,
+    log_file: Option<PathBuf>,
+    config: &crate::service::config::GlobalConfig,
+) -> crate::BitFunResult<PluginHostStartup> {
+    if launch_policy == PluginHostLaunchPolicy::Disabled {
+        return Ok(PluginHostStartup::Disabled);
+    }
     if !config.has_configured_plugins() {
         return Ok(PluginHostStartup::Disabled);
     }
+    let lifecycle_lock = PLUGIN_HOST_LIFECYCLE_LOCK
+        .get_or_init(|| async { Mutex::new(()) })
+        .await;
+    let _lifecycle_guard = lifecycle_lock.lock().await;
     if PLUGIN_HOST_SHUTDOWN_STARTED.load(Ordering::Acquire) {
         return Err(crate::BitFunError::ProcessError(
             "Plugin host is shutting down".to_string(),
@@ -485,10 +303,12 @@ pub async fn initialize_configured_plugin_host_with_log_file(
     crate::plugin_host_http::register_plugin_host_backend_handlers(client.clone()).await?;
     *host_state.lock().await = Some(host);
     start_plugin_host_health_monitor(client.clone());
-    // Do not prepare or import configured packages during host startup. Package
-    // resolution may install dependencies and execute lifecycle code; it must
-    // happen only after the workspace-specific source authority has approved
-    // the exact plugin activation.
+    // Do not prepare or import configured packages during Host startup. The
+    // workspace-specific ensure path owns package resolution and generation
+    // publication. Configured plugin declarations are currently treated as
+    // trusted local executable input; follow-up hardening is tracked in the
+    // OpenCode compatibility design rather than represented by a non-enforcing
+    // approval API.
     Ok(PluginHostStartup::Started)
 }
 
@@ -509,15 +329,29 @@ pub async fn set_configured_plugin_host_log_level(level: &str) -> crate::BitFunR
 /// Fault the current Host connection and reap its complete process tree. This
 /// is used after a side-effecting invocation whose cancellation could not be
 /// confirmed; closing the RPC socket alone is not a stop guarantee.
-pub(crate) async fn fault_configured_plugin_host(reason: &str) {
+pub(crate) async fn fault_configured_plugin_host_generation(
+    expected_generation: u64,
+    reason: &str,
+) -> bool {
+    let lifecycle_lock = PLUGIN_HOST_LIFECYCLE_LOCK
+        .get_or_init(|| async { Mutex::new(()) })
+        .await;
+    let _lifecycle_guard = lifecycle_lock.lock().await;
     let host = {
         let Some(state) = PLUGIN_HOST.get() else {
-            return;
+            return false;
         };
-        state.lock().await.take()
+        let mut state = state.lock().await;
+        if state
+            .as_ref()
+            .is_some_and(|host| host.client().generation() != expected_generation)
+        {
+            return false;
+        }
+        state.take()
     };
     let Some(host) = host else {
-        return;
+        return false;
     };
     log::error!(
         "Faulting configured plugin host and terminating its process tree: generation={}, reason={}",
@@ -531,6 +365,7 @@ pub(crate) async fn fault_configured_plugin_host(reason: &str) {
         report.disposition,
         report.exit_code
     );
+    true
 }
 
 pub async fn ensure_configured_plugin_instance(
@@ -538,18 +373,12 @@ pub async fn ensure_configured_plugin_instance(
     directory: PathBuf,
     worktree: PathBuf,
     project_id: Option<String>,
-) -> crate::BitFunResult<Option<Value>> {
+) -> crate::BitFunResult<()> {
     use crate::service::config::{get_global_config_service, GlobalConfig};
 
     if launch_policy == PluginHostLaunchPolicy::Disabled {
         withdraw_configured_plugin_workspace(&directory).await;
-        return Ok(None);
-    }
-    let config_service = get_global_config_service().await?;
-    let global_config: GlobalConfig = config_service.get_config(None).await?;
-    if !global_config.has_configured_plugins() {
-        withdraw_configured_plugin_workspace(&directory).await;
-        return Ok(None);
+        return Ok(());
     }
     if directory.as_os_str().is_empty() || !directory.is_dir() {
         return Err(crate::BitFunError::Validation(format!(
@@ -557,7 +386,6 @@ pub async fn ensure_configured_plugin_instance(
             directory.display()
         )));
     }
-
     let canonical_directory = dunce::canonicalize(&directory).map_err(|error| {
         crate::BitFunError::Io(std::io::Error::other(format!(
             "Failed to canonicalize plugin host instance directory {}: {error}",
@@ -567,10 +395,26 @@ pub async fn ensure_configured_plugin_instance(
     let canonical_directory_string = canonical_directory.to_string_lossy().into_owned();
     let comparable_directory = comparable_instance_directory(&canonical_directory_string);
     // All ensure/withdraw operations for a workspace use this same lock. The
-    // lock is acquired before reading policy/config so a concurrent revoke or
-    // replacement cannot race a later publish.
+    // workspace snapshot, generation replacement, and publication therefore
+    // form one serialized transition for this directory.
     let workspace_lock = plugin_host_workspace_lock(&comparable_directory).await;
     let _workspace_guard = workspace_lock.lock().await;
+
+    // Capture one immutable product configuration snapshot inside the
+    // workspace transition. Host initialization, package preparation, and the
+    // generation fingerprint must all describe this same declaration set.
+    let config_service = get_global_config_service().await?;
+    let global_config: GlobalConfig = config_service.get_config(None).await?;
+    if !global_config.has_configured_plugins() {
+        withdraw_configured_plugin_workspace_locked(&canonical_directory, &comparable_directory)
+            .await;
+        return Ok(());
+    }
+    initialize_configured_plugin_host_from_config(launch_policy, None, &global_config).await?;
+    // Shutdown sets its gate before waiting for active ensure leases. Holding
+    // this lease through prepare/open/register/publish prevents teardown from
+    // clearing the instance table while a generation is still being published.
+    let _ensure_lease = acquire_plugin_host_ensure_lease().await?;
 
     let config = serde_json::to_value(
         crate::plugin_runtime::opencode_config_snapshot(&canonical_directory).map_err(|error| {
@@ -590,13 +434,13 @@ pub async fn ensure_configured_plugin_instance(
     })?;
     let initial_config = config.clone();
     let config_fingerprint = plugin_config_fingerprint(&global_config)?;
-    let client = {
+    let (client, runtime) = {
         let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
         host_state
             .lock()
             .await
             .as_ref()
-            .map(PluginHost::client)
+            .map(|host| (host.client(), host.runtime()))
             .ok_or_else(|| {
                 crate::BitFunError::ProcessError(
                     "Configured plugin host is not running".to_string(),
@@ -637,41 +481,18 @@ pub async fn ensure_configured_plugin_instance(
                 canonical_directory.display()
             ))
         })?;
-    let prepared_count = prepared
-        .get("prepared")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    let failed_count = prepared
-        .get("failed")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    let reviewed_count = prepared
-        .get("reviewed")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
+    let prepared_count = prepared.prepared_count;
+    let failed_count = prepared.failed_count;
+    let reviewed_count = prepared.reviewed_count;
     if failed_count != 0 || prepared_count != reviewed_count {
         return Err(crate::BitFunError::Validation(format!(
-            "Configured OpenCode plugin preparation did not resolve the complete approved graph: prepared={prepared_count}, failed={failed_count}, reviewed={reviewed_count}"
+            "Configured OpenCode plugin preparation did not resolve the complete plugin graph: prepared={prepared_count}, failed={failed_count}, reviewed={reviewed_count}"
         )));
     }
     // Use the adapter's stable digest for generation identity. Cache state and
     // diagnostic prose are operational details and must not churn a generation.
-    let prepared_fingerprint = stable_prepared_digest(&prepared);
-    let expected_content_digests = prepared
-        .get("prepared")
-        .and_then(Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|entry| {
-                    Some((
-                        entry.get("identity")?.as_str()?.to_string(),
-                        entry.get("contentHash")?.as_str()?.to_string(),
-                    ))
-                })
-                .collect::<std::collections::BTreeMap<_, _>>()
-        })
-        .filter(|digests| !digests.is_empty());
+    let prepared_fingerprint = prepared.review_digest;
+    let expected_content_digests = prepared.content_digests;
 
     let workspace_config_fingerprint = serde_json::to_vec(&initial_config)
         .map(|bytes| hex::encode(Sha256::digest(bytes)))
@@ -680,8 +501,16 @@ pub async fn ensure_configured_plugin_instance(
                 "Failed to fingerprint workspace plugin config: {error}"
             ))
         })?;
+    let project_id = project_id
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "bitfun-project-{}",
+                hex::encode(Sha256::digest(canonical_directory_string.as_bytes()))
+            )
+        });
     let instance_key = format!(
-        "{comparable_directory}\n{config_fingerprint}\n{workspace_config_fingerprint}\n{prepared_fingerprint}"
+        "{comparable_directory}\n{project_id}\n{config_fingerprint}\n{workspace_config_fingerprint}\n{prepared_fingerprint}"
     );
     let reusable_instance = {
         let mut state = instances.lock().await;
@@ -701,7 +530,12 @@ pub async fn ensure_configured_plugin_instance(
                 &canonical_directory,
                 &instance.generation_key,
                 &initial_config,
-                &instance.open_result,
+                instance.registration_batch.as_ref().ok_or_else(|| {
+                    crate::BitFunError::ProcessError(
+                        "Reusable plugin instance is missing its typed registration batch"
+                            .to_string(),
+                    )
+                })?,
             )?;
             crate::plugin_hook_bridge::commit_plugin_generation(
                 &crate::native_hooks::plugin_hook_registry(&comparable_directory),
@@ -715,21 +549,34 @@ pub async fn ensure_configured_plugin_instance(
             client.generation(),
             instance.instance_id
         );
-        retire_superseded_plugin_instances(
+        if !retire_superseded_plugin_instances(
             &client,
+            runtime.clone(),
             instances,
             &instance_key,
             &comparable_directory,
         )
-        .await;
-        return Ok(Some(instance.open_result.clone()));
+        .await
+        {
+            return Err(crate::BitFunError::ProcessError(
+                "Configured plugin Host faulted while retiring a superseded generation".to_string(),
+            ));
+        }
+        return Ok(());
     }
 
     // The extension host owns one canonical directory at a time. Stop and
     // remove the old logical generation before opening the replacement so the
     // host cannot reject the new instance with directory_exists or run old and
     // new plugin code concurrently.
-    if !retire_workspace_instances_before_open(&client, instances, &comparable_directory).await {
+    if !retire_workspace_instances_before_open(
+        &client,
+        runtime.clone(),
+        instances,
+        &comparable_directory,
+    )
+    .await
+    {
         return Err(crate::BitFunError::ProcessError(
             "Configured plugin host could not confirm closure of the previous workspace generation"
                 .to_string(),
@@ -740,22 +587,12 @@ pub async fn ensure_configured_plugin_instance(
     let instance_id = format!("bitfun:host:{}:{sequence}", client.generation());
     let revision = format!("revision-{sequence}");
     let generation_material =
-        format!(
-            "{config_fingerprint}\n{workspace_config_fingerprint}\n{prepared_fingerprint}"
-        );
+        format!("{config_fingerprint}\n{workspace_config_fingerprint}\n{prepared_fingerprint}");
     let generation_key = format!(
         "host-{}:instance-{sequence}:sha256-{}",
         client.generation(),
         hex::encode(Sha256::digest(generation_material.as_bytes()))
     );
-    let project_id = project_id
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| {
-            format!(
-                "bitfun-project-{}",
-                hex::encode(Sha256::digest(canonical_directory_string.as_bytes()))
-            )
-        });
     let now_ms = chrono::Utc::now().timestamp_millis();
     let opening_context = PluginHostInstance {
         canonical_directory: comparable_directory.clone(),
@@ -767,7 +604,7 @@ pub async fn ensure_configured_plugin_instance(
         host_generation: client.generation(),
         generation_key: generation_key.clone(),
         revision: revision.clone(),
-        open_result: Value::Null,
+        registration_batch: None,
         ready: false,
         hook_commit_token: None,
         transformed_config_health_snapshot: None,
@@ -780,101 +617,116 @@ pub async fn ensure_configured_plugin_instance(
         .lock()
         .await
         .insert(instance_key.clone(), opening_context);
-    let open_result = match client
-        .open_instance(
-            PluginInstanceOpenRequest {
-                instance_id: instance_id.clone(),
-                generation_key: generation_key.clone(),
-                revision: revision.clone(),
-                project: serde_json::json!({
-                    "id": project_id,
-                    "worktree": canonical_directory_string,
-                    "time": {"created": now_ms},
-                }),
+    let generation = HookFunctionGeneration {
+        instance_id: instance_id.clone(),
+        generation_key: generation_key.clone(),
+        revision: revision.clone(),
+    };
+    let registrations = Arc::new(CapturedPluginGeneration::default());
+    let started = runtime
+        .start(
+            HookFunctionStartRequest {
+                generation: generation.clone(),
+                project_id: project_id.clone(),
+                project_worktree: canonical_directory_string.clone(),
+                project_created_at_ms: u64::try_from(now_ms).unwrap_or_default(),
                 config,
                 directory: canonical_directory.to_string_lossy().into_owned(),
                 worktree: worktree.to_string_lossy().into_owned(),
-                plugins: declarations,
+                plugins: declarations
+                    .into_iter()
+                    .map(|plugin| HookFunctionPluginDeclaration {
+                        spec: plugin.spec,
+                        options: plugin.options,
+                        base_directory: plugin.base_directory,
+                    })
+                    .collect(),
                 configuration_fingerprint: Some(config_fingerprint.clone()),
                 expected_content_digests,
                 expected_review_digest: Some(prepared_fingerprint.clone()),
             },
+            registrations.clone(),
+            crate::agentic::tools::plugin_host_tool::reverse_sink(),
             std::time::Duration::from_secs(30),
         )
-        .await
-    {
-        Ok(result) => result,
+        .await;
+    match started {
+        Ok(started) if started == generation => {}
+        Ok(_) => {
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
+            return Err(crate::BitFunError::ProcessError(
+                "Plugin runtime returned a different generation from the requested lease"
+                    .to_string(),
+            ));
+        }
         Err(error) => {
-            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
             return Err(crate::BitFunError::ProcessError(format!(
                 "Failed to activate plugins for workspace {}: {error}",
                 canonical_directory.display()
             )));
         }
-    };
-    if let Err(error) =
-        validate_open_generation_lease(&open_result, &instance_id, &generation_key, &revision)
-    {
-        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
-        return Err(error);
     }
-    if client.capabilities().supports(CONFIG_CONTRIBUTORS_V1)
-        && !open_result
-            .get("configContributors")
-            .is_some_and(Value::is_array)
-    {
-        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
-        return Err(crate::BitFunError::Validation(
-            "Plugin host open result is missing configContributors".to_string(),
-        ));
-    }
-    if client.capabilities().supports(CONFIG_CONTRIBUTIONS_V2)
-        && !open_result
-            .get("configContributions")
-            .is_some_and(Value::is_array)
-    {
-        discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
-        return Err(crate::BitFunError::Validation(
-            "Plugin host open result is missing configContributions".to_string(),
-        ));
-    }
+    let registration_batch = registrations.take()?;
     let config_projection = match crate::plugin_config_projection::prepare(
         &canonical_directory,
         &generation_key,
         &initial_config,
-        &open_result,
+        &registration_batch,
     ) {
         Ok(projection) => projection,
         Err(error) => {
-            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
             return Err(error);
         }
     };
     let plugin_agent_runtime_keys = config_projection.agent_runtime_keys();
-    let invoker = invocation_port(
-        client.clone(),
-        instance_id.clone(),
-        generation_key.clone(),
-        revision.clone(),
-    );
     log::info!(
         "Configured plugin host instance prepared: generation={}, instance_id={}, plugin_count={}",
         client.generation(),
         instance_id,
         global_config.plugin.len()
     );
-    let hook_commit_token = match crate::plugin_hook_bridge::register_plugin_hooks_with_invoker(
+    let hook_commit_token = match crate::plugin_hook_bridge::register_plugin_hooks_with_runtime(
         &crate::native_hooks::plugin_hook_registry(&comparable_directory),
         &comparable_directory,
-        invoker.clone(),
+        runtime.clone(),
         &instance_id,
         &generation_key,
         &revision,
-        &crate::plugin_hook_bridge::hook_names(&open_result),
+        &crate::plugin_hook_bridge::hook_names(&registration_batch),
     ) {
         Ok(token) => token,
         Err(error) => {
-            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
             return Err(crate::BitFunError::ProcessError(format!(
                 "Failed to register plugin hooks for workspace {}: {error}",
                 canonical_directory.display()
@@ -882,14 +734,15 @@ pub async fn ensure_configured_plugin_instance(
         }
     };
     let tool_names = match register_plugin_tools(
-        invoker,
+        runtime.clone(),
+        client.generation(),
         &instance_id,
         &comparable_directory,
         &canonical_directory,
         &generation_key,
         &revision,
         &config_fingerprint,
-        &open_result,
+        &registration_batch,
         &config_projection,
     )
     .await
@@ -903,7 +756,14 @@ pub async fn ensure_configured_plugin_instance(
                     token,
                 );
             }
-            discard_opening_plugin_instance(&client, instances, &instance_key, &instance_id).await;
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
             return Err(error);
         }
     };
@@ -913,15 +773,42 @@ pub async fn ensure_configured_plugin_instance(
     // instance identity is available to generation-fenced dispatch.
     {
         let mut state = instances.lock().await;
-        let instance = state.get_mut(&instance_key).ok_or_else(|| {
-            crate::BitFunError::ProcessError(
-                "Plugin instance disappeared before generation publication".to_string(),
+        if !state.contains_key(&instance_key) {
+            drop(state);
+            if let Some(token) = hook_commit_token.clone() {
+                crate::plugin_hook_bridge::unregister_plugin_hooks(
+                    &crate::native_hooks::plugin_hook_registry(&comparable_directory),
+                    &comparable_directory,
+                    token,
+                );
+            }
+            crate::agentic::tools::plugin_host_tool::unregister_workspace_tools(
+                &comparable_directory,
+                &canonical_directory,
+                &tool_names,
+                &generation_key,
             )
-        })?;
-        instance.open_result = open_result.clone();
+            .await;
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
+            return Err(crate::BitFunError::ProcessError(
+                "Plugin instance disappeared before generation publication".to_string(),
+            ));
+        }
+        let instance = state
+            .get_mut(&instance_key)
+            .expect("plugin instance existence checked while holding instance table lock");
+        instance.registration_batch = Some(registration_batch.clone());
         instance.ready = true;
         instance.hook_commit_token = hook_commit_token.clone();
-        instance.transformed_config_health_snapshot = open_result.get("config").cloned();
+        instance.transformed_config_health_snapshot =
+            Some(Value::Object(registration_batch.config.clone()));
         instance.tool_names = tool_names;
         instance.agent_runtime_keys = plugin_agent_runtime_keys.into_iter().collect();
         crate::plugin_hook_bridge::commit_plugin_generation(
@@ -931,32 +818,40 @@ pub async fn ensure_configured_plugin_instance(
         );
         config_projection.commit();
     }
-    retire_superseded_plugin_instances(&client, instances, &instance_key, &comparable_directory)
-        .await;
-    Ok(Some(open_result))
+    if !retire_superseded_plugin_instances(
+        &client,
+        runtime,
+        instances,
+        &instance_key,
+        &comparable_directory,
+    )
+    .await
+    {
+        return Err(crate::BitFunError::ProcessError(
+            "Configured plugin Host faulted while retiring a superseded generation".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 async fn discard_opening_plugin_instance(
     client: &bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     instance_key: &str,
-    instance_id: &str,
+    generation: &HookFunctionGeneration,
 ) {
-    if let Err(error) = client
-        .close_instance(instance_id, std::time::Duration::from_secs(10))
-        .await
-    {
+    if !dispose_plugin_generation(client, runtime, generation, "failed plugin prepare").await {
         log::debug!(
-            "Plugin instance cleanup after failed prepare was incomplete: instance_id={}, error={}",
-            instance_id,
-            error
+            "Plugin instance cleanup after failed prepare faulted the Host: instance_id={}",
+            generation.instance_id
         );
     }
-    close_plugin_host_ptys(instance_id).await;
+    close_plugin_host_ptys(&generation.instance_id).await;
     let mut state = instances.lock().await;
     if state
         .get(instance_key)
-        .is_some_and(|current| current.instance_id == instance_id)
+        .is_some_and(|current| current.instance_id == generation.instance_id)
     {
         state.remove(instance_key);
     }
@@ -964,6 +859,7 @@ async fn discard_opening_plugin_instance(
 
 async fn retire_workspace_instances_before_open(
     client: &bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     workspace_scope: &str,
 ) -> bool {
@@ -986,7 +882,8 @@ async fn retire_workspace_instances_before_open(
     };
     let mut all_closed = true;
     for (key, instance) in stale {
-        if retire_plugin_instance(client, instance.clone(), workspace_scope).await {
+        if retire_plugin_instance(client, runtime.clone(), instance.clone(), workspace_scope).await
+        {
             let mut state = instances.lock().await;
             if state
                 .get(&key)
@@ -1029,10 +926,15 @@ async fn withdraw_configured_plugin_workspace_locked(canonical: &Path, workspace
         .filter(|(_, instance)| instance.canonical_directory == workspace_scope)
         .map(|(key, instance)| (key.clone(), instance.clone()))
         .collect::<Vec<_>>();
-    let client = PLUGIN_HOST
-        .get()
-        .and_then(|state| state.try_lock().ok())
-        .and_then(|host| host.as_ref().map(PluginHost::client));
+    let host_runtime = if let Some(state) = PLUGIN_HOST.get() {
+        state
+            .lock()
+            .await
+            .as_ref()
+            .map(|host| (host.client(), host.runtime()))
+    } else {
+        None
+    };
     for (key, instance) in owned {
         if let Some(token) = instance.hook_commit_token.clone() {
             crate::plugin_hook_bridge::unregister_plugin_hooks(&registry, &workspace_scope, token);
@@ -1047,17 +949,18 @@ async fn withdraw_configured_plugin_workspace_locked(canonical: &Path, workspace
         if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
             bridge.cancel_instance_streams(&instance.instance_id).await;
         }
-        let close_result = if let Some(client) = client.as_ref() {
-            client
-                .close_instance(&instance.instance_id, std::time::Duration::from_secs(10))
-                .await
-                .map(|_| ())
-        } else {
-            Err(
-                bitfun_opencode_plugin_host::PluginHostError::ConnectionClosed(
-                    "plugin host is unavailable during workspace withdrawal".to_string(),
-                ),
+        let close_result = if let Some((client, runtime)) = host_runtime.as_ref() {
+            dispose_plugin_generation(
+                client,
+                runtime.clone(),
+                &instance.generation(),
+                "workspace withdrawal",
             )
+            .await
+            .then_some(())
+            .ok_or_else(|| "plugin Host faulted during workspace withdrawal".to_string())
+        } else {
+            Err("plugin host is unavailable during workspace withdrawal".to_string())
         };
         close_plugin_host_ptys(&instance.instance_id).await;
         let mut state = instances.lock().await;
@@ -1080,31 +983,91 @@ async fn withdraw_configured_plugin_workspace_locked(canonical: &Path, workspace
     crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
 }
 
+async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_generation: u64) {
+    let Ok(canonical) = dunce::canonicalize(directory) else {
+        return;
+    };
+    let workspace_scope = comparable_instance_directory(&canonical.to_string_lossy());
+    let workspace_lock = plugin_host_workspace_lock(&workspace_scope).await;
+    let _workspace_guard = workspace_lock.lock().await;
+    let Some(instances) = PLUGIN_HOST_INSTANCES.get() else {
+        return;
+    };
+    let owned = instances
+        .lock()
+        .await
+        .iter()
+        .filter(|(_, instance)| {
+            instance.canonical_directory == workspace_scope
+                && instance.host_generation == expected_generation
+        })
+        .map(|(key, instance)| (key.clone(), instance.clone()))
+        .collect::<Vec<_>>();
+    let registry = crate::native_hooks::plugin_hook_registry(&workspace_scope);
+    for (key, instance) in owned {
+        if let Some(token) = instance.hook_commit_token.clone() {
+            crate::plugin_hook_bridge::unregister_plugin_hooks(&registry, &workspace_scope, token);
+        }
+        crate::agentic::tools::plugin_host_tool::unregister_workspace_tools(
+            &workspace_scope,
+            &instance.directory,
+            &instance.tool_names,
+            &instance.generation_key,
+        )
+        .await;
+        if crate::plugin_config_projection::active_generation_key(&instance.directory).as_deref()
+            == Some(instance.generation_key.as_str())
+        {
+            crate::plugin_config_projection::release_workspace(&instance.directory);
+        }
+        if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
+            bridge.cancel_instance_streams(&instance.instance_id).await;
+        }
+        close_plugin_host_ptys(&instance.instance_id).await;
+        let mut state = instances.lock().await;
+        if state.get(&key).is_some_and(|current| {
+            current.instance_id == instance.instance_id
+                && current.host_generation == expected_generation
+        }) {
+            state.remove(&key);
+        }
+    }
+    let has_replacement = instances.lock().await.values().any(|instance| {
+        instance.canonical_directory == workspace_scope
+            && instance.host_generation != expected_generation
+    });
+    if !has_replacement {
+        crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
+        crate::plugin_config_projection::release_workspace(&canonical);
+        crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
+    }
+}
+
 fn start_plugin_host_health_monitor(client: bitfun_opencode_plugin_host::PluginHostClient) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let connected = {
+            let (connected, owns_host_slot) = {
                 let Some(host_state) = PLUGIN_HOST.get() else {
                     return;
                 };
                 let mut host_state = host_state.lock().await;
                 match host_state.as_mut() {
                     Some(host) if host.client().generation() != client.generation() => {
-                        return;
+                        (false, false)
                     }
                     Some(host) => match host.is_connected() {
-                        Ok(connected) => connected,
+                        Ok(connected) => (connected, true),
                         Err(error) => {
                             log::error!(
                                 "Configured plugin host health check failed: generation={}, error={}",
                                 client.generation(),
                                 error
                             );
-                            false
+                            (false, true)
                         }
                     },
-                    None => false,
+                    None => (false, false),
                 }
             };
             if connected && !client.is_closed() {
@@ -1114,19 +1077,30 @@ fn start_plugin_host_health_monitor(client: bitfun_opencode_plugin_host::PluginH
                 "Configured plugin host process or connection closed; withdrawing all plugin contributions: generation={}",
                 client.generation()
             );
-            fault_configured_plugin_host("host connection or process lost").await;
+            // Another outcome-unknown path may already have reaped this
+            // physical Host. Local routes still belong to this dead generation
+            // and must be withdrawn; the cleanup below is generation-scoped
+            // and therefore cannot remove a replacement Host's contributions.
+            if owns_host_slot {
+                fault_configured_plugin_host_generation(
+                    client.generation(),
+                    "host connection or process lost",
+                )
+                .await;
+            }
             let workspaces = PLUGIN_HOST_INSTANCES.get().map(|instances| async {
                 instances
                     .lock()
                     .await
                     .values()
+                    .filter(|instance| instance.host_generation == client.generation())
                     .map(|instance| instance.directory.clone())
-                    .collect::<Vec<_>>()
+                    .collect::<std::collections::BTreeSet<_>>()
             });
             let Some(workspaces) = workspaces else { return };
             let workspaces = workspaces.await;
             for workspace in workspaces {
-                withdraw_configured_plugin_workspace(&workspace).await;
+                withdraw_faulted_plugin_host_generation(&workspace, client.generation()).await;
             }
             return;
         }
@@ -1135,10 +1109,11 @@ fn start_plugin_host_health_monitor(client: bitfun_opencode_plugin_host::PluginH
 
 async fn retire_superseded_plugin_instances(
     client: &bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instances: &Mutex<HashMap<String, PluginHostInstance>>,
     active_key: &str,
     workspace_scope: &str,
-) {
+) -> bool {
     let stale = instances
         .lock()
         .await
@@ -1164,7 +1139,7 @@ async fn retire_superseded_plugin_instances(
                 })
             };
             if should_schedule {
-                schedule_plugin_instance_retirement(client.clone(), key.clone());
+                schedule_plugin_instance_retirement(client.clone(), runtime.clone(), key.clone());
             }
             continue;
         }
@@ -1178,13 +1153,17 @@ async fn retire_superseded_plugin_instances(
                 .flatten()
         };
         if let Some(removed) = removed {
-            retire_plugin_instance(client, removed, workspace_scope).await;
+            if !retire_plugin_instance(client, runtime.clone(), removed, workspace_scope).await {
+                return false;
+            }
         }
     }
+    true
 }
 
 fn schedule_plugin_instance_retirement(
     client: bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instance_key: String,
 ) {
     tokio::spawn(async move {
@@ -1228,7 +1207,9 @@ fn schedule_plugin_instance_retirement(
             };
             if let Some(instance) = removed {
                 let workspace_scope = instance.canonical_directory.clone();
-                let _ = retire_plugin_instance(&client, instance, &workspace_scope).await;
+                let _ =
+                    retire_plugin_instance(&client, runtime.clone(), instance, &workspace_scope)
+                        .await;
             }
             return;
         }
@@ -1237,6 +1218,7 @@ fn schedule_plugin_instance_retirement(
 
 async fn retire_plugin_instance(
     client: &bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instance: PluginHostInstance,
     workspace_scope: &str,
 ) -> bool {
@@ -1263,30 +1245,54 @@ async fn retire_plugin_instance(
         // as closed allows the next Host generation to recover the workspace.
         true
     } else {
-        match client
-            .close_instance(&instance.instance_id, std::time::Duration::from_secs(10))
-            .await
-        {
-            Ok(true) => true,
-            Ok(false) => {
-                log::warn!(
-                    "Superseded plugin instance close was not confirmed: instance_id={}",
-                    instance.instance_id
-                );
-                false
-            }
-            Err(error) => {
-                log::warn!(
-                    "Superseded plugin instance close failed: instance_id={}, error={}",
-                    instance.instance_id,
-                    error
-                );
-                false
-            }
-        }
+        dispose_plugin_generation(
+            client,
+            runtime,
+            &instance.generation(),
+            "superseded generation retirement",
+        )
+        .await
     };
     close_plugin_host_ptys(&instance.instance_id).await;
     closed
+}
+
+async fn dispose_plugin_generation(
+    client: &bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
+    generation: &HookFunctionGeneration,
+    reason: &str,
+) -> bool {
+    match runtime
+        .dispose(
+            HookFunctionDisposeRequest {
+                generation: generation.clone(),
+            },
+            std::time::Duration::from_secs(10),
+        )
+        .await
+    {
+        Ok(result) if result.closed => true,
+        Ok(_) => {
+            log::error!(
+                "Plugin runtime did not confirm generation disposal: instance_id={}, reason={}",
+                generation.instance_id,
+                reason
+            );
+            fault_configured_plugin_host_generation(client.generation(), reason).await;
+            false
+        }
+        Err(error) => {
+            log::error!(
+                "Plugin runtime generation disposal failed: instance_id={}, reason={}, error={}",
+                generation.instance_id,
+                reason,
+                error
+            );
+            fault_configured_plugin_host_generation(client.generation(), reason).await;
+            false
+        }
+    }
 }
 
 pub(crate) async fn plugin_host_instance_by_id(instance_id: &str) -> Option<PluginHostInstance> {
@@ -1326,42 +1332,34 @@ pub(crate) async fn plugin_hook_generation_for_agent(
 }
 
 pub(crate) async fn publish_plugin_host_diagnostic(
-    params: Value,
-) -> Result<Value, RpcHandlerError> {
-    let params: PluginHostDiagnosticPublishParams =
-        serde_json::from_value(params).map_err(|error| {
-            RpcHandlerError::new(
-                -32602,
-                format!("invalid backend.diagnostic.publish params: {error}"),
-            )
+    event: BackendDiagnosticEvent,
+) -> Result<(), BackendDiagnosticError> {
+    let diagnostic = serde_json::json!({
+        "severity": event.diagnostic.severity.as_str(),
+        "code": event.diagnostic.code,
+        "message": event.diagnostic.message,
+        "plugin": event.diagnostic.plugin,
+        "method": event.diagnostic.method,
+        "data": event.diagnostic.data,
+    });
+    if let Some(instance_id) = event.instance_id.as_deref() {
+        let instances = PLUGIN_HOST_INSTANCES.get().ok_or_else(|| {
+            BackendDiagnosticError::Unavailable("plugin instance is unavailable".to_string())
         })?;
-    if !matches!(
-        params.diagnostic.severity.as_str(),
-        "debug" | "info" | "warning" | "error"
-    ) {
-        return Err(RpcHandlerError::new(
-            -32602,
-            "backend.diagnostic.publish severity is invalid",
-        ));
-    }
-    let diagnostic = serde_json::to_value(params.diagnostic)
-        .map_err(|error| RpcHandlerError::new(-32603, error.to_string()))?;
-    if let Some(instance_id) = params.instance_id.as_deref() {
-        let instances = PLUGIN_HOST_INSTANCES
-            .get()
-            .ok_or_else(|| RpcHandlerError::new(-32004, "plugin instance is unavailable"))?;
         let mut instances = instances.lock().await;
         let instance = instances
             .values_mut()
             .find(|instance| instance.instance_id == instance_id)
-            .ok_or_else(|| RpcHandlerError::new(-32004, "plugin instance is unavailable"))?;
+            .ok_or_else(|| {
+                BackendDiagnosticError::Unavailable("plugin instance is unavailable".to_string())
+            })?;
         push_plugin_host_diagnostic(&mut instance.diagnostic_health_snapshot, diagnostic.clone());
     }
     crate::infrastructure::events::emit_global_event(
         crate::infrastructure::events::BackendEvent::Custom {
             event_name: "plugin-host-diagnostic".to_string(),
             payload: serde_json::json!({
-                "instance_id": params.instance_id,
+                "instance_id": event.instance_id,
                 "diagnostic": diagnostic,
                 "timestamp": chrono::Utc::now().timestamp_millis(),
             }),
@@ -1369,12 +1367,11 @@ pub(crate) async fn publish_plugin_host_diagnostic(
     )
     .await
     .map_err(|error| {
-        RpcHandlerError::new(
-            -32603,
-            format!("failed to publish plugin host diagnostic: {error}"),
-        )
+        BackendDiagnosticError::Backend(format!(
+            "failed to publish plugin host diagnostic: {error}"
+        ))
     })?;
-    Ok(serde_json::json!({}))
+    Ok(())
 }
 
 fn push_plugin_host_diagnostic(snapshot: &mut Vec<Value>, diagnostic: Value) {
@@ -1533,8 +1530,23 @@ pub async fn shutdown_configured_plugin_host(
         }
     }
 
+    let lifecycle_lock = PLUGIN_HOST_LIFECYCLE_LOCK
+        .get_or_init(|| async { Mutex::new(()) })
+        .await;
+    // Cross the lifecycle mutex once after closing the gate so an ensure can
+    // no longer pass its final shutdown check and acquire a publication lease.
+    {
+        let _lifecycle_barrier = lifecycle_lock.lock().await;
+    }
+    wait_for_plugin_host_ensure_leases().await;
+    let _lifecycle_guard = lifecycle_lock.lock().await;
+
     if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
-        bridge.begin_draining().await;
+        if !bridge.begin_draining().await {
+            log::error!(
+                "Plugin Host backend requests did not stop before shutdown teardown; no replacement generation will be started"
+            );
+        }
     }
     let host_state = PLUGIN_HOST.get_or_init(|| async { Mutex::new(None) }).await;
     let host = host_state.lock().await.take();
@@ -1589,24 +1601,26 @@ pub async fn shutdown_configured_plugin_host(
 }
 
 async fn register_plugin_tools(
-    invoker: std::sync::Arc<dyn bitfun_runtime_ports::PluginRuntimeInvocationPort>,
+    runtime: Arc<dyn HookFunctionRuntime>,
+    host_generation: u64,
     instance_id: &str,
     workspace_scope: &str,
     workspace_root: &Path,
     generation_key: &str,
     revision: &str,
     config_fingerprint: &str,
-    open_result: &Value,
+    registration_batch: &HookFunctionRegistrationBatch,
     projection: &crate::plugin_config_projection::PluginConfigProjectionPlan,
 ) -> crate::BitFunResult<Vec<String>> {
-    let Some(tools) = open_result.get("tools").and_then(Value::as_array) else {
+    let tools = &registration_batch.tools;
+    if tools.is_empty() {
         log::debug!(
             "Plugin tool registration completed with no tools: workspace={}, instance_id={}",
             workspace_scope,
             instance_id
         );
         return Ok(Vec::new());
-    };
+    }
     log::debug!(
         "Plugin tool registration preparing: workspace={}, instance_id={}, tool_count={}",
         workspace_scope,
@@ -1620,33 +1634,17 @@ async fn register_plugin_tools(
         if allowed_runtime_agent_keys.is_empty() {
             continue;
         }
-        let registration_id = tool
-            .get("registrationID")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                crate::BitFunError::Validation("Plugin tool registrationID is missing".to_string())
-            })?;
-        let id = tool.get("id").and_then(Value::as_str).ok_or_else(|| {
-            crate::BitFunError::Validation("Plugin tool id is missing".to_string())
-        })?;
-        if !seen_ids.insert(id.to_string()) {
+        if !seen_ids.insert(tool.id.clone()) {
             return Err(crate::BitFunError::Validation(format!(
-                "Plugin tool id is duplicated in the open result: {id}"
+                "Plugin tool id is duplicated in the registration batch: {}",
+                tool.id
             )));
         }
-        let description = tool
-            .get("description")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let parameters = tool
-            .get("parameters")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({"type":"object"}));
         prepared.push((
-            registration_id.to_string(),
-            id.to_string(),
-            description.to_string(),
-            parameters,
+            tool.registration_id.clone(),
+            tool.id.clone(),
+            tool.description.clone(),
+            tool.parameters.clone(),
             allowed_runtime_agent_keys,
         ));
     }
@@ -1660,7 +1658,8 @@ async fn register_plugin_tools(
         crate::agentic::tools::plugin_host_tool::register_workspace_tool(
             workspace_scope,
             workspace_root,
-            invoker.clone(),
+            runtime.clone(),
+            host_generation,
             instance_id,
             generation_key,
             revision,
@@ -1690,24 +1689,6 @@ async fn register_plugin_tools(
     Ok(names)
 }
 
-fn validate_open_generation_lease(
-    result: &Value,
-    instance_id: &str,
-    generation_key: &str,
-    revision: &str,
-) -> crate::BitFunResult<()> {
-    let valid = result.get("instanceID").and_then(Value::as_str) == Some(instance_id)
-        && result.get("generationKey").and_then(Value::as_str) == Some(generation_key)
-        && result.get("revision").and_then(Value::as_str) == Some(revision);
-    if valid {
-        Ok(())
-    } else {
-        Err(crate::BitFunError::Validation(
-            "Plugin host open result generation lease does not match the request".to_string(),
-        ))
-    }
-}
-
 fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf> {
     if let Some(entry) = std::env::var_os(spec.entry_env) {
         return absolutize_existing_entry(PathBuf::from(entry), spec);
@@ -1719,12 +1700,9 @@ fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf
             executable.display()
         ))
     })?;
-    let bundled_entry = executable_directory
-        .join("resources")
-        .join("ext-host")
-        .join(spec.entry_filename);
-    if bundled_entry.is_file() {
-        return Ok(bundled_entry);
+    let bundled_entries = bundled_host_entry_candidates(&executable, spec);
+    if let Some(entry) = bundled_entries.iter().find(|entry| entry.is_file()) {
+        return Ok(entry.clone());
     }
     let development_entry = development_host_entry(spec);
     if let Some(entry) = development_entry.filter(|entry| entry.is_file()) {
@@ -1733,9 +1711,30 @@ fn resolve_host_entry(spec: PluginHostLaunchSpec) -> crate::BitFunResult<PathBuf
     Err(crate::BitFunError::NotFound(format!(
         "{} plugin host entry does not exist at {}. Set {} in development.",
         spec.runtime_name,
-        bundled_entry.display(),
+        bundled_entries
+            .first()
+            .map(|entry| entry.display().to_string())
+            .unwrap_or_else(|| executable_directory.display().to_string()),
         spec.entry_env
     )))
+}
+
+fn bundled_host_entry_candidates(executable: &Path, spec: PluginHostLaunchSpec) -> Vec<PathBuf> {
+    let Some(executable_directory) = executable.parent() else {
+        return Vec::new();
+    };
+    let relative_entry = Path::new("resources")
+        .join("ext-host")
+        .join(spec.entry_filename);
+    let mut candidates = vec![executable_directory.join(&relative_entry)];
+    if let Some(parent) = executable_directory.parent() {
+        candidates.push(parent.join("Resources").join(&relative_entry));
+        if let Some(binary_name) = executable.file_name() {
+            candidates.push(parent.join("lib").join(binary_name).join(&relative_entry));
+            candidates.push(parent.join("share").join(binary_name).join(&relative_entry));
+        }
+    }
+    candidates
 }
 
 fn development_host_entry(spec: PluginHostLaunchSpec) -> Option<PathBuf> {
@@ -1826,10 +1825,11 @@ fn absolutize_existing_entry(
 #[cfg(test)]
 mod tests {
     use super::{
-        development_host_entry, initialize_configured_plugin_host, instance_directories_equal,
-        plugin_host_pty_ids_for_instance, plugin_host_pty_owned_by, push_plugin_host_diagnostic,
-        register_plugin_host_pty, unregister_plugin_host_pty, PluginHostLaunchPolicy,
-        PluginHostLaunchSpec, PluginHostStartup, MAX_PLUGIN_HOST_DIAGNOSTICS,
+        bundled_host_entry_candidates, development_host_entry, initialize_configured_plugin_host,
+        instance_directories_equal, plugin_host_pty_ids_for_instance, plugin_host_pty_owned_by,
+        push_plugin_host_diagnostic, register_plugin_host_pty, unregister_plugin_host_pty,
+        PluginHostLaunchPolicy, PluginHostLaunchSpec, PluginHostStartup,
+        MAX_PLUGIN_HOST_DIAGNOSTICS,
     };
     use std::path::Path;
 
@@ -1855,6 +1855,21 @@ mod tests {
                 .join("dist")
                 .join("extension-host.js")
         ));
+    }
+
+    #[test]
+    fn bundled_host_entry_supports_desktop_platform_layouts() {
+        let entries = bundled_host_entry_candidates(
+            Path::new("product/bin/bitfun-desktop"),
+            PluginHostLaunchSpec::bun(),
+        );
+
+        assert!(entries
+            .iter()
+            .any(|entry| entry.ends_with(Path::new("bin/resources/ext-host/extension-host.js"))));
+        assert!(entries.iter().any(|entry| entry.ends_with(Path::new(
+            "product/Resources/resources/ext-host/extension-host.js"
+        ))));
     }
 
     #[tokio::test]
@@ -1912,5 +1927,4 @@ mod tests {
             MAX_PLUGIN_HOST_DIAGNOSTICS
         );
     }
-
 }

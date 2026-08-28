@@ -9,8 +9,8 @@ use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentModeCatalogEntry, AgentModeCatalogPort,
     AgentModeCatalogQuery, AgentRuntime, AgentRuntimeBuilder, AgentSessionCompactionPort,
     AgentSessionForkPort, AgentSessionLineagePort, AgentSessionModePort, AgentSessionModelPort,
-    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
-    AgentTurnSettlementPort, RuntimeError,
+    AgentSessionRestorePort, AgentSessionRestoreRequest, AgentSessionRestoreResult,
+    AgentSessionRevertPort, AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_agent_runtime::sdk::{
@@ -20,18 +20,20 @@ use bitfun_agent_runtime::sdk::{
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
-    AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionManagementPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome,
-    AgentSessionRollbackToTurnRequest, AgentSubmissionPort, AgentThreadGoalManagementPort,
-    AgentTurnCancellationPort, AgentUserShellCommandPort, AgentWorkspaceReferencePort,
-    SessionStoragePathRequest, SessionStorePort,
+    AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionManagementPort, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionRollbackToTurnOutcome, AgentSessionRollbackToTurnRequest,
+    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult,
+    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentUserShellCommandPort,
+    AgentWorkspaceReferencePort, PortError, PortErrorKind, PortResult, SessionStoragePathRequest,
+    SessionStorePort,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_runtime_ports::{
-    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionSource,
-    AgentTurnCancellationRequest, PermissionPolicyPreset, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity,
-    RuntimeServiceCapability, RuntimeServicePort, ToolPermissionConfig,
+    AgentInputAttachment, AgentSubmissionSource, AgentTurnCancellationRequest,
+    PermissionPolicyPreset, RemoteControlStatePort, RemoteControlStateRequest,
+    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
+    RuntimeServicePort, ToolPermissionConfig,
 };
 #[cfg(feature = "remote-connect")]
 use bitfun_services_integrations::remote_connect::{
@@ -87,6 +89,201 @@ use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability};
 #[cfg(feature = "remote-connect")]
 use crate::service::session::{DialogTurnData, ToolItemIdentityExt, TurnStatus};
+
+#[cfg(feature = "opencode-plugin-host")]
+#[derive(Clone)]
+struct ConfiguredPluginSubmissionPort {
+    inner: Arc<dyn AgentSubmissionPort>,
+    coordinator: Arc<ConversationCoordinator>,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+impl ConfiguredPluginSubmissionPort {
+    async fn ensure_workspace(request: &AgentSessionCreateRequest) -> PortResult<()> {
+        let Some(execution_root) = configured_plugin_execution_root(request)? else {
+            return Ok(());
+        };
+        crate::plugin_host::ensure_configured_plugin_instance(
+            crate::plugin_host::PluginHostLaunchPolicy::Enabled,
+            execution_root.clone(),
+            execution_root,
+            request.workspace_id.clone(),
+        )
+        .await
+        .map(|_| ())
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))
+    }
+
+    async fn ensure_session(&self, session_id: &str) -> PortResult<()> {
+        let Some(session) = self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id)
+        else {
+            return Ok(());
+        };
+        let Some(execution_root) = configured_plugin_root_from_session_facts(
+            session.config.workspace_path.as_deref(),
+            session.config.execution_target.as_ref(),
+            session.config.remote_connection_id.as_deref(),
+            session.config.remote_ssh_host.as_deref(),
+        )?
+        else {
+            return Ok(());
+        };
+        crate::plugin_host::ensure_configured_plugin_instance(
+            crate::plugin_host::PluginHostLaunchPolicy::Enabled,
+            execution_root.clone(),
+            execution_root,
+            session.config.workspace_id.clone(),
+        )
+        .await
+        .map(|_| ())
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn configured_plugin_execution_root(
+    request: &AgentSessionCreateRequest,
+) -> PortResult<Option<std::path::PathBuf>> {
+    configured_plugin_root_from_session_facts(
+        request.workspace_path.as_deref(),
+        request.execution_target.as_ref(),
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn configured_plugin_root_from_session_facts(
+    workspace_path: Option<&str>,
+    execution_target: Option<&bitfun_core_types::SessionExecutionTarget>,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> PortResult<Option<std::path::PathBuf>> {
+    if remote_connection_id.is_some() || remote_ssh_host.is_some() {
+        return Ok(None);
+    }
+    execution_target
+        .map(|target| target.root_path.as_str())
+        .or(workspace_path)
+        .map(std::path::PathBuf::from)
+        .map(Some)
+        .ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::InvalidRequest,
+                "workspace_path is required to initialize configured plugins",
+            )
+        })
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+#[async_trait::async_trait]
+impl AgentSubmissionPort for ConfiguredPluginSubmissionPort {
+    async fn create_session(
+        &self,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        Self::ensure_workspace(&request).await?;
+        self.inner.create_session(request).await
+    }
+
+    async fn create_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        Self::ensure_workspace(&request).await?;
+        self.inner.create_session_with_id(session_id, request).await
+    }
+
+    async fn create_transient_session_with_id(
+        &self,
+        session_id: String,
+        request: AgentSessionCreateRequest,
+    ) -> PortResult<AgentSessionCreateResult> {
+        Self::ensure_workspace(&request).await?;
+        self.inner
+            .create_transient_session_with_id(session_id, request)
+            .await
+    }
+
+    async fn submit_message(
+        &self,
+        request: AgentSubmissionRequest,
+    ) -> PortResult<AgentSubmissionResult> {
+        // Every existing-session turn is a recovery trigger. The ensure call
+        // is idempotent while the Host is healthy and republishes the same
+        // workspace generation after a process loss before execution resumes.
+        self.ensure_session(&request.session_id).await?;
+        self.inner.submit_message(request).await
+    }
+
+    async fn resolve_session_agent_type(&self, session_id: &str) -> PortResult<Option<String>> {
+        self.inner.resolve_session_agent_type(session_id).await
+    }
+}
+
+fn configured_plugin_submission_port(
+    coordinator: Arc<ConversationCoordinator>,
+) -> Arc<dyn AgentSubmissionPort> {
+    #[cfg(feature = "opencode-plugin-host")]
+    {
+        let inner: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        Arc::new(ConfiguredPluginSubmissionPort { inner, coordinator })
+    }
+    #[cfg(not(feature = "opencode-plugin-host"))]
+    {
+        coordinator
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+#[derive(Clone)]
+struct ConfiguredPluginSessionRestorePort {
+    inner: Arc<dyn AgentSessionRestorePort>,
+    submission: ConfiguredPluginSubmissionPort,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+#[async_trait::async_trait]
+impl AgentSessionRestorePort for ConfiguredPluginSessionRestorePort {
+    async fn restore_session(
+        &self,
+        request: AgentSessionRestoreRequest,
+    ) -> PortResult<AgentSessionRestoreResult> {
+        let restored = self.inner.restore_session(request).await?;
+        // The restored Session owns the authoritative execution target,
+        // including managed worktrees. Do not publish a plugin generation for
+        // the storage-path hint before that target has been reconstructed.
+        self.submission
+            .ensure_session(&restored.session.session_id)
+            .await?;
+        Ok(restored)
+    }
+}
+
+fn configured_plugin_session_restore_port(
+    coordinator: Arc<ConversationCoordinator>,
+) -> Arc<dyn AgentSessionRestorePort> {
+    #[cfg(feature = "opencode-plugin-host")]
+    {
+        let inner: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let submission_inner: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        Arc::new(ConfiguredPluginSessionRestorePort {
+            inner,
+            submission: ConfiguredPluginSubmissionPort {
+                inner: submission_inner,
+                coordinator,
+            },
+        })
+    }
+    #[cfg(not(feature = "opencode-plugin-host"))]
+    {
+        coordinator
+    }
+}
 
 #[cfg(feature = "remote-connect")]
 fn current_workspace_path() -> Option<std::path::PathBuf> {
@@ -1479,12 +1676,12 @@ impl CoreServiceAgentRuntime {
     pub(crate) fn agent_runtime(
         coordinator: Arc<ConversationCoordinator>,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -1518,7 +1715,7 @@ impl CoreServiceAgentRuntime {
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
@@ -1526,7 +1723,7 @@ impl CoreServiceAgentRuntime {
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -1566,14 +1763,14 @@ impl CoreServiceAgentRuntime {
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -1615,7 +1812,7 @@ impl CoreServiceAgentRuntime {
         session_usage: Arc<dyn AgentSessionUsagePort>,
         session_lineage: Arc<dyn AgentSessionLineagePort>,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
@@ -1654,14 +1851,14 @@ impl CoreServiceAgentRuntime {
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -1775,7 +1972,7 @@ impl CoreServiceAgentRuntime {
         session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
         services: bitfun_runtime_services::RuntimeServices,
     ) -> Result<AgentRuntime, String> {
-        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let workspace_references: Arc<dyn AgentWorkspaceReferencePort> = coordinator.clone();
@@ -1783,7 +1980,7 @@ impl CoreServiceAgentRuntime {
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
-        let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let user_shell_command: Arc<dyn AgentUserShellCommandPort> = coordinator.clone();
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
@@ -2630,6 +2827,70 @@ mod tests {
         ToolCallData, ToolItemData, TurnStatus, UserMessageData,
     };
     use crate::BitFunError;
+
+    #[cfg(feature = "opencode-plugin-host")]
+    fn plugin_session_request() -> AgentSessionCreateRequest {
+        AgentSessionCreateRequest {
+            session_name: "session".to_string(),
+            agent_type: "Code".to_string(),
+            agent_route_key: None,
+            workspace_path: Some("project".to_string()),
+            project_workspace_path: None,
+            execution_target: Some(bitfun_core_types::SessionExecutionTarget::local(
+                "project-worktree",
+            )),
+            workspace_id: Some("workspace-a".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            model_id: None,
+            metadata: serde_json::Map::new(),
+        }
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn configured_plugins_bind_to_the_session_execution_root() {
+        let request = plugin_session_request();
+
+        assert_eq!(
+            configured_plugin_execution_root(&request).expect("local execution root"),
+            Some(std::path::PathBuf::from("project-worktree"))
+        );
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn configured_plugins_do_not_execute_for_remote_sessions() {
+        let mut request = plugin_session_request();
+        request.remote_connection_id = Some("remote-a".to_string());
+
+        assert_eq!(
+            configured_plugin_execution_root(&request).expect("remote session is supported"),
+            None
+        );
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn configured_plugins_recover_from_the_persisted_session_execution_root() {
+        let target = bitfun_core_types::SessionExecutionTarget::local("restored-worktree");
+
+        assert_eq!(
+            configured_plugin_root_from_session_facts(Some("project"), Some(&target), None, None,)
+                .expect("restored local execution root"),
+            Some(std::path::PathBuf::from("restored-worktree"))
+        );
+        assert_eq!(
+            configured_plugin_root_from_session_facts(
+                Some("/remote/project"),
+                None,
+                Some("remote-a"),
+                None,
+            )
+            .expect("remote session remains outside the local Host"),
+            None
+        );
+    }
 
     #[test]
     fn session_close_preserves_writer_conflicts() {

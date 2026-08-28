@@ -66,6 +66,8 @@ Rust returns:
 
 `cacheDirectory` must be absolute and writable by the host. It is the only location in which the host installs npm plugins. The accepted `maxFrameBytes` remains fixed until disconnect. Capabilities are intersected by both peers. Rust must not execute function hooks or plugin tools unless `generation-fencing-v1` was negotiated. Config projection requires `config-contributors-v1`; multiple Config contributors additionally require `config-contributions-v2`.
 
+Rust exposes the connection as ready only after the successful handshake response has been written. The host rejects `host.*` requests observed before a valid response. Its operational handlers are installed before the request is sent, so a first business request delivered in the same TCP read as the successful response waits for host construction instead of racing method registration.
+
 ## Common wire types
 
 ### JSON values
@@ -152,6 +154,12 @@ One read returns no more than `maxBytes`, with a 64 KiB maximum. `eof: true` rel
 ## Rust-to-host methods
 
 ### Instance lifecycle
+
+#### `host.plugins.prepare`
+
+Params: `{ plugins, configurationFingerprint?, defaultBaseDirectory?, allowInstall? }`. The result contains the normalized `reviewed` declarations, successfully `prepared` entries, `failed` entries, diagnostics, and a stable `reviewDigest`. Each prepared entry includes its canonical identity and, when available, `contentHash`.
+
+The Host coalesces only concurrent preparation of the same declarations, configuration fingerprint, install policy, and effective default base directory. A settled result is discarded. `host.instance.open` resolves the graph again and compares `expectedReviewDigest` and `expectedContentDigests` before import, so a changed local file or package graph cannot reuse an earlier preparation snapshot.
 
 #### `host.instance.open`
 
@@ -248,7 +256,7 @@ The host binds the requested `instanceID + generationKey + revision` only after 
 
 Params: `{ instanceID }`. Result: `{ closed: boolean }`.
 
-The host rejects new operations, aborts active tools and fetches, releases auth flows and streams, closes the gateway, and invokes every disposer once. Dispose failures are diagnostics and do not stop remaining cleanup. Repeated close is idempotent.
+The host rejects new operations, aborts active tools and fetches, releases auth flows and streams, closes the gateway, and invokes every disposer once. Ordinary disposer failures are diagnostics and do not stop remaining cleanup. If an active Tool does not drain before the hard deadline, or a disposer itself exceeds its hard deadline, cleanup continues but the close request fails and the Host enters `closing`; Rust must retire that physical Host generation before opening a replacement. Repeated close after a confirmed cleanup is idempotent.
 
 #### `host.shutdown`
 
@@ -327,7 +335,7 @@ Rust invokes the tool by the returned opaque `registrationID`. `id` is the plugi
 
 Params: `{ instanceID, generationKey, revision, executionID, reason? }`. Result: `{ cancelled: boolean }`.
 
-The host aborts the retained signal. Cancellation is idempotent and does not hard-kill subprocesses created by a plugin.
+The host aborts the retained signal. Cancellation is idempotent and does not hard-kill subprocesses created by a plugin. `cancelled: true` means the invocation stopped after observing the abort; it does not prove that earlier filesystem, network, process, or other side effects were rolled back. Rust therefore reports a dispatched cancellation as outcome-unknown and must not automatically retry it.
 
 ### Auth
 

@@ -8,7 +8,7 @@
   "scripts": {
     "build": "bun build ./src/main.ts --target=bun --outfile=dist/extension-host.js",
     "generate": "bun run ./script/generate-protocol.ts",
-    "test": "bun test",
+    "test": "bun test --silent ./test/boundary.test.ts && bun test --silent ./test/gateway.test.ts && bun test --silent ./test/host.test.ts && bun test --silent ./test/loader.test.ts && bun test --silent ./test/loopback.test.ts && bun test --silent ./test/process.test.ts && bun test --silent ./test/rpc.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

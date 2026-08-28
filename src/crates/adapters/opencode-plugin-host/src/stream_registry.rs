@@ -14,7 +14,7 @@ const DEFAULT_MAX_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamReadParams {
+pub(crate) struct StreamReadParams {
     #[serde(rename = "instanceID")]
     pub instance_id: String,
     #[serde(rename = "streamID")]
@@ -24,28 +24,29 @@ pub struct StreamReadParams {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamReadResult {
+pub(crate) struct StreamReadResult {
     pub data: String,
     pub eof: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamCancelParams {
+pub(crate) struct StreamCancelParams {
     #[serde(rename = "instanceID")]
     pub instance_id: String,
     #[serde(rename = "streamID")]
     pub stream_id: String,
-    pub reason: Option<String>,
+    #[serde(rename = "reason")]
+    pub _reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct StreamCancelResult {
+pub(crate) struct StreamCancelResult {
     pub cancelled: bool,
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
-pub enum StreamRegistryError {
+pub(crate) enum StreamRegistryError {
     #[error("response stream registry capacity was reached")]
     Capacity,
     #[error("response stream body exceeds the registry byte limit")]
@@ -57,7 +58,7 @@ pub enum StreamRegistryError {
 }
 
 #[derive(Clone)]
-pub struct PluginHostStreamRegistry {
+pub(crate) struct PluginHostStreamRegistry {
     state: Arc<Mutex<StreamRegistryState>>,
     sequence: Arc<AtomicU64>,
     changed: Arc<Notify>,
@@ -83,7 +84,7 @@ impl Default for PluginHostStreamRegistry {
 }
 
 impl PluginHostStreamRegistry {
-    pub fn with_limits(max_active_streams: usize, max_total_bytes: usize) -> Self {
+    pub(crate) fn with_limits(max_active_streams: usize, max_total_bytes: usize) -> Self {
         Self {
             state: Arc::new(Mutex::new(StreamRegistryState {
                 streams: HashMap::new(),
@@ -96,7 +97,7 @@ impl PluginHostStreamRegistry {
         }
     }
 
-    pub async fn add(
+    pub(crate) async fn add(
         &self,
         instance_id: &str,
         bytes: Vec<u8>,
@@ -128,7 +129,7 @@ impl PluginHostStreamRegistry {
         })
     }
 
-    pub async fn read(
+    pub(crate) async fn read(
         &self,
         params: StreamReadParams,
     ) -> Result<StreamReadResult, StreamRegistryError> {
@@ -164,7 +165,7 @@ impl PluginHostStreamRegistry {
         Ok(StreamReadResult { data, eof })
     }
 
-    pub async fn cancel(
+    pub(crate) async fn cancel(
         &self,
         params: StreamCancelParams,
     ) -> Result<StreamCancelResult, StreamRegistryError> {
@@ -184,7 +185,7 @@ impl PluginHostStreamRegistry {
         Ok(StreamCancelResult { cancelled: true })
     }
 
-    pub async fn cancel_instance(&self, instance_id: &str) -> usize {
+    pub(crate) async fn cancel_instance(&self, instance_id: &str) -> usize {
         let mut state = self.state.lock().await;
         let stream_ids = state
             .streams
@@ -203,7 +204,7 @@ impl PluginHostStreamRegistry {
         stream_ids.len()
     }
 
-    pub async fn cancel_all(&self) -> usize {
+    pub(crate) async fn cancel_all(&self) -> usize {
         let mut state = self.state.lock().await;
         let count = state.streams.len();
         state.streams.clear();
@@ -214,11 +215,11 @@ impl PluginHostStreamRegistry {
         count
     }
 
-    pub async fn active_count(&self) -> usize {
+    pub(crate) async fn active_count(&self) -> usize {
         self.state.lock().await.streams.len()
     }
 
-    pub async fn wait_until_empty(&self, timeout: Duration) -> bool {
+    pub(crate) async fn wait_until_empty(&self, timeout: Duration) -> bool {
         let wait = async {
             loop {
                 let changed = self.changed.notified();
@@ -292,7 +293,7 @@ mod tests {
                 .cancel(StreamCancelParams {
                     instance_id: "instance:1".to_string(),
                     stream_id: descriptor.stream_id,
-                    reason: Some("test".to_string()),
+                    _reason: Some("test".to_string()),
                 })
                 .await
                 .expect("cancel")
@@ -319,7 +320,7 @@ mod tests {
             .cancel(StreamCancelParams {
                 instance_id: "instance:1".to_string(),
                 stream_id: descriptor.stream_id,
-                reason: Some("test".to_string()),
+                _reason: Some("test".to_string()),
             })
             .await
             .expect("cancel");

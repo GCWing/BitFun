@@ -1380,40 +1380,6 @@ pub enum ExternalSourceScope {
     RemoteProject,
 }
 
-/// Exact executable-source envelope presented by an ecosystem adapter for
-/// product approval. Persistence and policy owners compare the full value;
-/// no field independently grants execution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalExecutableActivationReview {
-    pub schema_version: u32,
-    pub ecosystem_id: String,
-    pub execution_domain_id: String,
-    pub workspace_scope: String,
-    pub phase: String,
-    pub source_identities: Vec<ExternalExecutableSourceIdentity>,
-    pub prepared_digest: String,
-    pub permission_summary_digest: String,
-    pub policy_revision: u64,
-    pub requires_install: bool,
-    pub approval_fingerprint: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalExecutableSourceIdentity {
-    pub plugin_id: String,
-    pub source_kind: String,
-    pub canonical_source: String,
-    /// Stable digest of the declaration options that affect plugin loading.
-    /// This is intentionally a digest rather than the options themselves so
-    /// activation records never persist or expose plugin configuration values.
-    #[serde(default)]
-    pub declaration_digest: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub content_digest: Option<String>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]

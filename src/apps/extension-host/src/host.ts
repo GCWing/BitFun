@@ -122,6 +122,12 @@ type ActiveAuthFetch = {
   descriptor?: StreamDescriptor
 }
 
+type ActiveTool = {
+  controller: AbortController
+  done: Promise<void>
+  stoppedAfterAbort: boolean
+}
+
 type Instance = {
   id: string
   generationKey?: string
@@ -138,7 +144,8 @@ type Instance = {
   workspaces: Map<string, WorkspaceRegistration>
   flows: Map<string, OAuthFlow>
   fetches: Map<string, AuthFetch>
-  activeTools: Map<string, { controller: AbortController; done: Promise<void> }>
+  activeTools: Map<string, ActiveTool>
+  activeHooks: Set<Promise<void>>
   activeFetches: Map<string, ActiveAuthFetch>
   openDone: Promise<void>
   finishOpen(): void
@@ -298,6 +305,7 @@ export class ExtensionHost {
         flows: new Map(),
         fetches: new Map(),
         activeTools: new Map(),
+        activeHooks: new Set(),
         activeFetches: new Map(),
         openDone: opened.promise,
         finishOpen: opened.resolve,
@@ -557,6 +565,12 @@ export class ExtensionHost {
         })
         throw error
       })
+      // Preparation de-duplicates only concurrent callers. Keeping a settled
+      // result here would let a later open validate an old content digest
+      // against the same cached snapshot after a local plugin changed.
+      .finally(() => {
+        this.#preparations.delete(key)
+      })
     this.#preparations.set(key, operation)
     return operation
   }
@@ -573,24 +587,30 @@ export class ExtensionHost {
     assertGeneration(instance, input.generationKey, input.revision)
     const hookInput = cloneWireValue(input.input, "input")
     const hookOutput = cloneWireValue(input.output, "output")
-
-    for (const retained of instance.hooks) {
-      const hook = Reflect.get(retained.hooks, input.name)
-      if (typeof hook !== "function") continue
-      try {
-        await Promise.resolve(hook(hookInput, hookOutput))
-      } catch (error) {
-        throw pluginError(retained.plugin, input.name, error)
+    const completed = Promise.withResolvers<void>()
+    instance.activeHooks.add(completed.promise)
+    try {
+      for (const retained of instance.hooks) {
+        const hook = Reflect.get(retained.hooks, input.name)
+        if (typeof hook !== "function") continue
+        try {
+          await Promise.resolve(hook(hookInput, hookOutput))
+        } catch (error) {
+          throw pluginError(retained.plugin, input.name, error)
+        }
       }
-    }
 
-    return {
-      instanceID: instance.id,
-      generationKey: instance.generationKey,
-      revision: instance.revision,
-      hook: input.name,
-      input: cloneWireValue(hookInput, "input"),
-      output: cloneWireValue(hookOutput, "output"),
+      return {
+        instanceID: instance.id,
+        generationKey: instance.generationKey,
+        revision: instance.revision,
+        hook: input.name,
+        input: cloneWireValue(hookInput, "input"),
+        output: cloneWireValue(hookOutput, "output"),
+      }
+    } finally {
+      instance.activeHooks.delete(completed.promise)
+      completed.resolve()
     }
   }
 
@@ -641,7 +661,12 @@ export class ExtensionHost {
 
     const controller = new AbortController()
     const completed = Promise.withResolvers<void>()
-    instance.activeTools.set(input.executionID, { controller, done: completed.promise })
+    const active: ActiveTool = {
+      controller,
+      done: completed.promise,
+      stoppedAfterAbort: false,
+    }
+    instance.activeTools.set(input.executionID, active)
     try {
       const args = validateToolArguments(registration.definition.args, cloneWireValue(input.args, "args"))
       const result = await registration.definition.execute(args as never, {
@@ -681,6 +706,7 @@ export class ExtensionHost {
         result: cloneWireValue(result, "result"),
       }
     } catch (error) {
+      if (controller.signal.aborted) active.stoppedAfterAbort = true
       throw pluginError(registration.plugin, `tool:${registration.id}`, error)
     } finally {
       instance.activeTools.delete(input.executionID)
@@ -695,7 +721,7 @@ export class ExtensionHost {
     if (!active) return { cancelled: false }
     active.controller.abort(input.reason)
     await active.done
-    return { cancelled: !instance.activeTools.has(input.executionID) }
+    return { cancelled: active.stoppedAfterAbort }
   }
 
   evaluateAuthPrompt(input: {
@@ -976,6 +1002,8 @@ export class ExtensionHost {
   }
 
   async #disposeInstance(instance: Instance) {
+    let lifecycleTimeout: unknown
+    const activeHookDrains = [...instance.activeHooks]
     const activeToolDrains = [...instance.activeTools.values()].map((active) => {
       active.controller.abort("Instance closed")
       return active.done
@@ -991,11 +1019,32 @@ export class ExtensionHost {
     // signal, so the host must keep the instance fenced until every call has
     // settled; the Rust owner will terminate the process when this bounded
     // dispose phase exceeds its deadline.
-    await promiseWithDeadline(
-      Promise.allSettled(activeToolDrains).then(() => undefined),
-      2_000,
-      "Plugin tool drain timed out",
-    ).catch(async (error) => {
+    try {
+      await promiseWithDeadline(
+        Promise.allSettled(activeHookDrains).then(() => undefined),
+        2_000,
+        "Plugin hook drain timed out",
+      )
+    } catch (error) {
+      lifecycleTimeout = error
+      this.#status = "closing"
+      await publishDiagnostic(this.#rpc, {
+        level: "error",
+        message: `Instance ${instance.id} active hook drain failed`,
+        instanceID: instance.id,
+        operation: "dispose",
+        error: errorData(error),
+      }).catch(() => {})
+    }
+    try {
+      await promiseWithDeadline(
+        Promise.allSettled(activeToolDrains).then(() => undefined),
+        2_000,
+        "Plugin tool drain timed out",
+      )
+    } catch (error) {
+      lifecycleTimeout = error
+      this.#status = "closing"
       await publishDiagnostic(this.#rpc, {
         level: "error",
         message: `Instance ${instance.id} active tool drain failed`,
@@ -1003,7 +1052,8 @@ export class ExtensionHost {
         operation: "dispose",
         error: errorData(error),
       }).catch(() => {})
-    })
+    }
+    instance.activeHooks.clear()
     instance.activeTools.clear()
     instance.activeFetches.clear()
     try {
@@ -1028,6 +1078,10 @@ export class ExtensionHost {
         try {
           await promiseWithDeadline(Promise.resolve(retained.hooks.dispose()), 2_000, "Plugin dispose timed out")
         } catch (error) {
+          if (error instanceof Error && error.message === "Plugin dispose timed out") {
+            lifecycleTimeout ??= error
+            this.#status = "closing"
+          }
           await publishDiagnostic(this.#rpc, {
             level: "error",
             message: `Plugin ${retained.plugin.spec} dispose hook failed`,
@@ -1044,6 +1098,7 @@ export class ExtensionHost {
         this.#directories.delete(instance.canonicalDirectory)
       }
     }
+    if (lifecycleTimeout) throw lifecycleTimeout
   }
 
   #instance(instanceID: string) {
@@ -1266,9 +1321,7 @@ function preparationKey(input: {
   configurationFingerprint?: string
   allowInstall?: boolean
 }) {
-  const needsDefaultBaseDirectory = input.declarations.some(
-    ({ spec, baseDirectory }) => !baseDirectory && (spec.startsWith(".") || spec.startsWith("file:")),
-  )
+  const needsDefaultBaseDirectory = input.declarations.some(({ baseDirectory }) => !baseDirectory)
   return JSON.stringify({
     configurationFingerprint: input.configurationFingerprint,
     allowInstall: input.allowInstall ?? true,

@@ -5,8 +5,10 @@ use crate::agentic::agents::{
 };
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_subagents::ExternalSubagentMode;
-use bitfun_runtime_ports::{PermissionConstraintLayer, PermissionEffect, PermissionRule};
-use serde::Deserialize;
+use bitfun_runtime_ports::{
+    HookFunctionContributorOutcome, HookFunctionPluginIdentity, HookFunctionRegistrationBatch,
+    HookFunctionToolRegistration, PermissionConstraintLayer, PermissionEffect, PermissionRule,
+};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -25,13 +27,23 @@ pub(crate) fn is_plugin_agent_runtime_key(runtime_agent_key: &str) -> bool {
     runtime_agent_key.starts_with("external_subagent_runtime:opencode-plugin:")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PluginIdentity {
     id: Option<String>,
     spec: String,
     entry: String,
     index: usize,
+}
+
+impl From<&HookFunctionPluginIdentity> for PluginIdentity {
+    fn from(value: &HookFunctionPluginIdentity) -> Self {
+        Self {
+            id: value.id.clone(),
+            spec: value.spec.clone(),
+            entry: value.entry.clone(),
+            index: value.index,
+        }
+    }
 }
 
 impl PluginIdentity {
@@ -44,26 +56,32 @@ impl PluginIdentity {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug)]
 struct ConfigContributor {
     plugin: PluginIdentity,
     outcome: ContributorOutcome,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
 struct ConfigContribution {
     plugin: PluginIdentity,
     outcome: ContributorOutcome,
     config: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ContributorOutcome {
     Applied,
     Failed,
+}
+
+impl From<HookFunctionContributorOutcome> for ContributorOutcome {
+    fn from(value: HookFunctionContributorOutcome) -> Self {
+        match value {
+            HookFunctionContributorOutcome::Applied => Self::Applied,
+            HookFunctionContributorOutcome::Failed => Self::Failed,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -113,21 +131,18 @@ impl PluginConfigProjectionPlan {
 
     pub(crate) fn allowed_runtime_agent_keys_for_tool(
         &self,
-        tool: &Value,
+        tool: &HookFunctionToolRegistration,
     ) -> crate::BitFunResult<BTreeSet<String>> {
         let plugin = tool
-            .get("plugin")
-            .cloned()
-            .and_then(|value| serde_json::from_value::<PluginIdentity>(value).ok())
+            .plugin
+            .as_ref()
+            .map(PluginIdentity::from)
             .ok_or_else(|| {
                 crate::BitFunError::Validation("Plugin tool identity is missing".to_string())
             })?;
-        let id = tool.get("id").and_then(Value::as_str).ok_or_else(|| {
-            crate::BitFunError::Validation("Plugin tool id is missing".to_string())
-        })?;
         Ok(self
             .tool_runtime_agent_keys
-            .get(&(plugin, id.to_string()))
+            .get(&(plugin, tool.id.clone()))
             .cloned()
             .unwrap_or_default())
     }
@@ -185,33 +200,36 @@ pub(crate) fn prepare(
     workspace_root: &Path,
     generation_key: &str,
     initial_config: &Map<String, Value>,
-    open_result: &Value,
+    registration_batch: &HookFunctionRegistrationBatch,
 ) -> crate::BitFunResult<PluginConfigProjectionPlan> {
-    let contributors = serde_json::from_value::<Vec<ConfigContributor>>(
-        open_result
-            .get("configContributors")
-            .cloned()
-            .unwrap_or_else(|| Value::Array(Vec::new())),
-    )
-    .map_err(|error| {
-        crate::BitFunError::Validation(format!("Invalid plugin config contributors: {error}"))
-    })?;
+    let contributors = registration_batch
+        .config_contributors
+        .iter()
+        .map(|entry| ConfigContributor {
+            plugin: PluginIdentity::from(&entry.plugin),
+            outcome: entry.outcome.into(),
+        })
+        .collect::<Vec<_>>();
     if contributors.is_empty() {
         return Ok(PluginConfigProjectionPlan::empty(
             workspace_root,
             generation_key,
         ));
     }
-    let config = open_result
-        .get("config")
-        .and_then(Value::as_object)
-        .ok_or_else(|| {
-            crate::BitFunError::Validation("Plugin config result is missing".to_string())
-        })?;
-    let contributions = config_contribution_sequence(open_result, &contributors, config)?;
+    let config = &registration_batch.config;
+    let contributions = registration_batch
+        .config_contributions
+        .iter()
+        .map(|entry| ConfigContribution {
+            plugin: PluginIdentity::from(&entry.plugin),
+            outcome: entry.outcome.into(),
+            config: entry.config.clone(),
+        })
+        .collect::<Vec<_>>();
+    let contributions = config_contribution_sequence(&contributions, &contributors, config)?;
     let attribution = attribute_config(initial_config, &contributions, config)?;
     let final_agents = config_object_field(config, "agent")?;
-    let plugin_tools = plugin_tool_ids_by_owner(open_result)?;
+    let plugin_tools = plugin_tool_ids_by_owner(&registration_batch.tools)?;
     let tool_owners = plugin_tools
         .iter()
         .flat_map(|(owner, tools)| tools.iter().cloned().map(|tool| (tool, owner.clone())))
@@ -368,11 +386,11 @@ struct ConfigAttribution {
 }
 
 fn config_contribution_sequence(
-    open_result: &Value,
+    contributions: &[ConfigContribution],
     contributors: &[ConfigContributor],
     final_config: &Map<String, Value>,
 ) -> crate::BitFunResult<Vec<ConfigContribution>> {
-    let Some(value) = open_result.get("configContributions") else {
+    if contributions.is_empty() {
         if contributors.len() == 1 {
             return Ok(vec![ConfigContribution {
                 plugin: contributors[0].plugin.clone(),
@@ -384,11 +402,7 @@ fn config_contribution_sequence(
             "unsupported_multiple_config_contributors: plugin host did not provide configContributions"
                 .to_string(),
         ));
-    };
-    let contributions =
-        serde_json::from_value::<Vec<ConfigContribution>>(value.clone()).map_err(|error| {
-            crate::BitFunError::Validation(format!("Invalid plugin config contributions: {error}"))
-        })?;
+    }
     if contributions.len() != contributors.len()
         || contributions
             .iter()
@@ -406,7 +420,7 @@ fn config_contribution_sequence(
             "Plugin config contribution sequence does not end at the final config".to_string(),
         ));
     }
-    Ok(contributions)
+    Ok(contributions.to_vec())
 }
 
 fn attribute_config(
@@ -628,26 +642,16 @@ fn parse_prompt(value: Option<&Value>, id: &str) -> crate::BitFunResult<String> 
 }
 
 fn plugin_tool_ids_by_owner(
-    open_result: &Value,
+    tools: &[HookFunctionToolRegistration],
 ) -> crate::BitFunResult<BTreeMap<PluginIdentity, BTreeSet<String>>> {
     let mut result = BTreeMap::<PluginIdentity, BTreeSet<String>>::new();
-    for tool in open_result
-        .get("tools")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
-        let identity = tool
-            .get("plugin")
-            .cloned()
-            .and_then(|value| serde_json::from_value::<PluginIdentity>(value).ok());
+    for tool in tools {
+        let identity = tool.plugin.as_ref().map(PluginIdentity::from);
         let identity = identity.ok_or_else(|| {
             crate::BitFunError::Validation("Plugin tool identity is missing".to_string())
         })?;
         validate_plugin_identity(&identity)?;
-        let id = tool.get("id").and_then(Value::as_str).ok_or_else(|| {
-            crate::BitFunError::Validation("Plugin tool id is missing".to_string())
-        })?;
+        let id = tool.id.as_str();
         if id.is_empty() || id.len() > 256 || id.chars().any(char::is_control) {
             return Err(crate::BitFunError::Validation(
                 "Plugin tool id is invalid".to_string(),
@@ -827,6 +831,12 @@ mod tests {
         })
     }
 
+    fn projection_identity(value: Value) -> PluginIdentity {
+        let typed: HookFunctionPluginIdentity =
+            serde_json::from_value(value).expect("typed plugin identity");
+        PluginIdentity::from(&typed)
+    }
+
     fn open_result() -> Value {
         let plugin = plugin();
         let config = json!({
@@ -858,13 +868,70 @@ mod tests {
         })
     }
 
+    fn registration_batch(result: &Value) -> HookFunctionRegistrationBatch {
+        let tools = result
+            .get("tools")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|tool| HookFunctionToolRegistration {
+                registration_id: format!(
+                    "registration-{}",
+                    tool.get("id").and_then(Value::as_str).unwrap_or_default()
+                ),
+                id: tool
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                plugin: tool
+                    .get("plugin")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .expect("typed tool owner"),
+                description: String::new(),
+                parameters: json!({"type": "object"}),
+            })
+            .collect();
+        HookFunctionRegistrationBatch {
+            generation: bitfun_runtime_ports::HookFunctionGeneration {
+                instance_id: "projection-test".to_string(),
+                generation_key: "projection-generation".to_string(),
+                revision: "projection-revision".to_string(),
+            },
+            config: result
+                .get("config")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default(),
+            config_contributors: serde_json::from_value(
+                result
+                    .get("configContributors")
+                    .cloned()
+                    .unwrap_or_else(|| json!([])),
+            )
+            .expect("typed config contributors"),
+            config_contributions: serde_json::from_value(
+                result
+                    .get("configContributions")
+                    .cloned()
+                    .unwrap_or_else(|| json!([])),
+            )
+            .expect("typed config contributions"),
+            diagnostics: Vec::new(),
+            hooks: Vec::new(),
+            tools,
+        }
+    }
+
     #[test]
     fn maps_target_agent_fields_and_plugin_tool_permissions() {
         let plan = prepare(
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &open_result(),
+            &registration_batch(&open_result()),
         )
         .expect("projection");
 
@@ -980,7 +1047,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .expect("multiple config contributors should project");
         assert_eq!(plan.registrations.len(), 3);
@@ -1025,7 +1092,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .expect("single contributor legacy projection");
 
@@ -1053,7 +1120,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .err()
         .expect("multiple contributors require contribution snapshots");
@@ -1071,7 +1138,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .err()
         .expect("contributor metadata must align");
@@ -1085,7 +1152,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .err()
         .expect("last contribution must equal final config");
@@ -1106,7 +1173,7 @@ mod tests {
             Path::new("C:/workspace"),
             "generation-1",
             &Map::new(),
-            &result,
+            &registration_batch(&result),
         )
         .err()
         .expect("agent must be an object");
@@ -1125,7 +1192,7 @@ mod tests {
                 Path::new("C:/workspace"),
                 "generation-1",
                 &Map::new(),
-                &result,
+                &registration_batch(&result),
             )
             .err()
             .expect("malformed skill paths must fail");
@@ -1148,7 +1215,7 @@ mod tests {
             .clone();
 
         let contributor = ConfigContribution {
-            plugin: serde_json::from_value(plugin()).unwrap(),
+            plugin: projection_identity(plugin()),
             outcome: ContributorOutcome::Applied,
             config: final_config.clone(),
         };
@@ -1167,14 +1234,13 @@ mod tests {
         let base = tempfile::tempdir().expect("base skill root");
         let first = tempfile::tempdir().expect("first plugin skill root");
         let second = tempfile::tempdir().expect("second plugin skill root");
-        let plugin_a: PluginIdentity = serde_json::from_value(plugin()).unwrap();
-        let plugin_b: PluginIdentity = serde_json::from_value(json!({
+        let plugin_a = projection_identity(plugin());
+        let plugin_b = projection_identity(json!({
             "id": "second",
             "spec": "D:/code/second",
             "entry": "D:/code/second/index.js",
             "index": 0
-        }))
-        .unwrap();
+        }));
         let initial = json!({"skills": {"paths": [base.path()]}})
             .as_object()
             .unwrap()
@@ -1237,14 +1303,13 @@ mod tests {
 
     #[test]
     fn reattributes_deleted_and_recreated_agents_and_permission_fields() {
-        let plugin_a: PluginIdentity = serde_json::from_value(plugin()).unwrap();
-        let plugin_b: PluginIdentity = serde_json::from_value(json!({
+        let plugin_a = projection_identity(plugin());
+        let plugin_b = projection_identity(json!({
             "id": "second",
             "spec": "D:/code/second",
             "entry": "D:/code/second/index.js",
             "index": 0
-        }))
-        .unwrap();
+        }));
         let initial = json!({"agent": {"build": {"prompt": "native"}}})
             .as_object()
             .unwrap()

@@ -89,6 +89,42 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 | OC-E2 | 一个真实 package plugin，仅实现其需要的 loader 和最小 client/context | 全部 loader fallback 和 Client API |
 | OC-E3 | 按阻塞样例加入 Hook；TUI 先接 command/slash/key，toast 需先有 CLI 类型明确的状态/通知模块 | 原始 renderer、Server、Remote、连接器 |
 
+### 2.1 当前受管 package-plugin 运行切片
+
+当前生产路径已经包含一个受管 Bun Plugin Host，用于执行配置中显式声明的 OpenCode Server plugin。Desktop、CLI 和
+app-server 复用同一条 Core 装配路径；每个本地 Session 在创建前按实际 execution root 确保对应逻辑实例，Remote
+Session 不在控制机回退执行插件。一个物理 Host 可以承载多个目录实例，实例和贡献都由
+`instance_id + generation_key + revision` 隔离。
+
+Desktop、CLI 和 app-server 的标准开发/构建命令都会先构建 `extension-host.js`；Desktop 包、CLI 产品包和
+app-server release 输出都把它放入 `resources/ext-host`。当前分发仍要求系统提供兼容的 `bun`（也可通过
+`BITFUN_BUN_COMMAND` 显式指定）；签名 Bun
+sidecar 尚未交付，因此安装包还不能宣称插件运行时完全自包含。恢复 Session 和 Host 崩溃后的同 Session 下一次提交
+都会重新 ensure 实际 execution root；Remote Session 继续保持不在控制机执行本地插件。
+
+Rust 侧只暴露一个类型化 `HookFunctionRuntime` 数据面，覆盖启动及完整注册快照、`tool.execute.before/after`、插件
+Tool 执行与取消、dispose，以及插件反向调用的 metadata/ask。OpenCode wire JSON 和 RPC lease 留在 adapter 内，
+`PluginRuntimeClient` 继续负责通用插件状态/诊断控制面。`tool.execute.before` 先于 native `PreToolUse`，两者完成后
+重新做 schema 和权限判断；Tool 只执行一次，`tool.execute.after` 再先于 native `PostToolUse`。运行型插件 Hook
+失败会停止当前有序 Hook 链；after 失败只把已执行结果标成错误并反馈给模型，不进入 Tool 重试。
+
+Config Hook、插件 Agent/权限/Skill 投影、Tool 注册和模型可见 output 已接入现有归属模块。Host 会在完整 after Hook
+链中继续传递 `title`、`output`、`metadata`；BitFun 当前稳定 `ToolResult` 只有 model-visible output 是可变展示字段，
+因此最终只消费 output，原始 Tool 结果保持不可变。title/metadata 需要出现真实 UI 或持久化消费方后再增加一个小的
+展示契约，不能写回原始审计结果或临时塞入无关字段。
+
+当前信任边界是“配置中显式声明的插件等同受信任本地可执行扩展”。此前的 activation review/approve 接口没有进入
+执行门禁，继续保留会让调用方误以为已有安全保证，现已删除。此切片保持完整功能，但不满足本文第 7 节的安全完成
+判定；后续安全 PR 必须在不改变 `HookFunctionRuntime` 业务语义的前提下补齐：
+
+- import 前不可变内容快照和 TOCTOU 校验；
+- 来源签名、provenance 与安装/更新完整性；
+- 首次启用和扩权确认、细粒度权限及可撤销激活状态；
+- 凭据隔离、环境变量最小化和敏感数据审计；
+- 每插件 worker/沙箱选型，以及 CPU、内存、网络、子进程和队列额度。
+
+现有进程树回收、代际 fencing、期限、取消和 Host 故障重启仍是功能可靠性控制，不代表已经实现恶意插件隔离。
+
 ## 3. 能力矩阵
 
 `当前状态`只表示 OpenCode 兼容行为是否已经进入 BitFun 生产路径，不把“BitFun 有相似基础模块”算成已兼容。
@@ -130,35 +166,33 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 |---|---|---|---|---|---|---|
 | `.opencode/tools/*.js` | 补基础能力 | 受支持单文件子集已接入 Tool Runtime | 可完整适配 | OC-R2 | 当前 Node worker 支持基础 schema、默认值、字符串结果、取消/超时/撤下；完整 Zod、模块依赖、`metadata`/`ask` 和附件结果继续走类型化进程通信扩展 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
 | `.opencode/tools/*.ts` | 补基础能力 | 已识别，执行不支持 | 可完整适配 | OC-R2 | 当前静态显示不 import；后续由固定样例选择 Node 转译或 Bun/TypeScript worker，保留真实 schema 与 execute，不在 Rust 猜测 TS 语义 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
-| 插件 `tool` map | 补基础能力 + 补扩展接口 | 未实现 | 可完整适配 | OC-R2 | 运行插件工厂，按同一双表示注册真实工具，并接到 Tool 归属模块 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
-| 项目与用户目录插件 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 直接发现本地 JS/TS 模块，不要求 BitFun 专用清单；来源、插件身份和执行域确认后，在旧 Host 停止后由新 Host 加载 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
-| 配置中的软件包插件 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 确认来源、插件身份和执行域后，用 npm 配置、Arborist、package-lock 和 `ignoreScripts: true` 准备依赖，再由与固定插件样例匹配的 Node/Bun 脚本执行后端加载 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
+| 插件 `tool` map | 补基础能力 + 补扩展接口 | 已实现：受管 Host 注册、执行、取消和 generation 隔离 | 可完整适配 | OC-R2 | 继续扩充固定兼容样例；附件结果在产品有真实消费方前保持显式不支持 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
+| 项目与用户目录插件 | 补基础能力 | 部分实现：配置显式声明的本地文件/目录可执行，自动目录发现未实现 | 可完整适配 | OC-R2 | 补完整来源顺序下的自动发现与状态 UX；运行继续复用受管 Host | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
+| 配置中的软件包插件 | 补基础能力 | 已实现：受管缓存准备、禁用 lifecycle scripts、Bun Host 加载 | 可完整适配 | OC-R2 | 安装/更新 provenance、不可变快照和激活权限按 2.1 的安全后续项补齐 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
 | 全局插件加载 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 自动发现全局配置和 ConfigPaths 全局目录，并按完整来源顺序生成 `plugin_origins`；首次可执行启用按来源、插件身份和执行域确认，决定只提示一次且可按项目覆盖 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
-| `package.json`、入口与依赖 | 补基础能力 | 未实现 | 可主要适配 | OC-R2 | 复现 server 入口、入口回退、`engines.opencode`、npm 配置和锁文件；原生模块失败只影响对应插件 | [来源与执行版本](opencode-plugin-runtime-adapter-design.md#4-来源与执行版本) |
+| `package.json`、入口与依赖 | 补基础能力 | 主要实现：server exports/main/入口回退、`engines.opencode` 与受管依赖准备 | 可主要适配 | OC-R2 | 补更多 npm 配置和原生模块兼容样例；失败保持插件级诊断 | [来源与执行版本](opencode-plugin-runtime-adapter-design.md#4-来源与执行版本) |
 | 内置/MCP/外部同名工具；后续 pure/重复插件顺序 | 融合现有能力 | standalone Tool 显式选择已实现 | 可完整适配 | OC-R2 | 当前按候选身份与内容版本记忆选择且不静默覆盖；package plugin 阶段再复现 internal-first、pure、来源顺序和去重 | [注册与覆盖](opencode-plugin-runtime-adapter-design.md#53-注册与覆盖) |
-| `project` / `directory` / `worktree` | 直接桥接 | standalone Tool 已传 `directory/worktree/sessionID`；完整 `project` 未实现 | 可完整适配 | OC-R2 | 当前 `directory` 为打开的 workspace、`worktree` 为 Git 根并传递真实 session；完整插件 `project` 和 Remote 在 OC-R5 前保持 `unsupported` | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
-| `client` | 补扩展接口 | 未实现 | 可主要适配 | OC-R2 | 提供版本化插件客户端接口，按方法转发到现有 BitFun 归属模块 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
-| `serverUrl` | 补扩展接口 | 未实现 | 可主要适配 | OC-R2 | 在 Plugin Host 执行域提供真实回环服务，只实现插件所需的版本化路由 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
-| `$` 与脚本环境 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 只有需要 OpenCode/Bun `$` 的固定样例才启用 Bun-compatible adapter；Node 路径不能伪造等价语义。受限模式依赖真实 OS/容器边界，无法落实时停用插件 | [默认策略](opencode-plugin-runtime-adapter-design.md#3-默认策略与可调权限) |
-| 加载、停用、更新与崩溃恢复 | 补基础能力 | standalone Tool 加载失败即撤下脚本 | 可主要适配 | OC-R2 | 已有来源限定身份、后台重载、删除撤下与 worker 终止；package plugin 还需共享 Plugin Host、安全重启和进程级恢复 | [生命周期](opencode-plugin-runtime-adapter-design.md#9-生命周期) |
-| 同一 Host 内未文档化全局共享 | 明确限制 | 未实现 | 可主要适配 | OC-R2 | package plugin 默认共享 Plugin Host，但不把 `globalThis`、进程环境或模块单例协作提升为稳定兼容承诺 | [故障域](opencode-plugin-runtime-adapter-design.md#81-故障域) |
+| `project` / `directory` / `worktree` | 直接桥接 | 已实现：受管实例和 Tool context 使用真实本地 execution root；Remote 明确不回退 | 可完整适配 | OC-R2 | 继续补固定多工作树/多 Session 样例 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
+| `client` | 补扩展接口 | 主要实现：Plugin 所需方法经实例回环 gateway 转发现有后端 owner | 可主要适配 | OC-R2 | 按真实插件补方法；未知写操作稳定失败 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
+| `serverUrl` | 补扩展接口 | 已实现：每实例独立 loopback gateway，支持流式 HTTP/SSE | 可主要适配 | OC-R2 | WebSocket 明确不支持；完整外部 Server 协议不在本切片 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
+| `$` 与脚本环境 | 补基础能力 | 已实现：受管 Bun Host 注入公开 `$` 能力 | 可完整适配 | OC-R2 | 受限模式仍依赖后续真实 OS/容器安全边界 | [默认策略](opencode-plugin-runtime-adapter-design.md#3-默认策略与可调权限) |
+| 加载、停用、更新与崩溃恢复 | 补基础能力 | 已实现：共享 Host、逻辑实例 dispose、代际 fencing、进程树回收和下一次 ensure 重启 | 可主要适配 | OC-R2 | 不可变旧版本恢复和安全更新策略按 2.1 后续项补齐 | [生命周期](opencode-plugin-runtime-adapter-design.md#9-生命周期) |
+| 同一 Host 内未文档化全局共享 | 明确限制 | 已实现共享 Host，但不承诺未文档化全局协作 | 可主要适配 | OC-R2 | 保留公开 PluginInput、Hook 顺序和显式接口 | [故障域](opencode-plugin-runtime-adapter-design.md#81-故障域) |
 
 本类整体风险是第三方代码副作用、依赖安装失败、Hook 顺序不一致和 Plugin Host 失控。默认权限可以开放，但 Rust 主应用与 Plugin Host 的进程隔离、超时、取消、队列上限、结果大小和故障恢复必须始终启用。
 
 ### 3.3 稳定服务 Hook
 
-本节的“实现”指进入真实 OpenCode 插件运行时。BitFun 当前按插件声明与具名导出顺序，从本地插件文件静态展示
-下列 Hook 属性，并把 `tool.execute.before/after` 映射到已有 Tool Hook 点；未知或动态注册保持 `opaque`。映射仅表示
-BitFun 已识别等价契约覆盖，不表示外部 handler 已加载、激活或执行。目录不会 import 或执行插件，内容版本也只
-内容摘要化脱敏后的目录事实，因此不改变任何 Hook Runtime 的“未实现”结论。`tool` 是工具注册能力，不作为 Hook
-事件猜测或静态显示。
+本节的“实现”指进入真实 OpenCode 插件运行时。静态 Hook catalog 仍只负责 runtime-free 发现；配置中显式声明的
+package plugin 则由受管 Host import，并通过类型化 `HookFunctionRuntime` 执行。两条路径的状态必须分别显示，静态
+发现不能冒充运行可用，运行 Host 也不能反向接管其他生态的静态目录。
 
 | Hook | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 |
 |---|---|---|---|---|---|
-| `dispose` | 直接桥接 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 调用清理并设置期限；超时回收 worker。 |
+| `dispose` | 直接桥接 | 已实现：有界清理；drain/dispose 超时使 Host 代际失效并回收进程树 | 可完整适配 | OC-R3 | 补真实阻塞插件的跨平台 Host 重启样例。 |
 | `event` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 提供版本化事件代理并隔离插件异常。 |
-| `config` | 补扩展接口 + 融合现有能力 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 按插件顺序变换，最后由 Config 归属模块校验提交。 |
-| `tool` | 补基础能力 + 补扩展接口 | 未实现 | 可完整适配 | OC-R2 | 注册真实工具定义与执行函数。 |
+| `config` | 补扩展接口 + 融合现有能力 | 已实现：按插件顺序执行并投影 Agent、权限、Tool、Skill | 可完整适配 | OC-R3 | 继续由各归属模块做最终校验，不扩大 adapter ownership。 |
+| `tool` | 补基础能力 + 补扩展接口 | 已实现：真实定义、执行、取消和 generation-fenced 路由 | 可完整适配 | OC-R2 | 附件结果等待产品消费方。 |
 | `auth` | 补扩展接口 | 静态目录可见，运行未实现 | 可主要适配 | OC-R3 | 提供 API/OAuth 方法和脱敏凭据代理。 |
 | `provider` | 补扩展接口 + 融合现有能力 | 静态目录可见，运行未实现 | 可主要适配 | OC-R3 | 将动态模型列表接入 Provider 归属模块。 |
 | `chat.message` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 依次变换消息和 parts，变换后重做结构校验。 |
@@ -166,9 +200,9 @@ BitFun 已识别等价契约覆盖，不表示外部 handler 已加载、激活�
 | `chat.headers` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 依次变换请求头，敏感值不进入日志。 |
 | `permission.ask` | 融合现有能力 | 静态目录可见，运行未实现 | 可主要适配 | OC-R3 | 默认保留 allow/deny/ask 语义；用户或组织策略可收紧。 |
 | `command.execute.before` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 在命令执行前依次变换消息 parts。 |
-| `tool.execute.before` | 补扩展接口 | 静态映射可见，运行未实现 | 可完整适配 | OC-R3 | 变换最终参数，随后重做 schema 和权限判断。 |
+| `tool.execute.before` | 补扩展接口 | 已实现：先于 native PreToolUse，之后重做 schema 和权限判断 | 可完整适配 | OC-R3 | 补完整端到端 fixture 与交互验证。 |
 | `shell.env` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 在实际执行域构造环境变量。 |
-| `tool.execute.after` | 补扩展接口 | 静态映射可见，运行未实现 | 可完整适配 | OC-R3 | 依次变换 title、output、metadata，保留原始结果引用。 |
+| `tool.execute.after` | 补扩展接口 | 已实现：有序变换并保留原始结果；最终 model-visible output 已消费 | 可完整适配 | OC-R3 | title/metadata 等待稳定 UI/持久化消费方，见 2.1。 |
 | `tool.definition` | 补扩展接口 + 融合现有能力 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 变换模型可见 JSON Schema；真实执行继续使用 worker 中原始 Zod 校验，保持 OpenCode 双表示语义。 |
 
 Hook 的共同风险是把变换误做成通知、并行调用破坏顺序或插件写入非法状态。所有 Hook 都走类型化调用、顺序执行和归属模块终检；具体调用协议见[服务插件运行时设计](opencode-plugin-runtime-adapter-design.md#6-钩子适配与权威提交)。

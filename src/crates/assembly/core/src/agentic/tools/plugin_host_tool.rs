@@ -3,11 +3,12 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_events::ToolExecutionProgressInfo;
 use bitfun_runtime_ports::{
-    PluginRuntimeInvocationPort, PluginToolCancellationRequest, PluginToolInvocationRequest,
-    PortErrorKind,
+    HookFunctionCancelRequest, HookFunctionGeneration, HookFunctionReverseAsk,
+    HookFunctionReverseMetadata, HookFunctionReverseReply, HookFunctionReverseSink,
+    HookFunctionRuntime, HookFunctionToolContext, HookFunctionToolRequest, PortError,
+    PortErrorKind, PortResult,
 };
-use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, OnceLock, RwLock};
@@ -15,7 +16,8 @@ use std::time::Duration;
 
 #[derive(Clone)]
 struct PluginHostToolRoute {
-    invoker: Arc<dyn PluginRuntimeInvocationPort>,
+    runtime: Arc<dyn HookFunctionRuntime>,
+    host_generation: u64,
     instance_id: String,
     generation_key: String,
     revision: String,
@@ -31,28 +33,34 @@ struct PluginToolExecutionRoute {
     dialog_turn_id: String,
     agent: String,
     tool_name: String,
+    tool_call_id: Option<String>,
     generation_key: String,
     revision: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PluginToolMetadataParams {
-    #[serde(rename = "instanceID")]
-    instance_id: String,
-    #[serde(rename = "generationKey")]
-    generation_key: Option<String>,
-    revision: Option<String>,
-    #[serde(rename = "executionID")]
-    execution_id: String,
-    title: Option<String>,
-    metadata: Option<Map<String, Value>>,
 }
 
 fn executions() -> &'static dashmap::DashMap<(String, String), PluginToolExecutionRoute> {
     static EXECUTIONS: OnceLock<dashmap::DashMap<(String, String), PluginToolExecutionRoute>> =
         OnceLock::new();
     EXECUTIONS.get_or_init(dashmap::DashMap::new)
+}
+
+struct PluginToolExecutionGuard {
+    key: (String, String),
+}
+
+fn dispatched_tool_cancel_error(stopped: bool) -> BitFunError {
+    let detail = if stopped {
+        "OpenCode plugin tool stopped after cancellation, but its side effects may already have committed"
+    } else {
+        "OpenCode plugin tool cancellation was not confirmed"
+    };
+    BitFunError::OutcomeUnknown(detail.to_string())
+}
+
+impl Drop for PluginToolExecutionGuard {
+    fn drop(&mut self) {
+        executions().remove(&self.key);
+    }
 }
 
 struct PluginHostToolMux {
@@ -177,6 +185,12 @@ impl Tool for PluginHostToolMux {
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
         self.route_for(context).is_some()
     }
+    fn manages_own_execution_timeout(&self) -> bool {
+        // Side-effecting plugin calls must reach the typed timeout/cancel path;
+        // the generic pipeline timeout would drop the RPC future without a
+        // confirmed terminal outcome.
+        true
+    }
     async fn call_impl(
         &self,
         input: &Value,
@@ -185,16 +199,15 @@ impl Tool for PluginHostToolMux {
         let route = self.route_for(Some(context)).ok_or_else(|| {
             BitFunError::service("OpenCode plugin tool is not registered for this workspace")
         })?;
-        let execution_id = context
-            .tool_call_id
-            .clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let rpc_context = serde_json::json!({
-            "sessionID": context.session_id.clone().unwrap_or_default(),
-            "messageID": context.dialog_turn_id.clone().unwrap_or_default(),
-            "agent": context.agent_type.clone().unwrap_or_default(),
-            "callID": context.tool_call_id,
-        });
+        // OpenCode execution IDs are Host-local operation identities. A model
+        // tool-call ID is only a presentation correlation and can repeat across
+        // sessions, so never use it as the reverse-RPC routing key.
+        let execution_id = uuid::Uuid::new_v4().to_string();
+        let generation = HookFunctionGeneration {
+            instance_id: route.instance_id.clone(),
+            generation_key: route.generation_key.clone(),
+            revision: route.revision.clone(),
+        };
         let execution_key = (route.instance_id.clone(), execution_id.clone());
         executions().insert(
             execution_key.clone(),
@@ -203,19 +216,26 @@ impl Tool for PluginHostToolMux {
                 dialog_turn_id: context.dialog_turn_id.clone().unwrap_or_default(),
                 agent: context.agent_type.clone().unwrap_or_default(),
                 tool_name: self.id.clone(),
+                tool_call_id: context.tool_call_id.clone(),
                 generation_key: route.generation_key.clone(),
                 revision: route.revision.clone(),
             },
         );
-        let call = route.invoker.invoke_tool(
-            PluginToolInvocationRequest {
-                instance_id: route.instance_id.clone(),
-                generation_key: route.generation_key.clone(),
-                revision: route.revision.clone(),
+        let _execution_guard = PluginToolExecutionGuard {
+            key: execution_key.clone(),
+        };
+        let call = route.runtime.execute_tool(
+            HookFunctionToolRequest {
+                generation: generation.clone(),
                 execution_id: execution_id.clone(),
                 registration_id: route.registration_id.clone(),
                 args: input.clone(),
-                context: rpc_context,
+                context: HookFunctionToolContext {
+                    session_id: context.session_id.clone().unwrap_or_default(),
+                    message_id: context.dialog_turn_id.clone().unwrap_or_default(),
+                    agent: context.agent_type.clone().unwrap_or_default(),
+                    call_id: context.tool_call_id.clone(),
+                },
             },
             Duration::from_secs(120),
         );
@@ -223,11 +243,9 @@ impl Tool for PluginHostToolMux {
             tokio::select! {
                 value = call => value,
                 _ = token.cancelled() => {
-                    let cancelled = match route.invoker.cancel_tool(
-                        PluginToolCancellationRequest {
-                            instance_id: route.instance_id.clone(),
-                            generation_key: route.generation_key.clone(),
-                            revision: route.revision.clone(),
+                    let cancelled = match route.runtime.cancel(
+                        HookFunctionCancelRequest {
+                            generation: generation.clone(),
                             execution_id: execution_id.clone(),
                             reason: Some("cancelled".to_string()),
                         },
@@ -235,28 +253,28 @@ impl Tool for PluginHostToolMux {
                     ).await {
                         Ok(cancelled) => cancelled,
                         Err(error) => {
-                            crate::plugin_host::fault_configured_plugin_host(
+                            crate::plugin_host::fault_configured_plugin_host_generation(
+                                route.host_generation,
                                 "plugin tool cancellation failed",
                             ).await;
                             return Err(BitFunError::OutcomeUnknown(error.to_string()));
                         }
                     };
-                    executions().remove(&execution_key);
-                    return if cancelled {
-                        Err(BitFunError::Cancelled("OpenCode plugin tool cancelled".to_string()))
+                    return if cancelled.stopped {
+                        Err(dispatched_tool_cancel_error(true))
                     } else {
-                        crate::plugin_host::fault_configured_plugin_host(
+                        crate::plugin_host::fault_configured_plugin_host_generation(
+                            route.host_generation,
                             "plugin tool cancellation was not confirmed",
                         )
                         .await;
-                        Err(BitFunError::OutcomeUnknown("OpenCode plugin tool cancellation was not confirmed".to_string()))
+                        Err(dispatched_tool_cancel_error(false))
                     };
                 }
             }
         } else {
             call.await
         };
-        executions().remove(&execution_key);
         let result = result.map_err(|error| match error.kind {
             // A timed-out/cancelled side-effecting plugin call may still have
             // completed in the Host. Preserve this distinction so the tool
@@ -274,20 +292,17 @@ impl Tool for PluginHostToolMux {
             )),
         });
         if matches!(result, Err(BitFunError::OutcomeUnknown(_))) {
-            crate::plugin_host::fault_configured_plugin_host(
+            crate::plugin_host::fault_configured_plugin_host_generation(
+                route.host_generation,
                 "plugin tool invocation outcome is unknown",
             )
             .await;
         }
         let result = result?;
-        if result
-            .get("attachments")
-            .and_then(Value::as_array)
-            .is_some_and(|attachments| !attachments.is_empty())
-        {
+        if !result.attachments.is_empty() {
             return Err(BitFunError::service("unsupported_tool_attachment"));
         }
-        let (data, assistant) = match result {
+        let (data, assistant) = match result.output {
             Value::String(value) => (Value::String(value.clone()), Some(value)),
             Value::Object(object) => {
                 let output = object.get("output").cloned().unwrap_or(Value::Null);
@@ -306,36 +321,46 @@ impl Tool for PluginHostToolMux {
     }
 }
 
-pub(crate) async fn handle_tool_metadata(
-    params: Value,
-) -> Result<Value, bitfun_opencode_plugin_host::RpcHandlerError> {
-    let params: PluginToolMetadataParams = serde_json::from_value(params).map_err(|error| {
-        bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32602,
-            format!("invalid backend.tool.metadata params: {error}"),
-        )
-    })?;
+struct PluginToolReverseSink;
+
+pub(crate) fn reverse_sink() -> Arc<dyn HookFunctionReverseSink> {
+    Arc::new(PluginToolReverseSink)
+}
+
+#[async_trait]
+impl HookFunctionReverseSink for PluginToolReverseSink {
+    async fn metadata(&self, params: HookFunctionReverseMetadata) -> PortResult<()> {
+        handle_tool_metadata(params).await
+    }
+
+    async fn ask(&self, params: HookFunctionReverseAsk) -> PortResult<HookFunctionReverseReply> {
+        handle_tool_ask(params).await
+    }
+}
+
+async fn handle_tool_metadata(params: HookFunctionReverseMetadata) -> PortResult<()> {
     let route = executions()
-        .get(&(params.instance_id, params.execution_id.clone()))
+        .get(&(
+            params.generation.instance_id.clone(),
+            params.execution_id.clone(),
+        ))
         .map(|entry| entry.clone())
         .ok_or_else(|| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(
-                -32004,
+            PortError::new(
+                PortErrorKind::NotAvailable,
                 "plugin tool execution is no longer active",
             )
         })?;
-    validate_reverse_generation(
-        params.generation_key.as_deref(),
-        params.revision.as_deref(),
-        &route,
-    )?;
-    let progress_message = params
-        .title
-        .unwrap_or_else(|| Value::Object(params.metadata.unwrap_or_default()).to_string());
+    validate_reverse_generation(&params.generation, &route)?;
+    let progress_message = if params.title.is_empty() {
+        Value::Object(params.metadata).to_string()
+    } else {
+        params.title
+    };
     crate::infrastructure::events::emit_global_event(
         crate::infrastructure::events::BackendEvent::ToolExecutionProgress(
             ToolExecutionProgressInfo {
-                tool_use_id: params.execution_id,
+                tool_use_id: route.tool_call_id.clone().unwrap_or(params.execution_id),
                 tool_name: route.tool_name,
                 progress_message,
                 percentage: None,
@@ -348,96 +373,50 @@ pub(crate) async fn handle_tool_metadata(
     )
     .await
     .map_err(|error| {
-        bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32603,
+        PortError::new(
+            PortErrorKind::Backend,
             format!("failed to publish plugin tool metadata: {error}"),
         )
     })?;
-    Ok(serde_json::json!({}))
+    Ok(())
 }
 
-pub(crate) async fn handle_tool_ask(
-    params: Value,
-) -> Result<Value, bitfun_opencode_plugin_host::RpcHandlerError> {
-    let instance_id = params
-        .get("instanceID")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(
-                -32602,
-                "backend.tool.ask instanceID is missing",
-            )
-        })?;
-    let execution_id = params
-        .get("executionID")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(
-                -32602,
-                "backend.tool.ask executionID is missing",
-            )
-        })?;
+async fn handle_tool_ask(params: HookFunctionReverseAsk) -> PortResult<HookFunctionReverseReply> {
+    let instance_id = &params.generation.instance_id;
+    let execution_id = &params.execution_id;
     let route = executions()
         .get(&(instance_id.to_string(), execution_id.to_string()))
         .map(|entry| entry.clone())
         .ok_or_else(|| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(
-                -32004,
+            PortError::new(
+                PortErrorKind::NotAvailable,
                 "plugin tool execution is no longer active",
             )
         })?;
-    validate_reverse_generation(
-        params.get("generationKey").and_then(Value::as_str),
-        params.get("revision").and_then(Value::as_str),
-        &route,
-    )?;
+    validate_reverse_generation(&params.generation, &route)?;
     let instance = crate::plugin_host::plugin_host_instance_by_id(instance_id)
         .await
         .ok_or_else(|| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(
-                -32004,
+            PortError::new(
+                PortErrorKind::NotAvailable,
                 "plugin instance is unavailable",
             )
         })?;
     if instance.generation_key != route.generation_key || instance.revision != route.revision {
-        return Err(bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32004,
+        return Err(PortError::new(
+            PortErrorKind::NotAvailable,
             "plugin tool generation is no longer active",
         ));
     }
-    let permission = params
-        .get("permission")
-        .and_then(Value::as_str)
-        .unwrap_or("custom_tool");
-    let mut patterns = params
-        .get("patterns")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    let permission_action = if permission == route.tool_name {
+    let mut patterns = params.patterns;
+    let permission_action = if params.permission == route.tool_name {
         if patterns.is_empty() {
             patterns.push(route.tool_name.clone());
         }
         "custom_tool"
     } else {
-        permission
+        &params.permission
     };
-    let always = params
-        .get("always")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    let metadata = params
-        .get("metadata")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
     let policy = crate::agentic::agents::get_agent_registry()
         .get_agent_tool_policy(&route.agent, Some(&instance.directory))
         .await;
@@ -449,8 +428,8 @@ pub(crate) async fn handle_tool_ask(
             &policy.permission_constraints,
         ) == bitfun_runtime_ports::PermissionEffect::Deny
     }) {
-        return Err(bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32003,
+        return Err(PortError::new(
+            PortErrorKind::PermissionDenied,
             "plugin tool permission denied by the active agent policy",
         ));
     }
@@ -460,69 +439,68 @@ pub(crate) async fn handle_tool_ask(
     if permission_action == "custom_tool"
         && patterns.iter().all(|resource| resource == &route.tool_name)
     {
-        return Ok(serde_json::json!({}));
+        return Ok(HookFunctionReverseReply::Once);
     }
     let manager = crate::product_runtime::core_permission_request_manager()
-        .map_err(|error| bitfun_opencode_plugin_host::RpcHandlerError::new(-32603, error))?;
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error))?;
     let mut pending = manager
         .register_batch_for_turn(
             vec![bitfun_runtime_ports::PermissionRequest {
                 request_id: uuid::Uuid::new_v4().to_string(),
                 round_id: route.dialog_turn_id.clone(),
                 order: 0,
-                tool_call_id: Some(execution_id.to_string()),
+                tool_call_id: route
+                    .tool_call_id
+                    .clone()
+                    .or_else(|| Some(execution_id.to_string())),
                 project_path: Some(instance.canonical_directory.clone()),
                 project_id: instance.project_id,
                 session_id: route.session_id,
                 agent_id: route.agent,
                 action: permission_action.to_string(),
                 resources: patterns,
-                save_resources: always,
+                save_resources: params.always,
                 source: bitfun_runtime_ports::PermissionRequestSource {
                     kind: bitfun_runtime_ports::PermissionRequestSourceKind::Extension,
                     identity: instance_id.to_string(),
                 },
                 delegation: None,
-                display_metadata: metadata,
+                display_metadata: params.metadata,
             }],
             route.dialog_turn_id,
         )
         .await
-        .map_err(|error| {
-            bitfun_opencode_plugin_host::RpcHandlerError::new(-32603, error.to_string())
-        })?;
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?;
     let pending = pending
         .pop()
         .expect("single permission batch must return one receiver");
     match pending.wait().await {
         bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
-            bitfun_runtime_ports::PermissionReply::Once
-            | bitfun_runtime_ports::PermissionReply::Always,
-        ) => Ok(serde_json::json!({})),
+            bitfun_runtime_ports::PermissionReply::Once,
+        ) => Ok(HookFunctionReverseReply::Once),
+        bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
+            bitfun_runtime_ports::PermissionReply::Always,
+        ) => Ok(HookFunctionReverseReply::Always),
         bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
             bitfun_runtime_ports::PermissionReply::Reject { feedback },
-        ) => Err(bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32003,
-            feedback.unwrap_or_else(|| "plugin tool permission denied".to_string()),
-        )),
-        bitfun_agent_runtime::permission::PermissionWaitOutcome::Cancelled { reason } => Err(
-            bitfun_opencode_plugin_host::RpcHandlerError::new(-32003, reason),
-        ),
+        ) => Ok(HookFunctionReverseReply::Reject { feedback }),
+        bitfun_agent_runtime::permission::PermissionWaitOutcome::Cancelled { reason } => {
+            Ok(HookFunctionReverseReply::Reject {
+                feedback: Some(reason),
+            })
+        }
     }
 }
 
 fn validate_reverse_generation(
-    generation_key: Option<&str>,
-    revision: Option<&str>,
+    generation: &HookFunctionGeneration,
     route: &PluginToolExecutionRoute,
-) -> Result<(), bitfun_opencode_plugin_host::RpcHandlerError> {
-    if generation_key == Some(route.generation_key.as_str())
-        && revision == Some(route.revision.as_str())
-    {
+) -> PortResult<()> {
+    if generation.generation_key == route.generation_key && generation.revision == route.revision {
         Ok(())
     } else {
-        Err(bitfun_opencode_plugin_host::RpcHandlerError::new(
-            -32004,
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
             "plugin tool reverse RPC generation lease does not match the active execution",
         ))
     }
@@ -536,7 +514,8 @@ fn muxes() -> &'static RwLock<BTreeMap<String, Arc<PluginHostToolMux>>> {
 pub(crate) async fn register_workspace_tool(
     workspace_scope: &str,
     workspace_root: &std::path::Path,
-    invoker: Arc<dyn PluginRuntimeInvocationPort>,
+    runtime: Arc<dyn HookFunctionRuntime>,
+    host_generation: u64,
     instance_id: &str,
     generation_key: &str,
     revision: &str,
@@ -572,7 +551,8 @@ pub(crate) async fn register_workspace_tool(
     mux.set_route(
         workspace_scope.to_string(),
         PluginHostToolRoute {
-            invoker,
+            runtime,
+            host_generation,
             instance_id: instance_id.to_string(),
             generation_key: generation_key.to_string(),
             revision: revision.to_string(),
@@ -626,11 +606,14 @@ pub(crate) async fn unregister_workspace_tools(
 #[cfg(test)]
 mod tests {
     use super::{
-        executions, handle_tool_ask, handle_tool_metadata, PluginHostToolMux, PluginHostToolRoute,
-        PluginToolExecutionRoute,
+        dispatched_tool_cancel_error, executions, handle_tool_ask, handle_tool_metadata,
+        PluginHostToolMux, PluginHostToolRoute, PluginToolExecutionRoute,
     };
-    use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use bitfun_opencode_plugin_host::JsonRpcPeer;
+    use bitfun_runtime_ports::{
+        HookFunctionGeneration, HookFunctionReverseAsk, HookFunctionReverseMetadata, PortErrorKind,
+    };
     use serde_json::json;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -657,12 +640,8 @@ mod tests {
     ) -> PluginHostToolRoute {
         let instance_id = instance_id.to_string();
         PluginHostToolRoute {
-            invoker: bitfun_opencode_plugin_host::invocation_port(
-                client,
-                instance_id.clone(),
-                "generation-test",
-                "revision-test",
-            ),
+            runtime: bitfun_opencode_plugin_host::hook_function_runtime(client),
+            host_generation: 1,
             instance_id: instance_id.clone(),
             generation_key: "generation-test".to_string(),
             revision: "revision-test".to_string(),
@@ -688,6 +667,23 @@ mod tests {
             &Default::default(),
             &Default::default(),
         )
+    }
+
+    #[test]
+    fn plugin_tools_own_their_side_effecting_timeout_path() {
+        let mux = PluginHostToolMux::new(
+            "timeout-tool".to_string(),
+            bitfun_agent_runtime::native_hooks::RuntimeHookRegistry::default(),
+        );
+
+        assert!(mux.manages_own_execution_timeout());
+    }
+
+    #[test]
+    fn dispatched_tool_abort_is_not_reported_as_a_definite_cancellation() {
+        let error = dispatched_tool_cancel_error(true);
+
+        assert!(matches!(error, crate::BitFunError::OutcomeUnknown(_)));
     }
 
     #[tokio::test]
@@ -815,27 +811,40 @@ mod tests {
 
     #[tokio::test]
     async fn ask_for_missing_execution_route_is_rejected() {
-        let error = handle_tool_ask(json!({
-            "instanceID": "missing-instance",
-            "executionID": "missing-execution"
-        }))
+        let error = handle_tool_ask(HookFunctionReverseAsk {
+            generation: HookFunctionGeneration {
+                instance_id: "missing-instance".to_string(),
+                generation_key: "missing-generation".to_string(),
+                revision: "missing-revision".to_string(),
+            },
+            execution_id: "missing-execution".to_string(),
+            permission: "custom_tool".to_string(),
+            patterns: Vec::new(),
+            always: Vec::new(),
+            metadata: Default::default(),
+        })
         .await
         .unwrap_err();
 
-        assert_eq!(error.code, -32004);
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
     }
 
     #[tokio::test]
     async fn metadata_for_missing_execution_route_is_rejected() {
-        let error = handle_tool_metadata(json!({
-            "instanceID": "missing-instance",
-            "executionID": "missing-execution",
-            "title": "progress"
-        }))
+        let error = handle_tool_metadata(HookFunctionReverseMetadata {
+            generation: HookFunctionGeneration {
+                instance_id: "missing-instance".to_string(),
+                generation_key: "missing-generation".to_string(),
+                revision: "missing-revision".to_string(),
+            },
+            execution_id: "missing-execution".to_string(),
+            title: "progress".to_string(),
+            metadata: Default::default(),
+        })
         .await
         .unwrap_err();
 
-        assert_eq!(error.code, -32004);
+        assert_eq!(error.kind, PortErrorKind::NotAvailable);
     }
 
     #[tokio::test]
@@ -850,22 +859,25 @@ mod tests {
                 dialog_turn_id: "turn-a".to_string(),
                 agent: "agentic".to_string(),
                 tool_name: "plugin-tool".to_string(),
+                tool_call_id: Some("tool-call-a".to_string()),
                 generation_key: "generation-a".to_string(),
                 revision: "revision-a".to_string(),
             },
         );
 
-        let result = handle_tool_metadata(json!({
-            "instanceID": instance_id,
-            "generationKey": "generation-a",
-            "revision": "revision-a",
-            "executionID": execution_id,
-            "title": "Reading README.md",
-            "metadata": {"path": "README.md"}
-        }))
+        let result = handle_tool_metadata(HookFunctionReverseMetadata {
+            generation: HookFunctionGeneration {
+                instance_id,
+                generation_key: "generation-a".to_string(),
+                revision: "revision-a".to_string(),
+            },
+            execution_id,
+            title: "Reading README.md".to_string(),
+            metadata: serde_json::from_value(json!({"path": "README.md"})).unwrap(),
+        })
         .await;
         executions().remove(&key);
 
-        assert_eq!(result.unwrap(), json!({}));
+        result.unwrap();
     }
 }

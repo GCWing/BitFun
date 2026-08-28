@@ -253,7 +253,7 @@ describe("plugin loader", () => {
       path.join(outside, "server.ts"),
       'export default { id: "fixture.escape", server: async () => ({}) }\n',
     )
-    await symlink(outside, path.join(plugin, "escape"), "dir")
+    await symlink(outside, path.join(plugin, "escape"), process.platform === "win32" ? "junction" : "dir")
 
     const result = await loadPlugins({
       declarations: [plugin],
@@ -311,11 +311,14 @@ describe("plugin loader", () => {
       type: "git",
     })
     expect(parseNpmPluginSpecifier("file:./plugin.tgz", "/tmp/extension-host-base").installSpec).toBe(
-      "file:/tmp/extension-host-base/plugin.tgz",
+      pathToFileURL(path.resolve("/tmp/extension-host-base/plugin.tgz")).href,
     )
   })
 
-  test("installs npm packages with lifecycle scripts disabled", async () => {
+  // Bun 1.3.x cannot install local file dependencies reliably on Windows
+  // (oven-sh/bun#13379). File plugin declarations use the direct validated
+  // loader path in production; this integration case remains covered on Unix.
+  test.skipIf(process.platform === "win32")("installs npm packages with lifecycle scripts disabled", async () => {
     const directory = await temporaryDirectory()
     const source = path.join(directory, "source")
     const marker = path.join(directory, "postinstall.txt")
@@ -332,7 +335,7 @@ describe("plugin loader", () => {
     await Bun.write(path.join(source, "index.js"), "export default { server: async () => ({}) }\n")
 
     const target = await installNpmPlugin({
-      spec: `file:${source}`,
+      spec: pathToFileURL(source).href,
       packageName: "fixture-install",
       cacheDirectory: path.join(directory, "cache"),
     })

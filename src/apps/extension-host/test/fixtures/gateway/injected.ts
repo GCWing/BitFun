@@ -3,7 +3,9 @@ import type { PluginModule } from "@opencode-ai/plugin"
 const server: PluginModule["server"] = async (input) => {
   const project = await input.client.project.current()
   const raw = await fetch(new URL("/raw?fixture=1", input.serverUrl)).then((response) => response.text())
-  const shell = (await input.$`printf injected-shell`.text()).trim()
+  // `echo` is provided by Bun Shell on every supported platform; `printf`
+  // is not available in the Windows implementation.
+  const shell = (await input.$`echo injected-shell`.text()).trim()
 
   input.experimental_workspace.register("fixture-remote", {
     name: "Fixture remote",

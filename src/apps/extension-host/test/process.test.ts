@@ -111,9 +111,20 @@ describe("extension host process boundary", () => {
     const harness = await launchExtensionHost({ handshakeGate: gate.promise })
     running.add(harness)
 
-    await expect(harness.peer.request("host.stream.cancel", {})).rejects.toMatchObject({ code: -32601 })
+    const earlyRequest = harness.peer.request("host.stream.cancel", {})
+    const outcome = await Promise.race([
+      earlyRequest.then(
+        (value) => ({ kind: "resolved" as const, value }),
+        (error) => ({ kind: "rejected" as const, error }),
+      ),
+      Bun.sleep(1_000).then(() => ({ kind: "timeout" as const })),
+    ])
     gate.resolve()
-    expect(await harness.peer.request<{ closed: boolean }>("host.shutdown", {})).toEqual({ closed: true })
+    if (outcome.kind === "timeout") await earlyRequest.catch(() => {})
+    expect(outcome).toMatchObject({ kind: "rejected", error: { code: -32601 } })
+    expect(
+      await requestAfterHandshakeReply(() => harness.peer.request<{ closed: boolean }>("host.shutdown", {})),
+    ).toEqual({ closed: true })
     expect(await harness.waitForExit()).toBe(0)
   })
 
@@ -244,6 +255,18 @@ describe("extension host process boundary", () => {
     expect(await harness.waitForExit()).toBe(0)
   }, 10_000)
 })
+
+async function requestAfterHandshakeReply<Result>(request: () => Promise<Result>) {
+  const deadline = performance.now() + 1_000
+  for (;;) {
+    try {
+      return await request()
+    } catch (error) {
+      if (!(error instanceof RpcError) || error.code !== -32601 || performance.now() >= deadline) throw error
+      await Bun.sleep(5)
+    }
+  }
+}
 
 type OpenResult = {
   config: Record<string, unknown>

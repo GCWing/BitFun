@@ -42,6 +42,10 @@ export default {
         hookInput.trace.push("full")
         output.trace.push("full")
       },
+      "tool.execute.before": async () => {
+        await record(options.hookStartMarker, "started")
+        if (options.hookDelayMs) await Bun.sleep(options.hookDelayMs)
+      },
       dispose: async () => {
         await record(options.disposeMarker, `full:${run}`)
       },
@@ -61,10 +65,14 @@ export default {
               metadata: { value: args.value },
             })
             if (args.waitForAbort) {
-              await new Promise((resolve, reject) => {
-                if (context.abort.aborted) return reject(new Error("fixture aborted"))
-                context.abort.addEventListener("abort", () => reject(new Error("fixture aborted")), { once: true })
-              })
+              if (options.ignoreAbortMs) {
+                await Bun.sleep(options.ignoreAbortMs)
+              } else {
+                await new Promise((resolve, reject) => {
+                  if (context.abort.aborted) return reject(new Error("fixture aborted"))
+                  context.abort.addEventListener("abort", () => reject(new Error("fixture aborted")), { once: true })
+                })
+              }
             }
             return {
               title: `echo:${args.value}`,

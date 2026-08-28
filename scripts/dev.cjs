@@ -657,7 +657,7 @@ async function main() {
   let currentStep = 1;
 
   // Step 1: Run all independent preparation tasks in parallel.
-  // copy-monaco / generate-version / mobile-web / flashgrep have no
+  // copy-monaco / generate-version / mobile-web / flashgrep / plugin-host have no
   // dependencies on each other; each task's output is line-prefixed so the
   // interleaved logs stay attributable. The DeepSeek bridge is not prepared
   // here: it is not a compile-time Tauri resource. Official desktop:build
@@ -666,7 +666,7 @@ async function main() {
     currentStep++,
     totalSteps,
     desktopMode
-      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep)'
+      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep, plugin-host)'
       : 'Prepare resources (parallel: monaco, version)'
   );
 
@@ -687,6 +687,11 @@ async function main() {
   ];
 
   if (desktopMode) {
+    prepTasks.push({
+      name: 'Prepare OpenCode extension Host',
+      hint: 'Hint: install Bun, then run `pnpm run plugin-host:prepare`',
+      promise: runCommandPrefixed('plugin-host', 'pnpm', ['run', 'plugin-host:prepare']),
+    });
     prepTasks.push({
       name: 'Build mobile-web',
       promise: runCommandPrefixed('mobile-web', 'node', ['scripts/mobile-web-build.cjs', '--install']),

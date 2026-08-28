@@ -216,7 +216,15 @@ async fn main() -> Result<()> {
     );
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    let server = axum::serve(listener, app).with_graceful_shutdown(async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(error = %error, "Failed to listen for Server shutdown signal");
+        }
+    });
+    let serve_result = server.await;
+    let shutdown_result = bitfun_core::plugin_host::shutdown_configured_plugin_host().await;
+    serve_result?;
+    shutdown_result?;
 
     Ok(())
 }

@@ -20,16 +20,19 @@ export type RpcPeerOptions = {
   maxFrameBytes?: number
   onEof?: (error?: Error) => void | Promise<void>
   onError?: (error: Error) => void
+  onRequest?: (method: string) => void
 }
 
 export type RpcRequestOptions = {
   signal?: AbortSignal
+  onResult?: (value: unknown) => void
 }
 
 type PendingRequest = {
   resolve(value: unknown): void
   reject(error: Error): void
   cleanup(): void
+  onResult?: (value: unknown) => void
 }
 
 export class RpcError extends Error {
@@ -66,6 +69,7 @@ export class RpcPeer {
   readonly #pending = new Map<string, PendingRequest>()
   readonly #onEof?: RpcPeerOptions["onEof"]
   readonly #onError?: RpcPeerOptions["onError"]
+  readonly #onRequest?: RpcPeerOptions["onRequest"]
   readonly #resolveClosed: () => void
   #buffer = new Uint8Array()
   #sequence = 0
@@ -81,6 +85,7 @@ export class RpcPeer {
     this.#maxFrameBytes = validateMaxFrameBytes(options.maxFrameBytes ?? DEFAULT_MAX_FRAME_BYTES)
     this.#onEof = options.onEof
     this.#onError = options.onError
+    this.#onRequest = options.onRequest
     const deferred = Promise.withResolvers<void>()
     this.closed = deferred.promise
     this.#resolveClosed = deferred.resolve
@@ -117,7 +122,12 @@ export class RpcPeer {
       deferred.reject(abortError(options.signal?.reason))
     }
     const cleanup = () => options.signal?.removeEventListener("abort", abort)
-    this.#pending.set(id, { resolve: deferred.resolve, reject: deferred.reject, cleanup })
+    this.#pending.set(id, {
+      resolve: deferred.resolve,
+      reject: deferred.reject,
+      cleanup,
+      ...(options.onResult ? { onResult: options.onResult } : {}),
+    })
     options.signal?.addEventListener("abort", abort, { once: true })
 
     try {
@@ -223,10 +233,23 @@ export class RpcPeer {
       pending.reject(new RpcError(message.error.code, message.error.message, message.error.data))
       return
     }
+    try {
+      pending.onResult?.(message.result)
+    } catch (error) {
+      pending.reject(asError(error))
+      return
+    }
     pending.resolve(message.result)
   }
 
   async #dispatch(method: string, params: unknown, id?: string) {
+    try {
+      this.#onRequest?.(method)
+    } catch (error) {
+      if (id) await this.#sendError(id, rpcErrorObject(error))
+      else this.#reportError(asError(error))
+      return
+    }
     const handler = this.#handlers.get(method)
     if (!handler) {
       if (id) await this.#sendError(id, { code: -32601, message: `Method not found: ${method}` })

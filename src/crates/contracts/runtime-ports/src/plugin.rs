@@ -1,6 +1,5 @@
 use crate::{PortError, PortErrorKind, PortResult};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,60 +60,6 @@ impl ExtensionCapabilityAvailability {
 }
 
 pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginToolInvocationRequest {
-    pub instance_id: String,
-    pub generation_key: String,
-    pub revision: String,
-    pub execution_id: String,
-    pub registration_id: String,
-    pub args: Value,
-    pub context: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginHookInvocationRequest {
-    pub instance_id: String,
-    pub generation_key: String,
-    pub revision: String,
-    pub hook_name: String,
-    pub input: Value,
-    pub output: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginToolCancellationRequest {
-    pub instance_id: String,
-    pub generation_key: String,
-    pub revision: String,
-    pub execution_id: String,
-    pub reason: Option<String>,
-}
-
-/// Provider-neutral live invocation boundary. Wire DTOs, leases and process
-/// handles remain inside the concrete adapter implementation.
-#[async_trait::async_trait]
-pub trait PluginRuntimeInvocationPort: Send + Sync {
-    async fn invoke_tool(
-        &self,
-        request: PluginToolInvocationRequest,
-        deadline: std::time::Duration,
-    ) -> PortResult<Value>;
-    async fn invoke_hook(
-        &self,
-        request: PluginHookInvocationRequest,
-        deadline: std::time::Duration,
-    ) -> PortResult<Value>;
-    async fn cancel_tool(
-        &self,
-        request: PluginToolCancellationRequest,
-        deadline: std::time::Duration,
-    ) -> PortResult<bool>;
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
