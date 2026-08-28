@@ -1,5 +1,5 @@
 import { RemoteSession } from '../../model/RemoteModels';
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatTimelineItem } from '../../model/ChatTimelineModels';
 import { ChatTimelineState } from '../../services/ChatTimelineStore';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteLogger } from '../../services/RemoteLogger';

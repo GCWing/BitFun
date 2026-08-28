@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
 import { ChatTypingDots } from './ChatMessageChrome';
@@ -45,7 +46,7 @@ export struct SubagentTaskCard {
         .width(18)
         .height(32)
         Text(this.title)
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .layoutWeight(1)
@@ -66,8 +67,8 @@ export struct SubagentTaskCard {
         }
         if (this.content.trim().length > 0) {
           Text(this.content)
-            .fontSize(13)
-            .lineHeight(19)
+            .fontSize(MobileDesignTypography.bodySmall.size)
+            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
             .fontColor(MUTED)
             .width('100%')
         }

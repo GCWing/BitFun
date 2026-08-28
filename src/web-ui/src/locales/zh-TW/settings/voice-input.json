@@ -89,6 +89,13 @@
       "taskStopped": "目前的 BitFun 任務已停止。",
       "taskAlreadyComplete": "任務已經完成，無需停止。",
       "noActiveTask": "目前沒有正在執行的 BitFun 任務。",
+      "taskOutcome": {
+        "completed": "任務已完成。{{conclusion}}",
+        "completedWithoutConclusion": "任務已完成，但沒有傳回文字結論。",
+        "failed": "任務未完成。原因：{{reason}}",
+        "failedWithoutReason": "任務未完成，未傳回具體原因。",
+        "cancelled": "任務未完成，已依要求停止。"
+      },
       "status": {
         "connecting": "正在連線火山引擎…",
         "connected": "連線成功，正在建立會話…",

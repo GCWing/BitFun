@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, MUTED, SOFT } from './Theme';
@@ -10,6 +11,7 @@ import {
 } from '../policy/SettingsPlacementPolicy';
 import { SessionActionCapabilities, SessionActionPolicy, SessionActionScope } from '../policy/SessionActionPolicy';
 import { SessionDetailsView } from './SessionDetailsView';
+import { RemoteSessionRow } from './RemoteSessionRow';
 import {
   SessionListInputs,
   SessionListProjection,
@@ -192,7 +194,7 @@ export struct RemoteSessionList {
   private TimeGroupHeader(title: string, collapsed: boolean, action: () => void) {
     Row({ space: 8 }) {
       Text(title)
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
       if (collapsed) {
@@ -219,11 +221,11 @@ export struct RemoteSessionList {
       Row() {
         Row({ space: 8 }) {
           Text(RemoteI18n.t('sidebar.projects'))
-            .fontSize(14)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Text(`${this.projectEntries().length}`)
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(MUTED)
         }
         Blank()
@@ -240,7 +242,7 @@ export struct RemoteSessionList {
               .width(24)
               .height(24)
             Text(project.name || this.basename(project.path))
-              .fontSize(15)
+              .fontSize(MobileDesignTypography.titleSmall.size)
               .fontColor(INK)
               .layoutWeight(1)
               .maxLines(1)
@@ -299,7 +301,7 @@ export struct RemoteSessionList {
       }, (project: RecentWorkspaceEntry): string => project.path)
       if (this.visibleProjectCount < this.projectEntries().length) {
         Text(RemoteI18n.f('remote.projects.showMore', String(this.nextProjectEntryBatchSize())))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(MUTED)
           .height(40)
           .width('100%')
@@ -331,7 +333,7 @@ export struct RemoteSessionList {
   private ProjectCreateMenuItem(label: string, agentType: string, path: string) {
     Row() {
       Text(label)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .fontWeight(FontWeight.Medium)
     }
@@ -350,7 +352,7 @@ export struct RemoteSessionList {
       Row() {
         Row({ space: 8 }) {
           Text(RemoteI18n.t('remote.chats'))
-            .fontSize(14)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Stack({ alignContent: Alignment.Center }) {
@@ -390,7 +392,7 @@ export struct RemoteSessionList {
         })
         if (this.chatVisibleCount < this.visibleChatSessions().length) {
           Text(RemoteI18n.f('remote.sessions.showMore', String(this.nextChatBatchSize())))
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontColor(MUTED)
             .height(40)
             .width('100%')
@@ -412,7 +414,7 @@ export struct RemoteSessionList {
     })
     if (this.projectVisibleCount(path) < this.projectSessions(path).length) {
       Text(RemoteI18n.f('remote.sessions.showMore', String(this.nextProjectBatchSize(path))))
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(MUTED)
         .height(44)
         .width('100%')
@@ -525,66 +527,24 @@ export struct RemoteSessionList {
 
   @Builder
   private SessionRow(item: RemoteSession, nested: boolean = false) {
-    Row({ space: 8 }) {
-      Column({ space: 2 }) {
-        Text(item.title || RemoteI18n.t('sidebar.untitled'))
-          .width('100%')
-          .fontSize(15)
-          .fontWeight(this.isSessionSelected(item.id) ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(INK)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (this.metadataText(item).length > 0) {
-          Text(this.metadataText(item))
-            .width('100%')
-            .fontSize(11)
-            .fontColor(MUTED)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      this.SessionMoreButton(item)
-    }
-    .width('100%')
-    .height(this.metadataText(item).length > 0 ? 56 : 46)
-    .padding({ left: nested ? 0 : 10, right: 4 })
-    .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.isSessionSelected(item.id) ? SOFT : '#00000000')
-    .borderRadius(10)
-    .onTouch((event: TouchEvent) => {
-      if (this.isBusy) {
-        return;
-      }
-      if (event.type === TouchType.Down) {
-        this.optimisticSelectedSessionId = item.id;
-      } else if (event.type === TouchType.Cancel) {
-        this.optimisticSelectedSessionId = '';
-      }
-    })
-    .onClick(() => {
-      if (this.isBusy) {
-        return;
-      }
-      this.optimisticSelectedSessionId = item.id;
-      this.onOpenSession(item);
-    })
-    .gesture(LongPressGesture({ repeat: false }).onAction(() => this.openSessionActions(item)))
-    .bindPopup(this.actionPresentation === SessionActionPresentation.Popover &&
-      this.activeActionSessionId === item.id, {
-      builder: () => { this.SessionActionPopover() },
-      placement: Placement.Right,
-      popupColor: '#00000000',
-      enableArrow: false,
-      autoCancel: true,
-      mask: false,
-      targetSpace: 6,
-      onStateChange: (event) => {
-        if (!event.isVisible) {
-          this.closeSessionActions();
-        }
-      }
+    RemoteSessionRow({
+      session: item,
+      metadata: this.metadataText(item),
+      nested,
+      selected: this.isSessionSelected(item.id),
+      busy: this.isBusy,
+      actionPresentation: this.actionPresentation,
+      showActionPopover: this.activeActionSessionId === item.id,
+      actionsPopup: () => { this.SessionActionPopover() },
+      onPressStateChange: (pressed: boolean) => {
+        this.optimisticSelectedSessionId = pressed ? item.id : '';
+      },
+      onOpen: (session: RemoteSession) => {
+        this.optimisticSelectedSessionId = session.id;
+        this.onOpenSession(session);
+      },
+      onOpenActions: (session: RemoteSession) => this.openSessionActions(session),
+      onCloseActions: () => this.closeSessionActions()
     })
   }
 
@@ -592,24 +552,6 @@ export struct RemoteSessionList {
     const selectedSessionId = this.optimisticSelectedSessionId.length > 0 ?
       this.optimisticSelectedSessionId : this.selectedSessionId;
     return selectedSessionId === sessionId;
-  }
-
-  @Builder
-  private SessionMoreButton(item: RemoteSession) {
-    Stack({ alignContent: Alignment.Center }) {
-      Row({ space: 3 }) {
-        Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-        Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-        Text('').width(3.5).height(3.5).backgroundColor(MUTED).borderRadius(2)
-      }
-      .height(8)
-      .alignItems(VerticalAlign.Center)
-    }
-    .width(34)
-    .height(40)
-    .opacity(0.62)
-    .accessibilityText(RemoteI18n.t('session.actions'))
-    .onClick(() => this.openSessionActions(item))
   }
 
   @Builder
@@ -647,12 +589,12 @@ export struct RemoteSessionList {
   private EmptySessions() {
     Column({ space: 8 }) {
       Text(this.isBusy ? RemoteI18n.t('home.emptyLoadingTitle') : RemoteI18n.t('remote.emptyTitle'))
-        .fontSize(17)
+        .fontSize(MobileDesignTypography.titleMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Text(this.isBusy ? RemoteI18n.t('home.emptyLoadingText') : RemoteI18n.t('remote.emptyText'))
-        .fontSize(14)
-        .lineHeight(21)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
     }
@@ -667,12 +609,12 @@ export struct RemoteSessionList {
   private FilteredEmptySessions() {
     Column({ space: 8 }) {
       Text(this.isBusy ? RemoteI18n.t('home.emptyLoadingTitle') : RemoteI18n.t('remote.emptyTitle'))
-        .fontSize(17)
+        .fontSize(MobileDesignTypography.titleMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Text(this.isBusy ? RemoteI18n.t('home.emptyLoadingText') : RemoteI18n.t('remote.emptyText'))
-        .fontSize(14)
-        .lineHeight(21)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
     }

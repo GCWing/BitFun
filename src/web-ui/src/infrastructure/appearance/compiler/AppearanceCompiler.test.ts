@@ -38,6 +38,34 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).not.toContain('.btn-primary');
   });
 
+  it('keeps product Appearance selectors distinct from design-system anatomy', () => {
+    const pkg: AppearancePackage = {
+      schema: 'bitfun.appearance',
+      schemaVersion: 1,
+      id: 'test.product-surface',
+      name: 'Product Surface',
+      version: '1.0.0',
+      mode: 'dark',
+      components: {
+        'user-message-edit-composer': {
+          parts: {
+            root: { base: { opacity: { kind: 'number', value: 0.9 } } },
+          },
+        },
+      },
+    };
+
+    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+
+    expect(snapshot.cssText).toContain(
+      '[data-bf-product-component="user-message-edit-composer"]'
+      + '[data-bf-product-part="root"]',
+    );
+    expect(snapshot.cssText).not.toContain(
+      '[data-bf-component="user-message-edit-composer"][data-bf-part="root"]',
+    );
+  });
+
   it('migrates retired Settings surface ids at the package reader boundary', () => {
     const pkg: AppearancePackage = {
       schema: 'bitfun.appearance',

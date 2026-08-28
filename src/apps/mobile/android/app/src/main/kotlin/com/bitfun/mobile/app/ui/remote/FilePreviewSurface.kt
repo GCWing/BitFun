@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -207,20 +208,23 @@ internal fun FilePreviewSurface(
                     // The pane sits on the soft surface the whole way down, as
                     // HarmonyOS' TextPreview does — source is read against a
                     // tint, rendered Markdown against the page.
-                    Text(
-                        source,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        softWrap = false,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .verticalScroll(rememberScrollState())
-                            .horizontalScroll(rememberScrollState())
-                            .padding(start = 14.dp, end = 20.dp, top = 14.dp, bottom = 24.dp),
-                    )
+                    SelectionContainer {
+                        Text(
+                            source,
+                            fontSize = 12.sp,
+                            lineHeight = 19.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            softWrap = false,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .verticalScroll(rememberScrollState())
+                                .horizontalScroll(rememberScrollState())
+                                .padding(start = 14.dp, end = 20.dp, top = 14.dp, bottom = 24.dp),
+                        )
+                    }
                 }
             }
 

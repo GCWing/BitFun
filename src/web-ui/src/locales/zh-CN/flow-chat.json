@@ -800,6 +800,7 @@
     "boostAddContext": "引用文件或文件夹",
     "boostSkills": "Skills",
     "boostSkillsLoading": "正在加载 Skills…",
+    "boostSkillsLoadFailed": "Skills 加载失败，点击重试",
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
@@ -2497,6 +2498,7 @@
     "modelNotConfigured": "未配置",
     "tooltip": {
       "configName": "配置名",
+      "modelName": "模型名",
       "contextWindow": "上下文窗口",
       "compressionTrigger": "压缩触发线",
       "longContextWarning": "当前模型配置的上下文窗口超过 400K。超长上下文可能降低模型效果，建议将其调整到 300K 左右。"

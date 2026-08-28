@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '@/flow_chat/types/flow-chat';
 import {
+  extractVoiceTaskConclusion,
   extractVoiceTaskProgressTexts,
   extractVoiceTaskSummary,
+  summarizeVoiceTaskConclusion,
   summarizeVoiceTaskProgress,
 } from './voiceTaskBridge';
 
@@ -87,8 +89,8 @@ describe('extractVoiceTaskSummary', () => {
     ], 'processing'));
 
     expect(updates).toEqual([{
-      id: 'round-1:progress:Progress: Finished reading the config. Now checking audio output.',
-      text: 'Progress: Finished reading the config. Now checking audio output.',
+      id: 'round-1:progress:Finished reading the config. Now checking audio output.',
+      text: 'Finished reading the config. Now checking audio output.',
     }]);
   });
 
@@ -110,8 +112,8 @@ describe('extractVoiceTaskSummary', () => {
       status: 'completed',
       isStreaming: false,
     }], 'finishing'))).toEqual([{
-      id: 'round-1:verification:Progress: Tests are complete. Preparing the final result.',
-      text: 'Progress: Tests are complete. Preparing the final result.',
+      id: 'round-1:verification:Tests are complete. Preparing the final result.',
+      text: 'Tests are complete. Preparing the final result.',
     }]);
   });
 
@@ -120,9 +122,85 @@ describe('extractVoiceTaskSummary', () => {
 
     const spoken = summarizeVoiceTaskProgress(original);
 
-    expect(spoken).toBe('进展：配置文件读取和依赖检查已完成，确认主流程没有问题。下一步继续检查音频输出链路，并运行相关测试验证结果。');
+    expect(spoken).toBe('配置文件读取和依赖检查已完成，确认主流程没有问题。下一步继续检查音频输出链路，并运行相关测试验证结果。');
+    expect(spoken).not.toMatch(/^(?:进展|Progress)[:：]/i);
     expect(spoken).not.toBe(original);
     expect(spoken.match(/[。！？!?]/g)?.length).toBeLessThanOrEqual(2);
     expect(spoken.length).toBeLessThanOrEqual(90);
+  });
+
+  it('removes a progress label already present in Agent text', () => {
+    expect(summarizeVoiceTaskProgress('进展：已经完成了配置检查。接下来会运行测试。'))
+      .toBe('配置检查已完成。下一步运行测试。');
+    expect(summarizeVoiceTaskProgress('Progress: Finished the config check. Next, I will run tests.'))
+      .toBe('Finished the config check. Next, run tests.');
+  });
+});
+
+describe('voice task conclusion', () => {
+  it('uses the final completed public text instead of an earlier progress update', () => {
+    const session = sessionWithItems([
+      {
+        id: 'progress',
+        type: 'text',
+        content: '正在检查语音任务链路。',
+        status: 'completed',
+        isStreaming: false,
+      },
+      {
+        id: 'final',
+        type: 'text',
+        content: [
+          '## 已完成',
+          '',
+          '用户提出的两个语音问题都已处理。',
+          '- 电话弹窗现在会显示收尾简报',
+          '- 收尾会保留最终回答的关键结论',
+          '- 进展前缀仍保持移除',
+          '- 聚焦测试已通过',
+          '- 第六条内部实现细节不应进入简报',
+        ].join('\n'),
+        status: 'completed',
+        isStreaming: false,
+      },
+    ]);
+
+    expect(extractVoiceTaskConclusion(session))
+      .toBe('用户提出的两个语音问题都已处理。电话弹窗现在会显示收尾简报。收尾会保留最终回答的关键结论。进展前缀仍保持移除。聚焦测试已通过。');
+  });
+
+  it('keeps enough of the final answer to respond to the user while remaining a brief', () => {
+    const conclusion = summarizeVoiceTaskConclusion(
+      'Final result: Yes, the requested behavior is now supported. The closing text is visible in the call popup. The spoken brief retains the answer and key result. Focused tests pass. Restart the current call before testing. Internal implementation details should not be announced.',
+    );
+
+    expect(conclusion)
+      .toBe('Yes, the requested behavior is now supported. The closing text is visible in the call popup. The spoken brief retains the answer and key result. Focused tests pass. Restart the current call before testing.');
+    expect(conclusion.match(/[.!?]/g)?.length).toBeLessThanOrEqual(5);
+    expect(conclusion.length).toBeLessThanOrEqual(320);
+  });
+
+  it('starts with the answer instead of source-reading preamble, headings, or parentheses', () => {
+    const conclusion = summarizeVoiceTaskConclusion([
+      '我已经通读了项目的 README.md 和 README.zh-CN.md（项目自述是最权威的定位来源），下面是整理好的介绍。',
+      '',
+      '## BitFun 项目介绍',
+      '',
+      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
+      '它支持编码、办公和桌面执行（包括浏览器、终端与文件系统）。',
+      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。',
+    ].join('\n'));
+
+    expect(conclusion).toBe(
+      'BitFun 是一个桌面 AI Agent，能把任务变成可打开的应用界面。'
+      + '它支持编码、办公和桌面执行包括浏览器、终端与文件系统。',
+    );
+    expect(conclusion).not.toMatch(/[()（）]/);
+    expect(conclusion).not.toContain('README.md');
+    expect(conclusion.match(/BitFun 是一个桌面 AI Agent/g)).toHaveLength(1);
+  });
+
+  it('returns an empty conclusion when no final public text exists', () => {
+    expect(extractVoiceTaskConclusion(sessionWithItems([]))).toBe('');
   });
 });

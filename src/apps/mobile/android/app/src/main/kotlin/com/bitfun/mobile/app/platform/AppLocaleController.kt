@@ -14,13 +14,29 @@ internal enum class AppLocale(val languageTag: String) {
     SIMPLIFIED_CHINESE("zh-CN"),
 }
 
+/**
+ * Resolves Android's language token to one of the app-owned locales.
+ *
+ * Every `zh*` Android locale intentionally uses Simplified Chinese because
+ * this app ships only the default and `values-zh` resource catalogs.
+ */
+internal fun resolveAppLocale(language: String?): AppLocale =
+    when (language?.trim()?.lowercase(Locale.ROOT)) {
+        "zh" -> AppLocale.SIMPLIFIED_CHINESE
+        null, "" -> AppLocale.ENGLISH
+        else -> AppLocale.ENGLISH
+    }
+
 internal object AppLocaleController {
     private const val PREFERENCES = "bitfun_app_settings"
     private const val LANGUAGE_KEY = "language"
 
     fun current(configuration: Configuration): AppLocale {
-        val language = configuration.locales[0]?.language.orEmpty()
-        return if (language == "zh") AppLocale.SIMPLIFIED_CHINESE else AppLocale.ENGLISH
+        val language = configuration.locales
+            .takeIf { !it.isEmpty }
+            ?.get(0)
+            ?.language
+        return resolveAppLocale(language)
     }
 
     fun set(context: Context, locale: AppLocale) {

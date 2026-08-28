@@ -1,30 +1,23 @@
 import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
-import { inputAppearanceDescriptor } from '@/component-library/components/Input/appearance';
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
 import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
 import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
 import { numberInputAppearanceDescriptor } from '@/component-library/components/NumberInput/appearance';
-import { searchAppearanceDescriptor } from '@/component-library/components/Search/appearance';
 import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
 import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
-import { badgeAppearanceDescriptor } from '@/component-library/components/Badge/appearance';
 import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appearance';
 import { avatarAppearanceDescriptor } from '@/component-library/components/Avatar/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
-import { cubeLogoAppearanceDescriptor } from '@/component-library/components/CubeLogo/appearance';
 import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';
 import { emptyAppearanceDescriptor } from '@/component-library/components/Empty/appearance';
-import { filterPillAppearanceDescriptor } from '@/component-library/components/FilterPill/appearance';
 import { inputDialogAppearanceDescriptor } from '@/component-library/components/InputDialog/appearance';
-import { streamTextAppearanceDescriptor } from '@/component-library/components/StreamText/appearance';
 import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
-import { textStrokeEffectAppearanceDescriptor } from '@/component-library/components/TextStrokeEffect/appearance';
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
 import { markdownAppearanceDescriptor } from '@/component-library/components/Markdown/appearance';
 import { flowChatCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/appearance';
@@ -295,32 +288,25 @@ import { AppearanceRegistry } from './AppearanceRegistry';
 export function createDefaultAppearanceRegistry(): AppearanceRegistry {
   return new AppearanceRegistry()
     .registerComponent(cardAppearanceDescriptor)
-    .registerComponent(inputAppearanceDescriptor)
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
     .registerComponent(checkboxAppearanceDescriptor)
     .registerComponent(textareaAppearanceDescriptor)
     .registerComponent(numberInputAppearanceDescriptor)
-    .registerComponent(searchAppearanceDescriptor)
     .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
     .registerComponent(alertAppearanceDescriptor)
-    .registerComponent(badgeAppearanceDescriptor)
     .registerComponent(tagAppearanceDescriptor)
     .registerComponent(avatarAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)
     .registerComponent(cubeLoadingAppearanceDescriptor)
-    .registerComponent(cubeLogoAppearanceDescriptor)
     .registerComponent(dotMatrixLoaderAppearanceDescriptor)
     .registerComponent(emptyAppearanceDescriptor)
-    .registerComponent(filterPillAppearanceDescriptor)
     .registerComponent(inputDialogAppearanceDescriptor)
-    .registerComponent(streamTextAppearanceDescriptor)
     .registerComponent(taskRunningIndicatorAppearanceDescriptor)
-    .registerComponent(textStrokeEffectAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)
     .registerComponent(markdownAppearanceDescriptor)
     .registerComponent(flowChatCardAppearanceDescriptor)

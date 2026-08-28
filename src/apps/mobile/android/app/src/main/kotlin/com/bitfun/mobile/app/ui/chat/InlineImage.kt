@@ -12,7 +12,10 @@ import android.util.Base64
  * so a URL of any other shape decodes to null and the caller shows a caption.
  */
 internal fun decodeInlineImage(dataUrl: String): Bitmap? {
-    val payload = dataUrl.substringAfter("base64,", "")
+    if (!dataUrl.startsWith("data:", ignoreCase = true)) return null
+    val metadata = dataUrl.substringBefore(',')
+    if (!metadata.split(';').any { it.equals("base64", ignoreCase = true) }) return null
+    val payload = dataUrl.substringAfter(',', "")
     if (payload.isEmpty()) return null
     return runCatching {
         val bytes = Base64.decode(payload, Base64.DEFAULT)

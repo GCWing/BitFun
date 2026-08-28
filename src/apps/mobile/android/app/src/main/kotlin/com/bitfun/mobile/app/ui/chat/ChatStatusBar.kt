@@ -21,6 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +38,7 @@ import com.bitfun.mobile.core.feature.connection.ConnectionTone
 
 internal const val CHAT_STATUS_BAR_TEST_TAG: String = "chat-status-bar"
 internal const val CHAT_STATUS_DOT_TEST_TAG: String = "chat-status-dot"
+internal const val CHAT_STATUS_STOP_TEST_TAG: String = "chat-status-stop"
 
 /** The relay state strip between the conversation header and transcript. */
 @Composable
@@ -47,6 +52,7 @@ internal fun ChatStatusBar(
     val copy = phase.chatStatusBarCopy(canStop)
     val title = stringResource(copy.title)
     val detail = stringResource(copy.detail)
+    val stopLabel = stringResource(R.string.message_stop)
     val statusLabel = if (detail != title) "$title · $detail" else title
     val statusColor = when (ConnectionStatusPresenter.tone(phase)) {
         ConnectionTone.OK -> bitFunColors.success
@@ -95,11 +101,16 @@ internal fun ChatStatusBar(
                     .width(68.dp)
                     .height(34.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(17.dp))
-                    .clickable(onClick = onStop),
+                    .clickable(role = Role.Button, onClick = onStop)
+                    .semantics {
+                        contentDescription = stopLabel
+                        role = Role.Button
+                    }
+                    .testTag(CHAT_STATUS_STOP_TEST_TAG),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    stringResource(R.string.message_stop),
+                    stopLabel,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,

@@ -3,14 +3,14 @@
  * Supports selecting existing branches or creating new branches
  */
 
-import { Button, Input } from '@bitfun/ui';
+import { Button, IconButton, Input } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { GitBranch, Plus } from 'lucide-react';
+import { GitBranch, Plus, X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Checkbox, PopupCloseButton, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { Checkbox, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -200,14 +200,17 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
       onClick={onClose}
     >
       <div data-bf-component="branch-select-modal" data-bf-part="root" className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
-        <PopupCloseButton
-          className="branch-select-dialog__close"
-          data-bf-component="branch-select-modal"
-          data-bf-part="close"
-          onClick={onClose}
-          tooltip={tCommon('actions.close')}
-          aria-label={tCommon('actions.close')}
-        />
+        <Tooltip content={tCommon('actions.close')}>
+          <IconButton
+            className="branch-select-dialog__close"
+            data-bf-component="branch-select-modal"
+            data-bf-part="close"
+            icon={<X />}
+            onClick={onClose}
+            size="md"
+            aria-label={tCommon('actions.close')}
+          />
+        </Tooltip>
 
         <div data-bf-component="branch-select-modal" data-bf-part="header" className="branch-select-dialog__header">
           <h2 className="branch-select-dialog__title">{retainedDisplay.title}</h2>

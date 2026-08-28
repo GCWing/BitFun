@@ -1,4 +1,4 @@
-import { Button, IconButton, Modal } from '@bitfun/ui';
+import { Button, IconButton, Modal, StatusPill, type StatusPillTone } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { Badge, type BadgeVariant, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   speechAPI,
@@ -57,7 +57,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
-function statusBadgeVariant(state: SpeechModelInstallState): BadgeVariant {
+function statusBadgeVariant(state: SpeechModelInstallState): StatusPillTone {
   switch (state) {
     case 'installed':
       return 'success';
@@ -66,7 +66,7 @@ function statusBadgeVariant(state: SpeechModelInstallState): BadgeVariant {
       return 'info';
     case 'corrupt':
     case 'error':
-      return 'error';
+      return 'danger';
     default:
       return 'neutral';
   }
@@ -339,9 +339,9 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
               <div className="voice-input-config__model-copy">
                 <div className="voice-input-config__model-title-row">
                   <div className="voice-input-config__model-name">{model.displayName}</div>
-                  <Badge variant={isSelected ? 'info' : statusBadgeVariant(model.state)}>
+                  <StatusPill tone={isSelected ? 'info' : statusBadgeVariant(model.state)}>
                     {isSelected ? t('model.selected') : t(`states.${model.state}`)}
-                  </Badge>
+                  </StatusPill>
                 </div>
                 <div className="voice-input-config__model-meta">
                   <span>{formatBytes(model.expectedBytes || model.installedBytes)}</span>

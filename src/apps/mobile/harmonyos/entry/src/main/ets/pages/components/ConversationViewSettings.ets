@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteLogger } from '../../services/RemoteLogger';
@@ -24,7 +25,7 @@ struct WorkspaceFilterSection {
           .width(22)
         Text(RemoteI18n.t('viewSettings.allWorkspaces'))
           .layoutWeight(1)
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontColor(INK)
       }
       .width('100%')
@@ -42,7 +43,7 @@ struct WorkspaceFilterSection {
             .width(22)
           Text(item.name || this.basename(item.path))
             .layoutWeight(1)
-            .fontSize(15)
+            .fontSize(MobileDesignTypography.titleSmall.size)
             .fontColor(INK)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -107,11 +108,11 @@ export struct ConversationViewSettings {
       Row() {
         Column({ space: 3 }) {
           Text(RemoteI18n.t('viewSettings.title'))
-            .fontSize(18)
+            .fontSize(MobileDesignTypography.headlineSmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
           Text(RemoteI18n.t('viewSettings.subtitle'))
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(MUTED)
         }
         .layoutWeight(1)
@@ -186,7 +187,7 @@ export struct ConversationViewSettings {
       .width('100%')
       .height(34)
       .padding({ left: 10, top: 10 })
-      .fontSize(12)
+      .fontSize(MobileDesignTypography.labelSmall.size)
       .fontColor(MUTED)
   }
 
@@ -196,7 +197,7 @@ export struct ConversationViewSettings {
       .width('100%')
       .height(38)
       .padding({ left: 4, top: 12 })
-      .fontSize(12)
+      .fontSize(MobileDesignTypography.labelSmall.size)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
   }
@@ -209,7 +210,7 @@ export struct ConversationViewSettings {
         .fontColor([this.selectedSortMode === mode ? INK : MUTED])
       Text(label)
         .layoutWeight(1)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
     }
     .width('100%')
@@ -231,7 +232,7 @@ export struct ConversationViewSettings {
         .width(22)
       Text(label)
         .layoutWeight(1)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -250,7 +251,7 @@ export struct ConversationViewSettings {
     Row({ space: 12 }) {
       Text(label)
         .layoutWeight(1)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
       Toggle({ type: ToggleType.Switch, isOn: value })
         .selectedColor(INK)

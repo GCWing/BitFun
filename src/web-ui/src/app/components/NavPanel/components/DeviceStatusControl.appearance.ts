@@ -2,6 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const deviceOverviewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'device-overview',
+  componentAttribute: 'data-bf-product-component',
   parts: [{ id: 'root', propertyProfile: 'overlay', visualRole: 'popup' }],
   facets: [
     { id: 'placement', attribute: 'data-bf-placement', values: ['top', 'bottom'] },

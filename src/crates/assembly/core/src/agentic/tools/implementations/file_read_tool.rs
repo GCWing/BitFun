@@ -6,7 +6,12 @@ use crate::agentic::tools::file_read_state_runtime::{
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+#[cfg(feature = "tools-miniapp")]
+use crate::agentic::tools::miniapp_context_runtime::{
+    is_virtual_context_path, requires_virtual_context_path, virtual_context_file,
+};
 use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -23,13 +28,15 @@ use tool_runtime::fs::document::{
     convert_document_to_markdown, DocumentConversionError, MAX_DOCUMENT_INPUT_BYTES,
     MAX_DOCUMENT_MARKDOWN_BYTES,
 };
+#[cfg(feature = "document-read")]
+use tool_runtime::fs::read_file::read_file_bytes_bounded;
 use tool_runtime::fs::read_file::{
     build_read_file_presentation, build_remote_read_command, build_remote_tail_read_command,
     parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_tail,
     ReadFileResult,
 };
-#[cfg(feature = "document-read")]
-use tool_runtime::fs::read_file::{read_file_bytes_bounded, read_text, read_text_tail};
+#[cfg(any(feature = "document-read", feature = "tools-miniapp"))]
+use tool_runtime::fs::read_file::{read_text, read_text_tail};
 
 pub struct FileReadTool {
     default_max_lines_to_read: usize,
@@ -652,6 +659,36 @@ Usage:
             }
         };
 
+        #[cfg(feature = "tools-miniapp")]
+        if let Some(context) = context.filter(|context| is_virtual_context_path(context, &resolved))
+        {
+            return if virtual_context_file(context, &resolved).is_some() {
+                ValidationResult::default()
+            } else {
+                ValidationResult {
+                    result: false,
+                    message: Some(format!(
+                        "MiniApp context file is unavailable: {}",
+                        resolved.logical_path
+                    )),
+                    error_code: Some(404),
+                    meta: None,
+                }
+            };
+        }
+        #[cfg(feature = "tools-miniapp")]
+        if context.is_some_and(requires_virtual_context_path) {
+            return ValidationResult {
+                result: false,
+                message: Some(format!(
+                    "MiniApp context file is unavailable: {}",
+                    resolved.logical_path
+                )),
+                error_code: Some(404),
+                meta: None,
+            };
+        }
+
         if !resolved.uses_remote_workspace_backend() {
             let path = Path::new(&resolved.resolved_path);
             if !path.exists() {
@@ -707,6 +744,53 @@ Usage:
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
+        #[cfg(feature = "tools-miniapp")]
+        if is_virtual_context_path(context, &resolved) {
+            let content = virtual_context_file(context, &resolved).ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "MiniApp context file is unavailable: {}",
+                    resolved.logical_path
+                ))
+            })?;
+            let read_file_result = if tail {
+                read_text_tail(&content, limit, self.max_line_chars, self.max_total_chars)
+            } else {
+                read_text(
+                    &content,
+                    start_line,
+                    limit,
+                    self.max_line_chars,
+                    self.max_total_chars,
+                )
+            }
+            .map_err(BitFunError::tool)?;
+            let presentation =
+                build_read_file_presentation(&resolved.logical_path, &read_file_result);
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "file_path": resolved.logical_path,
+                    "content": read_file_result.content,
+                    "total_lines": read_file_result.total_lines,
+                    "lines_read": presentation.lines_read,
+                    "offset": read_file_result.start_line,
+                    "tail": tail,
+                    "start_line": read_file_result.start_line,
+                    "size": read_file_result.content.len(),
+                    "hit_total_char_limit": read_file_result.hit_total_char_limit,
+                    "representation": "miniapp_context"
+                }),
+                result_for_assistant: Some(presentation.result_for_assistant),
+                image_attachments: None,
+            }]);
+        }
+        #[cfg(feature = "tools-miniapp")]
+        if requires_virtual_context_path(context) {
+            return Err(BitFunError::tool(format!(
+                "MiniApp context file is unavailable: {}",
+                resolved.logical_path
+            )));
+        }
         crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
             context,
             &resolved.resolved_path,
@@ -885,8 +969,12 @@ mod tests {
     use super::MAX_DOCUMENT_INPUT_BYTES;
     use super::{FileReadTool, ReadRenderMode};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::{ToolPathPolicy, ToolRuntimeRestrictions};
     use crate::agentic::WorkspaceBinding;
+    #[cfg(feature = "tools-miniapp")]
+    use crate::miniapp::agent_context::{
+        publish_agent_context_snapshot, remove_agent_context_snapshot, MiniAppAgentContextInput,
+    };
     #[cfg(feature = "document-read")]
     use async_trait::async_trait;
     use bitfun_runtime_ports::ToolRuntimeHandles;
@@ -1031,6 +1119,126 @@ mod tests {
             properties["render"]["enum"],
             json!(["auto", "source", "markdown"])
         );
+    }
+
+    #[tokio::test]
+    async fn read_tool_enforces_runtime_read_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let allowed_root = dir.path().join(".miniapp-context").join(scope);
+        fs::create_dir_all(&allowed_root).expect("create context root");
+        fs::write(allowed_root.join("stocks.ndjson"), "allowed").expect("write allowed file");
+        fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions.path_policy = ToolPathPolicy {
+            read_roots: vec![format!(".miniapp-context/{scope}")],
+            ..Default::default()
+        };
+        let tool = FileReadTool::new();
+
+        tool.call_impl(
+            &json!({ "file_path": format!(".miniapp-context/{scope}/stocks.ndjson") }),
+            &context,
+        )
+        .await
+        .expect("reserved context file should be readable");
+        let error = tool
+            .call_impl(&json!({ "file_path": "storage.json" }), &context)
+            .await
+            .expect_err("app storage outside reserved context must stay blocked");
+        assert!(error.to_string().contains("is not allowed for read"));
+    }
+
+    #[cfg(feature = "tools-miniapp")]
+    #[tokio::test]
+    async fn read_tool_uses_virtual_context_without_filesystem_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let snapshot = publish_agent_context_snapshot(
+            "read-virtual-app",
+            "read-virtual-session",
+            "read-virtual-turn",
+            vec![MiniAppAgentContextInput {
+                name: "stocks.ndjson".to_string(),
+                content: "host-owned row".to_string(),
+            }],
+        )
+        .unwrap()
+        .unwrap();
+        let physical_root = dir.path().join(&snapshot.relative_root);
+        fs::create_dir_all(&physical_root).unwrap();
+        fs::write(physical_root.join("stocks.ndjson"), "attacker row").unwrap();
+        fs::create_dir_all(physical_root.join("nested")).unwrap();
+        fs::write(
+            physical_root.join("nested/stocks.ndjson"),
+            "nested attacker row",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&physical_root, dir.path().join("context-alias")).unwrap();
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions = ToolRuntimeRestrictions {
+            path_policy: ToolPathPolicy {
+                read_roots: vec![snapshot.relative_root.clone()],
+                ..Default::default()
+            },
+            miniapp_context_scope: Some(snapshot.scope.clone()),
+            ..Default::default()
+        };
+        let input = json!({
+            "file_path": format!("{}/stocks.ndjson", snapshot.relative_root)
+        });
+        let results = FileReadTool::new()
+            .call_impl(&input, &context)
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("Read should return a normal result");
+        };
+        assert!(data["content"]
+            .as_str()
+            .is_some_and(|content| content.contains("host-owned row")));
+        assert!(!data["content"]
+            .as_str()
+            .is_some_and(|content| content.contains("attacker row")));
+
+        let nested_error = FileReadTool::new()
+            .call_impl(
+                &json!({
+                    "file_path": format!("{}/nested/stocks.ndjson", snapshot.relative_root)
+                }),
+                &context,
+            )
+            .await
+            .expect_err("the entire virtual scope must reject nested physical paths");
+        assert!(nested_error
+            .to_string()
+            .contains("context file is unavailable"));
+
+        #[cfg(unix)]
+        {
+            let alias_error = FileReadTool::new()
+                .call_impl(
+                    &json!({ "file_path": "context-alias/stocks.ndjson" }),
+                    &context,
+                )
+                .await
+                .expect_err("a physical alias into the virtual root must fail closed");
+            assert!(alias_error
+                .to_string()
+                .contains("context file is unavailable"));
+        }
+
+        assert!(remove_agent_context_snapshot(
+            "read-virtual-session",
+            "read-virtual-turn"
+        ));
+        let error = FileReadTool::new()
+            .call_impl(&input, &context)
+            .await
+            .expect_err("expired virtual context must not fall back to the physical file");
+        assert!(error.to_string().contains("context file is unavailable"));
     }
 
     #[cfg(not(feature = "document-read"))]

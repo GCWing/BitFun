@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Modal, ConfirmDialog, Field, Select } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, ConfirmDialog, Field, SearchField, Select, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   Package,
   Plus,
   Puzzle,
+  Search as SearchIcon,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -20,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Input, Search } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
@@ -98,6 +99,7 @@ const CATEGORIES: CategoryInfo[] = [
 
 const SkillsScene: React.FC = () => {
   const { t } = useTranslation('scenes/skills');
+  const { t: tComponents } = useI18n('components');
   const notification = useNotification();
   const peerDevice = usePeerDeviceModeOptional();
   const remoteConnectionActive = peerDevice?.peerMode.active === true;
@@ -321,14 +323,16 @@ const SkillsScene: React.FC = () => {
               ) : (
                 <>
                   <div className="skills-main__toolbar" data-bf-scene="skills" data-bf-part="toolbar">
-                    <Search
+                    <SearchField
                       className="skills-main__toolbar-search"
                       value={installedSearch}
-                      onChange={setInstalledSearch}
-                      onClear={() => setInstalledSearch('')}
+                      onValueChange={setInstalledSearch}
+                      leadingIcon={<SearchIcon size={14} aria-hidden />}
                       placeholder={t('toolbar.searchPlaceholder')}
-                      size="small"
-                      clearable
+                      aria-label={t('toolbar.searchPlaceholder')}
+                      size="sm"
+                      clearLabel={installedSearch ? tComponents('search.clear') : undefined}
+                      onClear={installedSearch ? () => setInstalledSearch('') : undefined}
                     />
                     <button
                       type="button"
@@ -477,26 +481,24 @@ const SkillsScene: React.FC = () => {
                               </div>
                               <div className="skills-card__status-badges">
                                 {skill.isBuiltin && (
-                                  <Badge variant="accent">
-                                    <ShieldCheck size={10} />
+                                  <StatusPill tone="accent" leading={<ShieldCheck size={10} />}>
                                     {t('list.item.builtin')}
-                                  </Badge>
+                                  </StatusPill>
                                 )}
                                 {skill.level === 'user'
                                   && installed.globallyDisabledSkillKeys.has(skill.key) && (
-                                  <Badge variant="neutral">
+                                  <StatusPill tone="neutral">
                                     {t('list.item.globalDisabled')}
-                                  </Badge>
+                                  </StatusPill>
                                 )}
                                 {skill.isShadowed && (
                                   <span title={t('list.item.shadowedTooltip', {
                                     source: coverageSourceBySkillKey.get(skill.key)
                                       ?? t('list.item.unknownSource'),
                                   })}>
-                                    <Badge variant="warning">
-                                      <ShieldAlert size={10} />
+                                    <StatusPill tone="warning" leading={<ShieldAlert size={10} />}>
                                       {t('list.item.shadowed')}
-                                    </Badge>
+                                    </StatusPill>
                                   </span>
                                 )}
                               </div>
@@ -512,9 +514,9 @@ const SkillsScene: React.FC = () => {
                                 data-bf-scene="skills"
                                 data-bf-part="installedCardSource"
                               >
-                                <Badge variant="neutral">
+                                <StatusPill tone="neutral">
                                   {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
-                                </Badge>
+                                </StatusPill>
                               </span>
                             </div>
 
@@ -609,16 +611,20 @@ const SkillsScene: React.FC = () => {
                   {t('market.subtitle')}
                 </p>
                 <div className="skills-discover__search-wrapper" data-bf-scene="skills" data-bf-part="discoverSearch">
-                  <Search
+                  <SearchField
                     className="skills-discover__search"
                     value={searchDraft}
-                    onChange={setSearchDraft}
+                    onValueChange={setSearchDraft}
                     onSearch={submitMarketQuery}
-                    onClear={submitMarketQuery}
+                    leadingIcon={<SearchIcon size={15} aria-hidden />}
                     placeholder={t('market.searchPlaceholder')}
-                    size="medium"
-                    clearable
-                    enterToSearch
+                    aria-label={t('market.searchPlaceholder')}
+                    size="md"
+                    clearLabel={searchDraft ? tComponents('search.clear') : undefined}
+                    onClear={searchDraft ? () => {
+                      setSearchDraft('');
+                      submitMarketQuery();
+                    } : undefined}
                   />
                 </div>
               </div>
@@ -695,10 +701,9 @@ const SkillsScene: React.FC = () => {
                           accentSeed={skill.installId}
                           iconKind="market"
                           badges={isInstalled ? (
-                            <Badge variant="success">
-                              <CheckCircle2 size={11} />
+                            <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
                               {t('market.item.installed')}
-                            </Badge>
+                            </StatusPill>
                           ) : null}
                           meta={(
                             <span className="bitfun-skills-scene__market-meta">
@@ -785,19 +790,18 @@ const SkillsScene: React.FC = () => {
                 source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
                   ?? t('list.item.unknownSource'),
               })}>
-                <Badge variant="warning">
-                  <ShieldAlert size={11} />
+                <StatusPill tone="warning" leading={<ShieldAlert size={11} />}>
                   {t('list.item.shadowed')}
-                </Badge>
+                </StatusPill>
               </span>
             )}
-            <Badge variant="neutral">
+            <StatusPill tone="neutral">
               {getSkillSourceLabel(selectedInstalledSkill, t('list.item.unknownSource'))}
-            </Badge>
-            <Badge variant={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
+            </StatusPill>
+            <StatusPill tone={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
               {selectedInstalledSkill.isBuiltin ? t('list.item.builtin') : t('list.item.userInstalled')}
-            </Badge>
-            <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
+            </StatusPill>
+            <StatusPill tone={selectedInstalledSkill.level === 'user' ? 'info' : 'accent'}>
               {market.isRemoteWorkspace
                 ? selectedInstalledSkill.level === 'user'
                   ? t('list.item.localUser')
@@ -805,13 +809,12 @@ const SkillsScene: React.FC = () => {
                 : selectedInstalledSkill.level === 'user'
                   ? t('list.item.user')
                   : t('list.item.project')}
-            </Badge>
+            </StatusPill>
           </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
-          <Badge variant="success">
-            <CheckCircle2 size={11} />
+          <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
             {t('market.item.installed')}
-          </Badge>
+          </StatusPill>
         ) : null}
         description={selectedInstalledSkill?.description ?? selectedMarketSkill?.description}
         testId="skill-detail-panel"
@@ -970,13 +973,13 @@ const SkillsScene: React.FC = () => {
           ) : null}
 
           <div className="bitfun-skills-scene__path-input">
-            <Input
-              label={t('form.path.label')}
-              placeholder={t('form.path.placeholder')}
-              value={installed.formPath}
-              onChange={(e) => installed.setFormPath(e.target.value)}
-              variant="outlined"
-            />
+            <Field label={t('form.path.label')} controlWidth="fill">
+              <Input
+                placeholder={t('form.path.placeholder')}
+                value={installed.formPath}
+                onChange={(e) => installed.setFormPath(e.target.value)}
+              />
+            </Field>
             <IconButton
               size="md"
               onClick={installed.handleBrowse}

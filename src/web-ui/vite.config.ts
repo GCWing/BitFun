@@ -36,6 +36,15 @@ export function createDesignSystemSourceAliases(command: 'serve' | 'build') {
   ];
 }
 
+export function createDevServerResponseHeaders() {
+  return {
+    // Vite normally marks optimized dependencies as immutable for one year.
+    // WKWebView can retain those responses across desktop dev launches and
+    // then reject a lazy module graph after the optimizer has refreshed it.
+    'Cache-Control': 'no-store',
+  };
+}
+
 /**
  * Native fs events do not work reliably on UNC network shares (\\server\...,
  * including \\wsl$ / \\wsl.localhost) or on WSL drvfs mounts (/mnt/<drive>).
@@ -109,6 +118,7 @@ export default defineConfig(({ mode, command }) => {
     // If Vite silently falls back to another port, the desktop webview stays blank.
     strictPort: true,
     host: host || "localhost",
+    headers: createDevServerResponseHeaders(),
     hmr: {
       protocol: "ws",
       host: host || "localhost",

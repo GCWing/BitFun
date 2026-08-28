@@ -75,8 +75,8 @@ export const mobileTokens = {
       "dark": "#FFD021"
     },
     "modal_scrim": {
-      "light": "#99000000",
-      "dark": "#99000000"
+      "light": "#44000000",
+      "dark": "#44000000"
     },
     "soft": {
       "light": "#F4F3F0",
@@ -237,7 +237,43 @@ export const mobileTokens = {
     "composer_expanded_action_row_height": 44,
     "composer_expanded_height": 126,
     "composer_collapsed_radius": 26,
-    "composer_expanded_radius": 18
+    "composer_expanded_radius": 18,
+    "composer_model_selector_width": 330,
+    "composer_model_selector_radius": 14,
+    "composer_model_selector_row_height": 48,
+    "composer_model_selector_row_radius": 9,
+    "composer_model_selector_row_gap": 6,
+    "sheet_top_radius": 34,
+    "sheet_side_radius": 34,
+    "sheet_horizontal_padding": 20,
+    "sheet_header_height": 56,
+    "sheet_action_height": 46,
+    "selection_top_radius": 20,
+    "selection_row_height": 64,
+    "selection_close_size": 32,
+    "popover_width": 292,
+    "popover_radius": 16,
+    "popover_padding": 12,
+    "popover_vertical_padding": 10,
+    "popover_action_height": 48,
+    "popover_shadow_radius": 18,
+    "compact_popover_width": 150,
+    "compact_popover_radius": 14,
+    "compact_popover_action_height": 42,
+    "settings_compact_card_radius": 8,
+    "settings_card_radius": 24,
+    "settings_prominent_card_radius": 28,
+    "model_current_row_height": 64,
+    "model_source_row_height": 62,
+    "model_account_row_height": 56,
+    "model_account_row_gap": 6,
+    "model_section_gap": 20,
+    "model_overview_top_padding": 16,
+    "model_overview_bottom_padding": 24,
+    "model_list_top_padding": 10,
+    "model_list_bottom_padding": 16,
+    "model_empty_account_height": 80,
+    "model_editor_height": 560
   },
   "breakpoints": {
     "wide": 600,
@@ -343,6 +379,382 @@ export const mobileComponents = {
         "composer_expanded_radius"
       ],
       "platformNotes": "Keyboard, dictation, and attachment pickers remain native adapters."
+    },
+    "composer_model_selector": {
+      "purpose": "Changes the model for the message being composed without leaving the conversation or creation flow.",
+      "anatomy": [
+        "optional_modal_header",
+        "selected_mark",
+        "primary_label",
+        "supporting_label",
+        "scrolling_model_rows"
+      ],
+      "states": [
+        "compact_bottom",
+        "wide_popover",
+        "selected",
+        "empty",
+        "scrolling"
+      ],
+      "tokens": [
+        "composer_model_selector_width",
+        "composer_model_selector_radius",
+        "composer_model_selector_row_height",
+        "composer_model_selector_row_radius",
+        "composer_model_selector_row_gap",
+        "selection_top_radius",
+        "selection_close_size",
+        "floating_panel_bg",
+        "card",
+        "soft",
+        "line",
+        "ink",
+        "muted"
+      ],
+      "platformNotes": "Compact layouts use a native bottom surface with a closeable header; wide layouts use an arrowless anchored surface without a redundant header. The selected model is first, uses the soft surface and a leading check mark, and all platform-specific provider glyphs and row dividers are omitted."
+    },
+    "adaptive_modal_surface": {
+      "purpose": "Hosts settings, connection, creation, selection, and detail flows without crossing a physical fold or obscuring more of the workspace than necessary.",
+      "anatomy": [
+        "modal_scrim",
+        "paper_surface",
+        "header",
+        "scroll_content",
+        "action_rail"
+      ],
+      "states": [
+        "compact_bottom",
+        "wide_side",
+        "fold_operate",
+        "busy",
+        "error"
+      ],
+      "tokens": [
+        "modal_scrim",
+        "sheet_top_radius",
+        "sheet_side_radius",
+        "sheet_horizontal_padding",
+        "sheet_header_height",
+        "sheet_action_height",
+        "card",
+        "line",
+        "structure"
+      ],
+      "platformNotes": "Use each platform's native modal lifecycle, accessibility focus, and back gesture; placement comes from the shared adaptive policy and visual geometry comes from these tokens."
+    },
+    "action_popover": {
+      "purpose": "Presents a short, anchored set of conversation, session, model, or project actions.",
+      "anatomy": [
+        "section_label",
+        "action_rows",
+        "optional_divider",
+        "anchored_paper_surface"
+      ],
+      "states": [
+        "open",
+        "compact_two_action",
+        "selected",
+        "destructive",
+        "disabled"
+      ],
+      "tokens": [
+        "popover_width",
+        "popover_radius",
+        "popover_padding",
+        "popover_vertical_padding",
+        "popover_action_height",
+        "compact_popover_width",
+        "compact_popover_radius",
+        "compact_popover_action_height",
+        "floating_panel_bg",
+        "line",
+        "quick"
+      ],
+      "platformNotes": "Wide action sets use the standard arrowless anchored paper surface. The project-row Code/Cowork shortcut remains an anchored two-action popover on every size because its trigger already lives inside the session list; it uses the compact popover geometry."
+    },
+    "session_action_surface": {
+      "purpose": "Presents actions for a session row without stacking confirmation UI.",
+      "anatomy": [
+        "optional_drag_handle",
+        "session_identity",
+        "action_rows",
+        "in_place_confirmation"
+      ],
+      "states": [
+        "compact_bottom",
+        "wide_popover",
+        "confirming_delete",
+        "busy"
+      ],
+      "tokens": [
+        "sheet_action_height",
+        "popover_radius",
+        "card",
+        "line",
+        "soft",
+        "red"
+      ],
+      "platformNotes": "Compact session lists use a transparent native sheet hosting the same 16-unit paper surface that wide lists anchor as a popover; deletion confirmation replaces the action rows in place. This is distinct from the active conversation header's action_popover."
+    },
+    "selection_surface": {
+      "purpose": "Lets the user choose a language, model, device, workspace, or assistant from one consistent modal pattern.",
+      "anatomy": [
+        "modal_header",
+        "selection_rows",
+        "selected_mark",
+        "optional_supporting_text"
+      ],
+      "states": [
+        "loading",
+        "ready",
+        "selected",
+        "empty",
+        "failed"
+      ],
+      "tokens": [
+        "selection_top_radius",
+        "selection_row_height",
+        "selection_close_size",
+        "sheet_header_height",
+        "sheet_horizontal_padding",
+        "card",
+        "soft",
+        "line"
+      ],
+      "platformNotes": "A compact standalone picker uses one native bottom surface and a wide picker anchors one arrowless paper popover to its trigger. When selection starts inside another modal, it replaces that modal's content rather than stacking another modal or scrim. The picker mechanism may be native, but row height, selected treatment, header chrome, and dismissal affordance stay aligned."
+    },
+    "confirmation_surface": {
+      "purpose": "Confirms destructive or high-impact actions inside the surface that initiated them.",
+      "anatomy": [
+        "specific_consequence",
+        "cancel_action",
+        "destructive_action"
+      ],
+      "states": [
+        "idle",
+        "confirming",
+        "submitting",
+        "failed"
+      ],
+      "tokens": [
+        "sheet_action_height",
+        "red",
+        "soft",
+        "line"
+      ],
+      "platformNotes": "Prefer an in-place confirmation step over stacking a second modal and a second scrim."
+    },
+    "settings_card": {
+      "purpose": "Groups related settings into a stable paper card within an adaptive modal surface.",
+      "anatomy": [
+        "section_heading",
+        "card",
+        "entry_rows",
+        "dividers",
+        "inline_controls"
+      ],
+      "states": [
+        "navigable",
+        "editable",
+        "loading",
+        "failed",
+        "disabled"
+      ],
+      "tokens": [
+        "settings_compact_card_radius",
+        "settings_card_radius",
+        "settings_prominent_card_radius",
+        "card",
+        "line",
+        "muted",
+        "body_medium"
+      ],
+      "platformNotes": "A chevron means navigation; controls that mutate in place do not use one."
+    },
+    "session_view_settings_surface": {
+      "purpose": "Controls how the connected desktop's sessions are grouped, filtered, and annotated without changing remote session data.",
+      "anatomy": [
+        "modal_header",
+        "grouping_card",
+        "workspace_filter_card",
+        "agent_filter_card",
+        "status_filter_card",
+        "metadata_card"
+      ],
+      "states": [
+        "project_grouping",
+        "time_grouping",
+        "chat_first",
+        "filtered",
+        "metadata_visible"
+      ],
+      "tokens": [
+        "sheet_header_height",
+        "settings_compact_card_radius",
+        "card",
+        "soft",
+        "line",
+        "muted",
+        "body_medium",
+        "label_small"
+      ],
+      "platformNotes": "Open from the session-list overflow inside the shared adaptive modal. Choices update local view state only; compact, wide, and fold-operate placements use the same cards and never stack native pickers or alerts."
+    },
+    "model_service_surface": {
+      "purpose": "Manages the active chat model, account-synced choices, and the local provider editor as one replace-in-place settings flow.",
+      "anatomy": [
+        "modal_header",
+        "current_model_card",
+        "source_group",
+        "account_model_rows",
+        "local_provider_form",
+        "feedback",
+        "actions"
+      ],
+      "states": [
+        "overview",
+        "account_selection",
+        "local_editor",
+        "testing",
+        "saving",
+        "failed"
+      ],
+      "tokens": [
+        "sheet_header_height",
+        "model_current_row_height",
+        "model_source_row_height",
+        "model_account_row_height",
+        "model_section_gap",
+        "settings_compact_card_radius",
+        "card",
+        "soft",
+        "line"
+      ],
+      "platformNotes": "Overview, account selection, and local editing replace each other inside the existing adaptive modal. Never stack another sheet or system picker; account rows select immediately, while the local row selects a complete configuration and its chevron always opens the editor."
+    },
+    "pairing_surface": {
+      "purpose": "Guides desktop pairing from preparation through scanning, with a manual-code fallback that stays inside the connect surface.",
+      "anatomy": [
+        "hero_wash",
+        "back_control",
+        "desktop_or_scanner_glyph",
+        "instructions",
+        "primary_action",
+        "manual_pairing_overlay",
+        "conditional_account_credentials",
+        "status_feedback"
+      ],
+      "states": [
+        "intro",
+        "scan",
+        "manual",
+        "account_auth",
+        "connecting",
+        "failed",
+        "paired"
+      ],
+      "tokens": [
+        "connect_hero_bg",
+        "connect_hero_surface",
+        "modal_scrim",
+        "sheet_side_radius",
+        "primary_action",
+        "card",
+        "soft",
+        "line"
+      ],
+      "platformNotes": "Camera capture and permission prompts remain native. The manual form is an in-surface overlay with the shared scrim and 34-unit card, not a second system sheet. Account-protected links add username and password fields in that same card; passwords remain transient view state and are cleared on submit or dismiss."
+    },
+    "remote_create_surface": {
+      "purpose": "Creates a remote session from one instruction while making the target desktop, workspace, and model explicit.",
+      "anatomy": [
+        "back_control",
+        "empty_focus_region",
+        "device_context",
+        "workspace_context",
+        "create_composer",
+        "selection_surface"
+      ],
+      "states": [
+        "ready",
+        "selecting_device",
+        "selecting_workspace",
+        "selecting_model",
+        "listening",
+        "submitting",
+        "disconnected"
+      ],
+      "tokens": [
+        "composer_expanded_height",
+        "composer_expanded_radius",
+        "selection_row_height",
+        "popover_width",
+        "card",
+        "soft",
+        "line",
+        "accent"
+      ],
+      "platformNotes": "This is a conversation route, not a form modal: title and agent type are inferred from the first instruction and selected workspace. Compact selectors use one bottom selection surface; wide selectors use the same rows in an arrowless anchored popover."
+    },
+    "remote_control_settings_surface": {
+      "purpose": "Explains which desktop is being controlled, how it is connected, and which permission policy that desktop applies.",
+      "anatomy": [
+        "modal_header",
+        "profile_entry",
+        "current_control_card",
+        "connection_source",
+        "alternate_connection_entry",
+        "permission_mode_card",
+        "in_place_full_access_confirmation"
+      ],
+      "states": [
+        "disconnected",
+        "connecting",
+        "connected_by_account",
+        "connected_by_pairing",
+        "permission_loading",
+        "permission_failed",
+        "confirming_full_access",
+        "account_page"
+      ],
+      "tokens": [
+        "sheet_header_height",
+        "settings_prominent_card_radius",
+        "settings_compact_card_radius",
+        "modal_scrim",
+        "card",
+        "soft",
+        "line",
+        "red"
+      ],
+      "platformNotes": "The account page replaces this page inside the same adaptive modal. Full-access confirmation replaces content inside the permission card; it never opens a system alert or a second sheet."
+    },
+    "file_preview_surface": {
+      "purpose": "Shows a remote file as a compact full-page modal or as a wide companion pane.",
+      "anatomy": [
+        "file_header",
+        "download_action",
+        "close_action",
+        "content_viewport",
+        "truncation_notice"
+      ],
+      "states": [
+        "loading",
+        "text",
+        "markdown",
+        "image",
+        "unsupported",
+        "failed",
+        "truncated"
+      ],
+      "tokens": [
+        "sheet_header_height",
+        "file_link",
+        "card",
+        "line",
+        "soft"
+      ],
+      "platformNotes": "Placement is shared policy; rendering, file export, and platform-safe dismissal remain native adapters."
     }
   }
 };

@@ -2154,6 +2154,7 @@ pub fn posix_resolve_path_with_workspace(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolPathOperation {
+    Read,
     Write,
     Edit,
     Delete,
@@ -2162,6 +2163,7 @@ pub enum ToolPathOperation {
 impl ToolPathOperation {
     pub fn verb(self) -> &'static str {
         match self {
+            Self::Read => "read",
             Self::Write => "write",
             Self::Edit => "edit",
             Self::Delete => "delete",
@@ -2171,6 +2173,8 @@ impl ToolPathOperation {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolPathPolicy {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_roots: Vec<String>,
     #[serde(default)]
     pub write_roots: Vec<String>,
     #[serde(default)]
@@ -2182,6 +2186,7 @@ pub struct ToolPathPolicy {
 impl ToolPathPolicy {
     pub fn roots_for(&self, operation: ToolPathOperation) -> &[String] {
         match operation {
+            ToolPathOperation::Read => &self.read_roots,
             ToolPathOperation::Write => &self.write_roots,
             ToolPathOperation::Edit => &self.edit_roots,
             ToolPathOperation::Delete => &self.delete_roots,
@@ -2234,11 +2239,18 @@ pub struct ToolRuntimeRestrictions {
     pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
+    /// Host-owned virtual MiniApp context scope for this turn. This grants no
+    /// filesystem access by itself; assembled Read/Grep providers resolve it
+    /// through the in-process context registry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub miniapp_context_scope: Option<String>,
 }
 
 const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
 const MINIAPP_HEADLESS_AGENT_OWNER_PREFIX: &str = "miniapp-agent:";
 const MINIAPP_MARKET_STRICT_METADATA_KEY: &str = "marketStrict";
+const MINIAPP_CONTEXT_SCOPE_METADATA_KEY: &str = "contextScope";
+const MINIAPP_CONTEXT_ROOT: &str = ".miniapp-context";
 
 /// MiniApp agent runs execute inside a MiniApp iframe without Flow Chat tool
 /// cards or AskUserQuestion UI. Treat those sessions as headless even on
@@ -2326,12 +2338,15 @@ pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
 /// Tool set for a marketplace MiniApp agent turn.
 ///
 /// Marketplace MiniApps are third-party code, so their hidden agent sessions
-/// must not reach the filesystem, the shell, or any host control surface. They
-/// do need to answer questions about the live world, so the allowlist keeps
-/// read-only web research and the clock that dates it. The deferred gateway pair
-/// stays allowed because the execution gate matches the effective tool name, so
-/// an allowlisted tool that resolves as deferred still has to pass this list.
-/// An allowlist (rather than a longer deny list) keeps newly registered tools
+/// must not reach the general filesystem, the shell, or any host control
+/// surface. The host may publish bounded, app-supplied context through a
+/// reserved virtual `.miniapp-context/<opaque-scope>` namespace. Read and Grep
+/// are added later only when the host supplies a valid scope for this turn, and
+/// are confined to that exact immutable snapshot. Read-only web research and the clock
+/// remain available for live-world questions. The deferred gateway pair stays
+/// allowed because the execution gate matches the effective tool name, so an
+/// allowlisted tool that resolves as deferred still has to pass this list. An
+/// allowlist (rather than a longer deny list) keeps newly registered tools
 /// closed by default.
 pub fn miniapp_market_strict_agent_tool_restrictions() -> ToolRuntimeRestrictions {
     const ALLOWED_TOOLS: &[&str] = &[
@@ -2350,6 +2365,16 @@ pub fn miniapp_market_strict_agent_tool_restrictions() -> ToolRuntimeRestriction
     restrictions
 }
 
+fn miniapp_context_read_root(user_message_metadata: Option<&serde_json::Value>) -> Option<String> {
+    let scope = user_message_metadata?
+        .get(MINIAPP_CONTEXT_SCOPE_METADATA_KEY)?
+        .as_str()?;
+    if scope.len() != 32 || !scope.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(format!("{MINIAPP_CONTEXT_ROOT}/{scope}"))
+}
+
 /// Restrictions for one agent turn, keyed on whether it belongs to a MiniApp.
 ///
 /// Turns outside the MiniApp agent bridge keep the unrestricted default set.
@@ -2361,9 +2386,21 @@ pub fn miniapp_agent_run_tool_restrictions(
         return ToolRuntimeRestrictions::default();
     }
     if is_miniapp_market_strict_agent_run(user_message_metadata) {
-        return miniapp_market_strict_agent_tool_restrictions();
+        let mut restrictions = miniapp_market_strict_agent_tool_restrictions();
+        if let Some(read_root) = miniapp_context_read_root(user_message_metadata) {
+            restrictions.miniapp_context_scope = read_root
+                .rsplit_once('/')
+                .map(|(_, scope)| scope.to_string());
+            restrictions.allowed_tool_names.insert("Read".to_string());
+            restrictions.allowed_tool_names.insert("Grep".to_string());
+            restrictions.path_policy.read_roots = vec![read_root];
+        }
+        return restrictions;
     }
-    miniapp_headless_agent_tool_restrictions()
+    let mut restrictions = miniapp_headless_agent_tool_restrictions();
+    restrictions.miniapp_context_scope = miniapp_context_read_root(user_message_metadata)
+        .and_then(|root| root.rsplit_once('/').map(|(_, scope)| scope.to_string()));
+    restrictions
 }
 
 pub fn tool_restrictions_for_delegation_policy(
@@ -2705,6 +2742,7 @@ mod tests {
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: ToolPathPolicy::default(),
+            miniapp_context_scope: None,
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
@@ -2773,14 +2811,17 @@ mod tests {
     }
 
     #[test]
-    fn market_strict_miniapp_runs_keep_web_research_and_drop_host_reach() {
+    fn market_strict_miniapp_runs_default_to_web_only_and_drop_host_reach() {
         let restrictions = miniapp_market_strict_agent_tool_restrictions();
 
+        assert!(!restrictions.is_tool_allowed("Read"));
+        assert!(!restrictions.is_tool_allowed("Grep"));
         assert!(restrictions.is_tool_allowed("WebSearch"));
         assert!(restrictions.is_tool_allowed("WebFetch"));
         assert!(restrictions.is_tool_allowed("GetToolSpec"));
+        assert!(restrictions.path_policy.read_roots.is_empty());
 
-        for denied in ["Read", "Write", "Edit", "ExecCommand", "Task", "Skill"] {
+        for denied in ["Write", "Edit", "ExecCommand", "Task", "Skill"] {
             assert!(
                 !restrictions.is_tool_allowed(denied),
                 "{denied} must stay closed for marketplace MiniApp agent runs"
@@ -2828,15 +2869,52 @@ mod tests {
             "surface": "miniapp_agent",
             "marketStrict": true,
         });
+        let market_with_context = json!({
+            "surface": "miniapp_agent",
+            "marketStrict": true,
+            "contextScope": "0123456789abcdef0123456789abcdef",
+        });
         let builtin = json!({ "surface": "miniapp_agent" });
 
-        assert!(
-            !miniapp_agent_run_tool_restrictions(Some(&market_strict), created_by)
-                .is_tool_allowed("Write")
+        let strict = miniapp_agent_run_tool_restrictions(Some(&market_strict), created_by);
+        assert!(!strict.is_tool_allowed("Write"));
+        assert!(!strict.is_tool_allowed("Read"));
+
+        let scoped = miniapp_agent_run_tool_restrictions(Some(&market_with_context), created_by);
+        assert!(scoped.is_tool_allowed("Read"));
+        assert!(scoped.is_tool_allowed("Grep"));
+        assert_eq!(
+            scoped.path_policy.read_roots,
+            vec![".miniapp-context/0123456789abcdef0123456789abcdef"]
+        );
+        assert_eq!(
+            scoped.miniapp_context_scope.as_deref(),
+            Some("0123456789abcdef0123456789abcdef")
         );
         assert!(
             miniapp_agent_run_tool_restrictions(Some(&builtin), created_by)
                 .is_tool_allowed("Write")
+        );
+        let builtin_with_context = json!({
+            "surface": "miniapp_agent",
+            "contextScope": "fedcba9876543210fedcba9876543210",
+        });
+        let builtin_scoped =
+            miniapp_agent_run_tool_restrictions(Some(&builtin_with_context), created_by);
+        assert!(builtin_scoped.path_policy.read_roots.is_empty());
+        assert_eq!(
+            builtin_scoped.miniapp_context_scope.as_deref(),
+            Some("fedcba9876543210fedcba9876543210")
+        );
+
+        let invalid_scope = json!({
+            "surface": "miniapp_agent",
+            "marketStrict": true,
+            "contextScope": "../outside",
+        });
+        assert!(
+            !miniapp_agent_run_tool_restrictions(Some(&invalid_scope), created_by)
+                .is_tool_allowed("Read")
         );
         // A turn outside the MiniApp bridge keeps the unrestricted default set,
         // even when some other surface happens to carry the strict flag.

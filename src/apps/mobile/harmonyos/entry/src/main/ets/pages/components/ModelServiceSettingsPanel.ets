@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
@@ -109,7 +110,7 @@ export struct ModelServiceSettingsPanel {
         })
       }
       Text(this.headerTitle())
-        .fontSize(18)
+        .fontSize(MobileDesignTypography.headlineSmall.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
       Blank()
@@ -178,7 +179,7 @@ export struct ModelServiceSettingsPanel {
   AccountModelList() {
     if (this.accountModels().length === 0) {
       Text(RemoteI18n.t('settings.modelService.accountEmpty'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
         .width('100%')
         .height(ModelServiceSettingsPolicy.EMPTY_ACCOUNT_HEIGHT)
@@ -224,13 +225,13 @@ export struct ModelServiceSettingsPanel {
       .height(20)
       Column({ space: 2 }) {
         Text(this.modelLabel(model))
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(RemoteI18n.t('settings.modelService.accountSource'))
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -267,7 +268,7 @@ export struct ModelServiceSettingsPanel {
           Button(this.isTesting ? RemoteI18n.t('common.loading') : RemoteI18n.t('settings.modelService.testConnection'))
             .layoutWeight(1)
             .height(50)
-            .fontSize(16)
+        .fontSize(MobileDesignTypography.labelLarge.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .backgroundColor(this.isTesting ? MUTED : SOFT)
@@ -279,7 +280,7 @@ export struct ModelServiceSettingsPanel {
           Button(this.isSaving ? RemoteI18n.t('common.loading') : RemoteI18n.t('common.save'))
             .layoutWeight(1)
             .height(50)
-            .fontSize(16)
+        .fontSize(MobileDesignTypography.labelLarge.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(PRIMARY_ACTION_TEXT)
             .backgroundColor(this.isSaving ? MUTED : ACCENT)
@@ -293,16 +294,16 @@ export struct ModelServiceSettingsPanel {
 
         if (!this.hasTestableApiKey()) {
           Text(RemoteI18n.t('settings.modelService.testNeedsKey'))
-            .fontSize(12)
-            .lineHeight(18)
+            .fontSize(MobileDesignTypography.labelSmall.size)
+            .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
             .fontColor(SUBTLE)
             .width('100%')
         }
 
         if (this.feedbackText.length > 0) {
           Text(this.feedbackText)
-            .fontSize(13)
-            .lineHeight(19)
+            .fontSize(MobileDesignTypography.bodySmall.size)
+            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
             .fontColor(this.feedbackIsError ? RED : GREEN)
             .width('100%')
         }
@@ -324,7 +325,7 @@ export struct ModelServiceSettingsPanel {
   @Builder
   SectionHeader(title: string) {
     Text(title)
-      .fontSize(14)
+      .fontSize(MobileDesignTypography.bodyMedium.size)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
@@ -340,14 +341,14 @@ export struct ModelServiceSettingsPanel {
         .height(28)
       Column({ space: 3 }) {
         Text(this.currentModelLabel())
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         if (this.currentModel()) {
           Text(this.modelSourceLabel(this.currentModel()))
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(MUTED)
         }
       }
@@ -371,7 +372,7 @@ export struct ModelServiceSettingsPanel {
         .height(28)
       Column({ space: 3 }) {
         Text(RemoteI18n.t('settings.modelService.accountModelSummary'))
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
@@ -379,7 +380,7 @@ export struct ModelServiceSettingsPanel {
         Text(this.accountModels().length > 0 ?
           RemoteI18n.f('settings.modelService.syncedCount', String(this.accountModels().length)) :
           RemoteI18n.t('settings.modelService.accountEmpty'))
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -408,14 +409,14 @@ export struct ModelServiceSettingsPanel {
         .height(28)
       Column({ space: 3 }) {
         Text(this.hasCompleteLocalModel() ? this.modelName : RemoteI18n.t('settings.modelService.notConfigured'))
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         if (this.hasCompleteLocalModel()) {
           Text(RemoteI18n.t('settings.modelService.localSource'))
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(MUTED)
         }
       }
@@ -448,7 +449,7 @@ export struct ModelServiceSettingsPanel {
   ConfigField(label: string, placeholder: string, kind: string) {
     Column({ space: 8 }) {
       Text(label)
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .width('100%')
@@ -458,7 +459,7 @@ export struct ModelServiceSettingsPanel {
       })
         .width('100%')
         .height(52)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
         .backgroundColor(SOFT)
@@ -488,13 +489,13 @@ export struct ModelServiceSettingsPanel {
     Column({ space: 8 }) {
       Row() {
         Text(RemoteI18n.t('settings.modelService.apiKey'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
         Blank()
         if (this.hasApiKey && !this.sheetState.draftClearApiKey) {
           Text(RemoteI18n.t('settings.modelService.keySaved'))
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(MUTED)
         }
       }
@@ -507,7 +508,7 @@ export struct ModelServiceSettingsPanel {
         .showPasswordIcon(true)
         .width('100%')
         .height(52)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
         .backgroundColor(SOFT)
@@ -530,7 +531,7 @@ export struct ModelServiceSettingsPanel {
         Text(this.sheetState.draftClearApiKey ?
           RemoteI18n.t('settings.modelService.keepKey') :
           RemoteI18n.t('settings.modelService.clearKey'))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.sheetState.draftClearApiKey ? INK : RED)
           .width('100%')

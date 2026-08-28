@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
+import { RemoteControlSettingsPagePolicy } from '../main/ets/pages/policy/RemoteControlSettingsPagePolicy';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
 import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
 import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
@@ -165,6 +166,19 @@ import {
 } from './LocalTestFixtures';
 
 export default function lifecycleUnitTest() {
+  describe('RemoteControlSettingsPagePolicy', () => {
+    it('opens account mode directly on the signed-out login page', 0, () => {
+      expect(RemoteControlSettingsPagePolicy.resolve(true, false, false, false)).assertEqual('login');
+      expect(RemoteControlSettingsPagePolicy.resolve(true, false, false, true)).assertEqual('profile');
+    });
+
+    it('does not expose the remote page while account navigation is active', 0, () => {
+      expect(RemoteControlSettingsPagePolicy.resolve(false, true, false, false)).assertEqual('login');
+      expect(RemoteControlSettingsPagePolicy.resolve(false, false, true, false)).assertEqual('login');
+      expect(RemoteControlSettingsPagePolicy.resolve(false, false, false, false)).assertEqual('remote');
+    });
+  });
+
   describe('AppShellState', () => {
     it('owns global sidebar and sheet visibility', 0, () => {
       const state = new AppShellState();

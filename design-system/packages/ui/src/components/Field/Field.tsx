@@ -11,6 +11,7 @@ import styles from "./Field.module.css";
 
 interface FieldControlProps {
   "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
   id?: string;
   required?: boolean;
 }
@@ -27,6 +28,8 @@ export interface FieldProps
   controlTrailing?: ReactNode;
   controlWidth?: FieldControlWidth;
   description?: ReactNode;
+  /** Validation message rendered below the control; also marks the control invalid. */
+  error?: ReactNode;
   horizontalGap?: FieldHorizontalGap;
   label: ReactNode;
   labelAction?: ReactNode;
@@ -44,6 +47,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   controlTrailing,
   controlWidth = "auto",
   description,
+  error,
   horizontalGap = "md",
   label,
   labelAction,
@@ -58,12 +62,15 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   const descriptionId = description === undefined || description === null
     ? undefined
     : `${controlId}-description`;
-  const describedBy = [children.props["aria-describedby"], descriptionId]
+  const hasError = error !== undefined && error !== null && error !== false;
+  const errorId = hasError ? `${controlId}-error` : undefined;
+  const describedBy = [children.props["aria-describedby"], descriptionId, errorId]
     .filter((value): value is string => Boolean(value))
     .join(" ") || undefined;
   const isRequired = required || children.props.required === true;
   const control = cloneElement(children, {
     "aria-describedby": describedBy,
+    "aria-invalid": hasError ? true : children.props["aria-invalid"],
     id: controlId,
     required: isRequired || undefined,
   });
@@ -76,6 +83,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       data-control-width={controlWidth}
       data-horizontal-gap={horizontalGap}
       data-label-width={labelWidth}
+      data-invalid={hasError ? "true" : undefined}
       data-orientation={orientation}
       data-required={isRequired ? "true" : "false"}
       ref={ref}
@@ -115,6 +123,11 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
           </span>
         )}
       </span>
+      {hasError && (
+        <span className={styles.error} data-bf-part="error" id={errorId}>
+          {error}
+        </span>
+      )}
     </div>
   );
 });

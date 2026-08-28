@@ -4,9 +4,13 @@ import com.bitfun.mobile.core.protocol.CommandStatus
 import com.bitfun.mobile.core.protocol.RelayJson
 import com.bitfun.mobile.core.protocol.RemoteCommand
 import com.bitfun.mobile.core.transport.RemoteCommandTransport
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.serialization.DeserializationStrategy
 import kotlin.test.Test
@@ -50,13 +54,17 @@ class RemoteWorkspaceStoreTest {
     @Test
     fun loadsBoundedTextPreviewThroughCommandTransport() = runTest {
         val transport = FakeWorkspaceTransport()
-        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
         store.dispatch(RemoteWorkspaceIntent.Load)
         advanceUntilIdle()
-        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs#L2", "main.rs", "session-1"))
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs#L2", "main.rs", "session-1", "ios-preview-1"))
         advanceUntilIdle()
         val ready = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
         val preview = assertIs<RemoteFilePreviewUiState.Text>(ready.preview)
+        assertEquals("ios-preview-1", preview.identity.requestId)
+        assertEquals("device-a", preview.identity.deviceKey)
+        assertEquals("session-1", preview.identity.sessionId)
+        assertEquals("src/main.rs", preview.identity.path)
         assertEquals("fn main() {}", preview.content)
         assertFalse(preview.truncated)
         val read = transport.commands.first { it.cmd == "read_file_chunk" }
@@ -98,11 +106,12 @@ class RemoteWorkspaceStoreTest {
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
         store.dispatch(RemoteWorkspaceIntent.Load)
         advanceUntilIdle()
-        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs", "main.rs", "session-1"))
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs", "main.rs", "session-1", "failed-preview"))
         advanceUntilIdle()
 
         val ready = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
         val failed = assertIs<RemoteFilePreviewUiState.Failed>(ready.preview)
+        assertEquals("failed-preview", failed.identity.requestId)
         assertEquals("", failed.mimeType)
         assertEquals(0, failed.sizeBytes)
     }
@@ -152,11 +161,12 @@ class RemoteWorkspaceStoreTest {
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
         store.dispatch(RemoteWorkspaceIntent.Load)
         advanceUntilIdle()
-        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs", "main.rs", "session-1"))
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://src/main.rs", "main.rs", "session-1", "unsupported-preview"))
         advanceUntilIdle()
 
         val ready = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
         val unsupported = assertIs<RemoteFilePreviewUiState.Unsupported>(ready.preview)
+        assertEquals("unsupported-preview", unsupported.identity.requestId)
         assertEquals("text/plain", unsupported.mimeType)
     }
 
@@ -198,6 +208,78 @@ class RemoteWorkspaceStoreTest {
     }
 
     @Test
+    fun samePathRapidReopenRejectsFirstLateResponse() = runTest {
+        val transport = DelayedPreviewTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://same.txt", "same.txt", "session-1", "reused-request"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://same.txt", "same.txt", "session-1", "reused-request"))
+        runCurrent()
+        transport.release(1)
+        runCurrent()
+        transport.release(0)
+        runCurrent()
+        assertEquals("reused-request", assertIs<RemoteFilePreviewUiState.Text>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview).identity.requestId)
+    }
+
+    @Test
+    fun differentPathLateResponseCannotReplaceCurrentPreview() = runTest {
+        val transport = DelayedPreviewTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://old.txt", "old.txt", "session-1", "old"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://new.txt", "new.txt", "session-1", "new"))
+        runCurrent()
+        transport.release(1)
+        runCurrent()
+        transport.release(0)
+        runCurrent()
+        val preview = assertIs<RemoteFilePreviewUiState.Text>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+        assertEquals("new", preview.identity.requestId)
+        assertEquals("new.txt", preview.identity.path)
+    }
+
+    @Test
+    fun dismissAndStopRejectLatePreviewResponses() = runTest {
+        val transport = DelayedPreviewTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://late.txt", "late.txt", "session-1", "dismissed"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.DismissPreview)
+        transport.release(0)
+        runCurrent()
+        assertIs<RemoteFilePreviewUiState.None>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://stop.txt", "stop.txt", "session-1", "stopped"))
+        runCurrent()
+        store.stop()
+        transport.release(1)
+        runCurrent()
+        assertIs<RemoteFilePreviewUiState.Loading>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+    }
+
+    @Test
+    fun workspaceLoadInvalidatesLatePreviewResponse() = runTest {
+        val transport = DelayedPreviewTransport()
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler), "device-a")
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://late.txt", "late.txt", "session-1", "before-load"))
+        runCurrent()
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        runCurrent()
+        transport.release(0)
+        advanceUntilIdle()
+        assertIs<RemoteFilePreviewUiState.None>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+    }
+
+    @Test
     fun downloadsAFileInChunksAndWaitsForThePlatformSaver() = runTest {
         val transport = FakeWorkspaceTransport(downloadChunks = true)
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
@@ -230,6 +312,36 @@ class RemoteWorkspaceStoreTest {
             assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).download,
         )
         assertEquals(FilePreviewFailureKind.LOAD_FAILED, download.kind)
+    }
+}
+
+private class DelayedPreviewTransport : RemoteCommandTransport {
+    private val gates = mutableListOf<CompletableDeferred<Unit>>()
+    private var readIndex: Int = 0
+
+    fun release(index: Int) {
+        gates[index].complete(Unit)
+    }
+
+    override suspend fun <T : CommandStatus> send(
+        deserializer: DeserializationStrategy<T>,
+        command: RemoteCommand,
+        timeoutMs: Long,
+    ): T {
+        val json = when (command.cmd) {
+            "list_recent_workspaces" -> """{"resp":"ok","workspaces":[{"path":"/repo","name":"Repo"}]}"""
+            "list_assistants" -> """{"resp":"ok","assistants":[]}"""
+            "get_workspace_info" -> """{"resp":"ok","has_workspace":true,"path":"/repo"}"""
+            "get_file_info" -> """{"resp":"ok","name":"${command.path}","size":4,"mime_type":"text/plain"}"""
+            "read_file_chunk" -> {
+                val index = readIndex++
+                val gate = CompletableDeferred<Unit>().also(gates::add)
+                withContext(NonCancellable) { gate.await() }
+                """{"resp":"ok","name":"${command.path}","chunk_base64":"dGV4dA==","offset":0,"chunk_size":4,"total_size":4,"mime_type":"text/plain"}"""
+            }
+            else -> error("Unexpected command ${command.cmd}")
+        }
+        return RelayJson.decodeFromString(deserializer, json)
     }
 }
 

@@ -26,8 +26,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.core.feature.session.MessageFileReference
 import com.bitfun.mobile.core.feature.session.MessageFileReferenceProjector
@@ -147,7 +149,8 @@ private fun FileReferenceCard(
                 ) {
                     Text(
                         reference.label,
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

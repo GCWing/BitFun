@@ -1654,6 +1654,8 @@
       "pickCertificateDialogTitle": "Select OpenSSH certificate",
       "passphrase": "Passphrase",
       "passphraseOptional": "Leave empty if none",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
       "agentFingerprint": "Agent key fingerprint",
       "agentFallbackKey": "Agent fallback private key",
       "challengePassword": "Challenge password",

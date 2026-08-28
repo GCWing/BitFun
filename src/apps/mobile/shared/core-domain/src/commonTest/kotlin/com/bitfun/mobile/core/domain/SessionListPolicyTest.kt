@@ -27,6 +27,13 @@ class SessionListPolicyTest {
     }
 
     @Test
+    fun acpSessionsStayOffNativeMobileSurfaces() {
+        assertFalse(SessionAgentTypes.isMobileVisible("acp:codex"))
+        assertFalse(SessionAgentTypes.isMobileVisible("  ACP:custom  "))
+        assertTrue(SessionAgentTypes.isMobileVisible("code"))
+    }
+
+    @Test
     fun untitledSessionsGetTheAgentSpecificWireName() {
         assertEquals("Remote Code Session", SessionNaming.wireSessionName("code", "   "))
         assertEquals("Remote Cowork Session", SessionNaming.wireSessionName("cowork", ""))

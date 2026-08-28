@@ -165,7 +165,7 @@
       white-space: nowrap;
     }
 
-    > .bitfun-input-wrapper {
+    > [data-bf-component='input'] {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -383,7 +383,7 @@
     flex: 0 1 220px;
     min-width: 120px;
 
-    > .bitfun-input-wrapper {
+    > [data-bf-component='input'] {
       width: 100%;
     }
   }
@@ -429,7 +429,7 @@
   }
 
   &__action > .select,
-  &__action > .bitfun-input-wrapper,
+  &__action > [data-bf-component='input'],
   &__action > .bitfun-number-input {
     min-width: 0;
   }
@@ -439,7 +439,7 @@
     width: 190px;
   }
 
-  &__action > .bitfun-input-wrapper,
+  &__action > [data-bf-component='input'],
   &__action > .bitfun-number-input {
     flex: 1 1 160px;
   }
@@ -531,7 +531,7 @@
     }
 
     &__action > .select:first-child,
-    &__action > .bitfun-input-wrapper,
+    &__action > [data-bf-component='input'],
     &__action > .bitfun-number-input,
     &__effort-control,
     &__action > .bitfun-reasoning-preset-editor__json {

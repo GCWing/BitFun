@@ -295,9 +295,15 @@ export class AppearanceCompiler {
     Object.entries(definitions).forEach(([surfaceId, definition]) => {
       const descriptor = getDescriptor(surfaceId);
       if (!descriptor) return;
+      const resolvedSurfaceAttribute = surfaceAttribute === 'data-bf-component'
+        ? descriptor.componentAttribute ?? surfaceAttribute
+        : surfaceAttribute;
+      const partAttribute = resolvedSurfaceAttribute === 'data-bf-product-component'
+        ? 'data-bf-product-part'
+        : 'data-bf-part';
       const resolvedParts: Record<string, ResolvedAppearanceStyle[]> = {};
       Object.entries(definition.parts).forEach(([partId, partRule]) => {
-        const baseSelector = `:root[data-bf-appearance="${context.pkg.id}"][data-bf-appearance-revision="${context.revision}"] [${surfaceAttribute}="${surfaceId}"][data-bf-part="${partId}"]`;
+        const baseSelector = `:root[data-bf-appearance="${context.pkg.id}"][data-bf-appearance-revision="${context.revision}"] [${resolvedSurfaceAttribute}="${surfaceId}"][${partAttribute}="${partId}"]`;
         const compiled = this.compilePart(baseSelector, partRule, descriptor, materials, context);
         resolvedParts[partId] = compiled.map(rule => rule.style);
         rules.push(...compiled);
@@ -316,9 +322,9 @@ export class AppearanceCompiler {
   ): CompiledRule[] {
     const rules: CompiledRule[] = [];
     const important = rule.cascade === 'override';
-    const surfaceMatch = /^(.*) \[(data-bf-(?:component|scene))="([^"]+)"\]\[data-bf-part="([^"]+)"\]$/.exec(baseSelector);
+    const surfaceMatch = /^(.*) \[(data-bf-(?:component|product-component|scene))="([^"]+)"\]\[(data-bf-(?:part|product-part))="([^"]+)"\]$/.exec(baseSelector);
     if (!surfaceMatch) throw new Error(`Invalid host Appearance selector: ${baseSelector}`);
-    const [, rootSelector, surfaceAttribute, surfaceId, partId] = surfaceMatch;
+    const [, rootSelector, surfaceAttribute, surfaceId, partAttribute, partId] = surfaceMatch;
     const partDescriptor = descriptor.parts.find(candidate => candidate.id === partId);
     if (!partDescriptor) throw new Error(`Unknown Appearance part descriptor: ${surfaceId}.${partId}`);
     const forceableProperties = new Set(partDescriptor.forceableProperties ?? []);
@@ -341,7 +347,7 @@ export class AppearanceCompiler {
       facets: Record<string, string> = {},
       stateIds: readonly string[] = [],
     ): string => {
-      let targetSelector = `[${surfaceAttribute}="${surfaceId}"][data-bf-part="${partId}"]`;
+      let targetSelector = `[${surfaceAttribute}="${surfaceId}"][${partAttribute}="${partId}"]`;
       Object.entries(facets).forEach(([facetId, option]) => {
         const facet = descriptor.facets?.find(candidate => candidate.id === facetId);
         if (facet) targetSelector += `[${facet.attribute}="${option}"]`;
@@ -354,7 +360,7 @@ export class AppearanceCompiler {
           targetSelector += state.selector.suffix;
         } else {
           ancestors.push(
-            `[${surfaceAttribute}="${surfaceId}"][data-bf-part="${state.selector.part}"]${state.selector.suffix}`,
+            `[${surfaceAttribute}="${surfaceId}"][${partAttribute}="${state.selector.part}"]${state.selector.suffix}`,
           );
         }
       });

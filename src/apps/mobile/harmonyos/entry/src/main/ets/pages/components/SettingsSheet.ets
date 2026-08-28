@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
@@ -86,7 +87,7 @@ export struct SettingsSheet {
     Column() {
       Row() {
         Text(RemoteI18n.t('settings.title'))
-          .fontSize(28)
+          .fontSize(MobileDesignTypography.displayLarge.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
         Blank()
@@ -165,7 +166,8 @@ export struct SettingsSheet {
   @Builder
   SectionTitle(title: string) {
     Text(title)
-      .fontSize(18)
+      .fontSize(MobileDesignTypography.titleSmall.size)
+      .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
       .fontWeight(FontWeight.Medium)
       .fontColor(MUTED)
       .width('100%')
@@ -229,12 +231,12 @@ export struct SettingsSheet {
   StaticRow(title: string, value: string) {
     Row({ space: 16 }) {
       Text(title)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Blank()
       Text(value)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(MUTED)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -254,12 +256,12 @@ export struct SettingsSheet {
         .width(23)
         .height(23)
       Text(title)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Blank()
       Text(value)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(MUTED)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })

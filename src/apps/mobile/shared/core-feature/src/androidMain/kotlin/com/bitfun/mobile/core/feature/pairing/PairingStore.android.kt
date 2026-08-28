@@ -2,6 +2,7 @@ package com.bitfun.mobile.core.feature.pairing
 
 import android.content.Context
 import com.bitfun.mobile.core.feature.CoreLog
+import com.bitfun.mobile.core.persistence.androidPersistenceStores
 import com.bitfun.mobile.core.persistence.androidSecureStore
 import kotlinx.coroutines.CoroutineScope
 
@@ -17,9 +18,13 @@ public fun PairingStore.Companion.create(
     context: Context,
     device: DeviceIdentity,
     log: CoreLog,
-): PairingStore = PairingStore.create(
-    scope = scope,
-    device = device,
-    protection = androidSecureStore(context.applicationContext, "pairing_protection"),
-    log = log,
-)
+): PairingStore {
+    val persistence = androidPersistenceStores(context.applicationContext, "bitfun-mobile.db")
+    return PairingStore.create(
+        scope = scope,
+        device = device,
+        protection = androidSecureStore(context.applicationContext, "pairing_protection"),
+        log = log,
+        persistence = persistence,
+    )
+}

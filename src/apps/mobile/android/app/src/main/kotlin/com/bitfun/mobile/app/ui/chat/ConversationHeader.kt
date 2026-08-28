@@ -117,14 +117,21 @@ internal fun ConversationHeader(
                     title.ifBlank { stringResource(R.string.conversation_title_default) },
                     style = if (hasSubtitle) MobileDesignTypography.ConversationHeaderTitle
                     else MobileDesignTypography.TitleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .testTag(CONVERSATION_TITLE_TEST_TAG)
                         .clickable(enabled = enabled) {
-                            draft = title
-                            editing = !editing
+                            // The title and actions are mutually exclusive surfaces.
+                            menuOpen = false
+                            // Opening the editor re-seeds the draft from the
+                            // committed title; re-tapping the title while the
+                            // editor is already open must not throw the user's
+                            // in-progress text away.
+                            if (!editing) draft = title
+                            editing = true
                         },
                 )
                 if (hasSubtitle) {
@@ -151,7 +158,7 @@ internal fun ConversationHeader(
                         // The editor and the menu are two answers to the same
                         // tap target area; opening one closes the other.
                         editing = false
-                        menuOpen = true
+                        menuOpen = !menuOpen
                     },
                     modifier = Modifier.testTag(CONVERSATION_MENU_TEST_TAG),
                 )
@@ -170,7 +177,7 @@ internal fun ConversationHeader(
                         if (canStop) {
                             add(
                                 BitFunHeaderAction(
-                                    icon = R.drawable.ic_symbol_xmark,
+                                    icon = R.drawable.ic_symbol_gearshape,
                                     label = stringResource(R.string.message_stop),
                                     onClick = onStop,
                                     dividerBefore = true,
@@ -199,7 +206,7 @@ internal fun ConversationHeader(
 
 /** Rename in place: a field and the two verdicts, as the source's row is. */
 @Composable
-private fun TitleEditor(
+internal fun TitleEditor(
     draft: String,
     enabled: Boolean,
     onDraftChange: (String) -> Unit,

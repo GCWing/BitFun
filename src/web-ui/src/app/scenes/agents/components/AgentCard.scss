@@ -131,7 +131,7 @@
     flex-shrink: 0;
   }
 
-  &__kind-badge.badge {
+  &__kind-badge[data-bf-component='status-pill'] {
     max-width: 112px;
     padding: 1px 6px;
     overflow: hidden;

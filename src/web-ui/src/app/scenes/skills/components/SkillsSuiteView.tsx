@@ -1,8 +1,7 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Package, RefreshCw, RotateCcw, Settings2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { configAPI } from '@/infrastructure/api';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
@@ -533,7 +532,7 @@ const SkillsSuiteView: React.FC = () => {
                         <div className="skills-suite__group-title-wrap" data-bf-scene="skills" data-bf-part="suiteGroupTitleWrap">
                           <div className="skills-suite__group-title-row" data-bf-scene="skills" data-bf-part="suiteGroupTitleRow">
                             <span className="skills-suite__group-title" data-bf-scene="skills" data-bf-part="suiteGroupTitle">{group.label}</span>
-                            <Badge variant={groupStateVariant}>{groupStateLabel}</Badge>
+                            <StatusPill tone={groupStateVariant}>{groupStateLabel}</StatusPill>
                           </div>
                           <span className="skills-suite__group-count" data-bf-scene="skills" data-bf-part="suiteGroupCount">
                             {t('suite.groupCount', { total: group.totalCount })}

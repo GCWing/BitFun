@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,11 +38,29 @@ public class RemoteWorkspaceStore internal constructor(
     private val scope: CoroutineScope,
     private val transport: RemoteCommandTransport,
     private val backgroundDispatcher: CoroutineDispatcher,
+    public val deviceKey: String? = null,
 ) {
     private val _state = MutableStateFlow<RemoteWorkspaceUiState>(RemoteWorkspaceUiState.Idle)
     public val state: StateFlow<RemoteWorkspaceUiState> = _state.asStateFlow()
+    private val _stopVersion = MutableStateFlow(0L)
+    /** Changes only when this target store is stopped; useful to cancel observers. */
+    public val stopVersion: StateFlow<Long> = _stopVersion.asStateFlow()
     private var work: Job? = null
     private var targetEpoch: Int = 0
+    private var previewGeneration: Long = 0
+    private var activePreviewRequestId: String? = null
+
+    private fun nextPreviewIdentity(target: FilePreviewTarget, requestedId: String = ""): PreviewRequestIdentity {
+        previewGeneration += 1
+        val requestId = requestedId.trim().ifEmpty { "preview-$previewGeneration" }
+        activePreviewRequestId = requestId
+        return PreviewRequestIdentity(requestId, deviceKey, target.sessionId, target.remotePath)
+    }
+
+    private fun invalidatePreview() {
+        previewGeneration += 1
+        activePreviewRequestId = null
+    }
 
     public fun dispatch(intent: RemoteWorkspaceIntent) {
         when (intent) {
@@ -52,17 +71,23 @@ public class RemoteWorkspaceStore internal constructor(
             is RemoteWorkspaceIntent.DownloadFile -> resolveAndDownloadFile(intent)
             is RemoteWorkspaceIntent.DownloadSaved -> finishDownload(intent.reference, true)
             is RemoteWorkspaceIntent.DownloadSaveFailed -> finishDownload(intent.reference, false)
-            RemoteWorkspaceIntent.DismissPreview -> updateReady { it.copy(preview = RemoteFilePreviewUiState.None) }
+            RemoteWorkspaceIntent.DismissPreview -> {
+                invalidatePreview()
+                updateReady { it.copy(preview = RemoteFilePreviewUiState.None) }
+            }
             RemoteWorkspaceIntent.Stop -> stop()
         }
     }
 
     public fun stop() {
+        _stopVersion.value += 1
+        invalidatePreview()
         work?.cancel()
         work = null
     }
 
     private fun load() {
+        invalidatePreview()
         work?.cancel()
         _state.value = RemoteWorkspaceUiState.Loading
         work = scope.launch {
@@ -109,6 +134,7 @@ public class RemoteWorkspaceStore internal constructor(
 
     private fun runSelection(command: RemoteCommand, assistant: Boolean) {
         val current = _state.value as? RemoteWorkspaceUiState.Ready ?: return
+        invalidatePreview()
         work?.cancel()
         _state.value = current.copy(busy = true)
         work = scope.launch {
@@ -128,10 +154,12 @@ public class RemoteWorkspaceStore internal constructor(
         }
     }
 
-    private fun openFile(target: FilePreviewTarget) {
+    private fun openFile(target: FilePreviewTarget, requestedId: String) {
         val current = _state.value as? RemoteWorkspaceUiState.Ready ?: return
+        val identity = nextPreviewIdentity(target, requestedId)
+        val generation = previewGeneration
         work?.cancel()
-        _state.value = current.copy(preview = RemoteFilePreviewUiState.Loading(target))
+        _state.value = current.copy(preview = RemoteFilePreviewUiState.Loading(target, identity))
         work = scope.launch {
             try {
                 val info = transport.send<FileInfoResponse>(
@@ -144,23 +172,23 @@ public class RemoteWorkspaceStore internal constructor(
                 // `text/plain` for Markdown, and `image/svg+xml` for a file the
                 // preview can only show as source.
                 when (FilePreviewPolicy.rendererFor(name.ifEmpty { target.remotePath }, mime)) {
-                    FilePreviewRenderer.MARKDOWN -> loadText(target, name, mime, size, markdown = true)
-                    FilePreviewRenderer.TEXT -> loadText(target, name, mime, size, markdown = false)
+                    FilePreviewRenderer.MARKDOWN -> loadText(target, identity, generation, name, mime, size, markdown = true)
+                    FilePreviewRenderer.TEXT -> loadText(target, identity, generation, name, mime, size, markdown = false)
                     FilePreviewRenderer.IMAGE ->
                         if (FilePreviewPolicy.canPreviewImage(size)) {
-                            loadImage(target, name, mime, size)
+                            loadImage(target, identity, generation, name, mime, size)
                         } else {
-                            failPreview(target, "file too large", mime, size)
+                            failPreview(target, identity, generation, "file too large", mime, size)
                         }
                     FilePreviewRenderer.UNSUPPORTED ->
-                        updateReady { it.copy(preview = RemoteFilePreviewUiState.Unsupported(target, mime, size)) }
+                        updatePreview(identity, generation) { it.copy(preview = RemoteFilePreviewUiState.Unsupported(target, mime, size, identity)) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
                 // `get_file_info` may be what failed, so the type and size are
                 // not known here; the header falls back to the path it asked for.
-                failPreview(target, error.message.orEmpty(), "", 0)
+                failPreview(target, identity, generation, error.message.orEmpty(), "", 0)
             }
         }
     }
@@ -202,7 +230,7 @@ public class RemoteWorkspaceStore internal constructor(
             }
             return
         }
-        openFile(resolvedTarget)
+        openFile(resolvedTarget, intent.requestId)
     }
 
     private fun resolveAndDownloadFile(intent: RemoteWorkspaceIntent.DownloadFile) {
@@ -333,6 +361,8 @@ public class RemoteWorkspaceStore internal constructor(
 
     private suspend fun loadText(
         target: FilePreviewTarget,
+        identity: PreviewRequestIdentity,
+        generation: Long,
         name: String,
         mime: String,
         size: Long,
@@ -345,18 +375,19 @@ public class RemoteWorkspaceStore internal constructor(
         // The type said text; the bytes are the only thing that can disagree,
         // and a wall of replacement characters is worse than saying no.
         if (FilePreviewPolicy.looksBinary(bytes) || FilePreviewPolicy.looksUndecodable(bytes, content)) {
-            updateReady {
+            updatePreview(identity, generation) {
                 it.copy(
                     preview = RemoteFilePreviewUiState.Unsupported(
                         target,
                         response.mimeType ?: mime,
                         response.totalSize ?: size,
+                        identity,
                     ),
                 )
             }
             return
         }
-        updateReady {
+        updatePreview(identity, generation) {
             it.copy(
                 preview = RemoteFilePreviewUiState.Text(
                     target = target,
@@ -367,15 +398,16 @@ public class RemoteWorkspaceStore internal constructor(
                     mimeType = response.mimeType ?: mime,
                     sizeBytes = response.totalSize ?: size,
                     markdown = markdown,
+                    identity = identity,
                 ),
             )
         }
     }
 
-    private suspend fun loadImage(target: FilePreviewTarget, name: String, mime: String, size: Long) {
+    private suspend fun loadImage(target: FilePreviewTarget, identity: PreviewRequestIdentity, generation: Long, name: String, mime: String, size: Long) {
         val response = readChunk(target, size.coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
         val bytes = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
-        updateReady {
+        updatePreview(identity, generation) {
             it.copy(
                 preview = RemoteFilePreviewUiState.Image(
                     target = target,
@@ -383,6 +415,7 @@ public class RemoteWorkspaceStore internal constructor(
                     mimeType = response.mimeType ?: mime,
                     bytes = bytes,
                     sizeBytes = response.totalSize ?: size,
+                    identity = identity,
                 ),
             )
         }
@@ -399,17 +432,26 @@ public class RemoteWorkspaceStore internal constructor(
             ),
         )
 
-    private fun failPreview(target: FilePreviewTarget, message: String, mime: String, size: Long) {
+    private fun failPreview(target: FilePreviewTarget, identity: PreviewRequestIdentity, generation: Long, message: String, mime: String, size: Long) {
         val failure = if (message.isBlank()) {
             FilePreviewFailure(FilePreviewFailureReason.LOAD_FAILED, true)
         } else {
             FilePreviewPolicy.failure(message)
         }
-        updateReady {
+        updatePreview(identity, generation) {
             it.copy(
-                preview = RemoteFilePreviewUiState.Failed(target, failure.toKind(), failure.retryable, mime, size),
+                preview = RemoteFilePreviewUiState.Failed(target, failure.toKind(), failure.retryable, mime, size, identity),
             )
         }
+    }
+
+    private fun updatePreview(
+        identity: PreviewRequestIdentity,
+        generation: Long,
+        transform: (RemoteWorkspaceUiState.Ready) -> RemoteWorkspaceUiState.Ready,
+    ) {
+        if (previewGeneration != generation || activePreviewRequestId != identity.requestId) return
+        updateReady(transform)
     }
 
     private fun updateReady(transform: (RemoteWorkspaceUiState.Ready) -> RemoteWorkspaceUiState.Ready) {
@@ -452,6 +494,13 @@ public class RemoteWorkspaceStore internal constructor(
             transport: RemoteCommandTransport,
             backgroundDispatcher: CoroutineDispatcher,
         ): RemoteWorkspaceStore = RemoteWorkspaceStore(scope, transport, backgroundDispatcher)
+
+        internal fun create(
+            scope: CoroutineScope,
+            transport: RemoteCommandTransport,
+            backgroundDispatcher: CoroutineDispatcher,
+            deviceKey: String,
+        ): RemoteWorkspaceStore = RemoteWorkspaceStore(scope, transport, backgroundDispatcher, deviceKey)
 
         private const val DOWNLOAD_CHUNK_BYTES = 3 * 1024 * 1024
     }

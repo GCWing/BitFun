@@ -1607,11 +1607,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const currentModelId = currentNativeModelId;
 
   const fallbackTooltip = t('modelSelector.autoModelDesc');
+  const isAutoModel = currentModel?.id === 'auto';
   const tooltipDetails = buildModelSelectorTooltipDetails({
     configName: currentModel?.configName ?? fallbackTooltip,
-    contextWindow: currentModel?.contextWindow,
-    configuredMaxOutputTokens: currentModel?.maxOutputTokens,
-    usage: {
+    modelName: isAutoModel ? undefined : currentModel?.modelName,
+    contextWindow: isAutoModel ? undefined : currentModel?.contextWindow,
+    configuredMaxOutputTokens: isAutoModel ? undefined : currentModel?.maxOutputTokens,
+    usage: isAutoModel ? undefined : {
       current: currentTokens,
       max: maxTokens,
       source: resolvedContextUsageSource,

@@ -28,8 +28,10 @@ fun registerArgon2Archive(
         val include = sharedArgon2Dir.asFile.absolutePath
         val objects = sources.mapIndexed { index, source -> directory.resolve("argon2-$index.o") }
         val wrapper = directory.resolve("bitfun-argon2-wrapper.o")
+        // The target triple is the single source of platform and deployment
+        // metadata, avoiding conflicting minimum-version flags.
         val compile = listOf(
-            "clang", "-target", targetTriple, "-miphoneos-version-min=16.0",
+            "clang", "-target", targetTriple,
             "-DARGON2_NO_THREADS", "-I$include", "-I${sharedArgon2Dir.dir("blake2").asFile.absolutePath}",
             "-O2", "-fvisibility=hidden", "-c",
         )
@@ -47,7 +49,7 @@ fun registerArgon2Archive(
 }
 
 val iosArgon2Archive = registerArgon2Archive("iosArm64", "arm64-apple-ios16.0")
-val iosSimulatorArgon2Archive = registerArgon2Archive("iosSimulatorArm64", "arm64-apple-ios16.0-simulator")
+val iosSimulatorArgon2Archive = registerArgon2Archive("iosSimulatorArm64", "arm64-apple-ios15.0-simulator")
 
 kotlin {
     jvmToolchain(17)
@@ -82,6 +84,14 @@ kotlin {
             defFile(argon2InteropDir.file("bitfun_argon2_simulator.def"))
             includeDirs(sharedArgon2Dir, argon2InteropDir)
             extraOpts("-libraryPath", layout.buildDirectory.dir("native/argon2/iosSimulatorArm64").get().asFile.absolutePath)
+        }
+        // A non-standard Xcode selected explicitly through DEVELOPER_DIR needs its
+        // Swift compatibility archives when linking the simulator DEBUG test.
+        // Without that environment variable, leave toolchain discovery to Kotlin.
+        System.getenv("DEVELOPER_DIR")?.takeIf(String::isNotBlank)?.let { developerDir ->
+            val swiftSimulatorLibraries = file(developerDir)
+                .resolve("Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator")
+            binaries.getTest("DEBUG").linkerOpts("-L${swiftSimulatorLibraries.absolutePath}")
         }
     }
 

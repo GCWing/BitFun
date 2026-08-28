@@ -1,10 +1,11 @@
 import { ConversationUiImage } from '../state/ConversationUiModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { FileTargetResolver } from '../../services/FileTargetResolver';
+import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
+import { FileTargetResolver } from '../policy/FileTargetResolver';
 import {
   MessageFileReference,
   MessageFileReferenceProjectionCache
-} from '../../services/MessageFileReferenceProjector';
+} from '../policy/MessageFileReferenceProjector';
 import { FileReferenceCard } from './FileReferenceCard';
 import { MarkdownContent } from './MarkdownContent';
 import { StreamingMarkdownContent } from './StreamingMarkdownContent';
@@ -37,6 +38,7 @@ export struct MessageImageGallery {
 @ComponentV2
 export struct MessageMarkdown {
   @Param text: string = '';
+  @Param renderRevision: number = 0;
   @Param active: boolean = false;
   @Param streamKey: string = '';
   @Event onCopyText: (text: string) => void = (_text: string) => {};
@@ -49,16 +51,44 @@ export struct MessageMarkdown {
         text: this.text,
         active: this.active,
         streamKey: this.streamKey,
+        renderRevision: this.renderRevision,
         onCopyText: this.onCopyText,
         onOpenLink: this.onOpenLink
       })
     } else {
       MarkdownContent({
         text: this.text,
+        renderRevision: this.renderRevision,
         onCopyText: this.onCopyText,
         onOpenLink: this.onOpenLink
       })
     }
+  }
+}
+
+/**
+ * Keeps a retained message object as the reactive source. Deriving text inside
+ * this component avoids snapshotting a computed string through an @Builder.
+ */
+@ComponentV2
+export struct MessageBodyMarkdown {
+  @Param text: string = '';
+  @Param renderRevision: number = 0;
+  @Param active: boolean = false;
+  @Param streamKey: string = '';
+  @Event onCopyText: (text: string) => void = (_text: string) => {};
+  @Event onOpenLink: (reference: string, label: string) => void =
+    (_reference: string, _label: string) => {};
+
+  build() {
+    MessageMarkdown({
+      text: ConversationMessageRenderPolicy.visibleText(this.text),
+      renderRevision: this.renderRevision,
+      active: this.active,
+      streamKey: this.streamKey,
+      onCopyText: this.onCopyText,
+      onOpenLink: this.onOpenLink
+    })
   }
 }
 

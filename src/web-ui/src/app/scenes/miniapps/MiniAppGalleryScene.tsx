@@ -4,7 +4,7 @@
  */
 import React, { Suspense, lazy, useState } from 'react';
 import { Download, Store, UploadCloud } from 'lucide-react';
-import { Tabs, TabPane } from '@/component-library';
+import { TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -18,43 +18,40 @@ const MiniAppGalleryScene: React.FC = () => {
   const { t } = useI18n('scenes/miniapp');
   const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('installed');
 
+  const tabItems: TabGroupItem[] = [
+    {
+      value: 'installed',
+      icon: <Download size={14} />,
+      label: t('market.tabs.installed'),
+    },
+    {
+      value: 'market',
+      icon: <Store size={14} />,
+      label: t('market.tabs.market'),
+    },
+    {
+      value: 'submissions',
+      icon: <UploadCloud size={14} />,
+      label: t('market.tabs.submissions'),
+    },
+  ];
+
   return (
     <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
-      <Tabs
-        className="miniapp-gallery-scene__tabs"
-        type="line"
-        size="small"
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as MiniAppGalleryTab)}
-      >
-        <TabPane
-          tabKey="installed"
-          icon={<Download size={14} />}
-          label={t('market.tabs.installed')}
-        >
-          <Suspense fallback={null}>
-            <MiniAppGalleryView />
-          </Suspense>
-        </TabPane>
-        <TabPane
-          tabKey="market"
-          icon={<Store size={14} />}
-          label={t('market.tabs.market')}
-        >
-          <Suspense fallback={null}>
-            <MiniAppMarketView />
-          </Suspense>
-        </TabPane>
-        <TabPane
-          tabKey="submissions"
-          icon={<UploadCloud size={14} />}
-          label={t('market.tabs.submissions')}
-        >
-          <Suspense fallback={null}>
-            <MiniAppSubmissionsView />
-          </Suspense>
-        </TabPane>
-      </Tabs>
+      <div className="miniapp-gallery-scene__nav">
+        <TabGroup
+          items={tabItems}
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as MiniAppGalleryTab)}
+        />
+      </div>
+      <div className="miniapp-gallery-scene__content">
+        <Suspense fallback={null}>
+          {activeTab === 'installed' && <MiniAppGalleryView />}
+          {activeTab === 'market' && <MiniAppMarketView />}
+          {activeTab === 'submissions' && <MiniAppSubmissionsView />}
+        </Suspense>
+      </div>
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, PAGE_BG_FADE, SOFT, SUBTLE } from './Theme';
@@ -141,7 +142,7 @@ export struct AppSidebar {
     Column() {
       if (this.visiblePinnedSessions().length > 0) {
         Text(RemoteI18n.t('sidebar.pinned'))
-          .fontSize(14).fontWeight(FontWeight.Medium).fontColor(MUTED)
+          .fontSize(MobileDesignTypography.bodyMedium.size).fontWeight(FontWeight.Medium).fontColor(MUTED)
           .width('100%').margin({ top: 16, bottom: 6 })
         ForEach(this.visiblePinnedSessions(), (session: RemoteSession) => {
           this.PinnedRow(session)
@@ -149,7 +150,7 @@ export struct AppSidebar {
       }
 
       Text(RemoteI18n.t('sidebar.conversations'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
         .width('100%')
@@ -181,11 +182,11 @@ export struct AppSidebar {
   private MoreConversationsRow() {
     Row({ space: 8 }) {
       Text('···')
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(RemoteI18n.f('sidebar.moreSessions',
         String(this.visibleRecentSessions().length - this.visibleRecentCount)))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -201,7 +202,7 @@ export struct AppSidebar {
   private AuthenticatedHeader() {
     Row() {
       Text('BitFun')
-        .fontSize(20)
+        .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
       Blank()
@@ -257,7 +258,7 @@ export struct AppSidebar {
       TextInput({ placeholder: RemoteI18n.t('sidebar.searchPlaceholder'), text: this.sessionSearchQuery })
         .width('100%')
         .height(42)
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
         .padding({ left: 14, right: 14 })
@@ -285,7 +286,7 @@ export struct AppSidebar {
           .width(24)
           .height(24)
         Text(RemoteI18n.t('sidebar.signedOutNewChat'))
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
       }
@@ -314,7 +315,7 @@ export struct AppSidebar {
       Row({ space: 9 }) {
         SidebarGlyph({ kind: 'edit' })
         Text(RemoteI18n.t('sidebar.newChat'))
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
       }
@@ -356,7 +357,7 @@ export struct AppSidebar {
       if (SidebarConnectionActionPolicy.shouldShowScan(this.connectionState)) {
         Button() {
           Text(RemoteI18n.t('sidebar.scanToConnect'))
-            .fontSize(14)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .maxLines(1)
@@ -375,7 +376,7 @@ export struct AppSidebar {
 
       Button() {
         Text(RemoteI18n.t('sidebar.signInBitFunAccount'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(CARD)
           .maxLines(1)
@@ -403,13 +404,13 @@ export struct AppSidebar {
         .width(22)
         .height(22)
       Text(RemoteI18n.t('sidebar.archived'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Blank()
       Row({ space: 8 }) {
         Text(`${this.archivedSessionCount()}`)
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(MUTED)
           .width(24)
@@ -453,7 +454,7 @@ export struct AppSidebar {
       SymbolGlyph($r('sys.symbol.checkmark_circle'))
         .fontSize(18).fontColor([MUTED]).width(19).height(19)
       Text(session.title || RemoteI18n.t('sidebar.untitled'))
-        .fontSize(15).fontColor(INK).layoutWeight(1)
+        .fontSize(MobileDesignTypography.titleSmall.size).fontColor(INK).layoutWeight(1)
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       this.SessionMoreButton(session)
     }
@@ -483,7 +484,7 @@ export struct AppSidebar {
   RecentRow(item: RemoteSession) {
     Row({ space: 8 }) {
       Text(item.title || RemoteI18n.t('sidebar.untitled'))
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(FontWeight.Regular)
         .fontColor(INK)
         .layoutWeight(1)
@@ -579,7 +580,7 @@ export struct AppSidebar {
     Column() {
       Text(this.sessionSearchQuery.trim().length > 0 ?
         RemoteI18n.t('sidebar.noSearchResult') : RemoteI18n.t('sidebar.emptyRecentTitle'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
         .width('100%')

@@ -25,21 +25,27 @@ public data class ChatTimelineState public constructor(
     public val cursor: ChatSessionCursor,
     public val modelCatalog: RemoteModelCatalog,
     public val selectedModelId: String,
+    public val activeTurnAnchorId: String,
 )
 
 public class ChatTimelineStore public constructor() {
     private var state: ChatTimelineState = emptyState("")
+    private var recentlyCoveredTurn: CoveredTurn? = null
+    private var activeTurnAnchor: String = ""
 
     public fun reset(): Unit = reset("")
 
     public fun reset(sessionId: String) {
         state = emptyState(sessionId)
+        recentlyCoveredTurn = null
+        activeTurnAnchor = ""
     }
 
     public fun snapshot(): ChatTimelineState = state.copy(
         persistedMessages = state.persistedMessages.toList(),
         optimisticMessages = state.optimisticMessages.toList(),
         cursor = state.cursor.copy(),
+        activeTurnAnchorId = activeTurnAnchor,
     )
 
     public fun setSyncPhase(syncPhase: ChatSyncPhase) {
@@ -64,19 +70,34 @@ public class ChatTimelineStore public constructor() {
 
     public fun setPersistedMessages(messages: List<ChatMessage>) {
         val persisted = realMessages(messages)
+        val previousIds = state.persistedMessages.mapTo(mutableSetOf()) { it.id }
+        val newlyPersisted = persisted.filterNot { it.id in previousIds }
+        val activeCovered = state.activeTurn?.let { active ->
+            val coveredByContent = coveredByNewAssistantContent(active, newlyPersisted)
+            if (coveredByContent) recentlyCoveredTurn = CoveredTurn.from(active)
+            isActiveTurnCoveredByMessages(active, persisted) || coveredByContent
+        } == true
         state = state.copy(
             persistedMessages = persisted,
-            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, persisted),
-            activeTurn = state.activeTurn?.takeUnless { isActiveTurnCoveredByMessages(it, persisted) },
+            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, newlyPersisted),
+            activeTurn = state.activeTurn?.takeUnless { activeCovered },
         )
     }
 
     public fun mergePersistedMessages(messages: List<ChatMessage>) {
-        val persisted = mergeMessages(state.persistedMessages, realMessages(messages))
+        val incoming = realMessages(messages)
+        val previousIds = state.persistedMessages.mapTo(mutableSetOf()) { it.id }
+        val newlyPersisted = incoming.filterNot { it.id in previousIds }
+        val persisted = mergeMessages(state.persistedMessages, incoming)
+        val activeCovered = state.activeTurn?.let { active ->
+            val coveredByContent = coveredByNewAssistantContent(active, newlyPersisted)
+            if (coveredByContent) recentlyCoveredTurn = CoveredTurn.from(active)
+            isActiveTurnCoveredByMessages(active, persisted) || coveredByContent
+        } == true
         state = state.copy(
             persistedMessages = persisted,
-            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, persisted),
-            activeTurn = state.activeTurn?.takeUnless { isActiveTurnCoveredByMessages(it, persisted) },
+            optimisticMessages = optimisticMessagesNotPersisted(state.optimisticMessages, newlyPersisted),
+            activeTurn = state.activeTurn?.takeUnless { activeCovered },
         )
     }
 
@@ -117,6 +138,9 @@ public class ChatTimelineStore public constructor() {
         ) {
             return
         }
+        if (existing == null || !isLocalPendingActiveTurn(existing)) {
+            activeTurnAnchor = lastOptimisticMessageId()
+        }
         state = state.copy(
             activeTurn = emptyMessage(
                 id = activeId,
@@ -137,6 +161,7 @@ public class ChatTimelineStore public constructor() {
         ) {
             return ""
         }
+        activeTurnAnchor = normalizedLocalId
         state = state.copy(
             activeTurn = emptyMessage(id = activeId, turnId = null, status = "active"),
             syncPhase = ChatSyncPhase.STREAMING,
@@ -147,11 +172,19 @@ public class ChatTimelineStore public constructor() {
     public fun clearPendingActiveTurn(activeId: String) {
         val activeTurn = state.activeTurn
         if (activeTurn == null || activeTurn.id != activeId || !isLocalPendingActiveTurn(activeTurn)) return
+        activeTurnAnchor = ""
         state = state.copy(activeTurn = null, syncPhase = ChatSyncPhase.IDLE)
     }
 
     public fun setActiveTurn(activeTurn: ChatMessage?) {
         val normalized = activeTurn?.takeIf { it.id.isNotEmpty() }
+        if (normalized == null) {
+            recentlyCoveredTurn = null
+        } else if (recentlyCoveredTurn?.matches(normalized) == true) {
+            recentlyCoveredTurn = null
+            state = state.copy(activeTurn = null, syncPhase = ChatSyncPhase.IDLE)
+            return
+        }
         val merged = activeTurnForUpdate(state.activeTurn, normalized)
         val next = activeTurnForState(merged)
         state = state.copy(
@@ -161,7 +194,23 @@ public class ChatTimelineStore public constructor() {
     }
 
     public fun clearActiveTurn() {
+        recentlyCoveredTurn = null
+        activeTurnAnchor = ""
         state = state.copy(activeTurn = null, syncPhase = ChatSyncPhase.IDLE)
+    }
+
+    private data class CoveredTurn(val turnId: String?, val text: String) {
+        fun matches(message: ChatMessage): Boolean = when {
+            !turnId.isNullOrEmpty() && !message.turnId.isNullOrEmpty() -> turnId == message.turnId
+            else -> text.isNotEmpty() && text == message.text.trim()
+        }
+
+        companion object {
+            fun from(message: ChatMessage): CoveredTurn = CoveredTurn(
+                turnId = message.turnId?.takeIf(String::isNotEmpty),
+                text = message.text.trim(),
+            )
+        }
     }
 
     public fun applySnapshot(snapshot: ChatSessionSnapshot) {
@@ -215,12 +264,15 @@ public class ChatTimelineStore public constructor() {
 
     public fun activeTurnOrNull(): ChatMessage? = state.activeTurn
 
+    public fun activeTurnAnchorId(): String = activeTurnAnchor
+
     public fun project(hasMoreMessages: Boolean): List<ChatTimelineItem> =
         ChatTimelineProjector.project(
             state.persistedMessages,
             state.optimisticMessages,
             state.activeTurn,
             hasMoreMessages,
+            activeTurnAnchor,
         )
 
     private fun acceptsSession(sessionId: String): Boolean =
@@ -266,12 +318,26 @@ public class ChatTimelineStore public constructor() {
         return null
     }
 
+    private fun lastOptimisticMessageId(): String = state.optimisticMessages.lastOrNull()?.id.orEmpty()
+
     public companion object {
         public fun optimisticMessagesNotPersisted(
             optimisticMessages: List<ChatMessage>,
             persistedMessages: List<ChatMessage>,
-        ): List<ChatMessage> = optimisticMessages.filter { pending ->
-            persistedMessages.none { message -> isPersistedUserDuplicate(pending, message) }
+        ): List<ChatMessage> {
+            val acknowledgedIndexes = mutableSetOf<Int>()
+            return optimisticMessages.filter { pending ->
+                val acknowledgedIndex = persistedMessages.indices.firstOrNull { index ->
+                    index !in acknowledgedIndexes &&
+                        isPersistedUserDuplicate(pending, persistedMessages[index])
+                }
+                if (acknowledgedIndex == null) {
+                    true
+                } else {
+                    acknowledgedIndexes += acknowledgedIndex
+                    false
+                }
+            }
         }
 
         public fun isActiveTurnCoveredByMessages(
@@ -290,6 +356,7 @@ public class ChatTimelineStore public constructor() {
             cursor = ChatSessionCursor(0, 0, 0),
             modelCatalog = RemoteModelCatalog(0, emptyList(), RemoteDefaultModels(), null),
             selectedModelId = "",
+            activeTurnAnchorId = "",
         )
 
         private fun emptyMessage(id: String, turnId: String?, status: String): ChatMessage = ChatMessage(
@@ -333,7 +400,13 @@ public class ChatTimelineStore public constructor() {
             return previous.id == incoming.id && previous.id.startsWith("active-") && incoming.id.startsWith("active-")
         }
 
-        private fun mergeActiveTurn(previous: ChatMessage, incoming: ChatMessage): ChatMessage = incoming.copy(
+        private fun mergeActiveTurn(previous: ChatMessage, incoming: ChatMessage): ChatMessage {
+            val previousVersion = previous.renderVersion
+            val incomingVersion = incoming.renderVersion
+            if (previousVersion != null && incomingVersion != null && incomingVersion < previousVersion) {
+                return previous
+            }
+            return incoming.copy(
             turnId = incoming.turnId ?: previous.turnId,
             role = incoming.role.ifEmpty { previous.role },
             text = monotonicText(previous.text, incoming.text),
@@ -343,38 +416,225 @@ public class ChatTimelineStore public constructor() {
             tools = incoming.tools ?: previous.tools,
             items = mergeActiveItems(previous.items.orEmpty(), incoming.items.orEmpty()),
             images = incoming.images?.takeIf(List<ImageAttachment>::isNotEmpty) ?: previous.images,
-        )
+            )
+        }
 
         private fun mergeActiveItems(
             previousItems: List<ChatMessageItemResponse>,
             incomingItems: List<ChatMessageItemResponse>,
         ): List<ChatMessageItemResponse> {
             if (incomingItems.isEmpty()) return previousItems
-            val merged = previousItems.toMutableList()
-            val matched = mutableSetOf<Int>()
-            incomingItems.forEachIndexed { incomingIndex, incoming ->
-                val toolId = incoming.tool?.id.orEmpty()
-                val matchIndex = if (toolId.isNotEmpty()) {
-                    previousItems.indices.firstOrNull { index ->
-                        index !in matched && previousItems[index].tool?.id == toolId
-                    } ?: -1
-                } else if (
-                    incomingIndex < previousItems.size && incomingIndex !in matched &&
-                    sameActiveItem(previousItems[incomingIndex], incoming)
-                ) {
-                    incomingIndex
-                } else {
-                    -1
+
+            val working = previousItems.toMutableList()
+            var searchFrom = 0
+
+            for (incomingIndex in incomingItems.indices) {
+                val incoming = incomingItems[incomingIndex]
+                if (incoming.tool != null) {
+                    val toolIndex = findToolMatch(working, incoming, searchFrom)
+                    if (toolIndex >= 0) {
+                        working[toolIndex] = mergeActiveItem(working[toolIndex], incoming)
+                        searchFrom = toolIndex + 1
+                    } else {
+                        val anchor = anchorForNewTool(working, incomingItems, incomingIndex, searchFrom)
+                        working.add(anchor, incoming)
+                        searchFrom = anchor + 1
+                    }
+                    continue
                 }
-                if (matchIndex >= 0) {
-                    merged[matchIndex] = mergeActiveItem(previousItems[matchIndex], incoming)
-                    matched += matchIndex
-                } else {
-                    merged += incoming
+
+                when (val match = findTextMatch(working, incoming, incomingItems, incomingIndex, searchFrom)) {
+                    is TextMatch.Merge -> {
+                        working[match.index] = mergeActiveItem(working[match.index], incoming)
+                        searchFrom = match.index + 1
+                    }
+                    is TextMatch.Collapse -> {
+                        val merged = mergeActiveItem(working[match.start], incoming)
+                        repeat(match.end - match.start + 1) { working.removeAt(match.start) }
+                        working.add(match.start, merged)
+                        searchFrom = match.start + 1
+                    }
+                    is TextMatch.Split -> {
+                        val previous = working[match.index]
+                        val prefix = incoming.copy(
+                            type = incoming.type ?: previous.type,
+                            subItems = mergeActiveItems(previous.subItems.orEmpty(), incoming.subItems.orEmpty()),
+                        )
+                        val remainder = previous.copy(
+                            content = previous.content.orEmpty().substring(incoming.content.orEmpty().length),
+                            subItems = previous.subItems,
+                        )
+                        working[match.index] = prefix
+                        working.add(match.index + 1, remainder)
+                        searchFrom = match.index + 1
+                    }
+                    null -> {
+                        working.add(incoming)
+                        searchFrom = working.size
+                    }
                 }
             }
-            return merged
+            return working.deduplicateAdjacentActiveItems()
         }
+
+        private sealed interface TextMatch {
+            data class Merge(val index: Int) : TextMatch
+            data class Collapse(val start: Int, val end: Int) : TextMatch
+            data class Split(val index: Int) : TextMatch
+        }
+
+        private fun findToolMatch(
+            working: List<ChatMessageItemResponse>,
+            incoming: ChatMessageItemResponse,
+            searchFrom: Int,
+        ): Int {
+            val incomingToolId = incoming.tool?.id.orEmpty()
+            return (searchFrom until working.size).firstOrNull { index ->
+                val toolId = working[index].tool?.id.orEmpty()
+                toolId.isNotEmpty() && toolId == incomingToolId
+            } ?: -1
+        }
+
+        private fun anchorForNewTool(
+            working: List<ChatMessageItemResponse>,
+            incomingItems: List<ChatMessageItemResponse>,
+            incomingIndex: Int,
+            searchFrom: Int,
+        ): Int {
+            for (index in incomingIndex + 1 until incomingItems.size) {
+                val next = incomingItems[index]
+                if (next.tool != null) continue
+                val position = positionForText(working, next, searchFrom)
+                if (position >= 0) return position
+            }
+            return working.size
+        }
+
+        private fun positionForText(
+            working: List<ChatMessageItemResponse>,
+            incoming: ChatMessageItemResponse,
+            searchFrom: Int,
+        ): Int {
+            val incomingType = incoming.type.orEmpty().lowercase()
+            val incomingContent = incoming.content.orEmpty()
+            val exact = (searchFrom until working.size).firstOrNull { index ->
+                matchesTextType(working[index], incomingType) &&
+                    working[index].content.orEmpty() == incomingContent
+            }
+            if (exact != null) return exact
+
+            for (start in searchFrom until working.size) {
+                if (!isTextLikeItem(working[start]) || working[start].type.orEmpty().lowercase() != incomingType) continue
+                var concatenated = ""
+                var spaced = ""
+                var end = start
+                while (end < working.size && isTextLikeItem(working[end]) &&
+                    working[end].type.orEmpty().lowercase() == incomingType
+                ) {
+                    val content = working[end].content.orEmpty()
+                    concatenated += content
+                    spaced = if (spaced.isEmpty()) content else "$spaced $content"
+                    if (end > start && incomingContent.length > working[start].content.orEmpty().length &&
+                        (prefixRelated(incomingContent, concatenated) || prefixRelated(incomingContent, spaced))
+                    ) {
+                        return start
+                    }
+                    end += 1
+                }
+            }
+
+            return (searchFrom until working.size).firstOrNull { index ->
+                matchesTextType(working[index], incomingType) &&
+                    prefixRelated(working[index].content.orEmpty(), incomingContent)
+            } ?: -1
+        }
+
+        private fun findTextMatch(
+            working: List<ChatMessageItemResponse>,
+            incoming: ChatMessageItemResponse,
+            incomingItems: List<ChatMessageItemResponse>,
+            incomingIndex: Int,
+            searchFrom: Int,
+        ): TextMatch? {
+            val incomingType = incoming.type.orEmpty().lowercase()
+            val incomingContent = incoming.content.orEmpty()
+
+            val exact = (searchFrom until working.size).firstOrNull { index ->
+                matchesTextType(working[index], incomingType) &&
+                    working[index].content.orEmpty() == incomingContent
+            }
+            if (exact != null) return TextMatch.Merge(exact)
+
+            for (start in searchFrom until working.size) {
+                if (!isTextLikeItem(working[start]) || working[start].type.orEmpty().lowercase() != incomingType) continue
+                var concatenated = ""
+                var spaced = ""
+                var end = start
+                while (end < working.size && isTextLikeItem(working[end]) &&
+                    working[end].type.orEmpty().lowercase() == incomingType
+                ) {
+                    val content = working[end].content.orEmpty()
+                    concatenated += content
+                    spaced = if (spaced.isEmpty()) content else "$spaced $content"
+                    if (end > start && incomingContent.length > working[start].content.orEmpty().length &&
+                        (incomingContent.startsWith(concatenated) || incomingContent.startsWith(spaced))
+                    ) {
+                        return TextMatch.Collapse(start, end)
+                    }
+                    end += 1
+                }
+            }
+
+            val single = (searchFrom until working.size).firstOrNull { index ->
+                matchesTextType(working[index], incomingType) &&
+                    (incomingContent.isEmpty() || prefixRelated(working[index].content.orEmpty(), incomingContent))
+            }
+            if (single == null) return null
+
+            val previousContent = working[single].content.orEmpty()
+            if (incomingContent.isEmpty() || previousContent.isEmpty()) return TextMatch.Merge(single)
+            return if (previousContent.length > incomingContent.length &&
+                previousContent.startsWith(incomingContent) &&
+                remainderWillBeConsumed(previousContent.substring(incomingContent.length), incomingItems, incomingIndex)
+            ) {
+                TextMatch.Split(single)
+            } else {
+                TextMatch.Merge(single)
+            }
+        }
+
+        private fun remainderWillBeConsumed(
+            remainder: String,
+            incomingItems: List<ChatMessageItemResponse>,
+            incomingIndex: Int,
+        ): Boolean {
+            for (index in incomingIndex + 1 until incomingItems.size) {
+                val next = incomingItems[index]
+                if (next.tool != null) continue
+                if (prefixRelated(remainder, next.content.orEmpty())) return true
+            }
+            return false
+        }
+
+        private fun matchesTextType(item: ChatMessageItemResponse, incomingType: String): Boolean =
+            isTextLikeItem(item) && item.type.orEmpty().lowercase() == incomingType
+
+        private fun prefixRelated(left: String, right: String): Boolean =
+            left.isNotEmpty() && right.isNotEmpty() && (left.startsWith(right) || right.startsWith(left))
+
+        private fun List<ChatMessageItemResponse>.deduplicateAdjacentActiveItems(): List<ChatMessageItemResponse> =
+            fold(mutableListOf()) { result, item ->
+                if (result.lastOrNull()?.let { previous ->
+                        if (previous.tool != null || item.tool != null) {
+                            previous.tool?.id?.isNotEmpty() == true && previous.tool?.id == item.tool?.id
+                        } else {
+                            previous.type.orEmpty().lowercase() == item.type.orEmpty().lowercase() &&
+                                previous.content == item.content
+                        }
+                    } != true
+                ) result += item
+                result
+            }
 
         private fun mergeActiveItem(
             previous: ChatMessageItemResponse,
@@ -392,17 +652,6 @@ public class ChatTimelineStore public constructor() {
                 isSubagent = incoming.isSubagent ?: previous.isSubagent,
                 subItems = mergeActiveItems(previous.subItems.orEmpty(), incoming.subItems.orEmpty()),
             )
-        }
-
-        private fun sameActiveItem(previous: ChatMessageItemResponse, incoming: ChatMessageItemResponse): Boolean {
-            if (previous.type.orEmpty().lowercase() != incoming.type.orEmpty().lowercase()) return false
-            val previousToolId = previous.tool?.id.orEmpty()
-            val incomingToolId = incoming.tool?.id.orEmpty()
-            return if (previousToolId.isNotEmpty() || incomingToolId.isNotEmpty()) {
-                previousToolId == incomingToolId
-            } else {
-                true
-            }
         }
 
         private fun isTextLikeItem(item: ChatMessageItemResponse): Boolean =
@@ -439,8 +688,7 @@ public class ChatTimelineStore public constructor() {
                 if (existingIndex >= 0) {
                     merged[existingIndex] = mergeMessageSnapshot(merged[existingIndex], message)
                 } else {
-                    val optimisticIndex = merged.indexOfFirst { isOptimisticDuplicate(it, message) }
-                    if (optimisticIndex >= 0) merged[optimisticIndex] = message else merged += message
+                    merged += message
                 }
             }
             return merged
@@ -463,15 +711,24 @@ public class ChatTimelineStore public constructor() {
             )
         }
 
-        private fun isOptimisticDuplicate(local: ChatMessage, remote: ChatMessage): Boolean =
-            local.role == "user" && local.id.startsWith("msg-") && local.role == remote.role &&
-                local.text.trim().isNotEmpty() && local.text.trim() == remote.text.trim()
-
         private fun isPersistedAssistantDuplicate(activeTurn: ChatMessage, message: ChatMessage): Boolean {
             if (message.role != "assistant" || !hasDisplayableAssistantFinal(message)) return false
             if (message.id == activeTurn.id) return true
             if (!activeTurn.turnId.isNullOrEmpty() && message.id == "${activeTurn.turnId}_assistant") return true
-            return activeTurn.text.trim().isNotEmpty() && activeTurn.text.trim() == message.text.trim()
+            return !activeTurn.turnId.isNullOrEmpty() && !message.turnId.isNullOrEmpty() &&
+                activeTurn.turnId == message.turnId
+        }
+
+        private fun coveredByNewAssistantContent(
+            activeTurn: ChatMessage,
+            messages: List<ChatMessage>,
+        ): Boolean {
+            val activeText = activeTurn.text.trim()
+            if (activeText.isEmpty()) return false
+            return messages.any { message ->
+                message.role == "assistant" && hasDisplayableAssistantFinal(message) &&
+                    message.text.trim() == activeText
+            }
         }
 
         private fun hasDisplayableAssistantFinal(message: ChatMessage): Boolean {

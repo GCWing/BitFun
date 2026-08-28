@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, StatusPill } from '@bitfun/ui';
 import {
   ChevronRight,
   MessageSquarePlus,
@@ -9,7 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
 
@@ -94,7 +94,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             )}
             {creature ? (
               <span className="assistant-card__badges" data-bf-component="assistant-card" data-bf-part="badges">
-                <Badge variant="neutral">{creature}</Badge>
+                <StatusPill tone="neutral">{creature}</StatusPill>
               </span>
             ) : null}
           </span>

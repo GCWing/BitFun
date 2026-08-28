@@ -1654,6 +1654,8 @@
       "pickCertificateDialogTitle": "選擇 OpenSSH 憑證",
       "passphrase": "密碼短語",
       "passphraseOptional": "留空表示無密碼短語",
+      "showPassword": "顯示密碼",
+      "hidePassword": "隱藏密碼",
       "agentFingerprint": "Agent 金鑰指紋",
       "agentFallbackKey": "Agent 無法使用時的備用私鑰",
       "challengePassword": "互動驗證密碼",

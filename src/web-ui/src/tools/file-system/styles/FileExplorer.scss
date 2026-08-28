@@ -315,45 +315,41 @@ $_indent-width: 8px;
   min-width: 0;
   z-index: 10;
   
-  .bitfun-input-wrapper {
-    gap: 0;
-    border: none;
-    
-    .bitfun-input-container {
-      height: 26px;
-      padding: 0 8px;
-      background: var(--bf-appearance-token-color-bg-elevated);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: none !important;
+  [data-bf-component='input'] {
+    width: 100%;
+    height: 26px;
+    padding: 0 8px;
+    background: var(--bf-appearance-token-color-bg-elevated);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: none !important;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent),
+      0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-soft);
       box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 80%, transparent),
-        0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
-
-      &:hover {
-        background: var(--bf-appearance-token-element-bg-soft);
-        box-shadow:
-          0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, transparent),
-          0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
-      }
-
-      &:focus-within {
-        background: var(--bf-appearance-token-color-bg-elevated);
-        box-shadow:
-          0 0 0 1px var(--bf-appearance-token-color-accent-500),
-          0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
-      }
+        0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, transparent),
+        0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
     }
-    
-    .bitfun-input {
+
+    &:focus-within {
+      background: var(--bf-appearance-token-color-bg-elevated);
+      box-shadow:
+        0 0 0 1px var(--bf-appearance-token-color-accent-500),
+        0 4px 12px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
+    }
+
+    input {
       font-size: var(--bf-appearance-token-font-size-sm);
       color: var(--bf-appearance-token-color-text-primary);
       font-weight: $font-weight-medium;
       border: none !important;
       outline: none !important;
     }
-    
-    .bitfun-input-prefix {
+
+    [data-bf-part='leading'] {
       color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 85%, transparent);
     }
   }

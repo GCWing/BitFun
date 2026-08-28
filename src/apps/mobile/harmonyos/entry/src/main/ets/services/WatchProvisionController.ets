@@ -23,6 +23,8 @@ const DATASYNC_PERMISSION: Permissions = 'ohos.permission.DISTRIBUTED_DATASYNC';
  */
 export interface WatchProvisionOutcome {
   ok: boolean;
+  /** The relay requires the account's normal login path for this device. */
+  passwordRequired: boolean;
   relayUrl: string;
   token: string;
   userId: string;
@@ -40,7 +42,8 @@ export interface WatchProvisionPort {
   readonly provision: (
     deviceId: string,
     deviceName: string,
-    requestId: string
+    requestId: string,
+    password: string
   ) => Promise<WatchProvisionOutcome>;
 }
 
@@ -154,18 +157,21 @@ export class WatchProvisionController {
     this.state.ask(request.deviceName, request.deviceId);
   }
 
-  async approve(): Promise<void> {
+  async approve(password: string = ''): Promise<void> {
     const request = this.pending;
     if (!request || this.inFlight) {
       return;
     }
     this.inFlight = true;
     this.state.working();
+    let settled = false;
     try {
-      await this.runProvisioning(request);
+      settled = await this.runProvisioning(request, password);
     } finally {
-      this.answered.add(request.requestId);
-      this.pending = undefined;
+      if (settled) {
+        this.answered.add(request.requestId);
+        this.pending = undefined;
+      }
       this.inFlight = false;
     }
   }
@@ -193,18 +199,26 @@ export class WatchProvisionController {
     this.state.hide();
   }
 
-  private async runProvisioning(request: WatchProvisionRequest): Promise<void> {
+  private async runProvisioning(request: WatchProvisionRequest, password: string): Promise<boolean> {
     if (!this.port.canProvision()) {
       await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.noDesktop'));
-      return;
+      return true;
     }
     let outcome: WatchProvisionOutcome;
     try {
-      outcome = await this.port.provision(request.deviceId, request.deviceName, request.requestId);
+      outcome = await this.port.provision(request.deviceId, request.deviceName, request.requestId, password);
     } catch (err) {
       RemoteLogger.error(`watch provisioning failed: ${WatchProvisionController.errorText(err)}`);
+      if (password.length > 0) {
+        this.state.requirePassword(RemoteI18n.t('watchProvision.errors.passwordFailed'));
+        return false;
+      }
       await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.desktopUnreachable'));
-      return;
+      return true;
+    }
+    if (outcome.passwordRequired) {
+      this.state.requirePassword('');
+      return false;
     }
     if (!outcome.ok) {
       // A desktop that answered and refused knows why; a desktop that never
@@ -213,7 +227,7 @@ export class WatchProvisionController {
       const message = outcome.desktopReported && outcome.failure.length > 0 ?
         outcome.failure : RemoteI18n.t('watchProvision.errors.desktopUnreachable');
       await this.failAttempt(request.requestId, message);
-      return;
+      return true;
     }
 
     if (outcome.relayUrl.trim().length === 0) {
@@ -221,7 +235,7 @@ export class WatchProvisionController {
       // would only discover that after signing in. Stop here instead.
       RemoteLogger.error('watch provisioning produced a credential without a relay url');
       await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.handoffFailed'));
-      return;
+      return true;
     }
     const credential: WatchProvisionCredential = {
       relay_url: outcome.relayUrl,
@@ -246,10 +260,11 @@ export class WatchProvisionController {
       // already succeeded — so say so rather than implying nothing happened.
       RemoteLogger.error(`watch provisioning handoff failed: ${WatchProvisionController.errorText(err)}`);
       await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.handoffFailed'));
-      return;
+      return true;
     }
     RemoteLogger.info('watch provisioning credential handed off');
     this.state.done(RemoteI18n.f('watchProvision.doneBody', request.deviceName));
+    return true;
   }
 
   private async failAttempt(requestId: string, message: string): Promise<void> {

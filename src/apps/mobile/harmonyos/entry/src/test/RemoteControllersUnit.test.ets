@@ -52,7 +52,7 @@ import { RemoteSessionListCache } from '../main/ets/services/RemoteSessionListCa
 import {
   ToolFileInputPayload,
   ToolFileReferenceResolver
-} from '../main/ets/services/ToolFileReferenceResolver';
+} from '../main/ets/pages/policy/ToolFileReferenceResolver';
 import {
   CodeSyntaxHighlightCache,
   CodeSyntaxHighlighter,
@@ -70,13 +70,13 @@ import {
   RemoteFileDownloadController,
   RemoteFileDownloadScheduler
 } from '../main/ets/services/RemoteFileDownloadController';
-import { FileReferenceKind, FileTargetResolver } from '../main/ets/services/FileTargetResolver';
+import { FileReferenceKind, FileTargetResolver } from '../main/ets/pages/policy/FileTargetResolver';
 import { FilePreviewPolicy } from '../main/ets/services/FilePreviewPolicy';
 import { FilePreviewErrorPolicy } from '../main/ets/services/FilePreviewErrorPolicy';
 import {
   MessageFileReferenceProjectionCache,
   MessageFileReferenceProjector
-} from '../main/ets/services/MessageFileReferenceProjector';
+} from '../main/ets/pages/policy/MessageFileReferenceProjector';
 import { RemoteFilePreviewController } from '../main/ets/pages/viewmodel/RemoteFilePreviewController';
 import { RemoteHeartbeatController, RemoteHeartbeatScheduler } from '../main/ets/services/RemoteHeartbeatController';
 import {

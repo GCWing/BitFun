@@ -20,12 +20,12 @@ import {
   getDesignSystemThemeString,
 } from './designSystemThemeValues';
 
-const LIGHT_NAVY = getDesignSystemThemeString('light', 'color.accent.default');
+const LIGHT_NAVY = getDesignSystemThemeString('light', 'color.action.primary.background');
 const LIGHT_TEXT_PRIMARY = getDesignSystemThemeString('light', 'color.content.primary');
 const LIGHT_TEXT_SECONDARY = getDesignSystemThemeString('light', 'color.content.secondary');
 const LIGHT_TEXT_MUTED = getDesignSystemThemeString('light', 'color.content.muted');
 const LIGHT_TEXT_DISABLED = getDesignSystemThemeString('light', 'color.content.disabled');
-const LIGHT_NAVY_HOVER = getDesignSystemThemeString('light', 'color.accent.hover');
+const LIGHT_NAVY_HOVER = getDesignSystemThemeString('light', 'color.action.primary.hover');
 const LIGHT_PURPLE = '#7c6b99';
 const LIGHT_PURPLE_HOVER = '#655680';
 const LIGHT_SUCCESS = getDesignSystemThemeString('light', 'color.status.success.content');
@@ -267,6 +267,5 @@ export const bitfunLightPalette: AppearancePalette = {
     },
   },
 };
-
 
 

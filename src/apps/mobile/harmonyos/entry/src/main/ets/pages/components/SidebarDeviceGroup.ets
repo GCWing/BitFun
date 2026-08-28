@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
@@ -98,7 +99,7 @@ struct SidebarWorkspaceGroup {
           .height(21)
           .hitTestBehavior(HitTestMode.None)
         Text(this.name || this.basename(this.path))
-          .fontSize(15)
+          .fontSize(MobileDesignTypography.titleSmall.size)
           .fontWeight(this.currentWorkspace ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(INK)
           .layoutWeight(1)
@@ -144,7 +145,7 @@ struct SidebarWorkspaceGroup {
         .height(13)
         .color(MUTED)
       Text(RemoteI18n.t('common.loading'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -157,11 +158,11 @@ struct SidebarWorkspaceGroup {
   private SessionRetryRow() {
     Row({ space: 8 }) {
       Text(RemoteI18n.t('sidebar.deviceLoadFailed'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
         .layoutWeight(1)
       Text(RemoteI18n.t('common.retry'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(INK)
     }
     .width('100%')
@@ -193,7 +194,7 @@ struct SidebarWorkspaceGroup {
       .width(19)
       .height(19)
       Text(item.title || RemoteI18n.t('sidebar.untitled'))
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(item.id === this.selectedSessionId ? FontWeight.Medium : FontWeight.Regular)
         .fontColor(INK)
         .layoutWeight(1)
@@ -218,10 +219,10 @@ struct SidebarWorkspaceGroup {
   private MoreSessionsRow() {
     Row({ space: 8 }) {
       Text('···')
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(RemoteI18n.f('sidebar.moreSessions', String(this.hiddenSessionCount())))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -387,7 +388,7 @@ export struct SidebarDeviceGroup {
         .height(21)
         .hitTestBehavior(HitTestMode.None)
       Text(this.device.deviceName)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.device.online ? INK : SUBTLE)
         .layoutWeight(1)
@@ -396,7 +397,7 @@ export struct SidebarDeviceGroup {
         .hitTestBehavior(HitTestMode.None)
       if (!this.device.online) {
         Text(RemoteI18n.t('sidebar.deviceOffline'))
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(SUBTLE)
           .hitTestBehavior(HitTestMode.None)
       }
@@ -436,7 +437,7 @@ export struct SidebarDeviceGroup {
         .height(14)
         .color(MUTED)
       Text(RemoteI18n.t('common.loading'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -450,11 +451,11 @@ export struct SidebarDeviceGroup {
     Row({ space: 8 }) {
       Text(this.device.errorText.length > 0 ?
         this.device.errorText : RemoteI18n.t('sidebar.deviceLoadFailed'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
         .layoutWeight(1)
       Text(RemoteI18n.t('common.retry'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(INK)
         .onClick(() => {
           this.onRetry();
@@ -469,7 +470,7 @@ export struct SidebarDeviceGroup {
   @Builder
   private EmptyWorkspaces() {
     Text(RemoteI18n.t('sidebar.emptyWorkspaces'))
-      .fontSize(14)
+      .fontSize(MobileDesignTypography.bodyMedium.size)
       .fontColor(MUTED)
       .width('100%')
       .padding({ left: this.bodyIndent(), top: 6, bottom: 6 })
@@ -479,10 +480,10 @@ export struct SidebarDeviceGroup {
   private MoreWorkspacesRow() {
     Row({ space: 8 }) {
       Text('···')
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(RemoteI18n.f('sidebar.moreWorkspaces', String(this.hiddenWorkspaceCount())))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
     }
     .width('100%')

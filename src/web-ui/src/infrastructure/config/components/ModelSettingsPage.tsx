@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input, Modal, SearchField, Select } from '@bitfun/ui';
+import { Button, Card, Switch, IconButton, Input, Modal, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
-import { Select as LegacySelect, NumberInput, Card, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { Select as LegacySelect, NumberInput, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -1938,9 +1938,8 @@ const ModelSettingsPage: React.FC = () => {
             <Card
               data-testid="settings-model-custom-config-btn"
               data-provider-id="custom"
-              variant="default"
-              padding="small"
-              interactive
+              appearance="neutral"
+              padding="sm"
               className="bitfun-model-settings__custom-option"
               onClick={handleSelectCustom}
             >

@@ -15,6 +15,19 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const TEXT_PROGRESS_INTERVAL_MS = 8_000;
 const MAX_RESULT_CHARS = 6_000;
 const MAX_PROGRESS_CHARS = 90;
+const MAX_CONCLUSION_CHARS = 320;
+const MAX_CONCLUSION_SENTENCES = 5;
+
+type SentenceSegmenter = {
+  segment: (input: string) => Iterable<{ segment: string }>;
+};
+
+type SentenceSegmenterConstructor = new (
+  locales?: string | string[],
+  options?: { granularity: 'sentence' },
+) => SentenceSegmenter;
+
+let cachedSentenceSegmenter: SentenceSegmenter | null | undefined;
 
 export type VoiceTaskProgressPhase =
   | 'starting'
@@ -33,6 +46,7 @@ export interface VoiceTaskProgress {
 export interface VoiceTaskResult {
   sessionId: string;
   summary: string;
+  conclusion: string;
 }
 
 interface RunVoiceTaskOptions {
@@ -72,30 +86,102 @@ function normalizeAssistantText(text: string): string {
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*(?:[-+\u2022]|\d+[.)\u3001])\s+/gm, '')
     .replace(/[*_~]{1,3}/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeConclusionText(text: string): string {
+  const lines = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .split(/\r?\n+/)
+    .map(line => {
+      const heading = /^\s{0,3}#{1,6}\s+/.test(line);
+      const value = line
+        .replace(/^\s{0,3}#{1,6}\s+/, '')
+        .replace(/^\s{0,3}>\s?/, '')
+        .replace(/^\s*(?:[-+\u2022]|\d+[.)\u3001])\s+/, '')
+        .replace(/[*_~]{1,3}/g, '')
+        .replace(/[()\uFF08\uFF09]/g, '')
+        .trim();
+      return { heading, value };
+    })
+    .filter(line => line.value && !/^[-=]{3,}$/.test(line.value));
+
+  const contentLines = lines.some(line => !line.heading)
+    ? lines.filter(line => !line.heading)
+    : lines;
+
+  return contentLines.reduce((result, line) => {
+    if (!result) return line.value;
+    if (/[:\uFF1A]$/.test(result)) return `${result} ${line.value}`;
+    if (/[\u3002\uFF01\uFF1F.!?\uFF1B;]$/.test(result)) return `${result} ${line.value}`;
+    return /[\u3400-\u9fff]/.test(`${result}${line.value}`)
+      ? `${result}\u3002${line.value}`
+      : `${result}. ${line.value}`;
+  }, '').replace(/\s+/g, ' ').trim();
 }
 
 function latestTurn(session: Session): DialogTurn | undefined {
   return session.dialogTurns[session.dialogTurns.length - 1];
 }
 
-function truncateProgressText(text: string): string {
-  if (text.length <= MAX_PROGRESS_CHARS) return text;
-  const candidate = text.slice(0, MAX_PROGRESS_CHARS);
+function truncateBriefText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const candidate = text.slice(0, maxChars);
   const boundaries = ['。', '！', '？', '. ', '! ', '? ', '；', '; ']
     .map(mark => candidate.lastIndexOf(mark))
-    .filter(index => index >= Math.floor(MAX_PROGRESS_CHARS * 0.45));
+    .filter(index => index >= Math.floor(maxChars * 0.45));
   const boundary = boundaries.length ? Math.max(...boundaries) + 1 : -1;
-  return `${candidate.slice(0, boundary > 0 ? boundary : MAX_PROGRESS_CHARS - 1).trim()}…`;
+  return `${candidate.slice(0, boundary > 0 ? boundary : maxChars - 1).trim()}…`;
 }
 
 function progressSentences(text: string): string[] {
+  if (cachedSentenceSegmenter === undefined) {
+    const Segmenter = (Intl as typeof Intl & {
+      Segmenter?: SentenceSegmenterConstructor;
+    }).Segmenter;
+    cachedSentenceSegmenter = Segmenter
+      ? new Segmenter(undefined, { granularity: 'sentence' })
+      : null;
+  }
+  if (cachedSentenceSegmenter) {
+    return Array.from(cachedSentenceSegmenter.segment(text), part => part.segment.trim())
+      .filter(Boolean);
+  }
   return text
-    .match(/[^\u3002.\uFF01\uFF1F!?\uFF1B;]+[\u3002.\uFF01\uFF1F!?\uFF1B;]?/g)
+    .match(/[^\u3002\uFF01\uFF1F!?\uFF1B;]+(?:[\u3002\uFF01\uFF1F!?\uFF1B;]|\.(?=\s|$))?/g)
     ?.map(sentence => sentence.trim())
     .filter(Boolean) ?? [];
+}
+
+function cleanConclusionSentence(sentence: string): string {
+  const value = sentence
+    .replace(/[()\uFF08\uFF09]/g, '')
+    .replace(
+      /^(?:\u4E0B\u9762|\u4EE5\u4E0B|\u8FD9\u91CC)(?:\u662F|\u4E3A|\u7ED9\u51FA|\u6574\u7406|\u63D0\u4F9B)(?:\u6574\u7406\u597D\u7684|\u7B80\u8981\u7684|\u7B80\u8981)?(?:\u4ECB\u7ECD|\u7ED3\u8BBA|\u603B\u7ED3|\u56DE\u7B54|\u7ED3\u679C)?\s*[:\uFF1A,\uFF0C]?\s*/,
+      '',
+    )
+    .replace(
+      /^(?:below|here|the following)\s+(?:is|are)\s+(?:the\s+)?(?:brief\s+|concise\s+)?(?:introduction|conclusion|summary|answer|result)\s*[:,-]?\s*/i,
+      '',
+    )
+    .trim();
+  if (!value) return '';
+
+  const withoutPunctuation = value.replace(/[\u3002\uFF01\uFF1F.!?\uFF1B;:\uFF1A]+$/g, '').trim();
+  if (
+    /^(?:(?:\u6211|\u6211\u4EEC)(?:\u5DF2\u7ECF|\u5DF2)?|(?:\u5DF2\u7ECF|\u5DF2))(?:\u901A\u8BFB|\u9605\u8BFB|\u67E5\u9605|\u6D4F\u89C8|\u67E5\u770B|\u770B\u8FC7|\u7814\u7A76)/.test(withoutPunctuation)
+    || /^(?:I|we)(?:'ve| have)?\s+(?:read|reviewed|consulted|looked through|studied)\b/i.test(withoutPunctuation)
+    || /^(?:[\w.-]+\s*)?(?:\u9879\u76EE)?(?:\u4ECB\u7ECD|\u6982\u89C8|\u603B\u7ED3|\u7ED3\u8BBA|\u6700\u7EC8\u7ED3\u679C|\u56DE\u7B54)$/i.test(withoutPunctuation)
+  ) {
+    return '';
+  }
+  return value;
 }
 
 function rewriteProgressSentence(sentence: string): string {
@@ -150,8 +236,40 @@ export function summarizeVoiceTaskProgress(text: string): string {
     selected.push(nextStep ?? candidates[1]);
   }
   const separator = /[\u3400-\u9fff]/.test(normalized) ? '' : ' ';
-  const prefix = /[\u3400-\u9fff]/.test(normalized) ? '\u8FDB\u5C55\uFF1A' : 'Progress: ';
-  return truncateProgressText(`${prefix}${selected.join(separator)}`);
+  return truncateBriefText(selected.join(separator), MAX_PROGRESS_CHARS);
+}
+
+export function summarizeVoiceTaskConclusion(text: string): string {
+  const normalized = normalizeConclusionText(text)
+    .replace(
+      /^(?:(?:\u6700\u7EC8)?(?:\u7ED3\u8BBA|\u7ED3\u679C|\u603B\u7ED3)|(?:final\s+)?(?:conclusion|result|summary))\s*[:\uFF1A-]?\s*/i,
+      '',
+    )
+    .replace(/^(?:\u4EFB\u52A1)?(?:\u5DF2\u5B8C\u6210|\u5B8C\u6210)[\u3002\uFF01!:\uFF1A-]*\s*/, '')
+    .replace(/^(?:(?:the\s+)?task\s+)?(?:is\s+|was\s+)?completed?[.!:\s-]*/i, '')
+    .replace(/^(?:done|finished)[.!:\s-]*/i, '')
+    .trim();
+  if (!normalized) return '';
+
+  const candidates = progressSentences(normalized);
+  if (!candidates.length) return '';
+  const separator = /[\u3400-\u9fff]/.test(normalized) ? '' : ' ';
+  const seen = new Set<string>();
+  const selected: string[] = [];
+  for (const candidate of candidates) {
+    const cleaned = cleanConclusionSentence(candidate);
+    if (!cleaned) continue;
+    const key = cleaned.toLocaleLowerCase().replace(/[\s\u3002\uFF01\uFF1F.!?\uFF1B;:\uFF1A]/g, '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    selected.push(cleaned);
+    if (selected.length >= MAX_CONCLUSION_SENTENCES) break;
+  }
+  if (!selected.length) return '';
+  return truncateBriefText(
+    selected.join(separator),
+    MAX_CONCLUSION_CHARS,
+  );
 }
 
 export function extractVoiceTaskProgressTexts(session: Session): Array<{ id: string; text: string }> {
@@ -190,6 +308,22 @@ export function extractVoiceTaskSummary(session: Session): string {
     return summary || 'BitFun completed the task without a text response.';
   }
   return `${summary.slice(0, MAX_RESULT_CHARS - 1)}…`;
+}
+
+export function extractVoiceTaskConclusion(session: Session): string {
+  const turn = latestTurn(session);
+  if (!turn) return '';
+
+  let finalText = '';
+  turn.modelRounds.forEach(round => {
+    round.items.forEach(item => {
+      if (item.type !== 'text') return;
+      const textItem = item as FlowTextItem;
+      if (textItem.isStreaming || textItem.status !== 'completed') return;
+      if (textItem.content.trim()) finalText = textItem.content;
+    });
+  });
+  return summarizeVoiceTaskConclusion(finalText);
 }
 
 async function waitForSettledSession(sessionId: string): Promise<void> {
@@ -347,7 +481,11 @@ export async function runBitFunVoiceTask(
     if (turn.status === 'cancelled') {
       throw new VoiceTaskCancelledError(sessionId);
     }
-    return { sessionId, summary: extractVoiceTaskSummary(session) };
+    return {
+      sessionId,
+      summary: extractVoiceTaskSummary(session),
+      conclusion: extractVoiceTaskConclusion(session),
+    };
   } finally {
     options.signal?.removeEventListener('abort', handleAbort);
     window.clearInterval(heartbeatId);

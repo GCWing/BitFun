@@ -10,10 +10,10 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
+import { Button, Field, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input, Alert, Tooltip } from '@/component-library';
+import { Alert, Tooltip } from '@/component-library';
 import {
   Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
@@ -834,20 +834,26 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       >
         <div className="relay-deploy-wizard__row">
           <div className="relay-deploy-wizard__field relay-deploy-wizard__field--flex">
-            <Input label={t('ssh.remote.host')} value={formData.host}
-              onChange={(e) => setFormData((p) => ({ ...p, host: e.target.value }))}
-              prefix={<Server size={16} />} size="medium" disabled={connecting} />
+            <Field label={t('ssh.remote.host')} controlWidth="fill">
+              <DesignInput value={formData.host}
+                onChange={(e) => setFormData((p) => ({ ...p, host: e.target.value }))}
+                leading={<Server size={16} />} disabled={connecting} />
+            </Field>
           </div>
           <div className="relay-deploy-wizard__field relay-deploy-wizard__field--port">
-            <Input label={t('ssh.remote.port')} value={formData.port}
-              onChange={(e) => setFormData((p) => ({ ...p, port: e.target.value }))}
-              placeholder="22" size="medium" disabled={connecting} />
+            <Field label={t('ssh.remote.port')} controlWidth="fill">
+              <DesignInput value={formData.port}
+                onChange={(e) => setFormData((p) => ({ ...p, port: e.target.value }))}
+                placeholder="22" disabled={connecting} />
+            </Field>
           </div>
         </div>
         <div className="relay-deploy-wizard__field">
-          <Input label={t('ssh.remote.username')} value={formData.username}
-            onChange={(e) => setFormData((p) => ({ ...p, username: e.target.value }))}
-            prefix={<User size={16} />} size="medium" disabled={connecting} />
+          <Field label={t('ssh.remote.username')} controlWidth="fill">
+            <DesignInput value={formData.username}
+              onChange={(e) => setFormData((p) => ({ ...p, username: e.target.value }))}
+              leading={<User size={16} />} disabled={connecting} />
+          </Field>
         </div>
         <div className="relay-deploy-wizard__field">
           <label className="relay-deploy-wizard__label">{t('ssh.remote.authMethod')}</label>
@@ -857,47 +863,65 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         </div>
         {formData.authType === 'password' && (
           <div className="relay-deploy-wizard__field">
-            <Input label={t('ssh.remote.password')} type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
-              prefix={<Lock size={16} />} size="medium" disabled={connecting}
-              suffix={
-                <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword((s) => !s)} tabIndex={-1}>
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              } />
+            <Field label={t('ssh.remote.password')} controlWidth="fill">
+              <DesignInput type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
+                leading={<Lock size={16} />} disabled={connecting}
+                trailing={
+                  <IconButton
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    aria-label={showPassword ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
+                    onClick={() => setShowPassword((s) => !s)}
+                    tabIndex={-1}
+                    icon={showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  />
+                } />
+            </Field>
           </div>
         )}
         {formData.authType === 'privateKey' && (
           <>
             <div className="relay-deploy-wizard__field">
-              <Input label={t('ssh.remote.privateKeyPath')} value={formData.keyPath}
-                onChange={(e) => setFormData((p) => ({ ...p, keyPath: e.target.value }))}
-                placeholder="~/.ssh/id_rsa" prefix={<Key size={16} />} size="medium"
-                disabled={connecting}
-                suffix={
-                  <Tooltip content={t('ssh.remote.browsePrivateKey')}>
+              <Field label={t('ssh.remote.privateKeyPath')} controlWidth="fill">
+                <DesignInput value={formData.keyPath}
+                  onChange={(e) => setFormData((p) => ({ ...p, keyPath: e.target.value }))}
+                  placeholder="~/.ssh/id_rsa" leading={<Key size={16} />}
+                  disabled={connecting}
+                  trailing={
+                    <Tooltip content={t('ssh.remote.browsePrivateKey')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('ssh.remote.browsePrivateKey')}
+                        disabled={connecting}
+                        onClick={() => void handleBrowsePrivateKey()}
+                        icon={<FolderOpen size={16} />}
+                      />
+                    </Tooltip>
+                  } />
+              </Field>
+            </div>
+            <div className="relay-deploy-wizard__field">
+              <Field label={t('ssh.remote.passphrase')} controlWidth="fill">
+                <DesignInput type={showPassphrase ? 'text' : 'password'}
+                  value={formData.passphrase}
+                  onChange={(e) => setFormData((p) => ({ ...p, passphrase: e.target.value }))}
+                  placeholder={t('ssh.remote.passphraseOptional')} disabled={connecting}
+                  trailing={
                     <IconButton
                       type="button"
                       size="sm"
-                      aria-label={t('ssh.remote.browsePrivateKey')}
-                      disabled={connecting}
-                      onClick={() => void handleBrowsePrivateKey()}
-                      icon={<FolderOpen size={16} />}
+                      variant="quiet"
+                      aria-label={showPassphrase ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
+                      onClick={() => setShowPassphrase((s) => !s)}
+                      tabIndex={-1}
+                      icon={showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
                     />
-                  </Tooltip>
-                } />
-            </div>
-            <div className="relay-deploy-wizard__field">
-              <Input label={t('ssh.remote.passphrase')} type={showPassphrase ? 'text' : 'password'}
-                value={formData.passphrase}
-                onChange={(e) => setFormData((p) => ({ ...p, passphrase: e.target.value }))}
-                placeholder={t('ssh.remote.passphraseOptional')} size="medium" disabled={connecting}
-                suffix={
-                  <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassphrase((s) => !s)} tabIndex={-1}>
-                    {showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                } />
+                  } />
+              </Field>
             </div>
           </>
         )}
@@ -970,16 +994,16 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
             <div className="relay-deploy-wizard__port-row">
               <div className="relay-deploy-wizard__field relay-deploy-wizard__field--port">
-                <Input
-                  label={t('relayDeploy.relayPort')}
-                  type="number"
-                  value={relayPortInput}
-                  onChange={(e) => setRelayPortInput(e.target.value)}
-                  size="medium"
-                  disabled={taskRunning || preflightLoading}
-                  min={1}
-                  max={65535}
-                />
+                <Field label={t('relayDeploy.relayPort')} controlWidth="fill">
+                  <DesignInput
+                    type="number"
+                    value={relayPortInput}
+                    onChange={(e) => setRelayPortInput(e.target.value)}
+                    disabled={taskRunning || preflightLoading}
+                    min={1}
+                    max={65535}
+                  />
+                </Field>
               </div>
               <p className="relay-deploy-wizard__port-hint">{t('relayDeploy.relayPortHint')}</p>
             </div>
@@ -1235,25 +1259,37 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       </div>
       <div className="relay-deploy-wizard__form">
         <div className="relay-deploy-wizard__field">
-          <Input label={t('accountLogin.username')} type="text" value={regUsername}
-            onChange={(e) => setRegUsername(e.target.value)}
-            prefix={<User size={16} />} size="medium" disabled={regLoading} />
+          <Field label={t('accountLogin.username')} controlWidth="fill">
+            <DesignInput type="text" value={regUsername}
+              onChange={(e) => setRegUsername(e.target.value)}
+              leading={<User size={16} />} disabled={regLoading} />
+          </Field>
         </div>
         <div className="relay-deploy-wizard__field">
-          <Input label={t('accountLogin.password')} type={showRegPassword ? 'text' : 'password'}
-            value={regPassword} onChange={(e) => setRegPassword(e.target.value)}
-            prefix={<Lock size={16} />} size="medium" disabled={regLoading}
-            suffix={
-              <button type="button" className="bitfun-input-toggle" onClick={() => setShowRegPassword((s) => !s)} tabIndex={-1}>
-                {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            } />
+          <Field label={t('accountLogin.password')} controlWidth="fill">
+            <DesignInput type={showRegPassword ? 'text' : 'password'}
+              value={regPassword} onChange={(e) => setRegPassword(e.target.value)}
+              leading={<Lock size={16} />} disabled={regLoading}
+              trailing={
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  aria-label={showRegPassword ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
+                  onClick={() => setShowRegPassword((s) => !s)}
+                  tabIndex={-1}
+                  icon={showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                />
+              } />
+          </Field>
         </div>
         {regMode === 'create' && (
           <div className="relay-deploy-wizard__field">
-            <Input label={t('relayDeploy.confirmPassword')} type={showRegPassword ? 'text' : 'password'}
-              value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)}
-              prefix={<Lock size={16} />} size="medium" disabled={regLoading} />
+            <Field label={t('relayDeploy.confirmPassword')} controlWidth="fill">
+              <DesignInput type={showRegPassword ? 'text' : 'password'}
+                value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)}
+                leading={<Lock size={16} />} disabled={regLoading} />
+            </Field>
           </div>
         )}
       </div>

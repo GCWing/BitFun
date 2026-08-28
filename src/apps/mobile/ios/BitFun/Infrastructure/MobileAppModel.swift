@@ -2,101 +2,159 @@ import Foundation
 import SwiftUI
 import BitFunMobileCore
 
-enum ConnectionPhase {
-    case connected
-    case reconnecting
-    case disconnected
-}
-
-enum MobileSurface: String {
-    case local
-    case remote
-}
-
-struct ChatMessage: Identifiable, Equatable {
-    let id: UUID
-    let role: Role
-    let text: String
-
-    enum Role { case user, assistant }
-}
-
-struct ChatSession: Identifiable, Equatable {
-    let id: UUID
-    var title: String
-    var updatedLabel: String
-    var pinned: Bool = false
-}
-
 @MainActor
 final class MobileAppModel: ObservableObject {
+    @Published var appLanguage: MobileLanguage = MobileLocalization.restoredLanguage()
     @Published var surface: MobileSurface = .local
     @Published var sessions: [ChatSession]
     @Published var remoteSessions: [ChatSession] = []
-    @Published var selectedSessionID: UUID
+    @Published var remoteQuery = ""
+    @Published var remoteAgentFilter = "ALL"
+    @Published var remoteViewAgentFilter = ""
+    @Published var remoteGroupMode = "PROJECT"
+    @Published var remoteWorkspaceFilter = ""
+    @Published var remoteStatusFilter = ""
+    @Published var remoteShowWorkspaceMetadata = false
+    @Published var remoteShowUpdatedMetadata = false
+    @Published var remoteShowStatusMetadata = false
+    @Published var remoteViewSettingsOpen = false
+    @Published var remoteHasMore = false
+    @Published var remoteHasMoreMessages = false
+    @Published var remotePermissionMode = "ASK"
+    @Published var remotePermissionFailure: String?
+    @Published var remoteAssistants: [MobileAssistantOption] = []
+    @Published var remoteCreateOpen = false
+    @Published var remoteCreateSubmitting = false
+    @Published var remoteCreateError: String?
+    @Published var remoteCreateDeviceError: String?
+    @Published var generalConfigOpen = false
+    @Published var generalConfigured = false
+    @Published var generalConfigBaseURL = ""
+    @Published var generalConfigModel = ""
+    @Published var generalConfigHasAPIKey = false
+    @Published var generalConfigFailure: String?
+    @Published var generalConnectionTestRunning = false
+    @Published var generalConnectionTestMessage: String?
+    @Published var generalExportOpen = false
+    @Published var generalExportName = "conversation.md"
+    @Published var generalExportData = Data()
+    @Published var selectedSessionID: String
     @Published var messages: [ChatMessage]
+    @Published var timelineRows: [MobileConversationRow] = []
     @Published var draft = ""
     @Published var drawerOpen = false
     @Published var settingsOpen = false
+    @Published var remoteControlSettingsOpen = false
+    @Published var accountSheetOpen = false
+    @Published var languagePickerOpen = false
     @Published var connectionPhase: ConnectionPhase = .connected
     @Published var isSending = false
+    @Published var busy = false
+    @Published var composerImages: [ComposerAttachment] = []
+    @Published var modelOptions: [ComposerModelOption] = []
+    @Published var toastMessage: String?
     @Published var remoteConnected = false
     @Published var remoteSessionSelected = false
     @Published var localSessionSelected = false
     @Published var pairingSheetOpen = false
+    @Published var pairingScanRequested = false
     @Published var pairingBusy = false
     @Published var pairingError: String?
     @Published var coreErrorMessage: String?
     @Published var accountUser: String?
+    @Published var accountUserID: String?
+    @Published var localDeviceID = ""
     @Published var accountBusy = false
+    @Published var accountFailureStage: String?
+    @Published var accountFailureCanRetry = false
     @Published var accountDeviceName: String?
+    @Published var directPairingDeviceName: String?
     @Published var accountDeviceCount = 0
+    @Published var accountDevices: [MobileAccountDevice] = []
+    @Published var accountSelectedDeviceID: String?
+    @Published var accountRefreshing = false
+    @Published var deviceDirectory: [MobileDeviceDirectoryEntry] = []
+    @Published var directPairingDirectoryEntry: MobileDeviceDirectoryEntry?
+    @Published var remoteWorkspaces: [MobileWorkspaceGroup] = []
+    @Published var workspaceLoading = false
+    @Published var workspaceLoadFailed = false
+    @Published var filePreview: MobileFilePreview?
+    @Published var sessionDetails: ChatSession? = nil
+    @Published var filePreviewLoading = false
+    @Published var pendingDownload: MobilePendingDownload?
+    @Published var downloadExporterOpen = false
+    @Published var downloadTargetPath: String?
+    @Published var downloadStatusText: String?
+    @Published var downloadPhase: MobileDownloadPhase = .idle
+    var activeTurnID: String?
+    var directPairingConnected = false
+    var accountLoginPreview = false
+    var localActionPreview = false
+    var composerModelPickerPreview = false
+    var remoteCreatePreview = false
+    var directoryFixturePreview = false
+    var pairingGeneration: UInt64 = 0
+    var accountGeneration: UInt64 = 0
+    var pendingAccountOperationPreservesPairing: (generation: UInt64, preserve: Bool)?
+    var pairingIntentInFlight = false
+    var remoteTargetEpoch: UInt64 = 0
+    var remoteExpectedDeviceKey: String?
+    var remoteBoundTargetKey: String?
+    var remoteBoundTargetEpoch: UInt64?
+    var pairingRetainedAccountAuthority: RetainedAccountAuthority?
+    var accountDirectoryGeneration: UInt64 = 0
+    var pendingDirectorySession: (deviceKey: String, sessionID: String, epoch: UInt64)?
+    var remoteInitialSessionReady = false
+    var remoteInitialWorkspaceReady = false
+    var remoteCreateRequestID: String?
+    var remoteCreateRequestEpoch: UInt64 = 0
+    var remoteCreateRequestDeviceKey: String?
+    var committedRemoteCreate: CommittedRemoteCreate?
+    var remoteLastAppliedAuthority: RemoteAuthorityScope?
+    var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
+    var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
+    var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
+    var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
+    var pendingRemoteAssistantCreate = false
+    var selectedRemoteWorkspaceKind = ""
 
-    private var coreAdapter: MobileCoreAdapter?
+    var coreAdapter: MobileCoreAdapter?
 
-    init(sessions: [ChatSession], selectedSessionID: UUID, messages: [ChatMessage]) {
+    init(sessions: [ChatSession], selectedSessionID: String, messages: [ChatMessage]) {
         self.sessions = sessions
         self.selectedSessionID = selectedSessionID
         self.messages = messages
+        self.timelineRows = messages.map(Self.simpleTimelineRow)
         self.coreAdapter = nil
-        self.coreAdapter = MobileCoreAdapter(
+        let adapter = MobileCoreAdapter(
             onState: { [weak self] state in self?.apply(coreState: state) },
-            onPairingState: { [weak self] state in self?.apply(pairingState: state) },
-            onAccountState: { [weak self] state in self?.apply(accountState: state) },
-            onRemoteState: { [weak self] state in self?.apply(remoteState: state) },
+            onPairingState: { [weak self] state, generation in
+                self?.apply(pairingState: state, generation: generation)
+            },
+            onAccountState: { [weak self] state, generation in
+                self?.apply(accountState: state, generation: generation)
+            },
+            onRemoteTargetBound: { [weak self] targetKey, epoch, generation in
+                self?.apply(remoteTargetBound: targetKey, epoch: epoch, accountGeneration: generation)
+            },
+            onRemoteState: { [weak self] state, targetKey, epoch in
+                self?.apply(remoteState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onWorkspaceState: { [weak self] state, targetKey, epoch in
+                self?.apply(workspaceState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onDirectoryState: { [weak self] state, generation in
+                self?.apply(directoryState: state, generation: generation)
+            },
+            onCreateOperation: { [weak self] state, targetKey in
+                self?.apply(createOperation: state, targetKey: targetKey)
+            },
+            onCreateUnavailable: { [weak self] requestID, targetKey in
+                self?.failRemoteCreate(requestID: requestID, targetKey: targetKey)
+            }
         )
-    }
-
-    static let preview: MobileAppModel = {
-        let first = ChatSession(id: UUID(), title: "你好", updatedLabel: "刚刚")
-        return MobileAppModel(
-            sessions: [first],
-            selectedSessionID: first.id,
-            messages: [
-                ChatMessage(id: UUID(), role: .user, text: "你好"),
-                ChatMessage(id: UUID(), role: .assistant, text: "这是 BitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。")
-            ]
-        )
-    }()
-
-    static var launchConfigured: MobileAppModel {
-        let model = preview
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--remote") {
-            model.surface = .remote
-        }
-        if arguments.contains("--connected") {
-            model.configureConnectedPreview()
-        }
-        if let relay = arguments.value(after: "--relay-url"),
-           let username = arguments.value(after: "--username"),
-           let password = arguments.value(after: "--password") {
-            model.loginAccount(relayURL: relay, username: username, password: password)
-        }
-        if arguments.contains("--drawer") {
-            model.drawerOpen = true
-        }
-        return model
+        self.coreAdapter = adapter
+        self.localDeviceID = adapter.deviceID
     }
 
     var selectedSession: ChatSession? {
@@ -110,233 +168,357 @@ final class MobileAppModel: ObservableObject {
         surface == .local ? sessions : remoteSessions
     }
 
-    func send() {
-        if surface == .remote {
-            sendRemote()
-            return
-        }
-        let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, !isSending else { return }
-        if surface == .local {
-            localSessionSelected = true
-            if selectedSession == nil, let first = sessions.first {
-                selectedSessionID = first.id
-            }
-        }
-        messages.append(ChatMessage(id: UUID(), role: .user, text: value))
-        draft = ""
-        isSending = true
-        coreAdapter?.updateDraft(value)
-        coreAdapter?.send()
-    }
-
-    func select(_ session: ChatSession) {
-        selectedSessionID = session.id
-        if surface == .remote {
-            remoteSessionSelected = true
-        } else {
-            localSessionSelected = true
-        }
-        drawerOpen = false
-    }
-
     func switchSurface(_ next: MobileSurface) {
         surface = next
         drawerOpen = false
     }
 
+    func setLanguage(_ language: MobileLanguage) {
+        UserDefaults.standard.set(language.rawValue, forKey: MobileLocalization.preferenceKey)
+        guard appLanguage != language else {
+            languagePickerOpen = false
+            return
+        }
+        appLanguage = language
+        languagePickerOpen = false
+    }
+
+    func localized(_ key: String) -> String {
+        MobileLocalization.text(key, language: appLanguage)
+    }
+
+    func localizedFormat(_ key: String, _ arguments: CVarArg...) -> String {
+        String(
+            format: localized(key),
+            locale: Locale(identifier: appLanguage.rawValue),
+            arguments: arguments
+        )
+    }
+
     func connectRemote() {
         pairingError = nil
+        pairingScanRequested = false
         pairingSheetOpen = true
     }
 
-    private func configureConnectedPreview() {
-        surface = .remote
-        remoteConnected = true
+    func scanRemote() {
+        pairingError = nil
+        pairingScanRequested = true
+        pairingSheetOpen = true
+    }
+
+    func consumePairingScanRequest() {
+        pairingScanRequested = false
+    }
+
+    func openAccountFromPairing() {
+        pairingSheetOpen = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.accountSheetOpen = true
+        }
+    }
+
+    var usesDirectPairing: Bool { directPairingConnected }
+
+    var directPairingSidebarDeviceID: String { "qr:\(directPairingDeviceName ?? "desktop")" }
+
+    func dismissPairing() {
+        pairingError = nil
+        coreAdapter?.dismissPairingFailure()
+    }
+
+    func handleScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .active: coreAdapter?.pairingForeground()
+        case .background: coreAdapter?.pairingBackground()
+        default: break
+        }
+    }
+
+    func verifyRemoteConnection() {
+        guard accountUser == nil else {
+            refreshRemoteDevices()
+            return
+        }
+        connectionPhase = .reconnecting
+        coreAdapter?.verifyPairing()
+    }
+
+    func disconnectRemote() {
+        invalidateTargetScopedFileTransfers()
+        committedRemoteCreate = nil
+        remoteLastAppliedAuthority = nil
+        coreAdapter?.disconnect()
+        directPairingConnected = false
+        directPairingDeviceName = nil
+        pendingAccountOperationPreservesPairing = nil
+        remoteConnected = false
+        remoteSessionSelected = false
+        remoteSessions = []
+        remoteWorkspaces = []
+        workspaceCatalog = []
+        pendingRemoteWorkspaceCreate = nil
+        pendingDirectoryRemoteDraft = nil
+        pendingRemoteAssistantCreate = false
+        selectedRemoteWorkspaceKind = ""
+        selectedSessionID = ""
+        timelineRows = []
+        messages = []
+        surface = .local
         connectionPhase = .connected
-        remoteSessionSelected = true
-        accountDeviceName = "DESKTOP-KM3L4UI"
-        let session = ChatSession(id: UUID(), title: "你好", updatedLabel: "刚刚")
-        remoteSessions = [session]
-        selectedSessionID = session.id
-        messages = [
-            ChatMessage(id: UUID(), role: .user, text: "你好"),
-            ChatMessage(id: UUID(), role: .assistant, text: "这是 BitFun 的远程会话预览。"),
-        ]
+    }
+
+    func openRemoteSurface() {
+        surface = .remote
+        drawerOpen = false
+    }
+
+    func showSessionDetails(_ session: ChatSession) {
+        sessionDetails = session
+    }
+
+    func dismissSessionDetails() {
+        sessionDetails = nil
     }
 
     func submitPairing(url: String) {
+        prepareProjectionForPairingSubmission()
+        pairingIntentInFlight = true
+        pairingGeneration &+= 1
         pairingError = nil
         pairingBusy = true
         coreAdapter?.submitPairing(url: url)
     }
 
-    func loginAccount(relayURL: String, username: String, password: String) {
-        accountBusy = true
-        coreErrorMessage = nil
-        coreAdapter?.loginAccount(relayURL: relayURL, username: username, password: password)
+    func submitPairing(url: String, userID: String, password: String) {
+        prepareProjectionForPairingSubmission()
+        pairingIntentInFlight = true
+        pairingGeneration &+= 1
+        pairingError = nil
+        pairingBusy = true
+        coreAdapter?.submitPairing(url: url, userID: userID, password: password)
     }
 
-    func sendRemote() {
-        let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, let sessionID = visibleSessions.first(where: { $0.id == selectedSessionID })?.id else { return }
-        draft = ""
-        isSending = true
-        coreAdapter?.sendRemote(sessionID: sessionID.uuidString, content: value)
-    }
-
-    func syncDraftToCore() {
-        coreAdapter?.updateDraft(draft)
-    }
-
-    private func apply(coreState state: GeneralChatUiState) {
-        if !state.sessions.isEmpty {
-            sessions = state.sessions.map { session in
-                ChatSession(
-                    id: UUID(uuidString: session.id) ?? UUID(),
-                    title: session.title.isEmpty ? "未命名会话" : session.title,
-                    updatedLabel: session.updatedAt,
-                    pinned: session.pinned,
-                )
-            }
+    private func prepareProjectionForPairingSubmission() {
+        let adapterTargetKey = coreAdapter?.currentRemoteTargetKey
+        let adapterEpoch = coreAdapter?.currentRemoteTargetEpoch ?? 0
+        let healthyConnected: Bool
+        switch connectionPhase {
+        case .connected: healthyConnected = remoteConnected
+        case .reconnecting, .disconnected: healthyConnected = false
         }
-        if !state.messages.isEmpty {
-            messages = state.messages.map { message in
-                let text = message.blocks.map(\.text).joined(separator: "\n")
-                return ChatMessage(
-                    id: UUID(uuidString: message.id) ?? UUID(),
-                    role: message.role.lowercased() == "user" ? .user : .assistant,
-                    text: text,
-                )
-            }
-        }
-        if draft != state.draft { draft = state.draft }
-        isSending = state.busy
-        if let failure = state.failure {
-            coreErrorMessage = failure.name
+        if let adapterTargetKey,
+           adapterTargetKey.hasPrefix("account:"),
+           adapterTargetKey == remoteExpectedDeviceKey,
+           adapterEpoch == remoteTargetEpoch,
+           adapterTargetKey == remoteBoundTargetKey,
+           adapterEpoch == remoteBoundTargetEpoch,
+           healthyConnected {
+            pairingRetainedAccountAuthority = RetainedAccountAuthority(
+                targetKey: adapterTargetKey,
+                epoch: adapterEpoch
+            )
         } else {
-            coreErrorMessage = nil
+            pairingRetainedAccountAuthority = nil
+        }
+        let transition = RemoteAuthorityGate.pairingAttemptTransition(
+            authoritativeTargetKey: adapterTargetKey,
+            remoteConnected: remoteConnected
+        )
+        guard transition.clearBoundRemoteProjection else { return }
+
+        invalidateTargetScopedFileTransfers()
+        directPairingConnected = false
+        directPairingDeviceName = nil
+        directPairingDirectoryEntry = nil
+        remoteConnected = transition.remoteConnected
+        remoteExpectedDeviceKey = nil
+        remoteLastAppliedAuthority = nil
+        committedRemoteCreate = nil
+        pendingAccountOperationPreservesPairing = nil
+        remoteInitialSessionReady = false
+        remoteInitialWorkspaceReady = false
+        remoteSessionSelected = false
+        remoteSessions = []
+        remoteWorkspaces = []
+        remoteAssistants = []
+        remotePermissionFailure = nil
+        sessionDetails = nil
+        workspaceCatalog = []
+        workspaceLoading = false
+        workspaceLoadFailed = false
+        pendingDirectorySession = nil
+        pendingDirectoryWorkspace = nil
+        pendingDirectoryRemoteDraft = nil
+        pendingRemoteWorkspaceCreate = nil
+        pendingRemoteAssistantCreate = false
+        selectedRemoteWorkspaceKind = ""
+        selectedSessionID = ""
+        remoteCreateOpen = false
+        remoteCreateSubmitting = false
+        remoteCreateRequestID = nil
+        remoteCreateRequestEpoch = remoteTargetEpoch
+        remoteCreateRequestDeviceKey = nil
+        remoteCreateError = nil
+        remoteCreateDeviceError = nil
+        activeTurnID = nil
+        isSending = false
+        busy = false
+        composerImages = []
+        timelineRows = []
+        messages = []
+        connectionPhase = .reconnecting
+    }
+
+    func stopSending() {
+        if surface == .remote {
+            guard remoteSessionSelected else { return }
+            coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
+        } else {
+            coreAdapter?.cancelGeneralChat()
         }
     }
 
-    private func apply(pairingState state: PairingUiState) {
+    func retryMessage(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, !busy, !isSending else { return }
+        if surface == .remote {
+            guard remoteSessionSelected, connectionPhase != .disconnected else { return }
+            isSending = true
+            busy = true
+            coreAdapter?.sendRemote(sessionID: selectedSessionID, content: normalized, images: [])
+        } else {
+            draft = normalized
+            send()
+        }
+    }
+
+    func renameSelectedSession(_ title: String) {
+        let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, selectedSession != nil else { return }
+        if surface == .remote {
+            coreAdapter?.renameRemoteSession(sessionID: selectedSessionID, title: normalized)
+        } else {
+            coreAdapter?.renameGeneralSession(sessionID: selectedSessionID, title: normalized)
+        }
+    }
+
+    func togglePinSelectedSession() {
+        guard surface == .local, let session = selectedSession else { return }
+        coreAdapter?.pinGeneralSession(sessionID: session.id, pinned: !session.pinned)
+    }
+
+    func archiveSelectedSession() {
+        guard surface == .local, let session = selectedSession else { return }
+        coreAdapter?.archiveGeneralSession(
+            sessionID: session.id,
+            archived: session.status.lowercased() != "archived"
+        )
+    }
+
+    func deleteSelectedSession() {
+        guard surface == .local, let session = selectedSession else { return }
+        coreAdapter?.deleteGeneralSession(sessionID: session.id)
+        localSessionSelected = false
+    }
+
+    func showUploadedFiles() {
+        let count = composerImages.count
+        showToast(
+            count == 0
+                ? localized("当前会话暂无已上传文件")
+                : localizedFormat("当前会话已上传 %lld 个文件", Int64(count))
+        )
+    }
+
+    func showToast(_ message: String) {
+        toastMessage = message
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard self?.toastMessage == message else { return }
+            self?.toastMessage = nil
+        }
+    }
+
+    private func apply(pairingState state: PairingUiState, generation: UInt64) {
+        guard !localActionPreview, generation == pairingGeneration,
+              remoteExpectedDeviceKey == nil || remoteExpectedDeviceKey == "pairing" || pairingIntentInFlight else { return }
         pairingBusy = state is PairingUiStateConnecting
         if let failed = state as? PairingUiStateFailed {
             pairingBusy = false
-            pairingError = pairingErrorMessage(failed.failure)
-        } else if state is PairingUiStatePaired {
+            pairingIntentInFlight = false
+            pairingError = PairingFailureCopy.message(failed.failure, localized: localized)
+            let healthyConnected: Bool
+            switch connectionPhase {
+            case .connected: healthyConnected = remoteConnected
+            case .reconnecting, .disconnected: healthyConnected = false
+            }
+            let retainAccount = RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
+                captured: pairingRetainedAccountAuthority,
+                adapterTargetKey: coreAdapter?.currentRemoteTargetKey,
+                adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? 0,
+                modelTargetKey: remoteExpectedDeviceKey,
+                modelEpoch: remoteTargetEpoch,
+                healthyConnected: healthyConnected
+            )
+            let invalidatedAccountAuthority = !retainAccount &&
+                (remoteExpectedDeviceKey?.hasPrefix("account:") == true)
+            if invalidatedAccountAuthority, let targetKey = remoteExpectedDeviceKey {
+                invalidateTargetScopedFileTransfers()
+                _ = coreAdapter?.invalidateRemoteAuthority(
+                    ifTargetKey: targetKey,
+                    epoch: remoteTargetEpoch
+                )
+                clearInvalidatedRemoteAuthorityProjection(
+                    adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? remoteTargetEpoch
+                )
+            } else {
+                pairingRetainedAccountAuthority = nil
+            }
+            remoteConnected = retainAccount
+            if !retainAccount {
+                let clearingVisibleRemoteConversation = surface == .remote || remoteSessionSelected
+                remoteSessionSelected = false
+                if clearingVisibleRemoteConversation {
+                    selectedSessionID = ""
+                    activeTurnID = nil
+                    isSending = false
+                    busy = false
+                    timelineRows = []
+                    messages = []
+                }
+                connectionPhase = .disconnected
+            }
+        } else if let paired = state as? PairingUiStatePaired {
             pairingBusy = false
             pairingError = nil
+            directPairingConnected = true
+            pairingIntentInFlight = false
+            pairingRetainedAccountAuthority = nil
             remoteConnected = true
+            directPairingDeviceName = paired.workspace.roomLabel
+            if pendingDirectoryRemoteDraft?.targetKey == "pairing",
+               pendingDirectoryRemoteDraft?.rawDeviceKey != directPairingSidebarDeviceID {
+                pendingDirectoryRemoteDraft = nil
+                showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
+            }
+            directPairingDirectoryEntry = MobileDeviceDirectoryEntry(
+                id: directPairingSidebarDeviceID,
+                name: paired.workspace.roomLabel,
+                online: true,
+                expanded: true,
+                status: "READY",
+                error: nil,
+                workspaces: remoteWorkspaces,
+                sessions: remoteSessions
+            )
             surface = .remote
-            connectionPhase = .connected
+            switch paired.liveness {
+            case .checking: connectionPhase = .reconnecting
+            case .lost: connectionPhase = .disconnected
+            default: connectionPhase = .connected
+            }
             pairingSheetOpen = false
         }
-    }
-
-    private func apply(accountState state: AccountUiState) {
-        accountBusy = state is AccountUiStateSigningIn
-        if let ready = state as? AccountUiStateReady {
-            accountBusy = false
-            accountUser = ready.username
-            accountDeviceName = ready.selectedDeviceName
-            accountDeviceCount = ready.devices.count
-            if ready.selectedDeviceId == nil,
-               let target = ready.devices.first(where: { $0.online }) {
-                accountBusy = true
-                coreAdapter?.selectAccountDevice(id: target.id)
-                return
-            }
-            remoteConnected = true
-            surface = .remote
-            connectionPhase = .connected
-        } else if let failed = state as? AccountUiStateFailed {
-            accountBusy = false
-            coreErrorMessage = accountErrorMessage(failed.reason.name)
-            connectionPhase = .disconnected
-        }
-    }
-
-    private func apply(remoteState state: RemoteSessionUiState) {
-        guard let ready = state as? RemoteSessionUiStateReady else {
-            if let failed = state as? RemoteSessionUiStateFailed {
-                connectionPhase = .disconnected
-                coreErrorMessage = failed.remoteMessage ?? failed.reason.name
-            }
-            return
-        }
-        remoteConnected = true
-        surface = .remote
-        connectionPhase = .connected
-        remoteSessions = ready.sessions.map { session in
-            ChatSession(
-                id: UUID(uuidString: session.id) ?? UUID(),
-                title: session.title.isEmpty ? "未命名会话" : session.title,
-                updatedLabel: session.updatedAt,
-            )
-        }
-        if let selected = ready.selectedSessionId, let id = UUID(uuidString: selected) {
-            selectedSessionID = id
-        }
-        remoteSessionSelected = ready.selectedSessionId != nil
-        isSending = ready.busy
-        if let timeline = ready.timeline {
-            let allMessages = timeline.persistedMessages + timeline.optimisticMessages
-            messages = allMessages.map { message in
-                ChatMessage(
-                    id: UUID(uuidString: message.id) ?? UUID(),
-                    role: message.role.lowercased() == "user" ? .user : .assistant,
-                    text: message.text,
-                )
-            }
-        }
-    }
-
-    private func pairingErrorMessage(_ failure: PairingFailure) -> String {
-        if let remote = failure.remoteMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !remote.isEmpty {
-            return remote
-        }
-        switch failure.reason.name {
-        case "PAIRING_LINK_EMPTY", "PAIRING_LINK_INCOMPLETE", "PAIRING_LINK_UNDECODABLE", "PAIRING_LINK_KEY_UNUSABLE":
-            return "连接链接无效，请重新扫描或粘贴桌面端链接"
-        case "ACCOUNT_USERNAME_REQUIRED":
-            return "请输入桌面端账号"
-        case "ACCOUNT_PASSWORD_REQUIRED":
-            return "请输入桌面端密码"
-        case "REJECTED", "DESKTOP_REJECTED":
-            return "桌面端拒绝了这次连接"
-        case "ROOM_NOT_FOUND":
-            return "找不到桌面端房间，请确认桌面端仍在等待连接"
-        case "RATE_LIMITED", "TOO_MANY_ATTEMPTS":
-            return "尝试次数过多，请稍后再试"
-        case "RELAY_UNAVAILABLE", "NETWORK_UNREACHABLE":
-            return "网络不可用，请检查手机与桌面端的网络"
-        case "TIMEOUT":
-            return "连接超时，请重新尝试"
-        case "PROTOCOL_MISMATCH":
-            return "桌面端版本不兼容，请升级后重试"
-        default:
-            return "连接失败，请检查桌面端链接"
-        }
-    }
-
-    private func accountErrorMessage(_ reason: String) -> String {
-        switch reason {
-        case "INVALID_CREDENTIALS", "UNAUTHORIZED":
-            return "账号或密码错误"
-        case "NETWORK":
-            return "网络不可用，请检查 relay 地址"
-        case "TIMEOUT":
-            return "登录超时，请稍后重试"
-        default:
-            return "登录失败，请检查账号、密码和 relay 地址"
-        }
-    }
-}
-
-private extension Array where Element == String {
-    func value(after flag: String) -> String? {
-        guard let position = firstIndex(of: flag), position < self.index(before: endIndex) else { return nil }
-        return self[self.index(after: position)]
     }
 }

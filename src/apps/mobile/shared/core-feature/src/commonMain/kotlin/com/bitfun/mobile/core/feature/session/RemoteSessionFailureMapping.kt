@@ -26,6 +26,10 @@ internal fun remoteSessionFailure(error: Throwable): RemoteSessionUiState.Failed
         RelayFailure.NetworkUnreachable -> RemoteSessionUiState.Failed(RemoteSessionFailureReason.NETWORK)
         RelayFailure.RateLimited -> RemoteSessionUiState.Failed(RemoteSessionFailureReason.RATE_LIMITED)
         RelayFailure.MalformedResponse -> RemoteSessionUiState.Failed(RemoteSessionFailureReason.PROTOCOL_MISMATCH)
-        else -> RemoteSessionUiState.Failed(RemoteSessionFailureReason.TRANSPORT)
+        RelayFailure.PairRejected,
+        RelayFailure.RoomNotFound,
+        is RelayFailure.RelayUnavailable,
+        is RelayFailure.UnexpectedStatus,
+        -> RemoteSessionUiState.Failed(RemoteSessionFailureReason.TRANSPORT)
     }
 }

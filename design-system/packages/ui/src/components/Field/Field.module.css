@@ -91,6 +91,15 @@
     line-height: var(--bf-line-height-base);
   }
 
+  .error {
+    grid-column: 1 / -1;
+    color: var(--bf-color-status-danger-content);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-caption);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-base);
+  }
+
   .control {
     display: inline-flex;
     min-inline-size: 0;

@@ -1,6 +1,7 @@
 package com.bitfun.mobile.app
 
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -8,14 +9,21 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.bitfun.mobile.app.ui.remote.ChatCreateControl
+import com.bitfun.mobile.app.ui.remote.ProjectCreateControl
 import com.bitfun.mobile.app.ui.remote.RemoteSessionListView
+import com.bitfun.mobile.app.ui.remote.SESSION_CHAT_CREATE_TEST_TAG
+import com.bitfun.mobile.app.ui.remote.SESSION_PROJECT_CREATE_TEST_TAG_PREFIX
 import com.bitfun.mobile.app.ui.remote.SESSION_SEARCH_FIELD_TEST_TAG
 import com.bitfun.mobile.app.ui.remote.SESSION_SEARCH_TOGGLE_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TEST_TAG
 import com.bitfun.mobile.app.ui.settings.VIEW_SETTINGS_TOGGLE_TEST_TAG
 import com.bitfun.mobile.app.ui.theme.BitFunTheme
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
+import com.bitfun.mobile.core.feature.layout.SettingsPlacementMode
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,6 +38,9 @@ class RemoteSessionListViewTest {
                 RemoteSessionListView(
                     state = RemoteSessionUiState.Idle,
                     workspaceState = RemoteWorkspaceUiState.Idle,
+                    compact = true,
+                    sessionDetailsPlacement = compactPlacement,
+                    viewSettingsPlacement = compactPlacement,
                     connectionDetails = {},
                     onIntent = {},
                     onWorkspaceIntent = {},
@@ -66,8 +77,13 @@ class RemoteSessionListViewTest {
                         query = "",
                         agentFilter = com.bitfun.mobile.core.feature.session.SessionAgentFilter.ALL,
                         hasMore = false,
+                        hasMoreMessages = false,
+                        modelCatalog = null,
                     ),
                     workspaceState = RemoteWorkspaceUiState.Idle,
+                    compact = true,
+                    sessionDetailsPlacement = compactPlacement,
+                    viewSettingsPlacement = compactPlacement,
                     connectionDetails = {},
                     onIntent = {},
                     onWorkspaceIntent = {},
@@ -82,4 +98,47 @@ class RemoteSessionListViewTest {
         composeRule.onNodeWithTag(VIEW_SETTINGS_TOGGLE_TEST_TAG).performClick()
         composeRule.onNodeWithTag(VIEW_SETTINGS_TEST_TAG).assertIsDisplayed()
     }
+
+    @Test
+    fun projectCreateUsesAnAnchoredCodeCoworkMenu() {
+        val open = mutableStateOf(false)
+        var agentType: String? = null
+        val path = "/work/bitfun"
+
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                ProjectCreateControl(
+                    path = path,
+                    expanded = open.value,
+                    onToggle = { open.value = !open.value },
+                    onDismiss = { open.value = false },
+                    onCreateAgent = { agentType = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(SESSION_PROJECT_CREATE_TEST_TAG_PREFIX + path).performClick()
+        composeRule.onNodeWithText("Code").assertIsDisplayed().performClick()
+        assertEquals("code", agentType)
+    }
+
+    @Test
+    fun chatSectionCreateIsASectionAnchoredAction() {
+        var clicked = false
+        composeRule.setContent {
+            BitFunTheme(dark = false) {
+                ChatCreateControl(onCreate = { clicked = true })
+            }
+        }
+
+        composeRule.onNodeWithTag(SESSION_CHAT_CREATE_TEST_TAG).assertIsDisplayed().performClick()
+        assertEquals(true, clicked)
+    }
 }
+
+private val compactPlacement = SettingsPlacement(
+    mode = SettingsPlacementMode.BOTTOM,
+    width = 0,
+    height = 0,
+    maxHeight = 0,
+)

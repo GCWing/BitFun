@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -32,13 +33,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.remote.SessionActionPopup
 import com.bitfun.mobile.app.ui.remote.SessionActionSheet
 import com.bitfun.mobile.app.ui.remote.SessionDetailsSheet
 import com.bitfun.mobile.core.feature.account.AccountDeviceUi
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
+import com.bitfun.mobile.core.feature.connection.RemoteControlSource
 import com.bitfun.mobile.core.feature.session.SessionActionPolicy
 import com.bitfun.mobile.core.feature.session.SessionActionScope
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
+import com.bitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
 import com.bitfun.mobile.core.feature.shell.SidebarPresentation
 import com.bitfun.mobile.core.feature.shell.SidebarSessionRow
 import com.bitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
@@ -62,8 +67,11 @@ internal const val SIDEBAR_CODE_TEST_TAG: String = "app-sidebar-code"
  */
 @Composable
 internal fun AppSidebar(
+    permanent: Boolean,
+    sessionDetailsPlacement: SettingsPlacement,
     accountUserId: String?,
     connectionPhase: ConnectionPhase,
+    remoteControlSource: RemoteControlSource,
     remoteDevices: List<AccountDeviceUi>,
     remoteSelectedDeviceId: String?,
     remoteDeviceName: String,
@@ -77,7 +85,7 @@ internal fun AppSidebar(
     searchOpen: Boolean,
     onQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
-    onEnterCode: () -> Unit,
+    onScanDesktop: () -> Unit,
     onRetryRemoteDevice: () -> Unit,
     onSelectRemoteDevice: (String) -> Unit,
     onOpenRemoteSession: (String) -> Unit,
@@ -88,6 +96,7 @@ internal fun AppSidebar(
     onArchiveSession: (String, Boolean) -> Unit,
     onExportSession: (SidebarSessionRow) -> Unit,
     onDeleteSession: (String) -> Unit,
+    onDeleteRemoteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAccount: () -> Unit,
     modifier: Modifier,
@@ -98,7 +107,11 @@ internal fun AppSidebar(
     // Ids rather than rows: the list behind these sheets keeps updating while
     // they are open, and a captured row would go stale the moment a reply lands.
     var actionSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var actionAnchor by remember { mutableStateOf(IntRect.Zero) }
     var detailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var remoteActionSession by remember { mutableStateOf<RemoteSidebarSessionRow?>(null) }
+    var remoteActionAnchor by remember { mutableStateOf(IntRect.Zero) }
+    var remoteDetailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var archivedExpanded by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize().testTag(SIDEBAR_TEST_TAG)) {
@@ -122,23 +135,36 @@ internal fun AppSidebar(
                 archivedExpanded = archivedExpanded,
                 onToggleArchived = { archivedExpanded = !archivedExpanded },
                 onOpenSession = onOpenSession,
-                onOpenActions = { actionSessionId = it.id },
+                onOpenActions = { session, anchor ->
+                    actionAnchor = anchor
+                    actionSessionId = session.id
+                },
                 workspaceContent = {
                     SidebarRemoteWorkspaceSection(
                         connectionPhase = connectionPhase,
+                        controlSource = remoteControlSource,
                         devices = remoteDevices,
                         selectedDeviceId = remoteSelectedDeviceId,
                         deviceName = remoteDeviceName,
                         remoteState = remoteState,
                         workspaceState = workspaceState,
                         selectedSessionId = remoteSelectedSessionId.takeIf { remoteActive },
-                        onConnect = onEnterCode,
+                        onConnect = onScanDesktop,
                         onRetryActive = onRetryRemoteDevice,
                         onSelectDevice = onSelectRemoteDevice,
                         onOpenSession = onOpenRemoteSession,
+                        onOpenActions = { row, anchor ->
+                            remoteActionAnchor = anchor
+                            remoteActionSession = row
+                        },
                         onCreateInWorkspace = onCreateRemoteInWorkspace,
                         onOpenWorkspace = onOpenRemoteWorkspace,
                     )
+                },
+                footerRoom = if (!signedIn && connectionPhase != ConnectionPhase.CONNECTED) {
+                    142.dp
+                } else {
+                    84.dp
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -155,7 +181,11 @@ internal fun AppSidebar(
             if (signedIn) {
                 SidebarAuthenticatedFooter(onNewChat, onOpenSettings)
             } else {
-                SidebarSignedOutFooter(onOpenAccount)
+                SidebarSignedOutFooter(
+                    showScan = connectionPhase != ConnectionPhase.CONNECTED,
+                    onScanDesktop = onScanDesktop,
+                    onOpenAccount = onOpenAccount,
+                )
             }
         }
     }
@@ -166,7 +196,25 @@ internal fun AppSidebar(
             actionSessionId = null
             return@let
         }
-        SessionActionSheet(
+        val actionSurface: @Composable () -> Unit = {
+            if (permanent) {
+                SessionActionPopup(
+                    anchorBounds = actionAnchor,
+                    title = session.title,
+                    status = session.status,
+                    capabilities = SessionActionPolicy.resolve(
+                        SessionActionScope.GENERAL,
+                        GENERAL_CHAT_AGENT_TYPE,
+                        false,
+                    ),
+                    onViewDetails = { detailsSessionId = id },
+                    onArchive = { onArchiveSession(id, !session.status.equals(ARCHIVED, ignoreCase = true)) },
+                    onExport = { onExportSession(session) },
+                    onDelete = { onDeleteSession(id) },
+                    onDismiss = { actionSessionId = null },
+                )
+            } else {
+                SessionActionSheet(
             title = session.title,
             status = session.status,
             // Every sidebar row is a local general chat, so the policy is asked
@@ -183,6 +231,59 @@ internal fun AppSidebar(
             onExport = { onExportSession(session) },
             onDelete = { onDeleteSession(id) },
             onDismiss = { actionSessionId = null },
+                )
+            }
+        }
+        actionSurface()
+    }
+
+    remoteActionSession?.let { session ->
+        val busy = (remoteState as? RemoteSessionUiState.Ready)?.busy == true
+        val capabilities = SessionActionPolicy.resolve(
+            SessionActionScope.REMOTE,
+            session.agentType,
+            busy,
+        )
+        if (permanent) {
+            SessionActionPopup(
+                anchorBounds = remoteActionAnchor,
+                title = session.title,
+                status = "",
+                capabilities = capabilities,
+                onViewDetails = { remoteDetailsSessionId = session.id },
+                onDelete = { onDeleteRemoteSession(session.id) },
+                onDismiss = { remoteActionSession = null },
+            )
+        } else {
+            SessionActionSheet(
+                title = session.title,
+                status = "",
+                capabilities = capabilities,
+                onViewDetails = { remoteDetailsSessionId = session.id },
+                onDelete = { onDeleteRemoteSession(session.id) },
+                onDismiss = { remoteActionSession = null },
+            )
+        }
+    }
+
+    remoteDetailsSessionId?.let { id ->
+        val session = (remoteState as? RemoteSessionUiState.Ready)?.sessions
+            ?.firstOrNull { it.id == id }
+        if (session == null) {
+            remoteDetailsSessionId = null
+            return@let
+        }
+        SessionDetailsSheet(
+            title = session.title,
+            agentType = session.agentType,
+            status = session.status,
+            workspaceName = session.workspaceName,
+            workspacePath = session.workspacePath,
+            createdAt = session.createdAt,
+            updatedAt = session.updatedAt,
+            messageCount = session.messageCount,
+            placement = sessionDetailsPlacement,
+            onDismiss = { remoteDetailsSessionId = null },
         )
     }
 
@@ -202,6 +303,7 @@ internal fun AppSidebar(
             createdAt = session.createdAt,
             updatedAt = session.updatedAt,
             messageCount = session.messageCount,
+            placement = sessionDetailsPlacement,
             onDismiss = { detailsSessionId = null },
         )
     }

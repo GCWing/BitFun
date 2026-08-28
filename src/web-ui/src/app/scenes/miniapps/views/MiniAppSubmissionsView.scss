@@ -4,9 +4,9 @@
 // gallery/form primitives so nothing in here invents its own size:
 //   section title  13px / 600 / primary    — .gallery-zone__title
 //   section hint   12px / 400 / muted      — .gallery-zone__subtitle
-//   field label    13px / 500 / secondary  — .bitfun-input-label
+//   field label    13px / 500 / secondary  — Field label
 //   field value    13px / 400 / primary    — .select__value
-//   inline hint    12px / 400 / muted      — .bitfun-input-hint
+//   inline hint    12px / 400 / muted      — Field description
 .miniapp-submissions {
   // Label-to-control distance, shared by Input, Select and the textarea fields.
   --submissions-label-gap: 6px;
@@ -27,7 +27,7 @@
 
   // The shared Input renders its value at 14px while Select renders 13px; pin
   // both to 13px so every control in the form reads at the same size.
-  .bitfun-input-container {
+  [data-bf-component='input'] {
     font-size: var(--bf-appearance-token-font-size-sm);
   }
 
@@ -133,7 +133,7 @@
     textarea {
       width: 100%;
       min-height: 92px;
-      // Same box as .bitfun-input-container so the caret lines up with the
+      // Same box as the shared Input so the caret lines up with the
       // single-line fields above it.
       padding: 8px 12px;
       border: 1px solid var(--bf-appearance-token-border-base);

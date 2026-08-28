@@ -1,11 +1,12 @@
 /**
  * SearchFilter component.
- * Search filter in mission control using the component library Search.
+ * Search filter in mission control using the design system SearchField.
  */
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search } from '@/component-library';
+import { Search as SearchIcon } from 'lucide-react';
+import { SearchField } from '@bitfun/ui';
 import './SearchFilter.scss';
 
 export interface SearchFilterProps {
@@ -29,23 +30,26 @@ export const SearchFilter: React.FC<SearchFilterProps> = ({
   autoFocus = true,
 }) => {
   const { t } = useTranslation('components');
-  const countText = value 
-    ? `${matchCount} / ${totalCount}` 
+  const countText = value
+    ? `${matchCount} / ${totalCount}`
     : t('canvas.filesCount', { count: totalCount });
 
   return (
     <div data-bf-component="content-canvas" data-bf-part="searchFilter" className="canvas-search-filter">
-      <Search
+      <SearchField
         value={value}
-        onChange={onChange}
+        onValueChange={onChange}
         placeholder={t('canvas.searchPlaceholder')}
+        aria-label={t('canvas.searchPlaceholder')}
+        leadingIcon={<SearchIcon size={15} aria-hidden />}
         autoFocus={autoFocus}
-        clearable
-        size="medium"
+        size="md"
         className="canvas-search-filter__search"
-        suffixContent={
+        trailing={
           <span className="canvas-search-filter__count">{countText}</span>
         }
+        clearLabel={value ? t('search.clear') : undefined}
+        onClear={value ? () => onChange('') : undefined}
       />
     </div>
   );

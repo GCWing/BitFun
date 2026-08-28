@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
 
@@ -37,12 +38,12 @@ export struct SessionActionSurface {
         Column({ space: 3 }) {
           Text(RemoteI18n.t('session.actions'))
             .width('100%')
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Text(this.sessionTitle || RemoteI18n.t('sidebar.untitled'))
             .width('100%')
-            .fontSize(15)
+            .fontSize(MobileDesignTypography.titleSmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .maxLines(1)
@@ -118,7 +119,7 @@ export struct SessionActionSurface {
       this.ActionIcon(kind, destructive)
       Text(label)
         .layoutWeight(1)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(destructive ? RED : INK)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -157,14 +158,14 @@ export struct SessionActionSurface {
     Column({ space: 12 }) {
       Text(RemoteI18n.t('sidebar.deleteConfirm'))
         .width('100%')
-        .fontSize(13)
-        .lineHeight(19)
+        .fontSize(MobileDesignTypography.bodySmall.size)
+        .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(MUTED)
       Row({ space: 10 }) {
         Text(RemoteI18n.t('common.cancel'))
           .layoutWeight(1)
           .height(44)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(INK)
           .textAlign(TextAlign.Center)
           .backgroundColor(SOFT)
@@ -175,7 +176,7 @@ export struct SessionActionSurface {
         Text(RemoteI18n.t('common.delete'))
           .layoutWeight(1)
           .height(44)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(CARD)
           .textAlign(TextAlign.Center)

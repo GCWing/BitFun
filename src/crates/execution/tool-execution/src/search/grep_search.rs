@@ -13,6 +13,7 @@ use ignore::types::TypesBuilder;
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
 const MAX_DISPLAY_COLUMNS: usize = 500;
+const MAX_VIRTUAL_GREP_CONTENT_LINES: usize = 4096;
 const VCS_DIRECTORIES_TO_EXCLUDE: &[&str] = &[".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
 
 /// Output mode enumeration
@@ -1100,6 +1101,228 @@ pub fn grep_search(
     })
 }
 
+/// Search immutable in-memory text files with the same matcher and result
+/// presentation used by filesystem Grep.
+///
+/// This is used for capability-backed virtual files whose contents must not be
+/// reopened through a mutable filesystem path.
+pub fn grep_search_virtual_files(
+    options: GrepOptions,
+    files: &[(String, Arc<str>)],
+) -> Result<GrepSearchResult, String> {
+    let before_context = options
+        .before_context
+        .unwrap_or(options.context.unwrap_or(0));
+    let after_context = options
+        .after_context
+        .unwrap_or(options.context.unwrap_or(0));
+    let matcher = RegexMatcherBuilder::new()
+        .case_insensitive(options.case_insensitive)
+        .multi_line(options.multiline)
+        .dot_matches_new_line(options.multiline)
+        .build(&options.pattern)
+        .map_err(|error| format!("Invalid regex pattern: {error}"))?;
+    let glob_matchers = options
+        .globs
+        .iter()
+        .map(|glob| {
+            GlobBuilder::new(glob)
+                .build()
+                .map(|compiled| compiled.compile_matcher())
+                .map_err(|error| format!("Invalid glob pattern: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // A MiniApp controls these bounded inputs and may deliberately request an
+    // unbounded result (`head_limit: 0`). Keep the virtual capability bounded
+    // while scanning, not only while rendering, so millions of matching lines
+    // cannot expand into millions of formatted Strings first.
+    let content_head_limit = if options.output_mode == OutputMode::Content {
+        let requested = options
+            .head_limit
+            .filter(|limit| *limit > 0)
+            .unwrap_or(MAX_VIRTUAL_GREP_CONTENT_LINES);
+        let collection_budget = options
+            .offset
+            .checked_add(requested)
+            .filter(|budget| *budget <= MAX_VIRTUAL_GREP_CONTENT_LINES)
+            .ok_or_else(|| {
+                format!(
+                    "Virtual Grep offset + head_limit must not exceed {MAX_VIRTUAL_GREP_CONTENT_LINES} lines"
+                )
+            })?;
+        Some((requested, collection_budget))
+    } else {
+        None
+    };
+
+    let mut file_results = Vec::new();
+    let mut collected_content_lines = 0usize;
+    for (path, content) in files {
+        if content_head_limit.is_some_and(|(_, budget)| collected_content_lines >= budget) {
+            break;
+        }
+        let path_buf = PathBuf::from(path);
+        if !glob_matchers.is_empty() && !glob_matchers.iter().any(|glob| glob.is_match(&path_buf)) {
+            continue;
+        }
+        if let Some(file_type) = options.file_type.as_deref() {
+            let extension_matches = path_buf
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case(file_type)
+                        || (file_type.eq_ignore_ascii_case("json")
+                            && extension.eq_ignore_ascii_case("json5"))
+                });
+            if !extension_matches {
+                continue;
+            }
+        }
+
+        let mut searcher = build_grep_searcher(before_context, after_context, options.multiline);
+        let sink_limit =
+            content_head_limit.map(|(_, budget)| budget.saturating_sub(collected_content_lines));
+        let sink = GrepSink::new(
+            options.output_mode,
+            options.show_line_numbers,
+            before_context,
+            after_context,
+            sink_limit,
+            path_buf.clone(),
+            None,
+        );
+        searcher
+            .search_slice(&matcher, content.as_bytes(), sink.clone())
+            .map_err(|error| format!("Error searching virtual file {path}: {error}"))?;
+        let file_matches = sink.get_match_count();
+        if file_matches == 0 {
+            continue;
+        }
+        let output_lines = if options.output_mode == OutputMode::Content {
+            let remaining = content_head_limit
+                .map(|(_, budget)| budget.saturating_sub(collected_content_lines))
+                .unwrap_or(0);
+            let mut bounded = Vec::with_capacity(remaining.min(256));
+            'writes: for line in sink.take_output_lines() {
+                if line.contains('\n') {
+                    for part in line.lines().filter(|part| !part.is_empty()) {
+                        if bounded.len() >= remaining {
+                            break 'writes;
+                        }
+                        bounded.push(part.to_string());
+                    }
+                } else if !line.is_empty() {
+                    if bounded.len() >= remaining {
+                        break;
+                    }
+                    bounded.push(line);
+                }
+            }
+            collected_content_lines = collected_content_lines.saturating_add(bounded.len());
+            bounded
+        } else {
+            Vec::new()
+        };
+        file_results.push(GrepFileResult {
+            path: path_buf,
+            file_matches,
+            output_lines,
+            modified_time: SystemTime::UNIX_EPOCH,
+        });
+    }
+
+    file_results.sort_by(|left, right| left.path.cmp(&right.path));
+    let file_count = file_results.len();
+    let total_matches = file_results.iter().map(|result| result.file_matches).sum();
+    let mut content_lines = Vec::new();
+    let mut file_match_counts = Vec::new();
+    let mut matched_files = Vec::new();
+    for result in file_results {
+        let path = result.path.to_string_lossy().replace('\\', "/");
+        match options.output_mode {
+            OutputMode::Content => {
+                for line in result.output_lines {
+                    if line.contains('\n') {
+                        content_lines.extend(
+                            line.lines()
+                                .filter(|part| !part.is_empty())
+                                .map(str::to_string),
+                        );
+                    } else if !line.is_empty() {
+                        content_lines.push(line);
+                    }
+                }
+            }
+            OutputMode::FilesWithMatches => matched_files.push(path),
+            OutputMode::Count => file_match_counts.push((path, result.file_matches)),
+        }
+    }
+
+    let (result_text, applied_limit, applied_offset) = match options.output_mode {
+        OutputMode::Content => {
+            let (lines, applied_limit, applied_offset) = apply_offset_limit(
+                content_lines,
+                content_head_limit.map(|(limit, _)| limit),
+                options.offset,
+            );
+            (
+                if lines.is_empty() {
+                    format!("No matches found for pattern '{}'", options.pattern)
+                } else {
+                    lines.join("\n")
+                },
+                applied_limit,
+                applied_offset,
+            )
+        }
+        OutputMode::FilesWithMatches => {
+            let (matches, applied_limit, applied_offset) =
+                apply_offset_limit(matched_files, options.head_limit, options.offset);
+            (
+                if matches.is_empty() {
+                    format!("No files found matching pattern '{}'", options.pattern)
+                } else {
+                    matches.join("\n")
+                },
+                applied_limit,
+                applied_offset,
+            )
+        }
+        OutputMode::Count => {
+            let (counts, applied_limit, applied_offset) =
+                apply_offset_limit(file_match_counts, options.head_limit, options.offset);
+            let lines = counts
+                .iter()
+                .map(|(file, count)| format!("{file}:{count}"))
+                .collect::<Vec<_>>();
+            (
+                if lines.is_empty() {
+                    format!("No matches found for pattern '{}'", options.pattern)
+                } else {
+                    format!(
+                        "Total {} matches in {} files:\n{}",
+                        total_matches,
+                        counts.len(),
+                        lines.join("\n")
+                    )
+                },
+                applied_limit,
+                applied_offset,
+            )
+        }
+    };
+
+    Ok(GrepSearchResult {
+        file_count,
+        total_matches,
+        result_text,
+        applied_limit,
+        applied_offset,
+        cancelled: false,
+    })
+}
+
 fn paths_equal_for_exclusion(path: &Path, excluded: &str) -> bool {
     let path = path.to_string_lossy().replace('\\', "/");
     let excluded = excluded.replace('\\', "/");
@@ -1122,7 +1345,8 @@ fn paths_equal_for_exclusion(path: &Path, excluded: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        grep_search, paths_equal_for_exclusion, GrepOptions, OutputMode, SearchCancellation,
+        grep_search, grep_search_virtual_files, paths_equal_for_exclusion, GrepOptions, OutputMode,
+        SearchCancellation, MAX_VIRTUAL_GREP_CONTENT_LINES,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1142,6 +1366,60 @@ mod tests {
     fn create_file_symlink(target: &std::path::Path, alias: &std::path::Path) -> bool {
         std::os::unix::fs::symlink(target, alias).expect("file symlink should be available");
         true
+    }
+
+    #[test]
+    fn virtual_file_search_preserves_regex_modes_filters_and_pagination() {
+        let files = vec![
+            (
+                ".miniapp-context/scope/a.json".to_string(),
+                std::sync::Arc::<str>::from("alpha\nNeedle one\nneedle two\n"),
+            ),
+            (
+                ".miniapp-context/scope/b.txt".to_string(),
+                std::sync::Arc::<str>::from("needle ignored by type\n"),
+            ),
+        ];
+        let result = grep_search_virtual_files(
+            GrepOptions::new("needle", ".miniapp-context/scope")
+                .case_insensitive(true)
+                .output_mode(OutputMode::Content)
+                .file_type("json")
+                .offset(1)
+                .head_limit(1),
+            &files,
+        )
+        .expect("virtual grep should succeed");
+
+        assert_eq!(result.file_count, 1);
+        assert_eq!(result.total_matches, 2);
+        assert_eq!(
+            result.result_text,
+            ".miniapp-context/scope/a.json:3:needle two"
+        );
+        assert_eq!(result.applied_offset, Some(1));
+    }
+
+    #[test]
+    fn virtual_file_search_bounds_explicit_unlimited_content_during_collection() {
+        let files = vec![(
+            ".miniapp-context/scope/large.ndjson".to_string(),
+            std::sync::Arc::<str>::from(
+                "needle\n".repeat(MAX_VIRTUAL_GREP_CONTENT_LINES.saturating_add(100)),
+            ),
+        )];
+        let result = grep_search_virtual_files(
+            GrepOptions::new("needle", ".miniapp-context/scope")
+                .output_mode(OutputMode::Content)
+                .head_limit(0),
+            &files,
+        )
+        .expect("virtual grep should replace an unlimited request with a hard bound");
+
+        assert_eq!(
+            result.result_text.lines().count(),
+            MAX_VIRTUAL_GREP_CONTENT_LINES
+        );
     }
 
     #[cfg(windows)]

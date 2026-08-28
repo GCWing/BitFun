@@ -7,9 +7,21 @@ import com.bitfun.mobile.core.domain.RecentWorkspace
 import com.bitfun.mobile.core.domain.SelectedWorkspace
 import com.bitfun.mobile.core.domain.WorkspaceAssistant
 
+public data class PreviewRequestIdentity public constructor(
+    public val requestId: String,
+    public val deviceKey: String?,
+    public val sessionId: String,
+    public val path: String,
+)
+
 public sealed interface RemoteFilePreviewUiState {
     public data object None : RemoteFilePreviewUiState
-    public data class Loading public constructor(public val target: FilePreviewTarget) : RemoteFilePreviewUiState
+    public data class Loading public constructor(
+        public val target: FilePreviewTarget,
+        public val identity: PreviewRequestIdentity,
+    ) : RemoteFilePreviewUiState {
+        public constructor(target: FilePreviewTarget) : this(target, PreviewRequestIdentity("", null, target.sessionId, target.remotePath))
+    }
     public data class Text public constructor(
         public val target: FilePreviewTarget,
         public val name: String,
@@ -20,19 +32,34 @@ public sealed interface RemoteFilePreviewUiState {
         public val sizeBytes: Long,
         /** Markdown is rendered rather than shown as numbered source. */
         public val markdown: Boolean,
-    ) : RemoteFilePreviewUiState
+        public val identity: PreviewRequestIdentity,
+    ) : RemoteFilePreviewUiState {
+        public constructor(
+            target: FilePreviewTarget, name: String, content: String, truncated: Boolean,
+            loadedBytes: Long, mimeType: String, sizeBytes: Long, markdown: Boolean,
+        ) : this(target, name, content, truncated, loadedBytes, mimeType, sizeBytes, markdown,
+            PreviewRequestIdentity("", null, target.sessionId, target.remotePath))
+    }
     public data class Image public constructor(
         public val target: FilePreviewTarget,
         public val name: String,
         public val mimeType: String,
         public val bytes: ByteArray,
         public val sizeBytes: Long,
-    ) : RemoteFilePreviewUiState
+        public val identity: PreviewRequestIdentity,
+    ) : RemoteFilePreviewUiState {
+        public constructor(target: FilePreviewTarget, name: String, mimeType: String, bytes: ByteArray, sizeBytes: Long) :
+            this(target, name, mimeType, bytes, sizeBytes, PreviewRequestIdentity("", null, target.sessionId, target.remotePath))
+    }
     public data class Unsupported public constructor(
         public val target: FilePreviewTarget,
         public val mimeType: String,
         public val sizeBytes: Long,
-    ) : RemoteFilePreviewUiState
+        public val identity: PreviewRequestIdentity,
+    ) : RemoteFilePreviewUiState {
+        public constructor(target: FilePreviewTarget, mimeType: String, sizeBytes: Long) :
+            this(target, mimeType, sizeBytes, PreviewRequestIdentity("", null, target.sessionId, target.remotePath))
+    }
     /**
      * @param retryable whether asking again could give a different answer. A
      * file outside the workspace will not appear on a second try, so offering
@@ -44,7 +71,11 @@ public sealed interface RemoteFilePreviewUiState {
         public val retryable: Boolean,
         public val mimeType: String,
         public val sizeBytes: Long,
-    ) : RemoteFilePreviewUiState
+        public val identity: PreviewRequestIdentity,
+    ) : RemoteFilePreviewUiState {
+        public constructor(target: FilePreviewTarget, kind: FilePreviewFailureKind, retryable: Boolean, mimeType: String, sizeBytes: Long) :
+            this(target, kind, retryable, mimeType, sizeBytes, PreviewRequestIdentity("", null, target.sessionId, target.remotePath))
+    }
 }
 
 /**
@@ -135,7 +166,12 @@ public sealed interface RemoteWorkspaceIntent {
         public val reference: String,
         public val label: String,
         public val sessionId: String,
-    ) : RemoteWorkspaceIntent
+        /** Optional local correlation supplied by Swift; blank values are generated. */
+        public val requestId: String,
+    ) : RemoteWorkspaceIntent {
+        public constructor(reference: String, label: String, sessionId: String) :
+            this(reference, label, sessionId, "")
+    }
     public data class DownloadFile public constructor(
         public val reference: String,
         public val label: String,

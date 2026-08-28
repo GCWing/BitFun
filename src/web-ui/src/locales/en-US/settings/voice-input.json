@@ -89,6 +89,13 @@
       "taskStopped": "The current BitFun task has stopped.",
       "taskAlreadyComplete": "The task already finished, so there is nothing to stop.",
       "noActiveTask": "There is no BitFun task running right now.",
+      "taskOutcome": {
+        "completed": "The task is complete. {{conclusion}}",
+        "completedWithoutConclusion": "The task is complete, but it returned no written conclusion.",
+        "failed": "The task is incomplete. Reason: {{reason}}",
+        "failedWithoutReason": "The task is incomplete, and no specific reason was returned.",
+        "cancelled": "The task is incomplete because it was stopped as requested."
+      },
       "status": {
         "connecting": "Connecting to Volcengine…",
         "connected": "Connected, creating the conversation…",

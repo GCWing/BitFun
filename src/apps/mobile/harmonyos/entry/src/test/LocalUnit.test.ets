@@ -8,9 +8,11 @@ import appRootRuntimeStartupUnitTest from './AppRootRuntimeStartupUnit.test';
 import deviceDirectoryUnitTest from './DeviceDirectoryUnit.test';
 import architectureUnitTest from './ArchitectureUnit.test';
 import i18nUnitTest from './I18nUnit.test';
+import watchProvisionUnitTest from './WatchProvisionUnit.test';
 
 export default function localUnitTest() {
   i18nUnitTest();
+  watchProvisionUnitTest();
   architectureUnitTest();
   transportAndGeneralChatUnitTest();
   conversationStateUnitTest();

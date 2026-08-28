@@ -180,8 +180,8 @@ export abstract class AppRootRuntimeComposition {
     // account of its own to mint from.
     canProvision: (): boolean => this.settingsController.canMintWatchCredential() ||
       this.canProvisionViaDesktop(),
-    provision: (deviceId: string, deviceName: string, requestId: string): Promise<WatchProvisionOutcome> =>
-      this.provisionWatchDevice(deviceId, deviceName, requestId)
+    provision: (deviceId: string, deviceName: string, requestId: string, password: string): Promise<WatchProvisionOutcome> =>
+      this.provisionWatchDevice(deviceId, deviceName, requestId, password)
   };
   readonly watchProvisionController: WatchProvisionController =
     new WatchProvisionController(this.watchProvisionState, this.watchProvisionPort);
@@ -208,9 +208,10 @@ export abstract class AppRootRuntimeComposition {
   private async provisionWatchDevice(
     deviceId: string,
     deviceName: string,
-    requestId: string
+    requestId: string,
+    password: string
   ): Promise<WatchProvisionOutcome> {
-    const minted = await this.settingsController.provisionWatchCredential(deviceId, deviceName, requestId);
+    const minted = await this.settingsController.provisionWatchCredential(deviceId, deviceName, requestId, password);
     if (minted) {
       return minted;
     }
@@ -220,6 +221,7 @@ export abstract class AppRootRuntimeComposition {
     const outcome = await this.sessionManager.provisionPeerDevice(deviceId, deviceName, requestId);
     return {
       ok: outcome.ok,
+      passwordRequired: false,
       // The desktop mints against the relay its room lives on, which is not
       // necessarily the one this phone's account is on.
       relayUrl: outcome.ok ? this.sessionManager.roomRelayEndpoint() : '',
@@ -234,7 +236,7 @@ export abstract class AppRootRuntimeComposition {
 
   private static provisionUnavailable(): WatchProvisionOutcome {
     return {
-      ok: false, relayUrl: '', token: '', userId: '', masterKeyBase64: '', deviceId: '',
+      ok: false, passwordRequired: false, relayUrl: '', token: '', userId: '', masterKeyBase64: '', deviceId: '',
       failure: '', desktopReported: false
     };
   }

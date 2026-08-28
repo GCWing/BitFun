@@ -1,7 +1,6 @@
-import { inputMethod } from '@kit.IMEKit';
-import { window } from '@kit.ArkUI';
+import { KeyboardReleaseService } from '../../services/KeyboardReleaseService';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { MobileDesignGeometry, MobileDesignMotion } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignMotion, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import {
@@ -165,7 +164,7 @@ export struct ComposerBar {
   ModelControl() {
     Row({ space: 3 }) {
       Text(this.displaySelectedModel())
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .maxLines(1)
@@ -217,7 +216,7 @@ export struct ComposerBar {
       if (asSheet) {
         Row() {
           Text(RemoteI18n.t('chat.selectModel'))
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Blank()
@@ -236,7 +235,7 @@ export struct ComposerBar {
         .width('100%')
       }
 
-      List({ space: 6 }) {
+      List({ space: MobileDesignGeometry.composerModelSelectorRowGap }) {
         ForEach(this.selectorModels(), (model: ConversationUiModel) => {
           ListItem() {
             this.ModelRow(model)
@@ -249,10 +248,11 @@ export struct ComposerBar {
       .edgeEffect(EdgeEffect.Spring)
       .divider(null)
     }
-    .width(asSheet ? '100%' : 330)
+    .width(asSheet ? '100%' : MobileDesignGeometry.composerModelSelectorWidth)
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
     .backgroundColor(asSheet ? CARD : FLOATING_PANEL_BG)
-    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } : 14)
+    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
+      MobileDesignGeometry.composerModelSelectorRadius)
     .border({ width: asSheet ? 0 : 1, color: asSheet ? '#00000000' : LINE })
     .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? '#00000000' : '#18000000', offsetY: 7 })
   }
@@ -272,13 +272,13 @@ export struct ComposerBar {
 
       Column({ space: 2 }) {
         Text(ConversationModelPresentationPolicy.primaryLabel(model, RemoteI18n.t('chat.model')))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(ConversationModelPresentationPolicy.secondaryLabel(model, RemoteI18n.t('chat.model')))
-          .fontSize(11)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -287,10 +287,10 @@ export struct ComposerBar {
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .height(48)
+    .height(MobileDesignGeometry.composerModelSelectorRowHeight)
     .padding({ left: 10, right: 10 })
     .backgroundColor(this.isSelectedModel(model) ? SOFT : '#00000000')
-    .borderRadius(9)
+    .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
       this.closeModelSelector();
       this.onSelectModel(model.id);
@@ -325,7 +325,7 @@ export struct ComposerBar {
         .id(this.inputId)
         .layoutWeight(1)
         .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(INK)
         .placeholderColor(this.isVoiceListening ? GREEN : MUTED)
         .backgroundColor('#00000000')
@@ -494,7 +494,7 @@ export struct ComposerBar {
       Text('×')
         .width(32)
         .height(32)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)
         .backgroundColor('#AA222222')
@@ -589,7 +589,8 @@ export struct ComposerBar {
 
   private modelListHeight(): number {
     const visibleRows = Math.min(this.enabledModels().length, 7);
-    return visibleRows * 48 + Math.max(0, visibleRows - 1) * 6;
+    return visibleRows * MobileDesignGeometry.composerModelSelectorRowHeight +
+      Math.max(0, visibleRows - 1) * MobileDesignGeometry.composerModelSelectorRowGap;
   }
 
   private selectorModels(): ConversationUiModel[] {
@@ -637,28 +638,7 @@ export struct ComposerBar {
     }
 
     try {
-      const appWindow = await window.getLastWindow(hostContext);
-      const keyboardArea = appWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
-      if (!keyboardArea.visible) {
-        this.getUIContext().getFocusController().clearFocus();
-        return;
-      }
-
-      const keyboardDidHide = new Promise<void>((resolve) => {
-        const onKeyboardDidHide = (_keyboardInfo: window.KeyboardInfo): void => {
-          appWindow.off('keyboardDidHide', onKeyboardDidHide);
-          resolve();
-        };
-        appWindow.on('keyboardDidHide', onKeyboardDidHide);
-      });
-      try {
-        await inputMethod.getController().hideTextInput();
-      } catch (_error) {
-        // Clearing text focus is the platform-native close request when no IME
-        // controller session is attached to the focused editor.
-        this.getUIContext().getFocusController().clearFocus();
-      }
-      await keyboardDidHide;
+      await KeyboardReleaseService.release(hostContext);
     } catch (_error) {
       // A draft can keep the composer expanded without an active keyboard or
       // window event. Releasing focus still leaves the model anchor mounted.

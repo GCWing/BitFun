@@ -458,6 +458,7 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
             "idempotent_dialog_submit": true,
             "targeted_session_rollback": true,
             "token_usage_statistics": true,
+            "miniapp_agent_context_files_v1": true,
             "product_control_v1": true,
             "product_control_native_v1": true,
             "product_control_presentation_v1": true,
@@ -608,6 +609,12 @@ mod tests {
         assert_eq!(
             value
                 .pointer("/capabilities/token_usage_statistics")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/capabilities/miniapp_agent_context_files_v1")
                 .and_then(Value::as_bool),
             Some(true)
         );

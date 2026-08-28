@@ -800,6 +800,7 @@
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
     "boostSkillsLoading": "Loading skills…",
+    "boostSkillsLoadFailed": "Skills failed to load. Retry",
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
@@ -2497,6 +2498,7 @@
     "modelNotConfigured": "Not Configured",
     "tooltip": {
       "configName": "Configuration",
+      "modelName": "Model name",
       "contextWindow": "Context window",
       "compressionTrigger": "Compression trigger",
       "longContextWarning": "This model's configured context window exceeds 400K. Very long context can reduce model quality; consider setting it to around 300K."

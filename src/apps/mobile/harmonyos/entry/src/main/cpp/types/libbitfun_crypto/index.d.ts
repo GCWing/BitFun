@@ -5,7 +5,7 @@ declare const bitfunCrypto: {
     memory: number,
     time: number,
     lanes: number
-  ): Uint8Array;
+  ): Promise<Uint8Array>;
 };
 
 export default bitfunCrypto;

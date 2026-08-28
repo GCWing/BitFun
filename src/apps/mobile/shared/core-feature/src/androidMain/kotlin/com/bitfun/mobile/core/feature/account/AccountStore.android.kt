@@ -2,6 +2,7 @@ package com.bitfun.mobile.core.feature.account
 
 import android.content.Context
 import com.bitfun.mobile.core.feature.CoreLog
+import com.bitfun.mobile.core.persistence.androidPersistenceStores
 import com.bitfun.mobile.core.persistence.androidSecureStore
 import kotlinx.coroutines.CoroutineScope
 
@@ -16,10 +17,14 @@ public fun AccountStore.Companion.create(
     deviceName: String,
     log: CoreLog,
     legacyMobileDeviceNames: Set<String>,
-): AccountStore = AccountStore.create(
-    scope = scope,
-    backend = AccountStore.backend(log, legacyMobileDeviceNames),
-    secureStore = androidSecureStore(context.applicationContext, "cloud_account"),
-    deviceId = deviceId,
-    deviceName = deviceName,
-)
+): AccountStore {
+    val persistence = androidPersistenceStores(context.applicationContext, "bitfun-mobile.db")
+    return AccountStore.create(
+        scope = scope,
+        backend = AccountStore.backend(log, legacyMobileDeviceNames),
+        secureStore = androidSecureStore(context.applicationContext, "cloud_account"),
+        deviceId = deviceId,
+        deviceName = deviceName,
+        persistence = persistence,
+    )
+}

@@ -95,4 +95,31 @@ describe('ConfigAPI batch config reads', () => {
       },
     });
   });
+
+  it('bounds Skill catalog requests at sixty seconds', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    await configAPI.getSkillConfigs({ workspacePath: '/remote/project' });
+    await configAPI.getModeSkillConfigs({
+      modeId: 'agentic',
+      workspacePath: '/remote/project',
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'get_skill_configs',
+      { forceRefresh: undefined, workspacePath: '/remote/project' },
+      { timeout: 60_000 },
+    );
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      2,
+      'get_mode_skill_configs',
+      {
+        modeId: 'agentic',
+        forceRefresh: undefined,
+        workspacePath: '/remote/project',
+      },
+      { timeout: 60_000 },
+    );
+  });
 });

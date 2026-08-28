@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
 
 internal const val MARKDOWN_TEST_TAG: String = "markdown"
 
+
 /**
  * An agent turn as marked-up text, ported from `pages/components/MarkdownContent.ets`.
  *
@@ -76,21 +77,36 @@ internal fun MarkdownContent(
     text: String,
     onOpenLink: (String, String) -> Unit,
     modifier: Modifier,
+    streaming: Boolean = false,
 ) {
     val blocks = remember(text) { MarkdownParser.parse(text) }
     Column(
         modifier = modifier.fillMaxWidth().testTag(MARKDOWN_TEST_TAG),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        blocks.forEach { block -> MarkdownBlockView(block = block, onOpenLink = onOpenLink) }
+        blocks.forEach { block ->
+            MarkdownBlockView(
+                block = block,
+                onOpenLink = onOpenLink,
+                copyFullText = if (streaming) text else null,
+            )
+        }
     }
 }
 
 @Composable
-private fun MarkdownBlockView(block: MarkdownBlock, onOpenLink: (String, String) -> Unit) {
+private fun MarkdownBlockView(
+    block: MarkdownBlock,
+    onOpenLink: (String, String) -> Unit,
+    copyFullText: String?,
+) {
     val colors = MaterialTheme.colorScheme
     when (block.type) {
-        "code" -> CodeBlock(language = block.language, body = block.text)
+        "code" -> CodeBlock(
+            language = block.language,
+            body = block.text,
+            copyFullText = copyFullText,
+        )
 
         "heading" -> InlineText(
             inlines = block.inlines,
@@ -240,7 +256,8 @@ private fun MarkdownList(items: List<MarkdownListItem>, onOpenLink: (String, Str
  * wrote is meant to be run, and retyping it is how a typo gets into a shell.
  */
 @Composable
-private fun CodeBlock(language: String, body: String) {
+private fun CodeBlock(language: String, body: String, copyFullText: String?) {
+    val copyBody = copyFullText ?: body
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val copyLabel = stringResource(R.string.chat_copy)
@@ -261,7 +278,7 @@ private fun CodeBlock(language: String, body: String) {
                     modifier = Modifier.clickableText {
                         scope.launch {
                             clipboard.setClipEntry(
-                                ClipEntry(ClipData.newPlainText(copyLabel, body)),
+                                ClipEntry(ClipData.newPlainText(copyLabel, copyBody)),
                             )
                         }
                     },

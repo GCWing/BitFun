@@ -25,6 +25,8 @@ import {
 import { AssistantProcessLayoutPolicy } from '../main/ets/pages/policy/AssistantProcessLayoutPolicy';
 import { ConversationMessageRenderPolicy } from '../main/ets/pages/policy/ConversationMessageRenderPolicy';
 import { ToolCollapsePolicy } from '../main/ets/pages/policy/ToolCollapsePolicy';
+import { ChatMessageStructurePolicy } from '../main/ets/pages/policy/ChatMessageStructurePolicy';
+import { ToolStatusPresentationPolicy } from '../main/ets/pages/policy/ToolStatusPresentationPolicy';
 import { ConversationUiMessage, ConversationUiToolStatus } from '../main/ets/pages/state/ConversationUiModels';
 import {
   ConnectSheetLandingPolicy,
@@ -214,6 +216,53 @@ export default function conversationPresentationUnitTest() {
         error: 'Model request failed'
       };
       expect(ConversationMessageRenderPolicy.shouldRender(item)).assertTrue();
+    });
+  });
+
+  describe('Extracted chat presentation policies', () => {
+    it('classifies tool behavior and projects question payloads without the component', 0, () => {
+      const question = toolStatus('question-1', 'AskUserQuestion', 'running');
+      question.input_preview = '{"questions":[{"header":"Scope","question":"Which files?"}]}';
+      expect(ToolStatusPresentationPolicy.isQuestion(question)).assertTrue();
+      expect(ToolStatusPresentationPolicy.questionPromptFromJson(question.input_preview)).assertEqual('Which files?');
+      expect(ToolStatusPresentationPolicy.isFileMutation(toolStatus('edit-1', 'ApplyPatch', 'done'))).assertTrue();
+      expect(ToolStatusPresentationPolicy.isCommand(toolStatus('exec-1', 'ExecCommand', 'running'))).assertTrue();
+    });
+
+    it('groups adjacent reasoning and completed tools in transcript order', 0, () => {
+      const groups = ChatMessageStructurePolicy.structuredGroups([
+        { type: 'thinking', content: 'Inspect the architecture' },
+        { type: 'tool', tool: toolStatus('read-1', 'Read', 'completed') },
+        { type: 'text', content: 'The result' }
+      ], 'item', false, 'done');
+      expect(groups.length).assertEqual(2);
+      expect(groups[0].type).assertEqual('activity_group');
+      expect(ChatMessageStructurePolicy.activityGroupTools(groups[0]).length).assertEqual(1);
+      expect(groups[1].type).assertEqual('item');
+    });
+
+    it('keeps one plain assistant text item on the lightweight markdown path', 0, () => {
+      expect(ChatMessageStructurePolicy.requiresStructuredRendering([
+        { type: 'text', content: 'Hello' }
+      ])).assertFalse();
+      expect(ChatMessageStructurePolicy.requiresStructuredRendering([
+        { type: 'text', content: 'Streaming', subItems: [] }
+      ])).assertFalse();
+      expect(ChatMessageStructurePolicy.requiresStructuredRendering([
+        { type: 'thinking', content: 'Inspect' },
+        { type: 'text', content: 'Done' }
+      ])).assertTrue();
+    });
+
+    it('does not render a top-level tool twice when structured items already contain it', 0, () => {
+      const covered = toolStatus('read-1', 'Read', 'completed');
+      const extra = toolStatus('exec-1', 'ExecCommand', 'completed');
+      const remaining = ChatMessageStructurePolicy.toolsNotCoveredByItems(
+        [covered, extra],
+        [{ type: 'tool', tool: covered }]
+      );
+      expect(remaining.length).assertEqual(1);
+      expect(remaining[0].id).assertEqual('exec-1');
     });
   });
 

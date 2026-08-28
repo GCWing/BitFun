@@ -541,6 +541,75 @@ describe('PeerDeviceTransportAdapter queue', () => {
     expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects MiniApp Agent context files before RPC when the Peer host lacks the versioned contract', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('miniapp_agent_run', {
+      request: {
+        appId: 'market-lens',
+        prompt: 'Analyze the data',
+        contextFiles: [{ name: 'market.json', content: '{"sentinel":true}' }],
+      },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: expect.stringContaining('miniapp_agent_context_files_v1_unsupported'),
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed MiniApp Agent context files before an older Peer can ignore them', async () => {
+    const deviceRpc = vi.fn();
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('miniapp_agent_run', {
+      request: {
+        appId: 'market-lens',
+        prompt: 'Analyze the data',
+        contextFiles: '{"not":"an array"}',
+      },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: expect.stringContaining('miniapp_agent_context_files_v1_unsupported'),
+    }));
+    expect(deviceRpc).not.toHaveBeenCalled();
+  });
+
+  it('forwards MiniApp Agent context files after version negotiation', async () => {
+    const outcome = { sessionId: 'session-1', turnId: 'turn-1' };
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: outcome,
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, {
+      supportsMiniAppAgentContextFilesV1: true,
+    });
+
+    await expect(adapter.request('miniapp_agent_run', {
+      request: {
+        appId: 'market-lens',
+        prompt: 'Analyze the data',
+        contextFiles: [{ name: 'market.json', content: '{"sentinel":true}' }],
+      },
+    })).resolves.toEqual(outcome);
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps context-free MiniApp Agent runs compatible with older Peer hosts', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: true,
+      value: { sessionId: 'session-1', turnId: 'turn-1' },
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('miniapp_agent_run', {
+      request: { appId: 'notes', prompt: 'Summarize this note' },
+    })).resolves.toEqual({ sessionId: 'session-1', turnId: 'turn-1' });
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects ProductControl before RPC when the Peer host lacks the versioned contract', async () => {
     const deviceRpc = vi.fn();
     const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);

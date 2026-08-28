@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   CodeSyntaxHighlightCache,
@@ -80,13 +81,13 @@ export struct FilePreviewSurface {
 
       Column({ space: 2 }) {
         Text(this.state.fileName || this.state.target.displayName || RemoteI18n.t('filePreview.title'))
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.headerDetail())
-          .fontSize(11)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -97,7 +98,7 @@ export struct FilePreviewSurface {
       if (this.isImageReady()) {
         Stack({ alignContent: Alignment.Center }) {
           Text('1:1')
-            .fontSize(12)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.isImageOriginalSize() ? CODE_FUNCTION : INK)
         }
@@ -178,7 +179,7 @@ export struct FilePreviewSurface {
       Row() {
         Text(this.downloadStatus)
           .width('100%')
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -198,7 +199,7 @@ export struct FilePreviewSurface {
         .height(28)
         .color(MUTED)
       Text(RemoteI18n.t('filePreview.loading'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -211,11 +212,11 @@ export struct FilePreviewSurface {
   OfflineLoadingState() {
     Column({ space: 10 }) {
       Text(RemoteI18n.t('filePreview.loadFailed'))
-        .fontSize(17)
+        .fontSize(MobileDesignTypography.titleMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Text(RemoteI18n.t('filePreview.offline'))
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
     }
@@ -230,12 +231,12 @@ export struct FilePreviewSurface {
   ErrorState() {
     Column({ space: 12 }) {
       Text(RemoteI18n.t('filePreview.loadFailed'))
-        .fontSize(17)
+        .fontSize(MobileDesignTypography.titleMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Text(this.state.errorText)
-        .fontSize(13)
-        .lineHeight(19)
+        .fontSize(MobileDesignTypography.bodySmall.size)
+        .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
         .maxLines(4)
@@ -243,7 +244,7 @@ export struct FilePreviewSurface {
       if (this.state.errorRetryable) {
         Button(RemoteI18n.t('common.retry'))
           .height(42)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(CARD)
           .backgroundColor(INK)
           .borderRadius(21)
@@ -268,16 +269,16 @@ export struct FilePreviewSurface {
         .fontSize(38)
         .fontColor([MUTED])
       Text(RemoteI18n.t('filePreview.unsupported'))
-        .fontSize(17)
+        .fontSize(MobileDesignTypography.titleMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
       Text(this.metadataDetail())
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
       Button(RemoteI18n.t('chat.download'))
         .height(42)
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(CARD)
         .backgroundColor(INK)
         .borderRadius(21)
@@ -300,7 +301,7 @@ export struct FilePreviewSurface {
       if (this.state.truncated) {
         Text(RemoteI18n.f('filePreview.truncated', RemoteUiState.formatBytes(this.state.loadedBytes)))
           .width('100%')
-          .fontSize(11)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .padding({ left: 14, right: 14, top: 7, bottom: 7 })
           .backgroundColor(SOFT)
@@ -316,8 +317,8 @@ export struct FilePreviewSurface {
               })
           }, (token: CodeSyntaxToken) => token.id)
         }
-          .fontSize(12)
-          .lineHeight(19)
+          .fontSize(MobileDesignTypography.labelSmall.size)
+          .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
           .fontColor(INK)
           .fontFamily('monospace')
           .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)

@@ -6,7 +6,9 @@ export enum WatchProvisionPhase {
   Hidden = 'hidden',
   /** A request arrived and its owner has not answered yet. */
   Asking = 'asking',
-  /** Approved; the desktop is minting the credential. */
+  /** The relay needs a normal account login to add this watch. */
+  Password = 'password',
+  /** Approved; the phone is obtaining and handing off the credential. */
   Working = 'working',
   Done = 'done',
   Failed = 'failed'
@@ -29,6 +31,11 @@ export class WatchProvisionState implements WatchProvisionDisplay {
   working(): void {
     this.phase = WatchProvisionPhase.Working;
     this.message = '';
+  }
+
+  requirePassword(message: string): void {
+    this.phase = WatchProvisionPhase.Password;
+    this.message = message;
   }
 
   done(message: string): void {

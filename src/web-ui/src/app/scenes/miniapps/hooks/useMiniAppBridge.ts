@@ -380,6 +380,10 @@ export function useMiniAppBridge(
             return;
           }
           if (method === 'agent.run') {
+            if (params.contextFiles !== undefined && !Array.isArray(params.contextFiles)) {
+              replyError('agent.run: contextFiles must be an array when provided.');
+              return;
+            }
             const requestedSessionId =
               typeof params.sessionId === 'string' ? params.sessionId : '';
             if (
@@ -416,6 +420,9 @@ export function useMiniAppBridge(
                 sessionId: params.sessionId as string | undefined,
                 appDataWorkspace: params.appDataWorkspace as string | undefined,
                 model: typeof params.model === 'string' ? params.model : undefined,
+                contextFiles: params.contextFiles as
+                  | Array<{ name: string; content: string }>
+                  | undefined,
               },
             );
             agentSessionIdsRef.current.add(result.sessionId);

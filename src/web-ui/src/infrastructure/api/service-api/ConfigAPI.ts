@@ -73,6 +73,8 @@ export interface DownloadSkillMarketParams {
   workspacePath?: string;
 }
 
+const SKILL_CONFIG_REQUEST_TIMEOUT_MS = 60_000;
+
 
 export class ConfigAPI {
    
@@ -314,7 +316,11 @@ export class ConfigAPI {
     workspacePath,
   }: GetSkillConfigsParams = {}): Promise<SkillInfo[]> {
     try {
-      return await api.invoke('get_skill_configs', { forceRefresh, workspacePath });
+      return await api.invoke(
+        'get_skill_configs',
+        { forceRefresh, workspacePath },
+        { timeout: SKILL_CONFIG_REQUEST_TIMEOUT_MS },
+      );
     } catch (error) {
       throw createTauriCommandError('get_skill_configs', error, { forceRefresh, workspacePath });
     }
@@ -327,7 +333,11 @@ export class ConfigAPI {
     workspacePath,
   }: GetModeSkillConfigsParams): Promise<ModeSkillInfo[]> {
     try {
-      return await api.invoke('get_mode_skill_configs', { modeId, forceRefresh, workspacePath });
+      return await api.invoke(
+        'get_mode_skill_configs',
+        { modeId, forceRefresh, workspacePath },
+        { timeout: SKILL_CONFIG_REQUEST_TIMEOUT_MS },
+      );
     } catch (error) {
       throw createTauriCommandError('get_mode_skill_configs', error, { modeId, forceRefresh, workspacePath });
     }

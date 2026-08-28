@@ -1166,7 +1166,7 @@
     &__toolbar {
       grid-template-columns: 1fr 1fr;
 
-      > .search {
+      > [data-bf-component='search-field'] {
         grid-column: 1 / -1;
       }
     }

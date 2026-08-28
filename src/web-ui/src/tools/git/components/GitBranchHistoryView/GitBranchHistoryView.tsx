@@ -3,11 +3,11 @@
  * Shows a branch's commits and supports cherry-pick when applicable.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, RefreshCw, ChevronDown, ChevronUp, GitBranch, Square, CheckSquare } from 'lucide-react';
-import { Search, Select } from '@/component-library';
+import { Copy, RefreshCw, ChevronDown, ChevronUp, GitBranch, Square, CheckSquare, Search as SearchIcon } from 'lucide-react';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import type { GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -87,6 +87,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
   onCherryPickSuccess
 }) => {
   const { t } = useTranslation('panels/git');
+  const { t: tComponents } = useI18n('components');
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -340,15 +341,17 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
             </div>
           )}
           
-          <Search
+          <SearchField
             data-bf-component="git-branch-history"
             data-bf-part="search"
             value={searchQuery}
-            onChange={setSearchQuery}
+            onValueChange={setSearchQuery}
+            leadingIcon={<SearchIcon size={14} aria-hidden />}
             placeholder={t('search.commits')}
-            size="small"
-            clearable
-            enterToSearch={false}
+            aria-label={t('search.commits')}
+            size="sm"
+            clearLabel={searchQuery ? tComponents('search.clear') : undefined}
+            onClear={searchQuery ? () => setSearchQuery('') : undefined}
             className="git-branch-history-view__search"
           />
           
@@ -359,10 +362,9 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                 ...uniqueAuthors.map(author => ({ label: author, value: author }))
               ]}
               value={authorFilter}
-              onChange={(val) => setAuthorFilter(val as string)}
-              placeholder={t('branchHistory.authorPlaceholder')}
-              size="small"
-              clearable={!!authorFilter}
+              onValueChange={(val) => setAuthorFilter(String(val))}
+              aria-label={t('branchHistory.authorPlaceholder')}
+              size="sm"
               className="git-branch-history-view__author-select"
             />
           )}

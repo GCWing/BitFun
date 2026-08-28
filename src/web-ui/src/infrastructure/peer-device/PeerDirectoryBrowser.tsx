@@ -3,7 +3,7 @@
  * Lists directories on the peer via HostInvoke FS APIs.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -13,8 +13,8 @@ import {
   Home,
   Loader2,
   RefreshCw,
+  X,
 } from 'lucide-react';
-import { PopupCloseButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { globalAPI } from '@/infrastructure/api/service-api/GlobalAPI';
@@ -212,8 +212,10 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-component="peer-device"
             data-bf-part="title"
           >{title}</h2>
-          <PopupCloseButton
+          <IconButton
             className="peer-directory-browser__close-btn"
+            icon={<X />}
+            size="md"
             aria-label={t('peerDirectoryPicker.cancel')}
             onClick={onCancel}
             data-bf-component="peer-device"

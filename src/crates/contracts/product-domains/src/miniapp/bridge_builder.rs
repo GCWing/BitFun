@@ -121,6 +121,8 @@ pub fn build_bridge_script(
     // Requires manifest permissions.agent.enabled = true; enforced host-side.
     // `opts.displayText` may carry the user's original request for the shared
     // chat surface while `prompt` remains the MiniApp's internal agent protocol.
+    // `opts.contextFiles` may carry bounded context published by the host as a
+    // per-run virtual read-only snapshot.
     agent: {{
       ensureSession:  (opts) => _rpc('agent.ensureSession', opts || {{}}),
       run:            (prompt, opts) => _rpc('agent.run', {{ prompt, ...(opts || {{}}) }}),

@@ -253,14 +253,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-main__toolbar-search {
   flex: 1;
   min-width: min(260px, 100%);
-
-  .search__wrapper {
-    max-width: 100%;
-    border-radius: $size-radius-base;
-    min-height: 32px;
-    background: var(--bf-appearance-token-element-bg-subtle);
-    border-color: var(--bf-appearance-token-border-medium);
-  }
 }
 
 .skills-main__chip-btn {
@@ -844,11 +836,15 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     max-width: 100%;
   }
 
-  .badge {
+  [data-bf-component='status-pill'] {
     max-width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+    [data-bf-part='label'] {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 }
 
@@ -1025,20 +1021,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__search {
   width: 100%;
-
-  .search__wrapper {
-    border-radius: $size-radius-base;
-    min-height: 34px;
-    background: var(--bf-appearance-token-element-bg-soft);
-    border-color: var(--bf-appearance-token-border-medium);
-    box-shadow: none;
-    transition: border-color $motion-fast $easing-standard, box-shadow $motion-fast $easing-standard;
-  }
-
-  &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
-    border-color: var(--bf-appearance-token-color-accent-500);
-  }
 }
 
 .skills-discover__content {
