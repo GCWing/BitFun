@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input, Modal, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, ConfirmDialog, Field, SearchField, Select, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -21,7 +21,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { GalleryDetailModal } from '@/app/components';
@@ -482,26 +481,24 @@ const SkillsScene: React.FC = () => {
                               </div>
                               <div className="skills-card__status-badges">
                                 {skill.isBuiltin && (
-                                  <Badge variant="accent">
-                                    <ShieldCheck size={10} />
+                                  <StatusPill tone="accent" leading={<ShieldCheck size={10} />}>
                                     {t('list.item.builtin')}
-                                  </Badge>
+                                  </StatusPill>
                                 )}
                                 {skill.level === 'user'
                                   && installed.globallyDisabledSkillKeys.has(skill.key) && (
-                                  <Badge variant="neutral">
+                                  <StatusPill tone="neutral">
                                     {t('list.item.globalDisabled')}
-                                  </Badge>
+                                  </StatusPill>
                                 )}
                                 {skill.isShadowed && (
                                   <span title={t('list.item.shadowedTooltip', {
                                     source: coverageSourceBySkillKey.get(skill.key)
                                       ?? t('list.item.unknownSource'),
                                   })}>
-                                    <Badge variant="warning">
-                                      <ShieldAlert size={10} />
+                                    <StatusPill tone="warning" leading={<ShieldAlert size={10} />}>
                                       {t('list.item.shadowed')}
-                                    </Badge>
+                                    </StatusPill>
                                   </span>
                                 )}
                               </div>
@@ -517,9 +514,9 @@ const SkillsScene: React.FC = () => {
                                 data-bf-scene="skills"
                                 data-bf-part="installedCardSource"
                               >
-                                <Badge variant="neutral">
+                                <StatusPill tone="neutral">
                                   {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
-                                </Badge>
+                                </StatusPill>
                               </span>
                             </div>
 
@@ -704,10 +701,9 @@ const SkillsScene: React.FC = () => {
                           accentSeed={skill.installId}
                           iconKind="market"
                           badges={isInstalled ? (
-                            <Badge variant="success">
-                              <CheckCircle2 size={11} />
+                            <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
                               {t('market.item.installed')}
-                            </Badge>
+                            </StatusPill>
                           ) : null}
                           meta={(
                             <span className="bitfun-skills-scene__market-meta">
@@ -794,19 +790,18 @@ const SkillsScene: React.FC = () => {
                 source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
                   ?? t('list.item.unknownSource'),
               })}>
-                <Badge variant="warning">
-                  <ShieldAlert size={11} />
+                <StatusPill tone="warning" leading={<ShieldAlert size={11} />}>
                   {t('list.item.shadowed')}
-                </Badge>
+                </StatusPill>
               </span>
             )}
-            <Badge variant="neutral">
+            <StatusPill tone="neutral">
               {getSkillSourceLabel(selectedInstalledSkill, t('list.item.unknownSource'))}
-            </Badge>
-            <Badge variant={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
+            </StatusPill>
+            <StatusPill tone={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
               {selectedInstalledSkill.isBuiltin ? t('list.item.builtin') : t('list.item.userInstalled')}
-            </Badge>
-            <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
+            </StatusPill>
+            <StatusPill tone={selectedInstalledSkill.level === 'user' ? 'info' : 'accent'}>
               {market.isRemoteWorkspace
                 ? selectedInstalledSkill.level === 'user'
                   ? t('list.item.localUser')
@@ -814,13 +809,12 @@ const SkillsScene: React.FC = () => {
                 : selectedInstalledSkill.level === 'user'
                   ? t('list.item.user')
                   : t('list.item.project')}
-            </Badge>
+            </StatusPill>
           </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
-          <Badge variant="success">
-            <CheckCircle2 size={11} />
+          <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
             {t('market.item.installed')}
-          </Badge>
+          </StatusPill>
         ) : null}
         description={selectedInstalledSkill?.description ?? selectedMarketSkill?.description}
         testId="skill-detail-panel"

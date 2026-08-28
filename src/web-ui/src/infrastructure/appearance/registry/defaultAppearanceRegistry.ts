@@ -8,7 +8,6 @@ import { numberInputAppearanceDescriptor } from '@/component-library/components/
 import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
 import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
-import { badgeAppearanceDescriptor } from '@/component-library/components/Badge/appearance';
 import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appearance';
 import { avatarAppearanceDescriptor } from '@/component-library/components/Avatar/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
@@ -302,7 +301,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
     .registerComponent(alertAppearanceDescriptor)
-    .registerComponent(badgeAppearanceDescriptor)
     .registerComponent(tagAppearanceDescriptor)
     .registerComponent(avatarAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)

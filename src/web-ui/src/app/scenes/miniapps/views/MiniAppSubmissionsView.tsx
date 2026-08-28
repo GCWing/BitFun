@@ -1,4 +1,4 @@
-import { Button, Field, Input, Select } from '@bitfun/ui';
+import { Button, Field, Input, Select, StatusPill } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -15,7 +15,6 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { Badge } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -583,9 +582,9 @@ const MiniAppSubmissionsView: React.FC = () => {
                     </div>
                   </div>
                   <div className="miniapp-submissions__status">
-                    <Badge variant={statusVariant(submission.status)}>
+                    <StatusPill tone={statusVariant(submission.status)}>
                       {submissionStatusLabel(submission.status, t)}
-                    </Badge>
+                    </StatusPill>
                     {(submission.status === 'draft' || submission.status === 'submitted') ? (
                       <Button
                         size="sm"

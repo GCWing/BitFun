@@ -836,11 +836,15 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     max-width: 100%;
   }
 
-  .badge {
+  [data-bf-component='status-pill'] {
     max-width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+    [data-bf-part='label'] {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 }
 

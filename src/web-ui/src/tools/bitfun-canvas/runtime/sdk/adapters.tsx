@@ -1,6 +1,5 @@
 import React from 'react';
-import { Badge as BitFunBadge } from '@/component-library/components/Badge';
-import { Button as BitFunButton } from '@bitfun/ui';
+import { Button as BitFunButton, StatusPill as DesignStatusPill } from '@bitfun/ui';
 import {
   Card as BitFunCard,
   CardBody as BitFunCardBody,
@@ -84,11 +83,11 @@ export function Button({ children, variant = 'secondary', size, ...props }: Canv
 }
 
 function pillTone(tone: CanvasTone | 'accent' | 'purple' | undefined, active: boolean) {
-  if (tone === 'danger' || tone === 'error') return { badge: 'error' as const, tag: 'red' as const };
+  if (tone === 'danger' || tone === 'error') return { badge: 'danger' as const, tag: 'red' as const };
   if (tone === 'success') return { badge: 'success' as const, tag: 'green' as const };
   if (tone === 'warning') return { badge: 'warning' as const, tag: 'yellow' as const };
   if (tone === 'info') return { badge: 'info' as const, tag: 'blue' as const };
-  if (tone === 'purple') return { badge: 'purple' as const, tag: 'purple' as const };
+  if (tone === 'purple') return { badge: 'accent' as const, tag: 'purple' as const };
   if (tone === 'accent' || active) return { badge: 'accent' as const, tag: 'blue' as const };
   return { badge: 'neutral' as const, tag: 'gray' as const };
 }
@@ -121,9 +120,9 @@ export function Pill({
 
   if (active) {
     return (
-      <BitFunBadge variant={resolvedTone.badge} className={className}>
+      <DesignStatusPill tone={resolvedTone.badge} className={className}>
         {content}
-      </BitFunBadge>
+      </DesignStatusPill>
     );
   }
 

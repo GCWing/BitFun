@@ -89,7 +89,6 @@ vi.mock('./components/ToolGroupPicker', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),

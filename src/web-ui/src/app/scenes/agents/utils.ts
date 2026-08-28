@@ -16,7 +16,7 @@ const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
 };
 
 interface AgentBadgeConfig {
-  variant: 'accent' | 'info' | 'success' | 'purple' | 'neutral';
+  variant: 'accent' | 'info' | 'success' | 'neutral';
   label: string;
 }
 
@@ -53,7 +53,7 @@ function getAgentBadge(
       return { variant: 'success', label: t('agentCard.badges.userMode') };
     }
     if (source === 'project') {
-      return { variant: 'purple', label: t('agentCard.badges.projectMode') };
+      return { variant: 'accent', label: t('agentCard.badges.projectMode') };
     }
     return { variant: 'accent', label: t('agentCard.badges.agent') };
   }
@@ -64,7 +64,7 @@ function getAgentBadge(
     case 'user':
       return { variant: 'success', label: t('agentCard.badges.userSubagent') };
     case 'project':
-      return { variant: 'purple', label: t('agentCard.badges.projectSubagent') };
+      return { variant: 'accent', label: t('agentCard.badges.projectSubagent') };
     default:
       return { variant: 'info', label: t('agentCard.badges.subagent') };
   }

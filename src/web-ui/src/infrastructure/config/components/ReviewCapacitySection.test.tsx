@@ -45,7 +45,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
     disabled,
