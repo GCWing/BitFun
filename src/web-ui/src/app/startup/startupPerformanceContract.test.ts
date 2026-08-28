@@ -292,6 +292,14 @@ describe('startup performance contract', () => {
     expect(source).toContain('!appLayoutReady');
   });
 
+  it('recovers development module load failures without trapping the error boundary behind the startup overlay', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).toContain('retryStartupAfterModuleLoadFailure(error)');
+    expect(source).toContain("startupTrace.markPhase('app_layout_import_reload_requested')");
+    expect(source).toMatch(/void hideStartupOverlay\(\);\s+throw error;/);
+  });
+
   it('keeps non-default shell surfaces out of the startup import path', () => {
     const appSource = readSource('../App.tsx');
     const appLayoutSource = readSource('../layout/AppLayout.tsx');

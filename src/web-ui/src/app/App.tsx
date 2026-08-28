@@ -28,6 +28,10 @@ import {
   hideStartupOverlay,
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
+import {
+  clearStartupModuleReloadAttempt,
+  retryStartupAfterModuleLoadFailure,
+} from './startup/startupModuleRecovery';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/RealtimeVoiceCallContext';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
@@ -49,6 +53,7 @@ const LazyAppLayout = lazy(async () => {
   startupTrace.markPhase('app_layout_import_start');
   try {
     const module = await import('./layout/AppLayout');
+    clearStartupModuleReloadAttempt();
     startupTrace.markPhase('app_layout_import_end');
     return {
       default: function AppLayoutStartupGate({ onReady }: AppLayoutStartupGateProps) {
@@ -62,6 +67,13 @@ const LazyAppLayout = lazy(async () => {
     };
   } catch (error) {
     startupTrace.markPhase('app_layout_import_failed');
+    if (retryStartupAfterModuleLoadFailure(error)) {
+      startupTrace.markPhase('app_layout_import_reload_requested');
+      return await new Promise<never>(() => undefined);
+    }
+    // The static overlay otherwise hides AppErrorBoundary and makes a real
+    // startup failure look like an endless loading state.
+    void hideStartupOverlay();
     throw error;
   }
 });
