@@ -130,6 +130,17 @@
     }
   }
 
+  &__permission-approval {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-color-bg-secondary);
+
+    > .bitfun-chat-input-approval {
+      margin-bottom: 0;
+    }
+  }
+
   &__body {
     flex: 1;
     min-height: 0;

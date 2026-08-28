@@ -3,8 +3,12 @@ import type { PermissionRequest } from '@/infrastructure/api/service-api/AgentAP
 import {
   applyPermissionRequestEvent,
   pendingPermissionToolCallIdsForSession,
+  permissionRequestIsOwnedBySession,
+  permissionRequestOwnerSessionId,
   reconcilePermissionRequestSnapshot,
+  selectActivePermissionBatchOwnedBySession,
   selectPermissionRequestsForSession,
+  selectPermissionRequestsOwnedBySession,
   selectActivePermissionBatch,
   sortPermissionRequests,
 } from './permissionRequestRouting';
@@ -61,6 +65,41 @@ describe('permission request routing', () => {
       unrelatedRequest,
     ]);
     expect(selectPermissionRequestsForSession(requests, undefined)).toEqual([]);
+  });
+
+  it('assigns delegated requests to exactly one display owner', () => {
+    const requests = [parentRequest, childRequest, unrelatedRequest];
+
+    expect(permissionRequestOwnerSessionId(parentRequest)).toBe('parent-session');
+    expect(permissionRequestOwnerSessionId(childRequest)).toBe('parent-session');
+    expect(permissionRequestIsOwnedBySession(childRequest, 'parent-session')).toBe(true);
+    expect(permissionRequestIsOwnedBySession(childRequest, 'child-session')).toBe(false);
+
+    expect(selectPermissionRequestsOwnedBySession(requests, 'parent-session')).toEqual([
+      parentRequest,
+      childRequest,
+    ]);
+    expect(selectPermissionRequestsOwnedBySession(requests, 'child-session')).toEqual([]);
+    const reviewChildRequest = request('review-child', 'review-child', 'review-tool');
+    expect(selectPermissionRequestsOwnedBySession(
+      [reviewChildRequest],
+      'review-child',
+    )).toEqual([reviewChildRequest]);
+  });
+
+  it('does not expose a delegated child batch to the child surface', () => {
+    expect(selectActivePermissionBatchOwnedBySession(
+      [childRequest],
+      'child-session',
+    )).toBeUndefined();
+    expect(selectActivePermissionBatchOwnedBySession(
+      [childRequest],
+      'parent-session',
+    )).toEqual({
+      sessionId: 'child-session',
+      roundId: 'round-child',
+      requests: [childRequest],
+    });
   });
 
   it('maps delegated requests to the parent Task card and direct requests to their tool card', () => {

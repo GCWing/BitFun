@@ -11,6 +11,23 @@ export function permissionRequestBelongsToSession(
   return request.sessionId === sessionId || request.delegation?.parentSessionId === sessionId;
 }
 
+/**
+ * Return the single session surface that owns the user interaction for a
+ * permission request. Delegated subagent requests are surfaced by their
+ * parent task; direct requests stay with the session that emitted them.
+ */
+export function permissionRequestOwnerSessionId(request: PermissionRequest): string {
+  return request.delegation?.parentSessionId ?? request.sessionId;
+}
+
+export function permissionRequestIsOwnedBySession(
+  request: PermissionRequest,
+  sessionId?: string,
+): boolean {
+  if (!sessionId) return false;
+  return permissionRequestOwnerSessionId(request) === sessionId;
+}
+
 export function selectPermissionRequestsForSession(
   requests: readonly PermissionRequest[],
   sessionId?: string,
@@ -20,17 +37,30 @@ export function selectPermissionRequestsForSession(
   );
 }
 
+/**
+ * Select requests for the one UI surface that is allowed to present and
+ * answer them. This is intentionally separate from
+ * `selectPermissionRequestsForSession`, which also projects delegated child
+ * requests into the parent session for task-card state and history context.
+ */
+export function selectPermissionRequestsOwnedBySession(
+  requests: readonly PermissionRequest[],
+  sessionId?: string,
+): PermissionRequest[] {
+  return sortPermissionRequests(
+    requests.filter((request) => permissionRequestIsOwnedBySession(request, sessionId)),
+  );
+}
+
 export interface PermissionRequestBatch {
   sessionId: string;
   roundId: string;
   requests: PermissionRequest[];
 }
 
-export function selectActivePermissionBatch(
-  requests: readonly PermissionRequest[],
-  sessionId?: string,
+function selectActivePermissionBatchFromRequests(
+  routed: readonly PermissionRequest[],
 ): PermissionRequestBatch | undefined {
-  const routed = selectPermissionRequestsForSession(requests, sessionId);
   const first = routed[0];
   if (!first) return undefined;
 
@@ -42,6 +72,24 @@ export function selectActivePermissionBatch(
     roundId: first.roundId,
     requests: batchRequests,
   };
+}
+
+export function selectActivePermissionBatch(
+  requests: readonly PermissionRequest[],
+  sessionId?: string,
+): PermissionRequestBatch | undefined {
+  return selectActivePermissionBatchFromRequests(
+    selectPermissionRequestsForSession(requests, sessionId),
+  );
+}
+
+export function selectActivePermissionBatchOwnedBySession(
+  requests: readonly PermissionRequest[],
+  sessionId?: string,
+): PermissionRequestBatch | undefined {
+  return selectActivePermissionBatchFromRequests(
+    selectPermissionRequestsOwnedBySession(requests, sessionId),
+  );
 }
 
 /**

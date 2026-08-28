@@ -13,6 +13,13 @@ import {
   ConfigPageSectionStack,
 } from './ConfigPageLayout';
 
+function readStyleFixture(name: string): string {
+  return readFileSync(
+    resolve(process.cwd(), `src/infrastructure/config/components/common/${name}`),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
+}
+
 describe('ConfigPageLayout', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -54,18 +61,9 @@ describe('ConfigPageLayout', () => {
   });
 
   it('keeps the compact 680px settings geometry from the shared layout contract', () => {
-    const tokens = readFileSync(
-      resolve(process.cwd(), 'src/infrastructure/config/components/common/config-page-layout.tokens.scss'),
-      'utf8',
-    );
-    const layout = readFileSync(
-      resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageLayout.scss'),
-      'utf8',
-    );
-    const header = readFileSync(
-      resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageHeader.scss'),
-      'utf8',
-    );
+    const tokens = readStyleFixture('config-page-layout.tokens.scss');
+    const layout = readStyleFixture('ConfigPageLayout.scss');
+    const header = readStyleFixture('ConfigPageHeader.scss');
 
     expect(tokens).toContain('$config-page-content-max-width: 680px;');
     expect(layout).toContain('--config-page-section-gap: 36px;');

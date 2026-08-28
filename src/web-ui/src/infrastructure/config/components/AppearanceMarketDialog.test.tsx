@@ -53,6 +53,7 @@ vi.mock('@bitfun/ui', () => ({
       onKeyDown={event => event.key === 'Enter' && onSearch(event.currentTarget.value)}
     />
   ),
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   Select: ({ options, onValueChange, ...props }: any) => (
     <select {...props} onChange={event => onValueChange?.(event.target.value)}>
       {options.map((option: any) => (
