@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
-import './RealtimeVoiceCall.scss';
+import './RealtimeVoiceCallButton.scss';
 
 export function RealtimeVoiceCallButton() {
   const { t } = useTranslation('settings/voice-input');

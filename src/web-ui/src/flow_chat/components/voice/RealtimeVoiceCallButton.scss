@@ -1,0 +1,13 @@
+@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use './RealtimeVoiceCall';
+
+.bitfun-realtime-call {
+  @include surfaces.floating-surface;
+
+  background-image: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 12%, transparent) 0%,
+    transparent 58%,
+    color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent) 100%
+  );
+}
