@@ -152,17 +152,6 @@
   white-space: nowrap;
 }
 
-.bitfun-harness-selector__session-directive {
-  grid-column: 1 / -1;
-  min-width: 0;
-  margin-top: 1px;
-  overflow: hidden;
-  color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$support-size;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .bitfun-harness-selector__new-session {
   display: flex;
   align-items: center;

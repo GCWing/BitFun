@@ -13,8 +13,6 @@ const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
   'ultra',
 ]);
 
-export type ChatInputDirectiveId = 'Plan';
-
 export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
 
 export function agentExecutionTier(agentType: string | null | undefined): AgentExecutionTier {
@@ -266,24 +264,6 @@ export function resolveChatInputModePolicy(params: {
   };
 }
 
-export function isChatInputDirectiveModeId(
-  modeId: string | null | undefined,
-): modeId is ChatInputDirectiveId {
-  const normalized = normalizeModeLookupId(modeId);
-  return normalized === 'plan';
-}
-
-export function canonicalChatInputDirectiveId(
-  modeId: string | null | undefined,
-): ChatInputDirectiveId | null {
-  switch (normalizeModeLookupId(modeId)) {
-    case 'plan':
-      return 'Plan';
-    default:
-      return null;
-  }
-}
-
 /**
  * Main Agents are selected with the Harness control before the first Turn.
  * Standard, Minimal, and Ultra are already represented by Harness profiles;
@@ -296,13 +276,6 @@ export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   return Array.from(availableModes).filter(
     mode => !MAIN_AGENT_EXCLUDED_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
   );
-}
-
-/** Built-in planning is now provided by the plan Skill, not an Agent-derived directive. */
-export function resolveChatInputDirectiveModes<TMode extends { id: string }>(
-  _availableModes: Iterable<TMode>,
-): TMode[] {
-  return [];
 }
 
 export function resolveChatInputSendAgentType(params: {

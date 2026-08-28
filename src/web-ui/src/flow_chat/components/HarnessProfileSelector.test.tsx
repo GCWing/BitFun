@@ -60,7 +60,6 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           selectedProfile="balanced"
-          directiveLabel="Plan"
           onSelectProfile={vi.fn()}
         />,
       );
@@ -70,7 +69,7 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -211,7 +210,6 @@ describe('HarnessProfileSelector', () => {
         <HarnessProfileSelector
           selectedProfile="other"
           selectedAgentId="DeepResearch"
-          directiveLabel="Plan"
           otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
           onSelectProfile={vi.fn()}
           onSelectAgent={onSelectAgent}
@@ -220,7 +218,7 @@ describe('HarnessProfileSelector', () => {
     });
     expect(
       container.querySelector('[data-testid="harness-profile-selector"]')?.textContent,
-    ).toBe('Deep Research · Plan');
+    ).toBe('Deep Research');
   });
 
   it('activates every implemented profile including Creative', async () => {
@@ -273,7 +271,6 @@ describe('HarnessProfileSelector', () => {
         <HarnessProfileSelector
           sessionStarted
           selectedProfile="balanced"
-          directiveLabel="Plan"
           otherAgents={[{ id: 'Plan', name: 'Plan' }]}
           onSelectProfile={onSelectProfile}
           onStartNewSession={onStartNewSession}
@@ -287,7 +284,7 @@ describe('HarnessProfileSelector', () => {
     expect(trigger?.dataset.harnessLocked).toBe('true');
     expect(trigger?.dataset.harnessFixed).toBe('true');
     expect(trigger?.disabled).toBe(false);
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -300,7 +297,6 @@ describe('HarnessProfileSelector', () => {
       menu?.querySelector('[data-testid="harness-session-summary"]')?.textContent,
     ).toContain('chatInput.harness.profiles.balanced.name');
     expect(menu?.querySelector('.bitfun-harness-selector__session-scope')).toBeNull();
-    expect(menu?.textContent).toContain('chatInput.harness.nextMessageDirective');
     const startNewSession = menu?.querySelector<HTMLButtonElement>(
       '[data-testid="harness-start-new-session"]',
     );

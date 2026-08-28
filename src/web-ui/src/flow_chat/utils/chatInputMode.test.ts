@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   agentExecutionTier,
   canSwitchSessionMainAgent,
-  canonicalChatInputDirectiveId,
   hasCompleteThreadGoalTools,
   isChatInputActionVisibleForTarget,
   isPrimarySlashActionVisible,
@@ -12,7 +11,6 @@ import {
   resolveChatInputCanUseSkills,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
-  resolveChatInputDirectiveModes,
   resolveChatInputMainAgentModes,
   resolveSessionAssistantWorkspace,
   resolveWorkspaceChatInputMode,
@@ -207,7 +205,7 @@ describe('resolveChatInputModePolicy', () => {
   });
 });
 
-describe('ChatInput Agent and directive projection', () => {
+describe('ChatInput Agent projection', () => {
   it('puts specialized and custom main Agents under Other without duplicating Harness profiles', () => {
     expect(
       resolveChatInputMainAgentModes([
@@ -226,17 +224,6 @@ describe('ChatInput Agent and directive projection', () => {
     ]);
   });
 
-  it('does not project retired peer modes as per-task directives', () => {
-    expect(resolveChatInputDirectiveModes([
-      { id: 'agentic' },
-      { id: 'Plan' },
-      { id: 'Cowork' },
-      { id: 'Multitask' },
-    ])).toEqual([]);
-    expect(canonicalChatInputDirectiveId(' plan ')).toBe('Plan');
-    expect(canonicalChatInputDirectiveId('MULTITASK')).toBeNull();
-    expect(canonicalChatInputDirectiveId('DeepResearch')).toBeNull();
-  });
 });
 
 describe('Agent execution tier locking', () => {
