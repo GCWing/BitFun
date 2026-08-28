@@ -2,6 +2,7 @@
 export interface WatchProvisionDisplay {
   ask(deviceName: string, deviceId: string): void;
   working(): void;
+  requirePassword(message: string): void;
   done(message: string): void;
   fail(message: string): void;
   hide(): void;

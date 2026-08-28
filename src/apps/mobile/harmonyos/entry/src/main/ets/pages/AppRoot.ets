@@ -52,8 +52,8 @@ struct AppRoot {
       // not be hidden behind whatever screen the phone happens to be on.
       WatchProvisionCard({
         state: this.runtime.watchProvisionState,
-        onApprove: () => {
-          void this.runtime.watchProvisionController.approve();
+        onApprove: (password: string) => {
+          void this.runtime.watchProvisionController.approve(password);
         },
         onReject: () => {
           void this.runtime.watchProvisionController.reject();

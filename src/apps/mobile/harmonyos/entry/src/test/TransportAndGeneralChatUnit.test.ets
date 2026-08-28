@@ -94,6 +94,7 @@ import {
 import {
   CloudAccountClient,
   CloudAccountDevice,
+  CloudProvisionedDevice,
   CloudAccountRequestError,
   CloudAccountSession
 } from '../main/ets/services/CloudAccountClient';
@@ -352,6 +353,39 @@ class ExpiringAccountClient extends CloudAccountClient {
       return [{ deviceId: 'desk-a', deviceName: 'Desktop A', online: true }];
     }
     throw new CloudAccountRequestError('expired', 401);
+  }
+}
+
+class ProvisioningFailureAccountClient extends CloudAccountClient {
+  readonly statusCode: number;
+
+  constructor(statusCode: number) {
+    super();
+    this.statusCode = statusCode;
+  }
+
+  async provisionDevice(
+    _relayUrl: string,
+    _session: CloudAccountSession,
+    _deviceId: string,
+    _deviceName: string,
+    _requestId: string
+  ): Promise<CloudProvisionedDevice> {
+    throw new CloudAccountRequestError('provisioning failed', this.statusCode);
+  }
+}
+
+class WatchLoginFailureAccountClient extends CloudAccountClient {
+  async loginWatch(
+    _relayUrl: string,
+    _username: string,
+    _password: string,
+    _currentSession: CloudAccountSession,
+    _deviceId: string,
+    _deviceName: string,
+    _requestId: string
+  ): Promise<CloudProvisionedDevice> {
+    throw new CloudAccountRequestError('login rejected', 401);
   }
 }
 
@@ -1021,6 +1055,51 @@ export default function transportAndGeneralChatUnitTest() {
   });
 
   describe('SettingsController', () => {
+    it('asks for account confirmation when a legacy relay has no provisioning route', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(404));
+
+      const outcome = await harness.controller.provisionWatchCredential(
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'HarmonyOS Watch',
+        '12345678-1234-4234-8234-123456789abc'
+      );
+
+      expect(outcome !== undefined).assertTrue();
+      expect(outcome?.passwordRequired).assertTrue();
+    });
+
+    it('does not treat an authorization refusal as a legacy relay', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(403));
+
+      const outcome = await harness.controller.provisionWatchCredential(
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'HarmonyOS Watch',
+        '12345678-1234-4234-8234-123456789abc'
+      );
+
+      expect(outcome === undefined).assertTrue();
+    });
+
+    it('reports a rejected compatibility login instead of deferring to the desktop', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new WatchLoginFailureAccountClient());
+      let statusCode = 0;
+
+      try {
+        await harness.controller.provisionWatchCredential(
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          'HarmonyOS Watch',
+          '12345678-1234-4234-8234-123456789abc',
+          'wrong-password'
+        );
+      } catch (err) {
+        if (err instanceof CloudAccountRequestError) {
+          statusCode = err.statusCode;
+        }
+      }
+
+      expect(statusCode).assertEqual(401);
+    });
+
     it('tests model configuration with the stored key when the form keeps it unchanged', 0, async () => {
       const store = new InMemorySettingsConfigStore();
       store.snapshotResult = {
