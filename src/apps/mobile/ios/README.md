@@ -8,10 +8,15 @@ floating composer with 52pt collapsed height.
 
 ## Project layout
 
-- `BitFun/App/`: lifecycle and composition root.
-- `BitFun/Features/Chat/`: header, timeline bubbles, and composer.
-- `BitFun/Features/Shell/`: theme tokens, drawer, settings, and shell layout.
-- `BitFun/Infrastructure/`: observable state and the platform seam.
+- `BitFun/App/`: lifecycle, launch configuration, and composition root.
+- `BitFun/Features/Chat/`: conversation home, header, timeline bubbles, and composer.
+- `BitFun/Features/Remote/`: remote conversation home surfaces.
+- `BitFun/Features/Settings/`: app settings composition and reusable settings cards.
+- `BitFun/Features/Pairing/`: pairing sheet flow.
+- `BitFun/Features/Account/`: account settings and device rows.
+- `BitFun/Features/Shell/`: theme tokens, drawer, shell layout, and remote supporting surfaces.
+- `BitFun/Infrastructure/`: observable state, failure copy, and platform adapters.
+- `BitFun/Presentation/Models/`: SwiftUI-facing presentation DTOs.
 - `BitFun/Resources.xcassets/`: app icon and future native assets.
 
 ## Build and run
