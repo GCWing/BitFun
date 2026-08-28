@@ -93,7 +93,7 @@ $_resize-target-width: 6px;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 0;
+  gap: $size-gap-4;
   min-width: 0;
   min-height: 0;
   padding: $size-gap-4 $size-gap-4 0;
