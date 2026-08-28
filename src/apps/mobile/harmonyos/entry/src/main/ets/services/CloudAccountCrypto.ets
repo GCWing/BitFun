@@ -12,9 +12,42 @@ export interface CloudAccountKdfParams {
  * relay protocol and the UI never depend on a particular crypto provider.
  */
 export class CloudAccountCrypto {
+  private static readonly KDF_TIMEOUT_MS: number = 30000;
+
   static async derivePasswordHash(password: string, salt: Uint8Array, params: CloudAccountKdfParams): Promise<Uint8Array> {
     CloudAccountCrypto.validateParams(params, salt);
-    return bitfunCrypto.argon2idRaw(Encoding.utf8ToBytes(password), salt, params.m, params.t, params.p) as Uint8Array;
+    return CloudAccountCrypto.withTimeout(
+      bitfunCrypto.argon2idRaw(Encoding.utf8ToBytes(password), salt, params.m, params.t, params.p),
+      CloudAccountCrypto.KDF_TIMEOUT_MS
+    );
+  }
+
+  private static withTimeout(operation: Promise<Uint8Array>, timeoutMs: number): Promise<Uint8Array> {
+    return new Promise<Uint8Array>((resolve, reject) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(new Error('Argon2id operation timed out.'));
+      }, timeoutMs);
+      operation.then((value: Uint8Array) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(value);
+      }).catch((err: Object) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+    });
   }
 
   private static validateParams(params: CloudAccountKdfParams, salt: Uint8Array): void {

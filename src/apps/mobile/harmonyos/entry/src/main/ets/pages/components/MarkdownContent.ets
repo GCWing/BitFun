@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   MarkdownParseCache,
@@ -13,6 +14,10 @@ import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 export struct MarkdownContent {
   private readonly parseCache: MarkdownParseCache = new MarkdownParseCache();
   @Param text: string = '';
+  // Explicit primitive invalidation for retained Repeat rows. The text remains
+  // the source of truth; this revision only ensures parameter propagation on
+  // ArkUI builds that do not observe nested object mutations across children.
+  @Param renderRevision: number = 0;
   @Event onCopyText: (text: string) => void = (_text: string) => {};
   @Event onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
 
@@ -20,7 +25,7 @@ export struct MarkdownContent {
     Column({ space: 5 }) {
       ForEach(this.parseCache.blocksFor(this.text), (block: ParsedMarkdownBlock) => {
         this.MarkdownBlockView(block)
-      }, (block: ParsedMarkdownBlock) => block.id)
+      }, (block: ParsedMarkdownBlock) => block.renderKey)
     }
     .width('100%')
   }
@@ -33,7 +38,13 @@ export struct MarkdownContent {
       this.InlineText(block.inlines, this.headingFontSize(block.level), this.headingLineHeight(block.level), INK, true)
     } else if (block.type === 'quote') {
       Column() {
-        this.InlineText(block.inlines, 13, 18, MUTED, false)
+        this.InlineText(
+          block.inlines,
+          MobileDesignTypography.bodySmall.size,
+          MobileDesignTypography.bodySmall.lineHeight,
+          MUTED,
+          false
+        )
       }
         .width('100%')
         .padding({ left: 9 + Math.max(0, block.level - 1) * 10 })
@@ -48,7 +59,13 @@ export struct MarkdownContent {
         .height(1)
         .backgroundColor(LINE)
     } else {
-      this.InlineText(block.inlines, 14, 21, INK, false)
+      this.InlineText(
+        block.inlines,
+        MobileDesignTypography.bodyMedium.size,
+        MobileDesignTypography.bodyMedium.lineHeight,
+        INK,
+        false
+      )
     }
   }
 
@@ -109,7 +126,7 @@ export struct MarkdownContent {
           if (item.checked >= 0) {
             Stack({ alignContent: Alignment.Center }) {
               Text(item.checked === 1 ? '✓' : '')
-                .fontSize(11)
+                .fontSize(MobileDesignTypography.labelSmall.size)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(MUTED)
                 .textAlign(TextAlign.Center)
@@ -122,13 +139,19 @@ export struct MarkdownContent {
           } else {
             Text(item.marker)
               .width(20)
-              .fontSize(14)
-              .lineHeight(21)
+              .fontSize(MobileDesignTypography.bodyMedium.size)
+              .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
               .fontColor(MUTED)
               .textAlign(TextAlign.End)
           }
           Column() {
-            this.InlineText(item.inlines, 14, 21, INK, false)
+            this.InlineText(
+              item.inlines,
+              MobileDesignTypography.bodyMedium.size,
+              MobileDesignTypography.bodyMedium.lineHeight,
+              INK,
+              false
+            )
           }
             .layoutWeight(1)
         }
@@ -178,8 +201,8 @@ export struct MarkdownContent {
         }, (inline: ParsedMarkdownInline) => inline.id)
       }
       .width('100%')
-      .fontSize(13)
-      .lineHeight(19)
+      .fontSize(MobileDesignTypography.bodySmall.size)
+      .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
       .fontWeight(header ? FontWeight.Medium : FontWeight.Regular)
       .fontColor(INK)
       .textAlign(this.tableTextAlign(cell.alignment))
@@ -195,11 +218,11 @@ export struct MarkdownContent {
     Column({ space: 7 }) {
       Row() {
         Text(language.length > 0 ? language : 'code')
-          .fontSize(10)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
         Blank()
         Text(RemoteI18n.t('common.copy'))
-          .fontSize(10)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .onClick(() => {
             this.onCopyText(body);
@@ -208,8 +231,8 @@ export struct MarkdownContent {
       .width('100%')
       Scroll() {
         Text(body)
-          .fontSize(10)
-          .lineHeight(15)
+          .fontSize(MobileDesignTypography.labelSmall.size)
+          .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
           .fontColor(INK)
           .fontFamily('monospace')
           .constraintSize({ minWidth: '100%' })
@@ -227,28 +250,28 @@ export struct MarkdownContent {
 
   private headingFontSize(level: number): number {
     if (level <= 1) {
-      return 16;
+      return MobileDesignTypography.headlineSmall.size;
     }
     if (level === 2) {
-      return 15;
+      return MobileDesignTypography.titleMedium.size;
     }
     if (level === 3) {
-      return 14;
+      return MobileDesignTypography.titleSmall.size;
     }
-    return 14;
+    return MobileDesignTypography.bodyMedium.size;
   }
 
   private headingLineHeight(level: number): number {
     if (level <= 1) {
-      return 23;
+      return MobileDesignTypography.headlineSmall.lineHeight;
     }
     if (level === 2) {
-      return 22;
+      return MobileDesignTypography.titleMedium.lineHeight;
     }
     if (level === 3) {
-      return 20;
+      return MobileDesignTypography.titleSmall.lineHeight;
     }
-    return 20;
+    return MobileDesignTypography.bodyMedium.lineHeight;
   }
 
   private tableTextAlign(alignment: string): TextAlign {

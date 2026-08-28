@@ -96,15 +96,16 @@ export class GeneralChatConversationViewModel {
       if (this.stream.text().length > 0) {
         this.finishStream(sessionId, result);
       } else {
+        const finalMessage = this.messageForActiveTurn(result.assistantMessage);
         this.resetStream();
         this.timeline.dispatch({ type: 'user_message', message: result.userMessage, persisted: true });
         this.timeline.dispatch({
           type: 'turn_finished',
           sessionId,
-          turnId: result.assistantMessage.turnId || this.hooks.currentActiveTurnId(),
-          message: result.assistantMessage
+          turnId: finalMessage.turnId || this.hooks.currentActiveTurnId(),
+          message: finalMessage
         });
-        await this.persistAssistantMessage(sessionId, result.assistantMessage);
+        await this.persistAssistantMessage(sessionId, finalMessage);
         this.hooks.syncTimeline();
         this.pageState.setBusy(false);
         this.pageState.setServiceState(GeneralChatServiceState.Ready);
@@ -213,19 +214,39 @@ export class GeneralChatConversationViewModel {
     if (currentSessionId !== sessionId && !visible) {
       return;
     }
+    const finalMessage = this.messageForActiveTurn(result.assistantMessage);
     this.timeline.dispatch({ type: 'user_message', message: result.userMessage, persisted: true });
     this.timeline.dispatch({
       type: 'turn_finished',
       sessionId,
-      turnId: result.assistantMessage.turnId || this.hooks.currentActiveTurnId(),
-      message: result.assistantMessage
+      turnId: finalMessage.turnId || this.hooks.currentActiveTurnId(),
+      message: finalMessage
     });
-    this.persistAssistantMessage(sessionId, result.assistantMessage);
+    this.persistAssistantMessage(sessionId, finalMessage);
     this.hooks.syncTimeline();
     this.resetStream();
     this.pageState.setBusy(false);
     this.pageState.setServiceState(GeneralChatServiceState.Ready);
     this.pageState.setStatus(RemoteI18n.t('generalChat.ready'));
+  }
+
+  private messageForActiveTurn(message: ChatMessage): ChatMessage {
+    const turnId = this.stream.currentTurnId() || message.turnId;
+    return {
+      id: message.id,
+      role: message.role,
+      text: message.text,
+      status: message.status,
+      renderVersion: message.renderVersion,
+      turnId,
+      detail: message.detail,
+      error: message.error,
+      timestamp: message.timestamp,
+      thinking: message.thinking,
+      tools: message.tools,
+      items: message.items,
+      images: message.images
+    };
   }
 
   private async handleSendFailure(

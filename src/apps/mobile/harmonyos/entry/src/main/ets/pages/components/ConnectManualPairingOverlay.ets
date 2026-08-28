@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MODAL_SCRIM, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, SOFT, SUBTLE } from './Theme';
 
@@ -25,19 +26,19 @@ export struct ConnectManualPairingOverlay {
       Column({ space: 20 }) {
         Text(this.requiresAccountAuth ?
           RemoteI18n.t('connect.accountPairTitle') : RemoteI18n.t('connect.manualPair'))
-          .fontSize(24)
+          .fontSize(MobileDesignTypography.displayLarge.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
           .width('100%')
         Text(this.requiresAccountAuth ?
           RemoteI18n.t('connect.accountPairIntro') : RemoteI18n.t('connect.manualPairBody'))
-          .fontSize(17)
-          .lineHeight(24)
+          .fontSize(MobileDesignTypography.titleMedium.size)
+          .lineHeight(MobileDesignTypography.titleMedium.lineHeight)
           .fontColor(MUTED)
           .width('100%')
         TextInput({ placeholder: RemoteI18n.t('connect.pairCodePlaceholder'), text: this.remoteUrl })
           .height(62)
-          .fontSize(20)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontColor(INK)
           .backgroundColor(SOFT)
           .borderRadius(31)
@@ -50,7 +51,7 @@ export struct ConnectManualPairingOverlay {
             text: this.userIdInput
           })
             .height(56)
-            .fontSize(18)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
             .backgroundColor(SOFT)
             .borderRadius(28)
@@ -58,7 +59,7 @@ export struct ConnectManualPairingOverlay {
             .onChange(this.onUserIdChange)
           TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.password })
             .height(56)
-            .fontSize(18)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
             .backgroundColor(SOFT)
             .borderRadius(28)
@@ -66,8 +67,8 @@ export struct ConnectManualPairingOverlay {
             .type(InputType.Password)
             .onChange(this.onPasswordChange)
           Text(RemoteI18n.t('connect.accountPairBody'))
-            .fontSize(13)
-            .lineHeight(18)
+            .fontSize(MobileDesignTypography.bodySmall.size)
+            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
             .fontColor(MUTED)
             .width('100%')
         }
@@ -75,7 +76,7 @@ export struct ConnectManualPairingOverlay {
           Button(RemoteI18n.t('common.cancel'))
             .layoutWeight(1)
             .height(58)
-            .fontSize(19)
+            .fontSize(MobileDesignTypography.labelLarge.size)
             .fontWeight(FontWeight.Bold)
             .fontColor(INK)
             .backgroundColor(SOFT)
@@ -84,7 +85,7 @@ export struct ConnectManualPairingOverlay {
           Button(RemoteI18n.t('connect.pair'))
             .layoutWeight(1)
             .height(58)
-            .fontSize(19)
+            .fontSize(MobileDesignTypography.labelLarge.size)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.canSubmit ? PRIMARY_ACTION_TEXT : SUBTLE)
             .backgroundColor(this.canSubmit ? PRIMARY_ACTION : SOFT)

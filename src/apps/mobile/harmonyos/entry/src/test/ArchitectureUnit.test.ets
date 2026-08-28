@@ -282,18 +282,19 @@ export default function architectureUnitTest() {
       assertSheetMissesCreases(pad, [], 1440);
     });
 
-    it('sizes a dual-fold sheet to the pane after the only vertical crease', 0, () => {
+    it('centers connect on an expanded dual-fold device', 0, () => {
       const crease = new ConversationLayoutCrease(352, 16);
       const placement = SettingsPlacementPolicy.resolve(
         placementInput(680, 740, false, false, true, [crease], [], true, 1),
         SettingsSheetKind.Connect
       );
-      expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
-      expect(placement.width).assertEqual(312);
+      expect(placement.mode).assertEqual(SettingsPlacementMode.Center);
+      expect(placement.width).assertEqual(490);
       expect(placement.height).assertEqual(660);
-      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(placement, crease, 680))
-        .assertFalse();
-      assertSheetMissesCreases(placement, [crease], 680);
+      const options = AdaptiveSheetOptions.fromPlacement(placement);
+      expect(options.width).assertEqual(490);
+      expect(options.height).assertEqual(660);
+      expect(options.preferType).assertEqual(SheetType.CENTER);
     });
 
     it('sizes a tri-fold sheet to the pane after the last vertical crease', 0, () => {
@@ -311,11 +312,11 @@ export default function architectureUnitTest() {
       assertSheetMissesCreases(placement, creases, 1107);
     });
 
-    it('keeps an extremely narrow crease pane instead of applying a width floor', 0, () => {
+    it('keeps an extremely narrow crease pane for non-connect sheets', 0, () => {
       const crease = new ConversationLayoutCrease(590, 8);
       const placement = SettingsPlacementPolicy.resolve(
         placementInput(630, 700, false, false, true, [crease], [], true, 1),
-        SettingsSheetKind.Connect
+        SettingsSheetKind.SessionDetails
       );
       expect(placement.mode).assertEqual(SettingsPlacementMode.Side);
       expect(placement.width).assertEqual(32);
@@ -510,22 +511,10 @@ export default function architectureUnitTest() {
       expect(invalid.maxHeight).assertEqual(0);
       expect(mateX7Creases.vertical.length).assertEqual(1);
       expect(mateX7Creases.horizontal.length).assertEqual(0);
-      expect(bookHover.mode).assertEqual(SettingsPlacementMode.Side);
-      expect(bookHover.width).assertEqual(312);
-      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
-        bookHover,
-        mateX7Creases.vertical[0],
-        707.2
-      )).assertFalse();
-      expect(rtlTriFold.mode).assertEqual(SettingsPlacementMode.Side);
-      expect(rtlTriFold.width).assertEqual(351);
-      expect(SettingsPlacementPolicy.sheetLeft(rtlTriFold, 1107, true)).assertEqual(0);
-      expect(SettingsPlacementPolicy.sheetIntersectsVerticalCrease(
-        rtlTriFold,
-        new ConversationLayoutCrease(351, 44),
-        1107,
-        true
-      )).assertFalse();
+      expect(bookHover.mode).assertEqual(SettingsPlacementMode.Center);
+      expect(bookHover.width).assertEqual(509);
+      expect(rtlTriFold.mode).assertEqual(SettingsPlacementMode.Center);
+      expect(rtlTriFold.width).assertEqual(SettingsPlacementPolicy.TABLET_MAX_WIDTH);
       expect(remote.height).assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);
       expect(details.maxHeight).assertEqual(748);
       expect(details.height).assertEqual(SettingsPlacementPolicy.SESSION_DETAILS_HEIGHT);
@@ -534,9 +523,9 @@ export default function architectureUnitTest() {
       expect(AdaptiveSheetOptions.fromPlacement(details).height)
         .assertEqual(SettingsPlacementPolicy.SESSION_DETAILS_HEIGHT);
       expect(AdaptiveSheetOptions.fromPlacement(hover).height).assertEqual(428);
-      const sideOptions = AdaptiveSheetOptions.fromPlacement(bookHover);
-      expect(sideOptions.width).assertEqual(312);
-      expect(sideOptions.preferType).assertEqual(SheetType.SIDE);
+      const centerOptions = AdaptiveSheetOptions.fromPlacement(bookHover);
+      expect(centerOptions.width).assertEqual(509);
+      expect(centerOptions.preferType).assertEqual(SheetType.CENTER);
       expect(AdaptiveSheetOptions.fromPlacement(
         SettingsPlacementPolicy.compactBottom(SettingsSheetKind.RemoteViewSettings)
       ).height).assertEqual(SettingsPlacementPolicy.REMOTE_VIEW_SETTINGS_HEIGHT);

@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { DEFAULT_CLOUD_RELAY_URL } from '../../services/CloudAccountClient';
 import { CARD, INK, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SUBTLE } from './Theme';
@@ -21,22 +22,22 @@ export struct BitFunAccountLoginPage {
       Scroll() {
         Column({ space: 0 }) {
           Text(RemoteI18n.t('remote.settings.accountLoginTitle'))
-            .fontSize(32)
+            .fontSize(MobileDesignTypography.displayLarge.size)
             .fontWeight(FontWeight.Bold)
             .fontColor(INK)
             .width('100%')
             .margin({ top: 0 })
 
           Text(RemoteI18n.t('remote.settings.accountLoginBody'))
-            .fontSize(15)
-            .lineHeight(22)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
+            .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
             .fontColor(MUTED)
             .width('100%')
             .margin({ top: 12, bottom: 42 })
 
           TextInput({ placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'), text: this.username })
             .height(58)
-            .fontSize(17)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
             .placeholderColor(SUBTLE)
             .backgroundColor(CARD)
@@ -46,7 +47,7 @@ export struct BitFunAccountLoginPage {
 
           TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.password })
             .height(58)
-            .fontSize(17)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontColor(INK)
             .placeholderColor(SUBTLE)
             .backgroundColor(CARD)
@@ -58,7 +59,7 @@ export struct BitFunAccountLoginPage {
 
           Row() {
             Text(RemoteI18n.t('sheet.advancedOptions'))
-              .fontSize(13)
+              .fontSize(MobileDesignTypography.bodySmall.size)
               .fontColor(MUTED)
             Blank()
             if (this.showAdvanced) {
@@ -82,14 +83,14 @@ export struct BitFunAccountLoginPage {
 
           if (this.showAdvanced) {
             Text(RemoteI18n.t('remote.settings.loginServer'))
-              .fontSize(13)
+              .fontSize(MobileDesignTypography.bodySmall.size)
               .fontColor(MUTED)
               .width('100%')
               .margin({ left: 4, top: 8, bottom: 8 })
 
             TextInput({ placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'), text: this.relayUrl })
               .height(52)
-              .fontSize(14)
+              .fontSize(MobileDesignTypography.bodyMedium.size)
               .fontColor(INK)
               .placeholderColor(SUBTLE)
               .backgroundColor(CARD)
@@ -100,8 +101,8 @@ export struct BitFunAccountLoginPage {
 
           if (this.errorText.length > 0) {
             Text(this.errorText)
-              .fontSize(13)
-              .lineHeight(19)
+              .fontSize(MobileDesignTypography.bodySmall.size)
+              .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
               .fontColor(RED)
               .width('100%')
               .margin({ top: 12 })
@@ -111,7 +112,7 @@ export struct BitFunAccountLoginPage {
             RemoteI18n.t('remote.settings.accountSignIn'))
             .height(56)
             .width('100%')
-            .fontSize(17)
+            .fontSize(MobileDesignTypography.labelLarge.size)
             .fontWeight(FontWeight.Bold)
             .fontColor(PRIMARY_ACTION_TEXT)
             .backgroundColor(PRIMARY_ACTION)

@@ -158,7 +158,7 @@ export struct WideConversationHost {
           showCollapseButton: true,
           showViewSettingsButton: false,
           showWorkspaceSection: true,
-          showConversationSection: false,
+          showConversationSection: true,
           contentSlot: () => {
             this.WorkspaceMasterContent()
           },

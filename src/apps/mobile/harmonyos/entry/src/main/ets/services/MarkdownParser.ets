@@ -29,6 +29,7 @@ export interface ParsedMarkdownTableRow {
 
 export interface ParsedMarkdownBlock {
   id: string;
+  renderKey: string;
   type: string;
   level: number;
   language: string;
@@ -254,17 +255,72 @@ export class MarkdownParser {
     items: ParsedMarkdownListItem[],
     tableRows: ParsedMarkdownTableRow[] = []
   ): void {
+    const id = `md-${blocks.length}-${type}`;
+    const normalizedText = MarkdownParser.shouldParseInline(type) ? MarkdownParser.formatInlineText(text) : text;
+    const inlines = MarkdownParser.shouldParseInline(type) ? MarkdownParser.parseInlineText(text, id) : [];
     const block: ParsedMarkdownBlock = {
-      id: `md-${blocks.length}-${type}`,
+      id,
+      renderKey: '',
       type,
       level,
       language,
-      text: MarkdownParser.shouldParseInline(type) ? MarkdownParser.formatInlineText(text) : text,
+      text: normalizedText,
       items,
-      inlines: MarkdownParser.shouldParseInline(type) ? MarkdownParser.parseInlineText(text, `md-${blocks.length}-${type}`) : [],
+      inlines,
       tableRows
     };
+    block.renderKey = `${id}-${MarkdownParser.blockContentRevision(block)}`;
     blocks.push(block);
+  }
+
+  private static blockContentRevision(block: ParsedMarkdownBlock): string {
+    let source = MarkdownParser.revisionPart(block.type) +
+      MarkdownParser.revisionPart(block.level.toString()) +
+      MarkdownParser.revisionPart(block.language) +
+      MarkdownParser.revisionPart(block.text);
+    block.inlines.forEach((inline: ParsedMarkdownInline) => {
+      source += MarkdownParser.inlineRevisionSource(inline);
+    });
+    block.items.forEach((item: ParsedMarkdownListItem) => {
+      source += MarkdownParser.revisionPart(item.marker) +
+        MarkdownParser.revisionPart(item.text) +
+        MarkdownParser.revisionPart(item.depth.toString()) +
+        MarkdownParser.revisionPart(item.checked.toString());
+      item.inlines.forEach((inline: ParsedMarkdownInline) => {
+        source += MarkdownParser.inlineRevisionSource(inline);
+      });
+    });
+    block.tableRows.forEach((row: ParsedMarkdownTableRow) => {
+      source += MarkdownParser.revisionPart(row.header ? '1' : '0');
+      row.cells.forEach((cell: ParsedMarkdownTableCell) => {
+        source += MarkdownParser.revisionPart(cell.text) + MarkdownParser.revisionPart(cell.alignment);
+        cell.inlines.forEach((inline: ParsedMarkdownInline) => {
+          source += MarkdownParser.inlineRevisionSource(inline);
+        });
+      });
+    });
+    return MarkdownParser.revisionHash(source);
+  }
+
+  private static inlineRevisionSource(inline: ParsedMarkdownInline): string {
+    return MarkdownParser.revisionPart(inline.type) +
+      MarkdownParser.revisionPart(inline.text) +
+      MarkdownParser.revisionPart(inline.url);
+  }
+
+  private static revisionPart(value: string): string {
+    return `${value.length}:${value}`;
+  }
+
+  private static revisionHash(value: string): string {
+    let primary = 7;
+    let secondary = 11;
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      primary = (primary * 31 + code) % 2147483647;
+      secondary = (secondary * 131 + code) % 2147483629;
+    }
+    return `${value.length}-${primary}-${secondary}`;
   }
 
   static parseInlineText(value: string, prefix: string = 'inline'): ParsedMarkdownInline[] {

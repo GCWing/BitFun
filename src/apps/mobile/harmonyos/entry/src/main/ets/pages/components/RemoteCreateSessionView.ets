@@ -1,11 +1,14 @@
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
+import { ConversationViewState } from '../state/ConversationViewState';
 import { ConversationUiModelCatalog } from '../state/ConversationUiModels';
 import { REMOTE_CREATE_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import { ChatSurface } from '../state/ChatSurface';
+import { ConversationIntent, ConversationIntentType } from '../actions/ConversationIntent';
 import { ComposerPresentation } from './ComposerBar';
 import { ConversationView } from './ConversationView';
+import { ConversationViewOptions, RemoteCreateViewActions } from './ConversationViewContract';
 import { PAGE_BG } from './Theme';
 
 @ComponentV2
@@ -40,39 +43,12 @@ export struct RemoteCreateSessionView {
   build() {
     Column() {
       ConversationView({
-        surface: ChatSurface.Create,
-        composerCapabilities: REMOTE_CREATE_COMPOSER_CAPABILITIES,
-        composerPresentation: this.presentation === ComposerPresentation.Floating ?
-          ComposerPresentation.Floating : ComposerPresentation.Create,
-        composerInputId: 'remote-create-composer',
-        chatInput: this.state.draft,
-        isBusy: this.state.isSubmitting,
-        inlineStatusText: this.state.errorText,
-        connectionState: 'connected',
-        isVoiceListening: this.isVoiceListening,
-        modelCatalog: this.modelCatalog,
-        selectedModelId: this.selectedModelId,
-        showBackButton: true,
-        showSidebarButton: false,
-        showSidebarRestoreButton: this.showSidebarRestoreButton,
-        hoverOperateMode: this.hoverOperateMode,
-        showRemoteCreateContext: true,
+        state: this.conversationState(),
+        options: this.viewOptions(),
         remoteCreateState: this.state,
-        onToggleCreateDeviceMenu: this.onToggleDeviceMenu,
-        onToggleCreateWorkspaceMenu: this.onToggleWorkspaceMenu,
-        onSelectCreateDevice: this.onSelectDevice,
-        onSelectCreateWorkspace: this.onSelectWorkspace,
-        onSelectCreateHarness: this.onSelectHarness,
-        onBack: this.onBack,
+        createActions: this.createActions(),
         onRestoreSidebar: this.onRestoreSidebar,
-        onSend: this.onSend,
-        onChatInputChange: this.onDraftChange,
-        onVoiceInput: this.onVoiceInput,
-        onSelectModel: this.onSelectModel,
-        onBackgroundTap: () => {
-          this.state.closeMenu();
-          this.keepComposerFocused();
-        }
+        onIntent: (intent: ConversationIntent) => this.handleIntent(intent)
       })
     }
     .width('100%')
@@ -82,5 +58,60 @@ export struct RemoteCreateSessionView {
 
   private keepComposerFocused(): void {
     setTimeout(() => focusControl.requestFocus('remote-create-composer'), 30);
+  }
+
+  private conversationState(): ConversationViewState {
+    const viewState = new ConversationViewState();
+    viewState.surface = ChatSurface.Create;
+    viewState.composerCapabilities = REMOTE_CREATE_COMPOSER_CAPABILITIES;
+    viewState.chatInput = this.state.draft;
+    viewState.isBusy = this.state.isSubmitting;
+    viewState.inlineStatusText = this.state.errorText;
+    viewState.connectionState = 'connected';
+    viewState.isVoiceListening = this.isVoiceListening;
+    viewState.modelCatalog = this.modelCatalog;
+    viewState.selectedModelId = this.selectedModelId;
+    return viewState;
+  }
+
+  private viewOptions(): ConversationViewOptions {
+    const options = new ConversationViewOptions();
+    options.composerPresentation = this.presentation === ComposerPresentation.Floating ?
+      ComposerPresentation.Floating : ComposerPresentation.Create;
+    options.composerInputId = 'remote-create-composer';
+    options.showBackButton = true;
+    options.showSidebarButton = false;
+    options.showSidebarRestoreButton = this.showSidebarRestoreButton;
+    options.hoverOperateMode = this.hoverOperateMode;
+    options.showRemoteCreateContext = true;
+    return options;
+  }
+
+  private createActions(): RemoteCreateViewActions {
+    const actions = new RemoteCreateViewActions();
+    actions.toggleDeviceMenu = (): void => this.onToggleDeviceMenu();
+    actions.toggleWorkspaceMenu = (): void => this.onToggleWorkspaceMenu();
+    actions.selectDevice = (device: CloudAccountDevice): void => this.onSelectDevice(device);
+    actions.selectWorkspace = (workspace?: RecentWorkspaceEntry): void => this.onSelectWorkspace(workspace);
+    actions.selectHarness = (profile: RemoteHarnessProfile): void => this.onSelectHarness(profile);
+    actions.backgroundTap = (): void => {
+      this.state.closeMenu();
+      this.keepComposerFocused();
+    };
+    return actions;
+  }
+
+  private handleIntent(intent: ConversationIntent): void {
+    if (intent.type === ConversationIntentType.Back) {
+      this.onBack();
+    } else if (intent.type === ConversationIntentType.Send) {
+      this.onSend();
+    } else if (intent.type === ConversationIntentType.ChatInputChanged) {
+      this.onDraftChange(intent.value);
+    } else if (intent.type === ConversationIntentType.VoiceInput) {
+      this.onVoiceInput();
+    } else if (intent.type === ConversationIntentType.SelectModel) {
+      this.onSelectModel(intent.value);
+    }
   }
 }

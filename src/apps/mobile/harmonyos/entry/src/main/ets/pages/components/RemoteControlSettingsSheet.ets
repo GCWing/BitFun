@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, RED, SOFT } from './Theme';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
@@ -5,6 +6,10 @@ import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
 import { AccountProfilePanel } from './AccountProfilePanel';
+import {
+  RemoteControlSettingsPage,
+  RemoteControlSettingsPagePolicy
+} from '../policy/RemoteControlSettingsPagePolicy';
 
 @ComponentV2
 export struct RemoteControlSettingsSheet {
@@ -42,8 +47,6 @@ export struct RemoteControlSettingsSheet {
   @Local confirmFullAccess: boolean = false;
 
   aboutToAppear(): void {
-    this.showProfile = this.openAccountOnAppear && this.isAccountAuthenticated();
-    this.showLogin = this.openAccountOnAppear && !this.isAccountAuthenticated();
     if (this.canManagePermissions()) {
       this.refreshPermissionMode();
     }
@@ -51,14 +54,14 @@ export struct RemoteControlSettingsSheet {
 
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
-      if (this.showLogin || (this.showProfile && !this.isAccountAuthenticated())) {
+      if (this.currentPage() === 'login') {
         this.LoginPage()
-      } else if (this.showProfile) {
+      } else if (this.currentPage() === 'profile') {
         this.ProfilePage()
       } else {
         this.RemoteControlPage()
       }
-      if (!this.showLogin && !this.showProfile) {
+      if (this.currentPage() === 'remote') {
         this.CloseButton()
       }
     }
@@ -73,7 +76,7 @@ export struct RemoteControlSettingsSheet {
     Scroll() {
       Column({ space: 0 }) {
         Text(RemoteI18n.t('remote.settings.title'))
-          .fontSize(20)
+          .fontSize(MobileDesignTypography.headlineMedium.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
           .width('100%')
@@ -103,7 +106,7 @@ export struct RemoteControlSettingsSheet {
       DefaultAccountAvatar({ avatarSize: 34 })
       Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.profile') :
         RemoteI18n.t('sidebar.signInBitFunAccount'))
-        .fontSize(18)
+        .fontSize(MobileDesignTypography.headlineSmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .layoutWeight(1)
@@ -131,8 +134,9 @@ export struct RemoteControlSettingsSheet {
   private ConnectionSectionHeader() {
     Row() {
       Text(RemoteI18n.t('remote.settings.currentControl'))
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
+        .fontSize(MobileDesignTypography.titleSmall.size)
+        .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
+        .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
     }
     .width('100%')
@@ -153,16 +157,16 @@ export struct RemoteControlSettingsSheet {
           .opacity(0.58)
         Column({ space: 2 }) {
           Text(RemoteI18n.t('remote.settings.desktopProduct'))
-            .fontSize(14)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
             .fontColor(MUTED)
           Text(this.connectionTitle())
-            .fontSize(18)
+            .fontSize(MobileDesignTypography.headlineSmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.connectionDetail())
-            .fontSize(14)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
             .fontColor(MUTED)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -189,11 +193,11 @@ export struct RemoteControlSettingsSheet {
           .height(20)
           .opacity(0.58)
         Text(RemoteI18n.t('remote.settings.connectionSource'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(MUTED)
         Blank()
         Text(this.connectionSourceLabel())
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(INK)
           .padding({ left: 10, right: 10, top: 5, bottom: 5 })
           .backgroundColor(SOFT)
@@ -213,7 +217,7 @@ export struct RemoteControlSettingsSheet {
   private ConnectionAction() {
     if (this.isConnectedOrConnecting()) {
       Text(RemoteI18n.t('remote.settings.disconnect'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(INK)
         .padding({ left: 10, right: 10, top: 7, bottom: 7 })
         .backgroundColor(SOFT)
@@ -221,7 +225,7 @@ export struct RemoteControlSettingsSheet {
         .onClick(() => this.onDisconnect())
     } else if (this.hasConnectionProjection()) {
       Text(RemoteI18n.t('remote.settings.reconnect'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(INK)
         .padding({ left: 10, right: 10, top: 7, bottom: 7 })
         .backgroundColor(SOFT)
@@ -234,8 +238,9 @@ export struct RemoteControlSettingsSheet {
   private OtherConnectionSection() {
     Column({ space: 10 }) {
       Text(RemoteI18n.t('remote.settings.otherConnectionMethods'))
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
+        .fontSize(MobileDesignTypography.titleSmall.size)
+        .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
+        .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
         .width('100%')
         .height(42)
@@ -249,11 +254,11 @@ export struct RemoteControlSettingsSheet {
           .opacity(0.62)
         Column({ space: 2 }) {
           Text(RemoteI18n.t('remote.settings.qrConnect'))
-            .fontSize(16)
+            .fontSize(MobileDesignTypography.bodyLarge.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
           Text(RemoteI18n.t('remote.settings.qrConnectBody'))
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontColor(MUTED)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -279,13 +284,14 @@ export struct RemoteControlSettingsSheet {
   private PermissionSectionHeader() {
     Row() {
       Text(RemoteI18n.t('remote.permissions.title'))
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
+        .fontSize(MobileDesignTypography.titleSmall.size)
+        .lineHeight(MobileDesignTypography.titleSmall.lineHeight)
+        .fontWeight(FontWeight.Medium)
         .fontColor(MUTED)
       Blank()
       if (this.canManagePermissions()) {
         Text(RemoteI18n.t('common.refresh'))
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(this.permissionModeBusy ? MUTED : INK)
           .onClick(() => this.refreshPermissionMode())
       }
@@ -301,8 +307,8 @@ export struct RemoteControlSettingsSheet {
     Column() {
       Text(RemoteI18n.t('remote.permissions.scope'))
         .width('100%')
-        .fontSize(13)
-        .lineHeight(19)
+        .fontSize(MobileDesignTypography.bodySmall.size)
+        .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(MUTED)
         .padding({ left: 18, right: 18, top: 16, bottom: 8 })
 
@@ -327,7 +333,7 @@ export struct RemoteControlSettingsSheet {
       Text(this.permissionStatusText())
         .width('100%')
         .height(28)
-        .fontSize(12)
+        .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(this.permissionModeError.length > 0 ? RED : MUTED)
         .padding({ left: 18, right: 18, top: 4 })
         .maxLines(1)
@@ -359,13 +365,13 @@ export struct RemoteControlSettingsSheet {
       Column({ space: 3 }) {
         Text(label)
           .width('100%')
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
         Text(description)
           .width('100%')
-          .fontSize(12)
-          .lineHeight(17)
+          .fontSize(MobileDesignTypography.labelSmall.size)
+          .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
           .fontColor(MUTED)
           .maxLines(2)
       }
@@ -384,19 +390,19 @@ export struct RemoteControlSettingsSheet {
     Column({ space: 10 }) {
       Text(RemoteI18n.t('remote.permissions.fullAccessWarningTitle'))
         .width('100%')
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(RED)
       Text(RemoteI18n.t('remote.permissions.fullAccessWarningBody'))
         .width('100%')
-        .fontSize(13)
-        .lineHeight(19)
+        .fontSize(MobileDesignTypography.bodySmall.size)
+        .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
         .fontColor(INK)
       Row({ space: 10 }) {
         Button(RemoteI18n.t('remote.permissions.cancel'))
           .layoutWeight(1)
           .height(42)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(INK)
           .backgroundColor(SOFT)
           .borderRadius(21)
@@ -404,7 +410,7 @@ export struct RemoteControlSettingsSheet {
         Button(RemoteI18n.t('remote.permissions.confirmFullAccess'))
           .layoutWeight(1)
           .height(42)
-          .fontSize(14)
+          .fontSize(MobileDesignTypography.bodyMedium.size)
           .fontColor(PRIMARY_ACTION_TEXT)
           .backgroundColor(RED)
           .borderRadius(21)
@@ -580,6 +586,15 @@ export struct RemoteControlSettingsSheet {
 
   private isAccountAuthenticated(): boolean {
     return this.accountUserId.trim().length > 0;
+  }
+
+  private currentPage(): RemoteControlSettingsPage {
+    return RemoteControlSettingsPagePolicy.resolve(
+      this.openAccountOnAppear,
+      this.showLogin,
+      this.showProfile,
+      this.isAccountAuthenticated()
+    );
   }
 
   private leaveAccountPage(): void {
