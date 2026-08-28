@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "b0794e2a65d5356a8fdb262f0acf26753ac1aebfedf9b1e252d4dce4a21bc9a1",
+  "digest": "5a170c4fb33ea5bb4fe1d839ff0d405db53b82e586aead0891babafbb59b40aa",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -796,7 +796,6 @@
       },
       "delegateTools": [
         "TodoWrite",
-        "CreatePlan",
         "AskUserQuestion"
       ],
       "presentationTarget": {
@@ -18525,15 +18524,14 @@
             "kind": "delegate",
             "tools": [
               "TodoWrite",
-              "CreatePlan",
               "AskUserQuestion"
             ],
             "workflowZh": [
-              "复杂任务用 TodoWrite 维护当前进度，只有需要正式计划产物时才用 CreatePlan",
+              "复杂任务用 TodoWrite 维护当前进度；正式计划产物通过 Write 写入项目的 .bitfun/plans 目录",
               "缺少会改变结果的用户选择时用 AskUserQuestion；能从仓库或当前上下文查明的信息不重复询问"
             ],
             "workflowEn": [
-              "Use TodoWrite to maintain progress for complex work and CreatePlan only when a formal plan artifact is needed",
+              "Use TodoWrite to maintain progress for complex work; create formal plan artifacts with Write under the project's .bitfun/plans directory",
               "Use AskUserQuestion only for a missing choice that changes the outcome; do not ask again for facts available from the repository or current context"
             ]
           }
@@ -18703,11 +18701,10 @@
         "Inspect the current goal with get_goal; create one with create_goal only when the user explicitly asks",
         "Use update_goal complete only after the objective is achieved, and blocked only after the repeated-blocker threshold is genuinely met",
         "TodoWrite",
-        "CreatePlan",
         "AskUserQuestion",
-        "复杂任务用 TodoWrite 维护当前进度，只有需要正式计划产物时才用 CreatePlan",
+        "复杂任务用 TodoWrite 维护当前进度；正式计划产物通过 Write 写入项目的 .bitfun/plans 目录",
         "缺少会改变结果的用户选择时用 AskUserQuestion；能从仓库或当前上下文查明的信息不重复询问",
-        "Use TodoWrite to maintain progress for complex work and CreatePlan only when a formal plan artifact is needed",
+        "Use TodoWrite to maintain progress for complex work; create formal plan artifacts with Write under the project's .bitfun/plans directory",
         "Use AskUserQuestion only for a missing choice that changes the outcome; do not ask again for facts available from the repository or current context"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.ai-assistant/"

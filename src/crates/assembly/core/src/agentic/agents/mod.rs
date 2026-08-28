@@ -149,7 +149,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
-        "CreatePlan".to_string(),
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
@@ -324,11 +323,11 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_plan_and_goal_tools() {
+    fn shared_coding_mode_tools_exclude_create_plan_and_include_goal_tools() {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"ListModels".to_string()));
-        assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(!tools.contains(&"CreatePlan".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
     }

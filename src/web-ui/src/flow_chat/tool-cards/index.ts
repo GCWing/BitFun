@@ -106,7 +106,7 @@ export const TOOL_CARD_COMPONENTS = {
   // GetFileDiff tool
   'GetFileDiff': GetFileDiffDisplay,
 
-  // CreatePlan tool
+  // Legacy CreatePlan history remains displayable after runtime tool removal.
   'CreatePlan': CreatePlanDisplay,
 
   // TerminalControl tool

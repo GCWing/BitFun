@@ -23,7 +23,6 @@ pub mod computer_use_tool;
 pub mod control_hub;
 #[cfg(feature = "tools-browser-web")]
 pub mod control_hub_tool;
-pub mod create_plan_tool;
 #[cfg(feature = "tools-agent-control")]
 pub mod cron_tool;
 pub mod delete_file_tool;
@@ -97,7 +96,6 @@ pub use code_review_tool::CodeReviewTool;
 pub use computer_use_tool::ComputerUseTool;
 #[cfg(feature = "tools-browser-web")]
 pub use control_hub_tool::ControlHubTool;
-pub use create_plan_tool::CreatePlanTool;
 #[cfg(feature = "tools-agent-control")]
 pub use cron_tool::CronTool;
 pub use delete_file_tool::DeleteFileTool;

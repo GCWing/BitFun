@@ -29,7 +29,6 @@ Notes:
 | `CodeReview` | Direct | None | - |
 | `GetToolSpec` | Direct | None | - |
 | `CallDeferredTool` | Direct | None | - |
-| `CreatePlan` | Deferred | None | - |
 | `GetFileDiff` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
 | `SessionControl` | Deferred | None | - |
 | `SessionMessage` | Deferred | None | - |

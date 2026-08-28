@@ -2,20 +2,19 @@
  * Plan display components.
  *
  * PlanDisplay renders plan file data and supports view/build/refresh.
- * CreatePlanDisplay maps toolItem data into PlanDisplay.
+ * CreatePlanDisplay maps legacy persisted tool data into PlanDisplay.
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Button, IconButton } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check } from 'lucide-react';
+import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp, FolderOpen, Save, Check, AlertCircle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ideControl } from '@/shared/services/ide-control/api';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
-import yaml from 'yaml';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -25,16 +24,10 @@ import { basenamePath, dirnameAbsolutePath, joinPath } from '@/shared/utils/path
 import { createTodoRenderItems } from './todoRenderItems';
 import { useOptionalCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace } from '@/shared/types';
+import { parsePlanMarkdown, type PlanTodo } from '@/shared/plan/planDocument';
 import './CreatePlanDisplay.scss';
 
 const log = createLogger('PlanDisplay');
-
-interface PlanTodo {
-  id: string;
-  content: string;
-  status?: string;
-  dependencies?: string[];
-}
 
 interface PlanData {
   name: string;
@@ -60,9 +53,18 @@ export interface PlanDisplayProps {
   /** Initial todos (optional, first render optimization). */
   initialTodos?: PlanTodo[];
   /** Tool status (used for loading state). */
-  status?: 'pending' | 'preparing' | 'streaming' | 'running' | 'completed' | 'cancelled' | 'error' | 'analyzing';
+  status?: 'pending' | 'preparing' | 'receiving' | 'streaming' | 'running' | 'completed' | 'cancelled' | 'error' | 'analyzing';
   /** Cache key (defaults to planFilePath). */
   cacheKey?: string;
+  /** Initial complete plan markdown, when already available from Write input. */
+  initialContent?: string;
+  /** The tool identity used by the card height contract. */
+  toolName?: string;
+  /** Runtime artifacts may still be copied into the project by legacy cards. */
+  storageKind?: 'runtime-artifact' | 'project-file';
+  /** Explicit workspace scope for remote-safe reads and status updates. */
+  workspacePath?: string;
+  remoteConnectionId?: string;
 }
 
 export const PlanDisplay: React.FC<PlanDisplayProps> = ({
@@ -72,10 +74,22 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
   initialTodos = [],
   status = 'completed',
   cacheKey,
+  initialContent,
+  toolName = 'CreatePlan',
+  storageKind = 'runtime-artifact',
+  workspacePath,
+  remoteConnectionId,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
   const effectiveCacheKey = cacheKey || planFilePath;
+  const effectiveWorkspacePath = workspacePath ?? currentWorkspace?.rootPath ?? '';
+  const effectiveRemoteConnectionId = remoteConnectionId ?? currentWorkspace?.connectionId;
+  const planFileRef = useMemo(() => ({
+    planFilePath,
+    workspacePath: effectiveWorkspacePath,
+    remoteConnectionId: effectiveRemoteConnectionId,
+  }), [effectiveRemoteConnectionId, effectiveWorkspacePath, planFilePath]);
   
   const [refreshedData, setRefreshedData] = useState<PlanData | null>(() => {
     return planDataCache.get(effectiveCacheKey) || null;
@@ -83,19 +97,21 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
   
   // Initialize build state from the shared service to survive unmounts.
   const [isBuildStarted, setIsBuildStarted] = useState(() => {
-    return planFilePath ? planBuildStateService.isBuildActive(planFilePath) : false;
+    return planFilePath ? planBuildStateService.isBuildActive(planFileRef) : false;
   });
   const [isSavingToProject, setIsSavingToProject] = useState(false);
   const [hasSavedToProject, setHasSavedToProject] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   const [isTodosExpanded, setIsTodosExpanded] = useState(false);
   const toolCardId = cacheKey ?? planFilePath;
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId: toolCardId,
-    toolName: 'CreatePlan',
+    toolName,
   });
 
   const hasAutoLoaded = useRef(false);
+  const hasLoadedCompletedFile = useRef(false);
   const saveSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -106,7 +122,21 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
   // Streaming may provide partial data before planFilePath is available.
   const initialPlanData = useMemo((): PlanData | null => {
-    const hasAnyData = planFilePath || initialName || initialOverview || initialTodos.length > 0;
+    if (initialContent) {
+      try {
+        const parsed = parsePlanMarkdown(initialContent);
+        return {
+          name: parsed.name,
+          overview: parsed.overview,
+          todos: parsed.todos,
+          planFilePath,
+          planContent: parsed.planContent,
+        };
+      } catch {
+        // Streaming Write input may not contain the closing frontmatter delimiter yet.
+      }
+    }
+    const hasAnyData = initialName || initialOverview || initialTodos.length > 0;
     if (!hasAnyData) return null;
     
     return {
@@ -116,7 +146,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
       planFilePath: planFilePath,
       planContent: undefined,
     };
-  }, [planFilePath, initialName, initialOverview, initialTodos]);
+  }, [initialContent, planFilePath, initialName, initialOverview, initialTodos]);
 
   const planData = refreshedData || initialPlanData;
   const todoRenderItems = useMemo(
@@ -131,9 +161,9 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     if (!planFilePath) return;
     
     // Sync initial state (in case planFilePath just became available).
-    setIsBuildStarted(planBuildStateService.isBuildActive(planFilePath));
+    setIsBuildStarted(planBuildStateService.isBuildActive(planFileRef));
     
-    const unsubscribe = planBuildStateService.subscribe(planFilePath, (event) => {
+    const unsubscribe = planBuildStateService.subscribe(planFileRef, (event) => {
       setIsBuildStarted(event.isBuilding);
       
       if (event.updatedTodos) {
@@ -151,7 +181,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     });
     
     return unsubscribe;
-  }, [planFilePath, effectiveCacheKey, initialName, initialOverview]);
+  }, [planFilePath, planFileRef, effectiveCacheKey, initialName, initialOverview]);
 
   // Load latest content on mount and refresh on file changes.
   useEffect(() => {
@@ -163,37 +193,42 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
     const loadFromFile = async () => {
       // Skip refresh while writing to avoid feedback loops.
-      if (planBuildStateService.isFileWriting(planFilePath)) {
+      if (planBuildStateService.isFileWriting(planFileRef)) {
         return;
       }
 
       try {
-        const content = await workspaceAPI.readFileContent(planFilePath);
-        
-        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-        if (frontmatterMatch) {
-          const parsed = yaml.parse(frontmatterMatch[1]);
-          const planContent = content.replace(/^---\n[\s\S]*?\n---\n*/, '').trim();
-          
-          const newPlanData: PlanData = {
-            name: parsed.name || initialName,
-            overview: parsed.overview || initialOverview,
-            todos: parsed.todos || initialTodos,
-            planFilePath: planFilePath,
-            planContent: planContent,
-          };
-          
-          setRefreshedData(newPlanData);
-          planDataCache.set(effectiveCacheKey, newPlanData);
-        }
+        const content = await workspaceAPI.readFileContent(
+          planFilePath,
+          undefined,
+          effectiveRemoteConnectionId,
+        );
+        const parsed = parsePlanMarkdown(content);
+        const newPlanData: PlanData = {
+          name: parsed.name || initialName,
+          overview: parsed.overview || initialOverview,
+          todos: parsed.todos || initialTodos,
+          planFilePath,
+          planContent: parsed.planContent,
+        };
+
+        setLoadError(null);
+        setRefreshedData(newPlanData);
+        planDataCache.set(effectiveCacheKey, newPlanData);
       } catch (error) {
         log.warn('Failed to load plan file', { planFilePath, error });
+        if (status === 'completed') {
+          setLoadError(error instanceof Error ? error.message : String(error));
+        }
       }
     };
 
     // Always load once on mount to capture changes during unmount.
-    if (!hasAutoLoaded.current) {
+    if (!hasAutoLoaded.current || (status === 'completed' && !hasLoadedCompletedFile.current)) {
       hasAutoLoaded.current = true;
+      if (status === 'completed') {
+        hasLoadedCompletedFile.current = true;
+      }
       loadFromFile();
     }
 
@@ -228,7 +263,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
         clearTimeout(debounceTimer);
       }
     };
-  }, [effectiveCacheKey, planFilePath, planDirectoryPath, initialName, initialOverview, initialTodos]);
+  }, [effectiveCacheKey, effectiveRemoteConnectionId, planFilePath, planFileRef, planDirectoryPath, initialName, initialOverview, initialTodos, status]);
 
   // Build button status transitions: build -> building -> built.
   const buildStatus = useMemo((): 'build' | 'building' | 'built' => {
@@ -294,7 +329,11 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     setHasSavedToProject(false);
     setIsSavingToProject(true);
     try {
-      const content = await workspaceAPI.readFileContent(planFilePath);
+      const content = await workspaceAPI.readFileContent(
+        planFilePath,
+        undefined,
+        effectiveRemoteConnectionId,
+      );
       await workspaceAPI.createDirectory(projectPlansDirectory, currentWorkspace.connectionId);
       await workspaceAPI.writeFileContent(
         currentWorkspace.rootPath,
@@ -318,28 +357,25 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     } finally {
       setIsSavingToProject(false);
     }
-  }, [currentWorkspace, isSavingToProject, planFilePath, t]);
+  }, [currentWorkspace, effectiveRemoteConnectionId, isSavingToProject, planFilePath, t]);
 
   const handleBuild = useCallback(async () => {
     if (!planFilePath || buildStatus !== 'build') return;
     
     try {
-      const content = await workspaceAPI.readFileContent(planFilePath);
-      
-      const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-      if (!frontmatterMatch) {
-        throw new Error('Unable to parse plan file frontmatter');
-      }
-      
-      const parsed = yaml.parse(frontmatterMatch[1]);
-      const planContent = content.replace(/^---\n[\s\S]*?\n---\n*/, '').trim();
+      const content = await workspaceAPI.readFileContent(
+        planFilePath,
+        undefined,
+        effectiveRemoteConnectionId,
+      );
+      const parsed = parsePlanMarkdown(content);
       
       const latestPlanData: PlanData = {
         name: parsed.name || initialName,
         overview: parsed.overview || initialOverview,
         todos: parsed.todos || initialTodos,
-        planFilePath: planFilePath,
-        planContent: planContent,
+        planFilePath,
+        planContent: parsed.planContent,
       };
       
       setRefreshedData(latestPlanData);
@@ -347,7 +383,12 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
       // Register build in shared service (notifies all subscribers including PlanViewer).
       const todoIds = latestPlanData.todos.map(t => t.id);
-      planBuildStateService.startBuild(planFilePath, todoIds);
+      planBuildStateService.startBuild({
+        planFilePath,
+        todoIds,
+        workspacePath: effectiveWorkspacePath,
+        remoteConnectionId: effectiveRemoteConnectionId,
+      });
 
       // Send message using the latest data.
       const simpleTodos = latestPlanData.todos.map(t => ({ 
@@ -360,7 +401,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
 <attached_file path="${latestPlanData.planFilePath}">
 <plan>
-${planContent}
+${parsed.planContent}
 </plan>
 <todos>
 ${JSON.stringify(simpleTodos, null, 2)}
@@ -371,15 +412,15 @@ ${JSON.stringify(simpleTodos, null, 2)}
       await flowChatManager.sendMessage(message, undefined, displayMessage, 'agentic', 'agentic');
     } catch (error) {
       log.error('Build failed', { cacheKey: effectiveCacheKey, planFilePath, error });
-      planBuildStateService.cancelBuild(planFilePath);
+      planBuildStateService.cancelBuild(planFileRef);
     }
-  }, [planFilePath, buildStatus, effectiveCacheKey, initialName, initialOverview, initialTodos]);
+  }, [planFilePath, planFileRef, buildStatus, effectiveCacheKey, effectiveRemoteConnectionId, effectiveWorkspacePath, initialName, initialOverview, initialTodos]);
 
   const handleToggleTodos = useCallback(() => {
     applyExpandedState(isTodosExpanded, !isTodosExpanded, setIsTodosExpanded);
   }, [applyExpandedState, isTodosExpanded]);
 
-  const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  const isLoading = status === 'preparing' || status === 'receiving' || status === 'streaming' || status === 'running';
   const revealPlanTooltip = isRevealPlanDisabled
     ? t('toolCards.plan.revealPlanUnavailable')
     : t('toolCards.plan.revealPlanInExplorer');
@@ -390,6 +431,39 @@ ${JSON.stringify(simpleTodos, null, 2)}
       : hasSavedToProject
         ? t('toolCards.plan.saveToProjectSuccess')
       : t('toolCards.plan.saveToProject');
+
+  if (!planData && loadError && status === 'completed') {
+    return (
+      <div data-bf-component="create-plan-display" data-bf-part="root" className="create-plan-display status-error">
+        <div className="create-plan-header" data-bf-component="create-plan-display" data-bf-part="header">
+          <button
+            type="button"
+            className="create-plan-header-main create-plan-header-main--clickable"
+            onClick={handleViewPlan}
+          >
+            <div className="header-left">
+              <div className="file-icon-wrapper"><AlertCircle size={14} /></div>
+              <span className="file-name">{planFileName}</span>
+            </div>
+          </button>
+        </div>
+        <div className="create-plan-content" data-bf-component="create-plan-display" data-bf-part="content">
+          <div className="plan-content-left" data-bf-component="create-plan-display" data-bf-part="overview">
+            <h3 className="plan-title">{t('toolCards.plan.invalidFormat')}</h3>
+            <p className="plan-overview">{t('toolCards.plan.invalidFormatDescription')}</p>
+          </div>
+        </div>
+        <div className="create-plan-footer" data-bf-component="create-plan-display" data-bf-part="footer">
+          <Button variant="outline" size="sm" type="button" onClick={handleViewPlan}>
+            {t('toolCards.plan.viewPlan')}
+          </Button>
+          <Button type="button" variant="fill" size="sm" disabled>
+            {t('toolCards.plan.build')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!planData) {
     return (
@@ -429,20 +503,22 @@ ${JSON.stringify(simpleTodos, null, 2)}
           </button>
         </Tooltip>
         <div className="create-plan-header-actions">
-          <Tooltip content={savePlanTooltip}>
-            <span className="create-plan-header-folder-btn-wrapper">
-              <IconButton
-                type="button"
-                size="sm"
-                variant={hasSavedToProject ? 'fill' : 'quiet'}
-                loading={isSavingToProject}
-                onClick={handleSavePlanToProject}
-                disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
-                aria-label={savePlanTooltip}
-                icon={hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
-              />
-            </span>
-          </Tooltip>
+          {storageKind === 'runtime-artifact' && (
+            <Tooltip content={savePlanTooltip}>
+              <span className="create-plan-header-folder-btn-wrapper">
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant={hasSavedToProject ? 'fill' : 'quiet'}
+                  loading={isSavingToProject}
+                  onClick={handleSavePlanToProject}
+                  disabled={!planFilePath || !currentWorkspace || isSavingToProject || hasSavedToProject}
+                  aria-label={savePlanTooltip}
+                  icon={hasSavedToProject ? <Check size={14} /> : <Save size={14} />}
+                />
+              </span>
+            </Tooltip>
+          )}
           <Tooltip content={revealPlanTooltip}>
             <span className="create-plan-header-folder-btn-wrapper">
               <IconButton
@@ -538,10 +614,10 @@ ${JSON.stringify(simpleTodos, null, 2)}
   );
 };
 
-// ==================== CreatePlanDisplay tool wrapper ====================
+// ==================== Legacy CreatePlan history wrapper ====================
 
 /**
- * Tool wrapper that maps toolItem data into PlanDisplay.
+ * Compatibility wrapper that maps persisted CreatePlan data into PlanDisplay.
  */
 export const CreatePlanDisplay: React.FC<ToolCardProps> = ({
   toolItem,
