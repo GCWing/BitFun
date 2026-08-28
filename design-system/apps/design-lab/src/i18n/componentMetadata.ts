@@ -29,6 +29,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   NavigationPanel: "component.NavigationPanel.description",
   PageHeader: "component.PageHeader.description",
   SearchField: "component.SearchField.description",
+  SegmentedControl: "component.SegmentedControl.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
   Toolbar: "component.Toolbar.description",

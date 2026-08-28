@@ -59,6 +59,7 @@ import {
   PageHeader,
   ScrollArea,
   SearchField,
+  SegmentedControl,
   Select,
   StatusPill,
   Switch,
@@ -252,6 +253,9 @@ export function ComponentDetailPage({
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
+  const [activityShowDetail, setActivityShowDetail] = useState(false);
+  const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
+  const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
   const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
@@ -265,7 +269,7 @@ export function ComponentDetailPage({
         ? "success"
       : component.name === "Toolbar"
         ? "with-center"
-      : component.name === "TabGroup"
+      : component.name === "TabGroup" || component.name === "SegmentedControl"
         ? "selected"
         : component.name === "ScrollArea"
           ? "auto"
@@ -321,6 +325,7 @@ export function ComponentDetailPage({
         return ["auto", "always", "hidden"] as const;
       case "StatusPill":
         return ["neutral", "info", "success", "warning", "danger"] as const;
+      case "SegmentedControl":
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
       case "Toolbar":
@@ -338,13 +343,17 @@ export function ComponentDetailPage({
       return `import { ActionCard } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal } from "lucide-react";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<MessageCircle />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
     }
     if (component.name === "ActionItem") {
-      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+      const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
+      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
     }
     if (component.name === "ActivityItem") {
       if (activityItemAppearance === "inline") {
         return `import { ActivityItem } from "@bitfun/ui";\nimport { Check } from "lucide-react";\n\n<ActivityItem\n  appearance="inline"\n  leading={<Check />}\n>\n  ${t("components.preview.activityStatus")}\n</ActivityItem>`;
       }
-      return `import { ActivityItem, ChangeCount } from "@bitfun/ui";\nimport { Copy, Download, ExternalLink, Terminal } from "lucide-react";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Copy />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Download />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <ExternalLink />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"\n  label="${t("components.preview.activityAction")}"\n  leading={<Terminal />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
+      const detailProp = activityShowDetail
+        ? `\n  detail={<code>${t("components.preview.activityDetail")}</code>}`
+        : "";
+      return `import { ActivityItem, ChangeCount } from "@bitfun/ui";\nimport { Copy, Download, ExternalLink, Terminal } from "lucide-react";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Copy />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Download />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <ExternalLink />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"${detailProp}\n  label="${t("components.preview.activityAction")}"\n  leading={<Terminal />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
     }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -415,7 +424,8 @@ export function ComponentDetailPage({
       return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
     }
     if (component.name === "PageHeader") {
-      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { Settings, X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Settings />}\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
+      const requiredProp = pageHeaderRequired ? "\n  required" : "";
+      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { Settings, X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Settings />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
     }
     if (component.name === "SearchField") {
       const stateProps = previewState === "disabled"
@@ -427,6 +437,10 @@ export function ComponentDetailPage({
     }
     if (component.name === "Select") {
       return `import { Icon, Select } from "@bitfun/ui";\n\n<Select\n  aria-label="Mode"\n  leading={<Icon name="circle" />}\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value="${selectValue}"\n/>`;
+    }
+    if (component.name === "SegmentedControl") {
+      const defaultMode = previewState === "unselected" ? "agent" : "chat";
+      return `import { SegmentedControl } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <MessageCircle />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
       return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="circle" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
@@ -451,7 +465,9 @@ export function ComponentDetailPage({
         : "";
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
+    actionItemShowMetadata,
     activityItemAppearance,
+    activityShowDetail,
     component.name,
     composerShowContext,
     composerShowToolbar,
@@ -469,6 +485,7 @@ export function ComponentDetailPage({
     modalShowScrollbar,
     navigationPanelShowScrollbar,
     pageHeaderAlign,
+    pageHeaderRequired,
     pageHeaderSize,
     previewIcon,
     previewIconPosition,
@@ -735,6 +752,7 @@ export function ComponentDetailPage({
           data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
           disabled={state === "disabled"}
           leading={<MessageCircle aria-hidden="true" />}
+          metadata={actionItemShowMetadata ? "12" : undefined}
           shortcut={<KeyHint>K</KeyHint>}
         >
           {t("components.preview.assistant")}
@@ -768,6 +786,9 @@ export function ComponentDetailPage({
             ? "component-activity-item-example lab-force-focus"
             : "component-activity-item-example"}
           data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          detail={surface && activityShowDetail
+            ? <code>{t("components.preview.activityDetail")}</code>
+            : undefined}
           disabled={state === "disabled"}
           label={surface ? t("components.preview.activityAction") : undefined}
           leading={surface
@@ -1160,6 +1181,7 @@ export function ComponentDetailPage({
           description={t("components.preview.appearanceDescription")}
           leading={<Settings aria-hidden="true" />}
           level={2}
+          required={pageHeaderRequired}
           size={pageHeaderSize}
           title={t("components.preview.appearance")}
         />
@@ -1259,6 +1281,30 @@ export function ComponentDetailPage({
             ))}
           </div>
         </ScrollArea>
+      );
+    }
+
+    if (component.name === "SegmentedControl") {
+      const defaultMode = state === "unselected" ? "agent" : "chat";
+      return (
+        <SegmentedControl
+          aria-label={t("components.preview.segmentedLabel")}
+          data-bf-preview-state={state === "hover" ? "hover" : undefined}
+          defaultValue={defaultMode}
+          disabled={state === "disabled"}
+          key={state}
+          options={[
+            {
+              icon: <MessageCircle aria-hidden="true" size={12} strokeWidth={1.75} />,
+              label: t("components.preview.segmentedChat"),
+              value: "chat",
+            },
+            {
+              label: t("components.preview.segmentedAgent"),
+              value: "agent",
+            },
+          ]}
+        />
       );
     }
 
@@ -1517,7 +1563,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "Select" || component.name === "StatusPill" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionCard"
@@ -1528,6 +1574,8 @@ export function ComponentDetailPage({
                       ? "field"
                     : component.name === "StatusPill"
                       ? "status-pill"
+                    : component.name === "SegmentedControl"
+                      ? "segmented-control"
                     : component.name === "Select"
                       ? "select"
                     : component.name === "FieldGroup"
@@ -1786,6 +1834,27 @@ export function ComponentDetailPage({
                       onChange={(value) => setActivityItemAppearance(value as ActivityItemAppearance)}
                       options={activityItemAppearances}
                       value={activityItemAppearance}
+                    />
+                  )}
+                  {component.name === "ActivityItem" && (
+                    <InspectorToggle
+                      checked={activityShowDetail}
+                      label={t("detail.showDetailArea")}
+                      onCheckedChange={setActivityShowDetail}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorToggle
+                      checked={pageHeaderRequired}
+                      label={t("detail.showAsterisk")}
+                      onCheckedChange={setPageHeaderRequired}
+                    />
+                  )}
+                  {component.name === "ActionItem" && (
+                    <InspectorToggle
+                      checked={actionItemShowMetadata}
+                      label={t("detail.showMetadata")}
+                      onCheckedChange={setActionItemShowMetadata}
                     />
                   )}
                   {component.name === "ActionCard" && (

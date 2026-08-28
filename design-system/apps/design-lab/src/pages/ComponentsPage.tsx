@@ -46,6 +46,7 @@ import {
   PageHeader,
   ScrollArea,
   SearchField,
+  SegmentedControl,
   Select,
   Stack,
   StatusPill,
@@ -95,6 +96,7 @@ const componentIcons = {
   PageHeader: Heading,
   ScrollArea: Rows3,
   SearchField: SearchIcon,
+  SegmentedControl: ToggleLeft,
   Select: List,
   StatusPill: Check,
   Switch: ToggleLeft,
@@ -351,6 +353,24 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             { label: "Plan", value: "plan" },
           ]}
           value="ask"
+        />
+      );
+    case "SegmentedControl":
+      return (
+        <SegmentedControl
+          aria-label={t("components.preview.segmentedLabel")}
+          defaultValue="chat"
+          options={[
+            {
+              icon: <MessageCircle aria-hidden="true" />,
+              label: t("components.preview.segmentedChat"),
+              value: "chat",
+            },
+            {
+              label: t("components.preview.segmentedAgent"),
+              value: "agent",
+            },
+          ]}
         />
       );
     case "Switch":
