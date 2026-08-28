@@ -121,6 +121,7 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
 
 vi.mock('@/infrastructure/runtime', () => ({
   isTauriRuntime: () => true,
+  isOpenHarmonyRuntime: () => false,
 }));
 
 vi.mock('@/infrastructure/event-bus', () => ({
