@@ -2795,7 +2795,8 @@ fn create_event_emitter(
     use bitfun_transport::TransportEmitter;
     let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
-    api::remote_connect_api::wrap_peer_aware_emitter(inner)
+    let inner = api::remote_connect_api::wrap_peer_aware_emitter(inner);
+    api::miniapp_agent_api::wrap_miniapp_agent_context_cleanup_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {

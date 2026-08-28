@@ -265,6 +265,7 @@ mod tests {
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
+                miniapp_context_scope: None,
             },
         });
 

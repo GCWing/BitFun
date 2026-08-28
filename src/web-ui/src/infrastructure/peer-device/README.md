@@ -293,6 +293,13 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     unavailable surface fails explicitly and never mutates the controller as a
     fallback.
 
+17. **MiniApp Agent context files require an explicit peer capability.**
+    `miniapp_agent_run` remains compatible with older peers when no context
+    files are present. A run with non-empty `contextFiles` routes only after
+    `peer_mode_ping` advertises `miniapp_agent_context_files_v1`; otherwise the
+    controller fails before RPC. Never omit the files, fall back to a local
+    Agent, or run the prompt without its declared context.
+
 ## Related account-login guards
 
 Incomplete login (cloud vs local settings choice) must not persist a session

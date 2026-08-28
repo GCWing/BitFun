@@ -193,7 +193,7 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 | AI | `app.ai.complete / chat / cancel / getModels` | 复用宿主 AIClient，受 `permissions.ai`（含 `allowed_models` / 速率限制） |
 | 对话框 | `app.dialog.open/save/message` | Tauri dialog 插件 |
 | 剪贴板 | `app.clipboard.readText/writeText` | 宿主 navigator.clipboard |
-| Agent 会话 | `app.agent.run / cancel / turnText / cancelStaleRuns / onEvent` | 受 `permissions.agent.enabled` 限制；启动小应用自己的隐藏 agent 回合，事件只回流到发起的小应用。工具集按运行时档位收敛：市场小应用（`runtime_profile = market_strict`）只保留 `WebSearch` / `WebFetch` 这类只读联网调研工具，碰不到文件系统、命令行和宿主控制面；内置 / `compatibility` 档位保留完整的 headless 工具集 |
+| Agent 会话 | `app.agent.run / cancel / turnText / cancelStaleRuns / onEvent` | 受 `permissions.agent.enabled` 限制；启动小应用自己的隐藏 agent 回合，事件只回流到发起的小应用。工具集按运行时档位收敛：市场小应用（`runtime_profile = market_strict`）保留 `WebSearch` / `WebFetch`，并可通过 `options.contextFiles` 注入有大小上限的只读上下文；宿主在 Agent Runtime 内为每次运行发布独立、不可变的 `.miniapp-context/<opaque-scope>` 虚拟快照、向 prompt 注入精确路径和“不可信数据”提示，并仅在本次请求有上下文时开放限定到该快照的 `Read` / `Grep`。虚拟路径不会落盘或回退到同名物理文件，Agent 仍碰不到其他文件、命令行和宿主控制面。内置 / `compatibility` 档位保留完整的 headless 工具集 |
 | 悬浮会话气泡 | `app.chat.claimComposer / releaseComposer / focusSession / setComposerDraft / onUserMessage` | 受 `permissions.agent.enabled` 限制；把内容和提交路由注册进右下角的标准悬浮聊天窗（输入器、附件、模型、权限、停止等仍由宿主共享组件拥有），并展示小应用自己的 Agent 过程（Agentic MiniApp 模式，样板间：`builtin-ppt-live`） |
 | 幻灯片栅格化 | `app.deck.renderPage` | 在隐藏宿主 WebView 中渲染单页 HTML，返回 base64 PNG/PDF（导出用） |
 | 自定义后端 | `app.call('xxx', …)` + `worker.js` | 仅 `node.enabled = true` 时可用，自己实现业务逻辑 |

@@ -28,6 +28,7 @@ describe('PeerConnectionManager attach', () => {
         idempotentDialogSubmit: true,
         targetedSessionRollback: false,
         tokenUsageStatistics: true,
+        miniAppAgentContextFilesV1: true,
         productControlV1: true,
         productControlNativeV1: false,
         productControlPresentationV1: false,
@@ -82,6 +83,7 @@ describe('PeerConnectionManager attach', () => {
           capabilities: {
             cancel_tool: true,
             tool_catalog: true,
+            miniapp_agent_context_files_v1: true,
           },
         },
       }),
@@ -92,6 +94,7 @@ describe('PeerConnectionManager attach', () => {
     const caps = connection.getState().capabilities;
     expect(caps.cancelTool).toBe(true);
     expect(caps.toolCatalog).toBe(true);
+    expect(caps.miniAppAgentContextFilesV1).toBe(true);
   });
 
   it('parses host_type into hostKind for desktop and cli', async () => {
@@ -563,6 +566,7 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
           capabilities: {
             idempotent_dialog_submit: true,
             token_usage_statistics: true,
+            miniapp_agent_context_files_v1: true,
             product_control_v1: true,
             cancel_tool: true,
             tool_catalog: true,
