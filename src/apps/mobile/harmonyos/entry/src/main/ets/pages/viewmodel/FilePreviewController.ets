@@ -1,7 +1,7 @@
 import { FilePreviewRequest, FilePreviewTargetContext } from '../../model/FilePreviewTarget';
 import { SessionSummary } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { FileReferenceKind, FileTargetResolver } from '../../services/FileTargetResolver';
+import { FileReferenceKind, FileTargetResolver } from '../policy/FileTargetResolver';
 import { RemoteWorkspaceFileClient } from '../../services/RemoteWorkspaceFileClient';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { FilePreviewState } from '../state/FilePreviewState';

@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT } from './Theme';
@@ -46,12 +47,12 @@ export struct SidebarWorkspacePicker {
       Column({ space: 2 }) {
         Text(RemoteI18n.t('sidebar.selectWorkspace'))
           .width('100%')
-          .fontSize(20)
+          .fontSize(MobileDesignTypography.headlineMedium.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
         Text(this.deviceName)
           .width('100%')
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -90,14 +91,14 @@ export struct SidebarWorkspacePicker {
       Column({ space: 3 }) {
         Text(workspace.name || this.basename(workspace.path))
           .width('100%')
-          .fontSize(16)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(workspace.path === this.selectedWorkspacePath ? FontWeight.Medium : FontWeight.Regular)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(workspace.path)
           .width('100%')
-          .fontSize(12)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -125,7 +126,7 @@ export struct SidebarWorkspacePicker {
   private LoadingState() {
     Column({ space: 12 }) {
       LoadingProgress().width(22).height(22).color(MUTED)
-      Text(RemoteI18n.t('common.loading')).fontSize(14).fontColor(MUTED)
+      Text(RemoteI18n.t('common.loading')).fontSize(MobileDesignTypography.bodyMedium.size).fontColor(MUTED)
     }
     .width('100%')
     .layoutWeight(1)
@@ -138,7 +139,7 @@ export struct SidebarWorkspacePicker {
     Column({ space: 8 }) {
       SymbolGlyph($r('sys.symbol.folder')).fontSize(30).fontColor([MUTED])
       Text(RemoteI18n.t('sidebar.emptyWorkspaces'))
-        .fontSize(14)
+        .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
         .textAlign(TextAlign.Center)
     }

@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { TimeFormat } from '../../services/TimeFormat';
@@ -22,12 +23,12 @@ export struct SessionDetailsView {
         Column({ space: 3 }) {
           Text(RemoteI18n.t('session.details'))
             .width('100%')
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Text(this.session.title || RemoteI18n.t('sidebar.untitled'))
             .width('100%')
-            .fontSize(18)
+            .fontSize(MobileDesignTypography.headlineSmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .maxLines(2)
@@ -90,11 +91,11 @@ export struct SessionDetailsView {
     Row({ space: 16 }) {
       Text(label)
         .width(104)
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(value)
         .layoutWeight(1)
-        .fontSize(15)
+        .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .textAlign(TextAlign.End)
         .maxLines(2)
@@ -112,12 +113,12 @@ export struct SessionDetailsView {
     Column({ space: 8 }) {
       Text(label)
         .width('100%')
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontColor(MUTED)
       Text(value)
         .width('100%')
-        .fontSize(12)
-        .lineHeight(18)
+        .fontSize(MobileDesignTypography.labelSmall.size)
+        .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
         .fontColor(INK)
         .padding({ left: 10, right: 10, top: 8, bottom: 8 })
         .backgroundColor(CARD)

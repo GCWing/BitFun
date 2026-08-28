@@ -1,7 +1,6 @@
-import { inputMethod } from '@kit.IMEKit';
-import { window } from '@kit.ArkUI';
+import { KeyboardReleaseService } from '../../services/KeyboardReleaseService';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { MobileDesignGeometry, MobileDesignMotion } from '../../generated/MobileDesignTokens';
+import { MobileDesignGeometry, MobileDesignMotion, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { ChatComposerPolicy, ComposerPrimaryAction } from '../../services/ChatComposerPolicy';
 import { ChatComposerCapabilities, REMOTE_CHAT_COMPOSER_CAPABILITIES } from '../state/ChatComposerCapabilities';
 import {
@@ -165,7 +164,7 @@ export struct ComposerBar {
   ModelControl() {
     Row({ space: 3 }) {
       Text(this.displaySelectedModel())
-        .fontSize(13)
+        .fontSize(MobileDesignTypography.bodySmall.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .maxLines(1)
@@ -217,7 +216,7 @@ export struct ComposerBar {
       if (asSheet) {
         Row() {
           Text(RemoteI18n.t('chat.selectModel'))
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(MUTED)
           Blank()
@@ -272,13 +271,13 @@ export struct ComposerBar {
 
       Column({ space: 2 }) {
         Text(ConversationModelPresentationPolicy.primaryLabel(model, RemoteI18n.t('chat.model')))
-          .fontSize(13)
+          .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(ConversationModelPresentationPolicy.secondaryLabel(model, RemoteI18n.t('chat.model')))
-          .fontSize(11)
+          .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -325,7 +324,7 @@ export struct ComposerBar {
         .id(this.inputId)
         .layoutWeight(1)
         .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(INK)
         .placeholderColor(this.isVoiceListening ? GREEN : MUTED)
         .backgroundColor('#00000000')
@@ -494,7 +493,7 @@ export struct ComposerBar {
       Text('×')
         .width(32)
         .height(32)
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)
         .backgroundColor('#AA222222')
@@ -637,28 +636,7 @@ export struct ComposerBar {
     }
 
     try {
-      const appWindow = await window.getLastWindow(hostContext);
-      const keyboardArea = appWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
-      if (!keyboardArea.visible) {
-        this.getUIContext().getFocusController().clearFocus();
-        return;
-      }
-
-      const keyboardDidHide = new Promise<void>((resolve) => {
-        const onKeyboardDidHide = (_keyboardInfo: window.KeyboardInfo): void => {
-          appWindow.off('keyboardDidHide', onKeyboardDidHide);
-          resolve();
-        };
-        appWindow.on('keyboardDidHide', onKeyboardDidHide);
-      });
-      try {
-        await inputMethod.getController().hideTextInput();
-      } catch (_error) {
-        // Clearing text focus is the platform-native close request when no IME
-        // controller session is attached to the focused editor.
-        this.getUIContext().getFocusController().clearFocus();
-      }
-      await keyboardDidHide;
+      await KeyboardReleaseService.release(hostContext);
     } catch (_error) {
       // A draft can keep the composer expanded without an active keyboard or
       // window event. Releasing focus still leaves the model anchor mounted.

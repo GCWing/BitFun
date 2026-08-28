@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { CARD, FILE_LINK, INK, LINE, MUTED, SOFT } from './Theme';
 
 @ComponentV2
@@ -24,7 +25,7 @@ export struct FileReferenceCard {
               .color(FILE_LINK)
           } else {
             Text('▤')
-              .fontSize(16)
+              .fontSize(MobileDesignTypography.bodyLarge.size)
               .fontColor(INK)
           }
         }
@@ -34,13 +35,13 @@ export struct FileReferenceCard {
         .borderRadius(12)
         Column({ space: 3 }) {
           Text(this.label)
-            .fontSize(13)
+            .fontSize(MobileDesignTypography.bodySmall.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.status)
-            .fontSize(11)
+            .fontSize(MobileDesignTypography.labelSmall.size)
             .fontColor(FILE_LINK)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })

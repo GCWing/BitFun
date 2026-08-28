@@ -5,7 +5,7 @@ import {
   SelectedImageAttachment,
   SessionSummary
 } from '../../model/RemoteModels';
-import { ChatTimelineItem } from '../../services/ChatTimelineProjector';
+import { ChatTimelineItem, ObservableChatTimelineItem } from '../../model/ChatTimelineModels';
 import { GeneralChatServiceState } from '../../services/general-chat/GeneralChatServiceState';
 import { ConversationCoreState } from './ConversationCoreState';
 
@@ -23,7 +23,7 @@ export class GeneralChatPageState {
   get optimisticMessages(): ChatMessage[] { return this.conversation.optimisticMessages; }
   get activeTurnMessage(): ChatMessage { return this.conversation.activeTurnMessage; }
   get hasMoreMessages(): boolean { return this.conversation.hasMoreMessages; }
-  get timelineItems(): ChatTimelineItem[] { return this.conversation.timelineItems; }
+  get timelineItems(): ObservableChatTimelineItem[] { return this.conversation.timelineItems; }
   get timelineRevision(): number { return this.conversation.timelineRevision; }
   get isBusy(): boolean { return this.conversation.isBusy; }
   get modelCatalog(): RemoteModelCatalog { return this.conversation.modelCatalog; }

@@ -152,7 +152,8 @@ export struct AppShell {
   }
 
   private usesWideSheetChrome(placement: SettingsPlacement): boolean {
-    return placement.mode === SettingsPlacementMode.Side;
+    return placement.mode === SettingsPlacementMode.Side ||
+      placement.mode === SettingsPlacementMode.Center;
   }
 
   private areaLength(value: Object): number {

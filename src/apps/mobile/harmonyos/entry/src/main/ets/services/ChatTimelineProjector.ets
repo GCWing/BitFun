@@ -1,70 +1,7 @@
-import { ChatMessage, ChatMessageItemResponse, RemoteToolStatusResponse } from '../model/RemoteModels';
+import { ChatMessage, ChatMessageItemResponse } from '../model/RemoteModels';
+import { ChatTimelineItem, ChatTimelineItemType } from '../model/ChatTimelineModels';
 
-export type ChatTimelineItemType =
-  | 'user_message'
-  | 'assistant_message'
-  | 'optimistic_user_message'
-  | 'assistant_live_turn'
-  | 'empty_state';
-
-export interface ChatTimelineItem {
-  id: string;
-  type: ChatTimelineItemType;
-  message?: ChatMessage;
-  isStreaming: boolean;
-  isFinalizing: boolean;
-  showRetryAction?: boolean;
-}
-
-/** Shared render invalidation for both remote polling and general-chat streaming. */
-export class ChatTimelineRevisionTracker {
-  private signature: string = '';
-  private revision: number = 0;
-
-  /**
-   * Identity of a single rendered item: its own id, plus everything about it
-   * the bubble draws.
-   *
-   * Doubles as the timeline's `ForEach` key, which is the point of it being
-   * per-item. Keying on the revision instead made every bubble in the
-   * transcript a new node whenever any one of them changed — during a run that
-   * is a full rebuild per poll tick, to show one message growing.
-   */
-  static itemSignature(item: ChatTimelineItem): string {
-    const message = item.message;
-    return `${item.type}:${item.id}:${item.isStreaming}:${item.isFinalizing}:` +
-      `${message ? message.status : ''}:${message ? message.renderVersion || 0 : 0}:` +
-      `${message ? ChatTimelineRevisionTracker.textSignature(message.text) : ''}:` +
-      `${message && message.error ? ChatTimelineRevisionTracker.textSignature(message.error) : ''}:` +
-      `${message && message.thinking ? ChatTimelineRevisionTracker.textSignature(message.thinking) : ''}:` +
-      `${message && message.items ? message.items.length : 0}:${message && message.tools ? message.tools.length : 0}`;
-  }
-
-  update(items: ChatTimelineItem[]): number {
-    const nextSignature = items
-      .map((item: ChatTimelineItem) => ChatTimelineRevisionTracker.itemSignature(item))
-      .join('|');
-    if (nextSignature !== this.signature) {
-      this.signature = nextSignature;
-      this.revision += 1;
-    }
-    return this.revision;
-  }
-
-  private static textSignature(value: string): string {
-    let hash = 0;
-    for (let index = 0; index < value.length; index++) {
-      hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-    }
-    return `${value.length}:${Math.abs(hash).toString(36)}`;
-  }
-
-  reset(): number {
-    this.signature = '';
-    this.revision += 1;
-    return this.revision;
-  }
-}
+export { ChatTimelineItem, ChatTimelineItemType, ChatTimelineRevisionTracker } from '../model/ChatTimelineModels';
 
 export class ChatTimelineProjector {
   /**
@@ -148,7 +85,7 @@ export class ChatTimelineProjector {
   private static activeTurnItem(activeTurn: ChatMessage): ChatTimelineItem {
     const turnKey = ChatTimelineProjector.activeTurnKey(activeTurn);
     const item: ChatTimelineItem = {
-      id: `active-${turnKey}-${ChatTimelineProjector.activeTurnVersionKey(activeTurn)}`,
+      id: `active-${turnKey}`,
       type: 'assistant_live_turn',
       message: activeTurn,
       isStreaming: (activeTurn.status || '').toLowerCase() === 'active',
@@ -279,55 +216,4 @@ export class ChatTimelineProjector {
     return activeTurn.id;
   }
 
-  private static activeTurnVersionKey(activeTurn: ChatMessage): string {
-    const signature = [
-      activeTurn.status || '',
-      `${activeTurn.renderVersion || 0}`,
-      `${(activeTurn.text || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.text || '')}`,
-      `${(activeTurn.error || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.error || '')}`,
-      `${(activeTurn.thinking || '').length}:${ChatTimelineProjector.stableTextHash(activeTurn.thinking || '')}`,
-      ChatTimelineProjector.itemSignature(activeTurn.items || []),
-      ChatTimelineProjector.toolSignature(activeTurn.tools || [])
-    ].join('|');
-    return ChatTimelineProjector.stableTextHash(signature);
-  }
-
-  private static itemSignature(items: ChatMessageItemResponse[]): string {
-    const parts: string[] = [];
-    items.forEach((item: ChatMessageItemResponse, index: number) => {
-      parts.push([
-        `${index}`,
-        item.type || '',
-        item.is_subagent === true ? '1' : '0',
-        `${(item.content || '').length}:${ChatTimelineProjector.stableTextHash(item.content || '')}`,
-        item.tool ? ChatTimelineProjector.toolSignature([item.tool]) : '',
-        item.subItems ? ChatTimelineProjector.itemSignature(item.subItems) : ''
-      ].join(':'));
-    });
-    return parts.join(',');
-  }
-
-  private static toolSignature(tools: RemoteToolStatusResponse[]): string {
-    const parts: string[] = [];
-    tools.forEach((tool: RemoteToolStatusResponse, index: number) => {
-      const preview = `${tool.input_preview || ''}|${tool.result_preview || ''}|${tool.error_preview || ''}`;
-      parts.push([
-        `${index}`,
-        tool.id || '',
-        tool.name || '',
-        tool.status || '',
-        `${tool.duration_ms || 0}`,
-        `${preview.length}:${ChatTimelineProjector.stableTextHash(preview)}`
-      ].join(':'));
-    });
-    return parts.join(',');
-  }
-
-  private static stableTextHash(text: string): string {
-    let hash = 0;
-    for (let index = 0; index < text.length; index++) {
-      hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
-    }
-    return Math.abs(hash).toString(36);
-  }
 }

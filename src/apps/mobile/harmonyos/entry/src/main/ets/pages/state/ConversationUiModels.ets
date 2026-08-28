@@ -100,6 +100,40 @@ export interface ConversationUiMessage {
   images?: ConversationUiImage[];
 }
 
+/** Stable observable projection consumed by retained/reused message rows. */
+@ObservedV2
+export class ObservableConversationUiMessage implements ConversationUiMessage {
+  @Trace id: string = '';
+  @Trace role: string = 'assistant';
+  @Trace text: string = '';
+  @Trace status: string = '';
+  @Trace renderVersion: number | undefined = undefined;
+  @Trace turnId: string | undefined = undefined;
+  @Trace detail: string | undefined = undefined;
+  @Trace error: string | undefined = undefined;
+  @Trace timestamp: string | undefined = undefined;
+  @Trace thinking: string | undefined = undefined;
+  @Trace tools: ConversationUiToolStatus[] | undefined = undefined;
+  @Trace items: ConversationUiMessageItem[] | undefined = undefined;
+  @Trace images: ConversationUiImage[] | undefined = undefined;
+
+  updateFrom(source: ConversationUiMessage): void {
+    this.id = source.id;
+    this.role = source.role;
+    this.text = source.text;
+    this.status = source.status;
+    this.renderVersion = source.renderVersion;
+    this.turnId = source.turnId;
+    this.detail = source.detail;
+    this.error = source.error;
+    this.timestamp = source.timestamp;
+    this.thinking = source.thinking;
+    this.tools = source.tools;
+    this.items = source.items;
+    this.images = source.images;
+  }
+}
+
 export interface ConversationUiQuestionAnswer {
   answer?: string;
   '0'?: string | string[];

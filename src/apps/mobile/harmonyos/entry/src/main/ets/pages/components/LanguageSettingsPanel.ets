@@ -1,3 +1,4 @@
+import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { AppLocale } from '../../i18n/AppLocale';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
@@ -29,7 +30,7 @@ export struct LanguageSettingsPanel {
   Header() {
     Row() {
       Text(RemoteI18n.t('settings.language.choose'))
-        .fontSize(18)
+        .fontSize(MobileDesignTypography.headlineSmall.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(INK)
       Blank()
@@ -72,7 +73,7 @@ export struct LanguageSettingsPanel {
   LanguageRow(language: string) {
     Row() {
       Text(RemoteI18n.translate(language, AppLocale.nativeNameKey(language)))
-        .fontSize(16)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
         .layoutWeight(1)

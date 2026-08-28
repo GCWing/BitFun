@@ -1,4 +1,4 @@
-import { FilePreviewTargetContext } from '../model/FilePreviewTarget';
+import { FilePreviewTargetContext } from '../../model/FilePreviewTarget';
 import { FileReferenceKind, FileTargetResolver } from './FileTargetResolver';
 import {
   MarkdownParser,
@@ -7,7 +7,7 @@ import {
   ParsedMarkdownListItem,
   ParsedMarkdownTableCell,
   ParsedMarkdownTableRow
-} from './MarkdownParser';
+} from '../../services/MarkdownParser';
 
 export class MessageFileReference {
   readonly id: string;
@@ -77,7 +77,7 @@ export class MessageFileReferenceProjector {
       if (inline.type === 'code') {
         return;
       }
-      const found = inline.text.match(/computer:\/\/[^\s)\]}>"']+/g) || [];
+      const found: string[] = inline.text.match(/computer:\/\/[^\s)\]}>"']+/g) || [];
       found.forEach((reference: string) => {
         if (references.length < limit) {
           MessageFileReferenceProjector.add(reference, references, seenRemotePaths);
