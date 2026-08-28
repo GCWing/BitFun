@@ -60,6 +60,7 @@ vi.mock('@bitfun/ui', () => ({
       ))}
     </select>
   ),
+  Field: ({ label, children }: any) => <label>{label}{children}</label>,
 }));
 
 vi.mock('@/component-library', () => ({
