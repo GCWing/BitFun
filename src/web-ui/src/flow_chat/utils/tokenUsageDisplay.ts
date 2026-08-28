@@ -15,8 +15,8 @@ export interface TranslationFn {
   (key: string, params?: Record<string, unknown>): string;
 }
 
-export interface ModelRoundUsageMetaItem {
-  key: 'completed' | 'duration' | 'tokens';
+export interface ModelRoundCompletionMetaItem {
+  key: 'completed' | 'duration';
   label: string;
   value: string;
 }
@@ -254,25 +254,23 @@ export function formatElapsedDuration(durationMs: number): string {
   const minutes = Math.floor(wholeSeconds / 60);
   const remainingSeconds = wholeSeconds % 60;
   if (minutes < 60) {
-    return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m ${remainingSeconds}s`;
+    return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m${remainingSeconds}s`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
+  return remainingMinutes === 0 ? `${hours}h` : `${hours}h${remainingMinutes}m`;
 }
 
-export function buildModelRoundUsageMeta(params: {
+export function buildModelRoundCompletionMeta(params: {
   completedAt?: number;
   durationMs?: number;
-  tokenUsage?: TokenUsage;
   status?: string;
   formatTime: (timestamp: number) => string;
-  formatNumber: (value: number) => string;
   t: TranslationFn;
-}): ModelRoundUsageMetaItem[] {
-  const { completedAt, durationMs, tokenUsage, status, formatTime, formatNumber, t } = params;
-  const items: ModelRoundUsageMetaItem[] = [];
+}): ModelRoundCompletionMetaItem[] {
+  const { completedAt, durationMs, status, formatTime, t } = params;
+  const items: ModelRoundCompletionMetaItem[] = [];
 
   if (typeof completedAt === 'number') {
     items.push({
@@ -289,27 +287,6 @@ export function buildModelRoundUsageMeta(params: {
       key: 'duration',
       label: t('modelRound.meta.duration'),
       value: formatElapsedDuration(durationMs),
-    });
-  }
-
-  if (tokenUsage) {
-    const unavailable = t('modelRound.meta.tokensUnavailable');
-    items.push({
-      key: 'tokens',
-      label: t('modelRound.meta.tokens'),
-      value: t('modelRound.meta.tokenBreakdown', {
-        total: formatNumber(tokenUsage.totalTokens),
-        input: formatNumber(tokenUsage.inputTokens),
-        output: typeof tokenUsage.outputTokens === 'number'
-          ? formatNumber(tokenUsage.outputTokens)
-          : unavailable,
-      }),
-    });
-  } else if (status !== 'cancelled') {
-    items.push({
-      key: 'tokens',
-      label: t('modelRound.meta.tokens'),
-      value: t('modelRound.meta.tokensUnavailable'),
     });
   }
 

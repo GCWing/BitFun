@@ -91,6 +91,10 @@ import {
   getComponentCategoryLabel,
   getComponentDescription,
 } from "../i18n/componentMetadata";
+import {
+  FlowChatComponentPreview,
+  getFlowChatPreviewDefinition,
+} from "../preview/FlowChatPreviewRegistry";
 
 interface ComponentDetailPageProps {
   colorScheme: ColorScheme;
@@ -127,6 +131,7 @@ const iconTones = ["inherit", "primary", "secondary", "muted", "disabled", "info
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
   always: "detail.option.always",
+  asking: "detail.option.asking",
   auto: "detail.option.auto",
   both: "detail.option.both",
   chevron: "detail.option.chevron",
@@ -134,6 +139,8 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   default: "detail.option.default",
   disabled: "detail.option.disabled",
   display: "detail.option.display",
+  error: "detail.option.error",
+  expanded: "detail.option.expanded",
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
@@ -163,18 +170,20 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   quiet: "detail.option.quiet",
   raised: "detail.option.raised",
   right: "detail.option.right",
+  confirmation: "detail.option.confirmation",
+  completed: "detail.option.completed",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
   start: "detail.option.start",
   surface: "detail.option.surface",
   subtle: "detail.option.subtle",
+  submitting: "detail.option.submitting",
   success: "detail.option.success",
   text: "detail.option.text",
   media: "detail.option.media",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
   warning: "detail.option.warning",
-  error: "detail.option.error",
 };
 
 function InspectorSelect({
@@ -287,8 +296,14 @@ export function ComponentDetailPage({
   const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
   const [composerShowContext, setComposerShowContext] = useState(false);
   const [composerShowToolbar, setComposerShowToolbar] = useState(true);
+  const flowChatPreview = getFlowChatPreviewDefinition(component.name);
+  const isFlowChatComponent = Boolean(flowChatPreview);
 
   const states = useMemo(() => {
+    if (flowChatPreview) {
+      return component.states;
+    }
+
     switch (component.name) {
       case "ActionCard":
         return ["default", "hover", "active", "focus-visible", "selected", "disabled"] as const;
@@ -333,12 +348,16 @@ export function ComponentDetailPage({
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
-  }, [component.name]);
+  }, [component.name, component.states, flowChatPreview]);
   const inspectorStates = component.name === "Button" || component.name === "IconButton"
     ? buttonInspectorStates
     : states;
 
   const codeSample = useMemo(() => {
+    if (flowChatPreview) {
+      return flowChatPreview.codeSample(t);
+    }
+
     if (component.name === "ActionCard") {
       return `import { ActionCard } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal } from "lucide-react";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<MessageCircle />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
     }
@@ -475,6 +494,7 @@ export function ComponentDetailPage({
     fieldShowControlLeading,
     fieldShowControlTrailing,
     fieldShowLabelAction,
+    flowChatPreview,
     iconButtonVariant,
     iconName,
     iconSize,
@@ -676,6 +696,16 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (isFlowChatComponent) {
+      return (
+        <FlowChatComponentPreview
+          componentName={component.name}
+          key={`${component.name}-${state}`}
+          state={state}
+        />
+      );
+    }
+
     if (component.name === "Icon") {
       return <Icon name={iconName} size={iconSize} tone={iconTone} />;
     }
@@ -1417,7 +1447,9 @@ export function ComponentDetailPage({
   return (
     <main className="lab-page lab-page--component-detail">
       <nav className="component-breadcrumb" aria-label={t("detail.breadcrumbLabel")}>
-        <button onClick={onBack} type="button">{t("detail.back")}</button>
+        <button onClick={onBack} type="button">
+          {t(isFlowChatComponent ? "detail.backFlowChat" : "detail.back")}
+        </button>
         <ChevronRight aria-hidden="true" size={13} />
         <span aria-current="page">{component.name}</span>
       </nav>
@@ -1487,6 +1519,30 @@ export function ComponentDetailPage({
                     {t(optionLabelKeys[previewState] ?? "detail.option.default")}
                   </span>
                   {renderPreview(previewState)}
+                </div>
+              ) : isFlowChatComponent ? (
+                <div
+                  className="flow-chat-state-list"
+                  data-component="flow-chat-tool-card"
+                >
+                  {states.map((state) => (
+                    <section
+                      className="flow-chat-state-list__item"
+                      data-active={state === previewState || undefined}
+                      key={state}
+                    >
+                      <header className="flow-chat-state-list__heading">
+                        <strong>{t(optionLabelKeys[state] ?? "detail.option.default")}</strong>
+                        <code>{state}</code>
+                      </header>
+                      <div
+                        className="flow-chat-state-list__preview"
+                        data-component-name={component.name}
+                      >
+                        {renderPreview(state)}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               ) : component.name === "Button" ? (
                 <div

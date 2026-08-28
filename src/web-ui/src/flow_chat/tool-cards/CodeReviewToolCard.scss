@@ -1,18 +1,16 @@
 /**
  * CodeReview tool card styles
- * Only adds CodeReview-specific styles; container styling is handled by BaseToolCard.
+ * Only adds CodeReview-specific styles; the prominent framework owns the shell.
  */
-
-@use './BaseToolCard.scss';
 
 /* ========== Tool icon styles ========== */
 .code-review-card {
   /* icon={null}: no left rail; a small nudge so title is not flush to the border. */
-  .base-tool-card-header {
+  > [data-bf-part='surface'] > [data-bf-component='flow-chat-tool-card'][data-bf-part='header'] {
     padding-left: 10px;
   }
 
-  .tool-identifier-icon.code-review-icon {
+  [data-bf-part='iconGraphic'].code-review-icon {
     color: var(--bf-appearance-token-color-accent-500);
   }
 

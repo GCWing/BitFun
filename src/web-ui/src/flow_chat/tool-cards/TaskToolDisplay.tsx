@@ -23,11 +23,14 @@ import { useTranslation } from 'react-i18next';
 import { CubeLoading } from '../../component-library';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard } from './BaseToolCard';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardIconSlot } from './ToolCardIconSlot';
-import { ToolCardStatusIcon } from './ToolCardStatusIcon';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import {
+  AmbientToolCard,
+  AmbientToolCardHeader,
+  ProminentToolCard,
+  ToolCardIconSlot,
+  ToolCardStatusSlot,
+  ToolCardStatusIcon,
+} from '@bitfun/ui/flow-chat';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
@@ -962,12 +965,12 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     return (
       <div data-bf-component="task-tool-display" data-bf-part="root">
         <div data-bf-component="task-tool-display" data-bf-part="cancel">
-          <CompactToolCard
+          <AmbientToolCard
             status={status}
             isExpanded={false}
             className="task-cancel-card"
             header={
-              <CompactToolCardHeader
+              <AmbientToolCardHeader
                 icon={<ToolCardStatusSlot status={status} toolIcon={<Split size={16} />} />}
                 content={t('toolCards.taskTool.cancelSession', { sessionId: cancelSessionId })}
               />
@@ -986,7 +989,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
     >
-      <BaseToolCard
+      <ProminentToolCard
         status={displayStatus}
         isExpanded={displayIsExpanded}
         onClick={isCancelAction ? undefined : handleCardClick}

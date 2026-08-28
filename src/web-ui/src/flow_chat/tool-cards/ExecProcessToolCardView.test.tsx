@@ -161,13 +161,13 @@ describe('ExecProcessToolCardView', () => {
       root.render(<ExecProcessToolCardView toolItem={toolItem('pending_confirmation', true)} model={model} />);
     });
 
-    expect(container.querySelector('.base-tool-card')).not.toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
     expect(container.textContent).toContain('Waiting for confirmation');
     expect(container.textContent).not.toContain('Receiving parameters...');
-    expect(container.querySelector('.exec-process-output-frame')).not.toBeNull();
-    expect(container.querySelector('.terminal-result-footer')).not.toBeNull();
-    expect(container.querySelector('.terminal-xterm-output')).toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="output"] pre')).toBeNull();
   });
 
   it('retains a just-completed tail result during the grace period', () => {
@@ -186,8 +186,8 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    expect(container.querySelector('.base-tool-card')).not.toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -199,10 +199,10 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    expect(container.querySelector('.base-tool-card')).not.toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
     expect(container.textContent).toContain('All tests passed');
-    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('4');
+    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
 
     act(() => {
       root.render(
@@ -214,11 +214,11 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    // Collapsed cards keep the BaseToolCard shell and animate height closed.
-    expect(container.querySelector('.base-tool-card')).not.toBeNull();
-    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeNull();
-    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('4');
+    // Collapsed cards keep the prominent framework shell and animate height closed.
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
+    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
   });
 
   it('uses the expanded output preview after a completed card is manually expanded', () => {
@@ -237,10 +237,12 @@ describe('ExecProcessToolCardView', () => {
     });
 
     act(() => {
-      container.querySelector<HTMLElement>('.base-tool-card')?.click();
+      container
+        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        ?.click();
     });
 
-    expect(container.querySelector('.terminal-xterm-output')?.getAttribute('data-max-rows')).toBe('15');
+    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('15');
   });
 
   it('keeps the output frame and footer mounted while content changes', () => {
@@ -259,18 +261,18 @@ describe('ExecProcessToolCardView', () => {
     act(() => {
       root.render(<ExecProcessToolCardView toolItem={toolItem('running')} model={model} />);
     });
-    const frameBeforeOutput = container.querySelector('.exec-process-output-frame');
-    const footerBeforeOutput = container.querySelector('.terminal-result-footer');
-    expect(frameBeforeOutput?.getAttribute('data-output-rows')).toBe('4');
-    expect(footerBeforeOutput?.getAttribute('data-filled')).toBe('false');
-    expect(container.querySelector('.terminal-xterm-output')).toBeNull();
+    const frameBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]');
+    const footerBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]');
+    expect(frameBeforeOutput?.getAttribute('data-density')).toBe('compact');
+    expect(footerBeforeOutput?.textContent).toBe('');
+    expect(container.querySelector('[data-bf-part="output"] pre')).toBeNull();
 
     act(() => {
       root.render(<ExecProcessToolCardView toolItem={streamingItem} model={model} />);
     });
-    expect(container.querySelector('.exec-process-output-frame')).toBe(frameBeforeOutput);
-    expect(container.querySelector('.terminal-result-footer')).toBe(footerBeforeOutput);
-    expect(container.querySelector('.terminal-xterm-output')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).toBe(frameBeforeOutput);
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).toBe(footerBeforeOutput);
+    expect(container.querySelector('[data-bf-part="output"] pre')).not.toBeNull();
 
     act(() => {
       root.render(
@@ -281,10 +283,10 @@ describe('ExecProcessToolCardView', () => {
         />,
       );
     });
-    expect(container.querySelector('.exec-process-output-frame')).toBe(frameBeforeOutput);
-    expect(container.querySelector('.terminal-result-footer')).toBe(footerBeforeOutput);
-    expect(footerBeforeOutput?.getAttribute('data-filled')).toBe('true');
-    expect(container.querySelector('.exec-process-output-frame')?.getAttribute('data-output-rows')).toBe('4');
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).toBe(frameBeforeOutput);
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).toBe(footerBeforeOutput);
+    expect(footerBeforeOutput?.textContent).toContain('E:/workspace');
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('compact');
   });
 
   it('collapses a completed tail result when the grace period expires', () => {
@@ -318,22 +320,22 @@ describe('ExecProcessToolCardView', () => {
     act(() => {
       vi.advanceTimersByTime(799);
     });
-    expect(container.querySelector('.base-tool-card.expanded')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
-    expect(container.querySelector('.terminal-result-container')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(299);
     });
-    expect(container.querySelector('.terminal-result-container')).not.toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(container.querySelector('.terminal-result-container')).toBeNull();
+    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).toBeNull();
   });
 });

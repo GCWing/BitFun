@@ -4,13 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
 import { FileOperationToolCard } from './FileOperationToolCard';
-import { FlowChatContext } from '../components/modern/FlowChatContext';
-import type { FlowToolItem, Session, ToolCardConfig } from '../types/flow-chat';
-import {
-  clearHistorySessionOpenTransition,
-  clearRecentHistorySessionOpenIntent,
-  dispatchHistorySessionOpenIntent,
-} from '../services/sessionOpenIntent';
+import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,9 +18,6 @@ const mocks = vi.hoisted(() => ({
     originalContent: '',
     modifiedContent: '',
     anchorLine: undefined,
-  })),
-  useGitState: vi.fn(() => ({
-    isRepository: false,
   })),
   typewriterMode: 'passthrough' as 'passthrough' | 'partial',
   writePlanDisplayProps: [] as Array<Record<string, unknown>>,
@@ -135,16 +126,6 @@ vi.mock('../../infrastructure/contexts/WorkspaceContext', () => ({
   useOptionalCurrentWorkspace: () => ({
     workspace: mocks.currentWorkspace,
   }),
-}));
-
-vi.mock('@/shared/notification-system', () => ({
-  notificationService: {
-    info: vi.fn(),
-  },
-}));
-
-vi.mock('@/tools/git/hooks/useGitState', () => ({
-  useGitState: mocks.useGitState,
 }));
 
 describe('FileOperationToolCard', () => {
@@ -445,62 +426,7 @@ describe('FileOperationToolCard', () => {
     act(() => {
       root.unmount();
     });
-    clearRecentHistorySessionOpenIntent();
-    clearHistorySessionOpenTransition();
     vi.unstubAllGlobals();
-  });
-
-  it('does not trigger passive git refresh during history open transition', async () => {
-    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
-    dispatchHistorySessionOpenIntent('history-session', 'History');
-    const toolItem: FlowToolItem = {
-      id: 'tool-transition',
-      type: 'tool',
-      toolName: 'Write',
-      status: 'completed',
-      toolCall: {
-        id: 'call-transition',
-        name: 'Write',
-        input: {
-          file_path: 'src/newFile.ts',
-          content: 'export const value = 1;',
-        },
-      },
-      toolResult: {
-        success: true,
-        result: {
-          file_path: 'src/newFile.ts',
-        },
-      },
-    } as FlowToolItem;
-
-    await act(async () => {
-      root.render(
-        <FlowChatContext.Provider
-          value={{
-            sessionId: 'history-session',
-            activeSessionOverride: {
-              sessionId: 'history-session',
-              isHistorical: true,
-              contextRestoreState: 'ready',
-            } as Session,
-          }}
-        >
-          <FileOperationToolCard
-            toolItem={toolItem}
-            config={{} as ToolCardConfig}
-            sessionId="history-session"
-          />
-        </FlowChatContext.Provider>
-      );
-    });
-
-    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
-      repositoryPath: 'D:/workspace/BitFun',
-      isActive: false,
-      refreshOnMount: false,
-      refreshOnActive: false,
-    }));
   });
 
   it('renders failed write cards outside WorkspaceProvider', () => {
@@ -595,7 +521,7 @@ describe('FileOperationToolCard', () => {
       );
     });
 
-    const openButton = container.querySelector('.file-op-open-full-button') as HTMLButtonElement | null;
+    const openButton = container.querySelector('[data-testid="chat-file-change-open-file"]') as HTMLButtonElement | null;
     expect(openButton).not.toBeNull();
 
     await act(async () => {
@@ -614,7 +540,7 @@ describe('FileOperationToolCard', () => {
     }));
   });
 
-  it('opens a local diff for completed write cards without snapshot context', async () => {
+  it('renders only the expand and open-panel controls after change metadata', async () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -645,44 +571,108 @@ describe('FileOperationToolCard', () => {
       description: 'Write a file',
       displayMode: 'standard',
     };
+    const openInEditor = vi.fn();
 
     await act(async () => {
       root.render(
         <FileOperationToolCard
           toolItem={toolItem}
           config={config}
+          onOpenInEditor={openInEditor}
         />
       );
     });
 
-    const diffButton = container.querySelector('.file-op-diff-pill') as HTMLButtonElement | null;
-    expect(diffButton).not.toBeNull();
+    const contentRegion = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="content"]',
+    );
+    const extraRegion = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="extra"]',
+    );
+    const changeSummary = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="changeSummary"]',
+    );
+    expect(contentRegion?.querySelector('[data-testid="chat-file-change-path"]')).not.toBeNull();
+    expect(contentRegion?.querySelector('[data-bf-part="changeSummary"]')).toBeNull();
+    expect(extraRegion?.contains(changeSummary)).toBe(true);
+    expect(changeSummary?.querySelector('[data-bf-change="added"]')?.textContent).toBe('+1');
+    expect(changeSummary?.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-0');
+    expect(changeSummary?.querySelector('svg')).toBeNull();
+
+    const actionRegion = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="actionRegion"]',
+    );
+    const actionButtons = Array.from(actionRegion?.querySelectorAll('button') ?? []);
+    const openButton = container.querySelector(
+      '[data-testid="chat-file-change-open-file"]',
+    ) as HTMLButtonElement | null;
+
+    expect(container.querySelector('[data-testid="chat-file-change-open-diff"]')).toBeNull();
+    expect(actionButtons).toHaveLength(2);
+    expect(actionButtons[0]?.getAttribute('data-bf-part')).toBe('affordanceButton');
+    expect(actionButtons[1]).toBe(openButton);
+    expect(openButton?.getAttribute('data-bf-affordance')).toBe('open-panel-right');
+    expect(openButton?.querySelector('[data-bf-icon="open-panel-right"]')).not.toBeNull();
+    expect(openButton?.closest('[data-bf-part="trailingActions"]')?.getAttribute('data-divider')).toBe('true');
 
     await act(async () => {
-      diffButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    });
-
-    await act(async () => {
-      dom.window.dispatchEvent(new dom.window.Event('tick'));
-      await new Promise(resolve => dom.window.setTimeout(resolve, 260));
+      openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
     expect(mocks.getOperationDiff).not.toHaveBeenCalled();
-    expect(mocks.createDiffEditorTab).toHaveBeenCalledWith(
-      'src/newFile.ts',
-      'newFile.ts',
-      '',
-      'export const value = 1;\n',
-      false,
-      'agent',
-      undefined,
-      undefined,
-      false,
-      {
-        titleKind: 'diff',
-        duplicateKeyPrefix: 'diff',
+    expect(openInEditor).toHaveBeenCalledWith('src/newFile.ts');
+  });
+
+  it('places completed edit changes in the right-side summary without git decoration', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-edit',
+      type: 'tool',
+      toolName: 'Edit',
+      status: 'completed',
+      toolCall: {
+        id: 'call-edit',
+        name: 'Edit',
+        input: {
+          file_path: 'src/styles.css',
+          old_string: 'color: red;\n',
+          new_string: 'color: blue;\nbackground: white;\n',
+        },
       },
-    );
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/styles.css',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={{
+            toolName: 'Edit',
+            displayName: 'Edit',
+            icon: 'EDIT',
+            requiresConfirmation: false,
+            resultDisplayType: 'detailed',
+            description: 'Edit a file',
+            displayMode: 'standard',
+          }}
+        />
+      );
+    });
+
+    const contentRegion = container.querySelector('[data-bf-part="content"]');
+    const extraRegion = container.querySelector('[data-bf-part="extra"]');
+    const changeSummary = extraRegion?.querySelector('[data-bf-part="changeSummary"]');
+
+    expect(contentRegion?.textContent).toContain('styles.css');
+    expect(contentRegion?.querySelector('[data-bf-part="changeSummary"]')).toBeNull();
+    expect(changeSummary?.querySelector('[data-bf-change="added"]')?.textContent).toBe('+2');
+    expect(changeSummary?.querySelector('[data-bf-change="removed"]')?.textContent).toBe('-1');
+    expect(changeSummary?.querySelector('svg')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-file-change-open-diff"]')).toBeNull();
   });
 
   it('renders completed ACP file cards from result locations when input has no path', async () => {
@@ -780,7 +770,7 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).toContain(
       'Use Read to load the current contents of docs/report.md before calling Write on it.',
     );
-    expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="error"] [data-guidance="true"]')).not.toBeNull();
   });
 
   it('renders edit guardrail blocks as guidance instead of hard failure', async () => {
@@ -830,7 +820,7 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).toContain(
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
-    expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="error"] [data-guidance="true"]')).not.toBeNull();
   });
 
   it('shows receiving content label while write content streams before file_path', async () => {
@@ -1119,7 +1109,9 @@ describe('FileOperationToolCard', () => {
 
     mocks.inlineDiffPreviewProps = [];
 
-    const card = container.querySelector('.base-tool-card') as HTMLDivElement | null;
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="prominent"]',
+    ) as HTMLDivElement | null;
     await act(async () => {
       card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });

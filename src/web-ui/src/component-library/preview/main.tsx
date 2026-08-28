@@ -12,7 +12,6 @@ import {
   getSystemAppearanceId,
 } from '@/infrastructure/appearance';
 import './preview.css';
-import './flowchat-cards-preview.css';
 
 import '../../app/styles/index.scss';
 

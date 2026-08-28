@@ -1,0 +1,43 @@
+.terminal-output-pre {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  color: var(--bf-appearance-token-color-text-secondary);
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-code-line-height);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-output-renderer {
+  overflow: hidden;
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: var(--bf-appearance-token-color-bg-scene);
+
+  .xterm {
+    height: 100%;
+    padding: 0;
+
+    .xterm-viewport {
+      overflow: hidden !important;
+    }
+
+    &:not(.allow-transparency) .xterm-viewport {
+      background-color: var(--bf-appearance-token-color-bg-scene);
+    }
+
+    .xterm-screen {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  &.terminal-output-renderer--no-scroll .xterm .scrollbar.vertical {
+    display: none !important;
+    pointer-events: none !important;
+  }
+}

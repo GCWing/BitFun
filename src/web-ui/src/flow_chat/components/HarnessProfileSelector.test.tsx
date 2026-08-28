@@ -122,6 +122,59 @@ describe('HarnessProfileSelector', () => {
     ).toBe(true);
   });
 
+  it('nests the menu-item picker inside its parent menu and closes it after an Agent choice', async () => {
+    const onSelectAgent = vi.fn();
+    const onSelectionComplete = vi.fn();
+    await act(async () => {
+      root.render(
+        <div data-testid="parent-add-menu">
+          <HarnessProfileSelector
+            presentation="menu-item"
+            selectedProfile="balanced"
+            otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
+            onSelectProfile={vi.fn()}
+            onSelectAgent={onSelectAgent}
+            onSelectionComplete={onSelectionComplete}
+          />
+        </div>,
+      );
+    });
+
+    const selectorRoot = container.querySelector<HTMLElement>(
+      '[data-bf-component="harness-selector"][data-bf-part="root"]',
+    );
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-selector"]',
+    );
+    expect(selectorRoot?.dataset.bfPresentation).toBe('menu-item');
+    expect(trigger?.querySelector('.bitfun-harness-selector__trigger-chevron')).not.toBeNull();
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const menu = selectorRoot?.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    expect(menu).not.toBeNull();
+    expect(menu?.dataset.bfPlacement).toBe('side');
+    expect(container.querySelector('[data-testid="parent-add-menu"]')?.contains(menu ?? null))
+      .toBe(true);
+
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(menu?.dataset.bfPage).toBe('agents');
+    expect(onSelectionComplete).not.toHaveBeenCalled();
+
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-agent-DeepResearch"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectAgent).toHaveBeenCalledWith('DeepResearch');
+    expect(onSelectionComplete).toHaveBeenCalledTimes(1);
+    expect(selectorRoot?.querySelector('.bitfun-harness-selector__menu')).toBeNull();
+  });
+
   it('offers three Harness gears, Creative, and the second-level Agents entry', async () => {
     await act(async () => {
       root.render(

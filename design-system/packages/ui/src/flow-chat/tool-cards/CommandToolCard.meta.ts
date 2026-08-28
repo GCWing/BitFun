@@ -1,0 +1,34 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const commandToolCardMeta = {
+  category: "flow-chat",
+  description: "A concrete prominent FlowChat command card with controlled disclosure, output, metadata, and capability-driven actions.",
+  maturity: "stable",
+  name: "CommandToolCard",
+  props: [
+    { name: "status", type: "FlowChatToolStatus" },
+    { name: "action", type: "ReactNode" },
+    { name: "command", type: "string | null" },
+    { name: "isExpanded", type: "boolean" },
+    { name: "output", type: "ReactNode" },
+    { defaultValue: "false", name: "reserveOutput", type: "boolean" },
+    { defaultValue: "false", name: "reserveFooter", type: "boolean" },
+    { name: "footerItems", type: "readonly CommandToolCardFooterItem[]" },
+    { name: "copyAction", type: "CommandToolCardCopyAction" },
+  ],
+  states: ["default", "hover", "loading", "expanded", "error", "confirmation"],
+  tokens: [
+    "color.action.neutral.surface",
+    "color.content.primary",
+    "color.content.secondary",
+    "color.content.muted",
+    "color.status.danger.content",
+    "color.status.success.content",
+    "color.status.warning.content",
+    "color.surface.canvas",
+    "color.surface.raised",
+    "font.family.mono",
+    "font.size.small",
+    "radius.sm",
+  ],
+} as const satisfies ComponentMeta;

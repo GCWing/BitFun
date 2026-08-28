@@ -298,7 +298,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
 
   return (
     <span className="bitfun-chat-input__voice-cluster" data-bf-component="composer-voice-input" data-bf-part="root" data-bf-phase="idle">
-      <span data-bf-component="composer-voice-input" data-bf-part="control" data-bf-state={controller.disabled ? 'disabled' : undefined}>
+      <span className="bitfun-chat-input__voice-control-shell" data-bf-component="composer-voice-input" data-bf-part="control" data-bf-state={controller.disabled ? 'disabled' : undefined}>
         <Tooltip content={controller.tooltip}>
           <IconButton
             aria-label={controller.tooltip}

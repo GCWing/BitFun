@@ -83,8 +83,10 @@ describe('AgentWaitToolCard', () => {
 
     expect(html).toContain('Wait for subagents to finish');
     expect(html).toContain('Send a steering message to end the wait early');
-    expect(html).toContain('data-bf-component="activity-item"');
-    expect(html).toContain('agent-wait-tool-card__steering-hint-inline');
+    expect(html).toContain('data-bf-attention="ambient"');
+    expect(html).toContain('data-bf-tool-card="agent-wait"');
+    expect(html).toContain('data-bf-part="content"');
+    expect(html).toContain('data-bf-part="summary"');
     expect(html).not.toContain('data-bf-part="steeringHint"');
   });
 

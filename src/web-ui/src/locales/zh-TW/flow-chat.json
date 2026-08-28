@@ -1576,7 +1576,7 @@
       "expandPreview": "展開預覽",
       "collapsePreview": "收起預覽",
       "openFullCodeHint": "開啟全量代碼",
-      "viewGitDiff": "查看 Diff",
+      "changeSummary": "新增 {{additions}} 行，刪除 {{deletions}} 行",
       "viewBaselineDiff": "查看基線 Diff"
     },
     "getFileDiff": {
@@ -2112,6 +2112,7 @@
       "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。",
       "tokenChange": "{{before}} → {{after}} tokens",
       "savingsTag": "節省 {{saved}} · 壓縮率 {{ratio}}%",
+      "resultSummary": "壓縮後上下文長度 {{length}}（壓縮比例 {{ratio}}%）",
       "compressingContext": "正在壓縮上下文...",
       "compressionCount": "第 {{count}} 次壓縮"
     },

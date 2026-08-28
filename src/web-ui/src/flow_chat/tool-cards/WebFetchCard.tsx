@@ -1,16 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Globe, Link } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
-import { Tooltip } from '@/component-library';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { WebFetchToolCard as WebFetchToolCardView } from '@bitfun/ui/flow-chat';
+import { ToolCardCopyAction } from './ToolCardCopyAction';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import './WebFetchCard.scss';
 
 const log = createLogger('WebFetchCard');
 
@@ -77,8 +73,6 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
   const isExpandable = status === 'completed'
     ? Boolean(parsedResult?.url || hasContent)
     : status === 'error';
-  const headerToolIcon = <Globe size={16} />;
-
   const handleOpenLink = async (linkUrl: string) => {
     if (!linkUrl || linkUrl === '#') return;
 
@@ -113,14 +107,7 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
 
   const renderContent = () => {
     if (status === 'completed') {
-      return (
-        <span data-bf-component="web-fetch-card" data-bf-part="headerUrl"
-          className="web-fetch-card__header-url"
-          title={headerTitle || url}
-        >
-          {headerTitle || `"${url}"`}
-        </span>
-      );
+      return headerTitle || `"${url}"`;
     }
 
     if (status === 'error') {
@@ -144,95 +131,35 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
       : undefined
   );
 
-  const renderExpandedContent = () => {
-    const details = status === 'completed' ? getDetails() : [];
-
-    if (status === 'error') {
-      return (
-        <div data-bf-component="web-fetch-card" data-bf-part="content" className="compact-result-content web-fetch-card__content">
-          <pre>{errorMessage}</pre>
-        </div>
-      );
-    }
-
-    return (
-      <div data-bf-component="web-fetch-card" data-bf-part="expanded" className="web-fetch-card__expanded">
-        {parsedResult?.url && (
-          <div data-bf-component="web-fetch-card" data-bf-part="meta" className="compact-expanded-result-item web-fetch-card__meta-card">
-            <Tooltip content={t('toolCards.webFetch.clickToOpenLink')}>
-              <div
-                className="compact-expanded-result-title"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleOpenLink(parsedResult.url);
-                }}
-              >
-                <Link size={12} className="inline-icon" />
-                {parsedResult.url}
-              </div>
-            </Tooltip>
-          </div>
-        )}
-
-        {(details.length > 0 || hasContent) && (
-          <div data-bf-component="web-fetch-card" data-bf-part="detailsRow" className="web-fetch-card__details-row">
-            {details.length > 0 && (
-              <div data-bf-component="web-fetch-card" data-bf-part="details" className="web-fetch-card__details" aria-label="web-fetch-details">
-                {details.map((detail) => (
-                  <span key={detail} data-bf-component="web-fetch-card" data-bf-part="detail" className="web-fetch-card__detail-pill">
-                    {detail}
-                  </span>
-                ))}
-              </div>
-            )}
-            {hasContent && (
-              <span data-bf-component="web-fetch-card" data-bf-part="actions">
-                <ToolCardHeaderActions className="web-fetch-card__actions">
-                  <ToolCardCopyAction
-                    className="web-fetch-card__copy-action"
-                    getText={() => parsedResult?.content ?? ''}
-                    tooltip={t('toolCards.webFetch.copyResult')}
-                    copiedTooltip={t('toolCards.webFetch.resultCopied')}
-                    successMessage={t('toolCards.webFetch.resultCopied')}
-                    failureMessage={t('toolCards.webFetch.copyResultFailed')}
-                    ariaLabel={t('toolCards.webFetch.copyResult')}
-                    showSuccessNotification={false}
-                  />
-                </ToolCardHeaderActions>
-              </span>
-            )}
-          </div>
-        )}
-
-        <div data-bf-component="web-fetch-card" data-bf-part="result" className="compact-result-content web-fetch-card__content">
-          <pre>{hasContent ? parsedResult?.content : t('toolCards.webFetch.noContent')}</pre>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div data-bf-component="web-fetch-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', status === 'error' && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div data-bf-adapter="web-fetch" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+      <WebFetchToolCardView
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
-        className="web-fetch-card"
-        clickable={isExpandable}
-        header={(
-          <CompactToolCardHeader
-            icon={(
-              <ToolCardStatusSlot
-                status={status}
-                toolIcon={headerToolIcon}
-                defaultIcon={status === 'completed' || status === 'error' ? 'tool' : 'status'}
-              />
-            )}
-            content={renderContent()}
-            action={renderAction()}
+        onToggle={isExpandable ? handleClick : undefined}
+        action={renderAction()}
+        title={renderContent()}
+        url={status === 'completed' ? parsedResult?.url : undefined}
+        openUrlLabel={t('toolCards.webFetch.clickToOpenLink')}
+        onOpenUrl={parsedResult?.url ? (event) => {
+          event.stopPropagation();
+          void handleOpenLink(parsedResult.url);
+        } : undefined}
+        details={status === 'completed' ? getDetails() : undefined}
+        content={status === 'completed' && hasContent ? parsedResult?.content : undefined}
+        emptyContent={status === 'completed' && !hasContent ? t('toolCards.webFetch.noContent') : undefined}
+        error={status === 'error' ? errorMessage : undefined}
+        copyAction={hasContent ? (
+          <ToolCardCopyAction
+            getText={() => parsedResult?.content ?? ''}
+            tooltip={t('toolCards.webFetch.copyResult')}
+            copiedTooltip={t('toolCards.webFetch.resultCopied')}
+            successMessage={t('toolCards.webFetch.resultCopied')}
+            failureMessage={t('toolCards.webFetch.copyResultFailed')}
+            ariaLabel={t('toolCards.webFetch.copyResult')}
+            showSuccessNotification={false}
           />
-        )}
-        expandedContent={isExpandable ? renderExpandedContent() : undefined}
+        ) : undefined}
       />
     </div>
   );

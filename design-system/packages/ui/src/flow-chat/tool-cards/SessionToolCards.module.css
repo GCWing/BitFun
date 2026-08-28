@@ -1,0 +1,105 @@
+@layer bf.components {
+  .details {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-3);
+  }
+
+  .field {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .fieldLabel,
+  .sectionLabel {
+    color: var(--bf-color-content-muted);
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .fieldValue {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .field[data-monospace="true"] .fieldValue {
+    font-family: var(--bf-font-family-mono);
+  }
+
+  .sessionList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+  }
+
+  .session {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--bf-space-1) var(--bf-space-3);
+    padding: var(--bf-space-3);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .sessionId {
+    overflow-wrap: anywhere;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-font-family-mono);
+  }
+
+  .sessionName {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sessionAgent {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    color: var(--bf-color-content-muted);
+    white-space: nowrap;
+  }
+
+  .messageSection {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+  }
+
+  .message {
+    max-block-size: 20rem;
+    margin: 0;
+    padding: var(--bf-space-3);
+    overflow: auto;
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .empty {
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .error {
+    color: var(--bf-color-status-danger-content);
+    font-size: var(--bf-font-size-small);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

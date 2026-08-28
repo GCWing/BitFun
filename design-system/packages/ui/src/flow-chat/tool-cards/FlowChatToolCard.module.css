@@ -1,0 +1,539 @@
+@layer bf.components {
+  .prominentRoot,
+  .ambientRoot {
+    --_tool-card-action-size: var(--bf-space-6);
+    --_icon-size: var(--bf-font-size-xl);
+    --_tool-card-transition: var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+
+    box-sizing: border-box;
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    flex-direction: column;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-font-family-control);
+  }
+
+  .prominentRoot {
+    overflow: hidden;
+    margin-block: var(--bf-space-1);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-md);
+    background: var(--bf-color-surface-panel);
+    box-shadow: var(--bf-shadow-xs);
+    transition:
+      border-color var(--_tool-card-transition),
+      box-shadow var(--_tool-card-transition),
+      background-color var(--_tool-card-transition);
+  }
+
+  .prominentRoot:is(:hover, :focus-within),
+  .prominentRoot[data-bf-preview-state="hover"],
+  :global([data-bf-preview-state="hover"]) .prominentRoot {
+    border-color: var(--bf-color-border-strong);
+    box-shadow: var(--bf-shadow-sm);
+  }
+
+  .prominentRoot[data-bf-state~="confirmation"] {
+    border-color: var(--bf-color-status-warning-border);
+    background: var(--bf-color-status-warning-surface);
+  }
+
+  .prominentRoot[data-bf-status="cancelled"],
+  .prominentRoot[data-bf-status="rejected"] {
+    opacity: var(--bf-opacity-muted);
+  }
+
+  .surface {
+    box-sizing: border-box;
+    position: relative;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .prominentSurface {
+    border: 0;
+    background: transparent;
+    color: inherit;
+  }
+
+  .header {
+    box-sizing: border-box;
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    align-items: center;
+  }
+
+  .prominentHeader {
+    min-block-size: var(--bf-control-height-sm);
+    gap: var(--bf-space-2);
+    padding-block: var(--bf-space-1);
+    padding-inline: var(--bf-space-3) var(--bf-space-1);
+    line-height: var(--bf-line-height-tight);
+  }
+
+  .actionLabel,
+  .content,
+  .extra {
+    font-size: var(--bf-font-size-body);
+  }
+
+  .ambientAction,
+  .ambientContent,
+  .ambientExtra {
+    min-inline-size: 0;
+    font-size: var(--bf-font-size-small);
+  }
+
+  .actionLabel {
+    flex: 0 0 auto;
+    color: var(--bf-color-content-primary);
+    font-weight: var(--bf-font-weight-semibold);
+    white-space: nowrap;
+  }
+
+  .content {
+    display: flex;
+    overflow: hidden;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
+    font-weight: var(--bf-font-weight-regular);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content > * {
+    min-inline-size: 0;
+  }
+
+  .extra,
+  .statusIcon,
+  .headerActions,
+  .actionRegion {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .extra {
+    min-inline-size: 0;
+    gap: var(--bf-space-1);
+    margin-inline-start: auto;
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .changeSummary {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--bf-font-weight-semibold);
+    white-space: nowrap;
+  }
+
+  .changeSummary [data-bf-change="added"] {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .changeSummary [data-bf-change="removed"] {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .actionRegion {
+    overflow: hidden;
+    max-inline-size: 0;
+    gap: var(--bf-space-1);
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+    border-inline-start: var(--bf-border-width-default) solid transparent;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(var(--bf-space-1));
+    transition:
+      max-inline-size var(--_tool-card-transition),
+      margin-inline-start var(--_tool-card-transition),
+      padding-inline-start var(--_tool-card-transition),
+      border-color var(--_tool-card-transition),
+      opacity var(--_tool-card-transition),
+      transform var(--_tool-card-transition);
+  }
+
+  .prominentRoot:is(:hover, :focus-within) .actionRegion,
+  .prominentRoot[data-bf-preview-state="hover"] .actionRegion,
+  :global([data-bf-preview-state="hover"]) .prominentRoot .actionRegion,
+  .prominentRoot[data-actions-visible="true"] .actionRegion {
+    max-inline-size: 24rem;
+    margin-inline-start: var(--bf-space-1);
+    padding-inline-start: var(--bf-space-2);
+    border-inline-start-color: var(--bf-color-border-subtle);
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .affordanceButton {
+    display: inline-flex;
+    inline-size: var(--bf-space-6);
+    block-size: var(--bf-space-6);
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--bf-radius-sm);
+    color: var(--bf-color-content-muted);
+    background: transparent;
+    cursor: pointer;
+    transition:
+      background-color var(--_tool-card-transition),
+      color var(--_tool-card-transition);
+  }
+
+  .affordanceButton:is(:hover, [data-bf-preview-state="hover"]) {
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .affordanceButton:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .affordanceButton > :where(svg, img) {
+    display: block;
+    inline-size: var(--bf-font-size-base);
+    block-size: var(--bf-font-size-base);
+  }
+
+  .affordanceButton[aria-expanded="true"] :global(svg) {
+    transform: rotate(180deg);
+  }
+
+  .affordanceButton :global(svg) {
+    transition: transform var(--_tool-card-transition);
+  }
+
+  .headerActions {
+    gap: var(--bf-space-1);
+  }
+
+  .headerActions:empty {
+    display: none;
+  }
+
+  .trailingActions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .trailingActions[data-divider="true"] {
+    margin-inline-start: var(--bf-space-1);
+    padding-inline-start: var(--bf-space-2);
+    border-inline-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
+  .iconSlot {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+    inline-size: var(--_tool-card-action-size);
+    block-size: var(--_tool-card-action-size);
+    align-items: center;
+    justify-content: center;
+    color: var(--bf-color-content-secondary);
+  }
+
+  .iconSlot[data-divider="true"] {
+    margin-inline-end: var(--bf-space-1);
+    border-inline-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
+  .iconMarks {
+    position: relative;
+    display: inline-flex;
+    inline-size: var(--_icon-size);
+    block-size: var(--_icon-size);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mainIcon,
+  .inlineAffordance {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      opacity var(--_tool-card-transition),
+      color var(--_tool-card-transition),
+      transform var(--_tool-card-transition);
+  }
+
+  .mainIcon > :where(svg, img),
+  .inlineAffordance > :where(svg, img),
+  .statusIcon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .inlineAffordance {
+    color: var(--bf-color-content-secondary);
+    opacity: 0;
+  }
+
+  .inlineAffordance[data-expanded="true"] > :where(svg, img) {
+    transform: rotate(180deg);
+  }
+
+  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-bf-expandable="true"] .mainIcon,
+  .ambientRoot[data-bf-preview-state="hover"] .iconSlot[data-bf-expandable="true"] .mainIcon,
+  :global([data-bf-preview-state="hover"]) .ambientRoot .iconSlot[data-bf-expandable="true"] .mainIcon {
+    opacity: 0;
+  }
+
+  .ambientRoot:is(:hover, :focus-within) .iconSlot[data-bf-expandable="true"] .inlineAffordance,
+  .ambientRoot[data-bf-preview-state="hover"] .iconSlot[data-bf-expandable="true"] .inlineAffordance,
+  :global([data-bf-preview-state="hover"]) .ambientRoot .iconSlot[data-bf-expandable="true"] .inlineAffordance {
+    opacity: 1;
+  }
+
+  .iconAffordanceHit {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--bf-radius-sm);
+    outline: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .iconAffordanceHit:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .statusIcon {
+    inline-size: var(--bf-font-size-lg);
+    block-size: var(--bf-font-size-lg);
+    justify-content: center;
+    color: var(--bf-color-content-muted);
+  }
+
+  .statusIcon[data-divider="true"] {
+    box-sizing: content-box;
+    margin-inline-start: var(--bf-space-1);
+    padding-inline-start: var(--bf-space-2);
+    border-inline-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
+  .prominentRoot[data-bf-status="completed"] .statusIcon {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .prominentRoot[data-bf-status="error"] .statusIcon {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      grid-template-rows var(--_tool-card-collapse-duration) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      visibility 0s linear var(--_tool-card-collapse-duration);
+  }
+
+  .collapse[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .collapse[data-animate="false"] {
+    transition: none;
+  }
+
+  .collapseInner {
+    overflow: hidden;
+    min-block-size: 0;
+  }
+
+  .expanded,
+  .error {
+    box-sizing: border-box;
+    padding: var(--bf-space-3);
+    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-base);
+  }
+
+  .error {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .ambientRoot {
+    gap: 0;
+    color: var(--bf-color-content-muted);
+    line-height: var(--bf-line-height-base);
+  }
+
+  .ambientRoot[data-bf-direct-action="true"] {
+    border-radius: var(--bf-radius-sm);
+    cursor: pointer;
+  }
+
+  .ambientRoot[data-bf-direct-action="true"]:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .ambientSurface {
+    display: flex;
+    min-block-size: var(--bf-control-height-sm);
+    align-items: center;
+    gap: var(--bf-space-1);
+    padding-inline: var(--bf-space-1) var(--bf-space-2);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: default;
+    transition:
+      color var(--_tool-card-transition),
+      opacity var(--_tool-card-transition);
+  }
+
+  .ambientSurface[data-bf-interactive="true"] {
+    cursor: pointer;
+  }
+
+  .ambientSurface:is(:hover, :focus-within),
+  .ambientRoot[data-bf-preview-state="hover"] .ambientSurface,
+  :global([data-bf-preview-state="hover"]) .ambientRoot .ambientSurface {
+    color: var(--bf-color-content-primary);
+  }
+
+  .ambientSurface .iconSlot {
+    --_tool-card-action-size: var(--bf-space-5);
+
+    margin-inline-end: 1px;
+  }
+
+  .ambientAction {
+    flex: 0 0 auto;
+    color: inherit;
+    font-weight: var(--bf-font-weight-medium);
+    white-space: nowrap;
+  }
+
+  .ambientContent {
+    overflow: hidden;
+    flex: 1 1 auto;
+    color: inherit;
+    font-weight: var(--bf-font-weight-regular);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ambientExtra {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: inherit;
+  }
+
+  .ambientExpandedShell {
+    overflow: hidden;
+    margin-block: var(--bf-space-1);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-md);
+    background: var(--bf-color-surface-panel);
+    box-shadow: var(--bf-shadow-xs);
+  }
+
+  .ambientExpandedShell .ambientSurface {
+    min-block-size: var(--bf-control-height-md);
+    padding-inline: var(--bf-space-2);
+    color: var(--bf-color-content-primary);
+  }
+
+  .ambientRoot[data-bf-state~="loading"] .ambientAction,
+  .ambientRoot[data-bf-state~="loading"] .ambientContent,
+  .prominentRoot[data-bf-state~="loading"] .actionLabel,
+  .prominentRoot[data-bf-state~="loading"] .content {
+    animation: bf-flow-chat-tool-loading var(--bf-motion-duration-loop) var(--bf-motion-easing-standard) infinite alternate;
+  }
+
+  @keyframes bf-flow-chat-tool-loading {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: var(--bf-opacity-hover);
+    }
+  }
+
+  .ambientRoot[data-bf-status="error"] .ambientAction,
+  .ambientRoot[data-bf-status="error"] .ambientContent,
+  .ambientRoot[data-bf-status="error"] .ambientExtra {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .prominentRoot,
+    .ambientRoot,
+    .actionRegion,
+    .mainIcon,
+    .inlineAffordance,
+    .collapse,
+    .affordanceButton,
+    .affordanceButton :global(svg) {
+      transition: none;
+    }
+
+    .ambientRoot[data-bf-state~="loading"] .ambientAction,
+    .ambientRoot[data-bf-state~="loading"] .ambientContent,
+    .prominentRoot[data-bf-state~="loading"] .actionLabel,
+    .prominentRoot[data-bf-state~="loading"] .content {
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .prominentRoot,
+    .ambientExpandedShell {
+      border-color: CanvasText;
+    }
+
+    .iconAffordanceHit:focus-visible {
+      outline-color: Highlight;
+    }
+
+    .ambientRoot[data-bf-direct-action="true"]:focus-visible {
+      outline-color: Highlight;
+    }
+
+    .affordanceButton:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

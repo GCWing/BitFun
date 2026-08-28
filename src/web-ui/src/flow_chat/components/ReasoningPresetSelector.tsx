@@ -21,6 +21,7 @@ interface ReasoningPresetSelectorProps {
   selectedPreset?: string | null;
   disabled?: boolean;
   loading?: boolean;
+  triggerPresentation?: 'meter' | 'label';
   dropdownPlacement?: 'top' | 'bottom';
   onSelect: (presetId: string | null) => void | Promise<void>;
 }
@@ -253,6 +254,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   selectedPreset,
   disabled = false,
   loading = false,
+  triggerPresentation = 'meter',
   dropdownPlacement = 'top',
   onSelect,
 }) => {
@@ -402,6 +404,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
       data-bf-component="reasoning-preset-selector"
       data-bf-part="root"
       data-bf-state={open ? 'open' : undefined}
+      data-bf-presentation={triggerPresentation}
     >
       <Tooltip content={tooltip} disabled={open}>
         <button
@@ -440,7 +443,13 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             }
           }}
         >
-          <ReasoningIntensityMark level={intensityLevel} compact />
+          {triggerPresentation === 'label' ? (
+            <span className="bitfun-reasoning-preset-selector__trigger-label">
+              {statusLabel}
+            </span>
+          ) : (
+            <ReasoningIntensityMark level={intensityLevel} compact />
+          )}
         </button>
       </Tooltip>
 

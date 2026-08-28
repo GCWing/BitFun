@@ -19,10 +19,8 @@
    */
   .explore-region__content,
   .thinking-content,
-  .base-tool-card-expanded,
-  .base-tool-card-error,
-  .compact-tool-card-expanded,
-  .view-image-tool-card__content,
+  [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'],
+  [data-bf-component='flow-chat-tool-card'][data-bf-part='error'],
   .subagent-items-container,
   .subagent-projection-container--expanded {
     margin-inline-start: 0;

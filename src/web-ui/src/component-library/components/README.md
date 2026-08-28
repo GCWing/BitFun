@@ -10,7 +10,7 @@ This directory contains:
 
 - reusable components exported through [index.ts](index.ts)
 - preview registrations in [registry.tsx](registry.tsx)
-- component-specific docs such as [FlowChatCards README](FlowChatCards/README.md)
+- component-specific documentation owned by the component directory
 
 ## Component areas
 
@@ -19,10 +19,13 @@ Current component folders include:
 - **Actions & window controls**: `IconButton`, `WindowControls`
 - **Dialogs & overlays**: `Modal`, `InputDialog`, `ConfirmDialog`, `Tooltip`
 - **Form inputs**: `Input`, `NumberInput`, `Search`, `Select`, `Checkbox`, `Textarea`
-- **Display & content**: `Alert`, `Tag`, `Avatar`, `Card`, `Empty`, `Markdown`, `Tabs`
-- **Editors & text**: `CodeEditor`
-- **Visual utilities**: `CubeLoading`, `DotMatrixLoader`
-- **Feature-specific UI**: `ConfigPage`, `FlowChatCards`
+- **Display & content**: `Alert`, `Badge`, `Tag`, `Avatar`, `Card`, `Empty`, `Markdown`, `Tabs`
+- **Editors & text**: `CodeEditor`, `StreamText`
+- **Visual utilities**: `CubeLoading`, `CubeLogo`, `DotMatrixLoader`, `TextStrokeEffect`
+- **Feature-specific UI**: `ConfigPage`, `FilterPill`
+
+FlowChat tool-card frameworks are published by the independent design system
+through `@bitfun/ui/flow-chat` and documented in its Design Lab.
 
 ## Exports and Previews
 

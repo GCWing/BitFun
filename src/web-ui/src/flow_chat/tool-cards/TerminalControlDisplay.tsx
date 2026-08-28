@@ -3,11 +3,12 @@
  */
 
 import React, { useMemo } from 'react';
-import { Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ActivityItem } from '@bitfun/ui';
+import {
+  TerminalControlToolCard,
+  type FlowChatToolStatus,
+} from '@bitfun/ui/flow-chat';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 
 export const TerminalControlDisplay: React.FC<ToolCardProps> = React.memo(({
   toolItem,
@@ -24,64 +25,37 @@ export const TerminalControlDisplay: React.FC<ToolCardProps> = React.memo(({
   }, [toolCall?.input?.action]);
 
   const renderContent = () => {
-    const idLabel = terminalSessionId
-      ? <span className="read-file-meta"> {terminalSessionId}</span>
-      : null;
+    const idLabel = terminalSessionId ? ` ${terminalSessionId}` : '';
 
     const isInterrupt = action === 'interrupt';
 
     if (status === 'completed') {
-      return (
-        <>
-          {isInterrupt
-            ? t('toolCards.terminalControl.sessionInterrupted')
-            : t('toolCards.terminalControl.sessionKilled')}
-          {idLabel}
-        </>
-      );
+      return `${isInterrupt
+        ? t('toolCards.terminalControl.sessionInterrupted')
+        : t('toolCards.terminalControl.sessionKilled')}${idLabel}`;
     }
     if (status === 'running' || status === 'streaming') {
-      return (
-        <>
-          {isInterrupt
-            ? t('toolCards.terminalControl.interruptingSession')
-            : t('toolCards.terminalControl.terminatingSession')}
-          {idLabel}
-          ...
-        </>
-      );
+      return `${isInterrupt
+        ? t('toolCards.terminalControl.interruptingSession')
+        : t('toolCards.terminalControl.terminatingSession')}${idLabel}...`;
     }
     if (status === 'error') {
-      return (
-        <>
-          {isInterrupt
-            ? t('toolCards.terminalControl.interruptFailed')
-            : t('toolCards.terminalControl.killFailed')}
-          {idLabel}
-        </>
-      );
+      return `${isInterrupt
+        ? t('toolCards.terminalControl.interruptFailed')
+        : t('toolCards.terminalControl.killFailed')}${idLabel}`;
     }
     if (status === 'pending') {
-      return (
-        <>
-          {isInterrupt
-            ? t('toolCards.terminalControl.preparingInterrupt')
-            : t('toolCards.terminalControl.preparingKill')}
-          {idLabel}
-        </>
-      );
+      return `${isInterrupt
+        ? t('toolCards.terminalControl.preparingInterrupt')
+        : t('toolCards.terminalControl.preparingKill')}${idLabel}`;
     }
     return null;
   };
 
   return (
-    <ActivityItem
-      appearance="inline"
-      className="terminal-control-card"
-      data-bf-status={status}
-      leading={<ToolCardStatusSlot status={status} toolIcon={<Terminal size={16} />} />}
-    >
-      {renderContent()}
-    </ActivityItem>
+    <TerminalControlToolCard
+      status={status as FlowChatToolStatus}
+      summary={renderContent()}
+    />
   );
 });

@@ -1576,7 +1576,7 @@
       "expandPreview": "Expand preview",
       "collapsePreview": "Collapse preview",
       "openFullCodeHint": "Open full code",
-      "viewGitDiff": "View Diff",
+      "changeSummary": "{{additions}} additions and {{deletions}} deletions",
       "viewBaselineDiff": "View Baseline Diff"
     },
     "getFileDiff": {
@@ -2112,6 +2112,7 @@
       "noSummaryNotice": "No additional summary was generated for this compaction pass.",
       "tokenChange": "{{before}} → {{after}} tokens",
       "savingsTag": "Saved {{saved}} · Ratio {{ratio}}%",
+      "resultSummary": "Compressed context length {{length}} (compression ratio {{ratio}}%)",
       "compressingContext": "Compressing context...",
       "compressionCount": "Compression #{{count}}"
     },

@@ -172,8 +172,10 @@ describeWithJsdom('AgentControlToolCard', () => {
         );
       });
 
-      const pill = container.querySelector<HTMLButtonElement>('.agent-control-tool-card__agent-pill');
-      const toggle = container.querySelector<HTMLElement>('[data-testid="agent-control-tool-card-toggle"]');
+      const card = container.querySelector<HTMLElement>('[data-bf-tool-card="agent-control"]');
+      const pill = card?.querySelector<HTMLButtonElement>('[data-bf-part="agentIdentity"]');
+      const toggle = card?.querySelector<HTMLElement>('[data-bf-part="surface"]');
+      expect(card?.getAttribute('data-bf-attention')).toBe('prominent');
       expect(pill?.textContent?.trim()).toBeTruthy();
       expect(pill?.textContent).toContain(
         toolName === 'AgentSpawn' ? 'Parser review worker 2' : 'Agent 1',
@@ -185,7 +187,7 @@ describeWithJsdom('AgentControlToolCard', () => {
       expect(container.querySelector('[data-bf-part="type"]')).toBeNull();
       expect(container.textContent).not.toContain('SwarmWorker');
       expect(container.textContent).toContain('Running');
-      expect(container.querySelector('[data-bf-part="expandIndicator"]')).not.toBeNull();
+      expect(card?.querySelector('[data-bf-part="expandIndicator"]')).not.toBeNull();
       expect(container.textContent).not.toContain(
         toolName === 'AgentSpawn'
           ? 'Inspect the parser flow and report findings.'
@@ -240,7 +242,7 @@ describeWithJsdom('AgentControlToolCard', () => {
     expect(avatar?.getAttribute('style')).toContain(
       `--subagent-avatar-hue-shift: ${presentation.hueShiftDegrees}deg`,
     );
-    expect(container.querySelector('.agent-control-tool-card__fallback-avatar')).toBeNull();
+    expect(container.querySelector('[data-bf-part="avatar"] > svg')).toBeNull();
     expect(container.textContent).toContain('Agent 1');
   });
 
@@ -256,7 +258,7 @@ describeWithJsdom('AgentControlToolCard', () => {
     });
     await act(async () => {
       container
-        .querySelector<HTMLElement>('[data-testid="agent-control-tool-card-toggle"]')!
+        .querySelector<HTMLElement>('[data-bf-tool-card="agent-control"] [data-bf-part="surface"]')!
         .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
     expect(container.textContent).toContain('Inspect the parser flow and report findings.');
@@ -281,11 +283,16 @@ describeWithJsdom('AgentControlToolCard', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="agent-control-tool-card-toggle"]')).toBeNull();
+    expect(
+      container
+        .querySelector('[data-bf-tool-card="agent-control"] [data-bf-part="surface"]')
+        ?.getAttribute('data-bf-interactive'),
+    ).toBe('false');
+    expect(container.querySelector('[data-bf-part="expandIndicator"]')).toBeNull();
     expect(container.textContent).not.toContain('Inspect the parser flow and report findings.');
     expect(
-      container.querySelector('.base-tool-card-expanded-collapse')?.getAttribute('aria-hidden'),
+      container.querySelector('[data-bf-part="expandedCollapse"]')?.getAttribute('aria-hidden'),
     ).toBe('true');
-    expect(container.querySelector('[data-bf-state~="streaming"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-tool-card="agent-control"][data-bf-status="streaming"]')).not.toBeNull();
   });
 });

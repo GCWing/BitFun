@@ -1,0 +1,65 @@
+@layer bf.components {
+  .root {
+    --_dot-size: 2px;
+    --_dot-gap: 2px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--_dot-gap);
+    color: inherit;
+    vertical-align: middle;
+  }
+
+  .root[data-size="10"] {
+    --_dot-gap: 1px;
+  }
+
+  .root[data-size="14"] {
+    --_dot-size: 2.5px;
+  }
+
+  .root[data-size="16"] {
+    --_dot-size: 3px;
+    --_dot-gap: 3px;
+  }
+
+  .dot {
+    inline-size: var(--_dot-size);
+    block-size: var(--_dot-size);
+    flex: 0 0 auto;
+    border-radius: var(--bf-radius-pill);
+    background: currentColor;
+    animation: bf-flow-chat-processing-dot var(--bf-motion-duration-loop) var(--bf-motion-easing-standard) infinite;
+  }
+
+  .dot:nth-child(2) {
+    animation-delay: var(--bf-motion-duration-fast);
+  }
+
+  .dot:nth-child(3) {
+    animation-delay: var(--bf-motion-duration-base);
+  }
+
+  @keyframes bf-flow-chat-processing-dot {
+    0%,
+    60%,
+    100% {
+      opacity: var(--bf-opacity-disabled);
+      transform: translateY(0);
+    }
+
+    30% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot {
+      animation: none;
+      opacity: var(--bf-opacity-hover);
+      transform: none;
+    }
+  }
+}

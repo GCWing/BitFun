@@ -3,11 +3,9 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { GrepSearchToolCard } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
@@ -91,61 +89,28 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
     return pattern;
   };
 
-  const renderExpandedContent = () => (
-    <>
-      <div className="compact-detail-info-inline">
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.grepSearch.labelPattern')}:</span>
-          <span className="compact-detail-inline-value">{pattern}</span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.grepSearch.labelPath')}:</span>
-          <span className="compact-detail-inline-value">{searchPath}</span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.grepSearch.labelStats')}:</span>
-          <span className="compact-detail-inline-value">
-            {t('toolCards.grepSearch.matchesAndFiles', { matches: stats.matches, files: stats.files })}
-          </span>
-        </span>
-      </div>
-      {toolResult?.result?.result && (
-        <div className="compact-result-content">
-          <pre style={{ 
-            whiteSpace: 'pre-wrap', 
-            wordBreak: 'break-word',
-            fontSize: '12px',
-            maxHeight: '400px',
-            overflow: 'auto'
-          }}>
-            {formatSessionViewPreviewText(String(toolResult.result.result))}
-          </pre>
-        </div>
-      )}
-    </>
-  );
-
   if (status === 'error') {
     return null;
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="grep-search" data-tool-card-id={toolId ?? ''}>
+      <GrepSearchToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
-        className="grep-search-card"
-        clickable={hasDetails}
-        header={
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Search size={16} className="grep-search-card-icon" />} />}
-            content={renderContent()}
-          />
-        }
-        expandedContent={hasDetails ? renderExpandedContent() : undefined}
+        onToggle={hasDetails ? handleClick : undefined}
+        summary={renderContent()}
+        details={hasDetails ? [
+          { label: `${t('toolCards.grepSearch.labelPattern')}:`, value: pattern, monospace: true },
+          { label: `${t('toolCards.grepSearch.labelPath')}:`, value: searchPath, monospace: true },
+          {
+            label: `${t('toolCards.grepSearch.labelStats')}:`,
+            value: t('toolCards.grepSearch.matchesAndFiles', { matches: stats.matches, files: stats.files }),
+          },
+        ] : undefined}
+        resultText={hasDetails && toolResult?.result?.result
+          ? formatSessionViewPreviewText(String(toolResult.result.result))
+          : undefined}
       />
     </div>
   );

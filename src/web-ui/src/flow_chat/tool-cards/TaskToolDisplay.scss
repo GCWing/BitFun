@@ -1,6 +1,6 @@
-/* Task tool card styles (BaseToolCard). */
+/* Task tool card styles on the shared FlowChat attention frameworks. */
 .task-tool-display {
-  /* Match .base-tool-card-header: gap + icon rail like .tool-card-icon-slot. */
+  /* Keep custom task header content aligned with the framework icon rail. */
   .task-header-wrapper {
     display: flex;
     align-items: stretch;
@@ -14,20 +14,6 @@
     &.is-running {
       color: var(--bf-appearance-token-color-accent-500);
     }
-  }
-
-  &.base-tool-card-wrapper:hover
-    .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .tool-card-icon-slot--expandable
-    .tool-card-icon-main {
-    opacity: 0;
-  }
-
-  &.base-tool-card-wrapper:hover
-    .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .tool-card-icon-slot--expandable
-    .tool-card-icon-expand-hint {
-    opacity: 1;
   }
 
   .task-content-wrapper {
@@ -168,11 +154,11 @@
       flex-shrink: 0;
     }
 
-    .tool-card-status-icon:empty {
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:empty {
       display: none;
     }
 
-    .tool-card-status-icon:not(:empty) {
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:not(:empty) {
       line-height: 0;
       display: flex;
       align-items: center;
@@ -384,11 +370,13 @@
   }
 
   /* Extra breathing room below header / divider before prompt + actions. */
-  &.base-tool-card-wrapper > .base-tool-card-expanded {
+  > [data-bf-component='flow-chat-tool-card'][data-bf-part='expandedCollapse']
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'] {
     padding-top: 8px;
   }
 
-  &.base-tool-card-wrapper > .base-tool-card-expanded:has(.task-prompt-content) {
+  > [data-bf-component='flow-chat-tool-card'][data-bf-part='expandedCollapse']
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded']:has(.task-prompt-content) {
     padding-bottom: 0;
   }
 
@@ -527,11 +515,10 @@
 
 /**
  * Make the entire header area show pointer cursor.
- * BaseToolCard already sets cursor:pointer on .base-tool-card,
- * but the header content area clips it — force it here.
+ * Keep the summary surface pointer explicit for task cards.
  */
 .task-tool-display {
-  .base-tool-card {
+  > [data-bf-component='flow-chat-tool-card'][data-bf-part='surface'] {
     cursor: pointer;
   }
 }
@@ -548,7 +535,7 @@
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   contain: layout paint style;
 
-  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+  .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root'] {
     margin: 0;
     /*
      * Keep only shadow/border hover feedback in this grouped shell. Layout
@@ -561,7 +548,7 @@
   }
 
   // Keep expand/collapse press feedback subtle inside grouped subagent cards.
-  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display:active {
+  .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root']:active {
     box-shadow:
       0 1px 3px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.14),
       inset 0 1px 2px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18);
@@ -578,9 +565,9 @@
       0 2px 6px var(--bf-appearance-token-color-overlay-black-15),
       0 1px 3px var(--bf-appearance-token-color-overlay-black-12);
 
-    // Strip the BaseToolCard's own border/background/shadow so it merges
+    // Strip the shared framework shell so it merges
     // into the wrapper; the wrapper provides the unified card chrome.
-    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+    .flow-tool-card-wrapper .task-tool-display[data-bf-component='flow-chat-tool-card'][data-bf-part='root'] {
       border: none;
       border-radius: 0;
       background: transparent;
@@ -607,7 +594,7 @@
       backdrop-filter: none;
     }
 
-    .base-tool-card-expanded {
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'] {
       animation: none;
     }
 
@@ -629,12 +616,6 @@
         var(--task-prompt-inline-pad);
     }
 
-    // Hide the header top accent line — the wrapper border already frames
-    // the unified card; keeping ::before would show a ghost divider above
-    // the title, making the header look like a floating frame.
-    .base-tool-card-header::before {
-      display: none;
-    }
   }
 
   // Hover over expanded card: stronger elevation.
@@ -647,13 +628,13 @@
   }
 }
 
-/* Loading: task status icon (cube) hidden; border-pulse + text-fade from BaseToolCard handle the rest */
-.task-tool-display.base-tool-card-wrapper--loading-shimmer .tool-card-status-icon:has(.cube-loading) {
+/* Loading: the framework owns the shell state while task copy keeps its local fade. */
+.task-tool-display[data-bf-state~='loading'] [data-bf-component='flow-chat-tool-card'][data-bf-part='status']:has(.cube-loading) {
   display: none !important;
 }
 
 /* E — task description text fades with the card */
-.task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
+.task-tool-display[data-bf-state~='loading'] .task-action {
   animation: task-tool-loading-fade 2.2s ease-in-out infinite;
 }
 
@@ -707,7 +688,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .task-tool-display .task-subagent-stop-button:disabled svg,
-  .task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
+  .task-tool-display[data-bf-state~='loading'] .task-action {
     animation: none;
   }
 }

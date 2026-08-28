@@ -20,13 +20,11 @@ import { inputDialogAppearanceDescriptor } from '@/component-library/components/
 import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
 import { markdownAppearanceDescriptor } from '@/component-library/components/Markdown/appearance';
-import { flowChatCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/appearance';
 import { viewTransitionBoundaryAppearanceDescriptor } from '@/component-library/components/ViewTransitionBoundary/appearance';
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
 import { sessionUsagePanelAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
-import { fileOperationToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/FileOperationToolCard.appearance';
 import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTextInput.appearance';
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
@@ -40,7 +38,6 @@ import { codeReviewToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/C
 import { createAgentPageAppearanceDescriptor } from '@/app/scenes/agents/components/CreateAgentPage.appearance';
 import { keyboardShortcutsAppearanceDescriptor } from '@/app/scenes/settings/components/KeyboardShortcutsTab.appearance';
 import { taskToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/TaskToolDisplay.appearance';
-import { agentControlToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/AgentControlToolCard.appearance';
 import { applicationSettingsAppearanceDescriptor } from '@/infrastructure/config/components/ApplicationSettingsPages.appearance';
 import { markdownEditorAppearanceDescriptor } from '@/tools/editor/components/MarkdownEditor.appearance';
 import { planViewerAppearanceDescriptor } from '@/tools/editor/components/PlanViewer.appearance';
@@ -52,7 +49,6 @@ import { assistantDefaultsPageAppearanceDescriptor } from '@/app/scenes/profile/
 import { taskDetailPanelAppearanceDescriptor } from '@/flow_chat/components/TaskDetailPanel/TaskDetailPanel.appearance';
 import { toolbarModeAppearanceDescriptor } from '@/flow_chat/components/toolbar-mode/ToolbarMode.appearance';
 import { mcpToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/MCPToolDisplay.appearance';
-import { terminalToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/TerminalToolCard.appearance';
 import { skillsConfigAppearanceDescriptor } from '@/infrastructure/config/components/SkillsConfig.appearance';
 import { diffEditorAppearanceDescriptor } from '@/tools/editor/components/DiffEditor.appearance';
 import { agentCompanionDesktopPetAppearanceDescriptor } from '@/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.appearance';
@@ -62,9 +58,7 @@ import { exportImageAppearanceDescriptor } from '@/flow_chat/components/modern/E
 import { userMessageItemAppearanceDescriptor } from '@/flow_chat/components/modern/UserMessageItem.appearance';
 import { sessionUsageReportCardAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageReportCard.appearance';
 import { sessionUsageModalAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageModal.appearance';
-import { askUserQuestionCardAppearanceDescriptor } from '@/flow_chat/tool-cards/AskUserQuestionCard.appearance';
 import { createPlanDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/CreatePlanDisplay.appearance';
-import { execProcessToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ExecProcessToolCardView.appearance';
 import { editorConfigAppearanceDescriptor } from '@/infrastructure/config/components/EditorConfig.appearance';
 import { appearanceSettingsAppearanceDescriptor } from '@/infrastructure/config/components/AppearanceSettingsPage.appearance';
 import { configAppearanceDescriptor } from '@/infrastructure/config/appearance';
@@ -187,7 +181,6 @@ import { subagentProjectionAppearanceDescriptor } from '@/flow_chat/components/s
 import { threadGoalDialogsAppearanceDescriptor } from '@/flow_chat/components/thread-goal/ThreadGoalDialogs.appearance';
 import { welcomePanelAppearanceDescriptor } from '@/flow_chat/components/WelcomePanel.appearance';
 import { generativeWidgetToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GenerativeWidgetToolCard.appearance';
-import { gitToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/GitToolDisplay.appearance';
 import { snapshotFullscreenDiffViewerAppearanceDescriptor } from '@/flow_chat/tool-cards/SnapshotFullscreenDiffViewer.appearance';
 import { mermaidBlockAppearanceDescriptor } from '@/component-library/components/Markdown/MermaidBlock.appearance';
 import { defaultModelConfigAppearanceDescriptor } from '@/infrastructure/config/components/DefaultModelConfig.appearance';
@@ -230,30 +223,16 @@ import { mcpInteractionDialogAppearanceDescriptor } from '@/app/components/MCPIn
 import { remoteConnectDisclaimerAppearanceDescriptor } from '@/app/components/RemoteConnectDialog/RemoteConnectDisclaimer.appearance';
 import { diffFullscreenViewerAppearanceDescriptor } from '@/app/components/panels/DiffFullscreenViewer.appearance';
 import { notificationButtonAppearanceDescriptor } from '@/app/components/TitleBar/NotificationButton.appearance';
-import { contextCompressionCardAppearanceDescriptor } from '@/component-library/components/FlowChatCards/ContextCompressionCard/appearance';
-import { reviewSessionSummaryCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ReviewSessionSummaryCard.appearance';
 import { deepReviewConsentDialogAppearanceDescriptor } from '@/flow_chat/components/DeepReviewConsentDialog.appearance';
+import { flowToolCardAppearanceDescriptor } from '@/flow_chat/components/FlowToolCard.appearance';
 import { flowTextBlockAppearanceDescriptor } from '@/flow_chat/components/FlowTextBlock.appearance';
 import { chatInputApprovalBandAppearanceDescriptor } from '@/flow_chat/components/ChatInputApprovalBand.appearance';
-import { toolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/BaseToolCard.appearance';
 import { canvasToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CanvasToolCard.appearance';
 import { computerUseToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ComputerUseToolCard.appearance';
-import { defaultToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/DefaultToolCard.appearance';
-import { getFileDiffDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/GetFileDiffDisplay.appearance';
 import { miniAppToolDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/MiniAppToolDisplay.appearance';
 import { modelThinkingDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/ModelThinkingDisplay.appearance';
-import { todoWriteDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/TodoWriteDisplay.appearance';
 import { toolTimeoutIndicatorAppearanceDescriptor } from '@/flow_chat/tool-cards/ToolTimeoutIndicator.appearance';
-import { webFetchCardAppearanceDescriptor } from '@/flow_chat/tool-cards/WebFetchCard.appearance';
-import { compactToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CompactToolCard.appearance';
-import { toolCardStatusSlotAppearanceDescriptor } from '@/flow_chat/tool-cards/ToolCardStatusSlot.appearance';
-import { toolCardHeaderActionsAppearanceDescriptor } from '@/flow_chat/tool-cards/ToolCardHeaderActions.appearance';
 import { acpPermissionActionsAppearanceDescriptor } from '@/flow_chat/tool-cards/AcpPermissionActions.appearance';
-import { contextCompressionDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/ContextCompressionDisplay.appearance';
-import { getToolSpecCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GetToolSpecCard.appearance';
-import { agentWaitToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/AgentWaitToolCard.appearance';
-import { viewImageToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/ViewImageToolCard.appearance';
-import { runCodeToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/RunCodeToolCard.appearance';
 import { acpPlanPanelAppearanceDescriptor } from '@/flow_chat/components/AcpPlanPanel.appearance';
 import { backgroundCommandInputDialogAppearanceDescriptor } from '@/flow_chat/components/background-command/BackgroundCommandInputDialog.appearance';
 import { chatEmptyStateAppearanceDescriptor } from '@/flow_chat/components/ChatEmptyState.appearance';
@@ -309,13 +288,11 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(taskRunningIndicatorAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)
     .registerComponent(markdownAppearanceDescriptor)
-    .registerComponent(flowChatCardAppearanceDescriptor)
     .registerComponent(viewTransitionBoundaryAppearanceDescriptor)
     .registerComponent(chatInputAppearanceDescriptor)
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
     .registerComponent(sessionUsagePanelAppearanceDescriptor)
-    .registerComponent(fileOperationToolCardAppearanceDescriptor)
     .registerComponent(richTextInputAppearanceDescriptor)
     .registerComponent(modelRoundItemAppearanceDescriptor)
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
@@ -329,7 +306,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(createAgentPageAppearanceDescriptor)
     .registerComponent(keyboardShortcutsAppearanceDescriptor)
     .registerComponent(taskToolDisplayAppearanceDescriptor)
-    .registerComponent(agentControlToolCardAppearanceDescriptor)
     .registerComponent(applicationSettingsAppearanceDescriptor)
     .registerComponent(markdownEditorAppearanceDescriptor)
     .registerComponent(planViewerAppearanceDescriptor)
@@ -341,7 +317,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(taskDetailPanelAppearanceDescriptor)
     .registerComponent(toolbarModeAppearanceDescriptor)
     .registerComponent(mcpToolDisplayAppearanceDescriptor)
-    .registerComponent(terminalToolCardAppearanceDescriptor)
     .registerComponent(skillsConfigAppearanceDescriptor)
     .registerComponent(diffEditorAppearanceDescriptor)
     .registerComponent(agentCompanionDesktopPetAppearanceDescriptor)
@@ -351,9 +326,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(userMessageItemAppearanceDescriptor)
     .registerComponent(sessionUsageReportCardAppearanceDescriptor)
     .registerComponent(sessionUsageModalAppearanceDescriptor)
-    .registerComponent(askUserQuestionCardAppearanceDescriptor)
     .registerComponent(createPlanDisplayAppearanceDescriptor)
-    .registerComponent(execProcessToolCardAppearanceDescriptor)
     .registerComponent(editorConfigAppearanceDescriptor)
     .registerComponent(appearanceSettingsAppearanceDescriptor)
     .registerComponent(configAppearanceDescriptor)
@@ -404,8 +377,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(remoteConnectDisclaimerAppearanceDescriptor)
     .registerComponent(diffFullscreenViewerAppearanceDescriptor)
     .registerComponent(notificationButtonAppearanceDescriptor)
-    .registerComponent(contextCompressionCardAppearanceDescriptor)
-    .registerComponent(reviewSessionSummaryCardAppearanceDescriptor)
     .registerComponent(relayDeployAppearanceDescriptor)
     .registerComponent(marketAccountControlsAppearanceDescriptor)
     .registerComponent(sshRemoteAppearanceDescriptor)
@@ -480,7 +451,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(threadGoalDialogsAppearanceDescriptor)
     .registerComponent(welcomePanelAppearanceDescriptor)
     .registerComponent(generativeWidgetToolCardAppearanceDescriptor)
-    .registerComponent(gitToolDisplayAppearanceDescriptor)
     .registerComponent(snapshotFullscreenDiffViewerAppearanceDescriptor)
     .registerComponent(mermaidBlockAppearanceDescriptor)
     .registerComponent(defaultModelConfigAppearanceDescriptor)
@@ -499,27 +469,15 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(browserPanelAppearanceDescriptor)
     .registerComponent(nurseryGalleryAppearanceDescriptor)
     .registerComponent(deepReviewConsentDialogAppearanceDescriptor)
+    .registerComponent(flowToolCardAppearanceDescriptor)
     .registerComponent(flowTextBlockAppearanceDescriptor)
     .registerComponent(chatInputApprovalBandAppearanceDescriptor)
-    .registerComponent(toolCardAppearanceDescriptor)
     .registerComponent(canvasToolCardAppearanceDescriptor)
     .registerComponent(computerUseToolCardAppearanceDescriptor)
-    .registerComponent(defaultToolCardAppearanceDescriptor)
-    .registerComponent(getFileDiffDisplayAppearanceDescriptor)
     .registerComponent(miniAppToolDisplayAppearanceDescriptor)
     .registerComponent(modelThinkingDisplayAppearanceDescriptor)
-    .registerComponent(todoWriteDisplayAppearanceDescriptor)
     .registerComponent(toolTimeoutIndicatorAppearanceDescriptor)
-    .registerComponent(webFetchCardAppearanceDescriptor)
-    .registerComponent(compactToolCardAppearanceDescriptor)
-    .registerComponent(toolCardStatusSlotAppearanceDescriptor)
-    .registerComponent(toolCardHeaderActionsAppearanceDescriptor)
     .registerComponent(acpPermissionActionsAppearanceDescriptor)
-    .registerComponent(contextCompressionDisplayAppearanceDescriptor)
-    .registerComponent(getToolSpecCardAppearanceDescriptor)
-    .registerComponent(agentWaitToolCardAppearanceDescriptor)
-    .registerComponent(viewImageToolCardAppearanceDescriptor)
-    .registerComponent(runCodeToolCardAppearanceDescriptor)
     .registerComponent(acpPlanPanelAppearanceDescriptor)
     .registerComponent(backgroundCommandInputDialogAppearanceDescriptor)
     .registerComponent(chatEmptyStateAppearanceDescriptor)

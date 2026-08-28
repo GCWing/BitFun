@@ -6,6 +6,8 @@ import {
   DEDICATED_TOOL_CARD_NAMES,
   getToolCardComponent,
   isCollapsibleTool,
+  PRODUCT_OWNED_TOOL_CARD_COMPONENTS,
+  STANDARD_TOOL_CARD_ADAPTERS,
   TOOL_CARD_COMPONENTS,
   usesDefaultToolCard,
 } from './index';
@@ -24,6 +26,62 @@ describe('tool card registry', () => {
 
   it('keeps lightweight dedicated-card classification aligned with the component registry', () => {
     expect([...DEDICATED_TOOL_CARD_NAMES].sort()).toEqual(
+      Object.keys(TOOL_CARD_COMPONENTS).sort(),
+    );
+  });
+
+  it('keeps standard design-system adapters separate from bespoke product cards', () => {
+    const standardNames = Object.keys(STANDARD_TOOL_CARD_ADAPTERS);
+    const productOwnedNames = Object.keys(PRODUCT_OWNED_TOOL_CARD_COMPONENTS);
+
+    expect(standardNames).toEqual([
+      'Read',
+      'Write',
+      'Edit',
+      'Delete',
+      'Grep',
+      'Glob',
+      'LS',
+      'WebSearch',
+      'WebFetch',
+      'AgentSpawn',
+      'AgentSendInput',
+      'AgentWait',
+      'TodoWrite',
+      'ContextCompression',
+      'GetToolSpec',
+      'Skill',
+      'ReviewSessionSummary',
+      'Git',
+      'GetFileDiff',
+      'TerminalControl',
+      'SessionControl',
+      'SessionMessage',
+      'Bash',
+      'RunCode',
+      'ExecCommand',
+      'WriteStdin',
+      'ExecControl',
+      'PageDeploy',
+      'PagePublish',
+      'view_image',
+    ]);
+    expect(productOwnedNames).toEqual([
+      'Task',
+      'LaunchReviewAgent',
+      'submit_code_review',
+      'AskUserQuestion',
+      'CreatePlan',
+      'InitMiniApp',
+      'GenerativeUI',
+      'ComputerUse',
+      'CreateCanvas',
+      'ReadCanvas',
+      'UpdateCanvas',
+      'PatchCanvas',
+    ]);
+    expect(standardNames.some((toolName) => productOwnedNames.includes(toolName))).toBe(false);
+    expect([...standardNames, ...productOwnedNames].sort()).toEqual(
       Object.keys(TOOL_CARD_COMPONENTS).sort(),
     );
   });

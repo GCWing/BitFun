@@ -11,6 +11,13 @@ export const reasoningPresetSelectorAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'options' },
     { id: 'option' },
   ],
+  facets: [
+    {
+      id: 'presentation',
+      attribute: 'data-bf-presentation',
+      values: ['meter', 'label'],
+    },
+  ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
     { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },

@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '@bitfun/ui';
-import { FileText, Loader2, SearchCheck, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { ReviewSummaryToolCard } from '@bitfun/ui/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { openMainSession } from '../services/sessionActivation';
@@ -13,7 +12,6 @@ import {
   findLatestCodeReviewResult,
   summarizeCodeReviewResult,
 } from '../utils/reviewSessionSummary';
-import './ReviewSessionSummaryCard.scss';
 
 interface ReviewSessionSummaryInput {
   childSessionId?: string;
@@ -95,74 +93,40 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
         : t('toolCards.reviewSessionSummary.noIssues');
 
   const status = failed ? 'error' : running ? 'running' : 'completed';
-  const Icon = kind === 'deep_review' ? Sparkles : SearchCheck;
+  const summaryText = summary.summaryText || (running
+    ? t('toolCards.reviewSessionSummary.waitingSummary')
+    : t('toolCards.reviewSessionSummary.emptySummary'));
 
   return (
-    <BaseToolCard
+    <ReviewSummaryToolCard
       status={status}
       isExpanded={isExpanded}
-      onClick={() => setIsExpanded((current) => !current)}
-      className="review-session-summary-card"
-      header={(
-        <ToolCardHeader
-          icon={<Icon size={16} />}
-          iconClassName="review-session-summary-card__icon"
-          content={(
-            <span>
-              {reviewLabel}: {statusText}
-            </span>
-          )}
-          extra={changedFiles.length > 0 ? (
-            <span className="review-session-summary-card__file-count" data-bf-component="review-session-summary-card" data-bf-part="fileCount">
-              <FileText size={14} />
-              {t('toolCards.reviewSessionSummary.filesChanged', {
-                count: changedFiles.length,
-              })}
-            </span>
-          ) : null}
-          statusIcon={running ? <Loader2 className="animate-spin" size={14} /> : undefined}
-        />
-      )}
-      expandedContent={(
-        <div className="review-session-summary-card__details" data-bf-component="review-session-summary-card" data-bf-part="details" onClick={(event) => event.stopPropagation()}>
-          {summary.summaryText ? (
-            <p className="review-session-summary-card__summary" data-bf-component="review-session-summary-card" data-bf-part="summary">{summary.summaryText}</p>
-          ) : (
-            <p className="review-session-summary-card__summary" data-bf-component="review-session-summary-card" data-bf-part="summary">
-              {running
-                ? t('toolCards.reviewSessionSummary.waitingSummary')
-                : t('toolCards.reviewSessionSummary.emptySummary')}
-            </p>
-          )}
-          {changedFiles.length > 0 ? (
-            <div className="review-session-summary-card__files" data-bf-component="review-session-summary-card" data-bf-part="files">
-              <span className="review-session-summary-card__section-label">
-                {t('toolCards.reviewSessionSummary.changedFilesTitle')}
-              </span>
-              <ul>
-                {changedFiles.map((filePath) => (
-                  <li key={filePath}>{filePath}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <Button
-            type="button"
-            variant="fill"
-            size="sm"
-            className="review-session-summary-card__open"
-            onClick={async () => {
-              if (!childSessionId || !parentSessionId) return;
-              await openMainSession(parentSessionId);
-              openBtwSessionInAuxPane({
-                childSessionId,
-                parentSessionId,
-              });
-            }}
-          >
-            {t('toolCards.reviewSessionSummary.openReview')}
-          </Button>
-        </div>
+      onToggle={() => setIsExpanded((current) => !current)}
+      kind={kind === 'deep_review' ? 'deep-review' : 'review'}
+      loading={running}
+      title={`${reviewLabel}: ${statusText}`}
+      summary={summaryText}
+      changedFiles={changedFiles}
+      fileCountLabel={changedFiles.length > 0 ? t('toolCards.reviewSessionSummary.filesChanged', {
+        count: changedFiles.length,
+      }) : undefined}
+      filesLabel={t('toolCards.reviewSessionSummary.changedFilesTitle')}
+      action={(
+        <Button
+          type="button"
+          variant="fill"
+          size="sm"
+          onClick={async () => {
+            if (!childSessionId || !parentSessionId) return;
+            await openMainSession(parentSessionId);
+            openBtwSessionInAuxPane({
+              childSessionId,
+              parentSessionId,
+            });
+          }}
+        >
+          {t('toolCards.reviewSessionSummary.openReview')}
+        </Button>
       )}
     />
   );

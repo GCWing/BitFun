@@ -12,6 +12,7 @@ export default defineConfig({
     lib: {
       cssFileName: "styles",
       entry: {
+        "flow-chat": path.resolve(packageDirectory, "src/flow-chat.ts"),
         index: path.resolve(packageDirectory, "src/index.ts"),
         registry: path.resolve(packageDirectory, "src/registry.ts"),
       },

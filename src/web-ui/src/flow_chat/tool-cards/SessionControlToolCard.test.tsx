@@ -18,21 +18,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('./CompactToolCard', () => ({
-  CompactToolCard: ({ header, expandedContent }: {
-    header: React.ReactNode;
-    expandedContent?: React.ReactNode;
-  }) => <div>{header}{expandedContent}</div>,
-  CompactToolCardHeader: ({ action, content }: {
-    action: React.ReactNode;
-    content: React.ReactNode;
-  }) => <div>{action}{content}</div>,
-}));
-
-vi.mock('./ToolCardStatusSlot', () => ({
-  ToolCardStatusSlot: () => <span />,
-}));
-
 vi.mock('./useToolCardHeightContract', () => ({
   useToolCardHeightContract: () => ({
     cardRootRef: { current: null },
