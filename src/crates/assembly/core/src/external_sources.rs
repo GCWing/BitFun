@@ -2906,7 +2906,11 @@ impl WorkspaceExternalSourceService {
     }
 
     fn snapshot(&self) -> ExternalSourceCatalogSnapshot {
+        #[cfg(feature = "opencode-plugin-host")]
         let mut snapshot = lock_snapshot(&self.snapshot).clone();
+        #[cfg(not(feature = "opencode-plugin-host"))]
+        let snapshot = lock_snapshot(&self.snapshot).clone();
+        #[cfg(feature = "opencode-plugin-host")]
         for message in crate::plugin_host::configured_plugin_activation_failures(
             self.workspace_root.as_deref(),
         ) {

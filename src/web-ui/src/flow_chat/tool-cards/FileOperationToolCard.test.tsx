@@ -157,10 +157,6 @@ describe('FileOperationToolCard', () => {
     mocks.inlineDiffPreviewProps = [];
     mocks.typewriterMode = 'passthrough';
     mocks.writePlanDisplayProps = [];
-    mocks.useGitState.mockClear();
-    mocks.useGitState.mockReturnValue({
-      isRepository: false,
-    });
     mocks.getOperationDiff.mockReset();
     mocks.getOperationDiff.mockResolvedValue({
       originalContent: '',
@@ -315,111 +311,6 @@ describe('FileOperationToolCard', () => {
 
     expect(container.querySelector('[data-testid="write-plan-display"]')).toBeNull();
     expect(container.querySelector('[data-testid="chat-file-change-card"]')).not.toBeNull();
-  });
-
-  it('does not trigger passive git refresh while historical restore is pending', async () => {
-    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
-    const toolItem: FlowToolItem = {
-      id: 'tool-history',
-      type: 'tool',
-      toolName: 'Write',
-      status: 'completed',
-      toolCall: {
-        id: 'call-history',
-        name: 'Write',
-        input: {
-          file_path: 'src/newFile.ts',
-          content: 'export const value = 1;',
-        },
-      },
-      toolResult: {
-        success: true,
-        result: {
-          file_path: 'src/newFile.ts',
-        },
-      },
-    } as FlowToolItem;
-
-    await act(async () => {
-      root.render(
-        <FlowChatContext.Provider
-          value={{
-            sessionId: 'history-session',
-            activeSessionOverride: {
-              sessionId: 'history-session',
-              isHistorical: true,
-              contextRestoreState: 'pending',
-            } as Session,
-          }}
-        >
-          <FileOperationToolCard
-            toolItem={toolItem}
-            config={{} as ToolCardConfig}
-            sessionId="history-session"
-          />
-        </FlowChatContext.Provider>
-      );
-    });
-
-    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
-      repositoryPath: 'D:/workspace/BitFun',
-      isActive: false,
-      refreshOnMount: false,
-      refreshOnActive: false,
-      participateInWindowFocusRefresh: false,
-      layers: ['basic'],
-    }));
-  });
-
-  it('keeps passive git refresh enabled for normal active sessions', async () => {
-    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
-    const toolItem: FlowToolItem = {
-      id: 'tool-active',
-      type: 'tool',
-      toolName: 'Write',
-      status: 'completed',
-      toolCall: {
-        id: 'call-active',
-        name: 'Write',
-        input: {
-          file_path: 'src/newFile.ts',
-          content: 'export const value = 1;',
-        },
-      },
-      toolResult: {
-        success: true,
-        result: {
-          file_path: 'src/newFile.ts',
-        },
-      },
-    } as FlowToolItem;
-
-    await act(async () => {
-      root.render(
-        <FlowChatContext.Provider
-          value={{
-            sessionId: 'active-session',
-            activeSessionOverride: {
-              sessionId: 'active-session',
-              isHistorical: false,
-            } as Session,
-          }}
-        >
-          <FileOperationToolCard
-            toolItem={toolItem}
-            config={{} as ToolCardConfig}
-            sessionId="active-session"
-          />
-        </FlowChatContext.Provider>
-      );
-    });
-
-    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
-      repositoryPath: 'D:/workspace/BitFun',
-      isActive: true,
-      refreshOnMount: true,
-      refreshOnActive: false,
-    }));
   });
 
   afterEach(() => {

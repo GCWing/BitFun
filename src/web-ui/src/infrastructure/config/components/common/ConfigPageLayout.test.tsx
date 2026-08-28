@@ -61,7 +61,7 @@ describe('ConfigPageLayout', () => {
     const layout = readFileSync(
       resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageLayout.scss'),
       'utf8',
-    );
+    ).replace(/\r\n/g, '\n');
     const header = readFileSync(
       resolve(process.cwd(), 'src/infrastructure/config/components/common/ConfigPageHeader.scss'),
       'utf8',

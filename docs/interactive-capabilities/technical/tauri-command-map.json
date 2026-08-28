@@ -2725,7 +2725,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::get_available_modes",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn get_available_modes( state: State<'_, AppState>, startup_trace: State<'_, DesktopStartupTrace>, request: Option<GetAvailableModesRequest>, ) -> Result<Vec<ModeInfoDTO>, String>",
+      "signature": "fn get_available_modes( state: State<'_, AppState>, runtime: State<'_, DesktopRuntimeContext>, startup_trace: State<'_, DesktopStartupTrace>, request: Option<GetAvailableModesRequest>, ) -> Result<Vec<ModeInfoDTO>, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {

@@ -323,6 +323,9 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   const checkCompilation = rustJob.steps.find(
     (step) => step.name === 'Check compilation',
   );
+  const createTauriResources = rustJob.steps.find(
+    (step) => step.name === 'Create Tauri resource directories',
+  );
   const saveSherpaCache = rustJob.steps.find(
     (step) => step.name === 'Save Sherpa native libraries',
   );
@@ -340,6 +343,16 @@ test('keeps Rust CI independent, restore-only on PRs, and target-focused', () =>
   assert.equal(saveSherpaCache?.uses, 'actions/cache/save@v5');
   assert.equal(saveSherpaCache?.with?.path, 'target/sherpa-onnx-prebuilt');
   assert.equal(saveSherpaCache?.with?.key, sherpaCacheKey);
+  assert.match(
+    createTauriResources?.run ?? '',
+    /src\/apps\/extension-host\/dist\/extension-host\.js/,
+    'clean Rust checks must provide the generated extension Host resource path without building the Host',
+  );
+  assert.ok(
+    rustJob.steps.indexOf(createTauriResources) <
+      rustJob.steps.indexOf(checkCompilation),
+    'Tauri resource placeholders must exist before cargo check',
+  );
   assert.equal(
     saveSherpaCache?.if,
     "github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/1.0.0-explore') && steps.sherpa-native-cache.outputs.cache-hit != 'true'",

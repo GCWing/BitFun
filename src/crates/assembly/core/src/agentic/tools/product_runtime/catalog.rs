@@ -373,14 +373,10 @@ async fn contextual_tool_snapshot(context: &ToolUseContext) -> Vec<ToolRef> {
         }
         let registry = get_global_tool_registry();
         let tools = registry.read().await.get_all_tools();
-        let route_root = crate::external_tools::external_tool_route_root(
-            context.workspace_root(),
-            context.is_remote(),
-        );
         return tools
             .into_iter()
             .filter_map(|tool| {
-                crate::external_tools::resolve_external_tool_for_workspace(tool, route_root)
+                crate::external_tools::resolve_external_tool_for_context(tool, context)
             })
             .collect();
     }

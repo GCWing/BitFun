@@ -43,17 +43,20 @@ const MAX_CACHED_WORKSPACE_HOOK_SOURCES: usize = 32;
 const MAX_PENDING_CONTEXT_SESSIONS: usize = 1024;
 
 pub(crate) fn new_runtime_hook_registry() -> RuntimeHookRegistry {
-    let registry = RuntimeHookRegistry::default();
-    registry
-        .register_batch(vec![deep_review_builtin_registration()])
-        .expect("deep review builtin registration must be valid");
-    registry
+    runtime_hook_registry()
 }
 
 pub(crate) fn runtime_hook_registry() -> RuntimeHookRegistry {
-    crate::agentic::coordination::get_global_coordinator()
-        .map(|coordinator| coordinator.hook_registry().clone())
-        .expect("Agent Runtime hook registry is unavailable before coordinator initialization")
+    static REGISTRY: OnceLock<RuntimeHookRegistry> = OnceLock::new();
+    REGISTRY
+        .get_or_init(|| {
+            let registry = RuntimeHookRegistry::default();
+            registry
+                .register_batch(vec![deep_review_builtin_registration()])
+                .expect("deep review builtin registration must be valid");
+            registry
+        })
+        .clone()
 }
 
 #[cfg(feature = "opencode-plugin-host")]
@@ -1057,6 +1060,26 @@ fn reusable_cached_hook_source(
 #[cfg(test)]
 mod cache_tests {
     use super::*;
+
+    #[test]
+    fn runtime_hook_registry_handles_share_the_process_runtime_owner() {
+        let workspace_scope = format!("runtime-hook-registry-test-{}", uuid::Uuid::new_v4());
+        let first = new_runtime_hook_registry();
+        let second = runtime_hook_registry();
+
+        first.set_source_activation_for_workspace(
+            RuntimeHookSource::Plugin,
+            Some(&workspace_scope),
+            bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready,
+        );
+
+        assert_eq!(
+            second
+                .source_activation_for_workspace(RuntimeHookSource::Plugin, Some(&workspace_scope)),
+            bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready
+        );
+        second.clear_source_workspace(RuntimeHookSource::Plugin, &workspace_scope);
+    }
 
     #[test]
     fn imported_generation_invalidates_the_cached_hook_source_state() {

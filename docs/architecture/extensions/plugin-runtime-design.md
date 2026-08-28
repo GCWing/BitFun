@@ -157,6 +157,11 @@ Rust 监督路径检查，不能依赖可能已被同步插件代码阻塞的业
 插件 import 可能立即启动后台任务或产生文件、网络和进程副作用。因此新旧 Plugin Host 不能同时加载同一组插件。
 旧 Host 服务期间只能做不执行插件代码的来源、完整性、依赖和策略检查；真正加载新代码需要一个短暂停机窗口。
 
+本节描述完整生命周期目标。当前 OC-R2 可用切片已实现内容摘要、逻辑 generation 撤下、崩溃后的进程树回收与
+下一次使用恢复；正常源码更新、配置停用时的共享 Host 物理 generation 替换仍按兼容矩阵第 6 节作为后续生命周期
+工作跟踪。在该项完成前，更新后的贡献不会与旧逻辑 generation 并行发布，但 import 期创建且未被插件 `dispose`
+清理的进程内副作用可能持续到 Host 崩溃或应用退出，因此当前状态不能表述为已完成安全热更新。
+
 ```mermaid
 flowchart LR
   Change["Source changed"] --> Check["Static checks"] --> Ready["Ready to restart"]
@@ -271,7 +276,8 @@ flowchart LR
 当前 package-plugin 切片会准备并加载配置中显式声明的插件，发布 generation-fenced 注册快照，并把完整合并配置、
 Config Hook、Tool、`tool.execute.before/after`、反向 metadata/ask 和最小 Client gateway 接入现有 owner。一个 Rust
 Runtime 进程监督一个物理 Host，Host 可承载多个 workspace 逻辑实例；Session/Tool 调用只携带上下文，不成为进程键。
-激活或恢复失败会发布可查询的 workspace-scoped `plugin.activation_failed` 并继续原生 Session。初次激活失败时没有
+已知 workspace 的创建/激活失败会发布对应范围可查询的 `plugin.activation_failed` 并继续原生 Session；
+existing-session ensure 暂缺 execution root 时的诊断可能进入全局范围，按兼容文档第 6 节跟踪。初次激活失败时没有
 插件贡献；刷新失败可保留已确认的上一代贡献，因此诊断表达“本次激活/刷新失败”，不能把原生路径成功写成插件激活成功。
 
 standalone `.js` Tool 继续由 `ScriptToolRuntime` 为每个脚本启动 Node worker，两条执行路径不共享生命周期对象。当前

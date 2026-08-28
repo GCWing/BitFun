@@ -68,6 +68,9 @@ vi.mock('@bitfun/ui', () => ({
   IconButton: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props}>{children}</button>
   ),
+  Field: ({ label, children }: React.PropsWithChildren<{ label: string }>) => (
+    <label>{label}{React.cloneElement(children as React.ReactElement, { 'aria-label': label })}</label>
+  ),
   Input: ({
     leading,
     trailing,

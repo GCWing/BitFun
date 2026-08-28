@@ -1031,7 +1031,8 @@ export function runManifestParserSelfTest({
     throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
   }
   const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/assembly/core/src',
+    (rule) => rule.path === 'src/crates/assembly/core/src'
+      && rule.reason.includes('owner path for portable subagent contracts'),
   );
   if (!coreSubagentRuntimeOwnerPathRule) {
     throw new Error('missing core subagent runtime owner-path boundary rule');
@@ -4570,7 +4571,14 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
-      contracts: ['openLocalDiff', 'snapshotAPI\\.getOperationDiff', 'Snapshot diff unavailable', 'localDiffContent'],
+      contracts: [
+        'InlineDiffPreview',
+        "previewVariant === 'completed-diff'",
+        'originalContent=\\{oldStringContent\\}',
+        'modifiedContent=\\{newStringContent\\}',
+        'originalContent=""',
+        'modifiedContent=\\{contentPreview\\}',
+      ],
     },
     {
       path: 'src/web-ui/src/main.tsx',

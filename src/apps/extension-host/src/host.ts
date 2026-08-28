@@ -281,7 +281,7 @@ export class ExtensionHost {
         })
       }
 
-      const config = cloneWireValue(input.config, "config")
+      let config = cloneWireValue(input.config, "config")
       const gateway = await this.#gatewayFactory({
         instanceID: input.instanceID,
         rpc: this.#rpc,
@@ -408,6 +408,7 @@ export class ExtensionHost {
         for (const retained of instance.hooks) {
           this.#assertOpening(instance)
           if (!retained.hooks.config) continue
+          const configBeforeHook = cloneWireValue(config, "configBeforeHook")
           logEvent("plugin.activation.config_hook.begin", {
             instance_id: instance.id,
             plugin: retained.plugin.spec,
@@ -424,6 +425,7 @@ export class ExtensionHost {
               plugin: retained.plugin.spec,
             }, "debug")
           } catch (error) {
+            config = configBeforeHook
             const diagnostic = runtimeDiagnostic(retained.plugin, "config", error)
             diagnostics.push(diagnostic)
             configContributions.push({

@@ -445,7 +445,7 @@ impl CliAgentRuntimeClient {
     /// consults the controller process's local registry.
     pub(crate) async fn available_agent_modes(&self) -> Result<Vec<CliAgentMode>> {
         match &self.backend {
-            CliAgentRuntimeBackend::Embedded(_) => {
+            CliAgentRuntimeBackend::Embedded(runtime) => {
                 let binding = self.current_workspace_binding();
                 if let Err(error) = self.ensure_embedded_plugin_workspace_ready(&binding).await {
                     tracing::warn!(
@@ -462,20 +462,25 @@ impl CliAgentRuntimeClient {
                 {
                     tracing::warn!("Failed to initialize external agent sources: {error}");
                 }
-                let registry = bitfun_core::agentic::agents::get_agent_registry();
-                Ok(registry
-                    .get_modes_info_for_workspace(Some(&workspace), true)
-                    .await
-                    .into_iter()
-                    .map(|mode| CliAgentMode {
-                        id: mode.id,
-                        route_key: mode.key,
-                        description: mode.description,
-                        model_id: mode.model,
-                        is_external: mode.source
-                            == bitfun_core::agentic::agents::AgentSource::External,
+                runtime
+                    .list_agent_modes(AgentModeCatalogQuery {
+                        workspace_root: Some(workspace.to_string_lossy().to_string()),
+                        include_external: true,
                     })
-                    .collect())
+                    .await
+                    .map(|modes| {
+                        modes
+                            .into_iter()
+                            .map(|mode| CliAgentMode {
+                                id: mode.id,
+                                route_key: mode.route_key,
+                                description: mode.description,
+                                model_id: mode.model_id,
+                                is_external: mode.is_external,
+                            })
+                            .collect()
+                    })
+                    .map_err(|error| anyhow::anyhow!(error.into_message()))
             }
             CliAgentRuntimeBackend::Shared(client) => {
                 let session_id = self.session_id.lock().await.clone();
@@ -619,24 +624,10 @@ impl CliAgentRuntimeClient {
     }
 
     fn current_workspace_binding(&self) -> AgentSessionWorkspaceBinding {
-        let paths = self
-            .workspace_paths
+        self.workspace_paths
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let execution = paths.execution();
-        let project = paths.project();
-        AgentSessionWorkspaceBinding {
-            workspace_id: None,
-            workspace_path: execution.to_string_lossy().to_string(),
-            project_workspace_path: Some(project.to_string_lossy().to_string()),
-            execution_target: paths.execution_target.clone().or_else(|| {
-                Some(SessionExecutionTarget::local(
-                    execution.to_string_lossy().to_string(),
-                ))
-            }),
-            remote_connection_id: paths.remote_connection_id.clone(),
-            remote_ssh_host: paths.remote_ssh_host.clone(),
-        }
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .binding()
     }
 
     pub(crate) fn remote_workspace_scope(&self) -> (Option<String>, Option<String>) {
@@ -644,7 +635,10 @@ impl CliAgentRuntimeClient {
             .workspace_paths
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        (paths.remote_connection_id.clone(), paths.remote_ssh_host.clone())
+        (
+            paths.remote_connection_id.clone(),
+            paths.remote_ssh_host.clone(),
+        )
     }
 
     pub(crate) fn is_remote_workspace(&self) -> bool {
@@ -2823,6 +2817,7 @@ mod dual_backend_behavior_tests {
     use bitfun_runtime_ports::{
         ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionReplyStorePort,
         RuntimeServiceCapability, RuntimeServicePort, SessionExecutionTarget,
+        SessionExecutionTargetKind, WorktreeLifecycle,
     };
 
     use crate::shared_runtime::SharedRuntimeHandler;
@@ -3306,6 +3301,34 @@ mod dual_backend_behavior_tests {
                 Some(self.workspace.clone()),
             )
         }
+    }
+
+    #[test]
+    fn embedded_client_preserves_managed_workspace_binding() {
+        let root = tempfile::tempdir().expect("workspace root");
+        let workspace = dunce::canonicalize(root.path()).expect("canonical workspace");
+        let fixture = Fixture::new(&workspace);
+        let client = fixture.embedded_client();
+        let binding = AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace-1".to_string()),
+            workspace_path: workspace.join("managed-worktree").display().to_string(),
+            project_workspace_path: Some(workspace.display().to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("worktree-1".to_string()),
+                root_path: workspace.join("managed-worktree").display().to_string(),
+                base_ref: Some("main".to_string()),
+                base_commit: Some("123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        client.set_workspace_binding(&binding);
+
+        assert_eq!(client.current_workspace_binding(), binding);
     }
 
     async fn shared_backend(

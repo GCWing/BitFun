@@ -3,6 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computeFlowChatInputStackFooterPx } from '../../utils/flowChatScrollLayout';
 import { tailSpacerPxForViewport } from './flowChatTailFollow';
 import { ONE_SHOT_NAVIGATION_HOLD_MS } from './flowChatViewportOwnership';
 import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
@@ -46,8 +47,8 @@ const mocks = vi.hoisted(() => ({
   renderItemMetadata: true,
 }));
 
-/** Input-stack footer the chat-input mock produces: 140 + 4 + 24. */
-const BOTTOM_INSET = 168;
+/** Input-stack footer produced by the mocked 140px composer. */
+const BOTTOM_INSET = computeFlowChatInputStackFooterPx(140);
 
 /**
  * jsdom has no layout engine, so both halves of the navigation clamp have to be
@@ -357,8 +358,8 @@ describe('VirtualMessageList natural scroll contract', () => {
   it('renders only the current input layout inset in the Footer', () => {
     act(() => root.render(<VirtualMessageList />));
     const footer = container.querySelector<HTMLElement>('.message-list-footer');
-    expect(footer?.style.height).toBe('168px');
-    expect(footer?.style.minHeight).toBe('168px');
+    expect(footer?.style.height).toBe(`${BOTTOM_INSET}px`);
+    expect(footer?.style.minHeight).toBe(`${BOTTOM_INSET}px`);
   });
 
   it('reserves a tail spacer from the viewport and input-stack inset', () => {
@@ -386,7 +387,7 @@ describe('VirtualMessageList natural scroll contract', () => {
       // The input-stack footer stays a separate reservation. It feeds the
       // spacer's size, but the two are never folded into one number.
       expect(container.querySelector<HTMLElement>('.message-list-footer')?.style.height)
-        .toBe('168px');
+        .toBe(`${BOTTOM_INSET}px`);
     } finally {
       if (originalClientHeight) {
         Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalClientHeight);
@@ -497,7 +498,7 @@ describe('VirtualMessageList natural scroll contract', () => {
       owner: 'one-shot-navigation',
       holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
     });
-    expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
+    expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain(`${BOTTOM_INSET}px`);
   });
 
   it('top-aligns a Turn that still has a transcript below it', () => {
@@ -1089,7 +1090,7 @@ describe('VirtualMessageList natural scroll contract', () => {
     const listRef = React.createRef<VirtualMessageListRef>();
     act(() => root.render(<VirtualMessageList ref={listRef} />));
     expect(listRef.current?.prepareTurnNavigation('turn-2')).toBe('pending');
-    expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain('168px');
+    expect(container.querySelector('.message-list-footer')?.getAttribute('style')).toContain(`${BOTTOM_INSET}px`);
   });
 
   it('captures and restores a history viewport by Turn and viewport offset', () => {
