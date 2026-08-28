@@ -563,6 +563,24 @@ mod tests {
     }
 
     #[test]
+    fn commit_push_pr_is_bundled_with_attribution_and_owns_lightweight_pr_requests() {
+        let skill = embedded_skill_text("commit-push-pr/SKILL.md");
+        assert!(skill.contains("name: commit-push-pr"));
+        assert!(
+            skill.contains("Co-authored-by: BitFun <318544290+bitfun-ai@users.noreply.github.com>")
+        );
+        assert!(skill.contains("Generated with [BitFun](https://github.com/bitfun-ai)"));
+
+        let ship = embedded_skill_text("gstack-ship/SKILL.md");
+        let ship_frontmatter = ship
+            .split("---")
+            .nth(1)
+            .expect("gstack-ship should have YAML frontmatter");
+        assert!(ship_frontmatter.contains("explicit `/ship`"));
+        assert!(ship_frontmatter.contains("built-in `commit-push-pr` skill instead"));
+    }
+
+    #[test]
     fn redistribution_restricted_skills_are_not_embedded() {
         for skill in ["docx", "pdf", "pptx", "xlsx"] {
             assert!(
