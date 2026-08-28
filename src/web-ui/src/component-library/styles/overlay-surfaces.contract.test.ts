@@ -9,8 +9,6 @@ const readSource = (path: string): string => readFileSync(join(SOURCE_ROOT, path
 const readRepositorySource = (path: string): string => readFileSync(join(REPOSITORY_ROOT, path), 'utf8');
 
 const portalStyleOverrides: Record<string, string> = {
-  'app/components/NavPanel/components/AssistantSessionCreateMenu.tsx':
-    'app/components/NavPanel/NavPanel.scss',
   'app/components/NavPanel/components/DeviceStatusControl.tsx':
     'app/components/NavPanel/NavPanel.scss',
   'app/components/NavPanel/components/PersistentFooterActions.tsx':
@@ -18,8 +16,6 @@ const portalStyleOverrides: Record<string, string> = {
   'app/components/NavPanel/components/WorkspaceSessionFilterMenu.tsx':
     'app/components/NavPanel/sections/sessions/SessionsSection.scss',
   'app/components/NavPanel/MainNav.tsx': 'app/components/NavPanel/NavPanel.scss',
-  'app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx':
-    'app/components/NavPanel/sections/workspaces/WorkspaceListSection.scss',
   'app/components/scheduled-jobs/DateTimePickerPopover.tsx':
     'app/components/scheduled-jobs/LocalizedDateTimeField.scss',
   'app/scenes/profile/views/AssistantAvatarPicker.tsx':
@@ -28,6 +24,12 @@ const portalStyleOverrides: Record<string, string> = {
     'app/scenes/shell/ShellNav.scss',
   'flow_chat/components/WelcomePanel.tsx': 'flow_chat/components/WelcomePanelSurface.scss',
 };
+
+// Portals whose chrome is owned by a design-system surface component satisfy
+// the contract without a floating-surface/dialog-surface SCSS include.
+const rendersDesignSystemSurface = (source: string): boolean =>
+  /import\s*\{[^}]*\b(?:Menu|Modal|ConfirmDialog)\b[^}]*\}\s*from\s*'@bitfun\/ui'/.test(source)
+  && /createPortal\(\s*<(?:Menu|Modal|ConfirmDialog)\b/.test(source);
 
 const portalSurfaceExceptions: Record<string, string> = {
   'app/components/panels/DiffFullscreenViewer.tsx': 'fullscreen viewer',
@@ -267,6 +269,10 @@ describe('overlay surface contracts', () => {
       const exceptionReason = portalSurfaceExceptions[sourcePath];
       if (exceptionReason) {
         expect(exceptionReason.length).toBeGreaterThan(0);
+        continue;
+      }
+
+      if (rendersDesignSystemSurface(readSource(sourcePath))) {
         continue;
       }
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Plus } from 'lucide-react';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -121,13 +122,9 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
       </div>
 
       {menuOpen ? createPortal(
-        <div
+        <Menu
           ref={menuRef}
           className="bitfun-nav-panel__assistant-session-menu"
-          data-bf-component="nav-panel"
-          data-bf-part="assistantSessionMenu"
-          data-bf-placement={menuLayout?.placement ?? 'bottom'}
-          role="menu"
           aria-label={chooseAssistantLabel}
           data-testid="nav-assistant-session-menu"
           style={{
@@ -139,11 +136,9 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
           {orderedAssistants.map(workspace => {
             const assistantName = getAssistantDisplayName(workspace);
             return (
-              <button
+              <MenuItem
                 key={workspace.id}
-                type="button"
-                className="bitfun-nav-panel__assistant-session-menu-item"
-                role="menuitem"
+                leading={<Plus size={13} aria-hidden="true" />}
                 aria-label={t('nav.sessions.newAssistantSessionFor', { assistantName })}
                 onClick={() => {
                   closeMenu();
@@ -151,12 +146,11 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
                 }}
                 data-testid={`nav-assistant-session-menu-item-${workspace.id}`}
               >
-                <Plus size={13} aria-hidden="true" />
                 <span className="bitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
-              </button>
+              </MenuItem>
             );
           })}
-        </div>,
+        </Menu>,
         getAppearanceOverlayHost(),
       ) : null}
     </div>

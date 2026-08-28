@@ -1,4 +1,4 @@
-import { Button, Modal, ConfirmDialog } from '@bitfun/ui';
+import { Button, Modal, ConfirmDialog, Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
@@ -903,125 +903,84 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </div>
 
             {menuOpen && menuPosition && createPortal(
-              <div
-                data-bf-component="workspace-item"
-                data-bf-part="menuPopover"
-                data-bf-state="open"
+              <Menu
                 ref={menuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
-                role="menu"
                 style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
                 data-testid="nav-workspace-item-menu"
                 data-workspace-id={workspace.id}
               >
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => { void handleCreateSession(); }}
-                    data-testid="nav-workspace-menu-create-session"
-                  >
-                    <Plus size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newSession')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={handleOpenScheduledJobs}
-                  >
-                    <Clock3 size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={handleOpenProjectPermissions}
-                    data-testid="nav-workspace-menu-project-permissions"
-                  >
-                    <ShieldCheck size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {t('nav.workspaces.actions.manageProjectPermissions')}
-                    </span>
-                  </button>
-                  {portForwardConnectionId ? (
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
+                <MenuItem
+                  leading={<Plus size={13} />}
+                  onClick={() => { void handleCreateSession(); }}
+                  data-testid="nav-workspace-menu-create-session"
+                >
+                  {t('nav.workspaces.actions.newSession')}
+                </MenuItem>
+                <MenuItem leading={<Clock3 size={13} />} onClick={handleOpenScheduledJobs}>
+                  {t('nav.scheduledJobs.open')}
+                </MenuItem>
+                <MenuItem
+                  leading={<ShieldCheck size={13} />}
+                  onClick={handleOpenProjectPermissions}
+                  data-testid="nav-workspace-menu-project-permissions"
+                >
+                  {t('nav.workspaces.actions.manageProjectPermissions')}
+                </MenuItem>
+                {portForwardConnectionId ? (
+                  <MenuItem
+                    leading={<Network size={13} />}
                     onClick={handleOpenPortForward}
                     data-testid="nav-workspace-menu-port-forward"
                   >
-                    <Network size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {t('ssh.portForward.menuEntry')}
-                    </span>
-                  </button>
+                    {t('ssh.portForward.menuEntry')}
+                  </MenuItem>
                 ) : null}
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => { void handleCopyWorkspacePath(); }}
-                    disabled={!workspace.rootPath}
-                    data-testid="nav-workspace-menu-copy-path"
-                  >
-                  <Copy size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.copyPath')}</span>
-                </button>
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    onClick={() => { void handleReveal(); }}
-                    disabled={isRemoteWorkspace(workspace)}
-                    data-testid="nav-workspace-menu-reveal"
-                  >
-                  <FolderSearch size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
-                </button>
+                <MenuSeparator />
+                <MenuItem
+                  leading={<Copy size={13} />}
+                  onClick={() => { void handleCopyWorkspacePath(); }}
+                  disabled={!workspace.rootPath}
+                  data-testid="nav-workspace-menu-copy-path"
+                >
+                  {t('nav.workspaces.actions.copyPath')}
+                </MenuItem>
+                <MenuItem
+                  leading={<FolderSearch size={13} />}
+                  onClick={() => { void handleReveal(); }}
+                  disabled={isRemoteWorkspace(workspace)}
+                  data-testid="nav-workspace-menu-reveal"
+                >
+                  {t('nav.workspaces.actions.reveal')}
+                </MenuItem>
                 {(isDefaultAssistantWorkspace || isDeletableAssistantWorkspace) ? (
                   <>
-                    <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
+                    <MenuSeparator />
                     {isDefaultAssistantWorkspace ? (
-                      <button
-                        type="button"
-                        data-bf-component="workspace-item"
-                        data-bf-part="menuItem"
-                        className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                      <MenuItem
+                        leading={<RotateCcw size={13} />}
+                        tone="danger"
                         onClick={handleRequestResetWorkspace}
                         disabled={isResettingWorkspace}
                         data-testid="nav-workspace-menu-reset-assistant"
                       >
-                        <RotateCcw size={13} />
-                        <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.resetWorkspace')}</span>
-                      </button>
+                        {t('nav.workspaces.actions.resetWorkspace')}
+                      </MenuItem>
                     ) : null}
                     {isDeletableAssistantWorkspace ? (
-                      <button
-                        type="button"
-                        data-bf-component="workspace-item"
-                        data-bf-part="menuItem"
-                        className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                      <MenuItem
+                        leading={<Trash2 size={13} />}
+                        tone="danger"
                         onClick={handleRequestDeleteAssistant}
                         disabled={isDeletingAssistant}
                         data-testid="nav-workspace-menu-delete-assistant"
                       >
-                        <Trash2 size={13} />
-                        <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteAssistant')}</span>
-                      </button>
+                        {t('nav.workspaces.actions.deleteAssistant')}
+                      </MenuItem>
                     ) : null}
                   </>
                 ) : null}
-              </div>,
+              </Menu>,
               getAppearanceOverlayHost()
             )}
           </div>
@@ -1386,186 +1345,112 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </div>
 
             {menuOpen && menuPosition && createPortal(
-              <div
-                data-bf-component="workspace-item"
-                data-bf-part="menuPopover"
-                data-bf-state="open"
+              <Menu
                 ref={menuPopoverRef}
                 className="bitfun-nav-panel__workspace-item-menu-popover"
-                role="menu"
                 style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
                 data-testid="nav-workspace-item-menu"
                 data-workspace-id={workspace.id}
               >
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                <MenuItem
+                  leading={<Plus size={13} />}
                   onClick={handleCreateProjectSession}
                   data-testid="nav-workspace-menu-create-session"
                 >
-                  <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newSession')}</span>
-                </button>
+                  {t('nav.sessions.newSession')}
+                </MenuItem>
                 {acpClients.map(client => {
                   const label = client.name || client.id;
                   return (
-                    <button
+                    <MenuItem
                       key={client.id}
-                      type="button"
-                      data-bf-component="workspace-item"
-                      data-bf-part="menuItem"
-                      className="bitfun-nav-panel__workspace-item-menu-item"
+                      leading={<Bot size={13} />}
                       onClick={() => { void handleCreateAcpSession(client); }}
                       data-testid="nav-workspace-menu-create-acp-session"
                       data-acp-client-id={client.id}
                     >
-                      <Bot size={13} />
-                      <span className="bitfun-nav-panel__workspace-item-menu-label">
-                        {t('nav.sessions.newExternalAgentSessionShort', { agentName: label })}
-                      </span>
-                    </button>
+                      {t('nav.sessions.newExternalAgentSessionShort', { agentName: label })}
+                    </MenuItem>
                   );
                 })}
                 {acpClientsLoading ? (
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
-                    disabled
-                  >
-                    <Loader2 size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('app.loading')}</span>
-                  </button>
+                  <MenuItem leading={<Loader2 size={13} />} disabled>
+                    {t('app.loading')}
+                  </MenuItem>
                 ) : null}
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                <MenuItem
+                  leading={<FileText size={13} />}
                   onClick={() => { void handleCreateInitSession(); }}
                   data-testid="nav-workspace-menu-create-init-session"
                 >
-                  <FileText size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  {t('nav.workspaces.actions.initAgents')}
+                </MenuItem>
+                <MenuItem
+                  leading={<Link2 size={13} />}
                   onClick={() => {
                     setMenuOpen(false);
                     setRelatedPathsDialogOpen(true);
                   }}
                   data-testid="nav-workspace-menu-related-paths"
                 >
-                  <Link2 size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">
-                    {t('nav.workspaces.actions.manageRelatedPaths')}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  {t('nav.workspaces.actions.manageRelatedPaths')}
+                </MenuItem>
+                <MenuItem
+                  leading={<ShieldCheck size={13} />}
                   onClick={handleOpenProjectPermissions}
                   data-testid="nav-workspace-menu-project-permissions"
                 >
-                  <ShieldCheck size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">
-                    {t('nav.workspaces.actions.manageProjectPermissions')}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={handleOpenScheduledJobs}
-                >
-                  <Clock3 size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
-                </button>
+                  {t('nav.workspaces.actions.manageProjectPermissions')}
+                </MenuItem>
+                <MenuItem leading={<Clock3 size={13} />} onClick={handleOpenScheduledJobs}>
+                  {t('nav.scheduledJobs.open')}
+                </MenuItem>
                 {portForwardConnectionId ? (
-                  <button
-                    type="button"
-                    data-bf-component="workspace-item"
-                    data-bf-part="menuItem"
-                    className="bitfun-nav-panel__workspace-item-menu-item"
+                  <MenuItem
+                    leading={<Network size={13} />}
                     onClick={handleOpenPortForward}
                     data-testid="nav-workspace-menu-port-forward"
                   >
-                    <Network size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">
-                      {t('ssh.portForward.menuEntry')}
-                    </span>
-                  </button>
+                    {t('ssh.portForward.menuEntry')}
+                  </MenuItem>
                 ) : null}
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                <MenuSeparator />
+                <MenuItem
+                  leading={<Pencil size={13} />}
                   onClick={handleRequestRename}
                   data-testid="nav-workspace-menu-rename"
                 >
-                  <Pencil size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">
-                    {t('nav.workspaces.actions.rename')}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  {t('nav.workspaces.actions.rename')}
+                </MenuItem>
+                <MenuItem
+                  leading={<Copy size={13} />}
                   onClick={() => { void handleCopyWorkspacePath(); }}
                   disabled={!workspace.rootPath}
                   data-testid="nav-workspace-menu-copy-path"
                 >
-                  <Copy size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.copyPath')}</span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  {t('nav.workspaces.actions.copyPath')}
+                </MenuItem>
+                <MenuItem
+                  leading={<FolderSearch size={13} />}
                   onClick={() => { void handleReveal(); }}
                   disabled={isRemoteWorkspace(workspace)}
                   data-testid="nav-workspace-menu-reveal"
                 >
-                  <FolderSearch size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
-                </button>
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" data-bf-component="workspace-item" data-bf-part="menuDivider" />
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={handleOpenSessionBatchModal}
-                >
-                  <ListChecks size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.manage')}</span>
-                </button>
-                <button
-                  type="button"
-                  data-bf-component="workspace-item"
-                  data-bf-part="menuItem"
-                  className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                  {t('nav.workspaces.actions.reveal')}
+                </MenuItem>
+                <MenuSeparator />
+                <MenuItem leading={<ListChecks size={13} />} onClick={handleOpenSessionBatchModal}>
+                  {t('nav.sessions.manage')}
+                </MenuItem>
+                <MenuItem
+                  leading={<FolderOpen size={13} />}
+                  tone="danger"
                   onClick={() => { void handleCloseWorkspace(); }}
                   data-testid="nav-workspace-menu-close"
                 >
-                  <FolderOpen size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.close')}</span>
-                </button>
-              </div>,
+                  {t('nav.workspaces.actions.close')}
+                </MenuItem>
+              </Menu>,
               getAppearanceOverlayHost()
             )}
           </div>

@@ -38,6 +38,8 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'markdown-editor': new Set(['modeToggle']),
   'market-account-controls': new Set(['menu', 'menuItem']),
   'mini-app-tool-display': new Set(['open']),
+  'nav-panel': new Set(['assistantSessionMenu']),
+  'workspace-item': new Set(['menuPopover', 'menuItem', 'menuDivider']),
   'peer-device': new Set(['switcherDisconnect']),
   'review-session-summary-card': new Set(['open']),
   'sessions-section': new Set(['retry', 'aggregateRetry']),
