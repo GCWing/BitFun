@@ -227,15 +227,15 @@ describe('ChatInput Agent and directive projection', () => {
     ]);
   });
 
-  it('keeps Plan and Multitask as the only per-task directives', () => {
+  it('keeps Plan as the only per-task directive and ignores retired peer modes', () => {
     expect(resolveChatInputDirectiveModes([
       { id: 'agentic' },
       { id: 'Plan' },
       { id: 'Cowork' },
       { id: 'Multitask' },
-    ])).toEqual([{ id: 'Plan' }, { id: 'Multitask' }]);
+    ])).toEqual([{ id: 'Plan' }]);
     expect(canonicalChatInputDirectiveId(' plan ')).toBe('Plan');
-    expect(canonicalChatInputDirectiveId('MULTITASK')).toBe('Multitask');
+    expect(canonicalChatInputDirectiveId('MULTITASK')).toBeNull();
     expect(canonicalChatInputDirectiveId('DeepResearch')).toBeNull();
   });
 });
@@ -251,7 +251,7 @@ describe('Agent execution tier locking', () => {
     expect(canSwitchSessionMainAgent({
       sessionStarted: true,
       currentAgentType: 'Plan',
-      nextAgentType: 'Multitask',
+      nextAgentType: 'Cowork',
     })).toBe(false);
     expect(canSwitchSessionMainAgent({
       sessionStarted: true,
@@ -310,7 +310,7 @@ describe('resolveChatInputSendAgentType', () => {
         subagentType: 'Not provided',
         sessionMode: 'Explore',
         acpTargetAgentType: null,
-        composerMode: 'Multitask',
+        composerMode: 'Cowork',
       }),
     ).toBe('Explore');
   });
@@ -530,7 +530,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'agentic',
         isAssistantWorkspace: false,
         sessionMode: 'Plan',
-        availableModeIds: ['agentic', 'Plan', 'Multitask'],
+        availableModeIds: ['agentic', 'Plan', 'Cowork'],
       }),
     ).toBe('Plan');
   });
@@ -541,7 +541,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Multitask'],
+        availableModeIds: ['agentic', 'Cowork'],
       }),
     ).toBeNull();
   });
@@ -549,10 +549,10 @@ describe('resolveAvailableChatInputMode', () => {
   it('restores the persisted session mode even while its catalog entry is unavailable', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'Multitask',
+        currentMode: 'Cowork',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Multitask'],
+        availableModeIds: ['agentic', 'Cowork'],
       }),
     ).toBe('PlannerPlus');
   });
@@ -596,7 +596,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['Multitask', 'Plan'],
+        availableModeIds: ['Cowork', 'Plan'],
       }),
     ).toBeNull();
   });
@@ -613,7 +613,7 @@ describe('resolveAvailableChatInputMode', () => {
     ).toBe('PlannerPlus');
   });
 
-  it('does not let the user default override an existing session mode', () => {
+  it('does not let the user default override a retired mode bound by an older peer', () => {
     expect(
       resolveAvailableChatInputMode({
         currentMode: 'Multitask',
@@ -632,7 +632,7 @@ describe('resolveAvailableChatInputMode', () => {
         isAssistantWorkspace: false,
         sessionMode: undefined,
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Multitask'],
+        availableModeIds: ['agentic', 'Cowork'],
       }),
     ).toBe('agentic');
   });

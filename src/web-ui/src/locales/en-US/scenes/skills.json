@@ -117,6 +117,7 @@
       "miniapp": "MiniApp",
       "canvas": "Canvas",
       "debugging": "Debugging",
+      "coordination": "Coordination",
       "gstack": "gstack",
       "other": "Other"
     },

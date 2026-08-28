@@ -1018,7 +1018,6 @@ const CODE_AGENT_IDS: &[&str] = &[
     "minimal",
     "agentic",
     "Cowork",
-    "Multitask",
     "Plan",
     "Claw",
     "Ultra",

@@ -7,11 +7,12 @@ const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
   'claw',
   'creative',
   'minimal',
+  // Retired built-in mode that may still be advertised by an older peer.
   'multitask',
   'ultra',
 ]);
 
-export type ChatInputDirectiveId = 'Plan' | 'Multitask';
+export type ChatInputDirectiveId = 'Plan';
 
 export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
 
@@ -268,7 +269,7 @@ export function isChatInputDirectiveModeId(
   modeId: string | null | undefined,
 ): modeId is ChatInputDirectiveId {
   const normalized = normalizeModeLookupId(modeId);
-  return normalized === 'plan' || normalized === 'multitask';
+  return normalized === 'plan';
 }
 
 export function canonicalChatInputDirectiveId(
@@ -277,8 +278,6 @@ export function canonicalChatInputDirectiveId(
   switch (normalizeModeLookupId(modeId)) {
     case 'plan':
       return 'Plan';
-    case 'multitask':
-      return 'Multitask';
     default:
       return null;
   }
@@ -287,7 +286,8 @@ export function canonicalChatInputDirectiveId(
 /**
  * Main Agents are selected with the Harness control before the first Turn.
  * Standard, Minimal, and Ultra are already represented by Harness profiles;
- * Claw belongs to Assistant workspaces; Multitask is a per-task directive.
+ * Claw belongs to Assistant workspaces. Retired built-in modes stay filtered
+ * when an older peer still advertises them.
  */
 export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   availableModes: Iterable<TMode>,
@@ -432,6 +432,7 @@ export function resolveAvailableChatInputMode(params: {
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
     normalizedUserDefaultModeId
+      // Do not restore the retired Multitask Agent from older user config.
       && normalizeModeLookupId(normalizedUserDefaultModeId) !== 'multitask'
       && availableModeIds.has(normalizedUserDefaultModeId)
       ? normalizedUserDefaultModeId

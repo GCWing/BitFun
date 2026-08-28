@@ -7,6 +7,7 @@ pub(super) enum BuiltinSkillGroup {
     ComputerUse,
     Canvas,
     Debugging,
+    Coordination,
     Gstack,
 }
 
@@ -20,6 +21,7 @@ impl BuiltinSkillGroup {
             Self::ComputerUse => "computer-use",
             Self::Canvas => "canvas",
             Self::Debugging => "debugging",
+            Self::Coordination => "coordination",
             Self::Gstack => "gstack",
         }
     }
@@ -59,6 +61,10 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "evidence-debugging",
         group: BuiltinSkillGroup::Debugging,
+    },
+    BuiltinSkillSpec {
+        dir_name: "multitask",
+        group: BuiltinSkillGroup::Coordination,
     },
     BuiltinSkillSpec {
         dir_name: "miniapp-dev",

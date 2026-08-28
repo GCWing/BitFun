@@ -799,11 +799,7 @@ mod tests {
     fn shared_modes_report_shared_profile_members() {
         assert_eq!(
             agent_profile_member_mode_ids_for("agentic"),
-            vec![
-                "agentic".to_string(),
-                "Plan".to_string(),
-                "Multitask".to_string()
-            ]
+            vec!["agentic".to_string(), "Plan".to_string()]
         );
         assert_eq!(
             agent_profile_member_mode_ids_for("Cowork"),

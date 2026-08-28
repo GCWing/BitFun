@@ -11,11 +11,6 @@ const DIRECTIVES: Record<ChatInputDirectiveId, ChatInputTurnDirective> = {
     instruction:
       'For this task, stay in planning mode: clarify material uncertainties, inspect the relevant context, and produce an actionable plan. Do not implement changes unless the user explicitly asks you to proceed.',
   },
-  Multitask: {
-    id: 'Multitask',
-    instruction:
-      'For this task, identify independent workstreams and run them in parallel when that materially helps. Integrate and verify the results before responding.',
-  },
 };
 
 export function chatInputTurnDirective(

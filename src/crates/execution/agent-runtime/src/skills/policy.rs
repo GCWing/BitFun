@@ -94,6 +94,11 @@ const ENABLE_META: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Enable,
 };
 
+const ENABLE_COORDINATION: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::Coordination),
+    effect: PolicyEffect::Enable,
+};
+
 const OPEN_META_ONLY_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Disable,
     rules: &[ENABLE_META],
@@ -117,7 +122,12 @@ const CREATIVE_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Disable,
-    rules: &[ENABLE_OFFICE, ENABLE_META],
+    rules: &[ENABLE_OFFICE, ENABLE_META, ENABLE_COORDINATION],
+};
+
+const DEEP_RESEARCH_POLICY: ModeSkillPolicy = ModeSkillPolicy {
+    builtin_default: PolicyEffect::Disable,
+    rules: &[ENABLE_META, ENABLE_COORDINATION],
 };
 
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
@@ -126,9 +136,8 @@ fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
         SkillModeId::CodingShared | SkillModeId::Claw => AGENTIC_POLICY,
         SkillModeId::Creative => CREATIVE_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
-        SkillModeId::ComputerUse | SkillModeId::DeepResearch | SkillModeId::Other => {
-            OPEN_META_ONLY_POLICY
-        }
+        SkillModeId::DeepResearch => DEEP_RESEARCH_POLICY,
+        SkillModeId::ComputerUse | SkillModeId::Other => OPEN_META_ONLY_POLICY,
     }
 }
 
@@ -167,7 +176,6 @@ mod tests {
         for mode_id in [
             "agentic",
             "Plan",
-            "Multitask",
             "coding_shared",
             "Claw",
             "Creative",
@@ -202,7 +210,7 @@ mod tests {
 
     #[test]
     fn evidence_debugging_replaces_debug_mode_in_coding_workflows() {
-        for mode_id in ["agentic", "Plan", "Multitask", "coding_shared", "Claw"] {
+        for mode_id in ["agentic", "Plan", "coding_shared", "Claw"] {
             assert_eq!(
                 resolve_builtin_default_enabled("evidence-debugging", mode_id),
                 Some(true),
@@ -220,12 +228,38 @@ mod tests {
     }
 
     #[test]
+    fn multitask_skill_replaces_multitask_mode_in_coding_workflows() {
+        for mode_id in [
+            "agentic",
+            "Plan",
+            "coding_shared",
+            "Claw",
+            "Cowork",
+            "Creative",
+            "DeepResearch",
+        ] {
+            assert_eq!(
+                resolve_builtin_default_enabled("multitask", mode_id),
+                Some(true),
+                "multitask should be available in {mode_id}"
+            );
+        }
+
+        for mode_id in ["ComputerUse", "SomeUnknownMode"] {
+            assert_eq!(
+                resolve_builtin_default_enabled("multitask", mode_id),
+                Some(false),
+                "multitask should remain opt-in in {mode_id}"
+            );
+        }
+    }
+
+    #[test]
     fn product_creation_skills_default_only_in_creative_mode() {
         for skill in ["miniapp-dev", "bitfun-frontend-dev"] {
             for mode_id in [
                 "agentic",
                 "Plan",
-                "Multitask",
                 "coding_shared",
                 "Claw",
                 "Creative",

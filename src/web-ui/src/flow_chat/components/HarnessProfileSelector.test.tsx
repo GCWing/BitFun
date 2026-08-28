@@ -211,7 +211,7 @@ describe('HarnessProfileSelector', () => {
         <HarnessProfileSelector
           selectedProfile="other"
           selectedAgentId="DeepResearch"
-          directiveLabel="Multitask"
+          directiveLabel="Plan"
           otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
           onSelectProfile={vi.fn()}
           onSelectAgent={onSelectAgent}
@@ -220,7 +220,7 @@ describe('HarnessProfileSelector', () => {
     });
     expect(
       container.querySelector('[data-testid="harness-profile-selector"]')?.textContent,
-    ).toBe('Deep Research · Multitask');
+    ).toBe('Deep Research · Plan');
   });
 
   it('activates every implemented profile including Creative', async () => {

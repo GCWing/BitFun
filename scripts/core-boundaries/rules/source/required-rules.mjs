@@ -7898,21 +7898,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/agents/definitions/modes/mod.rs',
-    reason:
-      'core agent mode definitions must continue exposing Multitask mode until an approved agent-runtime migration preserves mode registration semantics',
-    patterns: [
-      {
-        regex: /\bmod multitask\b/,
-        message: 'missing Multitask mode module',
-      },
-      {
-        regex: /\bpub use multitask::MultitaskMode\b/,
-        message: 'missing Multitask mode export',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/agentic/agents/definitions/subagents/mod.rs',
     reason:
       'core subagent definitions must continue exposing the built-in GeneralPurpose subagent until registry ownership migration has equivalence coverage',
@@ -7950,10 +7935,6 @@ export const requiredContentRules = [
       {
         regex: /\bbuiltin_agent_definition_specs\(\)/,
         message: 'missing builtin agent definition catalog owner',
-      },
-      {
-        regex: /builtin_agent_spec\(\s*"Multitask",\s*Mode,\s*"auto"/,
-        message: 'missing Multitask runtime default model mapping',
       },
       {
         regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"primary"/,

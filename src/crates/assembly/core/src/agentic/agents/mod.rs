@@ -28,8 +28,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, MultitaskMode,
-    PlanMode, UltraMode,
+    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, PlanMode,
+    UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -288,8 +288,8 @@ pub trait Agent: Send + Sync + 'static {
 mod tests {
     use super::{
         get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, MultitaskMode,
-        PlanMode, EMBEDDED_PROMPTS,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, PlanMode,
+        EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -311,28 +311,11 @@ mod tests {
     #[test]
     fn shared_template_modes_share_system_prompt_cache_identity() {
         let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
         let plan = PlanMode::new();
 
         assert_eq!(
             agentic.system_prompt_cache_identity(None),
-            multitask.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
             plan.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            plan.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            multitask.user_context_cache_identity()
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            plan.user_context_cache_identity()
         );
         assert_eq!(
             agentic.user_context_cache_identity(),
@@ -372,7 +355,6 @@ mod tests {
         let shared_tools = shared_coding_mode_tools();
 
         assert_eq!(AgenticMode::new().default_tools(), shared_tools);
-        assert_eq!(MultitaskMode::new().default_tools(), shared_tools);
         assert_eq!(PlanMode::new().default_tools(), shared_tools);
     }
 
@@ -381,7 +363,6 @@ mod tests {
         let shared_policy = shared_coding_mode_user_context_policy();
 
         assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
-        assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
         assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
     }
 
@@ -389,11 +370,9 @@ mod tests {
     fn shared_coding_mode_tool_exposure_overrides_match_all_shared_modes() {
         let shared_overrides = shared_coding_mode_tool_exposure_overrides();
         let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
         let plan = PlanMode::new();
 
         assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
     }
 }

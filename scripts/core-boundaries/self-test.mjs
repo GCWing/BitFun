@@ -4205,10 +4205,6 @@ export function runManifestParserSelfTest({
       contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/agents/definitions/modes/mod.rs',
-      contracts: ['mod multitask', 'MultitaskMode'],
-    },
-    {
       path: 'src/crates/assembly/core/src/agentic/agents/definitions/subagents/mod.rs',
       contracts: ['mod general_purpose', 'GeneralPurposeAgent'],
     },
