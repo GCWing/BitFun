@@ -34,6 +34,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'font-preference': new Set(['resetButton', 'levelGroup', 'levelButton']),
   'git-diff-view': new Set(['typeSwitcher', 'typeOption']),
   'image-analysis-card': new Set(['expand']),
+  'image-viewer': new Set(['toolbar', 'controls', 'action']),
   'markdown-editor': new Set(['modeToggle']),
   'market-account-controls': new Set(['menu', 'menuItem']),
   'mini-app-tool-display': new Set(['open']),
