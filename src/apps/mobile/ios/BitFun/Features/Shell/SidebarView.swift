@@ -87,7 +87,7 @@ struct SidebarView: View {
             .padding(.top, 4)
             .padding(.bottom, 16)
             .frame(
-                width: permanent ? proxy.size.width : min(320, proxy.size.width * 0.68),
+                width: proxy.size.width,
                 height: proxy.size.height,
                 alignment: .topLeading
             )

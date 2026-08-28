@@ -79,7 +79,6 @@ struct MobileShellView: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.24), value: model.drawerOpen)
         .animation(.easeInOut(duration: 0.22), value: wideSidebarCollapsed)
         .overlay(alignment: .bottom) {
             if let message = model.toastMessage {
@@ -178,8 +177,20 @@ struct MobileShellView: View {
         let sidebarWidth = triplePane
             ? CGFloat(previewLayout.masterPaneWidth)
             : CGFloat(geometry.masterPaneWidth)
+        let compactSidebarWidth = min(280, max(220, viewportWidth * 0.68))
 
         ZStack(alignment: .leading) {
+            if !sidebarVisible {
+                SidebarView(model: model)
+                    .frame(width: compactSidebarWidth)
+                    .opacity(model.drawerOpen ? 1 : 0)
+                    .offset(x: model.drawerOpen ? 0 : -compactSidebarWidth * 0.1)
+                    .animation(
+                        .easeOut(duration: model.drawerOpen ? 0.30 : 0.22),
+                        value: model.drawerOpen
+                    )
+            }
+
             HStack(spacing: 0) {
                 if sidebarVisible {
                     SidebarView(
@@ -212,15 +223,30 @@ struct MobileShellView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-
-            if !sidebarVisible && model.drawerOpen {
-                Color.black.opacity(0.24)
-                    .ignoresSafeArea()
-                    .onTapGesture { model.drawerOpen = false }
-                SidebarView(model: model)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                    .shadow(color: .black.opacity(0.18), radius: 26, x: 10, y: 0)
+            .overlay {
+                if !sidebarVisible && model.drawerOpen {
+                    BitFunTheme.page.opacity(0.62)
+                        .transition(.opacity.animation(.easeOut(duration: 0.21)))
+                        .onTapGesture { model.drawerOpen = false }
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: !sidebarVisible && model.drawerOpen ? 28 : 0))
+            .shadow(
+                color: !sidebarVisible && model.drawerOpen ? .black.opacity(0.14) : .clear,
+                radius: !sidebarVisible && model.drawerOpen ? 34 : 0,
+                x: !sidebarVisible && model.drawerOpen ? -10 : 0
+            )
+            .blur(radius: !sidebarVisible && model.drawerOpen ? 1.1 : 0)
+            .scaleEffect(
+                x: !sidebarVisible && model.drawerOpen ? 0.985 : 1,
+                y: !sidebarVisible && model.drawerOpen ? 0.992 : 1,
+                anchor: .leading
+            )
+            .offset(x: !sidebarVisible && model.drawerOpen ? compactSidebarWidth : 0)
+            .animation(
+                .easeOut(duration: model.drawerOpen ? 0.32 : 0.25),
+                value: model.drawerOpen
+            )
         }
         .sheet(item: previewForSheet, onDismiss: model.dismissFilePreview) { preview in
             RemoteFilePreviewSheet(model: model, preview: preview)
@@ -325,7 +351,7 @@ struct MobileShellView: View {
                 RemoteConnectedHomeView(model: model)
                 ComposerBar(model: model)
             } else if model.surface == .local && !model.localSessionSelected {
-                LocalHomeView(model: model)
+                LocalHomeView()
                 ComposerBar(model: model)
             } else {
                 ChatTimelineView(model: model)
@@ -358,46 +384,8 @@ struct MobileShellView: View {
 
 
 private struct LocalHomeView: View {
-    @ObservedObject var model: MobileAppModel
-
-    private let prompts: [(String, String)] = [
-        ("Aa", "帮我写点内容"),
-        ("≡", "梳理一个问题"),
-        ("✓", "制定行动计划")
-    ]
-
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            VStack(spacing: 12) {
-                ForEach(prompts, id: \.1) { icon, title in
-                    let promptText = model.localized(title)
-                    Button {
-                        model.draft = promptText
-                        model.send()
-                    } label: {
-                        HStack(spacing: 20) {
-                            Text(icon)
-                                .font(.system(size: 29, weight: .regular))
-                                .foregroundStyle(BitFunTheme.muted)
-                                .frame(width: 32)
-                                .fixedSize()
-                            Text(promptText)
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundStyle(BitFunTheme.muted)
-                            Spacer(minLength: 0)
-                        }
-                        .frame(height: 48)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(BitFunTheme.page)
+        BitFunTheme.page
     }
 }
 
