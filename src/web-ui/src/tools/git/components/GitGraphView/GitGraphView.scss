@@ -77,6 +77,10 @@
     flex: 1;
   }
 
+  &__search-loading {
+    animation: bitfun-git-graph-spin 0.8s linear infinite;
+  }
+
   &__search-navigation {
     display: flex;
     align-items: center;

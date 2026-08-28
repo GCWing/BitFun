@@ -8,7 +8,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentDescription } from '../utils';
@@ -81,9 +81,9 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
           <div className="core-agent-card__top-info" data-bf-component="core-agent-card" data-bf-part="headerInfo">
             <span className="core-agent-card__name" data-bf-component="core-agent-card" data-bf-part="name" data-testid="agent-list-item-title">{agent.name}</span>
             <span data-bf-component="core-agent-card" data-bf-part="role">
-              <Badge variant="neutral" className="core-agent-card__role">
+              <StatusPill tone="neutral" className="core-agent-card__role">
                 {meta.role}
-              </Badge>
+              </StatusPill>
             </span>
           </div>
           <span

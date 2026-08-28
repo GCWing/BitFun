@@ -1147,7 +1147,7 @@
 
   &__form,
   &__form--modal {
-    .bitfun-input-container,
+    [data-bf-component='input'],
     .select__trigger,
     .bitfun-number-input__container,
     .resolved-url__value {
@@ -1156,13 +1156,13 @@
       box-sizing: border-box;
     }
 
-    .bitfun-input-container,
+    [data-bf-component='input'],
     .select__trigger,
     .resolved-url__value {
       padding-inline: 12px;
     }
 
-    .bitfun-input-wrapper,
+    [data-bf-component='input'],
     .select,
     .bitfun-number-input,
     .bitfun-model-settings__resolved-url {
@@ -1170,8 +1170,8 @@
       min-width: 0;
     }
 
-    .bitfun-input-container,
-    .bitfun-input,
+    [data-bf-component='input'],
+    [data-bf-component='input'] input,
     .select__value,
     .select__placeholder,
     .select__value-label,
@@ -1191,7 +1191,7 @@
     align-items: stretch;
 
     > .select,
-    > .bitfun-input-wrapper {
+    > [data-bf-component='input'] {
       width: 100%;
       min-width: 0;
     }
@@ -1298,7 +1298,7 @@
     width: 100%;
     align-items: start;
 
-    > .bitfun-input-wrapper {
+    > [data-bf-component='input'] {
       width: 100%;
       min-width: 0;
     }
@@ -1599,18 +1599,18 @@
   }
 
   &__resolved-url-input {
-    .bitfun-input-container {
+    &[data-bf-component='input'] {
       background: var(--bf-appearance-token-element-bg-subtle);
       border: none;
       box-shadow: none;
+
+      &:hover,
+      &:focus-within {
+        border: none;
+      }
     }
 
-    .bitfun-input-container:hover,
-    .bitfun-input-container:focus-within {
-      border: none;
-    }
-
-    .bitfun-input {
+    input {
       white-space: nowrap;
       overflow-x: auto;
       overflow-y: hidden;

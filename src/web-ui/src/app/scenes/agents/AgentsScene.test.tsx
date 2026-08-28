@@ -20,6 +20,12 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 vi.mock('./components/CreateAgentPage', () => ({
   default: () => <div data-testid="create-agent-page">create agent</div>,
 }));
@@ -83,14 +89,12 @@ vi.mock('./components/ToolGroupPicker', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
   IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
-  Search: () => <input readOnly />,
   Select: () => <div />,
   Switch: () => <input type="checkbox" readOnly />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,

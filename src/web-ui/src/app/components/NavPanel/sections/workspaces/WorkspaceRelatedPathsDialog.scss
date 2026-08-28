@@ -253,12 +253,12 @@
     align-items: stretch;
   }
 
-  &__path-input .bitfun-input-container,
+  &__path-input[data-bf-component='input'],
   &__description .bitfun-textarea__field {
     border-radius: 8px;
   }
 
-  &__path-input .bitfun-input-container {
+  &__path-input[data-bf-component='input'] {
     height: 32px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 72%, transparent);
   }

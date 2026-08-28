@@ -1,12 +1,7 @@
-import { Button, Select, Switch, type SelectOption } from '@bitfun/ui';
+import { Button, Input, Select, StatusPill, Switch, type SelectOption, type StatusPillTone } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CloudOff, Download, HardDrive, PhoneCall } from 'lucide-react';
-import {
-  Badge,
-  Input,
-  type BadgeVariant,
-} from '@/component-library';
 import {
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
   speechAPI,
@@ -53,7 +48,7 @@ function formatBytes(bytes: number): string {
 
 type VoiceInputStatus = 'ready' | 'setup' | 'downloading' | 'unavailable' | 'error';
 
-function statusBadgeVariant(status: VoiceInputStatus): BadgeVariant {
+function statusBadgeVariant(status: VoiceInputStatus): StatusPillTone {
   switch (status) {
     case 'ready':
       return 'success';
@@ -61,7 +56,7 @@ function statusBadgeVariant(status: VoiceInputStatus): BadgeVariant {
       return 'info';
     case 'unavailable':
     case 'error':
-      return 'error';
+      return 'danger';
     default:
       return 'neutral';
   }
@@ -343,7 +338,7 @@ const VoiceInputConfig: React.FC = () => {
                 <div className="voice-input-config__status-copy">
                   <div className="voice-input-config__status-heading">
                     <div className="voice-input-config__status-title">{t(`status.${status}.title`)}</div>
-                    <Badge variant={statusBadgeVariant(status)}>{t(`status.${status}.badge`)}</Badge>
+                    <StatusPill tone={statusBadgeVariant(status)}>{t(`status.${status}.badge`)}</StatusPill>
                   </div>
                   <div className="voice-input-config__status-description">
                     {t(`status.${status}.description`, {
@@ -459,7 +454,7 @@ const VoiceInputConfig: React.FC = () => {
               <Input
                 className="voice-input-config__credential-input"
                 type="password"
-                size="small"
+                size="sm"
                 autoComplete="off"
                 value={voiceCallDraft.apiKey}
                 placeholder={t('voiceCall.apiKey.placeholder')}
@@ -477,7 +472,7 @@ const VoiceInputConfig: React.FC = () => {
             >
               <Input
                 className="voice-input-config__credential-input"
-                size="small"
+                size="sm"
                 value={voiceCallDraft.voice}
                 disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
                 onChange={(event) => setVoiceCallDraft(previous => previous ? ({

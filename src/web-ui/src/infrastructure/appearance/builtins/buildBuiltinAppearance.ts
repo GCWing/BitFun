@@ -611,36 +611,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
           footer: { base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2') }, facets: { align: { left: { justifyContent: 'flex-start' }, center: { justifyContent: 'center' }, right: { justifyContent: 'flex-end' }, between: { justifyContent: 'space-between' } } } },
         },
       },
-      input: {
-        parts: {
-          root: { base: { display: 'flex', flexDirection: 'column', gap: { kind: 'px', value: 6 } }, states: { disabled: { opacity: numberRef('opacity-disabled'), cursor: 'default' } } },
-          label: { base: { color: colorRef('text-secondary'), fontSize: lengthRef('font-sm'), fontWeight: numberRef('weight-medium') } },
-          container: {
-            base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2'), paddingInline: lengthRef('gap-3'), borderRadius: { kind: 'px', value: 4 }, borderStyle: 'solid', borderWidth: lengthRef('border-one'), transition: transition() },
-            facets: {
-              variant: {
-                default: { backgroundColor: { kind: 'transparent' }, borderColor: colorRef('border-base') },
-                filled: { backgroundColor: colorRef('element-subtle'), borderColor: { kind: 'transparent' } },
-                outlined: { backgroundColor: { kind: 'transparent' }, borderColor: colorRef('border-strong') },
-              },
-              size: {
-                small: { height: { kind: 'px', value: 28 }, fontSize: { kind: 'px', value: 13 } },
-                medium: { height: { kind: 'px', value: 36 }, fontSize: { kind: 'px', value: 14 } },
-                large: { height: { kind: 'px', value: 44 }, fontSize: { kind: 'px', value: 15 } },
-              },
-            },
-            states: {
-              hover: { backgroundColor: colorRef('element-subtle'), borderColor: colorRef('border-strong') },
-              focusWithin: { backgroundColor: { kind: 'transparent' }, borderColor: colorRef('accent') },
-              error: { borderColor: colorRef('error-border') },
-            },
-          },
-          control: { base: { color: colorRef('text-primary'), fontFamily: fontRef('sans') } },
-          prefix: { base: { color: colorRef('text-muted') } },
-          suffix: { base: { color: colorRef('text-muted') } },
-          message: { base: { color: colorRef('error'), fontSize: lengthRef('font-xs') } },
-        },
-      },
     },
     renderers: {
       'css-tokens': {

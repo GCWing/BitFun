@@ -1,9 +1,8 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { Modal } from '@bitfun/ui';
-import { Search, PopupCloseButton } from '@/component-library';
+import { CheckCheck, Trash2, X, XCircle, ChevronDown, ChevronUp, Loader2, Search as SearchIcon } from 'lucide-react';
+import { IconButton, Modal, SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -386,9 +385,11 @@ export const NotificationCenter: React.FC = () => {
             >
               <Trash2 size={16} />
             </button>
-            <PopupCloseButton
+            <IconButton
               className="notification-center__close"
+              icon={<X />}
               onClick={handleClose}
+              size="md"
               title={t('common:actions.close')}
               aria-label={t('common:actions.close')}
               data-testid="notification-center-close-btn"
@@ -400,12 +401,15 @@ export const NotificationCenter: React.FC = () => {
 
         
         <div className="notification-center__search">
-          <Search
+          <SearchField
             placeholder={t('components:notificationCenter.searchPlaceholder')}
+            aria-label={t('components:notificationCenter.searchPlaceholder')}
+            leadingIcon={<SearchIcon size={16} aria-hidden />}
             value={searchQuery}
-            onChange={(val) => setSearchQuery(val)}
-            clearable
-            size="medium"
+            onValueChange={(val) => setSearchQuery(val)}
+            clearLabel={t('components:search.clear')}
+            onClear={searchQuery ? () => setSearchQuery('') : undefined}
+            size="md"
           />
         </div>
 

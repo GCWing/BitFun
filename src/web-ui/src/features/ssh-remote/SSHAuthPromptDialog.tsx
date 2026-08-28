@@ -2,10 +2,10 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button, IconButton, Modal, Select } from '@bitfun/ui';
+import { Button, Field, IconButton, Input, Modal, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import {
@@ -167,15 +167,15 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
 
         {!lockUsername && (
           <div className="ssh-auth-prompt-dialog__field" data-bf-component="ssh-remote" data-bf-part="authField">
-            <Input
-              label={t('ssh.remote.username')}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="root"
-              prefix={<User size={16} />}
-              size="medium"
-              disabled={isConnecting}
-            />
+            <Field label={t('ssh.remote.username')} controlWidth="fill">
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="root"
+                leading={<User size={16} />}
+                disabled={isConnecting}
+              />
+            </Field>
           </div>
         )}
 
@@ -194,78 +194,78 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
 
         {authMethod === 'password' && (
           <div className="ssh-auth-prompt-dialog__field">
-            <Input
-              ref={passwordRef}
-              label={t('ssh.remote.password')}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              prefix={<Lock size={16} />}
-              size="medium"
-              disabled={isConnecting}
-            />
+            <Field label={t('ssh.remote.password')} controlWidth="fill">
+              <Input
+                ref={passwordRef}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                leading={<Lock size={16} />}
+                disabled={isConnecting}
+              />
+            </Field>
           </div>
         )}
 
         {authMethod === 'privateKey' && (
           <>
             <div className="ssh-auth-prompt-dialog__field">
-              <Input
-                label={t('ssh.remote.privateKeyPath')}
-                value={keyPath}
-                onChange={(e) => setKeyPath(e.target.value)}
-                placeholder="~/.ssh/id_rsa"
-                prefix={<Key size={16} />}
-                suffix={
-                  <Tooltip content={t('ssh.remote.browsePrivateKey')}>
-                    <IconButton
-                      type="button"
-                      size="sm"
-                      className="ssh-auth-prompt-dialog__browse-key"
-                      aria-label={t('ssh.remote.browsePrivateKey')}
-                      disabled={isConnecting}
-                      onClick={() => void handleBrowsePrivateKey()}
-                      icon={<FolderOpen size={16} />}
-                    />
-                  </Tooltip>
-                }
-                size="medium"
-                disabled={isConnecting}
-              />
+              <Field label={t('ssh.remote.privateKeyPath')} controlWidth="fill">
+                <Input
+                  value={keyPath}
+                  onChange={(e) => setKeyPath(e.target.value)}
+                  placeholder="~/.ssh/id_rsa"
+                  leading={<Key size={16} />}
+                  trailing={
+                    <Tooltip content={t('ssh.remote.browsePrivateKey')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        className="ssh-auth-prompt-dialog__browse-key"
+                        aria-label={t('ssh.remote.browsePrivateKey')}
+                        disabled={isConnecting}
+                        onClick={() => void handleBrowsePrivateKey()}
+                        icon={<FolderOpen size={16} />}
+                      />
+                    </Tooltip>
+                  }
+                  disabled={isConnecting}
+                />
+              </Field>
             </div>
             <div className="ssh-auth-prompt-dialog__field">
-              <Input
-                label={t('ssh.remote.passphrase')}
-                type="password"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                placeholder={t('ssh.remote.passphraseOptional')}
-                size="medium"
-                disabled={isConnecting}
-              />
+              <Field label={t('ssh.remote.passphrase')} controlWidth="fill">
+                <Input
+                  type="password"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  placeholder={t('ssh.remote.passphraseOptional')}
+                  disabled={isConnecting}
+                />
+              </Field>
             </div>
             <div className="ssh-auth-prompt-dialog__field">
-              <Input
-                label={t('ssh.remote.certificatePath')}
-                value={certificatePath}
-                onChange={(e) => setCertificatePath(e.target.value)}
-                placeholder={t('ssh.remote.certificatePathOptional')}
-                suffix={
-                  <Tooltip content={t('ssh.remote.browseCertificate')}>
-                    <IconButton
-                      type="button"
-                      size="sm"
-                      className="ssh-auth-prompt-dialog__browse-key"
-                      aria-label={t('ssh.remote.browseCertificate')}
-                      disabled={isConnecting}
-                      onClick={() => void handleBrowseCertificate()}
-                      icon={<FolderOpen size={16} />}
-                    />
-                  </Tooltip>
-                }
-                size="medium"
-                disabled={isConnecting}
-              />
+              <Field label={t('ssh.remote.certificatePath')} controlWidth="fill">
+                <Input
+                  value={certificatePath}
+                  onChange={(e) => setCertificatePath(e.target.value)}
+                  placeholder={t('ssh.remote.certificatePathOptional')}
+                  trailing={
+                    <Tooltip content={t('ssh.remote.browseCertificate')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        className="ssh-auth-prompt-dialog__browse-key"
+                        aria-label={t('ssh.remote.browseCertificate')}
+                        disabled={isConnecting}
+                        onClick={() => void handleBrowseCertificate()}
+                        icon={<FolderOpen size={16} />}
+                      />
+                    </Tooltip>
+                  }
+                  disabled={isConnecting}
+                />
+              </Field>
             </div>
           </>
         )}
@@ -273,27 +273,27 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
         {authMethod === 'keyboardInteractive' && (
           <>
             <div className="ssh-auth-prompt-dialog__field">
-              <Input
-                ref={passwordRef}
-                label={t('ssh.remote.challengePassword')}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                prefix={<Lock size={16} />}
-                size="medium"
-                disabled={isConnecting}
-              />
+              <Field label={t('ssh.remote.challengePassword')} controlWidth="fill">
+                <Input
+                  ref={passwordRef}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  leading={<Lock size={16} />}
+                  disabled={isConnecting}
+                />
+              </Field>
             </div>
             <div className="ssh-auth-prompt-dialog__field">
-              <Input
-                label={t('ssh.remote.verificationCode')}
-                type="password"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-                placeholder={t('ssh.remote.optional')}
-                size="medium"
-                disabled={isConnecting}
-              />
+              <Field label={t('ssh.remote.verificationCode')} controlWidth="fill">
+                <Input
+                  type="password"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value)}
+                  placeholder={t('ssh.remote.optional')}
+                  disabled={isConnecting}
+                />
+              </Field>
             </div>
           </>
         )}

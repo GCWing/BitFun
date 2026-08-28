@@ -46,6 +46,11 @@
     background: var(--bf-color-surface-subtle);
   }
 
+  .root[data-tone="accent"] {
+    color: var(--bf-color-accent-default);
+    background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
+  }
+
   .root[data-tone="info"] {
     color: var(--bf-color-status-info-content);
     background: var(--bf-color-status-info-surface);

@@ -8,7 +8,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
@@ -87,9 +87,9 @@ const AgentCard: React.FC<AgentCardProps> = ({
             </div>
           </div>
           <div className="agent-card__badges" data-bf-component="agent-card" data-bf-part="badges">
-            <Badge variant={badge.variant} className="agent-card__kind-badge">
+            <StatusPill tone={badge.variant} className="agent-card__kind-badge">
               {badge.label}
-            </Badge>
+            </StatusPill>
           </div>
         </div>
 

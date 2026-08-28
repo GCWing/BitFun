@@ -1,4 +1,4 @@
-import { Button, ConfirmDialog, SearchField, Select, type SelectOption } from '@bitfun/ui';
+import { Button, ConfirmDialog, SearchField, Select, StatusPill, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -16,8 +16,6 @@ import {
   ShieldCheck,
   Star,
 } from 'lucide-react';
-import { Badge } from '@/component-library';
-
 
 import {
   GalleryDetailModal,
@@ -430,8 +428,8 @@ const MiniAppMarketView: React.FC = () => {
         title={detailName || t('market.detail.loading')}
         badges={detail ? (
           <>
-            <Badge variant="info">{categoryLabel(detail.category, t)}</Badge>
-            <Badge variant="neutral"><ShieldCheck size={11} /> {t('market.detail.reviewed')}</Badge>
+            <StatusPill tone="info">{categoryLabel(detail.category, t)}</StatusPill>
+            <StatusPill tone="neutral" leading={<ShieldCheck size={11} />}>{t('market.detail.reviewed')}</StatusPill>
           </>
         ) : null}
         description={detailDescription}
@@ -548,7 +546,7 @@ const MiniAppMarketView: React.FC = () => {
                   <div key={release.releaseId}>
                     <span>v{release.releaseNumber}</span>
                     <span>{release.minBitfunVersion}+</span>
-                    {release.yanked ? <Badge variant="warning">{t('market.detail.yanked')}</Badge> : <Check size={14} />}
+                    {release.yanked ? <StatusPill tone="warning">{t('market.detail.yanked')}</StatusPill> : <Check size={14} />}
                   </div>
                 ))}
               </div>

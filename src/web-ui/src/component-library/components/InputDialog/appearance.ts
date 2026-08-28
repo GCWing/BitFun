@@ -2,5 +2,5 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance/ty
 
 export const inputDialogAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'input-dialog',
-  parts: [{ id: 'root' }, { id: 'body' }, { id: 'description' }, { id: 'actions' }],
+  parts: [{ id: 'root' }, { id: 'body' }, { id: 'description' }, { id: 'error' }, { id: 'actions' }],
 };

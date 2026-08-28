@@ -1,4 +1,4 @@
-import { Button, Field, Select } from '@bitfun/ui';
+import { Button, Field, Input, Select, StatusPill } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -15,7 +15,6 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { Badge, Input } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -320,14 +319,14 @@ const MiniAppSubmissionsView: React.FC = () => {
             />
           </Field>
 
-          <Input
-            label={t('market.submissions.name')}
-            value={draft.name}
-            maxLength={80}
-            required
-            disabled={busy}
-            onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-          />
+          <Field label={t('market.submissions.name')} controlWidth="fill" required>
+            <Input
+              value={draft.name}
+              maxLength={80}
+              disabled={busy}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+            />
+          </Field>
 
           <label className="miniapp-submissions__field">
             <span>{t('market.submissions.description')}</span>
@@ -415,27 +414,31 @@ const MiniAppSubmissionsView: React.FC = () => {
           {showAdvanced ? (
             <div className="miniapp-submissions__advanced">
               <div className="miniapp-submissions__form-grid">
-                <Input
+                <Field
                   label={t('market.submissions.slug')}
-                  value={draft.slug}
-                  pattern="[a-z0-9][a-z0-9-]{2,62}"
+                  description={t('market.submissions.slugHint')}
+                  controlWidth="fill"
                   required
-                  disabled={busy}
-                  onChange={(event) => setDraft({ ...draft, slug: event.target.value })}
-                  hint={t('market.submissions.slugHint')}
-                />
-                <Input
-                  label={t('market.submissions.release')}
-                  type="number"
-                  min={1}
-                  max={4294967295}
-                  value={draft.releaseNumber}
-                  required
-                  disabled={busy}
-                  onChange={(event) =>
-                    setDraft({ ...draft, releaseNumber: Number(event.target.value) })
-                  }
-                />
+                >
+                  <Input
+                    value={draft.slug}
+                    pattern="[a-z0-9][a-z0-9-]{2,62}"
+                    disabled={busy}
+                    onChange={(event) => setDraft({ ...draft, slug: event.target.value })}
+                  />
+                </Field>
+                <Field label={t('market.submissions.release')} controlWidth="fill" required>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={4294967295}
+                    value={draft.releaseNumber}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDraft({ ...draft, releaseNumber: Number(event.target.value) })
+                    }
+                  />
+                </Field>
               </div>
 
               <div className="miniapp-submissions__form-grid">
@@ -450,26 +453,30 @@ const MiniAppSubmissionsView: React.FC = () => {
                     }))}
                   />
                 </Field>
-                <Input
-                  label={t('market.submissions.minVersion')}
-                  value={draft.minBitfunVersion}
-                  required
-                  disabled={busy}
-                  onChange={(event) =>
-                    setDraft({ ...draft, minBitfunVersion: event.target.value })
-                  }
-                />
+                <Field label={t('market.submissions.minVersion')} controlWidth="fill" required>
+                  <Input
+                    value={draft.minBitfunVersion}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDraft({ ...draft, minBitfunVersion: event.target.value })
+                    }
+                  />
+                </Field>
               </div>
 
-              <Input
+              <Field
                 label={t('market.submissions.tags')}
-                value={draft.tags.join(', ')}
-                disabled={busy}
-                onChange={(event) =>
-                  setDraft({ ...draft, tags: event.target.value.split(',').slice(0, 10) })
-                }
-                hint={t('market.submissions.tagsHint')}
-              />
+                description={t('market.submissions.tagsHint')}
+                controlWidth="fill"
+              >
+                <Input
+                  value={draft.tags.join(', ')}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setDraft({ ...draft, tags: event.target.value.split(',').slice(0, 10) })
+                  }
+                />
+              </Field>
 
               <label className="miniapp-submissions__field">
                 <span>{t('market.submissions.changelog')}</span>
@@ -483,39 +490,45 @@ const MiniAppSubmissionsView: React.FC = () => {
               </label>
 
               <div className="miniapp-submissions__form-grid">
-                <Input
+                <Field
                   label={t('market.submissions.spdx')}
-                  value={draft.license.spdxExpression ?? ''}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      license: { ...draft.license, spdxExpression: event.target.value },
-                    })
-                  }
-                  hint={t('market.submissions.licenseHint')}
-                />
-                <Input
-                  label={t('market.submissions.licenseUrl')}
-                  type="url"
-                  value={draft.license.customUrl ?? ''}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      license: { ...draft.license, customUrl: event.target.value },
-                    })
-                  }
-                />
+                  description={t('market.submissions.licenseHint')}
+                  controlWidth="fill"
+                >
+                  <Input
+                    value={draft.license.spdxExpression ?? ''}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        license: { ...draft.license, spdxExpression: event.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label={t('market.submissions.licenseUrl')} controlWidth="fill">
+                  <Input
+                    type="url"
+                    value={draft.license.customUrl ?? ''}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        license: { ...draft.license, customUrl: event.target.value },
+                      })
+                    }
+                  />
+                </Field>
               </div>
 
-              <Input
-                label={t('market.submissions.repository')}
-                type="url"
-                value={draft.repositoryUrl ?? ''}
-                disabled={busy}
-                onChange={(event) => setDraft({ ...draft, repositoryUrl: event.target.value })}
-              />
+              <Field label={t('market.submissions.repository')} controlWidth="fill">
+                <Input
+                  type="url"
+                  value={draft.repositoryUrl ?? ''}
+                  disabled={busy}
+                  onChange={(event) => setDraft({ ...draft, repositoryUrl: event.target.value })}
+                />
+              </Field>
             </div>
           ) : null}
 
@@ -569,9 +582,9 @@ const MiniAppSubmissionsView: React.FC = () => {
                     </div>
                   </div>
                   <div className="miniapp-submissions__status">
-                    <Badge variant={statusVariant(submission.status)}>
+                    <StatusPill tone={statusVariant(submission.status)}>
                       {submissionStatusLabel(submission.status, t)}
-                    </Badge>
+                    </StatusPill>
                     {(submission.status === 'draft' || submission.status === 'submitted') ? (
                       <Button
                         size="sm"

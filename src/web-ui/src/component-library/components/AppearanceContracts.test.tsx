@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Modal, ModalProvider } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Card, CardBody, CardFooter, CardHeader } from './Card/Card';
-import { Input } from './Input/Input';
 
 vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
@@ -42,12 +41,6 @@ describe('component appearance contracts', () => {
     expect(card).toContain('data-bf-part="title"');
     expect(card).toContain('data-bf-align="between"');
     expect(card).toContain('data-bf-state="interactive"');
-
-    const input = renderToStaticMarkup(<Input variant="filled" size="large" error errorMessage="Invalid" />);
-    expect(input).toContain('data-bf-component="input"');
-    expect(input).toContain('data-bf-part="container"');
-    expect(input).toContain('data-bf-size="large"');
-    expect(input).toContain('data-bf-state="error"');
   });
 
   it('renders Modal through the shared overlay host with stable parts', async () => {

@@ -7,6 +7,18 @@
 
   &__body {
     padding: 20px 20px 16px;
+
+    > [data-bf-component='input'] {
+      width: 100%;
+    }
+  }
+
+  &__error {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--bf-color-status-danger-content);
   }
 
   &__description {

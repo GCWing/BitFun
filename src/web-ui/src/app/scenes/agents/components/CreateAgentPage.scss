@@ -105,7 +105,7 @@
   background: var(--bf-appearance-token-color-bg-scene);
   box-shadow: none;
 
-  .bitfun-input-wrapper--default .bitfun-input-container {
+  [data-bf-component='input'] {
     background: var(--bf-appearance-token-color-bg-scene);
     border-color: var(--bf-appearance-token-border-subtle);
   }
@@ -501,7 +501,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .th-create-page__panel .bitfun-input-wrapper--default .bitfun-input-container:hover {
+  .th-create-page__panel [data-bf-component='input']:hover {
     background: var(--bf-appearance-token-color-bg-scene);
   }
 

@@ -1,6 +1,5 @@
-import { Button } from '@bitfun/ui';
+import { Button, StatusPill } from '@bitfun/ui';
 import React from 'react';
-import { Badge } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './RemoteConnectDisclaimer.scss';
 
@@ -21,9 +20,9 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
   return (
     <div data-bf-component="remote-connect-disclaimer" data-bf-part="root" className="bitfun-remote-disclaimer">
       <div className="bitfun-remote-disclaimer__meta" data-bf-component="remote-connect-disclaimer" data-bf-part="meta">
-        <Badge variant={agreed ? 'success' : 'warning'}>
+        <StatusPill tone={agreed ? 'success' : 'warning'}>
           {t(agreed ? 'remoteConnect.disclaimerStatusAgreed' : 'remoteConnect.disclaimerStatusPending')}
-        </Badge>
+        </StatusPill>
       </div>
 
       <p className="bitfun-remote-disclaimer__text" data-bf-component="remote-connect-disclaimer" data-bf-part="intro">{t('remoteConnect.disclaimerIntro')}</p>

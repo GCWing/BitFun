@@ -4,8 +4,6 @@ import type { ComponentCategory } from '../types';
 import { Button } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
-import { Input } from '@components/Input';
-import { Search } from '@components/Search';
 import { Select } from '@components/Select';
 import { Checkbox } from '@components/Checkbox';
 import { Textarea } from '@components/Textarea';
@@ -18,7 +16,6 @@ import { Avatar, AvatarGroup } from '@components/Avatar';
 import { Empty } from '@components/Empty';
 import { Markdown } from '@components/Markdown';
 import { CodeEditor } from '@components/CodeEditor';
-import { StreamText } from '@components/StreamText';
 import { TodoWriteDisplay } from '@/flow_chat/tool-cards/TodoWriteDisplay';
 import { TaskToolDisplay } from '@/flow_chat/tool-cards/TaskToolDisplay';
 import { WebSearchCard as RealWebSearchCard } from '@/flow_chat/tool-cards/WebSearchCard';
@@ -304,45 +301,6 @@ export const componentRegistry: ComponentCategory[] = [
           </div>
         ),
       },
-      {
-        id: 'stream-text-demo',
-        name: 'StreamText - 流式文本演示',
-        description: 'AI 流式文本打字机效果',
-        category: 'feedback',
-        component: () => {
-          const [key, setKey] = React.useState(0);
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-              <div style={{
-                fontSize: '15px',
-                lineHeight: '1.8',
-                minHeight: '120px',
-                padding: '20px',
-                background: 'var(--bf-appearance-token-color-overlay-white-04)',
-                borderRadius: '8px',
-                border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                maxWidth: '700px'
-              }}>
-                <StreamText
-                  key={key}
-                  text="Streaming AI demo text."
-                  effect="smooth"
-                  speed={30}
-                  showCursor={true}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setKey(prev => prev + 1)}
-              >
-                重新播放
-              </Button>
-            </div>
-          );
-        },
-      },
     ],
   },
   {
@@ -351,124 +309,6 @@ export const componentRegistry: ComponentCategory[] = [
     description: '输入类表单组件',
     layoutType: 'grid-2',
     components: [
-      {
-        id: 'input-demo',
-name: 'Input - Demo',
-        description: 'Demo',
-        category: 'form',
-        component: () => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
-            <Input placeholder="Enter text" />
-            <Input label="Label" placeholder="Placeholder" />
-            <Input
-              label="邮箱"
-              type="email"
-              placeholder="example@email.com"
-              prefix="@"
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="Enter password"
-              error
-              errorMessage="Error message"
-            />
-            <Input variant="filled" placeholder="Filled variant" />
-            <Input variant="outlined" placeholder="Outlined variant" />
-          </div>
-        ),
-      },
-      {
-        id: 'search-demo',
-name: 'Search - Demo',
-        description: 'Demo',
-        category: 'form',
-        component: () => {
-          const [value, setValue] = React.useState('');
-          const [loading, setLoading] = React.useState(false);
-          const [searchOptions, setSearchOptions] = React.useState({
-            caseSensitive: false,
-            useRegex: false,
-          });
-
-          const handleSearch = (val: string) => {
-            setLoading(true);
-            setTimeout(() => {
-              setLoading(false);
-            }, 1500);
-          };
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
-              <Search
-                placeholder="搜索关键词.."
-                onChange={(val) => setValue(val)}
-              />
-              <Search
-                placeholder="Search"
-                showSearchButton
-                onSearch={handleSearch}
-                loading={loading}
-              />
-              <Search
-                placeholder="With suffix"
-                suffixContent={
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      style={{
-                        padding: '4px 6px',
-                        background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                        borderRadius: '4px',
-                        color: searchOptions.caseSensitive ? 'var(--bf-appearance-token-color-accent-500)' : 'var(--bf-appearance-token-color-text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
-                      title="Option"
-                    >
-                      Aa
-                    </button>
-                    <button
-                      style={{
-                        padding: '4px 6px',
-                        background: searchOptions.useRegex ? 'color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                        borderRadius: '4px',
-                        color: searchOptions.useRegex ? 'var(--bf-appearance-token-color-accent-500)' : 'var(--bf-appearance-token-color-text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
-                      title="Option"
-                    >
-                      .*
-                    </button>
-                  </div>
-                }
-              />
-              <Search
-                placeholder="Search..."
-                expandOnFocus
-              />
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Search size="small" placeholder="Search" />
-                <Search size="medium" placeholder="Search" />
-                <Search size="large" placeholder="Search" />
-              </div>
-              <Search
-                placeholder="Disabled"
-                disabled
-              />
-              <Search
-                placeholder="Error"
-                error
-                errorMessage="Error message"
-              />
-            </div>
-          );
-        },
-      },
       {
         id: 'select-basic',
         name: 'Select - 基础选择',

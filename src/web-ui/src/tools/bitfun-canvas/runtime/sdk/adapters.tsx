@@ -1,13 +1,12 @@
 import React from 'react';
-import { Badge as BitFunBadge } from '@/component-library/components/Badge';
-import { Button as BitFunButton } from '@bitfun/ui';
+import { Button as BitFunButton, StatusPill as DesignStatusPill } from '@bitfun/ui';
 import {
   Card as BitFunCard,
   CardBody as BitFunCardBody,
   CardHeader as BitFunCardHeader,
 } from '@/component-library/components/Card';
 import { Empty as BitFunEmpty } from '@/component-library/components/Empty';
-import { Input as BitFunInput } from '@/component-library/components/Input';
+import { Field as DesignField, Input as DesignInput } from '@bitfun/ui';
 import { TabPane as BitFunTabPane, Tabs as BitFunTabs } from '@/component-library/components/Tabs';
 import { Tag as BitFunTag } from '@/component-library/components/Tag';
 import type {
@@ -84,11 +83,11 @@ export function Button({ children, variant = 'secondary', size, ...props }: Canv
 }
 
 function pillTone(tone: CanvasTone | 'accent' | 'purple' | undefined, active: boolean) {
-  if (tone === 'danger' || tone === 'error') return { badge: 'error' as const, tag: 'red' as const };
+  if (tone === 'danger' || tone === 'error') return { badge: 'danger' as const, tag: 'red' as const };
   if (tone === 'success') return { badge: 'success' as const, tag: 'green' as const };
   if (tone === 'warning') return { badge: 'warning' as const, tag: 'yellow' as const };
   if (tone === 'info') return { badge: 'info' as const, tag: 'blue' as const };
-  if (tone === 'purple') return { badge: 'purple' as const, tag: 'purple' as const };
+  if (tone === 'purple') return { badge: 'accent' as const, tag: 'purple' as const };
   if (tone === 'accent' || active) return { badge: 'accent' as const, tag: 'blue' as const };
   return { badge: 'neutral' as const, tag: 'gray' as const };
 }
@@ -121,9 +120,9 @@ export function Pill({
 
   if (active) {
     return (
-      <BitFunBadge variant={resolvedTone.badge} className={className}>
+      <DesignStatusPill tone={resolvedTone.badge} className={className}>
         {content}
-      </BitFunBadge>
+      </DesignStatusPill>
     );
   }
 
@@ -161,8 +160,40 @@ export function Tabs({ items, children, ...props }: CanvasTabsProps) {
   );
 }
 
-export function Input({ size, ...props }: CanvasInputProps) {
-  return <BitFunInput {...props} size={size} />;
+function designInputSize(size: CanvasInputProps['size']): 'sm' | 'md' | 'lg' {
+  if (size === 'small') return 'sm';
+  if (size === 'large') return 'lg';
+  return 'md';
+}
+
+export function Input({
+  size,
+  label,
+  hint,
+  prefix,
+  suffix,
+  error,
+  errorMessage,
+  ...props
+}: CanvasInputProps) {
+  const control = (
+    <DesignInput
+      {...props}
+      invalid={error}
+      leading={prefix}
+      trailing={suffix}
+      size={designInputSize(size)}
+    />
+  );
+  const fieldError = error ? errorMessage : undefined;
+  if (label === undefined && hint === undefined && fieldError === undefined) {
+    return control;
+  }
+  return (
+    <DesignField label={label} description={hint} error={fieldError} controlWidth="fill">
+      {control}
+    </DesignField>
+  );
 }
 
 export function Empty(props: CanvasEmptyProps) {

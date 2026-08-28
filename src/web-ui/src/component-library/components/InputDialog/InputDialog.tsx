@@ -4,9 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Input, Modal } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
-import { Input } from '../Input/Input';
 import './InputDialog.scss';
 
 export interface InputDialogProps {
@@ -125,11 +124,21 @@ export const InputDialog: React.FC<InputDialogProps> = ({
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             placeholder={resolvedPlaceholder}
-            error={!!error}
-            errorMessage={error || undefined}
-            inputSize="medium"
+            invalid={!!error}
+            aria-describedby={error ? 'input-dialog-error' : undefined}
             autoFocus
           />
+          {error && (
+            <span
+              className="input-dialog__error"
+              data-bf-component="input-dialog"
+              data-bf-part="error"
+              id="input-dialog-error"
+              role="alert"
+            >
+              {error}
+            </span>
+          )}
         </div>
 
         <div className="input-dialog__actions" data-bf-component="input-dialog" data-bf-part="actions">

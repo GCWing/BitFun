@@ -87,7 +87,7 @@
     text-overflow: ellipsis;
   }
 
-  &__role.badge {
+  &__role[data-bf-component='status-pill'] {
     max-width: 100%;
     padding: 1px 6px;
     overflow: hidden;

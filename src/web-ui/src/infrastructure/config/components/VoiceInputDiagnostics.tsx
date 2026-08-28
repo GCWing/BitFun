@@ -1,7 +1,7 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Select, type SelectOption } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, Square } from 'lucide-react';
-import { Select, Tooltip, type SelectOption } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import {
   DEFAULT_SPEECH_SAMPLE_RATE,
   speechAPI,
@@ -30,10 +30,6 @@ interface VoiceInputDiagnosticsProps {
   modelInstalled: boolean;
   unavailableReason?: string;
   onDeviceChange: (deviceId: string) => Promise<void>;
-}
-
-function normalizeSelectValue(value: string | number | (string | number)[]): string {
-  return String(Array.isArray(value) ? (value[0] ?? '') : value);
 }
 
 export function VoiceInputDiagnostics({
@@ -243,10 +239,10 @@ export function VoiceInputDiagnostics({
             data-bf-component="voice-input-diagnostics"
             data-bf-part="deviceSelect"
             value={settings.microphone_device_id}
-            onChange={value => void onDeviceChange(normalizeSelectValue(value))}
+            onValueChange={value => void onDeviceChange(String(value))}
             options={microphoneOptions}
-            size="small"
-            loading={devicesLoading}
+            size="sm"
+            disabled={devicesLoading}
             className="voice-input-config__device-select"
           />
           <Tooltip content={t('diagnostics.microphone.refresh')} disabled={phase !== 'idle'}>

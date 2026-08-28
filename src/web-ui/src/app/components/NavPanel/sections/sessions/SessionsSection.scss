@@ -524,23 +524,23 @@
     flex: 1;
     min-width: 0;
 
-    .bitfun-input-container {
+    &[data-bf-component='input'] {
       height: 18px;
       min-height: 18px;
       padding: 0 6px;
       border-radius: 4px;
       border-color: var(--bf-appearance-token-border-subtle);
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 55%, transparent);
+
+      &:focus-within {
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 35%, var(--bf-appearance-token-border-subtle));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
+      }
     }
 
-    .bitfun-input {
+    input {
       font-size: var(--bf-appearance-token-font-size-xs);
       line-height: 16px;
-    }
-
-    .bitfun-input-container:focus-within {
-      border-color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 35%, var(--bf-appearance-token-border-subtle));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
     }
   }
 

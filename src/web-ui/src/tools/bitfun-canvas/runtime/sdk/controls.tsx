@@ -1,7 +1,11 @@
 import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
-import { Input as BitFunInput } from '@/component-library/components/Input/Input';
 import { Tooltip as BitFunTooltip } from '@/component-library/components/Tooltip/Tooltip';
-import { IconButton as BitFunIconButton, Switch as BitFunSwitch } from '@bitfun/ui';
+import {
+  Field as DesignField,
+  IconButton as BitFunIconButton,
+  Input as DesignInput,
+  Switch as BitFunSwitch,
+} from '@bitfun/ui';
 import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {
   CanvasCheckboxProps,
@@ -131,13 +135,35 @@ export function Select({
   );
 }
 
-export function TextInput({ onChange, size, ...props }: CanvasTextInputProps) {
-  return (
-    <BitFunInput
+export function TextInput({
+  onChange,
+  size,
+  label,
+  hint,
+  prefix,
+  suffix,
+  error,
+  errorMessage,
+  ...props
+}: CanvasTextInputProps) {
+  const control = (
+    <DesignInput
       {...props}
-      size={controlSize(size)}
+      invalid={error}
+      leading={prefix}
+      trailing={suffix}
+      size={designSystemControlSize(size)}
       onChange={event => onChange?.(event.target.value)}
     />
+  );
+  const fieldError = error ? errorMessage : undefined;
+  if (label === undefined && hint === undefined && fieldError === undefined) {
+    return control;
+  }
+  return (
+    <DesignField label={label} description={hint} error={fieldError} controlWidth="fill">
+      {control}
+    </DesignField>
   );
 }
 

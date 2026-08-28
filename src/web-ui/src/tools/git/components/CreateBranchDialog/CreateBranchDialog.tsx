@@ -3,11 +3,10 @@
  * Provides a consistent UI for creating a new branch from an existing base branch.
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Field, Input, Modal } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GitBranch } from 'lucide-react';
-import { Input } from '@/component-library';
 import './CreateBranchDialog.scss';
 
 export interface CreateBranchDialogProps {
@@ -133,16 +132,19 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
         </div>
 
         <div className="bitfun-create-branch-dialog__form">
-          <Input
+          <Field
             label={t('dialog.createNewBranch.nameLabel')}
-            value={branchName}
-            onChange={handleInputChange}
-            placeholder={t('dialog.createNewBranch.namePlaceholder')}
-            disabled={isCreating}
-            autoFocus
-            error={!!error}
-            errorMessage={error}
-          />
+            controlWidth="fill"
+            error={error || undefined}
+          >
+            <Input
+              value={branchName}
+              onChange={handleInputChange}
+              placeholder={t('dialog.createNewBranch.namePlaceholder')}
+              disabled={isCreating}
+              autoFocus
+            />
+          </Field>
           <div className="bitfun-create-branch-dialog__hint">
             <div>{t('dialog.createNewBranch.namingHintTitle')}</div>
             <ul>

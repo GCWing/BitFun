@@ -28,6 +28,23 @@ test("Field associates label, description, and required state with its control",
   assert.match(markup, /required=""/);
 });
 
+test("Field renders a validation message wired to the control accessibility contract", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Field, {
+      error: "Name is already taken",
+      label: "Project name",
+    }, createElement(Input, {
+      id: "project-name",
+    })),
+  );
+
+  assert.match(markup, /data-invalid="true"/);
+  assert.match(markup, /aria-invalid="true"/);
+  assert.match(markup, /data-bf-part="error"[^>]*id="project-name-error"/);
+  assert.match(markup, /aria-describedby="project-name-error"/);
+  assert.match(markup, /Name is already taken/);
+});
+
 test("Field exposes horizontal layout independently from its control", () => {
   const markup = renderToStaticMarkup(
     createElement(Field, {

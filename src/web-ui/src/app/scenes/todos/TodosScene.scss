@@ -729,8 +729,7 @@ $todos-compact-breakpoint: 720px;
       );
     }
 
-    .bf-todos__field-control.bitfun-input-wrapper
-      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container'],
+    .bf-todos__field-control[data-bf-component='input'],
     .bf-todos__field-control.select
       > .select__trigger[data-bf-component='select'][data-bf-part='trigger'] {
       min-height: 36px;
@@ -742,10 +741,8 @@ $todos-compact-breakpoint: 720px;
       box-shadow: none;
     }
 
-    .bf-todos__field-control.bitfun-input-wrapper
-      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container']:hover,
-    .bf-todos__field-control.bitfun-input-wrapper
-      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container']:focus-within,
+    .bf-todos__field-control[data-bf-component='input']:hover,
+    .bf-todos__field-control[data-bf-component='input']:focus-within,
     .bf-todos__field-control.select
       > .select__trigger[data-bf-component='select'][data-bf-part='trigger']:hover,
     .bf-todos__field-control.select
@@ -792,8 +789,7 @@ $todos-compact-breakpoint: 720px;
     min-height: 36px;
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 
-    .bf-datetime-field__input
-      > .bitfun-input-container[data-bf-component='input'][data-bf-part='container'] {
+    .bf-datetime-field__input[data-bf-component='input'] {
       border: 0;
       padding: 0;
       background: transparent;

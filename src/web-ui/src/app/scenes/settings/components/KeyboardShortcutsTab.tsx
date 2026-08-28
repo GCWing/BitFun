@@ -10,9 +10,10 @@
  * - Reset button restores all defaults
  */
 
-import { Button } from '@bitfun/ui';
+import { Button, SearchField } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Tooltip } from '@/component-library';
+import { Search as SearchIcon } from 'lucide-react';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
 import {
@@ -248,6 +249,7 @@ function shortcutDisplayName(
 
 const KeyboardShortcutsTab: React.FC = () => {
   const { t } = useI18n('settings');
+  const { t: tComponents } = useI18n('components');
 
   const [registrations, setRegistrations] = useState<ShortcutRegistration[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -557,17 +559,18 @@ const KeyboardShortcutsTab: React.FC = () => {
       <ConfigPageContent data-bf-component="keyboard-shortcuts" data-bf-part="content">
         {/* Search + actions bar */}
         <div className="kb-shortcuts__toolbar" data-bf-component="keyboard-shortcuts" data-bf-part="toolbar">
-          <Search
+          <SearchField
             className="kb-shortcuts__search"
             data-bf-component="keyboard-shortcuts"
             data-bf-part="search"
-            size="small"
+            size="sm"
             value={searchQuery}
-            onChange={setSearchQuery}
+            onValueChange={setSearchQuery}
+            leadingIcon={<SearchIcon size={14} aria-hidden />}
             placeholder={t('keyboard.search')}
-            inputAriaLabel={t('keyboard.search')}
-            enterToSearch={false}
-            clearable
+            aria-label={t('keyboard.search')}
+            clearLabel={searchQuery ? tComponents('search.clear') : undefined}
+            onClear={searchQuery ? () => setSearchQuery('') : undefined}
           />
           <div className="kb-shortcuts__actions" data-bf-component="keyboard-shortcuts" data-bf-part="actions">
             {hasPendingChanges && (

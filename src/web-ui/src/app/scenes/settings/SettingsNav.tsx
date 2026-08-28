@@ -8,7 +8,9 @@ import React, {
 } from 'react';
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Search } from '@/component-library';
+import { Search as SearchIcon } from 'lucide-react';
+import { SearchField } from '@bitfun/ui';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
 import {
   SETTINGS_CATEGORIES,
@@ -111,6 +113,7 @@ function highlightFirstMatch(text: string, query: string): React.ReactNode {
 
 const SettingsNav: React.FC = () => {
   const { t, i18n } = useTranslation('settings');
+  const { t: tComponents } = useI18n('components');
   const activePageId = useSettingsStore((state) => state.activePageId);
   const activeViewId = useSettingsStore((state) => state.activeViewId);
   const openDestination = useSettingsStore((state) => state.openDestination);
@@ -208,20 +211,23 @@ const SettingsNav: React.FC = () => {
       </div>
 
       <div className="bitfun-settings-nav__search" data-bf-component="settings-nav" data-bf-part="search">
-        <Search
+        <SearchField
           ref={searchInputRef}
           className="bitfun-settings-nav__search-field"
-          size="small"
+          size="sm"
           value={draftQuery}
-          onChange={setDraftQuery}
-          onClear={clearSearch}
+          onValueChange={setDraftQuery}
+          onClear={draftQuery ? () => {
+            clearSearch();
+            searchInputRef.current?.focus();
+          } : undefined}
+          clearLabel={draftQuery ? tComponents('search.clear') : undefined}
           onKeyDown={handleSearchKeyDown}
-          enterToSearch={false}
+          leadingIcon={<SearchIcon size={14} aria-hidden />}
           placeholder={t('navigation.search.placeholder')}
-          inputAriaLabel={t('navigation.search.placeholder')}
-          ariaControls="settings-nav-results"
-          ariaExpanded={isSearchMode}
-          clearable
+          aria-label={t('navigation.search.placeholder')}
+          aria-controls="settings-nav-results"
+          aria-expanded={isSearchMode}
         />
       </div>
 

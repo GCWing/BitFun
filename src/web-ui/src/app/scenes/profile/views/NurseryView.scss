@@ -532,7 +532,7 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     gap: 4px;
     flex-wrap: wrap;
 
-    .badge--neutral {
+    [data-bf-component='status-pill'][data-tone='neutral'] {
       background: var(--bf-appearance-token-color-overlay-black-08);
       color: var(--bf-appearance-token-color-overlay-black-50);
     }

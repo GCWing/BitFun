@@ -17,6 +17,7 @@ import {
   IconButton,
   Input,
   PageHeader,
+  StatusPill,
   Switch,
   TabGroup,
   type TabGroupItem,
@@ -41,7 +42,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { Badge, Select } from '@/component-library';
+import { Select } from '@/component-library';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -956,7 +957,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   ) => (
     <div className="bitfun-remote-connect__connected" data-bf-component="remote-connect-dialog" data-bf-part="body" data-bf-state="connected">
       <div className="bitfun-remote-connect__status" data-bf-component="remote-connect-dialog" data-bf-part="status" data-bf-state="connected">
-        <Badge variant="success">{t('remoteConnect.stateConnected')}</Badge>
+        <StatusPill tone="success">{t('remoteConnect.stateConnected')}</StatusPill>
         {username && (
           <span className="bitfun-remote-connect__peer-username">
             {t('accountLogin.username')}: {username}
@@ -1014,13 +1015,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                   </div>
                 </div>
               )}
-              <Badge variant={qrCopied ? 'success' : 'warning'}>
+              <StatusPill tone={qrCopied ? 'success' : 'warning'}>
                 {qrCopied
                   ? t('remoteConnect.urlCopied')
                   : connectionOwner === 'bot'
                     ? t('remoteConnect.stateWaitingBot')
                     : t('remoteConnect.stateWaiting')}
-              </Badge>
+              </StatusPill>
             </div>
           )}
           <div className="bitfun-remote-connect__pairing-details">
@@ -1052,11 +1053,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             )}
             {!connectionResult.qr_url && (
               <>
-                <Badge variant="warning">
+                <StatusPill tone="warning">
                   {connectionOwner === 'bot'
                     ? t('remoteConnect.stateWaitingBot')
                     : t('remoteConnect.stateWaiting')}
-                </Badge>
+                </StatusPill>
                 <p className="bitfun-remote-connect__hint">
                   {connectionOwner === 'bot'
                     ? t('remoteConnect.botHint')
@@ -1228,7 +1229,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             </p>,
           )}
           <div className="bitfun-remote-connect__status" data-bf-component="remote-connect-dialog" data-bf-part="status" data-bf-state="connected">
-            <Badge variant="success">{t('remoteConnect.stateConnected')}</Badge>
+            <StatusPill tone="success">{t('remoteConnect.stateConnected')}</StatusPill>
           </div>
           <div className="bitfun-remote-connect__mode-setting">
             <span data-active={!botVerboseMode ? 'true' : undefined}>
@@ -1555,7 +1556,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             {statusDetail}
           </span>
         )}
-        <Badge variant={statusPositive ? 'success' : 'neutral'}>{statusLabel}</Badge>
+        <StatusPill tone={statusPositive ? 'success' : 'neutral'}>{statusLabel}</StatusPill>
       </span>
       <ChevronRight className="bitfun-remote-connect__overview-action-chevron" size={16} aria-hidden="true" />
     </button>

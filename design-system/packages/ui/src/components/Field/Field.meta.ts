@@ -8,6 +8,7 @@ export const fieldMeta = {
   props: [
     { name: "label", type: "ReactNode" },
     { name: "description", type: "ReactNode" },
+    { name: "error", type: "ReactNode" },
     { name: "labelAction", type: "ReactNode" },
     { name: "controlLeading", type: "ReactNode" },
     { name: "controlTrailing", type: "ReactNode" },
@@ -18,11 +19,12 @@ export const fieldMeta = {
     { defaultValue: "vertical", name: "orientation", type: "horizontal | vertical" },
     { name: "children", type: "ReactElement" },
   ],
-  states: ["default"],
+  states: ["default", "invalid"],
   tokens: [
     "color.accent.default",
     "color.content.primary",
     "color.content.muted",
+    "color.status.danger.content",
     "layout.field.rootGap",
     "layout.field.horizontalGap",
     "layout.field.horizontalGapWide",
