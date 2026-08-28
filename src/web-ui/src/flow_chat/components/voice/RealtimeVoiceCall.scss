@@ -6,11 +6,21 @@
   &:not(.is-active):hover {
     color: var(--bf-appearance-token-color-success);
     background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
+
+    > svg {
+      color: inherit;
+      stroke: currentColor;
+    }
   }
 
   &.is-active {
     color: var(--bf-appearance-token-color-success);
     background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+
+    &:hover > svg {
+      color: inherit;
+      stroke: currentColor;
+    }
   }
 }
 
