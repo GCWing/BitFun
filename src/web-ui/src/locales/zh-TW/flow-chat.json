@@ -2511,6 +2511,7 @@
     "modelNotConfigured": "未設定",
     "tooltip": {
       "configName": "設定名稱",
+      "modelName": "模型名稱",
       "contextWindow": "上下文視窗",
       "compressionTrigger": "壓縮觸發線",
       "longContextWarning": "目前模型設定的上下文視窗超過 400K。超長上下文可能降低模型效果，建議將其調整到 300K 左右。"

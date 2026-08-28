@@ -17,6 +17,7 @@ const t = (key: string, params?: Record<string, unknown>): string => {
     'modelSelector.contextUsage.agentPromptLabel': 'Last request prompt',
     'modelSelector.contextUsage.acpContextLabel': 'ACP reported context',
     'modelSelector.tooltip.configName': 'Configuration',
+    'modelSelector.tooltip.modelName': 'Model name',
     'modelSelector.tooltip.contextWindow': 'Context window',
     'modelSelector.tooltip.compressionTrigger': 'Compression trigger',
     'modelSelector.tooltip.longContextWarning': 'Long context warning',
@@ -119,6 +120,7 @@ describe('tokenUsageDisplay', () => {
   it('builds labeled model details and puts the long-context warning last', () => {
     expect(buildModelSelectorTooltipDetails({
       configName: 'OpenAI production',
+      modelName: 'gpt-5.6-sol',
       contextWindow: 1_000_000,
       usage: {
         current: 120_000,
@@ -129,6 +131,7 @@ describe('tokenUsageDisplay', () => {
     })).toEqual({
       rows: [
         { key: 'configName', label: 'Configuration', value: 'OpenAI production' },
+        { key: 'modelName', label: 'Model name', value: 'gpt-5.6-sol' },
         { key: 'contextWindow', label: 'Context window', value: '1M' },
         { key: 'compressionTrigger', label: 'Compression trigger', value: '926K' },
         { key: 'contextUsage', label: 'Last request prompt', value: '120K/1M (12%)' },
@@ -140,6 +143,7 @@ describe('tokenUsageDisplay', () => {
   it('does not warn when usage is high but the configured context window is not over 400K', () => {
     expect(buildModelSelectorTooltipDetails({
       configName: 'OpenAI production',
+      modelName: 'gpt-5.6-sol',
       contextWindow: 400_000,
       usage: {
         current: 390_000,
@@ -148,6 +152,18 @@ describe('tokenUsageDisplay', () => {
       },
       t,
     }).warning).toBeUndefined();
+  });
+
+  it('keeps the Auto tooltip to the configuration name when no concrete model is resolved', () => {
+    expect(buildModelSelectorTooltipDetails({
+      configName: 'Auto',
+      t,
+    })).toEqual({
+      rows: [
+        { key: 'configName', label: 'Configuration', value: 'Auto' },
+      ],
+      warning: undefined,
+    });
   });
 
   it('formats model-round timing and token metadata with unavailable output when missing', () => {

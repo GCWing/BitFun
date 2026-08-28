@@ -22,7 +22,7 @@ export interface ModelRoundUsageMetaItem {
 }
 
 export interface ModelSelectorTooltipRow {
-  key: 'configName' | 'contextWindow' | 'compressionTrigger' | 'contextUsage';
+  key: 'configName' | 'modelName' | 'contextWindow' | 'compressionTrigger' | 'contextUsage';
   label: string;
   value: string;
 }
@@ -79,13 +79,15 @@ export function formatContextUsageValue(usage: ContextUsageDisplay): string | nu
 
 export function buildModelSelectorTooltipDetails(params: {
   configName: string;
+  modelName?: string;
   contextWindow?: number;
   configuredMaxOutputTokens?: number;
-  usage: ContextUsageDisplay;
+  usage?: ContextUsageDisplay;
   t: TranslationFn;
 }): ModelSelectorTooltipDetails {
   const {
     configName,
+    modelName,
     contextWindow,
     configuredMaxOutputTokens,
     usage,
@@ -98,6 +100,14 @@ export function buildModelSelectorTooltipDetails(params: {
       key: 'configName',
       label: t('modelSelector.tooltip.configName'),
       value: configName,
+    });
+  }
+
+  if (modelName) {
+    rows.push({
+      key: 'modelName',
+      label: t('modelSelector.tooltip.modelName'),
+      value: modelName,
     });
   }
 
@@ -116,15 +126,17 @@ export function buildModelSelectorTooltipDetails(params: {
     });
   }
 
-  const contextUsageValue = formatContextUsageValue(usage);
-  if (contextUsageValue) {
-    rows.push({
-      key: 'contextUsage',
-      label: usage.source === 'acp_context'
-        ? t('modelSelector.contextUsage.acpContextLabel')
-        : t('modelSelector.contextUsage.agentPromptLabel'),
-      value: contextUsageValue,
-    });
+  if (usage) {
+    const contextUsageValue = formatContextUsageValue(usage);
+    if (contextUsageValue) {
+      rows.push({
+        key: 'contextUsage',
+        label: usage.source === 'acp_context'
+          ? t('modelSelector.contextUsage.acpContextLabel')
+          : t('modelSelector.contextUsage.agentPromptLabel'),
+        value: contextUsageValue,
+      });
+    }
   }
 
   return {
