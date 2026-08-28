@@ -797,7 +797,7 @@
       "fullAccessWarningMessageActiveTurn": "Full access allows tools by default without asking each time. This applies to later model rounds in the current turn; project and enforced rules still apply.",
       "openDefaultSettings": "Open permission settings"
     },
-    "addModeTooltip": "Add Plan or Multitask",
+    "addModeTooltip": "Add Plan",
     "boostSectionAgent": "Directives",
     "boostSectionContext": "Context",
     "boostStartBtw": "Start side question",
@@ -906,7 +906,6 @@
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
-      "Multitask": "Multitask mode: decompose work into orthogonal branches and proactively use subagents in parallel when it helps",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
@@ -916,7 +915,6 @@
     },
     "modeNames": {
       "agentic": "Agentic",
-      "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",
       "Cowork": "Cowork",

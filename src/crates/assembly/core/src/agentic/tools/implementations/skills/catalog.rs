@@ -21,6 +21,7 @@ mod tests {
             builtin_skill_group_key("evidence-debugging"),
             Some("debugging")
         );
+        assert_eq!(builtin_skill_group_key("multitask"), Some("coordination"));
         assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
         assert_eq!(
             builtin_skill_group_key("bitfun-frontend-dev"),

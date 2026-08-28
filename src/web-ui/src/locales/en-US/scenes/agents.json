@@ -207,6 +207,7 @@
       "miniapp": "MiniApp",
       "canvas": "Canvas",
       "debugging": "Debugging",
+      "coordination": "Coordination",
       "gstack": "gstack",
       "other": "Other"
     },
@@ -395,7 +396,6 @@
     "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
     "Init": "Init agent: help set up project structure and initial configuration",
     "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
-    "Multitask": "Multitask mode: decompose work into orthogonal branches and use subagents in parallel when beneficial",
     "Plan": "Plan mode: create detailed task plans and execution steps",
     "Claw": "Claw mode: extract and integrate information from external sources",
     "Ultra": "Swarm planning mode: decompose complex work into bounded agent tasks, coordinate execution, and synthesize reviewed results"

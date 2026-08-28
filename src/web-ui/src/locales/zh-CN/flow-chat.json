@@ -797,7 +797,7 @@
       "fullAccessWarningMessageActiveTurn": "完全访问会默认放行工具调用，不再逐次确认。该设置从当前轮的后续模型轮次生效，项目规则与强制规则仍然生效。",
       "openDefaultSettings": "打开权限设置"
     },
-    "addModeTooltip": "附加 Plan 或 Multitask",
+    "addModeTooltip": "附加 Plan",
     "boostSectionAgent": "指令",
     "boostSectionContext": "上下文",
     "boostStartBtw": "发起侧问",
@@ -900,7 +900,6 @@
     "sendingToBtw": "侧问会话：{{title}}",
     "modeDescriptions": {
       "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
-      "Multitask": "多任务模式：将工作拆成正交分支，并在合适时主动并行调度子 Agent 推进",
       "Claw": "个人助理模式：面向个人工作区和日常事务，使用独立的助理上下文",
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
@@ -910,7 +909,6 @@
     },
     "modeNames": {
       "agentic": "Agentic",
-      "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",
       "Cowork": "Cowork",

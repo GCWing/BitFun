@@ -797,7 +797,7 @@
       "fullAccessWarningMessageActiveTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定從目前輪次的後續模型輪次生效，專案規則與強制規則仍然生效。",
       "openDefaultSettings": "開啟權限設定"
     },
-    "addModeTooltip": "附加 Plan 或 Multitask",
+    "addModeTooltip": "附加 Plan",
     "boostSectionAgent": "指令",
     "boostSectionContext": "上下文",
     "boostStartBtw": "發起側問",
@@ -900,7 +900,6 @@
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
-      "Multitask": "多工模式：將工作拆成正交分支，並在合適時主動並行調度子 Agent 推進",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
       "Plan": "先規劃後執行，先明確需求並制定實施計劃，再進行編碼",
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
@@ -910,7 +909,6 @@
     },
     "modeNames": {
       "agentic": "Agentic",
-      "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",
       "Cowork": "Cowork",

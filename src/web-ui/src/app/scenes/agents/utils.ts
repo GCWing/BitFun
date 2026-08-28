@@ -114,7 +114,6 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
     if (id === 'cowork') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'creative', level: 3 }] };
     if (id === 'computeruse') return { ...agent, capabilities: [{ category: 'ops', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'deepresearch') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 4 }] };
-    if (id === 'multitask') return { ...agent, capabilities: codingAnalysisCapabilities() };
   }
 
   if (id === 'explore' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };

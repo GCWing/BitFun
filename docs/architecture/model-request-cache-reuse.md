@@ -178,12 +178,10 @@ keeping the forked child aligned with the parent session shape.
 
 ## 3. The Shared Coding Modes Intentionally Reuse The Same Cache Identity
 
-BitFun's four shared coding modes are:
+BitFun's shared coding modes are:
 
 - `agentic`
 - `Plan`
-- `debug`
-- `Multitask`
 
 They are intentionally configured to share the same stable prompt base.
 
@@ -192,7 +190,7 @@ Relevant code:
 - shared constants and tests:
   `src/crates/execution/agent-runtime/src/agents.rs`
 - mode definitions:
-  `src/crates/assembly/core/src/agentic/agents/definitions/modes/{agentic,plan,debug,multitask}.rs`
+  `src/crates/assembly/core/src/agentic/agents/definitions/modes/{agentic,plan}.rs`
 
 Why they reuse cache:
 
@@ -209,16 +207,20 @@ The test `shared_template_modes_share_system_prompt_cache_identity()` asserts
 that these shared modes intentionally produce the same system-prompt and
 user-context cache identities.
 
-Mode-specific behavior is added through `system_reminder` text, not by swapping
+Plan-specific behavior is added through `system_reminder` text, not by swapping
 the cached base template:
 
-- `Plan`, `Debug`, and `Multitask` provide first-entry and ongoing reminder
-  templates
+- `Plan` provides first-entry and ongoing reminder templates
 - reminders are injected immediately before the current user message in
   `ExecutionEngine::build_ai_messages_for_send(...)`
 
-This is the key reason mode switches between these four coding modes do not
+This is the key reason mode switches between these coding modes do not
 force a base prompt cache reset.
+
+Parallel task coordination is now the built-in `multitask` skill rather than a
+separate Agent mode. Skill availability and loading use the dynamic listing
+path described below, so enabling that workflow does not add another base
+prompt identity.
 
 The frontend also knows about this compatibility:
 

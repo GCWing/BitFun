@@ -234,7 +234,6 @@ async fn review_lookup_cold_loads_the_requested_project_registry() {
 fn top_level_modes_default_to_auto() {
     for agent_type in [
         "agentic",
-        "Multitask",
         "Cowork",
         "Creative",
         "Plan",
