@@ -11,6 +11,10 @@
     width: min(220px, 100%);
   }
 
+  &__credential-input {
+    width: min(360px, 100%);
+  }
+
   &__status-card {
     display: grid;
     grid-template-columns: 34px minmax(0, 1fr) auto;

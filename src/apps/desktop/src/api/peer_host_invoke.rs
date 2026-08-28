@@ -151,6 +151,15 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "speech_append_audio_chunk",
     "speech_finish_input_session",
     "speech_cancel_input_session",
+    "speech_start_realtime_session",
+    "speech_append_realtime_audio",
+    "speech_commit_realtime_audio",
+    "speech_send_realtime_tool_result",
+    "speech_speak_realtime_text",
+    "speech_cancel_realtime_response",
+    "speech_close_realtime_session",
+    "speech_get_realtime_config",
+    "speech_save_realtime_config",
     // Granting Git ownership trust writes to the peer user's global Git
     // configuration and tells Git to run hooks from a tree they do not own.
     // That decision stays with the person at that machine; a controller can
@@ -655,6 +664,15 @@ mod tests {
             "speech_append_audio_chunk",
             "speech_finish_input_session",
             "speech_cancel_input_session",
+            "speech_start_realtime_session",
+            "speech_append_realtime_audio",
+            "speech_commit_realtime_audio",
+            "speech_send_realtime_tool_result",
+            "speech_speak_realtime_text",
+            "speech_cancel_realtime_response",
+            "speech_close_realtime_session",
+            "speech_get_realtime_config",
+            "speech_save_realtime_config",
             // Same controller-owned observer/credential family as the other
             // dispatch verbs already denied here.
             "dispatch_continue",

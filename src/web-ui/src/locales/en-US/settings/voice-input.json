@@ -48,6 +48,73 @@
       "description": "Automatic by default; choose a language only when detection is inaccurate."
     }
   },
+  "voiceCall": {
+    "title": "Realtime voice call",
+    "enabled": {
+      "label": "Enable the client voice assistant",
+      "description": "Talk to Volcengine's end-to-end realtime voice model from the bottom-left client control, let it understand workspace state, and start BitFun tasks."
+    },
+    "apiKey": {
+      "label": "Volcengine API key",
+      "description": "Used only by this controller for the voice connection; it is not sent to a remote workspace or peer device with a task.",
+      "placeholder": "Enter the end-to-end realtime voice API key"
+    },
+    "voice": {
+      "label": "Voice ID",
+      "description": "Uses the Jupiter female voice from the official demo by default."
+    },
+    "status": {
+      "label": "Connection setup",
+      "description": "After saving, the call button at the bottom-left of the client can start a full-duplex voice conversation."
+    },
+    "save": "Save realtime voice",
+    "messages": {
+      "loadFailed": "Failed to load controller realtime voice settings",
+      "saved": "Realtime voice settings saved",
+      "saveFailed": "Failed to save realtime voice settings"
+    },
+    "call": {
+      "title": "BitFun realtime call",
+      "button": "Start a realtime voice call",
+      "empty": "Just start talking. When you ask for work, I will start a new BitFun session.",
+      "mute": "Mute microphone",
+      "unmute": "Unmute microphone",
+      "hangUp": "Hang up",
+      "settings": "Realtime voice settings",
+      "configureFirst": "Configure a Volcengine realtime voice API key first.",
+      "startFailed": "Failed to start the realtime voice call",
+      "taskComplete": "The BitFun task is complete. I am preparing the result.",
+      "taskFailed": "The BitFun task failed. I am preparing an explanation.",
+      "taskStopping": "Stopping the current BitFun task…",
+      "taskStopped": "The current BitFun task has stopped.",
+      "taskAlreadyComplete": "The task already finished, so there is nothing to stop.",
+      "noActiveTask": "There is no BitFun task running right now.",
+      "status": {
+        "connecting": "Connecting to Volcengine…",
+        "connected": "Connected, creating the conversation…",
+        "listening": "Listening",
+      "thinking": "Thinking",
+      "readingClientContext": "Reading client state…",
+      "switchingWorkspace": "Switching workspace…",
+      "speaking": "Speaking",
+      "ending": "Ending the call…",
+      "error": "The realtime voice connection failed",
+      "disconnected": "The realtime voice connection was interrupted",
+        "microphoneDisconnected": "The microphone was disconnected",
+        "retryingAudio": "Retrying voice playback…",
+        "audioPlaybackFailed": "Voice playback failed. Check the system audio output."
+      },
+      "taskPhases": {
+        "starting": "Creating a new BitFun session.",
+        "working": "BitFun is still working on the task. I will keep following it.",
+        "using_tools": "BitFun is using tools to move the task forward.",
+        "waiting_approval": "The task is waiting for your approval in BitFun.",
+        "needs_input": "BitFun needs more information in the task session.",
+        "finishing": "The main work is done and BitFun is preparing the final result.",
+        "stopping": "Stopping the current BitFun task."
+      }
+    }
+  },
   "diagnostics": {
     "microphone": {
       "label": "Input device",

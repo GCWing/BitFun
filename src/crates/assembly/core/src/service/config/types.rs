@@ -167,6 +167,13 @@ pub struct AppConfig {
     #[serde(default)]
     pub flow_chat: AppFlowChatConfig,
     pub ai_experience: AIExperienceConfig,
+    /// Controller-owned end-to-end realtime voice conversation settings.
+    ///
+    /// This is deliberately a sibling of `ai_experience`: generic AI
+    /// experience mutations can be routed to a peer host, while the dedicated
+    /// realtime speech commands always resolve this value on the controller.
+    #[serde(default)]
+    pub voice_call: VoiceCallConfig,
     /// User-defined keyboard shortcut overrides.
     /// Stored as opaque JSON so the backend remains schema-agnostic;
     /// the frontend owns the versioned format (StoredKeybindingsV1).
@@ -376,6 +383,39 @@ impl Default for VoiceInputConfig {
             model_id: "sensevoice-small-int8".to_string(),
             default_language: "auto".to_string(),
             max_recording_seconds: 60,
+            microphone_device_id: String::new(),
+        }
+    }
+}
+
+/// Controller-local full-duplex voice-call preferences.
+///
+/// The API key crosses only the controller-local settings IPC; starting a
+/// session resolves it in the Desktop adapter, so it is never forwarded to a
+/// remote workspace or peer HostInvoke request. Session execution selected by
+/// a voice tool call can still target a remote workspace or peer through the
+/// normal Agent Runtime adapters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceCallConfig {
+    pub enabled: bool,
+    pub provider: String,
+    pub api_key: String,
+    pub voice: String,
+    pub speed: i32,
+    pub loudness: i32,
+    pub microphone_device_id: String,
+}
+
+impl Default for VoiceCallConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            provider: "volcengine".to_string(),
+            api_key: String::new(),
+            voice: "zh_female_vv_jupiter_bigtts".to_string(),
+            speed: 0,
+            loudness: 0,
             microphone_device_id: String::new(),
         }
     }
@@ -1629,6 +1669,7 @@ impl Default for AppConfig {
             },
             flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
+            voice_call: VoiceCallConfig::default(),
             keybindings: None,
             user_tool_groups: UserToolGroupsConfig::default(),
             user_skill_groups: UserSkillGroupsConfig::default(),
@@ -2046,6 +2087,17 @@ mod tests {
         UserSkillGroupsConfig, UserToolGroupsConfig,
     };
     use bitfun_runtime_ports::ToolPermissionConfig;
+
+    #[test]
+    fn legacy_app_config_defaults_realtime_voice_call() {
+        let config: AppConfig = serde_json::from_value(serde_json::json!({}))
+            .expect("legacy app config should deserialize");
+
+        assert!(config.voice_call.enabled);
+        assert_eq!(config.voice_call.provider, "volcengine");
+        assert!(config.voice_call.api_key.is_empty());
+        assert_eq!(config.voice_call.voice, "zh_female_vv_jupiter_bigtts");
+    }
 
     #[test]
     fn prevent_sleep_defaults_to_disabled() {

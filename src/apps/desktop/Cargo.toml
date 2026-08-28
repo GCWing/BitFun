@@ -24,7 +24,7 @@ bitfun-relay-service = { path = "../../crates/services/relay-service" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "permission", "workspace-ports"] }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["appearance-market"] }
-bitfun-services-integrations = { path = "../../crates/services/services-integrations", features = ["canvas-runtime", "miniapp-market", "speech"] }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", features = ["canvas-runtime", "miniapp-market", "speech-realtime"] }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts", features = ["element-token"] }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }

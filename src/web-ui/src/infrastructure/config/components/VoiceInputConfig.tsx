@@ -1,9 +1,10 @@
 import { Button, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, CloudOff, Download, HardDrive } from 'lucide-react';
+import { CheckCircle2, CloudOff, Download, HardDrive, PhoneCall } from 'lucide-react';
 import {
   Badge,
+  Input,
   Select,
   type BadgeVariant,
   type SelectOption,
@@ -12,6 +13,7 @@ import {
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
   speechAPI,
   type SpeechModelStatus,
+  type SpeechRealtimeConfig,
 } from '@/infrastructure/api';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { notificationService } from '@/shared/notification-system';
@@ -82,6 +84,7 @@ const VoiceInputConfig: React.FC = () => {
   const [modelsLoading, setModelsLoading] = useState(speechRuntimeSupported);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [localModelsOpen, setLocalModelsOpen] = useState(false);
+  const [voiceCallDraft, setVoiceCallDraft] = useState<SpeechRealtimeConfig | null>(null);
   const cancelDownloadRequestedRef = useRef<Set<string>>(new Set());
 
   const voiceInput = settings?.voice_input;
@@ -99,6 +102,20 @@ const VoiceInputConfig: React.FC = () => {
     () => models.find(model => model.state === 'installed'),
     [models],
   );
+
+  useEffect(() => {
+    if (!speechRuntimeSupported) return undefined;
+    let active = true;
+    void speechAPI.getRealtimeConfig().then(config => {
+      if (active) setVoiceCallDraft(config);
+    }).catch(error => {
+      log.error('Failed to load controller realtime voice call settings', { error });
+      notificationService.error(t('voiceCall.messages.loadFailed'));
+    });
+    return () => {
+      active = false;
+    };
+  }, [speechRuntimeSupported, t]);
 
   const languageOptions = useMemo<SelectOption[]>(() => {
     const languages = selectedModel?.languages?.length
@@ -173,6 +190,34 @@ const VoiceInputConfig: React.FC = () => {
       model.modelId === status.modelId ? status : model
     ));
   }, []);
+
+  const saveVoiceCall = useCallback(async () => {
+    if (!voiceCallDraft) {
+      notificationService.error(t('messages.loadFailed'));
+      return;
+    }
+    try {
+      setBusyAction('save-voice-call');
+      const saved = await speechAPI.saveRealtimeConfig({
+        enabled: voiceCallDraft.enabled,
+        apiKey: voiceCallDraft.apiKey.trim(),
+        voice: voiceCallDraft.voice.trim(),
+        speed: voiceCallDraft.speed,
+        loudness: voiceCallDraft.loudness,
+        microphoneDeviceId: voiceCallDraft.microphoneDeviceId,
+      });
+      setVoiceCallDraft(saved);
+      window.dispatchEvent(new CustomEvent('bitfun:realtime-voice-config-changed', {
+        detail: saved,
+      }));
+      notificationService.success(t('voiceCall.messages.saved'));
+    } catch (error) {
+      log.error('Failed to save realtime voice call settings', { error });
+      notificationService.error(t('voiceCall.messages.saveFailed'));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [t, voiceCallDraft]);
 
   const handleDownload = useCallback((model: SpeechModelStatus) => {
     if (model.state === 'downloading') return;
@@ -395,6 +440,81 @@ const VoiceInputConfig: React.FC = () => {
             }}
           />
         </ConfigPageSection>
+
+        {voiceCallDraft ? (
+          <ConfigPageSection title={t('voiceCall.title')}>
+            <ConfigPageRow
+              label={t('voiceCall.enabled.label')}
+              description={t('voiceCall.enabled.description')}
+              align="center"
+            >
+              <Switch
+                checked={voiceCallDraft.enabled}
+                onChange={(event) => setVoiceCallDraft(previous => previous ? ({
+                  ...previous,
+                  enabled: event.target.checked,
+                }) : previous)}
+              />
+            </ConfigPageRow>
+            <ConfigPageRow
+              label={t('voiceCall.apiKey.label')}
+              description={t('voiceCall.apiKey.description')}
+              align="center"
+            >
+              <Input
+                className="voice-input-config__credential-input"
+                type="password"
+                size="small"
+                autoComplete="off"
+                value={voiceCallDraft.apiKey}
+                placeholder={t('voiceCall.apiKey.placeholder')}
+                disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
+                onChange={(event) => setVoiceCallDraft(previous => previous ? ({
+                  ...previous,
+                  apiKey: event.target.value,
+                }) : previous)}
+              />
+            </ConfigPageRow>
+            <ConfigPageRow
+              label={t('voiceCall.voice.label')}
+              description={t('voiceCall.voice.description')}
+              align="center"
+            >
+              <Input
+                className="voice-input-config__credential-input"
+                size="small"
+                value={voiceCallDraft.voice}
+                disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
+                onChange={(event) => setVoiceCallDraft(previous => previous ? ({
+                  ...previous,
+                  voice: event.target.value,
+                }) : previous)}
+              />
+            </ConfigPageRow>
+            <ConfigPageRow
+              label={t('voiceCall.status.label')}
+              description={speechRuntimeSupported
+                ? t('voiceCall.status.description')
+                : t('messages.unsupported')}
+              align="center"
+            >
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<PhoneCall size={14} />}
+                loading={busyAction === 'save-voice-call'}
+                disabled={
+                  !speechRuntimeSupported
+                  || !voiceCallDraft.voice.trim()
+                  || (voiceCallDraft.enabled && !voiceCallDraft.apiKey.trim())
+                }
+                onClick={() => void saveVoiceCall()}
+              >
+                {t('voiceCall.save')}
+              </Button>
+            </ConfigPageRow>
+          </ConfigPageSection>
+        ) : null}
 
       </ConfigPageContent>
       <LocalVoiceModelsConfig

@@ -178,6 +178,7 @@ import {
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { useComposerCapabilities } from '../session-drivers/useComposerCapabilities';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
+import { useRealtimeVoiceCallActive } from './voice/RealtimeVoiceCallContext';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import {
@@ -493,6 +494,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     DEFAULT_TOOL_PERMISSION_CONFIG,
   );
   const [permissionModeSaving, setPermissionModeSaving] = useState(false);
+  const realtimeVoiceCallActive = useRealtimeVoiceCallActive();
   const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
   // The session's own selection. `null` means it follows the global default,
   // which is what keeps switching modes in one conversation from moving every
@@ -6525,7 +6527,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 ) : null}
 
-                {!caps.transferInFlight && !isInterruptedTurnRecoveryInFlight ? (
+                {!realtimeVoiceCallActive
+                  && !caps.transferInFlight
+                  && !isInterruptedTurnRecoveryInFlight ? (
                   <ComposerVoiceInputButton controller={voiceInput} />
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}

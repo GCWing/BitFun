@@ -388,6 +388,13 @@ speech = [
     "tokio-util",
     "uuid",
 ]
+speech-realtime = [
+    "speech",
+    "tokio/net",
+    "tokio/time",
+    "dep:tokio-tungstenite",
+    "tokio-tungstenite?/rustls-tls-native-roots",
+]
 workspace-search = [
     "async-trait",
     "bitfun-services-core/filesystem",

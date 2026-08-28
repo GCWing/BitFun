@@ -2993,7 +2993,7 @@ test('services integrations image codecs stay attached to exact product owners',
   assert.match(messages, /image shared Image activation alias must not select capabilities: png/);
 });
 
-test('services integrations WebSocket TLS stays attached to remote-connect', () => {
+test('services integrations WebSocket TLS stays attached to reviewed realtime owners', () => {
   const pkg = {
     ...packageAt('bitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
       name: 'tokio-tungstenite',
@@ -3004,6 +3004,10 @@ test('services integrations WebSocket TLS stays attached to remote-connect', () 
     }]),
     features: {
       'remote-connect': [
+        'dep:tokio-tungstenite',
+        'tokio-tungstenite?/rustls-tls-native-roots',
+      ],
+      'speech-realtime': [
         'dep:tokio-tungstenite',
         'tokio-tungstenite?/rustls-tls-native-roots',
       ],

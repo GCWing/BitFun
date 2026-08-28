@@ -29,6 +29,7 @@ import {
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
+import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/RealtimeVoiceCallContext';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 import { shouldBlockBrowserShortcut } from './browserShortcutPolicy';
@@ -914,7 +915,8 @@ function App() {
       <ChatProvider>
         <ViewModeProvider defaultMode="coder">
           <SSHRemoteProvider>
-            <ToolbarModeProvider>
+            <RealtimeVoiceCallProvider>
+              <ToolbarModeProvider>
               {/* One shell-owned command/search surface for every scene and nav mode. */}
               <Suspense fallback={null}>
                 <LazyGlobalSearchRoot />
@@ -947,7 +949,8 @@ function App() {
                   Mounted here (inside ToolbarModeProvider, outside LazyAppLayout)
                   so it persists across both normal and Toolbar Mode. */}
               <AskUserAnnouncer />
-            </ToolbarModeProvider>
+              </ToolbarModeProvider>
+            </RealtimeVoiceCallProvider>
           </SSHRemoteProvider>
         </ViewModeProvider>
       </ChatProvider>
