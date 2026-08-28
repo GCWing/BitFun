@@ -3,11 +3,10 @@
  * Shows a branch's commits and supports cherry-pick when applicable.
  */
 
-import { Button, IconButton, SearchField } from '@bitfun/ui';
+import { Button, IconButton, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, RefreshCw, ChevronDown, ChevronUp, GitBranch, Square, CheckSquare, Search as SearchIcon } from 'lucide-react';
-import { Select } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
@@ -363,10 +362,9 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                 ...uniqueAuthors.map(author => ({ label: author, value: author }))
               ]}
               value={authorFilter}
-              onChange={(val) => setAuthorFilter(val as string)}
-              placeholder={t('branchHistory.authorPlaceholder')}
-              size="small"
-              clearable={!!authorFilter}
+              onValueChange={(val) => setAuthorFilter(String(val))}
+              aria-label={t('branchHistory.authorPlaceholder')}
+              size="sm"
               className="git-branch-history-view__author-select"
             />
           )}
