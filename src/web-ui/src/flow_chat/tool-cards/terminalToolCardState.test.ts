@@ -8,6 +8,7 @@ function caps(overrides: Partial<PeerHostCapabilities>): PeerHostCapabilities {
     idempotentDialogSubmit: false,
     targetedSessionRollback: false,
     tokenUsageStatistics: false,
+    miniAppAgentContextFilesV1: false,
     cancelTool: null,
     toolCatalog: null,
     hostKind: null,

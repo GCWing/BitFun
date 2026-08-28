@@ -192,6 +192,35 @@ describe('useMiniAppBridge floating Agent routing', () => {
     expect(mocks.openMainSession).not.toHaveBeenCalled();
   });
 
+  it('rejects malformed Agent context files instead of dropping them', async () => {
+    await act(async () => {
+      root.render(<BridgeHarness />);
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    await dispatchRpc(iframe, 1, 'agent.ensureSession', {
+      sessionName: 'Market Lens',
+      appDataWorkspace: 'chat',
+    });
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    await dispatchRpc(iframe, 2, 'agent.run', {
+      sessionId: 'session-1',
+      prompt: 'Summarize the market',
+      contextFiles: '{"not":"an array"}',
+    });
+
+    expect(mocks.agentRun).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: 'agent.run: contextFiles must be an array when provided.',
+        }),
+      }),
+      '*',
+    );
+  });
+
   it('associates a composer draft with the session focused immediately before it', async () => {
     await act(async () => {
       root.render(<BridgeHarness />);

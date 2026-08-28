@@ -1,4 +1,8 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+#[cfg(feature = "tools-miniapp")]
+use crate::agentic::tools::miniapp_context_runtime::{
+    is_virtual_context_path, requires_virtual_context_path, virtual_context_files_for_search,
+};
 use crate::agentic::tools::ToolPathOperation;
 use crate::service::search::{
     get_global_workspace_search_service, remote_workspace_search_service_for_path,
@@ -13,6 +17,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
+#[cfg(feature = "tools-miniapp")]
+use tool_runtime::search::grep_search::grep_search_virtual_files;
 use tool_runtime::search::grep_search::{
     apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches, grep_search,
     relativize_result_text, render_remote_grep_result_text, GrepOptions, GrepSearchResult,
@@ -621,6 +627,48 @@ Usage:
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
         context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
+        #[cfg(feature = "tools-miniapp")]
+        if is_virtual_context_path(context, &resolved) {
+            let files = virtual_context_files_for_search(context, &resolved).ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "MiniApp context path is unavailable: {}",
+                    resolved.logical_path
+                ))
+            })?;
+            let options = self.build_grep_options(input, context)?;
+            let pattern = options.pattern.clone();
+            let path = resolved.logical_path.clone();
+            let output_mode = options.output_mode.to_string();
+            let result =
+                tokio::task::spawn_blocking(move || grep_search_virtual_files(options, &files))
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!("virtual grep task failed: {error}"))
+                    })?
+                    .map_err(BitFunError::tool)?;
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "pattern": pattern,
+                    "path": path,
+                    "output_mode": output_mode,
+                    "file_count": result.file_count,
+                    "total_matches": result.total_matches,
+                    "applied_limit": result.applied_limit,
+                    "applied_offset": result.applied_offset,
+                    "result": result.result_text,
+                    "representation": "miniapp_context"
+                }),
+                result_for_assistant: Some(result.result_text),
+                image_attachments: None,
+            }]);
+        }
+        #[cfg(feature = "tools-miniapp")]
+        if requires_virtual_context_path(context) {
+            return Err(BitFunError::tool(format!(
+                "MiniApp context path is unavailable: {}",
+                resolved.logical_path
+            )));
+        }
         crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
             context,
             &resolved.resolved_path,
@@ -901,10 +949,16 @@ mod tests {
         render_workspace_search_result_lines, GrepTool, DEFAULT_HEAD_LIMIT,
         WORKSPACE_PROBE_PENDING_NOTE,
     };
+    #[cfg(feature = "tools-miniapp")]
+    use crate::agentic::tools::framework::ToolResult;
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use crate::agentic::tools::{ToolPathPolicy, ToolRuntimeRestrictions};
     use crate::agentic::WorkspaceBinding;
     use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
+    #[cfg(feature = "tools-miniapp")]
+    use crate::miniapp::agent_context::{
+        publish_agent_context_snapshot, remove_agent_context_snapshot, MiniAppAgentContextInput,
+    };
     use crate::service::search::{
         ContentSearchResult, WorkspaceSearchBackend, WorkspaceSearchHit, WorkspaceSearchLine,
         WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
@@ -940,7 +994,6 @@ mod tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 path_policy: ToolPathPolicy {
                     read_roots: vec![format!(".miniapp-context/{scope}")],
-                    reject_symlinked_read_roots: true,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -968,27 +1021,42 @@ mod tests {
         assert!(error.to_string().contains("is not allowed for read"));
     }
 
-    #[cfg(unix)]
+    #[cfg(feature = "tools-miniapp")]
     #[tokio::test]
-    async fn grep_tool_rejects_symlinked_context_snapshot_roots() {
+    async fn grep_tool_searches_virtual_context_without_filesystem_fallback() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let scope = "0123456789abcdef0123456789abcdef";
-        let outside = dir.path().join("outside");
-        let context_parent = dir.path().join(".miniapp-context");
-        std::fs::create_dir_all(&outside).expect("create outside root");
-        std::fs::create_dir_all(&context_parent).expect("create context parent");
-        std::fs::write(outside.join("stocks.ndjson"), "escaped market row")
-            .expect("write outside file");
-        std::os::unix::fs::symlink(&outside, context_parent.join(scope))
-            .expect("create context symlink");
-
+        let snapshot = publish_agent_context_snapshot(
+            "grep-virtual-app",
+            "grep-virtual-session",
+            "grep-virtual-turn",
+            vec![MiniAppAgentContextInput {
+                name: "stocks.ndjson".to_string(),
+                content: format!(
+                    "{}host-owned market sentinel row",
+                    "summary-only row\n".repeat(2_000)
+                ),
+            }],
+        )
+        .unwrap()
+        .unwrap();
+        let physical_root = dir.path().join(&snapshot.relative_root);
+        std::fs::create_dir_all(&physical_root).unwrap();
+        std::fs::write(physical_root.join("stocks.ndjson"), "attacker market row").unwrap();
+        std::fs::create_dir_all(physical_root.join("nested")).unwrap();
+        std::fs::write(
+            physical_root.join("nested/stocks.ndjson"),
+            "nested attacker market row",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&physical_root, dir.path().join("context-alias")).unwrap();
         let context = ToolUseContext {
             tool_call_id: None,
             agent_type: Some("Agent".to_string()),
-            session_id: None,
-            dialog_turn_id: Some("turn-1".to_string()),
+            session_id: Some("grep-virtual-session".to_string()),
+            dialog_turn_id: Some("grep-virtual-turn".to_string()),
             workspace: Some(WorkspaceBinding::new(
-                Some("grep-context-workspace".to_string()),
+                Some("grep-virtual-workspace".to_string()),
                 dir.path().to_path_buf(),
             )),
             loaded_deferred_tool_specs: Vec::new(),
@@ -997,26 +1065,79 @@ mod tests {
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 path_policy: ToolPathPolicy {
-                    read_roots: vec![format!(".miniapp-context/{scope}")],
-                    reject_symlinked_read_roots: true,
+                    read_roots: vec![snapshot.relative_root.clone()],
                     ..Default::default()
                 },
+                miniapp_context_scope: Some(snapshot.scope.clone()),
                 ..Default::default()
             },
             runtime_handles: ToolRuntimeHandles::default(),
         };
 
-        let error = GrepTool::new()
+        let results = GrepTool::new()
             .call_impl(
                 &json!({
-                    "pattern": "escaped market row",
-                    "path": format!(".miniapp-context/{scope}")
+                    "pattern": "host-owned market sentinel",
+                    "path": snapshot.relative_root,
+                    "output_mode": "content"
                 }),
                 &context,
             )
             .await
-            .expect_err("Grep must reject a symlinked context snapshot root");
-        assert!(error.to_string().contains("contains a symlink"));
+            .unwrap();
+        let ToolResult::Result {
+            result_for_assistant: Some(result),
+            ..
+        } = &results[0]
+        else {
+            panic!("Grep should return an assistant result");
+        };
+        assert!(result.contains("host-owned market sentinel row"));
+        assert!(!result.contains("attacker market row"));
+
+        let nested_error = GrepTool::new()
+            .call_impl(
+                &json!({
+                    "pattern": "attacker",
+                    "path": format!("{}/nested", snapshot.relative_root)
+                }),
+                &context,
+            )
+            .await
+            .expect_err("the entire virtual scope must reject nested physical paths");
+        assert!(nested_error
+            .to_string()
+            .contains("context path is unavailable"));
+
+        #[cfg(unix)]
+        {
+            let alias_error = GrepTool::new()
+                .call_impl(
+                    &json!({ "pattern": "attacker", "path": "context-alias" }),
+                    &context,
+                )
+                .await
+                .expect_err("a physical alias into the virtual root must fail closed");
+            assert!(alias_error
+                .to_string()
+                .contains("context path is unavailable"));
+        }
+
+        assert!(remove_agent_context_snapshot(
+            "grep-virtual-session",
+            "grep-virtual-turn"
+        ));
+        let error = GrepTool::new()
+            .call_impl(
+                &json!({
+                    "pattern": "attacker",
+                    "path": format!(".miniapp-context/{}", snapshot.scope)
+                }),
+                &context,
+            )
+            .await
+            .expect_err("expired virtual context must not fall back to the physical tree");
+        assert!(error.to_string().contains("context path is unavailable"));
     }
 
     #[test]

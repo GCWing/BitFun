@@ -805,6 +805,7 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
         denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
         denied_tool_messages: Default::default(),
         path_policy: Default::default(),
+        miniapp_context_scope: None,
     };
 
     assert!(restrictions.is_tool_allowed("Read"));
@@ -1098,20 +1099,26 @@ fn runtime_restrictions_keep_current_snake_case_wire_shape() {
 
     let round_trip = serde_json::to_value(&restrictions).expect("serialize restrictions");
     assert_eq!(round_trip, value);
+}
 
-    let symlink_safe: ToolRuntimeRestrictions = serde_json::from_value(json!({
+#[test]
+fn runtime_restrictions_accept_legacy_path_policy_without_read_roots() {
+    let legacy = json!({
+        "allowed_tool_names": ["Read"],
+        "denied_tool_names": [],
         "path_policy": {
-            "read_roots": [".miniapp-context/0123456789abcdef0123456789abcdef"],
-            "reject_symlinked_read_roots": true
+            "write_roots": ["src"],
+            "edit_roots": [],
+            "delete_roots": []
         }
-    }))
-    .expect("deserialize symlink-safe read restriction");
-    assert!(symlink_safe.path_policy.reject_symlinked_read_roots);
-    assert_eq!(
-        serde_json::to_value(&symlink_safe).expect("serialize symlink-safe restriction")
-            ["path_policy"]["reject_symlinked_read_roots"],
-        true
-    );
+    });
+    let restrictions: ToolRuntimeRestrictions =
+        serde_json::from_value(legacy).expect("legacy restrictions should deserialize");
+    assert!(restrictions.path_policy.read_roots.is_empty());
+    assert!(restrictions.miniapp_context_scope.is_none());
+    let round_trip = serde_json::to_value(restrictions).expect("serialize restrictions");
+    assert!(round_trip["path_policy"].get("read_roots").is_none());
+    assert!(round_trip.get("miniapp_context_scope").is_none());
 }
 
 #[test]

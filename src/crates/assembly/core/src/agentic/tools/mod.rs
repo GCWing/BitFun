@@ -18,6 +18,8 @@ pub mod image_context;
 pub mod implementations;
 pub mod manifest_resolver;
 #[cfg(feature = "tools-miniapp")]
+pub(crate) mod miniapp_context_runtime;
+#[cfg(feature = "tools-miniapp")]
 pub mod page_deploy_host;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_publish_host;

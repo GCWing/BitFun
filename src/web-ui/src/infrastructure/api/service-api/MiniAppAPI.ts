@@ -98,7 +98,7 @@ export interface AiModelInfo {
 // ─── Agent bridge types ───────────────────────────────────────────────────────
 
 export interface AgentContextFile {
-  /** Plain file name written into a per-run snapshot under `.miniapp-context`. */
+  /** Plain file name exposed through a host-owned virtual snapshot under `.miniapp-context`. */
   name: string;
   /** UTF-8 app-supplied context treated as untrusted data by the Agent prompt. */
   content: string;
@@ -127,8 +127,8 @@ export interface AgentRunOptions {
    */
   model?: string;
   /**
-   * Bounded context files materialized inside the MiniApp appdata workspace.
-   * Marketplace Agents may Read/Grep only this reserved context directory.
+   * Bounded context files exposed through a host-owned immutable virtual snapshot.
+   * Marketplace Agents may Read/Grep only that exact per-run scope.
    */
   contextFiles?: AgentContextFile[];
 }

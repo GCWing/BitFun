@@ -361,6 +361,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function requiresMiniAppAgentContextFilesV1(params: unknown): boolean {
+  const outer = asRecord(params);
+  if (!outer) {
+    return false;
+  }
+  const request = asRecord(outer.request) ?? outer;
+  for (const key of ['contextFiles', 'context_files']) {
+    if (!Object.prototype.hasOwnProperty.call(request, key)) {
+      continue;
+    }
+    const files = request[key];
+    if (files !== undefined && (!Array.isArray(files) || files.length > 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Mutations are retryable only when the peer can deduplicate the same logical
  * submission. Dialog turns carry a controller-generated turnId, which the
@@ -472,6 +490,8 @@ export interface PeerDeviceTransportHooks {
   supportsTargetedSessionRollback?: boolean;
   /** Enables host-local usage statistics only when the target implements it. */
   supportsTokenUsageStatistics?: boolean;
+  /** Enables MiniApp Agent runs with immutable virtual context files. */
+  supportsMiniAppAgentContextFilesV1?: boolean;
   /** Enables the versioned typed ProductControl HostInvoke contract. */
   supportsProductControlV1?: boolean;
 }
@@ -605,6 +625,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       | 'supportsIdempotentDialogSubmit'
       | 'supportsTargetedSessionRollback'
       | 'supportsTokenUsageStatistics'
+      | 'supportsMiniAppAgentContextFilesV1'
       | 'supportsProductControlV1'
     >,
   ): void {
@@ -683,6 +704,16 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     ) {
       throw new PeerProductCommandError(
         'token_usage_statistics_unsupported: The connected Peer host does not support usage statistics',
+      );
+    }
+
+    if (
+      action === 'miniapp_agent_run' &&
+      requiresMiniAppAgentContextFilesV1(params) &&
+      this.hooks.supportsMiniAppAgentContextFilesV1 !== true
+    ) {
+      throw new PeerProductCommandError(
+        'miniapp_agent_context_files_v1_unsupported: The connected Peer host does not support MiniApp Agent context files',
       );
     }
 

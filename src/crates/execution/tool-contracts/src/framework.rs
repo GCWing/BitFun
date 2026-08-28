@@ -2173,10 +2173,8 @@ impl ToolPathOperation {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolPathPolicy {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub read_roots: Vec<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub reject_symlinked_read_roots: bool,
     #[serde(default)]
     pub write_roots: Vec<String>,
     #[serde(default)]
@@ -2241,6 +2239,11 @@ pub struct ToolRuntimeRestrictions {
     pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
+    /// Host-owned virtual MiniApp context scope for this turn. This grants no
+    /// filesystem access by itself; assembled Read/Grep providers resolve it
+    /// through the in-process context registry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub miniapp_context_scope: Option<String>,
 }
 
 const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
@@ -2336,10 +2339,10 @@ pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
 ///
 /// Marketplace MiniApps are third-party code, so their hidden agent sessions
 /// must not reach the general filesystem, the shell, or any host control
-/// surface. The host may materialize bounded, app-supplied context under a
-/// reserved `.miniapp-context/<opaque-scope>` workspace snapshot. Read and Grep
+/// surface. The host may publish bounded, app-supplied context through a
+/// reserved virtual `.miniapp-context/<opaque-scope>` namespace. Read and Grep
 /// are added later only when the host supplies a valid scope for this turn, and
-/// are confined to that exact snapshot. Read-only web research and the clock
+/// are confined to that exact immutable snapshot. Read-only web research and the clock
 /// remain available for live-world questions. The deferred gateway pair stays
 /// allowed because the execution gate matches the effective tool name, so an
 /// allowlisted tool that resolves as deferred still has to pass this list. An
@@ -2385,14 +2388,19 @@ pub fn miniapp_agent_run_tool_restrictions(
     if is_miniapp_market_strict_agent_run(user_message_metadata) {
         let mut restrictions = miniapp_market_strict_agent_tool_restrictions();
         if let Some(read_root) = miniapp_context_read_root(user_message_metadata) {
+            restrictions.miniapp_context_scope = read_root
+                .rsplit_once('/')
+                .map(|(_, scope)| scope.to_string());
             restrictions.allowed_tool_names.insert("Read".to_string());
             restrictions.allowed_tool_names.insert("Grep".to_string());
             restrictions.path_policy.read_roots = vec![read_root];
-            restrictions.path_policy.reject_symlinked_read_roots = true;
         }
         return restrictions;
     }
-    miniapp_headless_agent_tool_restrictions()
+    let mut restrictions = miniapp_headless_agent_tool_restrictions();
+    restrictions.miniapp_context_scope = miniapp_context_read_root(user_message_metadata)
+        .and_then(|root| root.rsplit_once('/').map(|(_, scope)| scope.to_string()));
+    restrictions
 }
 
 pub fn tool_restrictions_for_delegation_policy(
@@ -2734,6 +2742,7 @@ mod tests {
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: ToolPathPolicy::default(),
+            miniapp_context_scope: None,
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
@@ -2878,10 +2887,24 @@ mod tests {
             scoped.path_policy.read_roots,
             vec![".miniapp-context/0123456789abcdef0123456789abcdef"]
         );
-        assert!(scoped.path_policy.reject_symlinked_read_roots);
+        assert_eq!(
+            scoped.miniapp_context_scope.as_deref(),
+            Some("0123456789abcdef0123456789abcdef")
+        );
         assert!(
             miniapp_agent_run_tool_restrictions(Some(&builtin), created_by)
                 .is_tool_allowed("Write")
+        );
+        let builtin_with_context = json!({
+            "surface": "miniapp_agent",
+            "contextScope": "fedcba9876543210fedcba9876543210",
+        });
+        let builtin_scoped =
+            miniapp_agent_run_tool_restrictions(Some(&builtin_with_context), created_by);
+        assert!(builtin_scoped.path_policy.read_roots.is_empty());
+        assert_eq!(
+            builtin_scoped.miniapp_context_scope.as_deref(),
+            Some("fedcba9876543210fedcba9876543210")
         );
 
         let invalid_scope = json!({

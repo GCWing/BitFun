@@ -1,5 +1,7 @@
 //! MiniApp module — V2: ESM UI + Node Worker, Runtime Adapter, permission policy.
 
+#[cfg(feature = "agent-runtime")]
+pub mod agent_context;
 pub mod builtin;
 pub mod compiler;
 pub mod exporter;

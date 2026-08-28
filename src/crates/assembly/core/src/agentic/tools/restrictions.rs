@@ -20,33 +20,6 @@ pub fn is_local_path_within_root(path: &Path, root: &Path) -> BitFunResult<bool>
     Ok(canonical_path == canonical_root || canonical_path.starts_with(&canonical_root))
 }
 
-pub fn local_path_has_symlink_component_below(path: &Path, base: &Path) -> BitFunResult<bool> {
-    let relative = path.strip_prefix(base).map_err(|_| {
-        BitFunError::validation(format!(
-            "Path '{}' is outside symlink-check base '{}'",
-            path.display(),
-            base.display()
-        ))
-    })?;
-    let mut current = base.to_path_buf();
-    for component in relative.components() {
-        current.push(component.as_os_str());
-        match std::fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(true),
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-            Err(error) => {
-                return Err(BitFunError::validation(format!(
-                    "Failed to inspect path '{}' for symlinks: {}",
-                    current.display(),
-                    error
-                )))
-            }
-        }
-    }
-    Ok(false)
-}
-
 pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<PathBuf> {
     if path.exists() {
         return dunce::canonicalize(path).map_err(|err| {
@@ -131,25 +104,6 @@ mod tests {
 
         assert!(is_local_path_within_root(&allowed_child, &root.join("allowed")).unwrap());
         assert!(!is_local_path_within_root(&sibling, &root.join("allowed")).unwrap());
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn local_symlink_component_detection_rejects_nested_links() {
-        let root =
-            std::env::temp_dir().join(format!("bitfun-restrictions-{}", uuid::Uuid::new_v4()));
-        let outside = root.join("outside");
-        std::fs::create_dir_all(&outside).expect("create outside root");
-        std::os::unix::fs::symlink(&outside, root.join("linked")).expect("create symlink");
-
-        assert!(
-            local_path_has_symlink_component_below(&root.join("linked/file.txt"), &root).unwrap()
-        );
-        assert!(
-            !local_path_has_symlink_component_below(&root.join("missing/file.txt"), &root).unwrap()
-        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

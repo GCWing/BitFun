@@ -4943,6 +4943,7 @@ mod tests {
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
+            miniapp_context_scope: None,
         };
 
         let context = pipeline.build_tool_use_context(&task, CancellationToken::new());

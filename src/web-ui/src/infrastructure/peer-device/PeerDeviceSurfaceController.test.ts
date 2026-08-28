@@ -132,6 +132,7 @@ class FakeConnectionManager {
         idempotentDialogSubmit: true,
         targetedSessionRollback: true,
         tokenUsageStatistics: true,
+        miniAppAgentContextFilesV1: true,
         cancelTool: true,
         toolCatalog: true,
         hostKind: 'desktop',

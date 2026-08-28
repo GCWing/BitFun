@@ -758,11 +758,11 @@ fn memory_phase2_tool_restrictions(memory_root: &std::path::Path) -> ToolRuntime
         denied_tool_messages,
         path_policy: ToolPathPolicy {
             read_roots: vec![root.clone()],
-            reject_symlinked_read_roots: false,
             write_roots: vec![root.clone()],
             edit_roots: vec![root.clone()],
             delete_roots: vec![root],
         },
+        miniapp_context_scope: None,
     }
 }
 

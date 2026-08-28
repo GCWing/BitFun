@@ -160,6 +160,7 @@ MiniApp 里可用的是 `window.app`。
 - `app.net.fetch`
 - `app.os.info`
 - `app.storage.get/set`
+- `app.agent.ensureSession / run / cancel / turnText / cancelStaleRuns / onEvent`
 - `app.dialog.*`
 - `app.clipboard.*`
 - `app.ai.*`
