@@ -35,6 +35,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'git-diff-view': new Set(['typeSwitcher', 'typeOption']),
   'image-analysis-card': new Set(['expand']),
   'markdown-editor': new Set(['modeToggle']),
+  'market-account-controls': new Set(['menu', 'menuItem']),
   'mini-app-tool-display': new Set(['open']),
   'peer-device': new Set(['switcherDisconnect']),
   'review-session-summary-card': new Set(['open']),

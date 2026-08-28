@@ -1,4 +1,4 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Menu, MenuItem, Modal } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
@@ -181,12 +181,10 @@ export function MarketAccountControls({
             <ChevronDown size={13} aria-hidden="true" />
           </button>
           {menuOpen && createPortal(
-            <div
+            <Menu
               ref={menuPanelRef}
               className="market-account-controls__menu"
-              role="menu"
-              data-bf-component="market-account-controls"
-              data-bf-part="menu"
+              aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
               style={{
                 top: `${menuPosition?.top ?? 0}px`,
                 left: `${menuPosition?.left ?? 0}px`,
@@ -204,18 +202,13 @@ export function MarketAccountControls({
                   <span>{t('market.account.githubAccount')}</span>
                 </div>
               </div>
-              <button
-                type="button"
-                role="menuitem"
-                className="market-account-controls__menu-item"
-                data-bf-component="market-account-controls"
-                data-bf-part="menuItem"
+              <MenuItem
+                leading={<LogOut size={14} aria-hidden="true" />}
                 onClick={() => void signOut()}
               >
-                <LogOut size={14} aria-hidden="true" />
                 {t('market.signOut')}
-              </button>
-            </div>,
+              </MenuItem>
+            </Menu>,
             getAppearanceOverlayHost(),
           )}
         </div>
