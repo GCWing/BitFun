@@ -20,6 +20,7 @@ const CONFIRM_WINDOW_LABEL: &str = "frontend-update-confirm";
 const CONFIRM_TIMEOUT: Duration = Duration::from_secs(15);
 const STATE_SCHEMA_VERSION: u32 = 1;
 const RECOVERY_HTML: &[u8] = include_bytes!("../bootstrap-ui/index.html");
+const CONFIRMATION_HTML: &[u8] = include_bytes!("../bootstrap-ui/frontend-update-confirm.html");
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -407,6 +408,17 @@ impl FrontendWorkbenchManager {
         request: tauri::http::Request<Vec<u8>>,
     ) -> tauri::http::Response<Vec<u8>> {
         let request_path = request.uri().path();
+        if request_path == "/frontend-update-confirm.html" {
+            return tauri::http::Response::builder()
+                .status(tauri::http::StatusCode::OK)
+                .header(
+                    tauri::http::header::CONTENT_TYPE,
+                    "text/html; charset=utf-8",
+                )
+                .header(tauri::http::header::CACHE_CONTROL, "no-store, max-age=0")
+                .body(CONFIRMATION_HTML.to_vec())
+                .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+        }
         match self.read_protocol_asset(request_path) {
             Ok((bytes, content_type)) => tauri::http::Response::builder()
                 .status(tauri::http::StatusCode::OK)
@@ -616,13 +628,7 @@ fn show_confirmation_window(app: &tauri::AppHandle, transaction_id: &str) -> Res
     if let Some(window) = app.get_webview_window(CONFIRM_WINDOW_LABEL) {
         let _ = window.close();
     }
-    let url = WebviewUrl::App(
-        format!(
-            "frontend-update-confirm.html?transactionId={}",
-            urlencoding::encode(transaction_id)
-        )
-        .into(),
-    );
+    let url = confirmation_window_url(transaction_id);
     WebviewWindowBuilder::new(app, CONFIRM_WINDOW_LABEL, url)
         .title("Confirm BitFun frontend update")
         .inner_size(420.0, 260.0)
@@ -633,6 +639,13 @@ fn show_confirmation_window(app: &tauri::AppHandle, transaction_id: &str) -> Res
         .build()
         .map(|_| ())
         .map_err(|error| format!("Failed to open frontend confirmation window: {error}"))
+}
+
+fn confirmation_window_url(transaction_id: &str) -> WebviewUrl {
+    custom_frontend_url(&format!(
+        "frontend-update-confirm.html?transactionId={}",
+        urlencoding::encode(transaction_id)
+    ))
 }
 
 fn navigate_main_to_frontend(app: &tauri::AppHandle) -> Result<(), String> {
@@ -935,5 +948,38 @@ mod tests {
             tauri::http::StatusCode::SERVICE_UNAVAILABLE
         );
         assert!(String::from_utf8_lossy(response.body()).contains("BitFun frontend recovery"));
+    }
+
+    #[test]
+    fn confirmation_window_uses_the_host_protocol_instead_of_the_dev_server() {
+        let url = confirmation_window_url("transaction with spaces");
+
+        let WebviewUrl::CustomProtocol(url) = url else {
+            panic!("confirmation window must use the immutable host protocol");
+        };
+        assert_eq!(url.scheme(), FRONTEND_PROTOCOL_SCHEME);
+        assert_eq!(url.path(), "/frontend-update-confirm.html");
+        assert_eq!(
+            url.query(),
+            Some("transactionId=transaction%20with%20spaces")
+        );
+    }
+
+    #[test]
+    fn protocol_serves_the_immutable_confirmation_page_without_an_active_revision() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let manager = FrontendWorkbenchManager::new(temp.path());
+        let request = tauri::http::Request::builder()
+            .uri("bitfun-ui://localhost/frontend-update-confirm.html?transactionId=probe")
+            .body(Vec::new())
+            .expect("request");
+
+        let response = manager.protocol_response(request);
+        let body = String::from_utf8_lossy(response.body());
+
+        assert_eq!(response.status(), tauri::http::StatusCode::OK);
+        assert!(body.contains("id=\"confirm\""));
+        assert!(body.contains("confirm_frontend_update"));
+        assert!(body.contains("rollback_frontend_update"));
     }
 }
