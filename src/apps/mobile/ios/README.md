@@ -35,6 +35,15 @@ are supplied by the generated `BitFunMobileCore` framework from
 presentation model. Pairing accepts the desktop connection URL through the
 connection sheet (the camera scanner remains a native adapter concern).
 
+Run the platform-independent Swift infrastructure checks through the registered
+focused entry point. It compiles production helpers together with their local
+test executables; test mains are not part of the app target:
+
+```bash
+export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
+./Testing/run-pure-swift-tests.sh
+```
+
 When the framework has not been built yet, generate it with the same compatible
 toolchain before opening the Xcode project:
 

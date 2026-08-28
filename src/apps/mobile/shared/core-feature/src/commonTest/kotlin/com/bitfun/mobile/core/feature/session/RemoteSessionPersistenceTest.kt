@@ -1,5 +1,6 @@
 package com.bitfun.mobile.core.feature.session
 
+import com.bitfun.mobile.core.domain.RemoteSession
 import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.persistence.ChatLocalStore
 import com.bitfun.mobile.core.persistence.DraftStore
@@ -17,12 +18,16 @@ import com.bitfun.mobile.core.protocol.RemoteCommand
 import com.bitfun.mobile.core.transport.RelayFailure
 import com.bitfun.mobile.core.transport.RelayTransportException
 import com.bitfun.mobile.core.transport.RemoteCommandTransport
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.DeserializationStrategy
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -40,6 +45,75 @@ class RemoteSessionPersistenceTest {
         advanceUntilIdle()
         assertEquals("server", assertIs<RemoteSessionUiState.Ready>(store.state.value).sessions.single().id)
         store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun confirmedCreateReconcilePersistsByDeviceAndRebuildRestoresIt() = runTest {
+        val stores = MemoryPersistence()
+        stores.sessions.byDevice["device-b"] = listOf(PersistedRemoteSession(sessionId = "other", title = "Other"))
+        val first = RemoteSessionStore.create(this, PersistenceTransport(), "device-a", stores.stores)
+        val confirmed = RemoteSession(
+            id = "created", title = "Created", agentType = "cowork", status = "active",
+            updatedAt = "now", createdAt = "now", messageCount = 1,
+            workspacePath = "/assistant", workspaceName = "Assistant",
+        )
+
+        assertEquals(true, first.reconcileConfirmedCreatedSession(confirmed))
+        assertEquals(listOf("created"), stores.sessions.byDevice.getValue("device-a").map { it.sessionId })
+        assertEquals(listOf("other"), stores.sessions.byDevice.getValue("device-b").map { it.sessionId })
+        assertEquals("/assistant", stores.sessions.byDevice.getValue("device-a").single().workspacePath)
+
+        assertEquals(true, stores.sessions.byDevice.getValue("device-a").single().pendingConfirmed)
+
+        val laggingTransport = PersistenceTransport().apply { sessionsJson = "[]" }
+        val rebuilt = RemoteSessionStore.create(this, laggingTransport, "device-a", stores.stores)
+        rebuilt.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        val afterLaggingList = assertIs<RemoteSessionUiState.Ready>(rebuilt.state.value).sessions.single()
+        assertEquals("created", afterLaggingList.id)
+        assertEquals("/assistant", afterLaggingList.workspacePath)
+        assertEquals(true, stores.sessions.byDevice.getValue("device-a").single().pendingConfirmed)
+
+        laggingTransport.sessionsJson =
+            """[{"id":"created","title":"Server calibrated","agent_type":"cowork","status":"idle","workspace_path":"/assistant","workspace_name":"Server assistant"}]"""
+        rebuilt.dispatch(RemoteSessionIntent.Refresh)
+        advanceUntilIdle()
+        val calibrated = assertIs<RemoteSessionUiState.Ready>(rebuilt.state.value).sessions.single()
+        assertEquals("Server calibrated", calibrated.title)
+        assertEquals("Server assistant", calibrated.workspaceName)
+        assertEquals(false, stores.sessions.byDevice.getValue("device-a").single().pendingConfirmed)
+        first.stop()
+        rebuilt.stop()
+    }
+
+    @Test
+    fun validCreateIdIsDurableBeforeGatedModelInitializationAndSurvivesStop() = runTest {
+        val stores = MemoryPersistence()
+        val transport = PersistenceTransport()
+        transport.commandGates["set_session_model"] = CompletableDeferred()
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+        store.dispatch(
+            RemoteSessionIntent.CreateSessionOperation(
+                "durable-create", "cowork", "Created", "", "model-primary", "/assistant",
+            ),
+        )
+        runCurrent()
+
+        assertIs<CreateSessionOperationState.Succeeded>(store.createOperation.value)
+        val persisted = stores.sessions.byDevice.getValue("device-a").single()
+        assertEquals("created", persisted.sessionId)
+        assertEquals("/assistant", persisted.workspacePath)
+        assertEquals(true, persisted.pendingConfirmed)
+        store.stop()
+        runCurrent()
+        assertIs<CreateSessionOperationState.Succeeded>(store.createOperation.value)
+
+        val rebuiltTransport = PersistenceTransport().apply { sessionsJson = "[]" }
+        val rebuilt = RemoteSessionStore.create(this, rebuiltTransport, "device-a", stores.stores)
+        rebuilt.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        assertEquals("created", assertIs<RemoteSessionUiState.Ready>(rebuilt.state.value).sessions.single().id)
+        rebuilt.stop()
     }
 
     @Test
@@ -128,6 +202,28 @@ class RemoteSessionPersistenceTest {
     }
 
     @Test
+    fun staleLoadMoreDoesNotWriteSessionPersistence() = runTest {
+        val stores = MemoryPersistence()
+        val transport = PersistenceTransport().apply { hasMore = true }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        val savesBeforeLatePage = stores.sessions.saveCount
+
+        transport.nonCancellableCommands += "list_sessions"
+        store.dispatch(RemoteSessionIntent.LoadMore)
+        runCurrent()
+        val lateLoadMore = transport.lateCommandContinuations.remove("list_sessions")!!
+        store.dispatch(RemoteSessionIntent.Open("server"))
+        runCurrent()
+        lateLoadMore.resume(Unit)
+        runCurrent()
+
+        assertEquals(savesBeforeLatePage, stores.sessions.saveCount)
+        store.stop()
+    }
+
+    @Test
     fun corruptedPayloadIsRetainedAsDegradedMessage() = runTest {
         val stores = MemoryPersistence()
         stores.transcripts.rows["device-a::server"] = listOf(PersistedRemoteMessage(messageId = "bad", sessionId = "server", role = "assistant", text = "retained", payloadJson = "not-json"))
@@ -168,9 +264,16 @@ private class NoOpChats : ChatLocalStore {
 
 private class MemorySessions : RemoteSessionListStore {
     var rows = emptyList<PersistedRemoteSession>()
+    val byDevice = mutableMapOf<String, List<PersistedRemoteSession>>()
     var more = false
-    override fun load(deviceKey: String): List<PersistedRemoteSession> = rows
-    override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) { rows = sessions; more = hasMore }
+    var saveCount = 0
+    override fun load(deviceKey: String): List<PersistedRemoteSession> = byDevice[deviceKey] ?: rows
+    override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
+        saveCount += 1
+        rows = sessions
+        byDevice[deviceKey] = sessions
+        more = hasMore
+    }
     override fun hasMore(deviceKey: String): Boolean = more
 }
 
@@ -185,6 +288,10 @@ private class MemoryTranscripts : RemoteTranscriptStore {
 }
 
 private class PersistenceTransport : RemoteCommandTransport {
+    val commandGates = mutableMapOf<String, CompletableDeferred<Unit>>()
+    val nonCancellableCommands = mutableSetOf<String>()
+    val lateCommandContinuations = mutableMapOf<String, Continuation<Unit>>()
+    var sessionsJson: String = """[{"id":"server","title":"Server","agent_type":"code"}]"""
     var messagesJson: String = "[]"
     var hasMore: Boolean = false
     var polls: List<String> = listOf("""{"resp":"ok","version":1,"changed":false,"session_state":"idle"}""")
@@ -192,13 +299,19 @@ private class PersistenceTransport : RemoteCommandTransport {
     var pollFailure: RelayFailure? = null
     val sinceVersions = mutableListOf<Int>()
     override suspend fun <T : CommandStatus> send(deserializer: DeserializationStrategy<T>, command: RemoteCommand, timeoutMs: Long): T {
+        commandGates[command.cmd]?.await()
+        if (nonCancellableCommands.remove(command.cmd)) {
+            suspendCoroutine { continuation -> lateCommandContinuations[command.cmd] = continuation }
+        }
         if (command.cmd == "poll_session") {
             sinceVersions += command.sinceVersion ?: 0
             pollFailure?.let { throw RelayTransportException(it) }
         }
         val json = when (command.cmd) {
             "get_workspace_info" -> "{\"resp\":\"ok\",\"path\":\"/repo\"}"
-            "list_sessions" -> "{\"resp\":\"ok\",\"sessions\":[{\"id\":\"server\",\"title\":\"Server\",\"agent_type\":\"code\"}]}"
+            "create_session" -> "{\"resp\":\"ok\",\"session_id\":\"created\",\"title\":\"Created\"}"
+            "set_session_model" -> "{\"resp\":\"ok\",\"model_id\":\"model-primary\"}"
+            "list_sessions" -> "{\"resp\":\"ok\",\"sessions\":$sessionsJson,\"has_more\":$hasMore}"
             "get_session_messages" -> "{\"resp\":\"ok\",\"messages\":$messagesJson,\"has_more\":$hasMore}"
             "get_permission_mode" -> "{\"resp\":\"ok\",\"mode\":\"ask\"}"
             "get_model_catalog" -> "{\"resp\":\"ok\",\"catalog\":{\"version\":0,\"models\":[],\"default_models\":{}}}"

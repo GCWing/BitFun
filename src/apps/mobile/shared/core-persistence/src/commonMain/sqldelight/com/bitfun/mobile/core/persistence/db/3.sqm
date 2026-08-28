@@ -1,0 +1,3 @@
+-- v3 -> v4: retain a confirmed create until list_sessions observes its id.
+-- Existing rows came from server lists and therefore are not pending.
+ALTER TABLE remote_session_list ADD COLUMN pending_confirmed INTEGER NOT NULL DEFAULT 0;

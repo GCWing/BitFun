@@ -151,6 +151,8 @@ public data class PersistedRemoteSession public constructor(
     public val lastMessageId: String = "",
     public val workspacePath: String? = null,
     public val workspaceName: String? = null,
+    /** True until a later server list observes this confirmed-created session id. */
+    public val pendingConfirmed: Boolean = false,
 )
 
 @Serializable
@@ -196,7 +198,7 @@ public class SqlDelightRemoteSessionListStore public constructor(
         queries.selectRemoteSessions(deviceKey).executeAsList().map { row ->
             PersistedRemoteSession(row.session_id, row.title, row.agent_type, row.status,
                 row.updated_at, row.created_at, row.message_count.toInt(), row.last_message_id,
-                row.workspace_path, row.workspace_name)
+                row.workspace_path, row.workspace_name, row.pending_confirmed == 1L)
         }
 
     override fun hasMore(deviceKey: String): Boolean =
@@ -205,14 +207,15 @@ public class SqlDelightRemoteSessionListStore public constructor(
     override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
         if (deviceKey.isBlank()) return
         val kept = sessions.take(20)
-        val signature = "$deviceKey|${hasMore}|${kept.joinToString { it.sessionId + ":" + it.updatedAt + ":" + it.messageCount }}"
+        val signature = "$deviceKey|${hasMore}|${kept.joinToString { it.sessionId + ":" + it.updatedAt + ":" + it.messageCount + ":" + it.pendingConfirmed }}"
         if (signature == lastSignature) return
         queries.transaction {
             queries.deleteRemoteSessionsForDevice(deviceKey)
             kept.forEach { session -> queries.upsertRemoteSession(
                 deviceKey, session.sessionId, session.title, session.agentType, session.status,
                 session.updatedAt, session.createdAt, session.messageCount.toLong(), session.lastMessageId,
-                session.workspacePath, session.workspaceName, if (hasMore) 1L else 0L)
+                session.workspacePath, session.workspaceName, if (hasMore) 1L else 0L,
+                if (session.pendingConfirmed) 1L else 0L)
             }
         }
         lastSignature = signature

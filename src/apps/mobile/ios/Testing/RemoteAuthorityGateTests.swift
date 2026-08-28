@@ -1,0 +1,436 @@
+import Foundation
+
+@main
+struct RemoteAuthorityGateTests {
+    private struct ReadyCase {
+        let name: String
+        let target: String
+        let epoch: UInt64
+        let revision: Int64
+        let expected: Bool
+    }
+
+    static func main() {
+        let authority = RemoteAuthorityScope(targetKey: "device-a", epoch: 7, revision: 12)
+        let readyCases = [
+            ReadyCase(name: "target-only reset accepts legacy", target: "device-b", epoch: 7, revision: 0, expected: true),
+            ReadyCase(name: "epoch-only reset accepts legacy", target: "device-a", epoch: 8, revision: 0, expected: true),
+            ReadyCase(name: "lower positive rejected", target: "device-a", epoch: 7, revision: 11, expected: false),
+            ReadyCase(name: "equal positive accepted idempotently", target: "device-a", epoch: 7, revision: 12, expected: true),
+            ReadyCase(name: "same scope legacy rejected", target: "device-a", epoch: 7, revision: 0, expected: false),
+        ]
+        for testCase in readyCases {
+            expect(
+                RemoteAuthorityGate.acceptsReady(
+                    targetKey: testCase.target,
+                    epoch: testCase.epoch,
+                    revision: testCase.revision,
+                    lastApplied: authority
+                ) == testCase.expected,
+                testCase.name
+            )
+        }
+
+        expect(
+            RemoteAuthorityGate.updatedScope(
+                targetKey: "device-b",
+                epoch: 7,
+                revision: 0,
+                lastApplied: authority
+            ) == nil,
+            "target-only reset clears positive authority for legacy Ready"
+        )
+        expect(
+            RemoteAuthorityGate.updatedScope(
+                targetKey: "device-a",
+                epoch: 8,
+                revision: 0,
+                lastApplied: authority
+            ) == nil,
+            "epoch-only reset clears positive authority for legacy Ready"
+        )
+        expect(
+            RemoteAuthorityGate.updatedScope(
+                targetKey: "device-a",
+                epoch: 7,
+                revision: 12,
+                lastApplied: authority
+            ) == authority,
+            "equal Ready is an idempotent authority update"
+        )
+
+        expect(
+            RemoteAuthorityGate.succeededIsAlreadyAuthoritative(
+                targetKey: "device-a",
+                epoch: 7,
+                commitRevision: 12,
+                confirmedSessionVisible: true,
+                lastApplied: authority
+            ),
+            "Ready-first then Succeeded is immediately authoritative"
+        )
+        expect(
+            RemoteAuthorityGate.readyIncludesCommit(
+                readyRevision: 12,
+                minimumAuthorityRevision: 12,
+                confirmedSessionVisible: true
+            ),
+            "Ready includes visible commit at its minimum revision"
+        )
+        expect(
+            !RemoteAuthorityGate.readyIncludesCommit(
+                readyRevision: 12,
+                minimumAuthorityRevision: 12,
+                confirmedSessionVisible: false
+            ),
+            "revision without the exact confirmed row cannot acknowledge commit"
+        )
+        expect(
+            RemoteAuthorityGate.readyIncludesCommit(
+                readyRevision: 0,
+                minimumAuthorityRevision: 0,
+                confirmedSessionVisible: true
+            ),
+            "legacy commit minimum zero accepts its exact visible row"
+        )
+
+        let protected = RemoteAuthorityGate.committedProjectionDecision(
+            readyTargetKey: "device-a",
+            readyEpoch: 7,
+            readyRevision: 11,
+            committedTargetKey: "device-a",
+            committedEpoch: 7,
+            minimumAuthorityRevision: 12,
+            confirmedSessionVisible: false
+        )
+        expect(protected.retainMarker, "stale Ready retains committed marker")
+        expect(protected.protectCommittedRowAndSelection, "stale Ready protects committed row and selection")
+
+        let acknowledged = RemoteAuthorityGate.committedProjectionDecision(
+            readyTargetKey: "device-a",
+            readyEpoch: 7,
+            readyRevision: 12,
+            committedTargetKey: "device-a",
+            committedEpoch: 7,
+            minimumAuthorityRevision: 12,
+            confirmedSessionVisible: true
+        )
+        expect(!acknowledged.retainMarker, "authoritative Ready clears committed marker")
+        expect(!acknowledged.protectCommittedRowAndSelection, "authoritative Ready restores authoritative projection")
+
+        let wrongTarget = RemoteAuthorityGate.committedProjectionDecision(
+            readyTargetKey: "device-b",
+            readyEpoch: 7,
+            readyRevision: 0,
+            committedTargetKey: "device-a",
+            committedEpoch: 7,
+            minimumAuthorityRevision: 12,
+            confirmedSessionVisible: false
+        )
+        expect(!wrongTarget.retainMarker, "target reset discards old committed marker")
+        expect(!wrongTarget.protectCommittedRowAndSelection, "target reset cannot project old row or selection")
+
+        let populatedProjection = RemoteTargetProjectionState(
+            hasSessionRows: true,
+            hasWorkspaceRows: true,
+            hasSelection: true,
+            hasTimeline: true,
+            hasActiveTurn: true,
+            hasPendingNavigation: true,
+            hasReadyAuthority: true,
+            hasCreateState: true
+        )
+        let accountToPairing = RemoteAuthorityGate.targetBoundTransition(
+            currentTargetKey: "account:device-a",
+            currentEpoch: 7,
+            boundTargetKey: "pairing",
+            boundEpoch: 8,
+            projection: populatedProjection
+        )
+        expect(accountToPairing.scopeChanged, "account to pairing is an authoritative scope change")
+        expect(accountToPairing.projection == .cleared, "account to pairing clears rows, selection, timeline, pending, Ready, and create metadata")
+
+        let repeatedBound = RemoteAuthorityGate.targetBoundTransition(
+            currentTargetKey: "pairing",
+            currentEpoch: 8,
+            boundTargetKey: "pairing",
+            boundEpoch: 8,
+            projection: populatedProjection
+        )
+        expect(!repeatedBound.scopeChanged, "repeated bound callback does not reset the scope")
+        expect(repeatedBound.projection == populatedProjection, "repeated bound callback preserves current projection")
+
+        expect(
+            !RemoteAuthorityGate.callbackMatchesAuthority(
+                targetKey: "account:device-a",
+                epoch: 7,
+                expectedTargetKey: "pairing",
+                expectedEpoch: 8
+            ),
+            "stale old-target callback is rejected"
+        )
+        expect(
+            !RemoteAuthorityGate.callbackMatchesAuthority(
+                targetKey: "pairing",
+                epoch: 7,
+                expectedTargetKey: "pairing",
+                expectedEpoch: 8
+            ),
+            "stale old-epoch callback is rejected"
+        )
+        expect(
+            !RemoteAuthorityGate.fileTransferCallbackMatchesAuthority(
+                requestTargetKey: "account:device-a",
+                requestEpoch: 7,
+                adapterTargetKey: "account:device-b",
+                adapterEpoch: 8
+            ),
+            "target switch rejects a queued preview or download callback from the old target"
+        )
+        expect(
+            !RemoteAuthorityGate.fileTransferCallbackMatchesAuthority(
+                requestTargetKey: "account:device-a",
+                requestEpoch: 7,
+                adapterTargetKey: "account:device-a",
+                adapterEpoch: 8
+            ),
+            "adapter epoch switch rejects a queued preview or download callback from the old store"
+        )
+        expect(
+            RemoteAuthorityGate.fileTransferCallbackMatchesAuthority(
+                requestTargetKey: "account:device-b",
+                requestEpoch: 8,
+                adapterTargetKey: "account:device-b",
+                adapterEpoch: 8
+            ),
+            "current target file transfer callback remains accepted"
+        )
+
+        let pairingReplacement = RemoteAuthorityGate.pairingAttemptTransition(
+            authoritativeTargetKey: "pairing",
+            remoteConnected: true
+        )
+        expect(pairingReplacement.clearBoundRemoteProjection, "re-pair clears the replaced pairing projection")
+        expect(!pairingReplacement.remoteConnected, "failed re-pair remains disconnected after the old projection was discarded")
+
+        expect(
+            RemoteAuthorityGate.exactInvalidationMatchesAuthority(
+                expectedTargetKey: "account:device-a",
+                expectedEpoch: 7,
+                currentTargetKey: "account:device-a",
+                currentEpoch: 7
+            ),
+            "terminal pairing failure may invalidate the exact old account authority"
+        )
+        expect(
+            !RemoteAuthorityGate.exactInvalidationMatchesAuthority(
+                expectedTargetKey: "account:device-a",
+                expectedEpoch: 7,
+                currentTargetKey: "account:device-a",
+                currentEpoch: 8
+            ),
+            "terminal pairing failure cannot invalidate a newer account authority"
+        )
+
+        let capturedAccount = RetainedAccountAuthority(targetKey: "account:device-a", epoch: 7)
+        expect(
+            RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
+                captured: capturedAccount,
+                adapterTargetKey: "account:device-a",
+                adapterEpoch: 7,
+                modelTargetKey: "account:device-a",
+                modelEpoch: 7,
+                healthyConnected: true
+            ),
+            "failed pairing retains the explicitly captured healthy authoritative account"
+        )
+        expect(
+            !RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
+                captured: capturedAccount,
+                adapterTargetKey: "account:device-a",
+                adapterEpoch: 7,
+                modelTargetKey: "account:device-a",
+                modelEpoch: 7,
+                healthyConnected: false
+            ),
+            "failed account remote cannot be retained by a later pairing failure"
+        )
+        expect(
+            !RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
+                captured: capturedAccount,
+                adapterTargetKey: "account:device-a",
+                adapterEpoch: 8,
+                modelTargetKey: "account:device-a",
+                modelEpoch: 7,
+                healthyConnected: true
+            ),
+            "changed adapter epoch cannot retain the captured account"
+        )
+
+        let retainedAccountPairingAttempt = RemoteAuthorityGate.pairingAttemptTransition(
+            authoritativeTargetKey: "account:device-a",
+            remoteConnected: true
+        )
+        expect(
+            !retainedAccountPairingAttempt.clearBoundRemoteProjection,
+            "pairing submission does not invalidate a retained account before its terminal result"
+        )
+        expect(
+            !RemoteAuthorityGate.fileTransferCallbackMatchesAuthority(
+                requestTargetKey: "account:device-a",
+                requestEpoch: 7,
+                adapterTargetKey: nil,
+                adapterEpoch: 8
+            ),
+            "token expiry prevents a queued old transfer callback from reviving after adapter invalidation"
+        )
+        expect(
+            !RemoteAuthorityGate.callbackMatchesAuthority(
+                targetKey: "account:device-a",
+                epoch: 7,
+                expectedTargetKey: nil,
+                expectedEpoch: 8
+            ),
+            "token expiry prevents a late old Ready callback from reviving cleared authority"
+        )
+        verifyProductionInvalidationPaths()
+    }
+
+    private static func verifyProductionInvalidationPaths() {
+        let iosDirectory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let accountSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+Account.swift")
+        )
+        expectInvalidationBeforeMutation(
+            in: accountSource,
+            function: "func selectRemoteDevice(_ device: MobileAccountDevice)",
+            mutation: "coreAdapter?.selectAccountDevice(id: device.id)",
+            message: "device switch invalidates transfers before adapter target selection"
+        )
+        expectInvalidationBeforeMutation(
+            in: accountSource,
+            function: "func logoutAccount()",
+            mutation: "coreAdapter?.beginAccountOperation()",
+            message: "non-retained logout invalidates transfers before adapter authority reset"
+        )
+        expectInvalidationBeforeMutation(
+            in: accountSource,
+            function: "func loginAccount(relayURL: String, username: String, password: String)",
+            mutation: "coreAdapter?.beginAccountOperation()",
+            message: "non-retained login invalidates transfers before adapter authority reset"
+        )
+        expectInvalidationBeforeMutation(
+            in: accountSource,
+            function: "func apply(accountState state: AccountUiState, generation: UInt64)",
+            mutation: "coreAdapter?.selectAccountDevice(id: target.id)",
+            message: "account Ready arbitration invalidates an old account transfer before automatic target selection"
+        )
+        expectInvalidationBeforeMutation(
+            in: accountSource,
+            function: "private func invalidateTerminalAccountAuthority()",
+            mutation: "_ = coreAdapter?.invalidateRemoteAuthority",
+            message: "token expiry invalidates transfers before exact adapter authority invalidation"
+        )
+        expectCallBeforeMutation(
+            in: accountSource,
+            function: "private func invalidateTerminalAccountAuthority()",
+            call: "_ = coreAdapter?.invalidateRemoteAuthority",
+            mutation: "clearInvalidatedRemoteAuthorityProjection(",
+            message: "token expiry invalidates exact adapter authority before clearing the complete projection"
+        )
+
+        let modelSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel.swift")
+        )
+        expectInvalidationBeforeMutation(
+            in: modelSource,
+            function: "func disconnectRemote()",
+            mutation: "coreAdapter?.disconnect()",
+            message: "disconnect invalidates transfers before adapter authority reset"
+        )
+        expectInvalidationBeforeMutation(
+            in: modelSource,
+            function: "private func prepareProjectionForPairingSubmission()",
+            mutation: "directPairingConnected = false",
+            message: "replacing pairing invalidates transfers before old pairing projection is revoked"
+        )
+        expectCallBeforeMutation(
+            in: modelSource,
+            function: "func submitPairing(url: String)",
+            call: "prepareProjectionForPairingSubmission()",
+            mutation: "coreAdapter?.submitPairing(url: url)",
+            message: "pairing replacement preparation runs before adapter pairing mutation"
+        )
+        expectInvalidationBeforeMutation(
+            in: modelSource,
+            function: "private func apply(pairingState state: PairingUiState, generation: UInt64)",
+            mutation: "_ = coreAdapter?.invalidateRemoteAuthority",
+            message: "non-retained pairing failure invalidates transfers before exact adapter authority invalidation"
+        )
+
+        let remoteSessionSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
+        )
+        expectCallBeforeMutation(
+            in: remoteSessionSource,
+            function: "func clearInvalidatedRemoteAuthorityProjection(adapterEpoch: UInt64)",
+            call: "clearTargetScopedRemoteProjection(",
+            mutation: "remoteExpectedDeviceKey = nil",
+            message: "terminal authority loss clears the complete target projection before dropping model authority"
+        )
+
+        let filePreviewSource = readSource(
+            iosDirectory.appendingPathComponent("BitFun/Infrastructure/MobileAppModel+FilePreview.swift")
+        )
+        let guardedEntryCount = filePreviewSource.components(
+            separatedBy: "guard surface == .remote, remoteSessionSelected"
+        ).count - 1
+        expect(
+            guardedEntryCount >= 2,
+            "preview and download production entries remain closed after token expiry clears remote selection"
+        )
+    }
+
+    private static func readSource(_ url: URL) -> String {
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            preconditionFailure("Unable to read production source at \(url.path)")
+        }
+        return source
+    }
+
+    private static func expectInvalidationBeforeMutation(
+        in source: String,
+        function: String,
+        mutation: String,
+        message: String
+    ) {
+        expectCallBeforeMutation(
+            in: source,
+            function: function,
+            call: "invalidateTargetScopedFileTransfers()",
+            mutation: mutation,
+            message: message
+        )
+    }
+
+    private static func expectCallBeforeMutation(
+        in source: String,
+        function: String,
+        call: String,
+        mutation: String,
+        message: String
+    ) {
+        guard let functionRange = source.range(of: function),
+              let callRange = source.range(of: call, range: functionRange.lowerBound..<source.endIndex),
+              let mutationRange = source.range(of: mutation, range: functionRange.lowerBound..<source.endIndex) else {
+            preconditionFailure("Missing production path contract for \(function)")
+        }
+        expect(callRange.lowerBound < mutationRange.lowerBound, message)
+    }
+
+    private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
+        precondition(condition(), message)
+    }
+}

@@ -93,14 +93,63 @@ struct MobileConversationRow: Identifiable, Equatable {
     let showRetry: Bool
 }
 
+enum MobileFilePreviewFailureKind: String {
+    case notFound, unavailable, accessDenied, tooLarge, connection, loadFailed
+}
+
 struct MobileFilePreview: Identifiable, Equatable {
     let id: String
+    let sessionID: String
+    let controlTargetEpoch: Int32
     let name: String
     let content: String
     let mimeType: String
     let imageData: Data?
     let truncated: Bool
+    let loadedBytes: Int64
+    let sizeBytes: Int64
+    let markdown: Bool
+    let lineStart: Int32
     let failure: String?
+    let failureKind: MobileFilePreviewFailureKind?
+    let retryable: Bool
+    let unsupported: Bool
+
+    init(
+        id: String,
+        sessionID: String = "",
+        controlTargetEpoch: Int32 = 0,
+        name: String,
+        content: String,
+        mimeType: String,
+        imageData: Data?,
+        truncated: Bool,
+        loadedBytes: Int64 = 0,
+        sizeBytes: Int64 = 0,
+        markdown: Bool = false,
+        lineStart: Int32 = 0,
+        failure: String?,
+        failureKind: MobileFilePreviewFailureKind? = nil,
+        retryable: Bool = false,
+        unsupported: Bool = false
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.controlTargetEpoch = controlTargetEpoch
+        self.name = name
+        self.content = content
+        self.mimeType = mimeType
+        self.imageData = imageData
+        self.truncated = truncated
+        self.loadedBytes = loadedBytes
+        self.sizeBytes = sizeBytes
+        self.markdown = markdown
+        self.lineStart = lineStart
+        self.failure = failure
+        self.failureKind = failureKind
+        self.retryable = retryable
+        self.unsupported = unsupported
+    }
 }
 
 struct MobilePendingDownload: Identifiable, Equatable {
@@ -110,6 +159,19 @@ struct MobilePendingDownload: Identifiable, Equatable {
     let name: String
     let mimeType: String
     let data: Data
+    let sessionID: String
+    let controlTargetEpoch: Int32
+
+    init(reference: String, remotePath: String, name: String, mimeType: String, data: Data,
+         sessionID: String = "", controlTargetEpoch: Int32 = 0) {
+        self.reference = reference
+        self.remotePath = remotePath
+        self.name = name
+        self.mimeType = mimeType
+        self.data = data
+        self.sessionID = sessionID
+        self.controlTargetEpoch = controlTargetEpoch
+    }
 }
 
 struct ChatSession: Identifiable, Equatable {
@@ -121,8 +183,26 @@ struct ChatSession: Identifiable, Equatable {
     var agentType: String = "general_chat"
     var workspacePath: String?
     var workspaceName: String?
+    var deviceKey: String? = nil
     var createdAt: String = ""
     var messageCount: Int = 0
+}
+
+struct CommittedRemoteCreate {
+    let targetKey: String
+    let epoch: UInt64
+    let session: ChatSession
+    /// First authoritative Ready revision guaranteed to contain this commit.
+    let minimumAuthorityRevision: Int64
+}
+
+struct PendingDirectoryRemoteDraft {
+    let targetKey: String
+    let rawDeviceKey: String
+    let workspacePath: String
+    let normalizedWorkspacePath: String
+    let epoch: UInt64
+    var selectionRequested: Bool
 }
 
 struct MobileAccountDevice: Identifiable, Equatable {
@@ -132,12 +212,24 @@ struct MobileAccountDevice: Identifiable, Equatable {
     let selected: Bool
 }
 
+struct MobileDeviceDirectoryEntry: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let online: Bool
+    let expanded: Bool
+    let status: String
+    let error: String?
+    let workspaces: [MobileWorkspaceGroup]
+    let sessions: [ChatSession]
+}
+
 struct MobileWorkspaceGroup: Identifiable, Equatable {
-    var id: String { path }
+    var id: String { (deviceKey ?? "") + ":" + path }
     let path: String
     let name: String
     let selected: Bool
     let sessions: [ChatSession]
+    var deviceKey: String? = nil
 }
 
 enum MobileSessionListSectionKind: Equatable {
@@ -217,6 +309,9 @@ final class MobileAppModel: ObservableObject {
     @Published var remotePermissionFailure: String?
     @Published var remoteAssistants: [MobileAssistantOption] = []
     @Published var remoteCreateOpen = false
+    @Published var remoteCreateSubmitting = false
+    @Published var remoteCreateError: String?
+    @Published var remoteCreateDeviceError: String?
     @Published var generalConfigOpen = false
     @Published var generalConfigured = false
     @Published var generalConfigBaseURL = ""
@@ -255,12 +350,16 @@ final class MobileAppModel: ObservableObject {
     @Published var accountUserID: String?
     @Published var localDeviceID = ""
     @Published var accountBusy = false
+    @Published var accountFailureStage: String?
+    @Published var accountFailureCanRetry = false
     @Published var accountDeviceName: String?
     @Published var directPairingDeviceName: String?
     @Published var accountDeviceCount = 0
     @Published var accountDevices: [MobileAccountDevice] = []
     @Published var accountSelectedDeviceID: String?
     @Published var accountRefreshing = false
+    @Published var deviceDirectory: [MobileDeviceDirectoryEntry] = []
+    @Published var directPairingDirectoryEntry: MobileDeviceDirectoryEntry?
     @Published var remoteWorkspaces: [MobileWorkspaceGroup] = []
     @Published var workspaceLoading = false
     @Published var workspaceLoadFailed = false
@@ -272,17 +371,39 @@ final class MobileAppModel: ObservableObject {
     @Published var downloadTargetPath: String?
     @Published var downloadStatusText: String?
     @Published var downloadPhase: MobileDownloadPhase = .idle
-    private var activeTurnID: String?
-    private var directPairingConnected = false
-    private var accountLoginPreview = false
-    private var localActionPreview = false
+    var activeTurnID: String?
+    var directPairingConnected = false
+    var accountLoginPreview = false
+    var localActionPreview = false
     var composerModelPickerPreview = false
-    private var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
-    private var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
-    private var pendingRemoteAssistantCreate = false
-    private var selectedRemoteWorkspaceKind = ""
+    var remoteCreatePreview = false
+    var directoryFixturePreview = false
+    var pairingGeneration: UInt64 = 0
+    var accountGeneration: UInt64 = 0
+    var pendingAccountOperationPreservesPairing: (generation: UInt64, preserve: Bool)?
+    var pairingIntentInFlight = false
+    var remoteTargetEpoch: UInt64 = 0
+    var remoteExpectedDeviceKey: String?
+    var remoteBoundTargetKey: String?
+    var remoteBoundTargetEpoch: UInt64?
+    var pairingRetainedAccountAuthority: RetainedAccountAuthority?
+    var accountDirectoryGeneration: UInt64 = 0
+    var pendingDirectorySession: (deviceKey: String, sessionID: String, epoch: UInt64)?
+    var remoteInitialSessionReady = false
+    var remoteInitialWorkspaceReady = false
+    var remoteCreateRequestID: String?
+    var remoteCreateRequestEpoch: UInt64 = 0
+    var remoteCreateRequestDeviceKey: String?
+    var committedRemoteCreate: CommittedRemoteCreate?
+    var remoteLastAppliedAuthority: RemoteAuthorityScope?
+    var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
+    var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
+    var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
+    var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
+    var pendingRemoteAssistantCreate = false
+    var selectedRemoteWorkspaceKind = ""
 
-    private var coreAdapter: MobileCoreAdapter?
+    var coreAdapter: MobileCoreAdapter?
 
     init(sessions: [ChatSession], selectedSessionID: String, messages: [ChatMessage]) {
         self.sessions = sessions
@@ -292,10 +413,30 @@ final class MobileAppModel: ObservableObject {
         self.coreAdapter = nil
         let adapter = MobileCoreAdapter(
             onState: { [weak self] state in self?.apply(coreState: state) },
-            onPairingState: { [weak self] state in self?.apply(pairingState: state) },
-            onAccountState: { [weak self] state in self?.apply(accountState: state) },
-            onRemoteState: { [weak self] state in self?.apply(remoteState: state) },
-            onWorkspaceState: { [weak self] state in self?.apply(workspaceState: state) },
+            onPairingState: { [weak self] state, generation in
+                self?.apply(pairingState: state, generation: generation)
+            },
+            onAccountState: { [weak self] state, generation in
+                self?.apply(accountState: state, generation: generation)
+            },
+            onRemoteTargetBound: { [weak self] targetKey, epoch, generation in
+                self?.apply(remoteTargetBound: targetKey, epoch: epoch, accountGeneration: generation)
+            },
+            onRemoteState: { [weak self] state, targetKey, epoch in
+                self?.apply(remoteState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onWorkspaceState: { [weak self] state, targetKey, epoch in
+                self?.apply(workspaceState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onDirectoryState: { [weak self] state, generation in
+                self?.apply(directoryState: state, generation: generation)
+            },
+            onCreateOperation: { [weak self] state, targetKey in
+                self?.apply(createOperation: state, targetKey: targetKey)
+            },
+            onCreateUnavailable: { [weak self] requestID, targetKey in
+                self?.failRemoteCreate(requestID: requestID, targetKey: targetKey)
+            }
         )
         self.coreAdapter = adapter
         self.localDeviceID = adapter.deviceID
@@ -430,7 +571,9 @@ final class MobileAppModel: ObservableObject {
             arguments.contains("--pairing-account") {
             model.pairingSheetOpen = true
         }
-        if arguments.contains("--remote-create") {
+        if arguments.contains("--remote-create") || arguments.contains("--remote-create-workspace-picker") {
+            model.remoteCreatePreview = true
+            if !model.remoteConnected { model.configureConnectedPreview() }
             model.remoteCreateOpen = true
         }
         if arguments.contains("--remote-home-preview") {
@@ -498,43 +641,7 @@ final class MobileAppModel: ObservableObject {
         surface == .local ? sessions : remoteSessions
     }
 
-    func send() {
-        if surface == .remote {
-            sendRemote()
-            return
-        }
-        let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty || !composerImages.isEmpty else { return }
-        guard !isSending && !busy else { return }
-        if surface == .local {
-            localSessionSelected = true
-            if selectedSession == nil, let first = sessions.first {
-                selectedSessionID = first.id
-            }
-        }
-        let optimisticMessage = ChatMessage(id: UUID(), role: .user, text: value)
-        messages.append(optimisticMessage)
-        timelineRows.append(Self.simpleTimelineRow(optimisticMessage, images: composerImages))
-        draft = ""
-        isSending = true
-        busy = true
-        coreAdapter?.updateDraft(value)
-        coreAdapter?.setGeneralChatImages(composerImages)
-        composerImages = []
-        coreAdapter?.send()
-    }
 
-    func select(_ session: ChatSession) {
-        selectedSessionID = session.id
-        if surface == .remote {
-            remoteSessionSelected = true
-            coreAdapter?.openRemoteSession(sessionID: session.id)
-        } else {
-            localSessionSelected = true
-            coreAdapter?.selectGeneralSession(sessionID: session.id)
-        }
-        drawerOpen = false
-    }
 
     func switchSurface(_ next: MobileSurface) {
         surface = next
@@ -613,15 +720,20 @@ final class MobileAppModel: ObservableObject {
     }
 
     func disconnectRemote() {
+        invalidateTargetScopedFileTransfers()
+        committedRemoteCreate = nil
+        remoteLastAppliedAuthority = nil
         coreAdapter?.disconnect()
         directPairingConnected = false
         directPairingDeviceName = nil
+        pendingAccountOperationPreservesPairing = nil
         remoteConnected = false
         remoteSessionSelected = false
         remoteSessions = []
         remoteWorkspaces = []
         workspaceCatalog = []
         pendingRemoteWorkspaceCreate = nil
+        pendingDirectoryRemoteDraft = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         selectedSessionID = ""
@@ -636,228 +748,29 @@ final class MobileAppModel: ObservableObject {
         drawerOpen = false
     }
 
-    func newLocalChat() {
-        surface = .local
-        drawerOpen = false
-        localSessionSelected = false
-        selectedSessionID = ""
-        messages = []
-        timelineRows = []
-        draft = ""
-        composerImages = []
-        coreAdapter?.newGeneralSession()
-    }
 
-    func selectRemoteDevice(_ device: MobileAccountDevice) {
-        guard device.online else {
-            showToast(localized("这台桌面设备当前离线"))
-            return
-        }
-        surface = .remote
-        drawerOpen = false
-        guard !device.selected else { return }
-        directPairingConnected = false
-        directPairingDeviceName = nil
-        accountBusy = true
-        remoteSessionSelected = false
-        remoteConnected = directPairingConnected
-        remoteSessions = []
-        remoteWorkspaces = []
-        workspaceCatalog = []
-        pendingRemoteWorkspaceCreate = nil
-        pendingRemoteAssistantCreate = false
-        selectedRemoteWorkspaceKind = ""
-        messages = []
-        timelineRows = []
-        coreAdapter?.selectAccountDevice(id: device.id)
-    }
 
-    func refreshRemoteDevices() {
-        guard accountUser != nil else { return }
-        coreAdapter?.refreshAccountDevices()
-    }
 
-    func logoutAccount() {
-        coreAdapter?.logoutAccount()
-        accountUser = nil
-        accountUserID = nil
-        accountDeviceName = nil
-        accountDeviceCount = 0
-        accountDevices = []
-        accountSelectedDeviceID = nil
-        remoteConnected = directPairingConnected
-        if !directPairingConnected {
-            remoteSessionSelected = false
-            remoteSessions = []
-            remoteWorkspaces = []
-            workspaceCatalog = []
-            pendingRemoteWorkspaceCreate = nil
-            pendingRemoteAssistantCreate = false
-            selectedRemoteWorkspaceKind = ""
-            surface = .local
-        }
-    }
 
-    func selectRemoteWorkspace(_ workspace: MobileWorkspaceGroup) {
-        guard remoteConnected else {
-            showToast(localized("请先连接桌面设备"))
-            return
-        }
-        surface = .remote
-        drawerOpen = false
-        coreAdapter?.selectRemoteWorkspace(path: workspace.path)
-    }
 
-    func createRemoteSession(in workspace: MobileWorkspaceGroup, agentType: String) {
-        guard remoteConnected, !busy else { return }
-        drawerOpen = false
-        surface = .remote
-        createRemoteSession(
-            agentType: agentType,
-            title: "",
-            instruction: "",
-            workspacePath: workspace.path
-        )
-    }
 
-    func createRemoteAssistantSession() {
-        guard remoteConnected, !busy else { return }
-        drawerOpen = false
-        surface = .remote
-        if selectedRemoteWorkspaceKind.lowercased() == "assistant" {
-            createRemoteSession(agentType: "Claw", title: "", instruction: "")
-            return
-        }
-        guard let assistant = remoteAssistants.first else {
-            showToast(localized("暂无可用工作区"))
-            return
-        }
-        pendingRemoteAssistantCreate = true
-        coreAdapter?.selectRemoteAssistant(path: assistant.path)
-    }
 
-    func selectRemoteAssistant(_ assistant: MobileAssistantOption) {
-        guard remoteConnected else { return }
-        coreAdapter?.selectRemoteAssistant(path: assistant.path)
-    }
 
-    func createRemoteSession(
-        agentType: String,
-        title: String,
-        instruction: String,
-        modelID: String? = nil,
-        workspacePath: String? = nil
-    ) {
-        guard remoteConnected, !busy else { return }
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedInstruction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let selectedModel = modelID ?? modelOptions.first(where: \.selected)?.id
-        coreAdapter?.createRemoteSession(
-            agentType: agentType,
-            title: normalizedTitle,
-            instruction: normalizedInstruction,
-            modelID: selectedModel,
-            workspacePath: workspacePath
-        )
-        remoteCreateOpen = false
-        surface = .remote
-    }
 
-    func deleteRemoteSession(_ session: ChatSession) {
-        guard !busy else { return }
-        coreAdapter?.deleteRemoteSession(sessionID: session.id)
-        if selectedSessionID == session.id {
-            remoteSessionSelected = false
-            timelineRows = []
-            messages = []
-        }
-    }
 
-    func searchRemoteSessions(_ query: String) {
-        remoteQuery = query
-        guard remoteConnected else { return }
-        coreAdapter?.searchRemoteSessions(query: query)
-    }
 
-    func loadMoreRemoteSessions() {
-        guard remoteConnected, remoteHasMore, !busy else { return }
-        coreAdapter?.loadMoreRemoteSessions()
-    }
 
-    func loadOlderRemoteMessages() {
-        guard surface == .remote, remoteConnected, remoteHasMoreMessages, !busy else { return }
-        coreAdapter?.loadOlderRemoteMessages()
-    }
 
-    func refreshRemoteSessions() {
-        guard remoteConnected, !busy else { return }
-        coreAdapter?.refreshRemoteSessions()
-    }
 
-    func setRemoteAgentFilter(_ name: String) {
-        let filter: SessionAgentFilter
-        switch name {
-        case "CODE": filter = .code
-        case "COWORK": filter = .cowork
-        default: filter = .all
-        }
-        remoteAgentFilter = name
-        coreAdapter?.setRemoteAgentFilter(filter)
-    }
 
-    func refreshRemotePermissionMode() {
-        guard remoteConnected else { return }
-        coreAdapter?.refreshRemotePermissionMode()
-    }
 
-    func setRemotePermissionMode(_ name: String) {
-        let mode: SessionPermissionMode
-        switch name {
-        case "AUTO": mode = .auto
-        case "FULL_ACCESS": mode = .fullAccess
-        default: mode = .ask
-        }
-        coreAdapter?.setRemotePermissionMode(mode)
-    }
 
-    func retryRemoteWorkspaces() {
-        coreAdapter?.loadRemoteWorkspaces()
-    }
 
-    func archiveLocalSession(_ session: ChatSession) {
-        coreAdapter?.archiveGeneralSession(
-            sessionID: session.id,
-            archived: session.status.lowercased() != "archived"
-        )
-    }
 
-    func deleteLocalSession(_ session: ChatSession) {
-        coreAdapter?.deleteGeneralSession(sessionID: session.id)
-        if selectedSessionID == session.id {
-            localSessionSelected = false
-        }
-    }
 
-    func saveGeneralConfig(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        coreAdapter?.saveGeneralConfig(
-            baseURL: baseURL, model: model, apiKey: apiKey, clearAPIKey: clearAPIKey
-        )
-    }
 
-    func testGeneralConnection(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        coreAdapter?.testGeneralConnection(
-            baseURL: baseURL, model: model, apiKey: apiKey, clearAPIKey: clearAPIKey
-        )
-    }
 
-    func exportSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.exportGeneralSession(sessionID: session.id)
-    }
 
-    func exportLocalSession(_ session: ChatSession) {
-        coreAdapter?.exportGeneralSession(sessionID: session.id)
-    }
 
     func showSessionDetails(_ session: ChatSession) {
         sessionDetails = session
@@ -867,11 +780,6 @@ final class MobileAppModel: ObservableObject {
         sessionDetails = nil
     }
 
-    func finishGeneralExport() {
-        generalExportOpen = false
-        generalExportData = Data()
-        coreAdapter?.clearGeneralExport()
-    }
 
     private func configureConnectedPreview() {
         directPairingConnected = true
@@ -882,8 +790,11 @@ final class MobileAppModel: ObservableObject {
         accountUser = "preview@bitfun"
         accountDeviceName = "DESKTOP-KM3L4UI"
         accountSelectedDeviceID = "preview-desktop"
+        directoryFixturePreview = true
         accountDevices = [
-            MobileAccountDevice(id: "preview-desktop", name: "DESKTOP-KM3L4UI", online: true, selected: true)
+            MobileAccountDevice(id: "preview-desktop", name: "DESKTOP-KM3L4UI", online: true, selected: true),
+            MobileAccountDevice(id: "preview-mac", name: "Studio Mac", online: true, selected: false),
+            MobileAccountDevice(id: "preview-offline", name: "Office PC", online: false, selected: false)
         ]
         accountDeviceCount = accountDevices.count
         let session = ChatSession(
@@ -895,6 +806,31 @@ final class MobileAppModel: ObservableObject {
             workspaceName: "BitFun"
         )
         remoteSessions = [session]
+        let extraSessions = (1...5).map { index in
+            ChatSession(
+                id: "preview-session-\(index)", title: "Review session \(index)", updatedLabel: "2026-01-01T00:00:00Z",
+                status: index == 1 ? "running" : "idle", agentType: "code",
+                workspacePath: "/workspace/BitFun", workspaceName: "BitFun", deviceKey: "preview-desktop"
+            )
+        }
+        remoteSessions.append(contentsOf: extraSessions)
+        let cachedSession = ChatSession(
+            id: "preview-offline-session", title: "Cached offline session", updatedLabel: "2026-01-01T00:00:00Z",
+            status: "idle", agentType: "code", workspacePath: "/office/project", workspaceName: "Office project", deviceKey: "preview-offline"
+        )
+        let failedSession = ChatSession(
+            id: "preview-failed-session", title: "Cached failed session", updatedLabel: "2026-01-01T00:00:00Z",
+            status: "idle", agentType: "code", workspacePath: "/staging/project", workspaceName: "Staging", deviceKey: "preview-mac"
+        )
+        remoteSessions.append(contentsOf: [cachedSession, failedSession])
+        let previewWorkspace = MobileWorkspaceGroup(path: "/workspace/BitFun", name: "BitFun", selected: true, sessions: remoteSessions.filter { $0.deviceKey == "preview-desktop" }, deviceKey: "preview-desktop")
+        let offlineWorkspace = MobileWorkspaceGroup(path: "/office/project", name: "Office project", selected: false, sessions: [cachedSession], deviceKey: "preview-offline")
+        let failedWorkspace = MobileWorkspaceGroup(path: "/staging/project", name: "Staging", selected: false, sessions: [failedSession], deviceKey: "preview-mac")
+        deviceDirectory = [
+            MobileDeviceDirectoryEntry(id: "preview-desktop", name: "DESKTOP-KM3L4UI", online: true, expanded: true, status: "READY", error: nil, workspaces: [previewWorkspace], sessions: previewWorkspace.sessions),
+            MobileDeviceDirectoryEntry(id: "preview-mac", name: "Studio Mac", online: true, expanded: true, status: "FAILED", error: "REMOTE_UNAVAILABLE", workspaces: [failedWorkspace], sessions: [failedSession]),
+            MobileDeviceDirectoryEntry(id: "preview-offline", name: "Office PC", online: false, expanded: false, status: "READY", error: nil, workspaces: [offlineWorkspace], sessions: [cachedSession])
+        ]
         workspaceCatalog = [(path: "/workspace/BitFun", name: "BitFun", selected: true)]
         remoteAssistants = [
             MobileAssistantOption(path: "/workspace/BitFun/.bitfun/assistants/review", name: "代码审查助手")
@@ -959,62 +895,98 @@ final class MobileAppModel: ObservableObject {
     }
 
     func submitPairing(url: String) {
+        prepareProjectionForPairingSubmission()
+        pairingIntentInFlight = true
+        pairingGeneration &+= 1
         pairingError = nil
         pairingBusy = true
         coreAdapter?.submitPairing(url: url)
     }
 
     func submitPairing(url: String, userID: String, password: String) {
+        prepareProjectionForPairingSubmission()
+        pairingIntentInFlight = true
+        pairingGeneration &+= 1
         pairingError = nil
         pairingBusy = true
         coreAdapter?.submitPairing(url: url, userID: userID, password: password)
     }
 
-    func loginAccount(relayURL: String, username: String, password: String) {
-        accountBusy = true
-        coreErrorMessage = nil
-        coreAdapter?.loginAccount(relayURL: relayURL, username: username, password: password)
-    }
-
-    func sendRemote() {
-        let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty || !composerImages.isEmpty,
-              !isSending,
-              connectionPhase != .disconnected,
-              let sessionID = visibleSessions.first(where: { $0.id == selectedSessionID })?.id else { return }
-        let images = composerImages
-        draft = ""
-        composerImages = []
-        isSending = true
-        busy = true
-        coreAdapter?.sendRemote(sessionID: sessionID, content: value, images: images)
-    }
-
-    func syncDraftToCore() {
-        if surface == .local {
-            coreAdapter?.updateDraft(draft)
+    private func prepareProjectionForPairingSubmission() {
+        let adapterTargetKey = coreAdapter?.currentRemoteTargetKey
+        let adapterEpoch = coreAdapter?.currentRemoteTargetEpoch ?? 0
+        let healthyConnected: Bool
+        switch connectionPhase {
+        case .connected: healthyConnected = remoteConnected
+        case .reconnecting, .disconnected: healthyConnected = false
         }
-    }
-
-    func addComposerImage(data: Data, mimeType: String) {
-        guard composerImages.count < 4, data.count <= 10 * 1024 * 1024 else {
-            showToast(localized("最多添加 4 张且每张不超过 10 MB 的图片"))
-            return
+        if let adapterTargetKey,
+           adapterTargetKey.hasPrefix("account:"),
+           adapterTargetKey == remoteExpectedDeviceKey,
+           adapterEpoch == remoteTargetEpoch,
+           adapterTargetKey == remoteBoundTargetKey,
+           adapterEpoch == remoteBoundTargetEpoch,
+           healthyConnected {
+            pairingRetainedAccountAuthority = RetainedAccountAuthority(
+                targetKey: adapterTargetKey,
+                epoch: adapterEpoch
+            )
+        } else {
+            pairingRetainedAccountAuthority = nil
         }
-        composerImages.append(
-            ComposerAttachment(id: UUID().uuidString, data: data, mimeType: mimeType)
+        let transition = RemoteAuthorityGate.pairingAttemptTransition(
+            authoritativeTargetKey: adapterTargetKey,
+            remoteConnected: remoteConnected
         )
-        if surface == .local {
-            coreAdapter?.setGeneralChatImages(composerImages)
-        }
+        guard transition.clearBoundRemoteProjection else { return }
+
+        invalidateTargetScopedFileTransfers()
+        directPairingConnected = false
+        directPairingDeviceName = nil
+        directPairingDirectoryEntry = nil
+        remoteConnected = transition.remoteConnected
+        remoteExpectedDeviceKey = nil
+        remoteLastAppliedAuthority = nil
+        committedRemoteCreate = nil
+        pendingAccountOperationPreservesPairing = nil
+        remoteInitialSessionReady = false
+        remoteInitialWorkspaceReady = false
+        remoteSessionSelected = false
+        remoteSessions = []
+        remoteWorkspaces = []
+        remoteAssistants = []
+        remotePermissionFailure = nil
+        sessionDetails = nil
+        workspaceCatalog = []
+        workspaceLoading = false
+        workspaceLoadFailed = false
+        pendingDirectorySession = nil
+        pendingDirectoryWorkspace = nil
+        pendingDirectoryRemoteDraft = nil
+        pendingRemoteWorkspaceCreate = nil
+        pendingRemoteAssistantCreate = false
+        selectedRemoteWorkspaceKind = ""
+        selectedSessionID = ""
+        remoteCreateOpen = false
+        remoteCreateSubmitting = false
+        remoteCreateRequestID = nil
+        remoteCreateRequestEpoch = remoteTargetEpoch
+        remoteCreateRequestDeviceKey = nil
+        remoteCreateError = nil
+        remoteCreateDeviceError = nil
+        activeTurnID = nil
+        isSending = false
+        busy = false
+        composerImages = []
+        timelineRows = []
+        messages = []
+        connectionPhase = .reconnecting
     }
 
-    func removeComposerImage(id: String) {
-        composerImages.removeAll { $0.id == id }
-        if surface == .local {
-            coreAdapter?.setGeneralChatImages(composerImages)
-        }
-    }
+
+
+
+
 
     func stopSending() {
         if surface == .remote {
@@ -1025,53 +997,10 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    func approveTool(_ toolID: String) {
-        guard surface == .remote, remoteSessionSelected, !toolID.isEmpty else { return }
-        coreAdapter?.approveRemoteTool(sessionID: selectedSessionID, toolID: toolID)
-    }
 
-    func rejectTool(_ toolID: String) {
-        guard surface == .remote, remoteSessionSelected, !toolID.isEmpty else { return }
-        coreAdapter?.rejectRemoteTool(
-            sessionID: selectedSessionID,
-            toolID: toolID,
-            reason: "Rejected from the iOS client"
-        )
-    }
 
-    func cancelTool(_ toolID: String) {
-        guard surface == .remote, remoteSessionSelected, !toolID.isEmpty else { return }
-        coreAdapter?.cancelRemoteTool(
-            sessionID: selectedSessionID,
-            toolID: toolID,
-            reason: "Cancelled from the iOS client"
-        )
-    }
 
-    func answerTool(_ toolID: String, answer: String) {
-        let normalized = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard surface == .remote,
-              remoteSessionSelected,
-              !toolID.isEmpty,
-              !normalized.isEmpty else { return }
-        coreAdapter?.answerRemoteTool(
-            sessionID: selectedSessionID,
-            toolID: toolID,
-            answer: normalized
-        )
-    }
 
-    func answerTool(_ toolID: String, answers: [QuestionAnswer]) {
-        guard surface == .remote,
-              remoteSessionSelected,
-              !toolID.isEmpty,
-              !answers.isEmpty else { return }
-        coreAdapter?.answerRemoteToolStructured(
-            sessionID: selectedSessionID,
-            toolID: toolID,
-            answers: answers
-        )
-    }
 
     func retryMessage(_ text: String) {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1087,59 +1016,10 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    func openRemoteFile(reference: String, label: String) {
-        guard surface == .remote, remoteSessionSelected else {
-            showToast(localized("仅远程工作区文件支持预览"))
-            return
-        }
-        filePreviewLoading = true
-        coreAdapter?.openRemoteFile(
-            reference: reference,
-            label: label,
-            sessionID: selectedSessionID
-        )
-    }
 
-    func downloadRemoteFile(reference: String, label: String) {
-        guard surface == .remote, remoteSessionSelected else { return }
-        downloadTargetPath = reference
-            .replacingOccurrences(of: "computer://", with: "", options: [.caseInsensitive])
-        downloadPhase = .preparing
-        downloadStatusText = localized("正在准备下载")
-        coreAdapter?.downloadRemoteFile(
-            reference: reference,
-            label: label,
-            sessionID: selectedSessionID
-        )
-    }
 
-    func finishDownloadExport(success: Bool) {
-        guard let download = pendingDownload else { return }
-        if success {
-            coreAdapter?.remoteDownloadSaved(reference: download.reference)
-            downloadPhase = .saved
-            downloadStatusText = localized("已下载")
-            showToast(localizedFormat("已保存 %@", download.name))
-        } else {
-            coreAdapter?.remoteDownloadSaveFailed(reference: download.reference)
-            downloadPhase = .failed
-            downloadStatusText = localized("保存失败")
-            showToast(localized("文件保存失败"))
-        }
-        pendingDownload = nil
-        downloadExporterOpen = false
-    }
 
-    func downloadStatus(for remotePath: String) -> String? {
-        guard downloadTargetPath == remotePath else { return nil }
-        return downloadStatusText
-    }
 
-    func dismissFilePreview() {
-        filePreview = nil
-        filePreviewLoading = false
-        coreAdapter?.dismissRemoteFilePreview()
-    }
 
     func renameSelectedSession(_ title: String) {
         let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1170,14 +1050,6 @@ final class MobileAppModel: ObservableObject {
         localSessionSelected = false
     }
 
-    func selectModel(_ modelID: String) {
-        guard selectedSession != nil else { return }
-        if surface == .remote {
-            coreAdapter?.selectRemoteModel(sessionID: selectedSessionID, modelID: modelID)
-        } else {
-            coreAdapter?.selectGeneralModel(modelID: modelID)
-        }
-    }
 
     func showUploadedFiles() {
         let count = composerImages.count
@@ -1197,87 +1069,79 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    private func apply(coreState state: GeneralChatUiState) {
-        generalConfigured = state.configured
-        generalConfigBaseURL = state.config.baseUrl
-        generalConfigModel = state.config.model
-        generalConfigHasAPIKey = state.config.hasApiKey
-        generalConfigFailure = state.configFailure?.name
-        generalConnectionTestRunning = state.connectionTest.running
-        if state.connectionTest.passed {
-            generalConnectionTestMessage = localized("连接成功")
-        } else if let failure = state.connectionTest.failure {
-            generalConnectionTestMessage = localizedFormat("连接失败：%@", failure.name)
-        } else {
-            generalConnectionTestMessage = nil
-        }
-        if let exported = state.export {
-            let safeTitle = exported.title
-                .replacingOccurrences(of: "/", with: "-")
-                .replacingOccurrences(of: "\\", with: "-")
-                .replacingOccurrences(of: ":", with: "-")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            generalExportName = safeTitle.isEmpty ? "conversation.md" : "\(safeTitle).md"
-            generalExportData = Data(exported.markdown.utf8)
-            generalExportOpen = true
-        }
-        if !state.sessions.isEmpty {
-            sessions = state.sessions.map { session in
-                ChatSession(
-                    id: session.id,
-                    title: session.title.isEmpty ? localized("未命名会话") : session.title,
-                    updatedLabel: session.updatedAt,
-                    pinned: session.pinned,
-                    status: session.status,
-                )
-            }
-        }
-        if !state.messages.isEmpty {
-            messages = state.messages.map { message in
-                let text = message.blocks.map(\.text).joined(separator: "\n")
-                return ChatMessage(
-                    id: UUID(uuidString: message.id) ?? UUID(),
-                    role: message.role.lowercased() == "user" ? .user : .assistant,
-                    text: text,
-                )
-            }
-            timelineRows = messages.map(Self.simpleTimelineRow)
-        }
-        if !composerModelPickerPreview, draft != state.draft { draft = state.draft }
-        isSending = state.busy
-        busy = state.busy
-        if !composerModelPickerPreview {
-            modelOptions = state.models.map { model in
-                ComposerModelOption(
-                    id: model.id,
-                    primaryLabel: model.label,
-                    secondaryLabel: model.source.name,
-                    source: model.source.name,
-                    selected: model.id == state.activeModelId
-                )
-            }
-        }
-        if !accountLoginPreview {
-            if let failure = state.failure {
-                coreErrorMessage = failure.name
-            } else {
-                coreErrorMessage = nil
-            }
-        }
-    }
 
-    private func apply(pairingState state: PairingUiState) {
-        guard !localActionPreview else { return }
+    private func apply(pairingState state: PairingUiState, generation: UInt64) {
+        guard !localActionPreview, generation == pairingGeneration,
+              remoteExpectedDeviceKey == nil || remoteExpectedDeviceKey == "pairing" || pairingIntentInFlight else { return }
         pairingBusy = state is PairingUiStateConnecting
         if let failed = state as? PairingUiStateFailed {
             pairingBusy = false
+            pairingIntentInFlight = false
             pairingError = pairingErrorMessage(failed.failure)
+            let healthyConnected: Bool
+            switch connectionPhase {
+            case .connected: healthyConnected = remoteConnected
+            case .reconnecting, .disconnected: healthyConnected = false
+            }
+            let retainAccount = RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
+                captured: pairingRetainedAccountAuthority,
+                adapterTargetKey: coreAdapter?.currentRemoteTargetKey,
+                adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? 0,
+                modelTargetKey: remoteExpectedDeviceKey,
+                modelEpoch: remoteTargetEpoch,
+                healthyConnected: healthyConnected
+            )
+            let invalidatedAccountAuthority = !retainAccount &&
+                (remoteExpectedDeviceKey?.hasPrefix("account:") == true)
+            if invalidatedAccountAuthority, let targetKey = remoteExpectedDeviceKey {
+                invalidateTargetScopedFileTransfers()
+                _ = coreAdapter?.invalidateRemoteAuthority(
+                    ifTargetKey: targetKey,
+                    epoch: remoteTargetEpoch
+                )
+                clearInvalidatedRemoteAuthorityProjection(
+                    adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? remoteTargetEpoch
+                )
+            } else {
+                pairingRetainedAccountAuthority = nil
+            }
+            remoteConnected = retainAccount
+            if !retainAccount {
+                let clearingVisibleRemoteConversation = surface == .remote || remoteSessionSelected
+                remoteSessionSelected = false
+                if clearingVisibleRemoteConversation {
+                    selectedSessionID = ""
+                    activeTurnID = nil
+                    isSending = false
+                    busy = false
+                    timelineRows = []
+                    messages = []
+                }
+                connectionPhase = .disconnected
+            }
         } else if let paired = state as? PairingUiStatePaired {
             pairingBusy = false
             pairingError = nil
             directPairingConnected = true
-            directPairingDeviceName = paired.workspace.roomLabel
+            pairingIntentInFlight = false
+            pairingRetainedAccountAuthority = nil
             remoteConnected = true
+            directPairingDeviceName = paired.workspace.roomLabel
+            if pendingDirectoryRemoteDraft?.targetKey == "pairing",
+               pendingDirectoryRemoteDraft?.rawDeviceKey != directPairingSidebarDeviceID {
+                pendingDirectoryRemoteDraft = nil
+                showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
+            }
+            directPairingDirectoryEntry = MobileDeviceDirectoryEntry(
+                id: directPairingSidebarDeviceID,
+                name: paired.workspace.roomLabel,
+                online: true,
+                expanded: true,
+                status: "READY",
+                error: nil,
+                workspaces: remoteWorkspaces,
+                sessions: remoteSessions
+            )
             surface = .remote
             switch paired.liveness {
             case .checking: connectionPhase = .reconnecting
@@ -1288,393 +1152,16 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    private func apply(accountState state: AccountUiState) {
-        guard !accountLoginPreview, !localActionPreview else { return }
-        accountBusy = state is AccountUiStateSigningIn
-        if let ready = state as? AccountUiStateReady {
-            accountBusy = false
-            accountUser = ready.username
-            accountUserID = ready.userId
-            accountDeviceName = ready.selectedDeviceName
-            accountDeviceCount = ready.devices.count
-            accountSelectedDeviceID = ready.selectedDeviceId
-            accountRefreshing = ready.refreshing
-            accountDevices = ready.devices.map { device in
-                MobileAccountDevice(
-                    id: device.id,
-                    name: device.name,
-                    online: device.online,
-                    selected: device.id == ready.selectedDeviceId
-                )
-            }
-            if !directPairingConnected,
-               ready.selectedDeviceId == nil,
-               let target = ready.devices.first(where: { $0.online }) {
-                accountBusy = true
-                coreAdapter?.selectAccountDevice(id: target.id)
-                return
-            }
-            remoteConnected = directPairingConnected || ready.selectedDeviceId != nil
-            surface = .remote
-            connectionPhase = .connected
-            if ready.refreshFailure != nil {
-                showToast(localized("设备列表刷新失败，仍显示上次结果"))
-            }
-        } else if let failed = state as? AccountUiStateFailed {
-            accountBusy = false
-            coreErrorMessage = accountErrorMessage(failed.reason.name)
-            if !directPairingConnected { connectionPhase = .disconnected }
-            if failed.reason.name == "AUTHENTICATION" {
-                accountUser = nil
-                accountUserID = nil
-                accountDevices = []
-                accountSelectedDeviceID = nil
-                accountDeviceName = nil
-                accountDeviceCount = 0
-                accountRefreshing = false
-                remoteConnected = directPairingConnected
-            }
-        } else if state is AccountUiStateSignedOut {
-            accountBusy = false
-            accountUser = nil
-            accountUserID = nil
-            accountDevices = []
-            accountSelectedDeviceID = nil
-            accountDeviceName = nil
-            accountDeviceCount = 0
-            accountRefreshing = false
-            if !directPairingConnected {
-                remoteConnected = false
-                remoteSessionSelected = false
-                remoteSessions = []
-                remoteWorkspaces = []
-                workspaceCatalog = []
-            }
-        }
-    }
 
-    private func apply(remoteState state: RemoteSessionUiState) {
-        guard !localActionPreview, !accountLoginPreview else { return }
-        guard let ready = state as? RemoteSessionUiStateReady else {
-            if let failed = state as? RemoteSessionUiStateFailed {
-                connectionPhase = .disconnected
-                coreErrorMessage = failed.remoteMessage ?? failed.reason.name
-            }
-            return
-        }
-        remoteConnected = true
-        surface = .remote
-        connectionPhase = .connected
-        remoteSessions = ready.sessions.map { session in
-            ChatSession(
-                id: session.id,
-                title: session.title.isEmpty ? localized("未命名会话") : session.title,
-                updatedLabel: session.updatedAt,
-                status: session.status,
-                agentType: session.agentType,
-                workspacePath: session.workspacePath,
-                workspaceName: session.workspaceName,
-                createdAt: session.createdAt,
-                messageCount: Int(session.messageCount),
-            )
-        }
-        rebuildRemoteWorkspaceGroups()
-        if let selected = ready.selectedSessionId {
-            selectedSessionID = selected
-        }
-        remoteSessionSelected = ready.selectedSessionId != nil
-        busy = ready.busy
-        remoteQuery = ready.query
-        remoteAgentFilter = ready.agentFilter.name
-        remoteHasMore = ready.hasMore
-        remoteHasMoreMessages = ready.hasMoreMessages
-        remotePermissionMode = ready.permissionMode?.name ?? remotePermissionMode
-        remotePermissionFailure = ready.permissionModeFailure?.name
-        activeTurnID = ready.timeline?.activeTurn?.turnId
-        isSending = ready.timeline?.activeTurn != nil
-        modelOptions = ready.createModelOptions(fallbackLabel: localized("模型")).map { option in
-            ComposerModelOption(
-                id: option.id,
-                primaryLabel: option.primaryLabel,
-                secondaryLabel: option.secondaryLabel,
-                source: "REMOTE",
-                selected: option.selected
-            )
-        }
-        if let timeline = ready.timeline {
-            timelineRows = timeline.conversationRows().map(Self.mapConversationRow)
-            messages = timelineRows.compactMap { row in
-                guard row.kind != "EMPTY" else { return nil }
-                return ChatMessage(
-                    id: UUID(uuidString: row.id) ?? UUID(),
-                    role: row.kind == "USER" ? .user : .assistant,
-                    text: row.text
-                )
-            }
-        } else {
-            timelineRows = []
-            messages = []
-        }
-    }
 
-    private func apply(workspaceState state: RemoteWorkspaceUiState) {
-        workspaceLoading = state is RemoteWorkspaceUiStateLoading
-        workspaceLoadFailed = state is RemoteWorkspaceUiStateFailed
-        if state is RemoteWorkspaceUiStateFailed {
-            if pendingRemoteWorkspaceCreate != nil || pendingRemoteAssistantCreate {
-                pendingRemoteWorkspaceCreate = nil
-                pendingRemoteAssistantCreate = false
-                showToast(localized("工作区加载失败，点按重试"))
-            }
-            return
-        }
-        guard let ready = state as? RemoteWorkspaceUiStateReady else { return }
 
-        workspaceLoading = false
-        workspaceLoadFailed = false
-        selectedRemoteWorkspaceKind = ready.selected?.kind ?? ""
-        var seen = Set<String>()
-        var catalog: [(path: String, name: String, selected: Bool)] = []
-        if let selected = ready.selected,
-           !selected.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            seen.insert(selected.path)
-            catalog.append((selected.path, selected.name, true))
-        }
-        for workspace in ready.workspaces where !workspace.path.isEmpty && !seen.contains(workspace.path) {
-            seen.insert(workspace.path)
-            catalog.append((workspace.path, workspace.name, false))
-        }
-        workspaceCatalog = catalog
-        remoteAssistants = ready.assistants.map {
-            MobileAssistantOption(path: $0.path, name: $0.name)
-        }
-        rebuildRemoteWorkspaceGroups()
-        apply(filePreviewState: ready.preview)
-        apply(downloadState: ready.download)
-        if let pending = pendingRemoteWorkspaceCreate,
-           ready.selected?.path == pending.path {
-            pendingRemoteWorkspaceCreate = nil
-            createRemoteSession(agentType: pending.agentType, title: "", instruction: "")
-        }
-        if pendingRemoteAssistantCreate,
-           ready.selected?.kind.lowercased() == "assistant" {
-            pendingRemoteAssistantCreate = false
-            createRemoteSession(agentType: "Claw", title: "", instruction: "")
-        }
-    }
 
-    private func apply(downloadState state: RemoteFileDownloadUiState) {
-        if state is RemoteFileDownloadUiStateNone { return }
-        if let loading = state as? RemoteFileDownloadUiStateLoading {
-            downloadTargetPath = loading.target.remotePath
-            downloadPhase = .downloading
-            if loading.totalBytes > 0 {
-                downloadStatusText = localizedFormat(
-                    "正在下载 %@ / %@",
-                    FilePreviewFormat.shared.bytes(value: loading.downloadedBytes),
-                    FilePreviewFormat.shared.bytes(value: loading.totalBytes)
-                )
-            } else {
-                downloadStatusText = localized("正在下载")
-            }
-        } else if let awaiting = state as? RemoteFileDownloadUiStateAwaitingSave {
-            let reference = awaiting.target.path
-            downloadTargetPath = awaiting.target.remotePath
-            downloadPhase = .saving
-            downloadStatusText = localized("正在保存")
-            if pendingDownload?.reference != reference {
-                pendingDownload = MobilePendingDownload(
-                    reference: reference,
-                    remotePath: awaiting.target.remotePath,
-                    name: awaiting.name,
-                    mimeType: awaiting.mimeType,
-                    data: Self.data(from: awaiting.bytes)
-                )
-                downloadExporterOpen = true
-            }
-        } else if let saved = state as? RemoteFileDownloadUiStateSaved {
-            downloadTargetPath = saved.target.remotePath
-            downloadPhase = .saved
-            downloadStatusText = localized("已下载")
-        } else if let failed = state as? RemoteFileDownloadUiStateFailed {
-            downloadTargetPath = failed.target.remotePath
-            downloadPhase = .failed
-            downloadStatusText = localized("下载失败")
-        }
-    }
 
-    private func apply(filePreviewState state: RemoteFilePreviewUiState) {
-        if let loading = state as? RemoteFilePreviewUiStateLoading {
-            filePreviewLoading = true
-            filePreview = MobileFilePreview(
-                id: loading.target.remotePath,
-                name: loading.target.displayName,
-                content: "",
-                mimeType: "",
-                imageData: nil,
-                truncated: false,
-                failure: nil
-            )
-            return
-        }
-        filePreviewLoading = false
-        if state is RemoteFilePreviewUiStateNone {
-            filePreview = nil
-        } else if let text = state as? RemoteFilePreviewUiStateText {
-            filePreview = MobileFilePreview(
-                id: text.target.remotePath,
-                name: text.name,
-                content: text.content,
-                mimeType: text.mimeType,
-                imageData: nil,
-                truncated: text.truncated,
-                failure: nil
-            )
-        } else if let image = state as? RemoteFilePreviewUiStateImage {
-            filePreview = MobileFilePreview(
-                id: image.target.remotePath,
-                name: image.name,
-                content: "",
-                mimeType: image.mimeType,
-                imageData: Self.data(from: image.bytes),
-                truncated: false,
-                failure: nil
-            )
-        } else if let unsupported = state as? RemoteFilePreviewUiStateUnsupported {
-            filePreview = MobileFilePreview(
-                id: unsupported.target.remotePath,
-                name: unsupported.target.displayName,
-                content: "",
-                mimeType: unsupported.mimeType,
-                imageData: nil,
-                truncated: false,
-                failure: localized("此文件类型暂不支持预览")
-            )
-        } else if let failed = state as? RemoteFilePreviewUiStateFailed {
-            filePreview = MobileFilePreview(
-                id: failed.target.remotePath,
-                name: failed.target.displayName,
-                content: "",
-                mimeType: failed.mimeType,
-                imageData: nil,
-                truncated: false,
-                failure: localizedFormat("文件预览失败：%@", failed.kind.name)
-            )
-        }
-    }
 
-    private func rebuildRemoteWorkspaceGroups() {
-        let selectedPath = workspaceCatalog.first(where: { $0.selected })?.path
-        remoteWorkspaces = workspaceCatalog.map { workspace in
-            MobileWorkspaceGroup(
-                path: workspace.path,
-                name: workspace.name.isEmpty ? workspace.path : workspace.name,
-                selected: workspace.selected,
-                sessions: remoteSessions.filter { session in
-                    (session.workspacePath ?? selectedPath) == workspace.path
-                }
-            )
-        }
-    }
 
-    private static func simpleTimelineRow(_ message: ChatMessage) -> MobileConversationRow {
-        simpleTimelineRow(message, images: [])
-    }
 
-    private static func simpleTimelineRow(
-        _ message: ChatMessage,
-        images: [ComposerAttachment]
-    ) -> MobileConversationRow {
-        MobileConversationRow(
-            id: message.id.uuidString,
-            kind: message.role == .user ? "USER" : "ASSISTANT",
-            text: message.text,
-            thinking: nil,
-            images: images.map {
-                MobileTimelineImage(name: "image", dataURL: $0.dataURL)
-            },
-            tools: [],
-            blocks: [],
-            streaming: false,
-            typing: false,
-            pending: false,
-            showRetry: false
-        )
-    }
 
-    private static func mapConversationRow(_ row: ConversationRow) -> MobileConversationRow {
-        MobileConversationRow(
-            id: row.id,
-            kind: row.kind.name,
-            text: row.text,
-            thinking: row.thinking,
-            images: row.images.map {
-                MobileTimelineImage(name: $0.name, dataURL: $0.dataUrl)
-            },
-            tools: row.tools.map(mapTool),
-            blocks: row.blocks.map(mapBlock),
-            streaming: row.streaming,
-            typing: row.typing,
-            pending: row.pending,
-            showRetry: row.showRetry
-        )
-    }
 
-    private static func mapTool(_ tool: ToolCard) -> MobileTimelineTool {
-        MobileTimelineTool(
-            id: tool.id,
-            name: tool.name,
-            phase: tool.phase.name,
-            kind: tool.kind.name,
-            operation: tool.operation.name,
-            target: tool.target,
-            filePath: tool.filePath,
-            fileLabel: tool.fileLabel,
-            input: tool.input,
-            output: tool.output,
-            question: tool.question,
-            questions: tool.questions.map { question in
-                MobileTimelineQuestion(
-                    index: Int(question.index),
-                    header: question.header,
-                    question: question.question,
-                    options: question.options.map {
-                        MobileTimelineOption(label: $0.label, description: $0.description_)
-                    },
-                    multiSelect: question.multiSelect
-                )
-            },
-            actions: Set(tool.actions.map(\.name))
-        )
-    }
-
-    private static func mapBlock(_ block: MessageBlock) -> MobileTimelineBlock {
-        if let text = block as? MessageBlockText {
-            return .text(id: text.id, text: text.text, streaming: text.streaming)
-        }
-        if let thinking = block as? MessageBlockThinking {
-            return .thinking(id: thinking.id, text: thinking.text, streaming: thinking.streaming)
-        }
-        if let tools = block as? MessageBlockTools {
-            return .tools(id: tools.id, tools: tools.tools.map(mapTool))
-        }
-        if let subagent = block as? MessageBlockSubagent {
-            return .subagent(
-                id: subagent.id,
-                title: subagent.title,
-                running: subagent.running,
-                text: subagent.text,
-                children: subagent.children.map(mapBlock)
-            )
-        }
-        return .text(id: block.id, text: "", streaming: false)
-    }
-
-    private static func data(from bytes: KotlinByteArray) -> Data {
-        Data((0..<Int(bytes.size)).map { index in
-            UInt8(bitPattern: bytes.get(index: Int32(index)))
-        })
-    }
 
     private func pairingErrorMessage(_ failure: PairingFailure) -> String {
         if let remote = failure.remoteMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !remote.isEmpty {
@@ -1704,147 +1191,8 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    private func accountErrorMessage(_ reason: String) -> String {
-        switch reason {
-        case "INVALID_CREDENTIALS", "UNAUTHORIZED":
-            return localized("账号或密码错误")
-        case "NETWORK":
-            return localized("网络不可用，请检查 relay 地址")
-        case "TIMEOUT":
-            return localized("登录超时，请稍后重试")
-        default:
-            return localized("登录失败，请检查账号、密码和 relay 地址")
-        }
-    }
 }
 
-extension MobileAppModel {
-    var sessionListWorkspaceOptions: [MobileSessionWorkspaceOption] {
-        SessionListPresentation.shared
-            .workspaceOptions(sessions: sessionListCoreSessions, workspace: sessionListWorkspaceContext)
-            .map { MobileSessionWorkspaceOption(path: $0.path, name: $0.name) }
-    }
-
-    var sessionListAgentGroups: [String] {
-        SessionListPresentation.shared
-            .agentGroups(sessions: sessionListCoreSessions, workspace: sessionListWorkspaceContext)
-            .map(\.name)
-    }
-
-    var sessionListStatusOptions: [String] {
-        SessionListPresentation.shared.statusOptions(sessions: sessionListCoreSessions)
-    }
-
-    var sessionListSections: [MobileSessionListSectionProjection] {
-        let groupMode: SessionGroupMode = switch remoteGroupMode {
-        case "TIME": .time
-        case "CHAT": .chat
-        default: .project
-        }
-        let agentFilter: SessionAgentGroup? = switch remoteViewAgentFilter {
-        case "CHAT": .chat
-        case "CODE": .code
-        case "COWORK": .cowork
-        default: nil
-        }
-        let view = SessionListPresentation.shared.view(
-            sessions: sessionListCoreSessions,
-            workspace: sessionListWorkspaceContext,
-            options: SessionListOptions(
-                groupMode: groupMode,
-                query: "",
-                workspaceFilter: remoteWorkspaceFilter,
-                agentFilter: agentFilter,
-                statusFilter: remoteStatusFilter
-            ),
-            nowMs: Int64(Date().timeIntervalSince1970 * 1_000)
-        )
-        let byID = Dictionary(uniqueKeysWithValues: remoteSessions.map { ($0.id, $0) })
-        return view.sections.compactMap { section in
-            switch onEnum(of: section) {
-            case .chat(let value):
-                return projection(id: "chat", kind: .chat, section: value, byID: byID)
-            case .project(let value):
-                return MobileSessionListSectionProjection(
-                    id: "project:\(value.path)",
-                    kind: .project,
-                    path: value.path,
-                    name: value.name,
-                    sessions: value.sessions.compactMap { byID[$0.id] }
-                )
-            case .today(let value):
-                return projection(id: "today", kind: .today, section: value, byID: byID)
-            case .yesterday(let value):
-                return projection(id: "yesterday", kind: .yesterday, section: value, byID: byID)
-            case .earlier(let value):
-                return projection(id: "earlier", kind: .earlier, section: value, byID: byID)
-            }
-        }
-    }
-
-    private var sessionListCoreSessions: [RemoteSession] {
-        remoteSessions.map { session in
-            RemoteSession(
-                id: session.id,
-                title: session.title,
-                agentType: session.agentType,
-                status: session.status,
-                updatedAt: session.updatedLabel,
-                createdAt: session.createdAt,
-                messageCount: Int32(session.messageCount),
-                workspacePath: session.workspacePath,
-                workspaceName: session.workspaceName
-            )
-        }
-    }
-
-    private var sessionListWorkspaceContext: SessionWorkspaceContext {
-        let assistantPaths = Set(remoteAssistants.map { normalizedSessionWorkspacePath($0.path) })
-        let selected = remoteWorkspaces.first(where: \.selected)
-        let recent = remoteWorkspaces.map { workspace in
-            RecentWorkspace(
-                path: workspace.path,
-                name: workspace.name,
-                lastOpened: "",
-                kind: assistantPaths.contains(normalizedSessionWorkspacePath(workspace.path))
-                    ? "assistant"
-                    : "normal"
-            )
-        }
-        let selectedKind = selected.map {
-            assistantPaths.contains(normalizedSessionWorkspacePath($0.path)) ? "assistant" : "normal"
-        } ?? ""
-        return SessionWorkspaceContext(
-            selectedPath: selected?.path ?? "",
-            selectedName: selected?.name ?? "",
-            selectedKind: selectedKind,
-            recent: recent
-        )
-    }
-
-    private func projection(
-        id: String,
-        kind: MobileSessionListSectionKind,
-        section: any SessionListSection,
-        byID: [String: ChatSession]
-    ) -> MobileSessionListSectionProjection {
-        MobileSessionListSectionProjection(
-            id: id,
-            kind: kind,
-            path: "",
-            name: "",
-            sessions: section.sessions.compactMap { byID[$0.id] }
-        )
-    }
-
-    private func normalizedSessionWorkspacePath(_ path: String) -> String {
-        var result = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        while result.count > 1 && (result.hasSuffix("/") || result.hasSuffix("\\")) {
-            result.removeLast()
-        }
-        return result
-    }
-}
 
 private extension Array where Element == String {
     func value(after flag: String) -> String? {

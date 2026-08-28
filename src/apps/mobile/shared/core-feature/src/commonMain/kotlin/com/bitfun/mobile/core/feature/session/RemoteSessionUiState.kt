@@ -49,6 +49,57 @@ public enum class PermissionModeFailure {
     SAVE,
 }
 
+/** Typed lifecycle of the most recent create-session request. */
+public sealed interface CreateSessionOperationState {
+    public data object Idle : CreateSessionOperationState
+
+    public data class InFlight public constructor(
+        public val requestId: String,
+        /** The remote target owning this operation; never a controller path. */
+        public val deviceKey: String?,
+        public val workspacePath: String,
+    ) : CreateSessionOperationState
+
+    public data class Succeeded public constructor(
+        public val requestId: String,
+        public val createdSessionId: String,
+        /** Canonical projection confirmed by create, including its owning workspace. */
+        public val confirmedSession: RemoteSession?,
+        /** Minimum Ready revision that contains this committed session. */
+        public val commitRevision: Long,
+    ) : CreateSessionOperationState {
+        public constructor(
+            requestId: String,
+            createdSessionId: String,
+            confirmedSession: RemoteSession?,
+        ) : this(requestId, createdSessionId, confirmedSession, 0)
+
+        public constructor(requestId: String, createdSessionId: String) : this(requestId, createdSessionId, null, 0)
+    }
+
+    public data class Failed public constructor(
+        public val requestId: String,
+        public val reason: CreateSessionOperationFailure,
+        public val retryable: Boolean,
+        public val unsupported: Boolean,
+    ) : CreateSessionOperationState
+
+    public data class Cancelled public constructor(
+        public val requestId: String,
+        public val reason: CreateSessionOperationFailure,
+    ) : CreateSessionOperationState
+}
+
+public enum class CreateSessionOperationFailure {
+    TRANSPORT,
+    UNSUPPORTED,
+    DISCONNECTED,
+    WORKSPACE,
+    DEVICE_MISMATCH,
+    PROTOCOL,
+    CANCELLED,
+}
+
 /** Why the optional model catalog could not be loaded. */
 public enum class ModelCatalogFailure {
     /**
@@ -140,7 +191,28 @@ public sealed interface RemoteSessionUiState {
          */
         public val modelCatalogFailure: ModelCatalogFailure?,
         public val draft: String,
+        /** Monotonic authority revision for session-list projection on this store. */
+        public val revision: Long,
     ) : RemoteSessionUiState {
+        public constructor(
+            sessions: List<RemoteSession>,
+            selectedSessionId: String?,
+            timeline: ChatTimelineState?,
+            busy: Boolean,
+            permissionMode: SessionPermissionMode?,
+            permissionModeFailure: PermissionModeFailure?,
+            query: String,
+            agentFilter: SessionAgentFilter,
+            hasMore: Boolean,
+            hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?,
+            modelCatalogFailure: ModelCatalogFailure?,
+            draft: String,
+        ) : this(
+            sessions, selectedSessionId, timeline, busy, permissionMode, permissionModeFailure,
+            query, agentFilter, hasMore, hasMoreMessages, modelCatalog, modelCatalogFailure, draft, 0,
+        )
+
         /**
          * The pre-catalog/pre-draft shape. A secondary constructor rather than
          * default arguments: Kotlin defaults do not survive into Swift, so an
@@ -227,6 +299,24 @@ public sealed interface RemoteSessionIntent {
         ) : this(agentType, title, instruction, modelId, null)
 
         public constructor(agentType: String) : this(agentType, "", "", null, null)
+    }
+
+    /** Create with an identity that Swift can retain and correlate with its UI. */
+    public data class CreateSessionOperation public constructor(
+        public val requestId: String,
+        public val agentType: String,
+        public val title: String,
+        public val instruction: String,
+        public val modelId: String?,
+        public val workspacePath: String?,
+    ) : RemoteSessionIntent {
+        public constructor(
+            requestId: String,
+            agentType: String,
+            title: String,
+            instruction: String,
+            modelId: String?,
+        ) : this(requestId, agentType, title, instruction, modelId, null)
     }
 
     public data class DeleteSession public constructor(

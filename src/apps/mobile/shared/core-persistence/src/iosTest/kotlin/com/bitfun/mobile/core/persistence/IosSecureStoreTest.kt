@@ -2,10 +2,20 @@ package com.bitfun.mobile.core.persistence
 
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import platform.Security.errSecItemNotFound
 
 /** Runs against the real Keychain on an iOS simulator/device, not a memory fake. */
 class IosSecureStoreTest {
+    @Test
+    fun readStatusDistinguishesMissingFromFailure() {
+        assertEquals(KeychainReadResult.FOUND, classifyKeychainReadStatus(0))
+        assertEquals(KeychainReadResult.MISSING, classifyKeychainReadStatus(errSecItemNotFound))
+        assertFailsWith<IllegalStateException> { classifyKeychainReadStatus(-50) }
+    }
+
     @Test
     fun roundTripsUpdatesAndDeletesSecret() {
         val store = iosSecureStore("com.bitfun.mobile.tests")

@@ -84,19 +84,40 @@ public class GeneralChatStore internal constructor(
     private var sequence: Long = 0
 
     init {
-        val stored = config.snapshot()
         val sessions = listSessions()
         sessionId = sessions.firstOrNull()?.id ?: newSessionId()
         timeline.reset(sessionId)
         timeline.setPersistedMessages(chats.loadMessages(sessionId).map(::restoreMessage))
+
+        var stored = GeneralChatConfigUi("", "", false)
+        var configured = false
+        var configFailure: GeneralChatConfigFailure? = null
+        var models = emptyList<GeneralChatModelUi>()
+        var activeModelId = ""
+        try {
+            stored = config.snapshot()
+            configured = config.activeEndpoint() != null
+            models = config.catalog()
+            activeModelId = config.activeModelId()
+        } catch (_: Throwable) {
+            // A platform keystore failure is not the same as an empty config.
+            // Keep all provider data out of observable state and do not retry the
+            // secure store while restoring the independent local conversation.
+            stored = GeneralChatConfigUi("", "", false)
+            configured = false
+            configFailure = GeneralChatConfigFailure.SECURE_STORAGE
+            models = emptyList()
+            activeModelId = ""
+        }
+
         _state = MutableStateFlow(
             GeneralChatUiState(
-                configured = config.activeEndpoint() != null,
+                configured = configured,
                 config = stored,
-                configFailure = null,
+                configFailure = configFailure,
                 connectionTest = GeneralChatConnectionTestUi(),
-                models = config.catalog(),
-                activeModelId = config.activeModelId(),
+                models = models,
+                activeModelId = activeModelId,
                 sessionId = sessionId,
                 sessions = sessions,
                 timeline = timeline.snapshot(),

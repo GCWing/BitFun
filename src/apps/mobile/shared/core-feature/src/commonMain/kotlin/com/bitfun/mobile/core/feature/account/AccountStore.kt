@@ -67,6 +67,8 @@ public class AccountStore internal constructor(
     public val state: StateFlow<AccountUiState> = _state.asStateFlow()
     private var session: AccountSessionData? = null
     private var work: Job? = null
+    /** Latest account membership snapshot, used to authorize explicit device stores. */
+    private var controllableDevices: List<AccountDeviceUi> = emptyList()
 
     public fun dispatch(intent: AccountIntent) {
         when (intent) {
@@ -74,6 +76,7 @@ public class AccountStore internal constructor(
             is AccountIntent.Login -> login(intent)
             is AccountIntent.SelectDevice -> selectDevice(intent.deviceId)
             AccountIntent.RefreshDevices -> refreshDevices()
+            AccountIntent.Retry -> retryFailedStage()
             AccountIntent.Logout -> logout()
             AccountIntent.Stop -> stop()
         }
@@ -93,7 +96,52 @@ public class AccountStore internal constructor(
     public fun createWorkspaceStore(scope: CoroutineScope): RemoteWorkspaceStore? {
         val current = session ?: return null
         val target = current.targetDeviceId?.takeIf(String::isNotBlank) ?: return null
-        return RemoteWorkspaceStore.create(scope, backend.transport(current, target))
+        return RemoteWorkspaceStore.create(
+            scope,
+            backend.transport(current, target),
+            kotlinx.coroutines.Dispatchers.Default,
+            target,
+        )
+    }
+
+    /**
+     * A session store addressed to one specific device, independent of the
+     * currently selected control target. This is how a multi-device directory
+     * loads several devices at once while the old single-target methods keep
+     * their existing meaning.
+     */
+    public fun createSessionStore(scope: CoroutineScope, deviceId: String): RemoteSessionStore? {
+        val current = session ?: return null
+        val target = authorizedDeviceId(deviceId) ?: return null
+        return RemoteSessionStore.create(
+            scope,
+            backend.transport(current, target),
+            deviceKey = target,
+            persistence = persistence,
+        )
+    }
+
+    /** The explicit-device twin of [createWorkspaceStore]. */
+    public fun createWorkspaceStore(scope: CoroutineScope, deviceId: String): RemoteWorkspaceStore? {
+        val current = session ?: return null
+        val target = authorizedDeviceId(deviceId) ?: return null
+        return RemoteWorkspaceStore.create(
+            scope,
+            backend.transport(current, target),
+            kotlinx.coroutines.Dispatchers.Default,
+            target,
+        )
+    }
+
+    /**
+     * The directory may retain an offline account row, but an explicit store is
+     * still only granted to a device in the latest authenticated membership
+     * snapshot. Offline is allowed here so cached directory data can be shown;
+     * the directory's online guard prevents commands from being sent.
+     */
+    private fun authorizedDeviceId(deviceId: String): String? {
+        val target = deviceId.trim().takeIf(String::isNotBlank) ?: return null
+        return controllableDevices.firstOrNull { it.id == target }?.id
     }
 
     /**
@@ -125,9 +173,16 @@ public class AccountStore internal constructor(
                 }
                 decodeRecord(stored)
             } catch (_: Throwable) {
-                secureStore.delete(SESSION_KEY)
+                // A record we cannot decode may belong to a newer or older app.
+                // Keep the opaque value in secure storage so a retry or upgraded
+                // client can still read it; only clear this store's projection.
                 session = null
-                _state.value = AccountUiState.Failed(AccountFailureReason.SECURE_STORAGE, true)
+                controllableDevices = emptyList()
+                _state.value = AccountUiState.Failed(
+                    AccountFailureReason.SECURE_STORAGE,
+                    true,
+                    AccountFailureStage.RESTORE,
+                )
                 return@launch
             }
             session = restored
@@ -137,12 +192,20 @@ public class AccountStore internal constructor(
                 throw cancelled
             } catch (error: CloudAccountException) {
                 if (error.failure == CloudAccountFailure.AUTHENTICATION) {
-                    expireSession(error.failure.toUiReason())
+                    expireSession(error.failure.toUiReason(), AccountFailureStage.DEVICE_LIST)
                 } else {
-                    _state.value = AccountUiState.Failed(error.failure.toUiReason(), true)
+                    _state.value = AccountUiState.Failed(
+                        error.failure.toUiReason(),
+                        true,
+                        AccountFailureStage.DEVICE_LIST,
+                    )
                 }
             } catch (_: Throwable) {
-                _state.value = AccountUiState.Failed(AccountFailureReason.NETWORK, true)
+                _state.value = AccountUiState.Failed(
+                    AccountFailureReason.NETWORK,
+                    true,
+                    AccountFailureStage.DEVICE_LIST,
+                )
             }
         }
     }
@@ -151,36 +214,120 @@ public class AccountStore internal constructor(
         work?.cancel()
         _state.value = AccountUiState.SigningIn
         work = scope.launch {
-            try {
-                val loggedIn = backend.login(
+            val loggedIn = try {
+                backend.login(
                     intent.relayUrl,
                     intent.username,
                     intent.password,
                     deviceId,
                     deviceName,
                 )
-                val devices = backend.listDevices(loggedIn, deviceId)
-                // Never this device, even as a fallback: driving the phone from
-                // the phone is what `canSelectAccountDevice` forbids, and a
-                // target nothing can be asked of is worse than none at all.
-                val preferred = AccountDevicePolicy.preferredTarget(devices, deviceId)
-                val selected = loggedIn.copy(
-                    targetDeviceId = preferred?.id,
-                    targetDeviceName = preferred?.name,
-                )
-                secureStore.write(SESSION_KEY, encodeRecord(selected).encodeToByteArray())
-                session = selected
-                publishReady(selected, devices)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: CloudAccountException) {
-                session = null
-                _state.value = AccountUiState.Failed(error.failure.toUiReason(), true)
+                failLogin(error.failure.toUiReason(), AccountFailureStage.AUTHENTICATION)
+                return@launch
             } catch (_: Throwable) {
-                session = null
-                _state.value = AccountUiState.Failed(AccountFailureReason.SECURE_STORAGE, true)
+                // Live transport failures are normalized by CloudAccountClient.
+                // An untyped failure here is therefore a crypto/protocol failure,
+                // never evidence that secure storage was involved.
+                failLogin(AccountFailureReason.MALFORMED_RESPONSE, AccountFailureStage.AUTHENTICATION)
+                return@launch
             }
+
+            controllableDevices = emptyList()
+            if (!persistLogin(loggedIn)) return@launch
+            session = loggedIn
+
+            val devices = loadDevices(loggedIn) ?: return@launch
+
+            // Never this device, even as a fallback: driving the phone from
+            // the phone is what `canSelectAccountDevice` forbids, and a
+            // target nothing can be asked of is worse than none at all.
+            val preferred = AccountDevicePolicy.preferredTarget(devices, deviceId)
+            val selected = loggedIn.copy(
+                targetDeviceId = preferred?.id,
+                targetDeviceName = preferred?.name,
+            )
+            if (!persistLogin(selected)) return@launch
+            session = selected
+            publishReady(selected, devices)
         }
+    }
+
+    private suspend fun loadDevices(current: AccountSessionData): List<AccountDeviceUi>? = try {
+        backend.listDevices(current, deviceId)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: CloudAccountException) {
+        _state.value = AccountUiState.Failed(
+            error.failure.toUiReason(),
+            true,
+            AccountFailureStage.DEVICE_LIST,
+        )
+        null
+    } catch (_: Throwable) {
+        _state.value = AccountUiState.Failed(
+            AccountFailureReason.NETWORK,
+            true,
+            AccountFailureStage.DEVICE_LIST,
+        )
+        null
+    }
+
+    private fun retryFailedStage() {
+        val failed = _state.value as? AccountUiState.Failed ?: return
+        val current = session ?: return
+        if (!failed.canRetry || failed.stage != AccountFailureStage.DEVICE_LIST) return
+        work?.cancel()
+        _state.value = AccountUiState.SigningIn
+        work = scope.launch {
+            val devices = loadDevices(current) ?: return@launch
+            val preferred = current.targetDeviceId
+                ?.let { selectedId -> devices.firstOrNull { it.id == selectedId } }
+                ?.takeIf { AccountDevicePolicy.canSelect(it, deviceId) }
+                ?: AccountDevicePolicy.preferredTarget(devices, deviceId)
+            val selected = current.copy(
+                targetDeviceId = preferred?.id,
+                targetDeviceName = preferred?.name,
+            )
+            // This retry only refreshes the volatile device-list projection. The
+            // authenticated bytes saved before the failed list request stay exact.
+            session = selected
+            publishReady(selected, devices)
+        }
+    }
+
+    private fun persistLogin(value: AccountSessionData): Boolean {
+        val previous = try {
+            secureStore.read(SESSION_KEY)
+        } catch (_: Throwable) {
+            failLogin(AccountFailureReason.SECURE_STORAGE, AccountFailureStage.SECURE_STORAGE)
+            return false
+        }
+        return try {
+            secureStore.write(SESSION_KEY, encodeRecord(value).encodeToByteArray())
+            true
+        } catch (_: Throwable) {
+            // Platform secure stores are expected to update atomically. Restore a
+            // fake or adapter that mutated before reporting failure as an extra
+            // compatibility guard, without ever deleting pre-existing bytes.
+            try {
+                if (previous != null) secureStore.write(SESSION_KEY, previous)
+                else secureStore.delete(SESSION_KEY)
+            } catch (_: Throwable) {
+                // The observable session still fails closed below. The original
+                // write contract must preserve its previous value on failure.
+            }
+            failLogin(AccountFailureReason.SECURE_STORAGE, AccountFailureStage.SECURE_STORAGE)
+            false
+        }
+    }
+
+    private fun failLogin(reason: AccountFailureReason, stage: AccountFailureStage) {
+        session = null
+        controllableDevices = emptyList()
+        _state.value = AccountUiState.Failed(reason, true, stage)
     }
 
     private fun selectDevice(targetId: String) {
@@ -192,13 +339,9 @@ public class AccountStore internal constructor(
             ?.takeIf { AccountDevicePolicy.canSelect(it, deviceId) }
             ?: return
         val updated = current.copy(targetDeviceId = selected.id, targetDeviceName = selected.name)
-        try {
-            secureStore.write(SESSION_KEY, encodeRecord(updated).encodeToByteArray())
-            session = updated
-            _state.value = ready.copy(selectedDeviceId = selected.id, selectedDeviceName = selected.name)
-        } catch (_: Throwable) {
-            _state.value = AccountUiState.Failed(AccountFailureReason.SECURE_STORAGE, true)
-        }
+        if (!persistLogin(updated)) return
+        session = updated
+        _state.value = ready.copy(selectedDeviceId = selected.id, selectedDeviceName = selected.name)
     }
 
     /**
@@ -221,7 +364,7 @@ public class AccountStore internal constructor(
                 throw cancelled
             } catch (error: CloudAccountException) {
                 if (error.failure == CloudAccountFailure.AUTHENTICATION) {
-                    expireSession(error.failure.toUiReason())
+                    expireSession(error.failure.toUiReason(), AccountFailureStage.DEVICE_LIST)
                 } else {
                     _state.value = ready.copy(refreshing = false, refreshFailure = error.failure.toUiReason())
                 }
@@ -234,19 +377,28 @@ public class AccountStore internal constructor(
     private fun logout() {
         work?.cancel()
         work = null
+        // Logout is immediately observable even when Keychain cannot remove the
+        // durable record. A stale persisted record must never keep capabilities
+        // active in this process.
+        session = null
+        controllableDevices = emptyList()
+        _state.value = AccountUiState.SignedOut
         try {
             secureStore.delete(SESSION_KEY)
-            session = null
-            _state.value = AccountUiState.SignedOut
         } catch (_: Throwable) {
-            _state.value = AccountUiState.Failed(AccountFailureReason.SECURE_STORAGE, true)
+            _state.value = AccountUiState.Failed(
+                AccountFailureReason.SECURE_STORAGE,
+                true,
+                AccountFailureStage.SECURE_STORAGE,
+            )
         }
     }
 
     /** Clears every observable and persisted fact owned by an expired token. */
-    private fun expireSession(reason: AccountFailureReason) {
+    private fun expireSession(reason: AccountFailureReason, stage: AccountFailureStage) {
         session = null
-        _state.value = AccountUiState.Failed(reason, true)
+        controllableDevices = emptyList()
+        _state.value = AccountUiState.Failed(reason, false, stage)
         try {
             secureStore.delete(SESSION_KEY)
         } catch (_: Throwable) {
@@ -261,10 +413,11 @@ public class AccountStore internal constructor(
      * different answers on two platforms.
      */
     private fun publishReady(current: AccountSessionData, devices: List<AccountDeviceUi>) {
+        controllableDevices = AccountDevicePolicy.controlTargets(devices, deviceId)
         _state.value = AccountUiState.Ready(
             userId = current.userId,
             username = current.username,
-            devices = AccountDevicePolicy.controlTargets(devices, deviceId),
+            devices = controllableDevices,
             selectedDeviceId = current.targetDeviceId,
             selectedDeviceName = current.targetDeviceName,
         )

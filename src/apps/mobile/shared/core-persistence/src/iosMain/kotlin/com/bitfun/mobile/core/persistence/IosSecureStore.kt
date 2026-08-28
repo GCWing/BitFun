@@ -38,6 +38,14 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.Security.errSecItemNotFound
 
+internal enum class KeychainReadResult { FOUND, MISSING }
+
+internal fun classifyKeychainReadStatus(status: Int): KeychainReadResult = when (status) {
+    0 -> KeychainReadResult.FOUND
+    errSecItemNotFound -> KeychainReadResult.MISSING
+    else -> error("Keychain value could not be read (status=$status).")
+}
+
 /** Keychain-backed secret storage for iOS account credentials and keys. */
 @OptIn(ExperimentalForeignApi::class)
 private class IosSecureStore(private val service: String) : SecureStore {
@@ -47,8 +55,12 @@ private class IosSecureStore(private val service: String) : SecureStore {
             set(query, kSecReturnData, kCFBooleanTrue)
             set(query, kSecMatchLimit, kSecMatchLimitOne)
             val result = alloc<COpaquePointerVar>()
-            if (SecItemCopyMatching(query, result.ptr) != 0) return@memScoped null
-            val data = result.value as? CFDataRef ?: return@memScoped null
+            when (classifyKeychainReadStatus(SecItemCopyMatching(query, result.ptr))) {
+                KeychainReadResult.MISSING -> return@memScoped null
+                KeychainReadResult.FOUND -> Unit
+            }
+            val data = result.value as? CFDataRef
+                ?: error("Keychain returned success without data.")
             try {
                 val length = CFDataGetLength(data).toInt()
                 if (length == 0) return@memScoped ByteArray(0)

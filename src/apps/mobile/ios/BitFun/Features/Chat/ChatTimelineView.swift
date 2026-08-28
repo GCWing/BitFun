@@ -77,11 +77,19 @@ private struct ConversationRowView: View {
     let row: MobileConversationRow
     @ObservedObject var model: MobileAppModel
 
+    @ViewBuilder
     var body: some View {
         switch row.kind {
-        case "EMPTY": EmptyConversationRow()
-        case "USER": userRow
-        default: assistantRow
+        case "EMPTY":
+            EmptyConversationRow()
+        case "USER":
+            userRow
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("message.user.\(row.id)")
+        default:
+            assistantRow
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("message.assistant.\(row.id)")
         }
     }
 
