@@ -594,6 +594,7 @@ export interface AppearanceStateDescriptor {
 
 export interface AppearanceSurfaceDescriptor {
   id: string;
+  componentAttribute?: 'data-bf-component' | 'data-bf-product-component';
   parts: readonly AppearancePartDescriptor[];
   facets?: readonly AppearanceFacetDescriptor[];
   states?: readonly AppearanceStateDescriptor[];

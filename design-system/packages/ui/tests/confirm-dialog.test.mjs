@@ -24,10 +24,11 @@ test("ConfirmDialog composes semantic content and actions on Modal", () => {
   }));
 
   assert.match(markup, /role="alertdialog"/);
-  assert.match(markup, /data-bf-component="confirm-dialog"/);
-  assert.match(markup, /data-bf-part="message"[^>]*>This cannot be undone/);
-  assert.match(markup, /data-bf-part="icon"[^>]+data-bf-status="danger"/);
-  assert.match(markup, /data-bf-part="preview"/);
+  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="content"/);
+  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="messageRow"/);
+  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="message"[^>]*>This cannot be undone/);
+  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="icon"[^>]+data-bf-status="danger"/);
+  assert.match(markup, /data-bf-component="confirm-dialog" data-bf-part="preview"/);
   assert.match(markup, /<pre>\/workspace\/project<\/pre>/);
   assert.match(markup, />Cancel<\/span><\/span><\/button>/);
   assert.match(markup, />Archive<\/span><\/span><\/button>/);
