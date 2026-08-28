@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
-  "commandCount": 642,
+  "catalogDigest": "b0794e2a65d5356a8fdb262f0acf26753ac1aebfedf9b1e252d4dce4a21bc9a1",
+  "commandCount": 651,
   "coverage": {
-    "commandCount": 642,
-    "documentedCommandCount": 615,
+    "commandCount": 651,
+    "documentedCommandCount": 624,
     "implementationCommandCount": 27,
     "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
   },
@@ -8838,6 +8838,22 @@
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
+      "id": "speech_append_realtime_audio",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_append_realtime_audio",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_append_realtime_audio( state: State<'_, AppState>, request: SpeechAppendRealtimeAudioRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
       "id": "speech_cancel_input_session",
       "moduleId": "speech",
       "capabilityId": "feature.voice-input",
@@ -8867,6 +8883,54 @@
       "rustPath": "speech_cancel_model_download",
       "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
       "signature": "fn speech_cancel_model_download( state: State<'_, AppState>, app: AppHandle, request: SpeechCancelModelDownloadRequest, ) -> Result<SpeechModelStatus, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_cancel_realtime_response",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_cancel_realtime_response",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_cancel_realtime_response( state: State<'_, AppState>, request: SpeechRealtimeSessionRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_close_realtime_session",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_close_realtime_session",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_close_realtime_session( state: State<'_, AppState>, request: SpeechRealtimeSessionRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_commit_realtime_audio",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_commit_realtime_audio",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_commit_realtime_audio( state: State<'_, AppState>, request: SpeechRealtimeSessionRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -8923,6 +8987,22 @@
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
+      "id": "speech_get_realtime_config",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-config"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_get_realtime_config",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_get_realtime_config( state: State<'_, AppState>, request: SpeechGetRealtimeConfigRequest, ) -> Result<SpeechRealtimeConfig, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
       "id": "speech_list_models",
       "moduleId": "speech",
       "capabilityId": "feature.voice-input",
@@ -8939,6 +9019,54 @@
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
+      "id": "speech_save_realtime_config",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-config"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_save_realtime_config",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_save_realtime_config( state: State<'_, AppState>, request: SpeechSaveRealtimeConfigRequest, ) -> Result<SpeechRealtimeConfig, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_send_realtime_tool_result",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_send_realtime_tool_result",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_send_realtime_tool_result( state: State<'_, AppState>, request: SpeechRealtimeToolResultRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_speak_realtime_text",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_speak_realtime_text",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_speak_realtime_text( state: State<'_, AppState>, request: SpeechRealtimeSpeakRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
       "id": "speech_start_input_session",
       "moduleId": "speech",
       "capabilityId": "feature.voice-input",
@@ -8952,6 +9080,22 @@
       "rustPath": "speech_start_input_session",
       "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
       "signature": "fn speech_start_input_session( state: State<'_, AppState>, request: SpeechStartInputSessionRequest, ) -> Result<SpeechInputSession, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "speech_start_realtime_session",
+      "moduleId": "speech",
+      "capabilityId": "feature.voice-input",
+      "capabilityIds": [
+        "feature.voice-input"
+      ],
+      "documentedItemIds": [
+        "feature.voice-input:realtime-assistant-call"
+      ],
+      "visibility": "documented",
+      "rustPath": "speech_start_realtime_session",
+      "sourceFile": "src/apps/desktop/src/api/speech_api.rs",
+      "signature": "fn speech_start_realtime_session( state: State<'_, AppState>, app: AppHandle, request: SpeechStartRealtimeSessionRequest, ) -> Result<SpeechRealtimeSession, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {

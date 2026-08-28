@@ -4738,17 +4738,19 @@
       "id": "feature.voice-input",
       "kind": "feature",
       "categoryId": "application",
-      "titleZh": "语音输入",
-      "titleEn": "Voice input",
-      "summaryZh": "在聊天输入框中录音并转成文字，可选择本地模型、语言、麦克风与最长录音时间。",
-      "summaryEn": "Record speech in the chat composer and transcribe it to text, with control over local models, language, microphone, and duration.",
+      "titleZh": "语音输入与实时通话",
+      "titleEn": "Voice input and realtime calls",
+      "summaryZh": "将录音转成文字，或在客户端持续进行实时语音通话，让助手进入项目执行任务并播报简要进展。",
+      "summaryEn": "Transcribe recordings or hold a client-wide realtime voice call that can enter projects, run tasks, and speak concise progress updates.",
       "keywordsZh": [
         "语音输入",
         "录音",
         "转写",
         "麦克风",
         "语音模型",
-        "听写"
+        "听写",
+        "实时通话",
+        "语音助手"
       ],
       "keywordsEn": [
         "voice input",
@@ -4756,17 +4758,21 @@
         "transcription",
         "microphone",
         "speech model",
-        "dictation"
+        "dictation",
+        "realtime voice",
+        "voice assistant"
       ],
       "highlightsZh": [
         "下载和校验本地语音模型",
         "选择识别语言与麦克风",
-        "在发送前编辑转写文本"
+        "在发送前编辑转写文本",
+        "通过客户端级实时通话执行或停止项目任务并听取简要进展"
       ],
       "highlightsEn": [
         "Download and verify local speech models",
         "Choose a recognition language and microphone",
-        "Edit transcribed text before sending"
+        "Edit transcribed text before sending",
+        "Run or stop project tasks from a client-wide realtime call and hear concise progress updates"
       ],
       "items": [
         {
@@ -4797,6 +4803,41 @@
           },
           "evidence": [
             "command:speech_append_audio_chunk"
+          ]
+        },
+        {
+          "id": "realtime-assistant-call",
+          "titleZh": "在客户端启动或结束实时语音通话，听取回复，并让助手执行或停止项目任务",
+          "titleEn": "Start or end a client-wide realtime voice call, hear replies, and ask the assistant to run or stop project tasks",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“在客户端启动或结束实时语音通话，听取回复，并让助手执行或停止项目任务”依赖麦克风、流式模型响应和任务状态，无法由单个结构化 Command 确定完成；Agent 会打开精确入口，并把通话与任务进度保留在用户可见界面。",
+            "reasonEn": "“Start or end a client-wide realtime voice call, hear replies, and ask the assistant to run or stop project tasks” depends on microphone input, streaming model responses, and task state, so no single structured Command can deterministically complete the workflow; the Agent opens the exact entry and keeps the call and task progress visible."
+          },
+          "evidence": [
+            "command:speech_start_realtime_session",
+            "command:speech_append_realtime_audio",
+            "command:speech_commit_realtime_audio",
+            "command:speech_send_realtime_tool_result",
+            "command:speech_speak_realtime_text",
+            "command:speech_cancel_realtime_response",
+            "command:speech_close_realtime_session"
+          ]
+        },
+        {
+          "id": "realtime-assistant-config",
+          "titleZh": "读取或保存实时语音服务配置",
+          "titleEn": "Read or save realtime voice service settings",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“读取或保存实时语音服务配置”包含凭据和模型选项，需要由用户在设置界面中检查并保存；Agent 会打开精确入口，将敏感输入保留在用户可见界面。",
+            "reasonEn": "“Read or save realtime voice service settings” includes credentials and model choices that the user must review and save in Settings; the Agent opens the exact entry and keeps sensitive input in the visible interface."
+          },
+          "evidence": [
+            "command:speech_get_realtime_config",
+            "command:speech_save_realtime_config"
           ]
         },
         {

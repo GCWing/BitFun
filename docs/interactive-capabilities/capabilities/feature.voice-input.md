@@ -3,17 +3,17 @@
 id: feature.voice-input
 kind: feature
 category: application
-title_zh: "语音输入"
-title_en: "Voice input"
+title_zh: "语音输入与实时通话"
+title_en: "Voice input and realtime calls"
 ---
 
-# 语音输入 / Voice input
+# 语音输入与实时通话 / Voice input and realtime calls
 
 > 功能 / Feature
 
-在聊天输入框中录音并转成文字，可选择本地模型、语言、麦克风与最长录音时间。
+将录音转成文字，或在客户端持续进行实时语音通话，让助手进入项目执行任务并播报简要进展。
 
-Record speech in the chat composer and transcribe it to text, with control over local models, language, microphone, and duration.
+Transcribe recordings or hold a client-wide realtime voice call that can enter projects, run tasks, and speak concise progress updates.
 
 ## 完整功能清单 / Everything included
 
@@ -21,6 +21,10 @@ Record speech in the chat composer and transcribe it to text, with control over 
   - Start, finish, or cancel a recording from the chat composer
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 录音过程中分块传输音频并显示识别进度
   - Stream audio chunks during recording and show recognition progress
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在客户端启动或结束实时语音通话，听取回复，并让助手执行或停止项目任务
+  - Start or end a client-wide realtime voice call, hear replies, and ask the assistant to run or stop project tasks
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 读取或保存实时语音服务配置
+  - Read or save realtime voice service settings
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看本地语音模型及安装、下载、验证、修复和删除状态
   - Browse local speech models and their install, download, verify, repair, and delete states
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 取消正在进行的语音模型下载
