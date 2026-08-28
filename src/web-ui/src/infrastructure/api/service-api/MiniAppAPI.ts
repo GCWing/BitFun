@@ -98,7 +98,7 @@ export interface AiModelInfo {
 // ─── Agent bridge types ───────────────────────────────────────────────────────
 
 export interface AgentContextFile {
-  /** Plain file name written under the reserved `.miniapp-context` directory. */
+  /** Plain file name written into a per-run snapshot under `.miniapp-context`. */
   name: string;
   /** UTF-8 app-supplied context treated as untrusted data by the Agent prompt. */
   content: string;

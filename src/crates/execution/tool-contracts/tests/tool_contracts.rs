@@ -1098,6 +1098,20 @@ fn runtime_restrictions_keep_current_snake_case_wire_shape() {
 
     let round_trip = serde_json::to_value(&restrictions).expect("serialize restrictions");
     assert_eq!(round_trip, value);
+
+    let symlink_safe: ToolRuntimeRestrictions = serde_json::from_value(json!({
+        "path_policy": {
+            "read_roots": [".miniapp-context/0123456789abcdef0123456789abcdef"],
+            "reject_symlinked_read_roots": true
+        }
+    }))
+    .expect("deserialize symlink-safe read restriction");
+    assert!(symlink_safe.path_policy.reject_symlinked_read_roots);
+    assert_eq!(
+        serde_json::to_value(&symlink_safe).expect("serialize symlink-safe restriction")
+            ["path_policy"]["reject_symlinked_read_roots"],
+        true
+    );
 }
 
 #[test]

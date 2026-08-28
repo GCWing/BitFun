@@ -1038,20 +1038,22 @@ mod tests {
     #[tokio::test]
     async fn read_tool_enforces_runtime_read_roots() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let allowed_root = dir.path().join(".miniapp-context");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let allowed_root = dir.path().join(".miniapp-context").join(scope);
         fs::create_dir_all(&allowed_root).expect("create context root");
         fs::write(allowed_root.join("stocks.ndjson"), "allowed").expect("write allowed file");
         fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
 
         let mut context = local_context(dir.path().to_path_buf());
         context.runtime_tool_restrictions.path_policy = ToolPathPolicy {
-            read_roots: vec![".miniapp-context".to_string()],
+            read_roots: vec![format!(".miniapp-context/{scope}")],
+            reject_symlinked_read_roots: true,
             ..Default::default()
         };
         let tool = FileReadTool::new();
 
         tool.call_impl(
-            &json!({ "file_path": ".miniapp-context/stocks.ndjson" }),
+            &json!({ "file_path": format!(".miniapp-context/{scope}/stocks.ndjson") }),
             &context,
         )
         .await
@@ -1061,6 +1063,36 @@ mod tests {
             .await
             .expect_err("app storage outside reserved context must stay blocked");
         assert!(error.to_string().contains("is not allowed for read"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn read_tool_rejects_symlinked_context_snapshot_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let outside = dir.path().join("outside");
+        let context_parent = dir.path().join(".miniapp-context");
+        fs::create_dir_all(&outside).expect("create outside root");
+        fs::create_dir_all(&context_parent).expect("create context parent");
+        fs::write(outside.join("stocks.ndjson"), "escaped").expect("write outside context file");
+        std::os::unix::fs::symlink(&outside, context_parent.join(scope))
+            .expect("create context symlink");
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions.path_policy = ToolPathPolicy {
+            read_roots: vec![format!(".miniapp-context/{scope}")],
+            reject_symlinked_read_roots: true,
+            ..Default::default()
+        };
+
+        let error = FileReadTool::new()
+            .call_impl(
+                &json!({ "file_path": format!(".miniapp-context/{scope}/stocks.ndjson") }),
+                &context,
+            )
+            .await
+            .expect_err("Read must reject a symlinked context snapshot root");
+        assert!(error.to_string().contains("contains a symlink"));
     }
 
     #[cfg(not(feature = "document-read"))]

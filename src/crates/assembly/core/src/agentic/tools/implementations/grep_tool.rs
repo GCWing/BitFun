@@ -918,6 +918,11 @@ mod tests {
     #[tokio::test]
     async fn grep_tool_enforces_runtime_read_roots() {
         let dir = tempfile::tempdir().expect("tempdir");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let allowed_root = dir.path().join(".miniapp-context").join(scope);
+        std::fs::create_dir_all(&allowed_root).expect("create context root");
+        std::fs::write(allowed_root.join("stocks.ndjson"), "allowed market row")
+            .expect("write allowed file");
         std::fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
         let context = ToolUseContext {
             tool_call_id: None,
@@ -934,7 +939,66 @@ mod tests {
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 path_policy: ToolPathPolicy {
-                    read_roots: vec![".miniapp-context".to_string()],
+                    read_roots: vec![format!(".miniapp-context/{scope}")],
+                    reject_symlinked_read_roots: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            runtime_handles: ToolRuntimeHandles::default(),
+        };
+
+        GrepTool::new()
+            .call_impl(
+                &json!({
+                    "pattern": "allowed market row",
+                    "path": format!(".miniapp-context/{scope}")
+                }),
+                &context,
+            )
+            .await
+            .expect("Grep should search the exact context snapshot root");
+        let error = GrepTool::new()
+            .call_impl(
+                &json!({ "pattern": "blocked", "path": "storage.json" }),
+                &context,
+            )
+            .await
+            .expect_err("Grep must not search app storage outside reserved context");
+        assert!(error.to_string().contains("is not allowed for read"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn grep_tool_rejects_symlinked_context_snapshot_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let outside = dir.path().join("outside");
+        let context_parent = dir.path().join(".miniapp-context");
+        std::fs::create_dir_all(&outside).expect("create outside root");
+        std::fs::create_dir_all(&context_parent).expect("create context parent");
+        std::fs::write(outside.join("stocks.ndjson"), "escaped market row")
+            .expect("write outside file");
+        std::os::unix::fs::symlink(&outside, context_parent.join(scope))
+            .expect("create context symlink");
+
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("Agent".to_string()),
+            session_id: None,
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: Some(WorkspaceBinding::new(
+                Some("grep-context-workspace".to_string()),
+                dir.path().to_path_buf(),
+            )),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                path_policy: ToolPathPolicy {
+                    read_roots: vec![format!(".miniapp-context/{scope}")],
+                    reject_symlinked_read_roots: true,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -944,12 +1008,15 @@ mod tests {
 
         let error = GrepTool::new()
             .call_impl(
-                &json!({ "pattern": "blocked", "path": "storage.json" }),
+                &json!({
+                    "pattern": "escaped market row",
+                    "path": format!(".miniapp-context/{scope}")
+                }),
                 &context,
             )
             .await
-            .expect_err("Grep must not search app storage outside reserved context");
-        assert!(error.to_string().contains("is not allowed for read"));
+            .expect_err("Grep must reject a symlinked context snapshot root");
+        assert!(error.to_string().contains("contains a symlink"));
     }
 
     #[test]

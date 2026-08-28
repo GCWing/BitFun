@@ -18,7 +18,8 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolTask};
 use crate::agentic::tools::post_call_hooks;
 use crate::agentic::tools::restrictions::{
-    is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
+    is_local_path_within_root, is_remote_posix_path_within_root,
+    local_path_has_symlink_component_below, ToolPathOperation,
 };
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_tool_uri, normalize_runtime_relative_path,
@@ -547,6 +548,50 @@ impl ToolUseContext {
         let mut resolved_roots = Vec::with_capacity(allowed_roots.len());
         for root in allowed_roots {
             resolved_roots.push(self.resolve_tool_path(root)?);
+        }
+
+        if operation == ToolPathOperation::Read
+            && self
+                .runtime_tool_restrictions
+                .path_policy
+                .reject_symlinked_read_roots
+        {
+            if resolution.backend != ToolPathBackend::Local {
+                return Err(BitFunError::validation(
+                    "Symlink-free read roots are available only for local workspaces".to_string(),
+                ));
+            }
+            let workspace_root = self
+                .workspace
+                .as_ref()
+                .ok_or_else(|| {
+                    BitFunError::validation(
+                        "A local workspace is required for symlink-safe read roots".to_string(),
+                    )
+                })?
+                .root_path_string();
+            let workspace_root = Path::new(&workspace_root);
+            let mut contains_symlink = local_path_has_symlink_component_below(
+                Path::new(&resolution.resolved_path),
+                workspace_root,
+            )?;
+            for root in &resolved_roots {
+                if root.backend == ToolPathBackend::Local
+                    && local_path_has_symlink_component_below(
+                        Path::new(&root.resolved_path),
+                        workspace_root,
+                    )?
+                {
+                    contains_symlink = true;
+                    break;
+                }
+            }
+            if contains_symlink {
+                return Err(BitFunError::validation(format!(
+                    "Path '{}' is not allowed for read because the configured context root contains a symlink",
+                    resolution.logical_path
+                )));
+            }
         }
 
         let is_allowed = is_tool_path_allowed_by_resolved_roots(
