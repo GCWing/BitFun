@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
-import { PopupCloseButton } from '@/component-library';
+import { Button, IconButton } from '@bitfun/ui';
+import { X } from 'lucide-react';
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -134,8 +134,10 @@ const FeatureModal: React.FC = () => {
       <div className={`feature-modal ${sizeClass}${exiting ? ' feature-modal--exiting' : ''}`} data-bf-component="announcement" data-bf-part="modal">
         {/* Close button */}
         {modal.closable && (
-          <PopupCloseButton
+          <IconButton
             className="feature-modal__close"
+            icon={<X />}
+            size="md"
             data-bf-component="announcement"
             data-bf-part="modalClose"
             onClick={() => triggerClose()}

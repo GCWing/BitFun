@@ -3,12 +3,11 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button, ConfirmDialog } from '@bitfun/ui';
+import { Button, ConfirmDialog, IconButton } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
-import { PopupCloseButton } from '@/component-library';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -23,6 +22,7 @@ import {
   Loader2,
   Upload,
   Download,
+  X,
 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
 
@@ -405,8 +405,10 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           <h2 className="remote-file-browser__header-title">
             {t('ssh.remote.selectWorkspace')}
           </h2>
-          <PopupCloseButton
+          <IconButton
             className="remote-file-browser__close-btn"
+            icon={<X />}
+            size="md"
             onClick={onCancel}
             aria-label={t('actions.close')}
             data-bf-component="ssh-remote"

@@ -1,9 +1,8 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2, Search as SearchIcon } from 'lucide-react';
-import { Modal, SearchField } from '@bitfun/ui';
-import { PopupCloseButton } from '@/component-library';
+import { CheckCheck, Trash2, X, XCircle, ChevronDown, ChevronUp, Loader2, Search as SearchIcon } from 'lucide-react';
+import { IconButton, Modal, SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -386,9 +385,11 @@ export const NotificationCenter: React.FC = () => {
             >
               <Trash2 size={16} />
             </button>
-            <PopupCloseButton
+            <IconButton
               className="notification-center__close"
+              icon={<X />}
               onClick={handleClose}
+              size="md"
               title={t('common:actions.close')}
               aria-label={t('common:actions.close')}
               data-testid="notification-center-close-btn"
