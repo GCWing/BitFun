@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createDesignSystemSourceAliases } from '../../../vite.config';
+import {
+  createDesignSystemSourceAliases,
+  createDevServerResponseHeaders,
+} from '../../../vite.config';
 
 describe('design-system Vite integration', () => {
   it('resolves UI package entry points to source only while serving for HMR', () => {
@@ -17,6 +20,12 @@ describe('design-system Vite integration', () => {
       path.normalize('design-system/packages/ui/src/index.ts'),
     );
     expect(createDesignSystemSourceAliases('build')).toEqual([]);
+  });
+
+  it('prevents persistent module caching in desktop development webviews', () => {
+    expect(createDevServerResponseHeaders()).toEqual({
+      'Cache-Control': 'no-store',
+    });
   });
 
   it('registers the layer contract before product modules can load component CSS', () => {

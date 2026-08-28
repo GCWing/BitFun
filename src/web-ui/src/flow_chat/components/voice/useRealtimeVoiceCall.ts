@@ -22,6 +22,7 @@ import { RealtimePcmPlayer } from './realtimeVoiceAudio';
 import { applyRealtimeAsrSnapshot } from './realtimeVoiceTranscript';
 import {
   runBitFunVoiceTask,
+  summarizeVoiceTaskConclusion,
   VoiceTaskCancelledError,
   type VoiceTaskProgress,
   type VoiceTaskProgressPhase,
@@ -245,7 +246,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     return t(`voiceCall.call.taskPhases.${progress.phase}`);
   }, [t]);
 
-  const enqueueSpokenProgress = useCallback((sessionId: string, text: string): Promise<void> => {
+  const enqueueSpokenTaskText = useCallback((sessionId: string, text: string): Promise<void> => {
     const spokenText = text.trim();
     if (!spokenText) return Promise.resolve();
     const epoch = spokenProgressEpochRef.current;
@@ -259,7 +260,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       try {
         await speechAPI.speakRealtimeText(sessionId, spokenText);
       } catch (firstError) {
-        log.warn('Failed to enqueue BitFun progress speech; retrying once', {
+        log.warn('Failed to enqueue BitFun task speech; retrying once', {
           sessionId,
           firstError,
         });
@@ -279,7 +280,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       .catch(() => undefined)
       .then(send);
     spokenProgressQueueRef.current = queued.catch(error => {
-      log.warn('Failed to speak BitFun task progress after retry', { sessionId, error });
+      log.warn('Failed to speak BitFun task update after retry', { sessionId, error });
       setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
     });
     return queued;
@@ -290,15 +291,33 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     setTaskPhase(progress.phase);
     setTaskProgressText(text);
     setStatus(text);
-    void enqueueSpokenProgress(sessionId, text);
-  }, [enqueueSpokenProgress, progressText]);
+    void enqueueSpokenTaskText(sessionId, text);
+  }, [enqueueSpokenTaskText, progressText]);
 
   const speakTextProgress = useCallback((sessionId: string, text: string) => {
     setTaskPhase(previous => previous === 'stopping' ? previous : 'working');
     setTaskProgressText(text);
     setStatus(text);
-    void enqueueSpokenProgress(sessionId, text);
-  }, [enqueueSpokenProgress]);
+    void enqueueSpokenTaskText(sessionId, text);
+  }, [enqueueSpokenTaskText]);
+
+  const speakTaskOutcome = useCallback(async (
+    sessionId: string,
+    text: string,
+  ): Promise<boolean> => {
+    setTaskPhase(null);
+    setTaskProgressText('');
+    setAssistantTranscript(text);
+    setStatus(text);
+    try {
+      // Share the progress queue so the closing brief cannot overtake an
+      // already accepted in-flight update.
+      await enqueueSpokenTaskText(sessionId, text);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [enqueueSpokenTaskText]);
 
   const clearAssistantSpeechFallbackTimer = useCallback(() => {
     if (assistantSpeechFallbackTimerRef.current === null) return;
@@ -516,14 +535,19 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       });
       settleActiveTask(activeTask, { status: 'completed', result });
       setTaskSessionId(result.sessionId);
-      setTaskPhase(null);
-      setTaskProgressText('');
-      setStatus(t('voiceCall.call.taskComplete'));
-      await spokenProgressQueueRef.current.catch(() => undefined);
+      const outcomeText = result.conclusion
+        ? t('voiceCall.call.taskOutcome.completed', { conclusion: result.conclusion })
+        : t('voiceCall.call.taskOutcome.completedWithoutConclusion');
+      const outcomeSpoken = await speakTaskOutcome(callSessionId, outcomeText);
       await speechAPI.sendRealtimeToolResult(
         callSessionId,
         call.callId,
-        JSON.stringify({ ok: true, session_id: result.sessionId, summary: result.summary }),
+        JSON.stringify({
+          ok: true,
+          session_id: result.sessionId,
+          summary: result.summary,
+          outcome_spoken: outcomeSpoken,
+        }),
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -533,13 +557,19 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       if (activeTask && error instanceof VoiceTaskCancelledError) {
         settleActiveTask(activeTask, { status: 'cancelled', sessionId: error.sessionId });
         setTaskSessionId(error.sessionId);
-        setTaskPhase(null);
-        setTaskProgressText('');
-        setStatus(t('voiceCall.call.taskStopped'));
+        const outcomeSpoken = await speakTaskOutcome(
+          callSessionId,
+          t('voiceCall.call.taskOutcome.cancelled'),
+        );
         await speechAPI.sendRealtimeToolResult(
           callSessionId,
           call.callId,
-          JSON.stringify({ ok: true, cancelled: true, session_id: error.sessionId }),
+          JSON.stringify({
+            ok: true,
+            cancelled: true,
+            session_id: error.sessionId,
+            outcome_spoken: outcomeSpoken,
+          }),
         ).catch(sendError => {
           log.warn('Failed to return BitFun task cancellation to realtime voice session', {
             sendError,
@@ -550,18 +580,28 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       if (activeTask) {
         settleActiveTask(activeTask, { status: 'failed', error: message });
       }
-      setTaskPhase(null);
-      setTaskProgressText('');
-      setStatus(
-        command?.kind === 'run_task' || command?.kind === 'stop_task'
-          ? t('voiceCall.call.taskFailed')
-          : t('voiceCall.call.status.error'),
-      );
+      const isTaskCommand = command?.kind === 'run_task' || command?.kind === 'stop_task';
+      let outcomeSpoken: boolean | undefined;
+      if (isTaskCommand) {
+        const reason = summarizeVoiceTaskConclusion(message);
+        const outcomeText = reason
+          ? t('voiceCall.call.taskOutcome.failed', { reason })
+          : t('voiceCall.call.taskOutcome.failedWithoutReason');
+        outcomeSpoken = await speakTaskOutcome(callSessionId, outcomeText);
+      } else {
+        setTaskPhase(null);
+        setTaskProgressText('');
+        setStatus(t('voiceCall.call.status.error'));
+      }
       log.error('BitFun client voice tool failed', { callId: call.callId, tool: call.name, error });
       await speechAPI.sendRealtimeToolResult(
         callSessionId,
         call.callId,
-        JSON.stringify({ ok: false, error: message }),
+        JSON.stringify({
+          ok: false,
+          error: message,
+          ...(outcomeSpoken === undefined ? {} : { outcome_spoken: outcomeSpoken }),
+        }),
       ).catch(sendError => {
         log.warn('Failed to return BitFun task error to realtime voice session', { sendError });
       });
@@ -570,7 +610,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
         activeTaskRef.current = null;
       }
     }
-  }, [speakProgress, speakTextProgress, t]);
+  }, [speakProgress, speakTaskOutcome, speakTextProgress, t]);
 
   const handleRealtimeEvent = useCallback((event: SpeechRealtimeEvent) => {
     const session = sessionRef.current;

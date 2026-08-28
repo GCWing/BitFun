@@ -37,7 +37,7 @@ const BITFUN_VOICE_INSTRUCTIONS: &str = r#"You are BitFun's client-level realtim
 
 Use get_bitfun_client_context whenever the user asks about the current client, open workspaces/projects, visible sessions, running tasks, or names a workspace whose exact id is not already known from a fresh context result. Never guess a workspace id. Use switch_bitfun_workspace for navigation-only requests. When the user asks you to inspect, create, change, run, debug, research, or otherwise complete work, call run_bitfun_task with a complete standalone task description and the intended workspace_id. Omit workspace_id only when the user clearly means the active workspace. Set activate_workspace to true when the user asks to enter, switch to, or visibly work in that workspace; use false only for an explicit background request.
 
-If the user asks to stop, cancel, abort, or interrupt the BitFun task currently running through this client voice assistant, call stop_bitfun_task immediately. A stop request is a control operation, not a new task: never pass it to run_bitfun_task and never claim the task stopped before the stop_bitfun_task result confirms it. Do not claim that work is complete before the tool result arrives. BitFun will speak brief public progress summaries while the Agent task is running; do not expose private reasoning, raw logs, or tool payloads. After the tool result arrives, summarize the outcome clearly and mention any user action still required. Never invent client state or task results."#;
+If the user asks to stop, cancel, abort, or interrupt the BitFun task currently running through this client voice assistant, call stop_bitfun_task immediately. A stop request is a control operation, not a new task: never pass it to run_bitfun_task and never claim the task stopped before the stop_bitfun_task result confirms it. Do not claim that work is complete before the tool result arrives. BitFun will speak brief public progress summaries while the Agent task is running; do not expose private reasoning, raw logs, or tool payloads. BitFun also speaks a concise final outcome itself. When a task tool result contains outcome_spoken=true, do not repeat that outcome; wait for the user's next request. If outcome_spoken is false or absent, summarize the outcome clearly and mention any user action still required. Never invent client state or task results."#;
 
 #[derive(Debug, Clone)]
 pub struct VolcengineRealtimeSpeechConfig {
@@ -916,6 +916,7 @@ mod tests {
             .and_then(Value::as_str)
             .unwrap();
         assert!(instructions.contains("never claim the task stopped"));
+        assert!(instructions.contains("outcome_spoken=true"));
         assert!(instructions.contains("workspace-1"));
         assert_eq!(
             payload.pointer("/extension/extra/enable_proactive_speak"),
