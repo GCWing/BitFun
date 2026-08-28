@@ -67,7 +67,8 @@
   }
 }
 
-.bitfun-chat-input__voice-control.icon-btn {
+.bitfun-chat-input__voice-control.icon-btn,
+.bitfun-chat-input__voice-control[data-bf-component='icon-button'] {
   width: 24px;
   height: 24px;
   min-width: 24px;
@@ -360,7 +361,6 @@
 @keyframes bitfun-voice-low-volume {
   50% { opacity: 0.55; }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .bitfun-chat-input__voice-spinner,
   .bitfun-chat-input__voice-pill,
@@ -369,6 +369,7 @@
   .bitfun-chat-input__voice-low-volume {
     animation: none;
   }
+
 }
 
 @media (max-width: 640px) {
@@ -393,6 +394,7 @@
     min-width: 28px;
     gap: 1px;
   }
+
 }
 
 .bitfun-chat-input {
@@ -566,6 +568,21 @@
           align-items: center;
         }
 
+        // The idle microphone has one semantic wrapper while the realtime-call
+        // button is a direct flex child. Give the wrapper the same 30px track
+        // so both controls share the capsule's exact vertical center.
+        .bitfun-chat-input__voice-cluster[data-bf-phase='idle'] {
+          height: 30px;
+          align-self: center;
+          line-height: 0;
+
+          > [data-bf-part='control'] {
+            display: inline-flex;
+            height: 30px;
+            align-items: center;
+          }
+        }
+
         // Context usage is a situation fact and belongs to the status track's
         // right rail. The capsule carries only what the next turn is configured
         // with, so the percentage is not repeated here.
@@ -621,7 +638,8 @@
           max-width: 160px;
         }
 
-        .bitfun-chat-input__voice-control.icon-btn {
+        .bitfun-chat-input__voice-control.icon-btn,
+        .bitfun-chat-input__voice-control[data-bf-component='icon-button'] {
           width: 30px;
           height: 30px;
           min-width: 30px;

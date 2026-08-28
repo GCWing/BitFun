@@ -1,0 +1,276 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-nav-panel__voice-call {
+  position: relative;
+
+  &:not(.is-active):hover {
+    color: var(--bf-appearance-token-color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
+
+    > svg {
+      color: inherit;
+      stroke: currentColor;
+    }
+  }
+
+  &.is-active {
+    color: var(--bf-appearance-token-color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+
+    &:hover > svg {
+      color: inherit;
+      stroke: currentColor;
+    }
+  }
+}
+
+.bitfun-nav-panel__voice-call-dot {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--bf-appearance-token-color-bg-primary);
+  border-radius: 50%;
+  background: var(--bf-appearance-token-color-success);
+}
+
+.bitfun-realtime-call {
+  position: fixed;
+  right: 24px;
+  bottom: 72px;
+  z-index: $z-overlay-host;
+  display: flex;
+  width: min(380px, calc(100vw - 32px));
+  min-height: 300px;
+  max-height: min(560px, calc(100vh - 112px));
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--bf-appearance-token-color-text-primary);
+  animation: bitfun-realtime-call-in 260ms cubic-bezier(0.18, 0.9, 0.3, 1.08) both;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    padding: $size-gap-4 $size-gap-4 $size-gap-3;
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  &__avatar {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+    color: var(--bf-appearance-token-color-accent-400);
+  }
+
+  &__spinner {
+    animation: bitfun-realtime-call-spin 0.9s linear infinite;
+  }
+
+  &__heading {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+
+    strong {
+      font-size: var(--bf-appearance-token-font-size-sm);
+      font-weight: $font-weight-semibold;
+      line-height: $line-height-tight;
+    }
+
+    small {
+      overflow: hidden;
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      line-height: $line-height-base;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__live-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-success);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
+    animation: bitfun-realtime-call-live 1.8s ease-in-out infinite;
+  }
+
+  &[data-bf-phase='connecting'] &__live-dot,
+  &[data-bf-phase='ending'] &__live-dot {
+    background: var(--bf-appearance-token-color-warning);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
+  }
+
+  &[data-bf-phase='error'] &__live-dot {
+    background: var(--bf-appearance-token-color-error);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent);
+  }
+
+  &__conversation {
+    display: flex;
+    min-height: 132px;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: $size-gap-3;
+    overflow: auto;
+    padding: $size-gap-4;
+  }
+
+  &__utterance {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: flex-start;
+    gap: $size-gap-2;
+    max-width: 92%;
+    padding: $size-gap-3;
+    border-radius: $size-radius-base;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: $line-height-base;
+    overflow-wrap: anywhere;
+
+    svg { margin-top: 2px; }
+
+    &--user {
+      align-self: flex-end;
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
+    }
+
+    &--assistant {
+      align-self: flex-start;
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+  }
+
+  &__empty {
+    display: flex;
+    min-height: 118px;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-4;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    line-height: $line-height-base;
+    text-align: center;
+  }
+
+  &__task {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin: 0 $size-gap-4 $size-gap-3;
+    padding: $size-gap-2 $size-gap-3;
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 22%, transparent);
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    line-height: $line-height-base;
+  }
+
+  &__task-pulse {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-color-accent-400);
+    animation: bitfun-realtime-call-live 1.4s ease-in-out infinite;
+  }
+
+  &__meter {
+    display: grid;
+    grid-template-columns: repeat(18, 3px);
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    gap: 4px;
+    color: var(--bf-appearance-token-color-success);
+
+    span {
+      width: 3px;
+      height: 24px;
+      border-radius: $size-radius-full;
+      background: currentColor;
+      opacity: 0.72;
+      transform: scaleY(0.08);
+      transition: transform 80ms linear;
+    }
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-3;
+    padding: $size-gap-3 $size-gap-4 $size-gap-4;
+  }
+
+  &__control {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 50%;
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+
+    &:not(:disabled):hover {
+      background: var(--bf-appearance-token-element-bg-base);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__control--end {
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 32%, transparent);
+    background: var(--bf-appearance-token-color-error);
+    color: var(--bf-appearance-token-color-static-white);
+
+    &:not(:disabled):hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 86%, var(--bf-appearance-token-color-static-white));
+    }
+  }
+}
+
+@keyframes bitfun-realtime-call-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes bitfun-realtime-call-live {
+  0%, 100% { opacity: 0.55; transform: scale(0.86); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes bitfun-realtime-call-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-realtime-call,
+  .bitfun-realtime-call__spinner,
+  .bitfun-realtime-call__live-dot,
+  .bitfun-realtime-call__task-pulse {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .bitfun-realtime-call {
+    right: 16px;
+    bottom: 64px;
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 96px);
+  }
+}

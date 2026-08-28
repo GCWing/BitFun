@@ -32,6 +32,12 @@ describe('isPeerLocalOnlyCommand', () => {
     expect(isPeerLocalOnlyCommand('speech_start_input_session')).toBe(true);
     expect(isPeerLocalOnlyCommand('speech_append_audio_chunk')).toBe(true);
     expect(isPeerLocalOnlyCommand('speech_finish_input_session')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_start_realtime_session')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_append_realtime_audio')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_send_realtime_tool_result')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_close_realtime_session')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_get_realtime_config')).toBe(true);
+    expect(isPeerLocalOnlyCommand('speech_save_realtime_config')).toBe(true);
   });
 
   it('keeps sleep-prevention controls on the controller computer', () => {

@@ -7,20 +7,20 @@ function source(relativePath: string): string {
 }
 
 describe('unified project session creation', () => {
-  it('exposes one icon-only unified action beside search', () => {
+  it('places the client voice action beside search instead of the new-session shortcut', () => {
     const mainNav = source('./MainNav.tsx');
     const workspaceItem = source('./sections/workspaces/WorkspaceItem.tsx');
     const utilityRowIndex = mainNav.indexOf('data-bf-part="utilityRow"');
-    const newSessionIndex = mainNav.indexOf('data-testid="nav-new-session-btn"');
+    const voiceIndex = mainNav.indexOf('<RealtimeVoiceCallButton />');
     const sectionsIndex = mainNav.indexOf('data-testid="nav-sections"');
     const sessionsSectionIndex = mainNav.indexOf('data-bf-section="sessions"');
 
-    expect(newSessionIndex).toBeGreaterThan(utilityRowIndex);
-    expect(sectionsIndex).toBeGreaterThan(newSessionIndex);
-    expect(sessionsSectionIndex).toBeGreaterThan(newSessionIndex);
-    expect(mainNav).toContain('<Plus size={15} aria-hidden="true" />');
-    expect(mainNav).not.toContain('<span>{createSessionLabel}</span>');
-    expect(mainNav).toContain("activateProductAction('session.new')");
+    expect(voiceIndex).toBeGreaterThan(utilityRowIndex);
+    expect(sectionsIndex).toBeGreaterThan(voiceIndex);
+    expect(sessionsSectionIndex).toBeGreaterThan(voiceIndex);
+    expect(mainNav).not.toContain('data-testid="nav-new-session-btn"');
+    expect(mainNav).not.toContain('<Plus size={15} aria-hidden="true" />');
+    expect(mainNav).not.toContain("activateProductAction('session.new')");
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');
     expect(workspaceItem).toContain('data-testid="nav-workspace-menu-create-session"');

@@ -1705,6 +1705,14 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
+        "speech_append_realtime_audio",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_cancel_realtime_response",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "speech_cancel_input_session",
         RemoteWorkspacePolicy::LocalOnly,
     ),
@@ -1720,7 +1728,35 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("speech_list_models", RemoteWorkspacePolicy::LocalOnly),
     (
+        "speech_get_realtime_config",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_save_realtime_config",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_close_realtime_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_commit_realtime_audio",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_send_realtime_tool_result",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_speak_realtime_text",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "speech_start_input_session",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "speech_start_realtime_session",
         RemoteWorkspacePolicy::LocalOnly,
     ),
     ("speech_verify_model", RemoteWorkspacePolicy::LocalOnly),

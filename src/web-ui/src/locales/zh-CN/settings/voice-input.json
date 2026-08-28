@@ -48,6 +48,73 @@
       "description": "默认自动识别；仅在识别不准确时指定语言。"
     }
   },
+  "voiceCall": {
+    "title": "实时语音通话",
+    "enabled": {
+      "label": "启用客户端语音助手",
+      "description": "从客户端左下角与火山引擎端到端实时语音模型通话，并允许它理解工作区状态和启动 BitFun 任务。"
+    },
+    "apiKey": {
+      "label": "火山引擎 API Key",
+      "description": "仅由当前控制端建立语音连接，不会随任务发送到远程工作区或 Peer 设备。",
+      "placeholder": "输入端到端实时语音 API Key"
+    },
+    "voice": {
+      "label": "音色 ID",
+      "description": "默认使用官方 Demo 的 Jupiter 女声音色。"
+    },
+    "status": {
+      "label": "连接配置",
+      "description": "保存后，客户端左下角的电话按钮即可建立全双工语音通话。"
+    },
+    "save": "保存实时语音",
+    "messages": {
+      "loadFailed": "加载控制端实时语音设置失败",
+      "saved": "实时语音设置已保存",
+      "saveFailed": "保存实时语音设置失败"
+    },
+    "call": {
+      "title": "BitFun 实时通话",
+      "button": "开始实时语音通话",
+      "empty": "直接说话即可。需要做事时，我会启动一个新的 BitFun 会话。",
+      "mute": "静音麦克风",
+      "unmute": "取消静音",
+      "hangUp": "挂断",
+      "settings": "实时语音设置",
+      "configureFirst": "请先配置火山引擎实时语音 API Key。",
+      "startFailed": "实时语音通话启动失败",
+      "taskComplete": "BitFun 任务已完成，正在整理结果。",
+      "taskFailed": "BitFun 任务执行失败，正在说明原因。",
+      "taskStopping": "正在停止当前 BitFun 任务…",
+      "taskStopped": "当前 BitFun 任务已停止。",
+      "taskAlreadyComplete": "任务已经完成，无需停止。",
+      "noActiveTask": "当前没有正在执行的 BitFun 任务。",
+      "status": {
+        "connecting": "正在连接火山引擎…",
+        "connected": "连接成功，正在建立会话…",
+        "listening": "正在聆听",
+      "thinking": "正在思考",
+      "readingClientContext": "正在读取客户端状态…",
+      "switchingWorkspace": "正在切换工作区…",
+      "speaking": "正在回应",
+      "ending": "正在结束通话…",
+      "error": "实时语音连接发生错误",
+      "disconnected": "实时语音连接已中断",
+      "microphoneDisconnected": "麦克风已断开连接",
+      "retryingAudio": "正在重试语音播报…",
+      "audioPlaybackFailed": "语音播放失败，请检查系统输出设备"
+      },
+      "taskPhases": {
+        "starting": "正在创建新的 BitFun 会话。",
+        "working": "BitFun 仍在处理任务，我会继续跟进。",
+        "using_tools": "BitFun 正在使用工具推进任务。",
+        "waiting_approval": "任务正在等待你在 BitFun 中确认权限。",
+        "needs_input": "BitFun 需要你在任务会话中补充信息。",
+        "finishing": "任务主体已完成，BitFun 正在整理最终结果。",
+        "stopping": "正在停止当前 BitFun 任务。"
+      }
+    }
+  },
   "diagnostics": {
     "microphone": {
       "label": "输入设备",

@@ -6,6 +6,8 @@ mod error;
 mod model_catalog;
 mod model_store;
 mod qwen3_asr_int8;
+#[cfg(feature = "speech-realtime")]
+mod realtime;
 mod recognizer;
 mod recognizer_router;
 mod sensevoice_int8;
@@ -27,6 +29,8 @@ use base64::Engine;
 pub use bitfun_core_types::speech::*;
 pub use error::{SpeechError, SpeechResult};
 use error::{SpeechError as BitFunError, SpeechResult as BitFunResult};
+#[cfg(feature = "speech-realtime")]
+pub use realtime::VolcengineRealtimeSpeechConfig;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -71,6 +75,8 @@ pub struct SpeechService {
     recognizer: Arc<dyn SpeechRecognizer>,
     downloads: Arc<Mutex<HashMap<String, Arc<SpeechModelDownloadControl>>>>,
     sessions: Arc<Mutex<HashMap<String, SpeechInputSessionState>>>,
+    #[cfg(feature = "speech-realtime")]
+    realtime: realtime::RealtimeSpeechRegistry,
 }
 
 #[derive(Debug)]
@@ -93,6 +99,8 @@ impl SpeechService {
             recognizer: Arc::new(SpeechRecognizerRouter::new()),
             downloads: Arc::new(Mutex::new(HashMap::new())),
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            #[cfg(feature = "speech-realtime")]
+            realtime: realtime::RealtimeSpeechRegistry::default(),
         }
     }
 

@@ -252,6 +252,7 @@ export const optionalDependencyFeatureOwnerRules = [
     crateName: 'services-integrations',
     reason:
       'services-integrations optional runtime dependencies must stay owned by explicit integration features',
+    reviewedAggregateFeatures: ['speech-realtime'],
     dependencies: [
       { depName: 'aes', ownerFeatures: ['remote-connect'] },
       { depName: 'aes-gcm', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
@@ -328,7 +329,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'terminal-core', ownerFeatures: ['remote-ssh', 'remote-ssh-concrete'] },
       { depName: 'tar', ownerFeatures: ['speech'] },
       { depName: 'thiserror', ownerFeatures: ['browser-control', 'git', 'hook-import', 'miniapp-market', 'plugin-source', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools', 'workspace-search'] },
-      { depName: 'tokio-tungstenite', ownerFeatures: ['remote-connect'] },
+      { depName: 'tokio-tungstenite', ownerFeatures: ['remote-connect', 'speech-realtime'] },
       { depName: 'tokio-util', ownerFeatures: ['remote-ssh', 'speech'] },
       { depName: 'urlencoding', ownerFeatures: ['canvas-runtime', 'miniapp-market', 'remote-connect', 'review-platform'] },
       { depName: 'uuid', ownerFeatures: ['canvas-runtime', 'hook-import', 'miniapp-runtime', 'plugin-source', 'remote-connect', 'remote-ssh-concrete', 'speech'] },

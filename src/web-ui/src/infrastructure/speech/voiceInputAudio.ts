@@ -18,6 +18,7 @@ export interface VoiceInputRecorderStartupTiming {
 export interface VoiceInputRecorderOptions {
   targetSampleRate: number;
   chunkDurationMs: number;
+  audioContext?: AudioContext;
   microphoneDeviceId?: string;
   onChunk: (pcm16Base64: string) => void;
   onLevel?: (level: number) => void;
@@ -98,6 +99,7 @@ function calculateRmsLevel(samples: Float32Array): number {
 export async function createVoiceInputRecorder({
   targetSampleRate,
   chunkDurationMs,
+  audioContext: sharedAudioContext,
   microphoneDeviceId,
   onChunk,
   onLevel,
@@ -126,12 +128,13 @@ export async function createVoiceInputRecorder({
   });
 
   const AudioContextCtor = window.AudioContext ?? window.webkitAudioContext;
-  if (!AudioContextCtor) {
+  if (!sharedAudioContext && !AudioContextCtor) {
     mediaStream.getTracks().forEach(track => track.stop());
     throw new Error('AudioContext is unavailable');
   }
 
   let audioContext: AudioContext | null = null;
+  const ownsAudioContext = !sharedAudioContext;
   let source: MediaStreamAudioSourceNode | null = null;
   let processor: ScriptProcessorNode | null = null;
   let pending = new Float32Array(0);
@@ -150,13 +153,26 @@ export async function createVoiceInputRecorder({
       pending = new Float32Array(0);
     }
     mediaStream.getTracks().forEach(track => track.stop());
-    if (audioContext && audioContext.state !== 'closed') {
+    if (ownsAudioContext && audioContext && audioContext.state !== 'closed') {
       await audioContext.close();
     }
   };
 
   try {
-    audioContext = new AudioContextCtor();
+    if (sharedAudioContext) {
+      audioContext = sharedAudioContext;
+    } else {
+      if (!AudioContextCtor) {
+        throw new Error('AudioContext is unavailable');
+      }
+      audioContext = new AudioContextCtor();
+    }
+    if (audioContext.state === 'closed') {
+      throw new Error('AudioContext is already closed');
+    }
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
     source = audioContext.createMediaStreamSource(mediaStream);
     processor = audioContext.createScriptProcessor(4096, 1, 1);
     const chunkSize = Math.max(1, Math.floor(targetSampleRate * (chunkDurationMs / 1000)));

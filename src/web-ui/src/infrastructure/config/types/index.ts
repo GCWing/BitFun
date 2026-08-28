@@ -72,6 +72,8 @@ export interface AppConfig {
   notifications: NotificationConfig;
   flow_chat?: AppFlowChatConfig;
   ai_experience: AIExperienceConfig;
+  /** Controller-owned end-to-end realtime voice-call settings. */
+  voice_call?: VoiceCallSettings;
   user_tool_groups?: UserToolGroupsConfig;
   user_skill_groups?: UserSkillGroupsConfig;
 }
@@ -176,6 +178,16 @@ export interface VoiceInputSettings {
   model_id: string;
   default_language: string;
   max_recording_seconds: number;
+  microphone_device_id: string;
+}
+
+export interface VoiceCallSettings {
+  enabled: boolean;
+  provider: 'volcengine';
+  api_key: string;
+  voice: string;
+  speed: number;
+  loudness: number;
   microphone_device_id: string;
 }
 

@@ -138,6 +138,15 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'speech_append_audio_chunk',
   'speech_finish_input_session',
   'speech_cancel_input_session',
+  'speech_start_realtime_session',
+  'speech_append_realtime_audio',
+  'speech_commit_realtime_audio',
+  'speech_send_realtime_tool_result',
+  'speech_speak_realtime_text',
+  'speech_cancel_realtime_response',
+  'speech_close_realtime_session',
+  'speech_get_realtime_config',
+  'speech_save_realtime_config',
   // UI locale is controller app-shell state: it writes the controller's config
   // file, rebuilds THIS machine's macOS menubar/tray, and drives the UI the user
   // is looking at. Routing it to a peer both writes the wrong config and rebuilds

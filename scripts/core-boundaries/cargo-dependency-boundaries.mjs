@@ -150,6 +150,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['remote-ssh-concrete', ['fs', 'io-util', 'macros', 'net', 'process', 'rt', 'sync', 'time']],
   ['review-platform', ['fs', 'io-util', 'sync']],
   ['speech', ['fs', 'io-util', 'macros', 'rt', 'sync']],
+  ['speech-realtime', ['fs', 'io-util', 'macros', 'net', 'rt', 'sync', 'time']],
   ['workspace-search', ['io-util', 'rt', 'sync', 'time']],
   ['script-tool-runtime', ['io-util', 'process', 'rt', 'sync', 'time']],
 ]);
@@ -560,6 +561,7 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
         optional: true,
         ownerFeatureCapabilities: new Map([
           ['remote-connect', ['rustls-tls-native-roots']],
+          ['speech-realtime', ['rustls-tls-native-roots']],
         ]),
       })],
     ]),

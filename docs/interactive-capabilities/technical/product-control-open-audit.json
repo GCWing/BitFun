@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "b915ffcb329182de3e033d8e48186a1dbd5c683d975484567d9dfe9b9c595c13",
-  "count": 205,
+  "catalogDigest": "b0794e2a65d5356a8fdb262f0acf26753ac1aebfedf9b1e252d4dce4a21bc9a1",
+  "count": 207,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 4,
-    "unstructuredInteraction": 182,
+    "unstructuredInteraction": 184,
     "visualSelection": 15
   },
   "entries": [
@@ -2341,6 +2341,47 @@
       },
       "evidence": [
         "command:speech_append_audio_chunk"
+      ]
+    },
+    {
+      "capabilityId": "feature.voice-input",
+      "itemId": "realtime-assistant-call",
+      "titleZh": "在客户端启动或结束实时语音通话，听取回复，并让助手执行或停止项目任务",
+      "titleEn": "Start or end a client-wide realtime voice call, hear replies, and ask the assistant to run or stop project tasks",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“在客户端启动或结束实时语音通话，听取回复，并让助手执行或停止项目任务”依赖麦克风、流式模型响应和任务状态，无法由单个结构化 Command 确定完成；Agent 会打开精确入口，并把通话与任务进度保留在用户可见界面。",
+      "reasonEn": "“Start or end a client-wide realtime voice call, hear replies, and ask the assistant to run or stop project tasks” depends on microphone input, streaming model responses, and task state, so no single structured Command can deterministically complete the workflow; the Agent opens the exact entry and keeps the call and task progress visible.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.input",
+        "viewId": "voice"
+      },
+      "evidence": [
+        "command:speech_start_realtime_session",
+        "command:speech_append_realtime_audio",
+        "command:speech_commit_realtime_audio",
+        "command:speech_send_realtime_tool_result",
+        "command:speech_speak_realtime_text",
+        "command:speech_cancel_realtime_response",
+        "command:speech_close_realtime_session"
+      ]
+    },
+    {
+      "capabilityId": "feature.voice-input",
+      "itemId": "realtime-assistant-config",
+      "titleZh": "读取或保存实时语音服务配置",
+      "titleEn": "Read or save realtime voice service settings",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“读取或保存实时语音服务配置”包含凭据和模型选项，需要由用户在设置界面中检查并保存；Agent 会打开精确入口，将敏感输入保留在用户可见界面。",
+      "reasonEn": "“Read or save realtime voice service settings” includes credentials and model choices that the user must review and save in Settings; the Agent opens the exact entry and keeps sensitive input in the visible interface.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.input",
+        "viewId": "voice"
+      },
+      "evidence": [
+        "command:speech_get_realtime_config",
+        "command:speech_save_realtime_config"
       ]
     },
     {
