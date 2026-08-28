@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,11 +43,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import com.bitfun.mobile.app.R
 import com.bitfun.mobile.app.ui.settings.statusText
+import com.bitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.bitfun.mobile.core.feature.session.SessionActionCapabilities
+import com.bitfun.mobile.core.feature.layout.SettingsPlacement
 import com.bitfun.mobile.core.feature.session.SessionTimePresentation
+import com.bitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 
 internal const val SESSION_ACTIONS_TEST_TAG: String = "session-actions"
 internal const val SESSION_DETAILS_TEST_TAG: String = "session-details"
@@ -79,8 +90,8 @@ internal fun SessionActionSheet(
     status: String,
     capabilities: SessionActionCapabilities,
     onViewDetails: () -> Unit,
-    onArchive: () -> Unit,
-    onExport: () -> Unit,
+    onArchive: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -88,11 +99,19 @@ internal fun SessionActionSheet(
     // sheet that is itself gone after a process death, and restoring "about to
     // delete" without the tap that got there is not a state worth rebuilding.
     var confirmingDelete by remember { mutableStateOf(false) }
+    // Archive and export are local-storage operations a remote session can never
+    // offer, so those callbacks are optional: a surface without them renders no
+    // row instead of rendering one that does nothing.
+    val showArchive = capabilities.canArchive && onArchive != null
+    val showExport = capabilities.canExport && onExport != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        shape = RoundedCornerShape(
+            topStart = MobileDesignGeometry.PopoverRadius,
+            topEnd = MobileDesignGeometry.PopoverRadius,
+        ),
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         dragHandle = null,
@@ -101,7 +120,10 @@ internal fun SessionActionSheet(
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                shape = RoundedCornerShape(
+                    topStart = MobileDesignGeometry.PopoverRadius,
+                    topEnd = MobileDesignGeometry.PopoverRadius,
+                ),
             ),
     ) {
         Column(
@@ -196,7 +218,7 @@ internal fun SessionActionSheet(
                     onDismiss()
                 }
             }
-            if (capabilities.canArchive) {
+            if (showArchive) {
                 val archived = status.equals("archived", ignoreCase = true)
                 val label = stringResource(
                     if (archived) R.string.session_unarchive else R.string.session_archive,
@@ -206,16 +228,20 @@ internal fun SessionActionSheet(
                     onDismiss()
                 }
             }
-            if (capabilities.canExport) {
-                // The source draws a cloud here; the label says copy, and on
-                // Android the action puts Markdown on the clipboard.
-                ActionRow(R.drawable.ic_symbol_cloud, stringResource(R.string.general_chat_export)) {
+            if (showExport) {
+                // The label says "Copy Markdown" for Harmony parity, but Android
+                // opens an Intent.ACTION_SEND text/plain share sheet; this icon
+                // must not promise a file or cloud export.
+                ActionRow(
+                    R.drawable.ic_symbol_doc_text_badge_arrow_up,
+                    stringResource(R.string.general_chat_export),
+                ) {
                     onExport()
                     onDismiss()
                 }
             }
             if (capabilities.canDelete) {
-                if (capabilities.canArchive || capabilities.canExport) {
+                if (showArchive || showExport) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
                 ActionRow(
@@ -223,6 +249,166 @@ internal fun SessionActionSheet(
                     label = stringResource(R.string.session_delete),
                     destructive = true,
                 ) { confirmingDelete = true }
+            }
+        }
+    }
+}
+
+/** Wide-sidebar counterpart of [SessionActionSheet]. It renders the same rows
+ * next to the row that opened it and keeps the native popup lifecycle arrowless. */
+@Composable
+internal fun SessionActionPopup(
+    anchorBounds: IntRect,
+    title: String,
+    status: String,
+    capabilities: SessionActionCapabilities,
+    onViewDetails: () -> Unit,
+    onArchive: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var confirmingDelete by remember { mutableStateOf(false) }
+    val showArchive = capabilities.canArchive && onArchive != null
+    val showExport = capabilities.canExport && onExport != null
+    val targetBounds = anchorBounds
+    val positionProvider = remember(targetBounds) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                val desiredX = targetBounds.right + 6
+                val desiredY = (
+                    targetBounds.top + targetBounds.bottom -
+                        popupContentSize.height
+                    ) / 2
+                return IntOffset(
+                    x = desiredX.coerceIn(
+                        8,
+                        (windowSize.width - popupContentSize.width - 8).coerceAtLeast(8),
+                    ),
+                    y = desiredY.coerceIn(
+                        8,
+                        (windowSize.height - popupContentSize.height - 8).coerceAtLeast(8),
+                    ),
+                )
+            }
+        }
+    }
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .width(300.dp)
+                .shadow(20.dp, RoundedCornerShape(MobileDesignGeometry.PopoverRadius))
+                .clip(RoundedCornerShape(MobileDesignGeometry.PopoverRadius))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(MobileDesignGeometry.PopoverRadius),
+                )
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 18.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        stringResource(R.string.session_actions),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        title.ifBlank { stringResource(R.string.sidebar_untitled) },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Box(
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_symbol_xmark),
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+            if (confirmingDelete) {
+                Text(
+                    stringResource(R.string.session_delete_confirm),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ConfirmationButton(
+                        stringResource(R.string.common_cancel),
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.onSurface,
+                        Modifier.weight(1f),
+                    ) { confirmingDelete = false }
+                    ConfirmationButton(
+                        stringResource(R.string.session_delete),
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.colorScheme.onError,
+                        Modifier.weight(1f),
+                    ) {
+                        onDelete()
+                        onDismiss()
+                    }
+                }
+            } else {
+                if (capabilities.canViewDetails) {
+                    ActionRow(R.drawable.ic_symbol_info_circle, stringResource(R.string.session_view_details)) {
+                        onViewDetails(); onDismiss()
+                    }
+                }
+                if (showArchive) {
+                    ActionRow(
+                        R.drawable.ic_symbol_archivebox,
+                        stringResource(
+                            if (status.equals("archived", true)) R.string.session_unarchive
+                            else R.string.session_archive,
+                        ),
+                    ) { onArchive(); onDismiss() }
+                }
+                if (showExport) {
+                    ActionRow(
+                        R.drawable.ic_symbol_doc_text_badge_arrow_up,
+                        stringResource(R.string.general_chat_export),
+                    ) {
+                        onExport(); onDismiss()
+                    }
+                }
+                if (capabilities.canDelete) {
+                    if (showArchive || showExport) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    }
+                    ActionRow(
+                        R.drawable.ic_symbol_trash,
+                        stringResource(R.string.session_delete),
+                        destructive = true,
+                    ) { confirmingDelete = true }
+                }
             }
         }
     }
@@ -324,6 +510,7 @@ internal fun SessionDetailsSheet(
     createdAt: String,
     updatedAt: String,
     messageCount: Int,
+    placement: SettingsPlacement,
     onDismiss: () -> Unit,
 ) {
     val now = remember(createdAt, updatedAt) { System.currentTimeMillis() }
@@ -334,14 +521,14 @@ internal fun SessionDetailsSheet(
         remember(updatedAt, now) { SessionTimePresentation.relative(updatedAt, now) },
     )
 
-    ModalBottomSheet(
+    AdaptiveModalSurface(
+        visible = true,
+        placement = placement,
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
-        modifier = Modifier.testTag(SESSION_DETAILS_TEST_TAG),
-    ) {
+    ) { surfaceModifier ->
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
+            modifier = surfaceModifier
+                .testTag(SESSION_DETAILS_TEST_TAG)
                 .padding(start = 20.dp, end = 16.dp, bottom = 24.dp),
         ) {
             Row(

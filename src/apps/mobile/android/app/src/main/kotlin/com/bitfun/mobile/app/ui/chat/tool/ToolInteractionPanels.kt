@@ -6,13 +6,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,11 +26,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
+import com.bitfun.mobile.core.feature.session.QuestionAnswerValue
+import com.bitfun.mobile.core.feature.session.QuestionOption
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditContract
+import com.bitfun.mobile.core.feature.session.ToolApprovalEditSupport
+import com.bitfun.mobile.core.feature.session.ToolQuestion
 
 /**
  * Approve and reject as equal halves of one row, ported from
  * `ToolConfirmationPanel` in `pages/components/ToolInteractionPanels.ets`.
  *
+ * Editable approval is gated by [ToolApprovalEditContract.support] and is
+ * intentionally not rendered while support is [ToolApprovalEditSupport.UNSUPPORTED].
  * The HarmonyOS source offers a JSON editor over `tool_input` before approving.
  * Android does not expose it yet because the shared intent still carries only a
  * tool id; the HarmonyOS command factory currently drops `updatedInput` at the
@@ -111,6 +123,118 @@ internal fun ToolQuestionAnswerPanel(
                 onSubmit(answer.trim())
                 answer = ""
             },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+internal fun isOtherOption(label: String, otherLabel: String): Boolean {
+    val normalizedLabel = label.trim()
+    return normalizedLabel.equals("other", ignoreCase = true) ||
+        normalizedLabel.equals(otherLabel.trim(), ignoreCase = true) ||
+        normalizedLabel == "其他"
+}
+
+internal fun effectiveOptions(
+    question: ToolQuestion,
+    otherLabel: String,
+): List<QuestionOption> = question.options + if (
+    question.options.none { isOtherOption(it.label, otherLabel) }
+) {
+    listOf(QuestionOption(otherLabel, null))
+} else {
+    emptyList()
+}
+
+internal fun buildStructuredAnswers(
+    questions: List<ToolQuestion>,
+    selectedByIndex: Map<Int, Set<String>>,
+    customByIndex: Map<Int, String>,
+    otherLabel: String,
+): List<QuestionAnswer> = questions.map { question ->
+    val selected = selectedByIndex[question.index].orEmpty()
+    val custom = customByIndex[question.index].orEmpty().trim()
+    val effectiveOptions = effectiveOptions(question, otherLabel)
+    val values = effectiveOptions.map { it.label }.filter { it in selected }.map { label ->
+        if (isOtherOption(label, otherLabel)) custom else label
+    }
+    if (question.multiSelect) {
+        QuestionAnswer(question.index, QuestionAnswerValue.Choice(values))
+    } else {
+        QuestionAnswer(question.index, QuestionAnswerValue.Text(values.firstOrNull().orEmpty()))
+    }
+}
+
+@Composable
+internal fun ToolStructuredQuestionPanel(
+    toolId: String,
+    questions: List<ToolQuestion>,
+    enabled: Boolean,
+    onSubmit: (List<QuestionAnswer>) -> Unit,
+) {
+    val otherLabel = stringResource(R.string.tool_option_other)
+    var selectedByIndex by remember(toolId) { mutableStateOf<Map<Int, Set<String>>>(emptyMap()) }
+    var customByIndex by remember(toolId) { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    val answers = buildStructuredAnswers(questions, selectedByIndex, customByIndex, otherLabel)
+    val canSubmit = enabled && toolId.isNotEmpty() && questions.all { question ->
+        val selected = selectedByIndex[question.index].orEmpty()
+        selected.isNotEmpty() && (!selected.any { isOtherOption(it, otherLabel) } || customByIndex[question.index].orEmpty().isNotBlank())
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        questions.forEach { question ->
+            val selected = selectedByIndex[question.index].orEmpty()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (question.header.isNotBlank()) {
+                    Text(question.header, style = MaterialTheme.typography.labelLarge)
+                }
+                Text(question.question, style = MaterialTheme.typography.bodyMedium)
+                val options = effectiveOptions(question, otherLabel)
+                options.forEach { option ->
+                    val checked = option.label in selected
+                    Column(
+                        modifier = Modifier.fillMaxWidth().toggleable(
+                            value = checked,
+                            enabled = enabled,
+                            role = if (question.multiSelect) androidx.compose.ui.semantics.Role.Checkbox else androidx.compose.ui.semantics.Role.RadioButton,
+                            onValueChange = {
+                                selectedByIndex = selectedByIndex.toMutableMap().apply {
+                                    this[question.index] = if (question.multiSelect) {
+                                        if (checked) selected - option.label else selected + option.label
+                                    } else {
+                                        setOf(option.label)
+                                    }
+                                }
+                            },
+                        ).padding(vertical = 2.dp),
+                    ) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            if (question.multiSelect) Checkbox(checked, null, enabled = enabled)
+                            else RadioButton(checked, null, enabled = enabled)
+                            Text(option.label, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        option.description?.takeIf(String::isNotBlank)?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 48.dp))
+                        }
+                    }
+                    if (isOtherOption(option.label, otherLabel) && checked) {
+                        OutlinedTextField(
+                            value = customByIndex[question.index].orEmpty(),
+                            onValueChange = { customByIndex = customByIndex + (question.index to it) },
+                            label = { Text(stringResource(R.string.tool_answer_label)) },
+                            enabled = enabled,
+                            modifier = Modifier.fillMaxWidth().padding(start = 48.dp),
+                        )
+                    }
+                }
+            }
+        }
+        PillButton(
+            label = stringResource(R.string.tool_answer_send),
+            primary = true,
+            enabled = canSubmit,
+            compact = false,
+            onClick = { onSubmit(answers) },
             modifier = Modifier.fillMaxWidth(),
         )
     }

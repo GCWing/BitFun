@@ -2,13 +2,6 @@ package com.bitfun.mobile.app.ui.shell
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -20,15 +13,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -43,11 +34,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitfun.mobile.app.R
@@ -57,8 +49,10 @@ import com.bitfun.mobile.app.state.SettingsMode
 import com.bitfun.mobile.app.state.rememberAppShellState
 import com.bitfun.mobile.app.ui.account.AccountScreen
 import com.bitfun.mobile.app.ui.chat.GeneralChatScreen
-import com.bitfun.mobile.app.ui.remote.FilePreviewSurface
+import com.bitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.bitfun.mobile.app.ui.remote.AccountRemoteScreen
+import com.bitfun.mobile.app.ui.remote.ConnectAccountDeviceScreen
+import com.bitfun.mobile.app.ui.remote.FilePreviewSurface
 import com.bitfun.mobile.app.ui.remote.PairingScreen
 import com.bitfun.mobile.app.ui.settings.GeneralSettingsScreen
 import com.bitfun.mobile.app.ui.settings.SettingsScreen
@@ -75,8 +69,11 @@ import com.bitfun.mobile.core.feature.connection.allowsRemoteCommands
 import com.bitfun.mobile.core.feature.connection.connectionPhase
 import com.bitfun.mobile.core.feature.generalchat.GeneralChatIntent
 import com.bitfun.mobile.core.feature.layout.ConversationLayoutPolicy
+import com.bitfun.mobile.core.feature.layout.AdaptiveLayoutInput
 import com.bitfun.mobile.core.feature.layout.FilePreviewPlacement
 import com.bitfun.mobile.core.feature.layout.FilePreviewPlacementPolicy
+import com.bitfun.mobile.core.feature.layout.SettingsPlacementPolicy
+import com.bitfun.mobile.core.feature.layout.SettingsSheetKind
 import com.bitfun.mobile.core.feature.pairing.PairingIntent
 import com.bitfun.mobile.core.feature.pairing.PairingUiState
 import com.bitfun.mobile.core.feature.session.RemoteSessionUiState
@@ -155,6 +152,9 @@ internal fun MobileScreen() {
     val pairingPhase: ConnectionPhase = pairingState.connectionPhase()
     val readyAccount = accountState as? AccountUiState.Ready
     val accountUserId = readyAccount?.userId
+    LaunchedEffect(pairingState) {
+        if (pairingState is PairingUiState.Paired) shell.closeRemoteScanner()
+    }
 
     // Which desktop this phone is driving is the one fact neither store holds on
     // its own: the pairing store knows a room, the account store knows a device,
@@ -279,6 +279,29 @@ internal fun MobileScreen() {
         isHover = window.isHoverLayout,
     )
     val geometry = ConversationLayoutPolicy.resolveWideGeometry(window.widthDp, layoutCreases)
+    val adaptiveLayoutInput = AdaptiveLayoutInput(
+        viewportWidth = window.widthDp,
+        viewportHeight = window.heightDp,
+        isFolded = window.isFolded,
+        isExpandedFoldable = window.isExpandedFoldable,
+        isHoverOperate = window.isHoverLayout,
+        wideLayoutMatched = window.wideViewportMatched,
+        verticalCreases = window.creases,
+        horizontalCreases = window.horizontalCreases,
+        isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl,
+    )
+    val settingsPlacement = SettingsPlacementPolicy.resolve(
+        adaptiveLayoutInput,
+        SettingsSheetKind.SETTINGS,
+    )
+    val sessionDetailsPlacement = SettingsPlacementPolicy.resolve(
+        adaptiveLayoutInput,
+        SettingsSheetKind.SESSION_DETAILS,
+    )
+    val remoteViewSettingsPlacement = SettingsPlacementPolicy.resolve(
+        adaptiveLayoutInput,
+        SettingsSheetKind.REMOTE_VIEW_SETTINGS,
+    )
 
     // A file the agent referenced is the third thing that wants the window, and
     // the one that decides whether the other two still fit. Only the remote
@@ -311,13 +334,12 @@ internal fun MobileScreen() {
 
     val sidebar: @Composable () -> Unit = {
         AppSidebar(
+            permanent = sidebarWidth > 0,
+            sessionDetailsPlacement = sessionDetailsPlacement,
             accountUserId = accountUserId,
             connectionPhase = phase,
-            remoteDevices = if (controlSummary.source == RemoteControlSource.ACCOUNT_DEVICE) {
-                readyAccount?.devices.orEmpty()
-            } else {
-                emptyList()
-            },
+            remoteControlSource = controlSummary.source,
+            remoteDevices = readyAccount?.devices.orEmpty(),
             remoteSelectedDeviceId = readyAccount?.selectedDeviceId
                 .takeIf { controlSummary.source == RemoteControlSource.ACCOUNT_DEVICE },
             remoteDeviceName = controlSummary.desktopName,
@@ -335,9 +357,13 @@ internal fun MobileScreen() {
             searchOpen = shell.searchOpen,
             onQueryChange = shell::search,
             onToggleSearch = shell::toggleSearch,
-            onEnterCode = {
-                shell.show(MobileSurface.REMOTE)
-                shell.closeRemoteSession()
+            onScanDesktop = {
+                pairingViewModel.dispatch(PairingIntent.Disconnect)
+                // The sidebar row opens the choose-connection page, not the
+                // camera: ML Kit's scanner is a full-screen system activity, so
+                // launching it from the drawer would leave the user no way to
+                // pick "scan" vs "sign in" and would cover the app on every tap.
+                shell.openRemoteConnect()
                 closeDrawer()
             },
             onRetryRemoteDevice = {
@@ -355,8 +381,16 @@ internal fun MobileScreen() {
                 closeDrawer()
             },
             onCreateRemoteInWorkspace = { path ->
-                dispatchActiveWorkspace(RemoteWorkspaceIntent.SelectWorkspace(path))
-                shell.createRemoteSession()
+                dispatchActiveSession(
+                    RemoteSessionIntent.CreateSession(
+                        agentType = "code",
+                        title = "",
+                        instruction = "",
+                        modelId = null,
+                        workspacePath = path,
+                    ),
+                )
+                shell.show(MobileSurface.REMOTE)
                 closeDrawer()
             },
             onOpenRemoteWorkspace = { path ->
@@ -391,6 +425,7 @@ internal fun MobileScreen() {
             onDeleteSession = { id ->
                 generalChatViewModel.dispatch(GeneralChatIntent.DeleteSession(id))
             },
+            onDeleteRemoteSession = { id -> dispatchActiveSession(RemoteSessionIntent.DeleteSession(id)) },
             onOpenSettings = {
                 // HarmonyOS' `onSidebar.settings` always opens root settings.
                 // Remote-control settings has a separate remote-home action;
@@ -425,20 +460,57 @@ internal fun MobileScreen() {
                 when (shell.surface) {
                     MobileSurface.GENERAL_CHAT -> GeneralChatScreen(
                         modifier = Modifier,
+                        modelServicePlacement = settingsPlacement,
                         onOpenSidebar = if (showMenu) {
                             { compactDrawerOpen = true }
                         } else {
                             null
                         },
                     )
-                    MobileSurface.REMOTE -> when (controlSummary.source) {
+                    MobileSurface.REMOTE -> if (shell.remoteScanRequested) {
+                        PairingScreen(
+                            modifier = Modifier,
+                            settingsPlacement = settingsPlacement,
+                            sessionDetailsPlacement = sessionDetailsPlacement,
+                            viewSettingsPlacement = remoteViewSettingsPlacement,
+                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
+                            onOpenSidebar = if (showMenu) {
+                                { compactDrawerOpen = true }
+                            } else {
+                                null
+                            },
+                            onBack = {
+                                shell.closeRemoteScanner()
+                                shell.show(MobileSurface.GENERAL_CHAT)
+                            },
+                            onOpenAccount = {
+                                shell.closeRemoteScanner()
+                                shell.openAccount()
+                            },
+                            compact = !wide,
+                            startScanning = true,
+                        )
+                    } else when (controlSummary.source) {
                         RemoteControlSource.ACCOUNT_DEVICE -> AccountRemoteScreen(
                             remoteState = accountRemoteState,
                             workspaceState = accountWorkspaceState,
                             deviceId = readyAccount?.selectedDeviceId.orEmpty(),
                             deviceName = controlSummary.desktopName,
+                            createDevices = readyAccount?.devices.orEmpty().map { device ->
+                                com.bitfun.mobile.app.ui.remote.CreateDeviceChoice(
+                                    id = device.id,
+                                    name = device.name,
+                                    online = device.online,
+                                    selected = device.id == readyAccount?.selectedDeviceId,
+                                )
+                            },
                             accountUsername = readyAccount?.username.orEmpty(),
                             phase = accountPhase,
+                            settingsPlacement = settingsPlacement,
+                            sessionDetailsPlacement = sessionDetailsPlacement,
+                            viewSettingsPlacement = remoteViewSettingsPlacement,
+                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
+                            onCreateDevicePick = accountViewModel::selectDevice,
                             onSessionIntent = accountViewModel::dispatchSession,
                             onWorkspaceIntent = accountViewModel::dispatchWorkspace,
                             onOpenSidebar = if (showMenu) {
@@ -455,16 +527,19 @@ internal fun MobileScreen() {
                             modifier = Modifier,
                         )
 
-                        RemoteControlSource.QR_PAIRING,
-                        RemoteControlSource.NONE,
-                        -> PairingScreen(
+                        RemoteControlSource.QR_PAIRING -> PairingScreen(
                             modifier = Modifier,
+                            settingsPlacement = settingsPlacement,
+                            sessionDetailsPlacement = sessionDetailsPlacement,
+                            viewSettingsPlacement = remoteViewSettingsPlacement,
+                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
                             onOpenSidebar = if (showMenu) {
                                 { compactDrawerOpen = true }
                             } else {
                                 null
                             },
                             onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
+                            onOpenAccount = { shell.openAccount() },
                             compact = !wide,
                             requestedSessionId = shell.remoteSessionId,
                             creatingSession = shell.remoteCreating,
@@ -472,6 +547,41 @@ internal fun MobileScreen() {
                             onCreateSession = shell::createRemoteSession,
                             onRemoteHome = shell::closeRemoteSession,
                         )
+
+                        RemoteControlSource.NONE -> if (readyAccount != null) {
+                            ConnectAccountDeviceScreen(
+                                state = readyAccount,
+                                onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
+                                onRefresh = { accountViewModel.dispatch(AccountIntent.RefreshDevices) },
+                                onSelect = accountViewModel::selectDevice,
+                                onOpenScanner = {
+                                    pairingViewModel.dispatch(PairingIntent.Disconnect)
+                                    shell.openRemoteScanner()
+                                },
+                                modifier = Modifier,
+                            )
+                        } else {
+                            PairingScreen(
+                                modifier = Modifier,
+                                settingsPlacement = settingsPlacement,
+                                sessionDetailsPlacement = sessionDetailsPlacement,
+                                viewSettingsPlacement = remoteViewSettingsPlacement,
+                                onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
+                                onOpenSidebar = if (showMenu) {
+                                    { compactDrawerOpen = true }
+                                } else {
+                                    null
+                                },
+                                onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
+                                onOpenAccount = { shell.openAccount() },
+                                compact = !wide,
+                                requestedSessionId = shell.remoteSessionId,
+                                creatingSession = shell.remoteCreating,
+                                onOpenSession = shell::openRemoteSession,
+                                onCreateSession = shell::createRemoteSession,
+                                onRemoteHome = shell::closeRemoteSession,
+                            )
+                        }
                     }
                 }
             }
@@ -499,12 +609,13 @@ internal fun MobileScreen() {
     }
     BitFunCompactDrawer(
         open = showMenu && compactDrawerOpen,
+        compact = showMenu,
         drawerWidth = compactDrawerWidth.dp,
         onDismiss = ::closeDrawer,
         drawerContent = {
             Surface(
                 color = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
             ) { sidebar() }
         },
     ) {
@@ -626,69 +737,26 @@ internal fun MobileScreen() {
                 },
                 onConnectByLink = {
                     shell.dismissSettings()
-                    shell.show(MobileSurface.REMOTE)
+                    pairingViewModel.dispatch(PairingIntent.Disconnect)
+                    shell.openRemoteScanner()
                 },
             )
         }
     }
 
-    if (wide) {
-        AnimatedVisibility(
-            visible = shell.showSettings,
-            enter = fadeIn(tween(180, easing = FastOutSlowInEasing)) +
-                scaleIn(tween(180, easing = FastOutSlowInEasing), initialScale = 0.97f),
-            exit = fadeOut(tween(160, easing = FastOutSlowInEasing)) +
-                scaleOut(tween(160, easing = FastOutSlowInEasing), targetScale = 0.97f),
-        ) {
-            val sheetWidth = minOf(680, maxOf(540, (window.widthDp * 0.48f).toInt()))
-            val sheetHeight = minOf(760, maxOf(560, window.heightDp - 80))
-            BackHandler(onBack = shell::dismissSettings)
-            Box(
-                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.27f))
-                        .clickable(onClick = shell::dismissSettings),
-                )
-                Surface(
-                    color = MaterialTheme.colorScheme.background,
-                    shape = RoundedCornerShape(30.dp),
-                    shadowElevation = 12.dp,
-                    modifier = Modifier
-                        .width(sheetWidth.dp)
-                        .height(sheetHeight.dp)
-                        .clickable(interactionSource = null, indication = null, onClick = {}),
-                ) {
-                    settingsContent(Modifier.fillMaxSize())
-                }
-            }
-        }
-    } else if (shell.showSettings) {
-        ModalBottomSheet(
-            onDismissRequest = shell::dismissSettings,
-            // Compact sheets open fully: the page gives no indication that
-            // lower controls are hidden behind another upward drag.
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.background,
-            shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
-            dragHandle = null,
-        ) {
-            settingsContent(Modifier.fillMaxWidth().fillMaxHeight(0.94f))
-        }
-    }
-    if (shell.showAccount) {
-        ModalBottomSheet(
-            onDismissRequest = shell::dismissAccount,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.background,
-            shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
-            dragHandle = null,
-        ) {
-            AccountScreen(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.94f),
+    AdaptiveModalSurface(
+        visible = shell.showSettings,
+        placement = settingsPlacement,
+        onDismissRequest = shell::dismissSettings,
+        content = settingsContent,
+    )
+    AdaptiveModalSurface(
+        visible = shell.showAccount,
+        placement = settingsPlacement,
+        onDismissRequest = shell::dismissAccount,
+    ) { modifier ->
+        AccountScreen(
+                modifier = modifier,
                 onBack = shell::dismissAccount,
                 onDeviceSelected = {
                     shell.dismissAccount()
@@ -698,6 +766,5 @@ internal fun MobileScreen() {
                 },
                 viewModel = accountViewModel,
             )
-        }
     }
 }

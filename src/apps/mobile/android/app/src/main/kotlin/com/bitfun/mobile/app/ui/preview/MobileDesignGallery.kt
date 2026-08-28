@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,14 @@ import com.bitfun.mobile.core.feature.connection.ConnectionPhase
 import com.bitfun.mobile.core.feature.session.ChatComposerCapabilities
 import com.bitfun.mobile.core.feature.session.ModelOption
 
+/**
+ * Stable preview semantics: the gallery root, platform label, and message timeline
+ * are tagged so visual-parity instrumentation can locate each region.
+ */
+internal const val MOBILE_DESIGN_GALLERY_TEST_TAG: String = "mobile-design-gallery"
+internal const val MOBILE_DESIGN_GALLERY_PLATFORM_TEST_TAG: String = "mobile-design-gallery-platform"
+internal const val MOBILE_DESIGN_GALLERY_TIMELINE_TEST_TAG: String = "mobile-design-gallery-timeline"
+
 @Composable
 internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean) {
     BitFunTheme(dark = dark) {
@@ -39,7 +48,8 @@ internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean)
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .testTag(MOBILE_DESIGN_GALLERY_TEST_TAG),
         ) {
             PlatformLabel(scenario)
             ConversationHeader(
@@ -58,6 +68,7 @@ internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean)
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .testTag(MOBILE_DESIGN_GALLERY_TIMELINE_TEST_TAG)
                     .padding(
                         horizontal = MobileDesignGeometry.ContentGutter,
                         vertical = MobileDesignGeometry.TimelineTopPadding,
@@ -107,9 +118,10 @@ private fun PlatformLabel(scenario: MobilePreviewScenario) {
             .fillMaxWidth()
             .height(MobileDesignGeometry.ConnectionStripHeight)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            .padding(horizontal = MobileDesignGeometry.ContentGutter),
+            .padding(horizontal = MobileDesignGeometry.ContentGutter)
+            .testTag(MOBILE_DESIGN_GALLERY_PLATFORM_TEST_TAG),
     ) {
-        Text("Android", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        Text("Android", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
         Text(
             "NATIVE",
             style = MaterialTheme.typography.labelSmall,
@@ -134,6 +146,7 @@ private fun PreviewMessageBubble(message: MobilePreviewMessage) {
         Text(
             text = message.text,
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .widthIn(max = MobileDesignGeometry.MessageBubbleMaxWidth)
                 .background(
@@ -165,4 +178,10 @@ private fun MobileDesignCompactPreview() {
 @Composable
 private fun MobileDesignDarkPreview() {
     MobileDesignGallery(MobilePreviewScenarios.StreamingDark, dark = true)
+}
+
+@Preview(name = "BitFun Mobile · Reconnecting Wide", widthDp = 1024, heightDp = 768, showBackground = true)
+@Composable
+private fun MobileDesignReconnectingWidePreview() {
+    MobileDesignGallery(MobilePreviewScenarios.ReconnectingWide, dark = false)
 }

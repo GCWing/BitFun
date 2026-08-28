@@ -3,6 +3,7 @@ package com.bitfun.mobile.core.feature.session
 import com.bitfun.mobile.core.domain.ChatTimelineState
 import com.bitfun.mobile.core.domain.RemoteSession
 import com.bitfun.mobile.core.domain.SessionAgentTypes
+import com.bitfun.mobile.core.protocol.RemoteModelCatalog
 
 /**
  * Which agent kinds the session list is narrowed to.
@@ -27,6 +28,9 @@ public enum class SessionPermissionMode {
     ASK,
     AUTO,
     FULL_ACCESS,
+
+    /** Unknown or unavailable permission mode, surfaced instead of assuming ask. */
+    UNKNOWN,
 }
 
 /**
@@ -43,6 +47,77 @@ public enum class PermissionModeFailure {
 
     /** `set_permission_mode` failed; the mode still shown is the desktop's old one. */
     SAVE,
+}
+
+/** Typed lifecycle of the most recent create-session request. */
+public sealed interface CreateSessionOperationState {
+    public data object Idle : CreateSessionOperationState
+
+    public data class InFlight public constructor(
+        public val requestId: String,
+        /** The remote target owning this operation; never a controller path. */
+        public val deviceKey: String?,
+        public val workspacePath: String,
+    ) : CreateSessionOperationState
+
+    public data class Succeeded public constructor(
+        public val requestId: String,
+        public val createdSessionId: String,
+        /** Canonical projection confirmed by create, including its owning workspace. */
+        public val confirmedSession: RemoteSession?,
+        /** Minimum Ready revision that contains this committed session. */
+        public val commitRevision: Long,
+    ) : CreateSessionOperationState {
+        public constructor(
+            requestId: String,
+            createdSessionId: String,
+            confirmedSession: RemoteSession?,
+        ) : this(requestId, createdSessionId, confirmedSession, 0)
+
+        public constructor(requestId: String, createdSessionId: String) : this(requestId, createdSessionId, null, 0)
+    }
+
+    public data class Failed public constructor(
+        public val requestId: String,
+        public val reason: CreateSessionOperationFailure,
+        public val retryable: Boolean,
+        public val unsupported: Boolean,
+    ) : CreateSessionOperationState
+
+    public data class Cancelled public constructor(
+        public val requestId: String,
+        public val reason: CreateSessionOperationFailure,
+    ) : CreateSessionOperationState
+}
+
+public enum class CreateSessionOperationFailure {
+    TRANSPORT,
+    UNSUPPORTED,
+    DISCONNECTED,
+    WORKSPACE,
+    DEVICE_MISMATCH,
+    PROTOCOL,
+    CANCELLED,
+}
+
+/** Why the optional model catalog could not be loaded. */
+public enum class ModelCatalogFailure {
+    /**
+     * The catalog command failed with any of the generic transport results
+     * (rejected, malformed, timed out, unreachable, ...). Retrying is
+     * meaningful, so the UI offers Retry.
+     */
+    LOAD_FAILED,
+
+    /**
+     * Reserved forward-compat state for a real peer-capability signal: the peer
+     * is known to lack `get_model_catalog`. The current transport produces no
+     * such signal, so this value is never set from a generic command failure —
+     * a rejection or malformed response can also come from a modern desktop or
+     * a local protocol fault. The UI still renders it explicitly if a future
+     * transport surfaces it.
+     */
+    UNSUPPORTED_BY_PEER,
 }
 
 public enum class RemoteSessionFailureReason {
@@ -98,7 +173,71 @@ public sealed interface RemoteSessionUiState {
         public val agentFilter: SessionAgentFilter,
         /** Whether another `list_sessions` page is worth asking for. */
         public val hasMore: Boolean,
-    ) : RemoteSessionUiState
+        /** Whether the open transcript has an older page above what is visible. */
+        public val hasMoreMessages: Boolean,
+        /**
+         * Desktop model choices are account/device facts, not session facts.
+         *
+         * Keeping the catalog beside the session list lets a new-session surface
+         * offer the same model picker before any transcript has been opened.
+         * It is null until a catalog loads successfully.
+         */
+        public val modelCatalog: RemoteModelCatalog?,
+        /**
+         * Non-null when catalog loading failed. [ModelCatalogFailure.LOAD_FAILED]
+         * is the generic, retryable classification; [ModelCatalogFailure.UNSUPPORTED_BY_PEER]
+         * is reserved for a future peer-capability signal the transport does not
+         * yet produce.
+         */
+        public val modelCatalogFailure: ModelCatalogFailure?,
+        public val draft: String,
+        /** Monotonic authority revision for session-list projection on this store. */
+        public val revision: Long,
+    ) : RemoteSessionUiState {
+        public constructor(
+            sessions: List<RemoteSession>,
+            selectedSessionId: String?,
+            timeline: ChatTimelineState?,
+            busy: Boolean,
+            permissionMode: SessionPermissionMode?,
+            permissionModeFailure: PermissionModeFailure?,
+            query: String,
+            agentFilter: SessionAgentFilter,
+            hasMore: Boolean,
+            hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?,
+            modelCatalogFailure: ModelCatalogFailure?,
+            draft: String,
+        ) : this(
+            sessions, selectedSessionId, timeline, busy, permissionMode, permissionModeFailure,
+            query, agentFilter, hasMore, hasMoreMessages, modelCatalog, modelCatalogFailure, draft, 0,
+        )
+
+        /**
+         * The pre-catalog/pre-draft shape. A secondary constructor rather than
+         * default arguments: Kotlin defaults do not survive into Swift, so an
+         * iOS caller would be forced to name fields it does not use — see the
+         * design doc §4.1.
+         */
+        public constructor(
+            sessions: List<RemoteSession>,
+            selectedSessionId: String?,
+            timeline: ChatTimelineState?,
+            busy: Boolean,
+            permissionMode: SessionPermissionMode?,
+            permissionModeFailure: PermissionModeFailure?,
+            query: String,
+            agentFilter: SessionAgentFilter,
+            hasMore: Boolean,
+            hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?,
+        ) : this(
+            sessions = sessions, selectedSessionId = selectedSessionId, timeline = timeline, busy = busy,
+            permissionMode = permissionMode, permissionModeFailure = permissionModeFailure,
+            query = query, agentFilter = agentFilter, hasMore = hasMore, hasMoreMessages = hasMoreMessages,
+            modelCatalog = modelCatalog, modelCatalogFailure = null, draft = "",
+        )
+    }
 
     /**
      * @param remoteMessage verbatim text from the desktop, present only for
@@ -122,6 +261,9 @@ public sealed interface RemoteSessionIntent {
 
     /** Fetch the next page of the session list, keeping what is already shown. */
     public data object LoadMore : RemoteSessionIntent
+
+    /** Fetch the transcript page immediately before the oldest visible message. */
+    public data object LoadOlderMessages : RemoteSessionIntent
 
     public data class Search public constructor(
         public val query: String,
@@ -147,8 +289,34 @@ public sealed interface RemoteSessionIntent {
         public val title: String,
         public val instruction: String,
         public val modelId: String?,
+        public val workspacePath: String?,
     ) : RemoteSessionIntent {
-        public constructor(agentType: String) : this(agentType, "", "", null)
+        public constructor(
+            agentType: String,
+            title: String,
+            instruction: String,
+            modelId: String?,
+        ) : this(agentType, title, instruction, modelId, null)
+
+        public constructor(agentType: String) : this(agentType, "", "", null, null)
+    }
+
+    /** Create with an identity that Swift can retain and correlate with its UI. */
+    public data class CreateSessionOperation public constructor(
+        public val requestId: String,
+        public val agentType: String,
+        public val title: String,
+        public val instruction: String,
+        public val modelId: String?,
+        public val workspacePath: String?,
+    ) : RemoteSessionIntent {
+        public constructor(
+            requestId: String,
+            agentType: String,
+            title: String,
+            instruction: String,
+            modelId: String?,
+        ) : this(requestId, agentType, title, instruction, modelId, null)
     }
 
     public data class DeleteSession public constructor(
@@ -167,6 +335,16 @@ public sealed interface RemoteSessionIntent {
         public val answer: String,
     ) : RemoteSessionIntent
 
+    public data class AnswerStructuredQuestion public constructor(
+        public val sessionId: String,
+        public val toolId: String,
+        public val answers: List<QuestionAnswer>,
+    ) : RemoteSessionIntent
+
+    public data class UpdateDraft public constructor(
+        public val text: String,
+    ) : RemoteSessionIntent
+
     public data class SendMessage public constructor(
         public val sessionId: String,
         public val content: String,
@@ -183,7 +361,10 @@ public sealed interface RemoteSessionIntent {
     public data class ApproveTool public constructor(
         public val sessionId: String,
         public val toolId: String,
-    ) : RemoteSessionIntent
+        public val updatedInput: String?,
+    ) : RemoteSessionIntent {
+        public constructor(sessionId: String, toolId: String) : this(sessionId, toolId, null)
+    }
 
     public data class RejectTool public constructor(
         public val sessionId: String,
@@ -213,6 +394,17 @@ public sealed interface RemoteSessionIntent {
      * load or a save has failed.
      */
     public data object RefreshPermissionMode : RemoteSessionIntent
+
+    /**
+     * Re-read the desktop's model catalog without touching the session list or
+     * the open transcript, as [RefreshPermissionMode] does for the permission
+     * mode.
+     *
+     * No session id, for the same reason [RefreshPermissionMode] carries none:
+     * `get_model_catalog` is addressed to the desktop and one catalog answers
+     * for every session on it.
+     */
+    public data object RefreshModelCatalog : RemoteSessionIntent
 
     public data class SelectModel public constructor(
         public val sessionId: String,

@@ -23,6 +23,7 @@ import com.bitfun.mobile.app.ui.chat.message.MessageImageGallery
 import com.bitfun.mobile.app.ui.chat.message.ThinkingBlock
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusList
 import com.bitfun.mobile.core.feature.session.ConversationRow
+import com.bitfun.mobile.core.feature.session.QuestionAnswer
 import com.bitfun.mobile.core.feature.session.ConversationRowKind
 import com.bitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
@@ -43,6 +44,7 @@ internal fun ChatMessageBubble(
     onRejectTool: (String, String) -> Unit,
     onCancelTool: (String, String) -> Unit,
     onAnswerTool: (String, String) -> Unit,
+    onAnswerToolStructured: (String, List<QuestionAnswer>) -> Unit,
     onRetry: (String) -> Unit,
     onOpenLink: (String, String) -> Unit,
     /** The file the preview surface is showing, so its card can say so. */
@@ -76,6 +78,7 @@ internal fun ChatMessageBubble(
                     onRejectTool = onRejectTool,
                     onCancelTool = onCancelTool,
                     onAnswerTool = onAnswerTool,
+                    onAnswerToolStructured = onAnswerToolStructured,
                     onOpenLink = onOpenLink,
                     previewingRemotePath = previewingRemotePath,
                     previewLoading = previewLoading,
@@ -118,12 +121,17 @@ private fun AssistantContent(row: ConversationRow, callbacks: MessageBlockCallba
         return
     }
 
-    row.thinking?.let { ThinkingBlock(it, row.streaming) }
+    row.thinking?.let { ThinkingBlock(it, row.streaming, row.id) }
     if (row.text.isNotEmpty()) {
         // No bubble on this side, matching `ChatMessageChrome.ets`: an agent
         // turn carries headings, lists and code cards, and a rounded tint
         // around all of that reads as one quoted lump.
-        MarkdownContent(text = row.text, onOpenLink = callbacks.onOpenLink, modifier = Modifier)
+        MarkdownContent(
+            text = row.text,
+            onOpenLink = callbacks.onOpenLink,
+            modifier = Modifier,
+            streaming = row.streaming,
+        )
         FileReferenceCards(
             text = row.text,
             previewingRemotePath = callbacks.previewingRemotePath,
@@ -143,6 +151,7 @@ private fun AssistantContent(row: ConversationRow, callbacks: MessageBlockCallba
             onReject = callbacks.onRejectTool,
             onCancel = callbacks.onCancelTool,
             onAnswer = callbacks.onAnswerTool,
+            onAnswerStructured = callbacks.onAnswerToolStructured,
             onOpenFile = callbacks.onOpenLink,
             modifier = Modifier,
         )

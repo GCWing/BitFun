@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitfun.mobile.app.R
+import com.bitfun.mobile.app.ui.common.SignedOutConnectionActions
 import com.bitfun.mobile.app.ui.theme.bitFunColors
 import com.bitfun.mobile.core.feature.pairing.PairingIntent
 import com.bitfun.mobile.core.feature.pairing.PairingUiState
@@ -85,10 +86,13 @@ internal fun ConnectView(
     onSubmit: (PairingIntent.Submit) -> Unit,
     onDismiss: () -> Unit,
     onBack: () -> Unit,
+    onOpenAccount: () -> Unit,
+    startScanning: Boolean = false,
+    onScanStarted: () -> Unit = {},
     modifier: Modifier,
 ) {
     var manual by rememberSaveable { mutableStateOf(false) }
-    var scanning by rememberSaveable { mutableStateOf(false) }
+    var scanning by rememberSaveable { mutableStateOf(startScanning) }
     var url by rememberSaveable { mutableStateOf("") }
     var userId by rememberSaveable { mutableStateOf("") }
     // Never rememberSaveable: a password must not reach saved instance state.
@@ -137,6 +141,13 @@ internal fun ConnectView(
             .addOnCanceledListener { scanFailed = true }
         Unit
     }
+    LaunchedEffect(startScanning) {
+        if (startScanning) {
+            scanning = true
+            scan()
+            onScanStarted()
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize().testTag(CONNECT_TEST_TAG)) {
         Column(
@@ -161,6 +172,7 @@ internal fun ConnectView(
                     },
                     onDismiss = onDismiss,
                     onBack = onBack,
+                    onOpenAccount = onOpenAccount,
                 )
             }
         }
@@ -192,6 +204,7 @@ private fun ColumnScope.IntroPairing(
     onScan: () -> Unit,
     onDismiss: () -> Unit,
     onBack: () -> Unit,
+    onOpenAccount: () -> Unit,
 ) {
     Box {
         Hero()
@@ -224,42 +237,31 @@ private fun ColumnScope.IntroPairing(
     ) {
         ConnectDesktopGlyph()
         Text(
-            stringResource(R.string.connect_title),
+            stringResource(R.string.connect_choose_connection),
             fontSize = 24.sp,
             lineHeight = 30.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
-        Centered(stringResource(R.string.connect_body), fontSize = 17.sp, lineHeight = 25.sp)
-        Centered(stringResource(R.string.connect_steps), fontSize = 17.sp, lineHeight = 25.sp)
-
         if (state is PairingUiState.Failed) {
             PairingFailureCard(state, onDismiss)
         }
     }
 
-    Button(
-        onClick = onScan,
-        enabled = !connecting,
+    SignedOutConnectionActions(
+        scanLabel = stringResource(R.string.sidebar_scan_to_connect),
+        accountLabel = stringResource(R.string.sidebar_sign_in),
+        onScan = onScan,
+        onOpenAccount = onOpenAccount,
         modifier = Modifier
             .align(Alignment.CenterHorizontally)
             .padding(bottom = 14.dp)
-            .fillMaxWidth(0.82f)
-            .height(58.dp),
-        shape = RoundedCornerShape(29.dp),
-        contentPadding = ButtonDefaults.ContentPadding,
-    ) {
-        if (connecting) {
-            CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
-            Text(stringResource(R.string.pairing_connecting))
-        } else {
-            Text(
-                stringResource(R.string.connect_have_pair_code),
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
+            .fillMaxWidth(0.82f),
+        enabled = !connecting,
+        buttonHeight = 58.dp,
+        spacing = 12.dp,
+        fontSize = 20,
+    )
 }
 
 @Composable
@@ -341,7 +343,7 @@ private fun ManualPairing(
     val consumeTouches = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.58f))
+            .background(bitFunColors.modalScrim)
             .clickable(enabled = !connecting, onClick = onBack),
         contentAlignment = Alignment.Center,
     ) {

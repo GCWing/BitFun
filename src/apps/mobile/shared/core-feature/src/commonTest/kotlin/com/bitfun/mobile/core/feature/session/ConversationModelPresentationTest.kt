@@ -110,4 +110,5 @@ private fun timeline(
         sessionModelId = sessionModelId,
     ),
     selectedModelId = selectedModelId,
+    activeTurnAnchorId = "",
 )

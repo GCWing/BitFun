@@ -72,7 +72,10 @@ UiState or an Intent declared there, and no module above it is visible to them.
   above, mirroring `pnpm run harmony:architecture`.
 - Build and test from `shared/`: `./gradlew jvmTest` for host logic,
   `./gradlew assembleAndroidMain testAndroidHostTest` for Android, and
-  `./gradlew compileKotlinIosSimulatorArm64` for iOS. `local.properties` holds
+  `./gradlew compileKotlinIosSimulatorArm64` for iOS. Run iOS pure Swift
+  infrastructure checks from the repository root with
+  `(cd src/apps/mobile/ios && ./Testing/run-pure-swift-tests.sh)`.
+  `local.properties` holds
   the local SDK path and is not committed.
 - The Android app builds from `android/`: `./gradlew :app:assembleDebug` and
   `:app:installDebug`; release verification is `./gradlew :app:assembleRelease`.

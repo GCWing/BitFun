@@ -44,6 +44,18 @@ private const val DEVICE_KIND_DESKTOP = "desktop"
 private const val DEVICE_KIND_MOBILE = "mobile"
 
 /**
+ * Names used by our pre-`device_kind` mobile clients.
+ *
+ * This belongs to the shared transport rather than an Android/iOS adapter: both
+ * native clients can receive the same legacy account rows, and both must hide
+ * them from the desktop target picker.
+ */
+private val KNOWN_NON_DESKTOP_DEVICE_NAMES = setOf(
+    "HarmonyOS Phone",
+    "HarmonyOS Watch",
+)
+
+/**
  * Whether a relay device row is a desktop, and so controllable from a phone.
  *
  * A row that reports its kind is taken at its word. A row without one predates
@@ -130,9 +142,10 @@ public class CloudAccountClient internal constructor(
     private val log: TransportLog = TransportLog.None,
     legacyMobileDeviceNames: Set<String> = emptySet(),
 ) {
-    private val normalizedLegacyMobileDeviceNames = legacyMobileDeviceNames.mapTo(mutableSetOf()) {
-        it.trim().lowercase()
-    }
+    private val normalizedLegacyMobileDeviceNames =
+        (KNOWN_NON_DESKTOP_DEVICE_NAMES + legacyMobileDeviceNames).mapTo(mutableSetOf()) {
+            it.trim().lowercase()
+        }
 
     public suspend fun login(
         relayUrl: String,

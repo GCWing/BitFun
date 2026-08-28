@@ -5,8 +5,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.bitfun.mobile.app.ui.chat.tool.TOOL_EXPAND_TEST_TAG
 import androidx.compose.ui.test.performTextInput
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusList
 import com.bitfun.mobile.app.ui.chat.tool.ToolStatusRow
@@ -45,6 +47,7 @@ class ToolStatusRowTest {
                 onReject = { rejection = it },
                 onCancel = {},
                 onAnswer = {},
+                onAnswerStructured = {},
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )
@@ -74,6 +77,7 @@ class ToolStatusRowTest {
                 onReject = {},
                 onCancel = {},
                 onAnswer = { answer = it },
+                onAnswerStructured = {},
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )
@@ -101,6 +105,7 @@ class ToolStatusRowTest {
                 onReject = {},
                 onCancel = {},
                 onAnswer = {},
+                onAnswerStructured = {},
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )
@@ -124,6 +129,7 @@ class ToolStatusRowTest {
                 onReject = {},
                 onCancel = { cancellation = it },
                 onAnswer = {},
+                onAnswerStructured = {},
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )
@@ -145,6 +151,7 @@ class ToolStatusRowTest {
                 onReject = {},
                 onCancel = {},
                 onAnswer = {},
+                onAnswerStructured = {},
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )
@@ -153,8 +160,31 @@ class ToolStatusRowTest {
         // The state is carried by the badge, so the line is free to say the one
         // thing a chip reading "Done" never did: which file was edited.
         composeRule.onNodeWithText("Edit file · README.md").assertIsDisplayed()
+        composeRule.onNodeWithTag(TOOL_EXPAND_TEST_TAG).assertIsDisplayed()
         composeRule.onNodeWithText("Approve").assertDoesNotExist()
         composeRule.onNodeWithText("Your answer").assertDoesNotExist()
+    }
+
+    @Test
+    fun aCompletedEmptyPreviewStillExpandsWithChevronFeedback() {
+        composeRule.setContent {
+            ToolStatusRow(
+                tool = readTool("a", "One.kt"),
+                enabled = true,
+                onApprove = {},
+                onReject = {},
+                onCancel = {},
+                onAnswer = {},
+                onAnswerStructured = {},
+                onOpenFile = { _, _ -> },
+                modifier = Modifier,
+            )
+        }
+
+        composeRule.onNodeWithTag(TOOL_EXPAND_TEST_TAG).assertIsDisplayed()
+        composeRule.onNodeWithTag(TOOL_EXPAND_TEST_TAG).performClick()
+        composeRule.onNodeWithTag(TOOL_EXPAND_TEST_TAG).assertIsDisplayed()
+        composeRule.onNodeWithText("Read file · One.kt").assertIsDisplayed()
     }
 
     @Test
@@ -173,6 +203,7 @@ class ToolStatusRowTest {
                 onReject = {},
                 onCancel = {},
                 onAnswer = {},
+                onAnswerStructured = {},
                 onOpenFile = { path, label -> opened = path to label },
                 modifier = Modifier,
             )
@@ -193,6 +224,7 @@ class ToolStatusRowTest {
                 onReject = { _, _ -> },
                 onCancel = { _, _ -> },
                 onAnswer = { _, _ -> },
+                onAnswerStructured = { _, _ -> },
                 onOpenFile = { _, _ -> },
                 modifier = Modifier,
             )

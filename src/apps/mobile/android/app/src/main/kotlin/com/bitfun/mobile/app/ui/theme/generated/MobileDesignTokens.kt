@@ -26,7 +26,7 @@ internal object MobileDesignColors {
         val ConnectHeroSecondary = Color(0xFFC9C5FF)
         val ConnectHeroSurface = Color(0xFFF8FAFF)
         val ConnectScanAccent = Color(0xFFFFD021)
-        val ModalScrim = Color(0x99000000)
+        val ModalScrim = Color(0x44000000)
         val Soft = Color(0xFFF4F3F0)
         val FloatingPanelBg = Color(0xFFF7F7F5)
         val Green = Color(0xFF27C46A)
@@ -61,7 +61,7 @@ internal object MobileDesignColors {
         val ConnectHeroSecondary = Color(0xFF3C3B38)
         val ConnectHeroSurface = Color(0xFF252522)
         val ConnectScanAccent = Color(0xFFFFD021)
-        val ModalScrim = Color(0x99000000)
+        val ModalScrim = Color(0x44000000)
         val Soft = Color(0xFF2D2C28)
         val FloatingPanelBg = Color(0xFF1E1E1C)
         val Green = Color(0xFF3BD47B)
@@ -119,6 +119,42 @@ internal object MobileDesignGeometry {
     val ComposerExpandedHeight = 126.dp
     val ComposerCollapsedRadius = 26.dp
     val ComposerExpandedRadius = 18.dp
+    val ComposerModelSelectorWidth = 330.dp
+    val ComposerModelSelectorRadius = 14.dp
+    val ComposerModelSelectorRowHeight = 48.dp
+    val ComposerModelSelectorRowRadius = 9.dp
+    val ComposerModelSelectorRowGap = 6.dp
+    val SheetTopRadius = 34.dp
+    val SheetSideRadius = 34.dp
+    val SheetHorizontalPadding = 20.dp
+    val SheetHeaderHeight = 56.dp
+    val SheetActionHeight = 46.dp
+    val SelectionTopRadius = 20.dp
+    val SelectionRowHeight = 64.dp
+    val SelectionCloseSize = 32.dp
+    val PopoverWidth = 292.dp
+    val PopoverRadius = 16.dp
+    val PopoverPadding = 12.dp
+    val PopoverVerticalPadding = 10.dp
+    val PopoverActionHeight = 48.dp
+    val PopoverShadowRadius = 18.dp
+    val CompactPopoverWidth = 150.dp
+    val CompactPopoverRadius = 14.dp
+    val CompactPopoverActionHeight = 42.dp
+    val SettingsCompactCardRadius = 8.dp
+    val SettingsCardRadius = 24.dp
+    val SettingsProminentCardRadius = 28.dp
+    val ModelCurrentRowHeight = 64.dp
+    val ModelSourceRowHeight = 62.dp
+    val ModelAccountRowHeight = 56.dp
+    val ModelAccountRowGap = 6.dp
+    val ModelSectionGap = 20.dp
+    val ModelOverviewTopPadding = 16.dp
+    val ModelOverviewBottomPadding = 24.dp
+    val ModelListTopPadding = 10.dp
+    val ModelListBottomPadding = 16.dp
+    val ModelEmptyAccountHeight = 80.dp
+    val ModelEditorHeight = 560.dp
 }
 
 internal object MobileDesignBreakpoints {

@@ -1,0 +1,41 @@
+-- v2 -> v3: additive remote session-list and transcript persistence.
+CREATE TABLE IF NOT EXISTS remote_session_list (
+    device_key TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    agent_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    message_count INTEGER NOT NULL,
+    last_message_id TEXT NOT NULL,
+    workspace_path TEXT,
+    workspace_name TEXT,
+    has_more INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (device_key, session_id)
+);
+CREATE INDEX IF NOT EXISTS remote_session_list_device_updated_index
+ON remote_session_list(device_key, updated_at DESC);
+CREATE TABLE IF NOT EXISTS remote_session_message (
+    device_key TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    message_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    status TEXT NOT NULL,
+    timestamp TEXT,
+    thinking TEXT,
+    payload_json TEXT NOT NULL,
+    PRIMARY KEY (device_key, session_id, seq)
+);
+CREATE INDEX IF NOT EXISTS remote_session_message_device_session_index
+ON remote_session_message(device_key, session_id, seq);
+CREATE TABLE IF NOT EXISTS remote_session_cursor (
+    device_key TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    poll_version TEXT NOT NULL DEFAULT '',
+    known_message_count INTEGER NOT NULL DEFAULT 0,
+    known_model_catalog_version TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (device_key, session_id)
+);

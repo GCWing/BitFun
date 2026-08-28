@@ -29,7 +29,7 @@ enum MobileDesignColors {
     static let connectHeroSecondary = dynamic(light: 0xFFC9C5FF, dark: 0xFF3C3B38)
     static let connectHeroSurface = dynamic(light: 0xFFF8FAFF, dark: 0xFF252522)
     static let connectScanAccent = dynamic(light: 0xFFFFD021, dark: 0xFFFFD021)
-    static let modalScrim = dynamic(light: 0x99000000, dark: 0x99000000)
+    static let modalScrim = dynamic(light: 0x44000000, dark: 0x44000000)
     static let soft = dynamic(light: 0xFFF4F3F0, dark: 0xFF2D2C28)
     static let floatingPanelBg = dynamic(light: 0xFFF7F7F5, dark: 0xFF1E1E1C)
     static let green = dynamic(light: 0xFF27C46A, dark: 0xFF3BD47B)
@@ -101,6 +101,42 @@ enum MobileDesignGeometry {
     static let composerExpandedHeight: CGFloat = 126
     static let composerCollapsedRadius: CGFloat = 26
     static let composerExpandedRadius: CGFloat = 18
+    static let composerModelSelectorWidth: CGFloat = 330
+    static let composerModelSelectorRadius: CGFloat = 14
+    static let composerModelSelectorRowHeight: CGFloat = 48
+    static let composerModelSelectorRowRadius: CGFloat = 9
+    static let composerModelSelectorRowGap: CGFloat = 6
+    static let sheetTopRadius: CGFloat = 34
+    static let sheetSideRadius: CGFloat = 34
+    static let sheetHorizontalPadding: CGFloat = 20
+    static let sheetHeaderHeight: CGFloat = 56
+    static let sheetActionHeight: CGFloat = 46
+    static let selectionTopRadius: CGFloat = 20
+    static let selectionRowHeight: CGFloat = 64
+    static let selectionCloseSize: CGFloat = 32
+    static let popoverWidth: CGFloat = 292
+    static let popoverRadius: CGFloat = 16
+    static let popoverPadding: CGFloat = 12
+    static let popoverVerticalPadding: CGFloat = 10
+    static let popoverActionHeight: CGFloat = 48
+    static let popoverShadowRadius: CGFloat = 18
+    static let compactPopoverWidth: CGFloat = 150
+    static let compactPopoverRadius: CGFloat = 14
+    static let compactPopoverActionHeight: CGFloat = 42
+    static let settingsCompactCardRadius: CGFloat = 8
+    static let settingsCardRadius: CGFloat = 24
+    static let settingsProminentCardRadius: CGFloat = 28
+    static let modelCurrentRowHeight: CGFloat = 64
+    static let modelSourceRowHeight: CGFloat = 62
+    static let modelAccountRowHeight: CGFloat = 56
+    static let modelAccountRowGap: CGFloat = 6
+    static let modelSectionGap: CGFloat = 20
+    static let modelOverviewTopPadding: CGFloat = 16
+    static let modelOverviewBottomPadding: CGFloat = 24
+    static let modelListTopPadding: CGFloat = 10
+    static let modelListBottomPadding: CGFloat = 16
+    static let modelEmptyAccountHeight: CGFloat = 80
+    static let modelEditorHeight: CGFloat = 560
 }
 
 enum MobileDesignBreakpoints {

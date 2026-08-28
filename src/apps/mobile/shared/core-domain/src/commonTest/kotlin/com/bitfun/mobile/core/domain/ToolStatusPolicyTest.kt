@@ -16,10 +16,36 @@ class ToolStatusPolicyTest {
     }
 
     @Test
-    fun allThreeSpellingsOfFinishedCount() {
-        listOf("completed", "done", "sent").forEach { status ->
+    fun completedVocabularyIncludesSuccessAndLegacyFinishedCaseInsensitively() {
+        listOf("completed", "done", "sent", "success", "finished", "Success", "SUCCESS").forEach { status ->
             assertTrue(ToolStatusPolicy.isCompleted(tool(status = status)), status)
         }
+        listOf("queued", "unknown").forEach { status ->
+            assertFalse(ToolStatusPolicy.isCompleted(tool(status = status)), status)
+        }
+    }
+
+    @Test
+    fun emptyPreviewToolsAreExpandableOnlyForKnownActionableStates() {
+        listOf(
+            "completed",
+            "cancelled",
+            "error",
+            "failed",
+            "running",
+            "pending_confirmation",
+        ).forEach { status ->
+            assertTrue(ToolStatusPolicy.isExpandable(tool(status = status)), status)
+        }
+        assertTrue(ToolStatusPolicy.isExpandable(tool(name = "AskUserQuestion", status = "sent")))
+        assertFalse(ToolStatusPolicy.isExpandable(tool(status = "unknown")))
+    }
+
+    @Test
+    fun previewFactIsIndependentFromExpandability() {
+        assertFalse(ToolStatusPolicy.hasPreview(tool()))
+        assertTrue(ToolStatusPolicy.hasPreview(tool(inputPreview = "input")))
+        assertTrue(ToolStatusPolicy.hasPreview(tool(resultPreview = "output")))
     }
 
     @Test
