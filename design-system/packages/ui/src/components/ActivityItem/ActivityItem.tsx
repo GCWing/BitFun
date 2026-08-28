@@ -25,6 +25,7 @@ export interface ActivityItemProps
   actions?: readonly ActivityItemAction[];
   appearance?: ActivityItemAppearance;
   children: ReactNode;
+  detail?: ReactNode;
   disabled?: boolean;
   label?: ReactNode;
   leading?: ReactNode;
@@ -69,6 +70,7 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
     appearance = "inline",
     children,
     className,
+    detail,
     disabled = false,
     label,
     leading,
@@ -82,6 +84,7 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
         {children}
       </ActivityItemContent>
     );
+    const hasDetail = detail !== undefined && detail !== null;
 
     return (
       <span
@@ -91,6 +94,7 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
         data-appearance={appearance}
         data-bf-component="activity-item"
         data-disabled={disabled ? "true" : "false"}
+        data-has-detail={hasDetail ? "true" : "false"}
         ref={ref}
       >
         {onActivate ? (
@@ -128,6 +132,9 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
               ))}
             </span>
           </>
+        )}
+        {hasDetail && (
+          <span className={styles.detail} data-bf-part="detail">{detail}</span>
         )}
       </span>
     );

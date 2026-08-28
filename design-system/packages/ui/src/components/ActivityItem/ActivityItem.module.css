@@ -9,6 +9,7 @@
   .metadata,
   .actions,
   .divider,
+  .detail,
   .changeCount,
   .additions,
   .deletions {
@@ -21,6 +22,10 @@
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-control);
+  }
+
+  .root[data-has-detail="true"] {
+    flex-wrap: wrap;
   }
 
   .trigger,
@@ -178,6 +183,18 @@
     gap: 0;
   }
 
+  .detail {
+    display: block;
+    flex: 1 1 100%;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .root[data-appearance="surface"] .detail {
+    padding-block-start: var(--bf-space-1);
+    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  }
+
   .changeCount {
     gap: var(--bf-control-change-count-gap);
     padding-block: var(--bf-control-change-count-padding-block);
@@ -214,6 +231,10 @@
 
     .divider {
       background: CanvasText;
+    }
+
+    .root[data-appearance="surface"] .detail {
+      border-block-start-color: CanvasText;
     }
 
     .additions,

@@ -10,6 +10,7 @@ export const activityItemMeta = {
     { name: "label", type: "ReactNode" },
     { name: "leading", type: "ReactNode" },
     { name: "metadata", type: "ReactNode" },
+    { name: "detail", type: "ReactNode" },
     { defaultValue: "[]", name: "actions", type: "readonly ActivityItemAction[]" },
     { defaultValue: "inline", name: "appearance", type: "inline | surface" },
     { name: "onActivate", type: "MouseEventHandler<HTMLButtonElement>" },

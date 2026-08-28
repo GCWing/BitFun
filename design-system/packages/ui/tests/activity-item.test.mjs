@@ -61,6 +61,35 @@ test("ActivityItem disables its trigger and sibling actions as one contract", ()
   assert.equal((markup.match(/disabled=""/g) ?? []).length, 2);
 });
 
+test("ActivityItem renders an optional full-width detail area after the row content", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActivityItem, {
+      actions: [{ icon: createElement("svg"), id: "open", label: "Open" }],
+      appearance: "surface",
+      detail: createElement("pre", null, "+ registry.register(component)"),
+      label: "Edit file",
+    }, "src/registry.ts"),
+  );
+
+  const description = markup.indexOf('data-bf-part="description"');
+  const actions = markup.indexOf('data-bf-part="actions"');
+  const detail = markup.indexOf('data-bf-part="detail"');
+
+  assert.match(markup, /data-has-detail="true"/);
+  assert.match(markup, /data-bf-part="detail"[^>]*><pre>\+ registry\.register\(component\)<\/pre>/);
+  assert.ok(description < actions);
+  assert.ok(actions < detail);
+});
+
+test("ActivityItem reports the absence of a detail area on the root contract", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActivityItem, { appearance: "surface" }, "pnpm run check"),
+  );
+
+  assert.match(markup, /data-has-detail="false"/);
+  assert.doesNotMatch(markup, /data-bf-part="detail"/);
+});
+
 test("ChangeCount formats positive additions and deletions with distinct parts", () => {
   const markup = renderToStaticMarkup(
     createElement(ChangeCount, { additions: -6, deletions: -2 }),
