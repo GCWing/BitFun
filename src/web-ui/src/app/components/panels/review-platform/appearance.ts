@@ -35,6 +35,8 @@ export const reviewPlatformAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'detailMeta' },
     { id: 'detailActions' },
     { id: 'facts' },
+    { id: 'tabs' },
+    { id: 'tabBar' },
     { id: 'tabContent' },
     { id: 'section' },
     { id: 'sectionHeading' },

@@ -38,14 +38,14 @@ const MiniAppGalleryScene: React.FC = () => {
 
   return (
     <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
-      <div className="miniapp-gallery-scene__nav" data-bf-part="nav">
+      <div className="miniapp-gallery-scene__nav">
         <TabGroup
           items={tabItems}
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as MiniAppGalleryTab)}
         />
       </div>
-      <div className="miniapp-gallery-scene__content" data-bf-part="content">
+      <div className="miniapp-gallery-scene__content">
         <Suspense fallback={null}>
           {activeTab === 'installed' && <MiniAppGalleryView />}
           {activeTab === 'market' && <MiniAppMarketView />}
