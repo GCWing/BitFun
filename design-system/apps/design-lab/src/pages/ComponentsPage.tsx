@@ -57,6 +57,7 @@ import {
   ToolbarBadge,
   ToolbarGroup,
   ToolbarSeparator,
+  Tooltip,
   type ColorScheme,
   type ContrastMode,
   type DensityMode,
@@ -109,6 +110,7 @@ const componentIcons = {
   Switch: ToggleLeft,
   TabGroup: PanelTop,
   Toolbar: PanelTop,
+  Tooltip: MessageCircle,
 } as const;
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
@@ -451,6 +453,14 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
             </ToolbarGroup>
           )}
         />
+      );
+    case "Tooltip":
+      return (
+        <Tooltip content={t("components.preview.tooltipContent")} delay={0}>
+          <Button size="sm" tabIndex={-1} variant="fill">
+            {t("components.preview.tooltipTrigger")}
+          </Button>
+        </Tooltip>
       );
     default:
       return null;
