@@ -5,7 +5,7 @@
  * @module components/MarkdownEditor
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, SegmentedControl } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -652,26 +652,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     return (
       <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={unsafeViewMode}>
         <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
-          <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
-            <Button
-              type="button"
-              size="sm"
-              variant={unsafeViewMode === 'source' ? 'fill' : 'outline'}
-              onClick={() => setUnsafeViewMode('source')}
-              aria-pressed={unsafeViewMode === 'source'}
-            >
-              {t('editor.markdownEditor.markdown')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={unsafeViewMode === 'preview' ? 'fill' : 'outline'}
-              onClick={() => setUnsafeViewMode('preview')}
-              aria-pressed={unsafeViewMode === 'preview'}
-            >
-              {t('editor.markdownEditor.preview')}
-            </Button>
-          </div>
+          <SegmentedControl
+            className="bitfun-markdown-editor__mode-toggle"
+            aria-label={t('editor.markdownEditor.viewModeLabel')}
+            options={[
+              { value: 'source', label: t('editor.markdownEditor.markdown') },
+              { value: 'preview', label: t('editor.markdownEditor.preview') },
+            ]}
+            value={unsafeViewMode}
+            onValueChange={(value) => setUnsafeViewMode(value as 'source' | 'preview')}
+          />
           <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
             <IconButton
               type="button"
@@ -743,26 +733,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   return (
     <div className={`bitfun-markdown-editor ${className}`} data-bf-component="markdown-editor" data-bf-part="root" data-bf-view={viewMode}>
       <div className="bitfun-markdown-editor__mode-toolbar" data-bf-component="markdown-editor" data-bf-part="toolbar">
-        <div className="bitfun-markdown-editor__mode-toggle" role="tablist" aria-label={t('editor.markdownEditor.viewModeLabel')} data-bf-component="markdown-editor" data-bf-part="modeToggle">
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === 'preview' ? 'fill' : 'outline'}
-            onClick={() => setViewMode('preview')}
-            aria-pressed={viewMode === 'preview'}
-          >
-            {t('editor.markdownEditor.preview')}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === 'markdown' ? 'fill' : 'outline'}
-            onClick={() => setViewMode('markdown')}
-            aria-pressed={viewMode === 'markdown'}
-          >
-            {t('editor.markdownEditor.markdown')}
-          </Button>
-        </div>
+        <SegmentedControl
+          className="bitfun-markdown-editor__mode-toggle"
+          aria-label={t('editor.markdownEditor.viewModeLabel')}
+          options={[
+            { value: 'preview', label: t('editor.markdownEditor.preview') },
+            { value: 'markdown', label: t('editor.markdownEditor.markdown') },
+          ]}
+          value={viewMode}
+          onValueChange={(value) => setViewMode(value as 'preview' | 'markdown')}
+        />
         <div className="bitfun-markdown-editor__toolbar-actions" data-bf-component="markdown-editor" data-bf-part="actions">
           <IconButton
             type="button"

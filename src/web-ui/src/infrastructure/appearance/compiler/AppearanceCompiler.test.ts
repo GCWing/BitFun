@@ -900,7 +900,7 @@ describe('AppearanceCompiler', () => {
           parts: { commit: { states: { expanded: { borderColor: accent } } } },
         },
         'git-diff-view': {
-          parts: { typeOption: { states: { active: { backgroundColor: accent } } } },
+          parts: { file: { states: { expanded: { backgroundColor: accent } } } },
         },
         'git-settings-view': {
           parts: { status: { states: { error: { borderColor: accent } } } },
@@ -980,7 +980,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="session-file-modifications-bar"][data-bf-part="file"][data-bf-operation="edit"]');
     expect(snapshot.cssText).toContain('[data-bf-component="editor-breadcrumb"][data-bf-part="item"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="git-branch-history"][data-bf-part="commit"][data-bf-state~="expanded"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="git-diff-view"][data-bf-part="typeOption"][data-bf-state~="active"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="git-diff-view"][data-bf-part="file"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="git-settings-view"][data-bf-part="status"][data-bf-state~="error"]');
   });
 });

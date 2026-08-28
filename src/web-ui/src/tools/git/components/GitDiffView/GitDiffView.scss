@@ -48,43 +48,6 @@ $opacity-high: 0.8 !default;
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
-  &__diff-type-switcher {
-    display: flex;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-xs;
-    overflow: hidden;
-  }
-
-  &__type-btn {
-    padding: $size-gap-1-5 $size-gap-3;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    border: none;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-family: $font-family-sans;
-    font-weight: $font-weight-medium;
-    cursor: pointer;
-    transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &--active {
-      background: var(--bf-appearance-token-element-bg-base);
-      color: var(--bf-appearance-token-color-accent-500);
-      font-weight: $font-weight-semibold;
-    }
-
-    & + & {
-      border-left: 1px solid var(--bf-appearance-token-border-base);
-    }
-  }
-
   &__loading-indicator {
     display: flex;
     align-items: center;

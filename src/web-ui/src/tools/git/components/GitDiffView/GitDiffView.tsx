@@ -1,6 +1,6 @@
 /** Git diff view. */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, SegmentedControl } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -277,26 +277,15 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </span>
           )}
           {!sourceCommit && !targetCommit && (
-            <div data-bf-component="git-diff-view" data-bf-part="typeSwitcher" className="bitfun-git-diff-view__diff-type-switcher">
-              <button 
-                data-bf-component="git-diff-view"
-                data-bf-part="typeOption"
-                data-bf-state={!currentShowStaged ? 'active' : undefined}
-                className={`bitfun-git-diff-view__type-btn ${!currentShowStaged ? 'bitfun-git-diff-view__type-btn--active' : ''}`}
-                onClick={() => setCurrentShowStaged(false)}
-              >
-                {t('diffView.workingTree')}
-              </button>
-              <button 
-                data-bf-component="git-diff-view"
-                data-bf-part="typeOption"
-                data-bf-state={currentShowStaged ? 'active' : undefined}
-                className={`bitfun-git-diff-view__type-btn ${currentShowStaged ? 'bitfun-git-diff-view__type-btn--active' : ''}`}
-                onClick={() => setCurrentShowStaged(true)}
-              >
-                {t('diffView.staged')}
-              </button>
-            </div>
+            <SegmentedControl
+              className="bitfun-git-diff-view__diff-type-switcher"
+              options={[
+                { value: 'working', label: t('diffView.workingTree') },
+                { value: 'staged', label: t('diffView.staged') },
+              ]}
+              value={currentShowStaged ? 'staged' : 'working'}
+              onValueChange={(value) => setCurrentShowStaged(value === 'staged')}
+            />
           )}
           {loading && (
             <span className="bitfun-git-diff-view__loading-indicator">
