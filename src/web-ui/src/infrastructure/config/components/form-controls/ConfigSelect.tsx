@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select, type SelectOption } from '@/component-library';
+import { Field, Select, type SelectOption, type SelectSize } from '@bitfun/ui';
 
 export interface ConfigSelectOption {
   value: string | number;
@@ -72,11 +72,7 @@ export const ConfigSelect: React.FC<ConfigSelectProps> = ({
   }));
 
   
-  const handleChange = (newValue: string | number | (string | number)[]) => {
-    if (onChange && !Array.isArray(newValue)) {
-      onChange(newValue);
-    }
-  };
+  const resolvedSize: SelectSize = size === 'small' ? 'sm' : size === 'large' ? 'lg' : 'md';
 
   
   const selectElement = (
@@ -86,39 +82,38 @@ export const ConfigSelect: React.FC<ConfigSelectProps> = ({
       defaultValue={defaultValue}
       placeholder={placeholder}
       disabled={disabled}
-      onChange={handleChange}
-      size={size}
-      error={!!error}
-      errorMessage={error}
+      onValueChange={onChange}
+      size={resolvedSize}
+      invalid={!!error}
       className={className}
     />
   );
 
+  const fieldElement = label ? (
+    <Field
+      controlWidth="fill"
+      description={hint && !error && !success ? hint : undefined}
+      label={<>{labelIcon}{label}</>}
+      orientation={inline ? 'horizontal' : 'vertical'}
+      required={required}
+    >
+      {selectElement}
+    </Field>
+  ) : selectElement;
+
   if (inline) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', ...style }}>
-        {label && (
-          <label className={`config-form-label ${required ? 'required' : ''}`}>
-            {labelIcon}
-            {label}
-          </label>
-        )}
-        {selectElement}
-        {hint && <span className="config-form-hint">{hint}</span>}
+        {fieldElement}
+        {!label && hint && <span className="config-form-hint">{hint}</span>}
       </div>
     );
   }
 
   return (
     <div className="config-form-group" style={style}>
-      {label && (
-        <label className={`config-form-label ${required ? 'required' : ''}`}>
-          {labelIcon}
-          {label}
-        </label>
-      )}
-      {selectElement}
-      {hint && !error && !success && <span className="config-form-hint">{hint}</span>}
+      {fieldElement}
+      {!label && hint && !error && !success && <span className="config-form-hint">{hint}</span>}
       {error && (
         <div className="config-form-status error">
           <span>{error}</span>

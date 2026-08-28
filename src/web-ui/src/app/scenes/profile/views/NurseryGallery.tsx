@@ -20,7 +20,7 @@ import {
   GalleryGrid,
   GallerySkeleton,
 } from '@/app/components';
-import { confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useApp } from '@/app/hooks/useApp';
 import { useSceneStore } from '@/app/stores/sceneStore';

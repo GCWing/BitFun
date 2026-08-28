@@ -3,8 +3,6 @@
  * Simple and understated style
  */
 
-@use '../../../component-library/styles/tokens' as *;
-
 // ==================== Content Section ====================
 
 .terminal-edit-dialog__content {
@@ -12,63 +10,6 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px 20px;
-}
-
-// ==================== Form Fields ====================
-
-.terminal-edit-dialog__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.terminal-edit-dialog__label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--bf-appearance-token-color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.terminal-edit-dialog__required {
-  color: #f44336;
-}
-
-.terminal-edit-dialog__optional {
-  font-weight: 400;
-  color: var(--bf-appearance-token-color-text-muted);
-}
-
-.terminal-edit-dialog__input {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 13px;
-  border: 1px solid var(--bf-appearance-token-border-subtle);
-  border-radius: 6px;
-  background: var(--bf-appearance-token-color-bg-secondary);
-  color: var(--bf-appearance-token-color-text-primary);
-  outline: none !important;
-  transition: border-color 0.15s ease, background 0.15s ease;
-
-  &:focus,
-  &:focus-visible,
-  &:focus-within,
-  &:active {
-    border-color: var(--bf-appearance-token-color-accent-500);
-    outline: none !important;
-    box-shadow: none;
-  }
-
-  &::placeholder {
-    color: var(--bf-appearance-token-color-text-muted);
-  }
-}
-
-.terminal-edit-dialog__hint {
-  font-size: 11px;
-  color: var(--bf-appearance-token-color-text-muted);
-  margin-top: 2px;
 }
 
 // ==================== Footer Buttons ====================

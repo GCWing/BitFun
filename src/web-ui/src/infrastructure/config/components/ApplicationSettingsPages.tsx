@@ -1,10 +1,10 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Select, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
-  Select,
+  Select as LegacySelect,
   Tooltip,
   type SelectOption,
   ConfigPageLoading,
@@ -502,7 +502,7 @@ function LoggingSection() {
           >
             <Select
               value={configLevel}
-              onChange={(v) => handleLevelChange(v as string)}
+              onValueChange={(v) => handleLevelChange(v as string)}
               options={levelOptions}
               disabled={saving}
             />
@@ -744,7 +744,7 @@ function TerminalSection() {
             align="center"
           >
             {availableShells.length > 0 ? (
-              <Select
+              <LegacySelect
                 value={selectedShellValue}
                 onChange={(v) => handleShellChange(v as string)}
                 options={shellOptions}
@@ -765,7 +765,7 @@ function TerminalSection() {
           >
             <Select
               value={terminalPanelPosition}
-              onChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
+              onValueChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
               options={terminalPanelPositionOptions}
               placeholder={t('terminal.panelPosition.placeholder')}
               disabled={saving}
@@ -862,7 +862,7 @@ function WindowBehaviorSection() {
           >
             <Select
               value={behavior}
-              onChange={(v) => { void handleChange(v as string); }}
+              onValueChange={(v) => { void handleChange(v as string); }}
               options={behaviorOptions}
               disabled={saving}
             />

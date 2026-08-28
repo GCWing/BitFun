@@ -15,13 +15,23 @@ interface FieldControlProps {
   required?: boolean;
 }
 
+export type FieldControlWidth = "auto" | "fill";
+export type FieldHorizontalGap = "md" | "lg";
+export type FieldLabelWidth = "auto" | "sm" | "md" | "lg";
+
 export interface FieldProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: ReactElement<FieldControlProps>;
   controlClassName?: string;
+  controlLeading?: ReactNode;
+  controlTrailing?: ReactNode;
+  controlWidth?: FieldControlWidth;
   description?: ReactNode;
+  horizontalGap?: FieldHorizontalGap;
   label: ReactNode;
+  labelAction?: ReactNode;
   labelClassName?: string;
+  labelWidth?: FieldLabelWidth;
   orientation?: "horizontal" | "vertical";
   required?: boolean;
 }
@@ -30,9 +40,15 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   children,
   className,
   controlClassName,
+  controlLeading,
+  controlTrailing,
+  controlWidth = "auto",
   description,
+  horizontalGap = "md",
   label,
+  labelAction,
   labelClassName,
+  labelWidth = "auto",
   orientation = "vertical",
   required = false,
   ...props
@@ -57,19 +73,29 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       {...props}
       className={classNames(styles.root, className)}
       data-bf-component="field"
+      data-control-width={controlWidth}
+      data-horizontal-gap={horizontalGap}
+      data-label-width={labelWidth}
       data-orientation={orientation}
       data-required={isRequired ? "true" : "false"}
       ref={ref}
     >
       <span className={classNames(styles.content, labelClassName)} data-bf-part="content">
-        <label className={styles.label} htmlFor={controlId}>
-          <span>{label}</span>
-          {isRequired && (
-            <span aria-hidden="true" className={styles.required} data-bf-part="required">
-              *
+        <span className={styles.labelRow} data-bf-part="label-row">
+          <label className={styles.label} htmlFor={controlId}>
+            <span>{label}</span>
+            {isRequired && (
+              <span aria-hidden="true" className={styles.required} data-bf-part="required">
+                *
+              </span>
+            )}
+          </label>
+          {labelAction !== undefined && labelAction !== null && (
+            <span className={styles.labelAction} data-bf-part="label-action">
+              {labelAction}
             </span>
           )}
-        </label>
+        </span>
         {descriptionId !== undefined && (
           <span className={styles.description} data-bf-part="description" id={descriptionId}>
             {description}
@@ -77,7 +103,17 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
         )}
       </span>
       <span className={classNames(styles.control, controlClassName)} data-bf-part="control">
+        {controlLeading !== undefined && controlLeading !== null && (
+          <span className={styles.controlAdornment} data-bf-part="control-leading">
+            {controlLeading}
+          </span>
+        )}
         {control}
+        {controlTrailing !== undefined && controlTrailing !== null && (
+          <span className={styles.controlAdornment} data-bf-part="control-trailing">
+            {controlTrailing}
+          </span>
+        )}
       </span>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Switch, ConfirmDialog, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +14,8 @@ import {
   Settings2,
   ShieldCheck,
 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  Select,
-  Tooltip,
-} from '@/component-library';
+import { ConfigPageLoading, Select as LegacySelect, Tooltip } from '@/component-library';
+
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
@@ -1862,9 +1858,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             </div>
                             <div className="bitfun-external-sources-config__policy-actions" data-bf-component="external-sources-config" data-bf-part="policyActions">
                               <Select
-                                size="small"
+                                size="sm"
                                 value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
-                                triggerAriaLabel={t('policy.modeLabel', {
+                                aria-label={t('policy.modeLabel', {
                                   ecosystem: ecosystem.descriptor.displayName,
                                 })}
                                 disabled={!policyCompatible || !hostCapabilities.canMutatePolicy
@@ -1884,7 +1880,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                       }]
                                     : []),
                                 ]}
-                                onChange={(value) => void updatePolicy({
+                                onValueChange={(value) => void updatePolicy({
                                   operation: 'set_ecosystem_mode',
                                   ecosystemId: ecosystem.ecosystemId,
                                   mode: String(Array.isArray(value) ? value[0] : value) as ExternalIntegrationMode,
@@ -2001,11 +1997,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                       ) : null}
                                     </div>
                                     <Select
-                                      size="small"
+                                      size="sm"
                                       value={accessKnown
                                         ? selectedCapabilityAccess(ecosystem, capabilityId)
                                         : configuredAccess}
-                                      triggerAriaLabel={t('policy.capabilityAccessLabel', {
+                                      aria-label={t('policy.capabilityAccessLabel', {
                                         ecosystem: ecosystem.descriptor.displayName,
                                         capability: t(`policy.capability.${capabilityId}`),
                                       })}
@@ -2026,7 +2022,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                             }]
                                           : []),
                                       ]}
-                                      onChange={(value) => {
+                                      onValueChange={(value) => {
                                         const access = String(
                                           Array.isArray(value) ? value[0] : value,
                                         ) as ExternalIntegrationAccess;
@@ -2081,9 +2077,9 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                   </div>
                   <div className="bitfun-external-sources-config__policy-actions" data-bf-component="external-sources-config" data-bf-part="policyActions">
                     <Select
-                      size="small"
+                      size="sm"
                       value={selectedPolicyEnabled ? ecosystem.mode : 'disabled'}
-                      triggerAriaLabel={t('policy.modeLabel', {
+                      aria-label={t('policy.modeLabel', {
                         ecosystem: ecosystem.descriptor.displayName,
                       })}
                       disabled={!policyCompatible || !hostCapabilities.canMutatePolicy
@@ -2103,7 +2099,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             }]
                           : []),
                       ]}
-                      onChange={(value) => void updatePolicy({
+                      onValueChange={(value) => void updatePolicy({
                         operation: 'set_ecosystem_mode',
                         ecosystemId: ecosystem.ecosystemId,
                         mode: String(Array.isArray(value) ? value[0] : value) as ExternalIntegrationMode,
@@ -2157,11 +2153,11 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             ) : null}
                           </div>
                           <Select
-                            size="small"
+                            size="sm"
                             value={accessKnown
                               ? selectedCapabilityAccess(ecosystem, capabilityId)
                               : configuredAccess}
-                            triggerAriaLabel={t('policy.capabilityAccessLabel', {
+                            aria-label={t('policy.capabilityAccessLabel', {
                               ecosystem: ecosystem.descriptor.displayName,
                               capability: t(`policy.capability.${capabilityId}`),
                             })}
@@ -2182,7 +2178,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                   }]
                                 : []),
                             ]}
-                            onChange={(value) => {
+                            onValueChange={(value) => {
                               const access = String(
                                 Array.isArray(value) ? value[0] : value,
                               ) as ExternalIntegrationAccess;
@@ -2731,7 +2727,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       align="center"
                     >
                       {canEdit ? (
-                        <Select
+                        <LegacySelect
                           size="small"
                           value={selectedKey}
                           triggerAriaLabel={t('agentModelBindings.selectLabel', {

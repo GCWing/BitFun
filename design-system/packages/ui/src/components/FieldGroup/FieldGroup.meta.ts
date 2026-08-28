@@ -1,0 +1,37 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const fieldGroupMeta = {
+  category: "form",
+  description: "Composes titled form sections, grouped field surfaces, and independently padded rows without coupling product settings semantics into the library.",
+  maturity: "stable",
+  name: "FieldGroup",
+  props: [
+    { name: "FormSection.title", type: "ReactNode" },
+    { name: "FormSection.description", type: "ReactNode" },
+    { name: "FormSection.leading", type: "ReactNode" },
+    { name: "FormSection.actions", type: "ReactNode" },
+    { defaultValue: "h2", name: "FormSection.headingAs", type: "h2 | h3 | h4" },
+    { defaultValue: "subtle", name: "appearance", type: "subtle | plain" },
+    { defaultValue: "true", name: "dividers", type: "boolean" },
+    { defaultValue: "center", name: "FieldRow.align", type: "center | start" },
+    { defaultValue: "md", name: "FieldRow.padding", type: "none | md" },
+  ],
+  states: ["subtle", "plain", "divided"],
+  tokens: [
+    "color.surface.subtle",
+    "color.content.primary",
+    "color.content.muted",
+    "color.border.subtle",
+    "layout.formSection.gap",
+    "layout.formSection.headerGap",
+    "layout.formSection.titleDescriptionGap",
+    "layout.formSection.titleFontSize",
+    "layout.fieldGroup.radius",
+    "layout.fieldGroup.rowPaddingBlock",
+    "layout.fieldGroup.rowPaddingInline",
+    "font.family.control",
+    "font.size.small",
+    "font.weight.regular",
+    "font.weight.semibold",
+  ],
+} as const satisfies ComponentMeta;

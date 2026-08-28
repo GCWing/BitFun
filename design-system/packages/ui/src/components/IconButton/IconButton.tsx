@@ -12,7 +12,7 @@ export interface IconButtonProps
   icon: ReactNode;
   loading?: boolean;
   shape?: "circle" | "square";
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   tone?: "danger" | "neutral";
   variant?: "fill" | "primary" | "quiet";
 }

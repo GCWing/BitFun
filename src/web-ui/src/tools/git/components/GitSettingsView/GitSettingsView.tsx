@@ -1,6 +1,6 @@
 /** Git settings view. */
 
-import { Button, IconButton, Input, TabGroup } from '@bitfun/ui';
+import { Button, Field, IconButton, Input, Select, TabGroup } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Settings, 
@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { Select, Checkbox } from '@/component-library';
+import { Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -225,18 +225,19 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.editor.title')}</h4>
         
         <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
-          <Select
-            label={t('settingsView.sections.editor.defaultEditorLabel')}
-            options={[
-              { label: 'Visual Studio Code', value: 'code --wait' },
-              { label: 'Vim', value: 'vim' },
-              { label: 'Nano', value: 'nano' },
-              { label: 'Emacs', value: 'emacs' },
-              { label: 'Sublime Text', value: 'subl -w' },
-            ]}
-            value={config.core.editor}
-            onChange={(value) => updateCoreConfig('editor', value as string)}
-          />
+          <Field label={t('settingsView.sections.editor.defaultEditorLabel')} controlWidth="fill">
+            <Select
+              options={[
+                { label: 'Visual Studio Code', value: 'code --wait' },
+                { label: 'Vim', value: 'vim' },
+                { label: 'Nano', value: 'nano' },
+                { label: 'Emacs', value: 'emacs' },
+                { label: 'Sublime Text', value: 'subl -w' },
+              ]}
+              value={config.core.editor}
+              onValueChange={(value) => updateCoreConfig('editor', value as string)}
+            />
+          </Field>
         </div>
       </div>
 
@@ -244,16 +245,17 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.lineEndings.title')}</h4>
         
         <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
-          <Select
-            label={t('settingsView.sections.lineEndings.autocrlfLabel')}
-            options={[
-              { label: t('settingsView.sections.lineEndings.options.auto'), value: 'true' },
-              { label: t('settingsView.sections.lineEndings.options.input'), value: 'input' },
-              { label: t('settingsView.sections.lineEndings.options.disabled'), value: 'false' },
-            ]}
-            value={config.core.autocrlf}
-            onChange={(value) => updateCoreConfig('autocrlf', value as string)}
-          />
+          <Field label={t('settingsView.sections.lineEndings.autocrlfLabel')} controlWidth="fill">
+            <Select
+              options={[
+                { label: t('settingsView.sections.lineEndings.options.auto'), value: 'true' },
+                { label: t('settingsView.sections.lineEndings.options.input'), value: 'input' },
+                { label: t('settingsView.sections.lineEndings.options.disabled'), value: 'false' },
+              ]}
+              value={config.core.autocrlf}
+              onValueChange={(value) => updateCoreConfig('autocrlf', value as string)}
+            />
+          </Field>
         </div>
       </div>
 

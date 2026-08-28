@@ -20,10 +20,12 @@ vi.mock('react-i18next', () => ({
 }));
 
 interface SelectSpyProps {
+  'aria-label'?: string;
   triggerAriaLabel?: string;
   value?: string | number | (string | number)[] | null;
   options?: Array<{ label: string; value: string | number }>;
   onChange?: (value: string | number | (string | number)[]) => void;
+  onValueChange?: (value: string) => void;
   disabled?: boolean;
   searchable?: boolean;
   clearable?: boolean;
@@ -31,6 +33,39 @@ interface SelectSpyProps {
 }
 
 const selectProps: Record<string, SelectSpyProps> = {};
+
+vi.mock('@bitfun/ui', () => ({
+  Button: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props}>{children}</button>
+  ),
+  IconButton: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props}>{children}</button>
+  ),
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Switch: () => <input type="checkbox" />,
+  Select: (props: SelectSpyProps) => {
+    const label = props['aria-label'] ?? '';
+    selectProps[label] = props;
+    return (
+      <select
+        aria-label={label}
+        value={typeof props.value === 'string' ? props.value : ''}
+        disabled={props.disabled}
+        onChange={(event) => props.onValueChange?.(event.target.value)}
+      >
+        {props.options?.map(option => (
+          <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+        ))}
+      </select>
+    );
+  },
+}));
 
 vi.mock('@/component-library', () => ({
   Button: ({

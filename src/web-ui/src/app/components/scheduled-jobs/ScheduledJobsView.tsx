@@ -5,10 +5,11 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { Select, Textarea, confirmDanger, Tooltip } from '@/component-library';
+import { Select as LegacySelect, Textarea, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,
   type CreateCronJobRequest,
@@ -750,14 +751,14 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
             <div className="asv__control-grid asv__control-grid--schedule">
               <Select
-                size="small"
+                size="sm"
                 value={draft.scheduleKind}
                 options={[
                   { value: 'at', label: t('nav.scheduledJobs.scheduleKinds.at') },
                   { value: 'every', label: t('nav.scheduledJobs.scheduleKinds.every') },
                   { value: 'cron', label: t('nav.scheduledJobs.scheduleKinds.cron') },
                 ]}
-                onChange={value => {
+                onValueChange={value => {
                   setValidationErrors(current => ({
                     ...current,
                     at: false,
@@ -830,13 +831,13 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                     size="sm"
                   />
                   <Select
-                    size="small"
+                    size="sm"
                     value={draft.everyUnit}
                     options={INTERVAL_UNIT_OPTIONS.map(unit => ({
                       value: unit,
                       label: t(`nav.scheduledJobs.intervalUnits.${unit}`),
                     }))}
-                    onChange={value => {
+                    onValueChange={value => {
                       setDraft(c => ({ ...c, everyUnit: value as IntervalUnit }));
                     }}
                   />
@@ -906,7 +907,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Select
+              <LegacySelect
                 size="small"
                 options={sessionOptions}
                 value={draft.sessionId}
@@ -930,7 +931,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.agentType')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Select
+              <LegacySelect
                 size="small"
                 options={workspaceAgentOptions}
                 value={draft.agentType}
@@ -961,7 +962,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Select
+              <LegacySelect
                 size="small"
                 options={sessionOptions}
                 value={draft.sessionId}

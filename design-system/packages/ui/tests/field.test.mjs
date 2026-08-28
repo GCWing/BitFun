@@ -42,6 +42,41 @@ test("Field exposes horizontal layout independently from its control", () => {
   assert.match(markup, /type="checkbox"/);
 });
 
+test("Field exposes reusable horizontal label and fill-control geometry", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Field, {
+      controlWidth: "fill",
+      horizontalGap: "lg",
+      label: "Provider name",
+      labelWidth: "md",
+      orientation: "horizontal",
+    }, createElement(Input)),
+  );
+
+  assert.match(markup, /data-control-width="fill"/);
+  assert.match(markup, /data-horizontal-gap="lg"/);
+  assert.match(markup, /data-label-width="md"/);
+});
+
+test("Field keeps label and control adornments outside the associated control", () => {
+  const markup = renderToStaticMarkup(
+    createElement(Field, {
+      controlLeading: createElement("button", { type: "button" }, "Toggle"),
+      controlTrailing: createElement("button", { type: "button" }, "More"),
+      label: "Appearance",
+      labelAction: createElement("button", { type: "button" }, "Help"),
+    }, createElement(Input, { id: "appearance" })),
+  );
+
+  assert.match(markup, /data-bf-part="label-row"/);
+  assert.match(markup, /data-bf-part="label-action"[^>]*><button[^>]*>Help/);
+  assert.match(markup, /data-bf-part="control-leading"[^>]*><button[^>]*>Toggle/);
+  assert.match(markup, /data-bf-part="control-trailing"[^>]*><button[^>]*>More/);
+  assert.match(markup, /<label[^>]+for="appearance"/);
+  const labelMarkup = /<label[^>]*>.*?<\/label>/s.exec(markup)?.[0] ?? "";
+  assert.doesNotMatch(labelMarkup, /<button/);
+});
+
 test("Field styles consume shared content and typography tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
@@ -50,4 +85,9 @@ test("Field styles consume shared content and typography tokens", async () => {
   assert.match(styles, /--bf-color-accent-default/);
   assert.match(styles, /--bf-font-size-caption/);
   assert.match(styles, /--bf-font-weight-semibold/);
+  assert.match(styles, /--bf-layout-field-root-gap/);
+  assert.match(styles, /--bf-layout-field-label-action-gap/);
+  assert.match(styles, /--bf-layout-field-control-gap/);
+  assert.match(styles, /--bf-layout-field-horizontal-gap-wide/);
+  assert.match(styles, /--bf-layout-field-label-width-md/);
 });

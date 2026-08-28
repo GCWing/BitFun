@@ -5,9 +5,8 @@
 import React, { useMemo } from 'react';
 import { Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ActivityItem } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import type { CompactToolCardProps } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 
 export const TerminalControlDisplay: React.FC<ToolCardProps> = React.memo(({
@@ -76,17 +75,13 @@ export const TerminalControlDisplay: React.FC<ToolCardProps> = React.memo(({
   };
 
   return (
-    <CompactToolCard
-      status={status as CompactToolCardProps['status']}
-      isExpanded={false}
+    <ActivityItem
+      appearance="inline"
       className="terminal-control-card"
-      clickable={false}
-      header={
-        <CompactToolCardHeader
-          icon={<ToolCardStatusSlot status={status as CompactToolCardProps['status']} toolIcon={<Terminal size={16} />} />}
-          content={renderContent()}
-        />
-      }
-    />
+      data-bf-status={status}
+      leading={<ToolCardStatusSlot status={status} toolIcon={<Terminal size={16} />} />}
+    >
+      {renderContent()}
+    </ActivityItem>
   );
 });

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Hourglass } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ActivityItem } from '@bitfun/ui';
 
 import { Tooltip } from '@/component-library';
 import { flowChatStore } from '../store/FlowChatStore';
 import type { Session, ToolCardProps, ToolCardDisplayContext } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import './AgentWaitToolCard.scss';
 
@@ -106,20 +106,17 @@ export const AgentWaitToolCard: React.FC<ToolCardProps> = ({
       data-tool-card-id={toolId ?? ''}
       className="agent-wait-tool-card"
     >
-      <CompactToolCard
-        status={status}
-        className="agent-wait-tool-card__compact"
-        clickable={false}
-        header={(
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Hourglass size={16} />} />}
-            action={t('toolCards.agentWait.title')}
-            content={showSteeringHint
-              ? <TruncatedSteeringHint text={steeringHint} />
-              : summary}
-          />
-        )}
-      />
+      <ActivityItem
+        appearance="inline"
+        className="agent-wait-tool-card__activity"
+        data-bf-status={status}
+        label={t('toolCards.agentWait.title')}
+        leading={<ToolCardStatusSlot status={status} toolIcon={<Hourglass size={16} />} />}
+      >
+        {showSteeringHint
+          ? <TruncatedSteeringHint text={steeringHint} />
+          : summary}
+      </ActivityItem>
     </div>
   );
 };

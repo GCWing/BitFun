@@ -234,7 +234,7 @@ describe('UserMessageEditComposer', () => {
     expect(onChange).toHaveBeenLastCalledWith('Continue the investigation.');
 
     await act(async () => {
-      container.querySelector('.user-message-edit-composer__icon-button--confirm')?.dispatchEvent(
+      container.querySelector('button[aria-label="Save"]')?.dispatchEvent(
         new dom.window.MouseEvent('click', { bubbles: true }),
       );
     });

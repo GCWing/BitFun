@@ -1,15 +1,9 @@
-import { Switch, IconButton } from '@bitfun/ui';
+import { Switch, IconButton, ConfirmDialog, Select, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfirmDialog,
-  NumberInput,
-  Select,
-  type SelectOption,
-  Tooltip,
-} from '@/component-library';
+import { ConfigPageLoading, NumberInput, Tooltip } from '@/component-library';
+
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -330,14 +324,14 @@ const MemorySettingsPage: React.FC = () => {
           >
             <Select
               value={config.external_context_policy}
-              onChange={(value) => {
+              onValueChange={(value) => {
                 void updateConfig(
                   'external_context_policy',
                   normalizeSelectValue(value) as MemoriesConfigShape['external_context_policy'],
                 );
               }}
               options={externalContextPolicyOptions}
-              size="small"
+              size="sm"
               disabled={savingKey === 'external_context_policy' || memoryWorkDisabled}
             />
           </ConfigPageRow>
@@ -351,9 +345,9 @@ const MemorySettingsPage: React.FC = () => {
           >
             <Select
               value={config.extract_model ?? ''}
-              onChange={(value) => updateModelSelector('extract_model', value)}
+              onValueChange={(value) => updateModelSelector('extract_model', value)}
               options={buildModelOptions(t('models.followPrimary'))}
-              size="small"
+              size="sm"
               disabled={savingKey === 'extract_model' || memoryWorkDisabled}
             />
           </ConfigPageRow>
@@ -364,9 +358,9 @@ const MemorySettingsPage: React.FC = () => {
           >
             <Select
               value={config.consolidation_model ?? ''}
-              onChange={(value) => updateModelSelector('consolidation_model', value)}
+              onValueChange={(value) => updateModelSelector('consolidation_model', value)}
               options={buildModelOptions(t('models.followExtraction'))}
-              size="small"
+              size="sm"
               disabled={savingKey === 'consolidation_model' || memoryWorkDisabled}
             />
           </ConfigPageRow>

@@ -24,6 +24,10 @@ test("preview matrices define horizontal columns for every registered state coun
   );
   assert.match(
     source,
+    /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(244px, 1fr\)\)/s,
+  );
+  assert.match(
+    source,
     /\.component-preview-matrix\[data-state-count="4"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(124px, 1fr\)\)/s,
   );
   assert.match(
@@ -50,6 +54,26 @@ test("Button preview opens on the filled variant used by the reference inspector
     source,
     /useState<\(typeof buttonVariants\)\[number\]>\("fill"\)/,
   );
+});
+
+test("Card preview exposes generic surface and slot composition contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Card"/);
+  assert.match(detail, /case "Card":\s*return \["raised", "subtle", "media"\] as const/);
+  assert.match(detail, /CardHeader/);
+  assert.match(detail, /CardBody/);
+  assert.match(detail, /CardFooter/);
+  assert.match(detail, /CardMedia/);
+  assert.match(detail, /appearance="raised"/);
+  assert.match(detail, /appearance="subtle"/);
+  assert.match(detail, /appearance="neutral"/);
+  assert.match(styles, /\.component-card-example\s*\{[^}]*max-inline-size:\s*760px/s);
+  assert.match(styles, /\.component-card-command-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
 });
 
 test("Button matrix is limited to the four reference interaction states", async () => {
@@ -96,6 +120,49 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
 });
 
+test("Icon preview exposes the complete named catalog and semantic controls", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Icon"/);
+  assert.match(detail, /iconNames\.map\(\(name\)/);
+  assert.match(detail, /setIconName/);
+  assert.match(detail, /setIconSize/);
+  assert.match(detail, /setIconTone/);
+  assert.match(detail, /translateOptions=\{false\}/);
+  assert.match(styles, /\.component-icon-catalog\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill, minmax\(132px, 1fr\)\)/s);
+});
+
+test("StatusPill preview exposes compact indicator anatomy and semantic tones", async () => {
+  const [catalog, detail] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "StatusPill"/);
+  assert.match(detail, /case "StatusPill":\s*return \["neutral", "info", "success", "warning", "danger"\] as const/);
+  assert.match(detail, /<StatusPill/);
+  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /tone=\{state as StatusPillTone\}/);
+});
+
+test("Select preview exposes native grouped selection and independent states", async () => {
+  const [catalog, detail] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Select"/);
+  assert.match(detail, /case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(detail, /onValueChange=\{\(value\) => setSelectValue\(String\(value\)\)\}/);
+  assert.match(detail, /leading=\{<Icon name="circle" \/>\}/);
+  assert.match(detail, /disabled=\{state === "disabled"\}/);
+  assert.match(detail, /invalid=\{state === "invalid"\}/);
+});
+
 test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
@@ -104,6 +171,25 @@ test("ActionItem preview keeps its trigger and end actions as separate contracts
   assert.match(source, /shortcut=\{<KeyHint>K<\/KeyHint>\}/);
   assert.match(source, /id: "add"/);
   assert.match(source, /id: "more"/);
+});
+
+test("ActivityItem preview exposes inline and surfaced anatomy without product behavior", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ActivityItem"/);
+  assert.match(detail, /const activityItemAppearances = \["inline", "surface"\] as const/);
+  assert.match(detail, /case "ActivityItem":\s*return \["default", "hover", "active", "focus-visible", "disabled"\] as const/);
+  assert.match(detail, /appearance=\{activityItemAppearance\}/);
+  assert.match(detail, /label=\{surface \? t\("components\.preview\.activityAction"\) : undefined\}/);
+  assert.match(detail, /metadata=\{surface \? <ChangeCount additions=\{6\} deletions=\{0\} \/> : undefined\}/);
+  assert.match(detail, /actions=\{surface \? \[/);
+  assert.match(detail, /setActivityItemAppearance/);
+  assert.match(styles, /\.component-activity-item-example\s*\{[^}]*max-inline-size:\s*680px/s);
+  assert.match(styles, /\[data-bf-component="activity-item"\]\.lab-force-focus/);
 });
 
 test("ActionItem preview reserves a full-width column for its complete anatomy", async () => {
@@ -140,10 +226,28 @@ test("Modal preview exposes a direct anatomy specimen and a separate interaction
   assert.match(styles, /\.component-modal-preview-dialog\s*\{[^}]*block-size:\s*700px/s);
 });
 
+test("ConfirmDialog preview exposes semantic, destructive, preview, and pending contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ConfirmDialog"/);
+  assert.match(detail, /case "ConfirmDialog":\s*return \["info", "warning", "error", "success", "pending"\] as const/);
+  assert.match(detail, /<ConfirmDialog/);
+  assert.match(detail, /confirmDanger=\{confirmType === "error"\}/);
+  assert.match(detail, /pendingAction=\{state === "pending" \? "confirm" : null\}/);
+  assert.match(detail, /preview="\/workspace\/project"/);
+  assert.match(detail, /portalled=\{false\}/);
+  assert.match(styles, /\.component-confirm-dialog-preview-overlay\s*\{[^}]*position:\s*relative/s);
+  assert.match(styles, /\.component-confirm-dialog-preview-dialog\s*\{[^}]*animation:\s*none/s);
+});
+
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Input":\s*case "SearchField":\s*case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);
@@ -152,13 +256,110 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   assert.match(source, /shortcut=\{<KeyHint icon=\{<Command aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
 });
 
-test("Field preview exposes label content independently from layout orientation", async () => {
-  const source = await readFile(detailSource, "utf8");
+test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "ScrollArea"/);
+  assert.match(detail, /const scrollAreaOrientations = \["vertical", "horizontal", "both"\] as const/);
+  assert.match(detail, /case "ScrollArea":\s*return \["auto", "always", "hidden"\] as const/);
+  assert.match(detail, /orientation=\{scrollAreaOrientation\}/);
+  assert.match(detail, /scrollbarVisibility=\{state as ScrollbarVisibility\}/);
+  assert.match(styles, /\.component-scroll-area-example\s*\{[^}]*block-size:\s*160px/s);
+});
+
+test("Menu preview exposes grouped anatomy, item states, and scrollbar control", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Menu"/);
+  assert.match(detail, /MenuSection/);
+  assert.match(detail, /MenuSeparator/);
+  assert.match(detail, /"scrolling", "focus-within", "disabled-item", "checked-item"/);
+  assert.match(detail, /scrollbarVisibility=\{menuShowScrollbar \? "auto" : "hidden"\}/);
+  assert.match(detail, /role=\{state === "checked-item"/);
+  assert.match(styles, /\[data-bf-component="action-item"\]\.lab-force-focus/);
+});
+
+test("NavigationPanel preview exposes header, grouped navigation, selected items, scrolling, and footer", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "NavigationPanel"/);
+  assert.match(detail, /NavigationPanelSection/);
+  assert.match(detail, /NavigationPanelSeparator/);
+  assert.match(detail, /"default", "selected-item", "disabled-item", "scrolling"/);
+  assert.match(detail, /footer=\{\(/);
+  assert.match(detail, /header=\{\(/);
+  assert.match(detail, /selected=\{state === "selected-item"/);
+  assert.match(detail, /scrollbarVisibility=\{navigationPanelShowScrollbar \? "auto" : "hidden"\}/);
+  assert.match(styles, /\.component-navigation-panel-example\s*\{[^}]*block-size:\s*520px/s);
+});
+
+test("Composer preview exposes context, editor, and action regions independently", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Composer"/);
+  assert.match(detail, /ComposerContextBar/);
+  assert.match(detail, /ComposerDivider/);
+  assert.match(detail, /ComposerToolbar/);
+  assert.match(detail, /"default", "focus-within", "with-context", "invalid", "disabled"/);
+  assert.match(detail, /contextBar=\{showContext \? \(/);
+  assert.match(detail, /toolbar=\{composerShowToolbar \? \(/);
+  assert.match(detail, /<textarea/);
+  assert.match(detail, /setComposerShowContext/);
+  assert.match(detail, /setComposerShowToolbar/);
+  assert.match(styles, /\.component-composer-example\s*\{[^}]*max-inline-size:\s*680px/s);
+  assert.match(styles, /\[data-bf-component="composer"\]\.lab-force-focus/);
+});
+
+test("Field preview exposes label and control composition independently from layout orientation", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
 
   assert.match(source, /const fieldOrientations = \["vertical", "horizontal"\] as const/);
   assert.match(source, /description=\{t\("components\.preview\.fieldDescription"\)\}/);
   assert.match(source, /orientation=\{fieldOrientation\}/);
   assert.match(source, /component\.name === "Field"/);
+  assert.match(source, /labelAction=\{fieldShowLabelAction \? \(/);
+  assert.match(source, /controlLeading=\{fieldShowControlLeading \? \(/);
+  assert.match(source, /controlTrailing=\{fieldShowControlTrailing \? \(/);
+  assert.match(source, /setFieldShowLabelAction/);
+  assert.match(source, /setFieldShowControlLeading/);
+  assert.match(source, /setFieldShowControlTrailing/);
+  assert.match(styles, /\.component-field-example\[data-orientation="horizontal"\] \[data-bf-part="control"\]\s*\{[^}]*inline-size:\s*150px/s);
+});
+
+test("FieldGroup preview exposes section, surface, row, and field composition contracts", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(source, /case "FieldGroup":\s*return \["subtle", "plain", "divided"\] as const/);
+  assert.match(source, /component\.name === "FieldGroup"/);
+  assert.match(source, /<FormSection/);
+  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
+  assert.match(source, /<FieldGroup appearance=\{plain \? "plain" : "subtle"\} dividers=\{state === "divided"\}/);
+  assert.match(source, /<FieldRow>/);
+  assert.match(source, /controlWidth="fill"/);
+  assert.match(source, /labelWidth="md"/);
+  assert.match(styles, /\.component-field-group-example\s*\{[^}]*max-inline-size:\s*760px/s);
 });
 
 test("PageHeader preview decouples semantic level from visual size and alignment", async () => {
@@ -170,6 +371,7 @@ test("PageHeader preview decouples semantic level from visual size and alignment
   assert.match(source, /size=\{pageHeaderSize\}/);
   assert.match(source, /align=\{pageHeaderAlign\}/);
   assert.match(source, /action=\{\(/);
+  assert.match(source, /leading=\{<Settings aria-hidden="true" \/>\}/);
 });
 
 test("TabGroup preview carries the selected and outline reference composition", async () => {
@@ -186,4 +388,22 @@ test("TabGroup preview carries the selected and outline reference composition", 
   assert.match(source, /components\.preview\.settings/);
   assert.match(source, /data-component="tab-group"/);
   assert.match(source, /<TabGroup/);
+});
+
+test("Toolbar preview keeps leading, centered, trailing, and overflow compositions independent", async () => {
+  const [catalog, detail, styles] = await Promise.all([
+    readFile(catalogSource, "utf8"),
+    readFile(detailSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(catalog, /case "Toolbar"/);
+  assert.match(detail, /ToolbarBadge/);
+  assert.match(detail, /ToolbarGroup/);
+  assert.match(detail, /ToolbarSeparator/);
+  assert.match(detail, /case "Toolbar":\s*return \["default", "with-center", "overflow"\] as const/);
+  assert.match(detail, /leadingOverflow=\{state === "overflow" \? "scroll" : "visible"\}/);
+  assert.match(detail, /center=\{state === "with-center"/);
+  assert.match(detail, /setToolbarSize/);
+  assert.match(styles, /\.component-toolbar-example\s*\{[^}]*max-inline-size:\s*760px/s);
 });

@@ -31,7 +31,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { getAiErrorPresentation } from '@/shared/ai-errors/aiErrorPresenter';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import {
   aggregateReviewerProgress,
   buildErrorAttribution,

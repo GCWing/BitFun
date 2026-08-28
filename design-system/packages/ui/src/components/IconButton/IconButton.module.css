@@ -83,6 +83,11 @@
     border-radius: var(--bf-radius-pill);
   }
 
+  .button[data-size="xs"] {
+    --_icon-button-icon-size: var(--bf-control-icon-button-xs-icon-size);
+    --_icon-button-size: var(--bf-control-icon-button-xs-size);
+  }
+
   .button[data-size="md"] {
     --_icon-button-icon-size: 16px;
     --_icon-button-size: var(--bf-control-height-md);

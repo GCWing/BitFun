@@ -53,6 +53,14 @@ vi.mock('@bitfun/ui', () => ({
       onKeyDown={event => event.key === 'Enter' && onSearch(event.currentTarget.value)}
     />
   ),
+  Select: ({ options, onValueChange, ...props }: any) => (
+    <select {...props} onChange={event => onValueChange?.(event.target.value)}>
+      {options.map((option: any) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  ),
+  Field: ({ label, children }: any) => <label>{label}{children}</label>,
 }));
 
 vi.mock('@/component-library', () => ({
@@ -61,6 +69,9 @@ vi.mock('@/component-library', () => ({
   Textarea: ({ label, showCount: _showCount, ...props }: any) => (
     <label>{label}<textarea {...props} /></label>
   ),
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDialog: mocks.confirmDialog,
 }));
 

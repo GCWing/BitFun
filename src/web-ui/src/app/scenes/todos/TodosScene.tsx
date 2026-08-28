@@ -27,7 +27,8 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react';
-import { PresenceBoundary, Tooltip, confirmDanger } from '@/component-library';
+import { PresenceBoundary, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';

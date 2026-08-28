@@ -12,17 +12,27 @@ const categoryKeys: Readonly<Record<string, MessageKey>> = {
 };
 
 const descriptionKeys: Readonly<Record<string, MessageKey>> = {
+  ActionCard: "component.ActionCard.description",
   ActionItem: "component.ActionItem.description",
+  ActivityItem: "component.ActivityItem.description",
   Button: "component.Button.description",
+  Card: "component.Card.description",
+  Composer: "component.Composer.description",
+  ConfirmDialog: "component.ConfirmDialog.description",
   Field: "component.Field.description",
+  FieldGroup: "component.FieldGroup.description",
   IconButton: "component.IconButton.description",
   Input: "component.Input.description",
   KeyHint: "component.KeyHint.description",
+  Menu: "component.Menu.description",
   Modal: "component.Modal.description",
+  NavigationPanel: "component.NavigationPanel.description",
   PageHeader: "component.PageHeader.description",
   SearchField: "component.SearchField.description",
+  SegmentedControl: "component.SegmentedControl.description",
   Switch: "component.Switch.description",
   TabGroup: "component.TabGroup.description",
+  Toolbar: "component.Toolbar.description",
 };
 
 export function getComponentCategoryLabel(category: string, t: Translate): string {

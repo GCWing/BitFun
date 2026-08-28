@@ -23,8 +23,8 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { ConfirmDialog } from '@/component-library';
-import { SearchField } from '@bitfun/ui';
+import { ConfirmDialog, SearchField, IconButton } from '@bitfun/ui';
+
 import {
   GalleryEmpty,
   GalleryGrid,
@@ -45,7 +45,7 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { getMiniAppSceneId, stopMiniAppActivity } from '../miniAppActivity';
 import { useMiniAppActivity } from '../hooks/useMiniAppActivity';
 import './MiniAppGalleryView.scss';
-import { IconButton } from '@bitfun/ui';
+
 
 const log = createLogger('MiniAppGalleryView');
 const MINIAPP_CARD_MIN_WIDTH = 280;

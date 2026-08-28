@@ -27,14 +27,40 @@ test("PageHeader exposes alignment and action content independently", () => {
     createElement(PageHeader, {
       action: createElement(Button, null, "Close"),
       align: "center",
+      leading: createElement("svg", { "aria-hidden": "true" }),
       title: "Good morning, coding partner",
     }),
   );
 
   assert.match(markup, /data-align="center"/);
+  assert.match(markup, /data-bf-part="leading"[^>]*><svg aria-hidden="true"><\/svg>/);
   assert.match(markup, /data-bf-part="action"/);
   assert.match(markup, /<button/);
   assert.match(markup, /data-bf-part="action"[^]*>Close<\/span>/);
+});
+
+test("PageHeader marks a required title with a decorative asterisk", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PageHeader, {
+      required: true,
+      title: "Provider name",
+    }),
+  );
+
+  assert.match(markup, /data-required="true"/);
+  assert.match(
+    markup,
+    /data-bf-part="heading"[^>]*>Provider name<span aria-hidden="true"[^>]*data-bf-part="required"[^>]*>\*<\/span><\/h1>/,
+  );
+});
+
+test("PageHeader omits the required marker by default", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PageHeader, { title: "Appearance" }),
+  );
+
+  assert.match(markup, /data-required="false"/);
+  assert.doesNotMatch(markup, /data-bf-part="required"/);
 });
 
 test("PageHeader styles use shared typography and content tokens", async () => {
@@ -45,4 +71,5 @@ test("PageHeader styles use shared typography and content tokens", async () => {
   assert.match(styles, /--bf-font-family-sans/);
   assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-content-muted/);
+  assert.match(styles, /--bf-color-accent-default/);
 });

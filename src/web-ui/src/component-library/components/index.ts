@@ -10,7 +10,6 @@ export * from './WindowControls';
 export * from './PresenceBoundary';
 export * from './ViewTransitionBoundary';
 export * from './InputDialog';
-export * from './ConfirmDialog';
 
 export * from './Alert';
 

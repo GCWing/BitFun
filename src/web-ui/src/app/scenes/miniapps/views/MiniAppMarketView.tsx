@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, ConfirmDialog, SearchField, Select, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -16,13 +16,9 @@ import {
   ShieldCheck,
   Star,
 } from 'lucide-react';
-import {
-  Badge,
-  ConfirmDialog,
-  Select,
-  type SelectOption,
-} from '@/component-library';
-import { SearchField } from '@bitfun/ui';
+import { Badge } from '@/component-library';
+
+
 import {
   GalleryDetailModal,
   GalleryEmpty,
@@ -306,11 +302,11 @@ const MiniAppMarketView: React.FC = () => {
           tools={(
             <Select
               className="miniapp-market-native__sort"
-              size="small"
+              size="sm"
               options={sortOptions}
               value={sort}
-              onChange={(value) => setSort(value as MarketSort)}
-              triggerAriaLabel={t('market.sortLabel')}
+              onValueChange={(value) => setSort(value as MarketSort)}
+              aria-label={t('market.sortLabel')}
             />
           )}
         >

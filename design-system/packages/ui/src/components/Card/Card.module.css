@@ -1,0 +1,210 @@
+@layer bf.components {
+  .root,
+  .header,
+  .leading,
+  .headerContent,
+  .title,
+  .description,
+  .actions,
+  .body,
+  .media,
+  .footer {
+    box-sizing: border-box;
+  }
+
+  .root {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    border: var(--bf-border-width-default) solid transparent;
+    color: var(--bf-color-content-secondary);
+    background: transparent;
+  }
+
+  .root[data-appearance="raised"] {
+    border-color: var(--bf-color-border-subtle);
+    background: var(--bf-color-surface-raised);
+    box-shadow: var(--bf-shadow-overlay);
+  }
+
+  .root[data-appearance="subtle"] {
+    background: var(--bf-color-surface-subtle);
+  }
+
+  .root[data-appearance="neutral"] {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .root[data-clip="true"] {
+    overflow: clip;
+  }
+
+  .root[data-gap="sm"] {
+    gap: var(--bf-layout-card-gap-sm);
+  }
+
+  .root[data-gap="md"] {
+    gap: var(--bf-layout-card-gap-md);
+  }
+
+  .root[data-gap="lg"] {
+    gap: var(--bf-layout-card-gap-lg);
+  }
+
+  .root[data-radius="sm"] {
+    border-radius: var(--bf-layout-card-radius-sm);
+  }
+
+  .root[data-radius="md"] {
+    border-radius: var(--bf-layout-card-radius-md);
+  }
+
+  .root[data-radius="lg"] {
+    border-radius: var(--bf-layout-card-radius-lg);
+  }
+
+  .root[data-padding="sm"],
+  .header[data-padding="sm"],
+  .body[data-padding="sm"],
+  .footer[data-padding="sm"] {
+    padding: var(--bf-layout-card-padding-sm);
+  }
+
+  .root[data-padding="md"],
+  .header[data-padding="md"],
+  .body[data-padding="md"],
+  .footer[data-padding="md"] {
+    padding: var(--bf-layout-card-padding-md);
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    min-inline-size: 0;
+    gap: var(--bf-layout-card-header-gap);
+  }
+
+  .header[data-align="center"] {
+    align-items: center;
+  }
+
+  .leading,
+  .actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .headerContent {
+    display: flex;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-layout-card-title-description-gap);
+  }
+
+  .headerContent[data-align="center"] {
+    align-items: center;
+    text-align: center;
+  }
+
+  .headerContent[data-align="start"] {
+    align-items: flex-start;
+    text-align: start;
+  }
+
+  .headerContent[data-align="end"] {
+    align-items: flex-end;
+    text-align: end;
+  }
+
+  .title {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
+  }
+
+  .description,
+  .body {
+    min-inline-size: 0;
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-base);
+  }
+
+  .body[data-align="start"] {
+    align-items: flex-start;
+  }
+
+  .body[data-align="center"] {
+    align-items: center;
+    text-align: center;
+  }
+
+  .body[data-align="end"] {
+    align-items: flex-end;
+    text-align: end;
+  }
+
+  .actions {
+    margin-inline-start: auto;
+  }
+
+  .body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .media {
+    display: grid;
+    min-inline-size: 0;
+    min-block-size: var(--bf-layout-card-media-min-block-size);
+    overflow: hidden;
+    place-items: center;
+    background: var(--bf-color-surface-canvas);
+  }
+
+  .media > :where(img, video, picture) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--bf-layout-card-footer-gap);
+  }
+
+  .footer[data-align="start"] {
+    justify-content: flex-start;
+  }
+
+  .footer[data-align="center"] {
+    justify-content: center;
+  }
+
+  .footer[data-align="end"] {
+    justify-content: flex-end;
+  }
+
+  .footer[data-align="between"] {
+    justify-content: space-between;
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+  }
+}

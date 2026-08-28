@@ -1,7 +1,6 @@
-import { Button, Switch } from '@bitfun/ui';
+import { Button, Select, Switch, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select, type SelectOption } from '@/component-library';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
 import { useFontPreference } from '../hooks/useFontPreference';
 import { FontSizeLevel, PRESET_UI_BASE_PX, UI_FONT_SIZE_PRESETS } from '../types';
@@ -311,12 +310,11 @@ export function FontPreferencePanel() {
               data-bf-part="flowChatControls"
             >
               <Select
-                size="small"
+                size="sm"
                 value={flowChatPxValue}
                 options={flowChatPxOptions}
-                onChange={handleFlowChatPxChange}
-                placement="bottom"
-                triggerTestId="appearance-flowchat-font-select"
+                onValueChange={handleFlowChatPxChange}
+                data-testid="appearance-flowchat-font-select"
               />
             </div>
           )}

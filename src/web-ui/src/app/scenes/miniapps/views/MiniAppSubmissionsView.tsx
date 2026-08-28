@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, Field, Select } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -15,7 +15,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { Badge, Input, Select } from '@/component-library';
+import { Badge, Input } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { MarketAccountControls } from '@/features/market-account';
@@ -308,16 +308,17 @@ const MiniAppSubmissionsView: React.FC = () => {
             <p>{t('market.submissions.newHint')}</p>
           </header>
 
-          <Select
-            label={t('market.submissions.app')}
-            value={selectedAppId}
-            onChange={(value) => {
-              const app = apps.find((item) => item.id === value);
-              if (app) selectApp(app);
-            }}
-            disabled={busy || localActionsDisabled}
-            options={apps.map((app) => ({ value: app.id, label: app.name }))}
-          />
+          <Field label={t('market.submissions.app')} controlWidth="fill">
+            <Select
+              value={selectedAppId}
+              onValueChange={(value) => {
+                const app = apps.find((item) => item.id === value);
+                if (app) selectApp(app);
+              }}
+              disabled={busy || localActionsDisabled}
+              options={apps.map((app) => ({ value: app.id, label: app.name }))}
+            />
+          </Field>
 
           <Input
             label={t('market.submissions.name')}
@@ -438,16 +439,17 @@ const MiniAppSubmissionsView: React.FC = () => {
               </div>
 
               <div className="miniapp-submissions__form-grid">
-                <Select
-                  label={t('market.submissions.category')}
-                  value={draft.category}
-                  disabled={busy}
-                  onChange={(value) => setDraft({ ...draft, category: String(value) })}
-                  options={MARKET_CATEGORIES.map((value) => ({
-                    value,
-                    label: marketCategoryLabel(value, t),
-                  }))}
-                />
+                <Field label={t('market.submissions.category')} controlWidth="fill">
+                  <Select
+                    value={draft.category}
+                    disabled={busy}
+                    onValueChange={(value) => setDraft({ ...draft, category: String(value) })}
+                    options={MARKET_CATEGORIES.map((value) => ({
+                      value,
+                      label: marketCategoryLabel(value, t),
+                    }))}
+                  />
+                </Field>
                 <Input
                   label={t('market.submissions.minVersion')}
                   value={draft.minBitfunVersion}

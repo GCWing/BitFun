@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,65 +58,38 @@ vi.mock('@bitfun/ui', () => ({
   }: React.PropsWithChildren<{ isOpen: boolean }>) => isOpen ? <div>{children}</div> : null,
   Button: ({
     children,
-    onClick,
-    disabled,
-    title,
-    className,
-  }: React.PropsWithChildren<{
-    onClick?: React.MouseEventHandler<HTMLButtonElement>;
-    disabled?: boolean;
-    title?: string;
-    className?: string;
-  }>) => (
-    <button type="button" onClick={onClick} disabled={disabled} title={title} className={className}>
-      {children}
-    </button>
-  ),
-  IconButton: ({
-    children,
-    onClick,
-    disabled,
-    className,
-    title,
-    'aria-label': ariaLabel,
-  }: React.PropsWithChildren<{
-    onClick?: React.MouseEventHandler<HTMLButtonElement>;
-    disabled?: boolean;
-    className?: string;
-    title?: string;
-    'aria-label'?: string;
-  }>) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-      title={title}
-      aria-label={ariaLabel}
-    >
-      {children}
-    </button>
+    leadingIcon: _leadingIcon,
+    loading: _loading,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    leadingIcon?: React.ReactNode;
+    loading?: boolean;
+  }) => <button type="button" {...props}>{children}</button>,
+  IconButton: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props}>{children}</button>
   ),
   Input: ({
-    label,
+    leading,
+    trailing,
+    ...props
+  }: React.InputHTMLAttributes<HTMLInputElement> & {
+    leading?: React.ReactNode;
+    trailing?: React.ReactNode;
+  }) => <label>{leading}<input {...props} />{trailing}</label>,
+  Select: ({
+    options,
     value,
-    onChange,
-    className,
-    placeholder,
-    suffix,
+    onValueChange,
   }: {
-    label?: string;
-    value?: string;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    className?: string;
-    placeholder?: string;
-    suffix?: React.ReactNode;
+    options: Array<{ label: string; value: string }>;
+    value: string;
+    onValueChange: (value: string) => void;
   }) => (
-    <label className={className}>
-      {label}
-      <input aria-label={label} value={value} onChange={onChange} placeholder={placeholder} />
-      {suffix}
-    </label>
+    <select value={value} onChange={(event) => onValueChange(event.target.value)}>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
   ),
 }));
 
@@ -253,28 +224,12 @@ describe('SSHConnectionDialog', () => {
     expect(container.querySelector('input[aria-label="ssh.remote.connectTimeout"]')).not.toBeNull();
   });
 
-  it('keeps portalled select menus above the raised dialog overlay', async () => {
+  it('uses native select controls inside the dialog', async () => {
     await renderDialog();
 
     const selects = Array.from(container.querySelectorAll<HTMLSelectElement>('select'));
     expect(selects.length).toBeGreaterThan(0);
-    expect(selects.every((select) => (
-      select.dataset.dropdownClassName === 'ssh-connection-dialog__select-dropdown'
-    ))).toBe(true);
-
-    const stylesheet = readFileSync(
-      resolve(process.cwd(), 'src/features/ssh-remote/SSHConnectionDialog.scss'),
-      'utf8',
-    );
-    const overlayZIndex = Number(stylesheet.match(
-      /\.ssh-connection-dialog__modal-overlay\s*\{[^}]*z-index:\s*(\d+)/,
-    )?.[1]);
-    const selectZIndex = Number(stylesheet.match(
-      /\.select__dropdown\.ssh-connection-dialog__select-dropdown\s*\{[^}]*z-index:\s*(\d+)/,
-    )?.[1]);
-
-    expect(overlayZIndex).toBeGreaterThan(0);
-    expect(selectZIndex).toBeGreaterThan(overlayZIndex);
+    expect(selects.every((select) => container.contains(select))).toBe(true);
   });
 
   it('reveals non-default settings when editing an existing connection', async () => {

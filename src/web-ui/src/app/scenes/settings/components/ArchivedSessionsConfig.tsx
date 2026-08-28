@@ -19,7 +19,7 @@ import {
 } from '@/infrastructure/config/components/common';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
-import { confirmWarning, confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning, confirmDanger } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';

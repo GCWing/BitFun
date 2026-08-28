@@ -56,6 +56,10 @@ vi.mock('@/component-library', () => ({
   ) : null),
 }));
 
+vi.mock('@/component-library', () => ({
+  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
+}));
+
 vi.mock('./common', () => ({
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (

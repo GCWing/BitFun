@@ -11,6 +11,27 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@bitfun/ui', () => ({
+  Select: ({ options, ...props }: any) => (
+    <select {...props}>
+      {options.map((option: any) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  ),
+  Switch: ({
+    checked,
+    onChange,
+    'data-testid': testId,
+  }: {
+    checked?: boolean;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+    'data-testid'?: string;
+  }) => (
+    <input type="checkbox" checked={checked} onChange={onChange} data-testid={testId} />
+  ),
+}));
+
 vi.mock('@/component-library', () => ({
   ConfigPageLoading: () => null,
   ConfigPageMessage: () => null,

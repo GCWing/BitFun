@@ -17,6 +17,10 @@
     "keyHint": {
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },
+    "scrollbar": {
+      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
+    },
     "content": {
       "primary": { "$type": "color", "$value": "{ref.color.neutral.200}" },
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.350}" },
@@ -26,7 +30,8 @@
     },
     "accent": {
       "default": { "$type": "color", "$value": "{ref.color.blue.400}" },
-      "hover": { "$type": "color", "$value": "{ref.color.blue.500}" }
+      "hover": { "$type": "color", "$value": "{ref.color.blue.500}" },
+      "disabled": { "$type": "color", "$value": "rgba(96, 165, 250, 0.30)" }
     },
     "border": {
       "subtle": { "$type": "color", "$value": "rgba(255, 255, 255, 0.12)" },
@@ -109,7 +114,9 @@
     "lg": { "$value": "0 8px 16px rgba(0, 0, 0, 0.6)" },
     "xl": { "$value": "0 12px 24px rgba(0, 0, 0, 0.5)" },
     "raised": { "$value": "{shadow.sm}" },
-    "overlay": { "$value": "{shadow.lg}" }
+    "composer": { "$value": "0 2px 6px rgba(0, 0, 0, 0.32)" },
+    "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.48)" },
+    "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.48)" }
   },
   "effect": {
     "blur": {

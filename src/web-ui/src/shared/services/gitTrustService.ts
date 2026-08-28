@@ -12,7 +12,7 @@
  * so the decision belongs to the user, not to the surface that tripped over it.
  */
 
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitTrustReport } from '@/infrastructure/api/service-api/GitAPI';
 import {

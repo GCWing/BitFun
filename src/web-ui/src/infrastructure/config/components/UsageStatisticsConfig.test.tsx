@@ -37,9 +37,15 @@ vi.mock('@bitfun/ui', () => ({
   IconButton: ({
     children,
     icon,
+    tooltip: _tooltip,
+    size: _size,
+    variant: _variant,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     icon?: React.ReactNode;
+    tooltip?: React.ReactNode;
+    size?: string;
+    variant?: string;
   }) => <button {...props}>{icon ?? children}</button>,
   Input: ({
     leading,
@@ -54,6 +60,27 @@ vi.mock('@bitfun/ui', () => ({
       <input {...props} />
       {trailing}
     </div>
+  ),
+  Select: ({
+    value,
+    options,
+    onValueChange,
+  }: {
+    value: string | number;
+    options: { value: string | number; label: string }[];
+    onValueChange?: (value: string) => void;
+  }) => (
+    <select
+      data-testid="usage-select"
+      value={String(value)}
+      onChange={(event) => onValueChange?.(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={String(option.value)} value={String(option.value)}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   ),
 }));
 

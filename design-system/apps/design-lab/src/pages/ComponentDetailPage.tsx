@@ -1,33 +1,88 @@
 import { Fragment, useMemo, useState } from "react";
 import {
+  ArrowUp,
+  Check,
   ChevronDown,
   ChevronRight,
   Clipboard,
   Command,
+  Copy,
+  Download,
   Eye,
+  ExternalLink,
+  Info,
   List,
   MessageCircle,
+  Mic,
+  Monitor,
   MoreHorizontal,
   Plus,
   Search as SearchIcon,
+  Settings,
+  Terminal,
   X,
 } from "lucide-react";
 import {
+  ActionCard,
   ActionItem,
+  ActivityItem,
   Button,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  CardMedia,
+  ChangeCount,
+  Composer,
+  ComposerContextBar,
+  ComposerDivider,
+  ComposerToolbar,
+  ConfirmDialog,
   Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
+  Icon,
   IconButton,
+  iconNames,
   Input,
   KeyHint,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
   Modal,
+  NavigationPanel,
+  NavigationPanelItem,
+  NavigationPanelSection,
+  NavigationPanelSeparator,
   PageHeader,
+  ScrollArea,
   SearchField,
+  SegmentedControl,
+  Select,
+  StatusPill,
   Switch,
   TabGroup,
   ThemeRoot,
+  Toolbar,
+  ToolbarBadge,
+  ToolbarGroup,
+  ToolbarSeparator,
   type ColorScheme,
+  type ConfirmDialogType,
   type ContrastMode,
   type DensityMode,
+  type IconName,
+  type IconSize,
+  type IconTone,
+  type ActivityItemAppearance,
+  type ActionCardSize,
+  type CardContentAlignment,
+  type ScrollAreaOrientation,
+  type ScrollbarVisibility,
+  type StatusPillTone,
+  type ToolbarSize,
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
@@ -61,10 +116,19 @@ const iconButtonVariants = ["quiet", "fill", "primary"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
+const cardContentAlignments = ["start", "center", "end"] as const;
 const pageHeaderSizes = ["sm", "md", "lg", "display"] as const;
+const scrollAreaOrientations = ["vertical", "horizontal", "both"] as const;
+const activityItemAppearances = ["inline", "surface"] as const;
+const actionCardSizes = ["sm", "md"] as const;
+const iconSizes = ["2xs", "xs", "sm", "md", "lg"] as const;
+const iconTones = ["inherit", "primary", "secondary", "muted", "disabled", "info", "success", "warning", "danger"] as const;
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
+  always: "detail.option.always",
+  auto: "detail.option.auto",
+  both: "detail.option.both",
   chevron: "detail.option.chevron",
   center: "detail.option.center",
   default: "detail.option.default",
@@ -73,11 +137,23 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   fill: "detail.option.fill",
   "focus-visible": "detail.option.focus-visible",
   hover: "detail.option.hover",
+  info: "detail.option.info",
   horizontal: "detail.option.horizontal",
+  hidden: "detail.option.hidden",
+  inline: "detail.option.inline",
+  scrolling: "detail.option.scrolling",
+  "focus-within": "detail.option.focus-within",
+  "with-context": "detail.option.with-context",
+  "with-center": "detail.option.with-center",
+  overflow: "detail.option.overflow",
+  "disabled-item": "detail.option.disabled-item",
+  "selected-item": "detail.option.selected-item",
+  "checked-item": "detail.option.checked-item",
   invalid: "detail.option.invalid",
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
+  pending: "detail.option.pending",
   md: "detail.option.md",
   none: "detail.option.none",
   off: "detail.option.off",
@@ -85,24 +161,33 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   outline: "detail.option.outline",
   primary: "detail.option.primary",
   quiet: "detail.option.quiet",
+  raised: "detail.option.raised",
   right: "detail.option.right",
   selected: "detail.option.selected",
   sm: "detail.option.sm",
   start: "detail.option.start",
+  surface: "detail.option.surface",
+  subtle: "detail.option.subtle",
+  success: "detail.option.success",
   text: "detail.option.text",
+  media: "detail.option.media",
   unselected: "detail.option.unselected",
   vertical: "detail.option.vertical",
+  warning: "detail.option.warning",
+  error: "detail.option.error",
 };
 
 function InspectorSelect({
   label,
   onChange,
   options,
+  translateOptions = true,
   value,
 }: {
   label: string;
   onChange: (value: string) => void;
   options: readonly string[];
+  translateOptions?: boolean;
   value: string;
 }) {
   const { t } = useI18n();
@@ -113,7 +198,7 @@ function InspectorSelect({
       <select onChange={(event) => onChange(event.target.value)} value={value}>
         {options.map((option) => (
           <option key={option} value={option}>
-            {t(optionLabelKeys[option] ?? "detail.option.default")}
+            {translateOptions ? t(optionLabelKeys[option] ?? "detail.option.default") : option}
           </option>
         ))}
       </select>
@@ -154,15 +239,40 @@ export function ComponentDetailPage({
   const { t } = useI18n();
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
+  const [iconName, setIconName] = useState<IconName>("search");
+  const [iconSize, setIconSize] = useState<IconSize>("lg");
+  const [iconTone, setIconTone] = useState<IconTone>("inherit");
+  const [selectValue, setSelectValue] = useState<string>("ask");
   const [size, setSize] = useState<PreviewSize>("md");
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
+  const [fieldShowLabelAction, setFieldShowLabelAction] = useState(false);
+  const [fieldShowControlLeading, setFieldShowControlLeading] = useState(false);
+  const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
+  const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
   const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
+  const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
+  const [activityShowDetail, setActivityShowDetail] = useState(false);
+  const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
+  const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
+  const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
-    component.name === "Switch"
-      ? "off"
-      : component.name === "TabGroup"
+    component.name === "Card"
+      ? "raised"
+      : component.name === "Composer"
+      ? "with-context"
+      : component.name === "Switch"
+        ? "off"
+      : component.name === "StatusPill"
+        ? "success"
+      : component.name === "Toolbar"
+        ? "with-center"
+      : component.name === "TabGroup" || component.name === "SegmentedControl"
         ? "selected"
+        : component.name === "ScrollArea"
+          ? "auto"
         : "default",
   );
   const [inspectorDisabled, setInspectorDisabled] = useState(false);
@@ -173,24 +283,53 @@ export function ComponentDetailPage({
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("properties");
   const [modalOpen, setModalOpen] = useState(false);
   const [modalShowScrollbar, setModalShowScrollbar] = useState(true);
+  const [menuShowScrollbar, setMenuShowScrollbar] = useState(true);
+  const [navigationPanelShowScrollbar, setNavigationPanelShowScrollbar] = useState(true);
+  const [composerShowContext, setComposerShowContext] = useState(false);
+  const [composerShowToolbar, setComposerShowToolbar] = useState(true);
 
   const states = useMemo(() => {
     switch (component.name) {
+      case "ActionCard":
+        return ["default", "hover", "active", "focus-visible", "selected", "disabled"] as const;
       case "ActionItem":
         return ["default", "hover", "active", "disabled"] as const;
+      case "ActivityItem":
+        return ["default", "hover", "active", "focus-visible", "disabled"] as const;
       case "Button":
       case "IconButton":
         return ["default", "hover", "active", "disabled"] as const;
+      case "Composer":
+        return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
+      case "ConfirmDialog":
+        return ["info", "warning", "error", "success", "pending"] as const;
+      case "Card":
+        return ["raised", "subtle", "media"] as const;
       case "Input":
       case "SearchField":
+      case "Select":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
       case "Field":
+      case "Icon":
       case "KeyHint":
       case "Modal":
       case "PageHeader":
         return ["default"] as const;
+      case "FieldGroup":
+        return ["subtle", "plain", "divided"] as const;
+      case "Menu":
+        return ["default", "scrolling", "focus-within", "disabled-item", "checked-item"] as const;
+      case "NavigationPanel":
+        return ["default", "selected-item", "disabled-item", "scrolling"] as const;
+      case "ScrollArea":
+        return ["auto", "always", "hidden"] as const;
+      case "StatusPill":
+        return ["neutral", "info", "success", "warning", "danger"] as const;
+      case "SegmentedControl":
       case "TabGroup":
         return ["selected", "unselected", "hover", "disabled"] as const;
+      case "Toolbar":
+        return ["default", "with-center", "overflow"] as const;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
@@ -200,8 +339,21 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "ActionCard") {
+      return `import { ActionCard } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal } from "lucide-react";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<MessageCircle />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
+    }
     if (component.name === "ActionItem") {
-      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+      const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
+      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+    }
+    if (component.name === "ActivityItem") {
+      if (activityItemAppearance === "inline") {
+        return `import { ActivityItem } from "@bitfun/ui";\nimport { Check } from "lucide-react";\n\n<ActivityItem\n  appearance="inline"\n  leading={<Check />}\n>\n  ${t("components.preview.activityStatus")}\n</ActivityItem>`;
+      }
+      const detailProp = activityShowDetail
+        ? `\n  detail={<code>${t("components.preview.activityDetail")}</code>}`
+        : "";
+      return `import { ActivityItem, ChangeCount } from "@bitfun/ui";\nimport { Copy, Download, ExternalLink, Terminal } from "lucide-react";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Copy />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Download />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <ExternalLink />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"${detailProp}\n  label="${t("components.preview.activityAction")}"\n  leading={<Terminal />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
     }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -213,12 +365,43 @@ export function ComponentDetailPage({
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
     }
+    if (component.name === "Card") {
+      if (previewState === "media") {
+        return `import { Card, CardBody, CardHeader, CardMedia } from "@bitfun/ui";\n\n<Card appearance="neutral" clip radius="md">\n  <CardMedia>\n    <ProductArtwork />\n  </CardMedia>\n  <CardBody align="center" padding="sm">\n    <CardHeader\n      contentAlign="center"\n      title="${t("components.preview.cardMediaTitle")}"\n      description="${t("components.preview.cardMediaDescription")}"\n    />\n  </CardBody>\n</Card>`;
+      }
+      return `import { Card, CardBody, CardFooter, CardHeader } from "@bitfun/ui";\n\n<Card appearance="${previewState}" gap="md" padding="md" radius="lg">\n  <CardHeader\n    contentAlign="${cardContentAlign}"\n    title="${t("components.preview.cardTitle")}"\n    description="${t("components.preview.cardDescription")}"\n  />\n  <CardBody>\n    <CommandGrid />\n  </CardBody>\n  <CardFooter align="end">\n    <Button>${t("components.preview.settings")}</Button>\n  </CardFooter>\n</Card>`;
+    }
+    if (component.name === "Composer") {
+      const stateProps = `${previewState === "disabled" ? " disabled" : ""}${previewState === "invalid" ? " invalid" : ""}`;
+      const contextProp = composerShowContext || previewState === "with-context"
+        ? `\n  contextBar={<ComposerContextBar\n    leading={<><span>${t("components.preview.composerDevice")}</span><ComposerDivider /><span>${t("components.preview.composerWorkspace")}</span></>}\n    trailing={<span>${t("components.preview.composerMode")}</span>}\n  />}`
+        : "";
+      const toolbarProp = composerShowToolbar
+        ? `\n  toolbar={<ComposerToolbar\n    leading={<IconButton aria-label="${t("components.preview.composerAdd")}" icon={<Plus />} />}\n    trailing={<><Button variant="text">${t("components.preview.composerModel")}</Button><IconButton aria-label="${t("components.preview.composerSend")}" icon={<ArrowUp />} variant="primary" /></>}\n  />}`
+        : "";
+      return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\nimport { ArrowUp, Plus } from "lucide-react";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
+    }
+    if (component.name === "ConfirmDialog") {
+      return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  isOpen={open}\n  message="${t("components.preview.confirmMessage")}"\n  onClose={() => setOpen(false)}\n  onConfirm={() => deleteItem()}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
+    }
+    if (component.name === "Icon") {
+      return `import { Icon } from "@bitfun/ui";\n\n<Icon name="${iconName}" size="${iconSize}" tone="${iconTone}" />`;
+    }
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
       return `import { IconButton } from "@bitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
     }
     if (component.name === "Field") {
-      return `import { Field, Switch } from "@bitfun/ui";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.notifications")}"\n  orientation="${fieldOrientation}"\n  required\n>\n  <Switch />\n</Field>`;
+      const labelAction = fieldShowLabelAction
+        ? `\n  labelAction={<IconButton aria-label="${t("components.preview.fieldHelp")}" icon={<Info />} size="xs" />}`
+        : "";
+      const controlLeading = fieldShowControlLeading
+        ? `\n  controlLeading={<Switch aria-label="${t("components.preview.notifications")}" />}`
+        : "";
+      const controlTrailing = fieldShowControlTrailing
+        ? `\n  controlTrailing={<IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />}`
+        : "";
+      return `import { Field, IconButton, Input, Switch } from "@bitfun/ui";\nimport { ChevronDown, Info, MoreHorizontal } from "lucide-react";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.appearance")}"${labelAction}${controlLeading}${controlTrailing}\n  orientation="${fieldOrientation}"\n  required\n>\n  <Input defaultValue="${t("components.preview.fieldValue")}" trailing={<ChevronDown />} />\n</Field>`;
     }
     if (component.name === "Input") {
       const stateProps = previewState === "disabled"
@@ -231,11 +414,18 @@ export function ComponentDetailPage({
     if (component.name === "KeyHint") {
       return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
     }
+    if (component.name === "FieldGroup") {
+      return `import { Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\nimport { Settings } from "lucide-react";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  leading={<Settings />}\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
+    }
+    if (component.name === "Menu") {
+      return `import { Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
+    }
     if (component.name === "Modal") {
       return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
     }
     if (component.name === "PageHeader") {
-      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  level={2}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
+      const requiredProp = pageHeaderRequired ? "\n  required" : "";
+      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { Settings, X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Settings />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
     }
     if (component.name === "SearchField") {
       const stateProps = previewState === "disabled"
@@ -245,9 +435,28 @@ export function ComponentDetailPage({
           : "";
       return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
     }
+    if (component.name === "Select") {
+      return `import { Icon, Select } from "@bitfun/ui";\n\n<Select\n  aria-label="Mode"\n  leading={<Icon name="circle" />}\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value="${selectValue}"\n/>`;
+    }
+    if (component.name === "SegmentedControl") {
+      const defaultMode = previewState === "unselected" ? "agent" : "chat";
+      return `import { SegmentedControl } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <MessageCircle />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
+    }
+    if (component.name === "StatusPill") {
+      return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="circle" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+    }
+    if (component.name === "NavigationPanel") {
+      return `import { IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\nimport { Monitor, Search, Settings } from "lucide-react";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Monitor />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Settings />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Search />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
+    }
+    if (component.name === "ScrollArea") {
+      return `import { ScrollArea } from "@bitfun/ui";\n\n<ScrollArea\n  aria-label="${t("components.preview.scrollAreaLabel")}"\n  className="activity-scroll-area"\n  orientation="${scrollAreaOrientation}"\n  scrollbarVisibility="${previewState}"\n>\n  {items.map((item) => <div key={item.id}>{item.label}</div>)}\n</ScrollArea>`;
+    }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
       return `import { TabGroup } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\nconst items = [\n  { icon: <MessageCircle />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <MessageCircle />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
+    }
+    if (component.name === "Toolbar") {
+      return `import { ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\nimport { MoreHorizontal, Search } from "lucide-react";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Search />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />\n  </ToolbarGroup>}\n/>`;
     }
     const stateProps = previewState === "on"
       ? " defaultChecked"
@@ -256,19 +465,36 @@ export function ComponentDetailPage({
         : "";
     return `import { Switch } from "@bitfun/ui";\n\n<Switch\n  aria-label="${t("components.preview.notifications")}"${stateProps}\n/>`;
   }, [
+    actionItemShowMetadata,
+    activityItemAppearance,
+    activityShowDetail,
     component.name,
+    composerShowContext,
+    composerShowToolbar,
     fieldOrientation,
+    fieldShowControlLeading,
+    fieldShowControlTrailing,
+    fieldShowLabelAction,
     iconButtonVariant,
+    iconName,
+    iconSize,
+    iconTone,
     inspectorDisabled,
     inspectorLoading,
+    menuShowScrollbar,
     modalShowScrollbar,
+    navigationPanelShowScrollbar,
     pageHeaderAlign,
+    pageHeaderRequired,
     pageHeaderSize,
     previewIcon,
     previewIconPosition,
     previewState,
+    scrollAreaOrientation,
+    selectValue,
     size,
     t,
+    toolbarSize,
     variant,
   ]);
 
@@ -284,103 +510,108 @@ export function ComponentDetailPage({
 
   function renderModalConfigurationContent() {
     return (
-      <section className="component-modal-example" aria-label={t("components.preview.modalSectionTitle")}>
-        <h3>{t("components.preview.modalSectionTitle")}</h3>
-        <div className="component-modal-example__panel">
-          <div className="component-modal-example__row">
+      <FormSection
+        aria-label={t("components.preview.modalSectionTitle")}
+        className="component-modal-example"
+        headingAs="h3"
+        title={t("components.preview.modalSectionTitle")}
+      >
+        <FieldGroup>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalProviderName")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
-              <Input className="component-modal-example__control" defaultValue="OpenBitFun" />
+              <Input defaultValue="OpenBitFun" />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalAuthentication")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="API Key"
                 readOnly
                 trailing={<ChevronDown aria-hidden="true" />}
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalApiKey")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="bitfun-provider-api-key"
                 readOnly
                 trailing={<Eye aria-hidden="true" />}
                 type="password"
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalApiUrl")}
+              labelWidth="md"
               orientation="horizontal"
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="https://api.openbitfun.com"
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalRequestFormat")}
+              labelWidth="md"
               orientation="horizontal"
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="Anthropic (messages)"
                 readOnly
                 trailing={<ChevronDown aria-hidden="true" />}
               />
             </Field>
-          </div>
-          <div className="component-modal-example__row">
+          </FieldRow>
+          <FieldRow>
             <Field
-              className="component-modal-example__field"
-              controlClassName="component-modal-example__field-control"
+              controlWidth="fill"
+              horizontalGap="lg"
               label={t("components.preview.modalSelectModels")}
+              labelWidth="md"
               orientation="horizontal"
               required
             >
               <Input
-                className="component-modal-example__control"
                 defaultValue="k3-256k"
                 trailing={<Plus aria-hidden="true" />}
               />
             </Field>
-          </div>
-        </div>
+          </FieldRow>
+        </FieldGroup>
         <p className="component-modal-example__hint">{t("components.preview.modalPresetModels")}</p>
         <div className="component-modal-example__model-card">
           <strong>k3-256k</strong>
           <span>{t("components.preview.modalModelSummary")}</span>
         </div>
-      </section>
+      </FormSection>
     );
   }
 
@@ -445,6 +676,64 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "Icon") {
+      return <Icon name={iconName} size={iconSize} tone={iconTone} />;
+    }
+
+    if (component.name === "ActionCard") {
+      return (
+        <ActionCard
+          actions={[
+            {
+              icon: <MoreHorizontal aria-hidden="true" />,
+              id: "more",
+              label: t("components.preview.more"),
+            },
+          ]}
+          className={state === "focus-visible" ? "lab-force-focus" : undefined}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          description={t("components.preview.actionCardDescription")}
+          disabled={state === "disabled"}
+          leading={<MessageCircle aria-hidden="true" />}
+          selected={state === "selected"}
+          size={actionCardSize}
+          tabIndex={-1}
+        >
+          {t("components.preview.actionCardTitle")}
+        </ActionCard>
+      );
+    }
+
+    if (component.name === "StatusPill") {
+      return (
+        <StatusPill
+          leading={<Icon name="circle" />}
+          tone={state as StatusPillTone}
+        >
+          Ask
+        </StatusPill>
+      );
+    }
+
+    if (component.name === "Select") {
+      return (
+        <Select
+          aria-label="Mode"
+          data-bf-preview-state={state === "hover" || state === "focus-visible" ? state : undefined}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          leading={<Icon name="circle" />}
+          onValueChange={(value) => setSelectValue(String(value))}
+          options={[
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+            { disabled: true, label: "Agent", value: "agent" },
+          ]}
+          value={selectValue}
+        />
+      );
+    }
+
     if (component.name === "ActionItem") {
       return (
         <ActionItem
@@ -463,10 +752,56 @@ export function ComponentDetailPage({
           data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
           disabled={state === "disabled"}
           leading={<MessageCircle aria-hidden="true" />}
+          metadata={actionItemShowMetadata ? "12" : undefined}
           shortcut={<KeyHint>K</KeyHint>}
         >
           {t("components.preview.assistant")}
         </ActionItem>
+      );
+    }
+
+    if (component.name === "ActivityItem") {
+      const surface = activityItemAppearance === "surface";
+      return (
+        <ActivityItem
+          actions={surface ? [
+            {
+              icon: <Copy aria-hidden="true" />,
+              id: "copy",
+              label: t("components.preview.activityCopy"),
+            },
+            {
+              icon: <Download aria-hidden="true" />,
+              id: "download",
+              label: t("components.preview.activityDownload"),
+            },
+            {
+              icon: <ExternalLink aria-hidden="true" />,
+              id: "open",
+              label: t("components.preview.activityOpen"),
+            },
+          ] : []}
+          appearance={activityItemAppearance}
+          className={state === "focus-visible"
+            ? "component-activity-item-example lab-force-focus"
+            : "component-activity-item-example"}
+          data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
+          detail={surface && activityShowDetail
+            ? <code>{t("components.preview.activityDetail")}</code>
+            : undefined}
+          disabled={state === "disabled"}
+          label={surface ? t("components.preview.activityAction") : undefined}
+          leading={surface
+            ? <Terminal aria-hidden="true" />
+            : <Check aria-hidden="true" />}
+          metadata={surface ? <ChangeCount additions={6} deletions={0} /> : undefined}
+          onActivate={surface ? () => undefined : undefined}
+          triggerProps={{ tabIndex: -1 }}
+        >
+          {surface
+            ? t("components.preview.activityDescription")
+            : t("components.preview.activityStatus")}
+        </ActivityItem>
       );
     }
 
@@ -517,18 +852,312 @@ export function ComponentDetailPage({
     if (component.name === "Field") {
       return (
         <Field
+          className="component-field-example"
+          controlLeading={fieldShowControlLeading ? (
+            <Switch aria-label={t("components.preview.notifications")} />
+          ) : undefined}
+          controlTrailing={fieldShowControlTrailing ? (
+            <IconButton
+              aria-label={t("components.preview.more")}
+              icon={<MoreHorizontal aria-hidden="true" />}
+              size="xs"
+            />
+          ) : undefined}
           description={t("components.preview.fieldDescription")}
-          label={t("components.preview.notifications")}
+          label={t("components.preview.appearance")}
+          labelAction={fieldShowLabelAction ? (
+            <IconButton
+              aria-label={t("components.preview.fieldHelp")}
+              icon={<Info aria-hidden="true" />}
+              size="xs"
+            />
+          ) : undefined}
           orientation={fieldOrientation}
           required
         >
-          <Switch />
+          <Input
+            aria-label={t("components.preview.appearance")}
+            defaultValue={t("components.preview.fieldValue")}
+            trailing={<ChevronDown aria-hidden="true" />}
+          />
         </Field>
       );
     }
 
     if (component.name === "KeyHint") {
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    }
+
+    if (component.name === "FieldGroup") {
+      const plain = state === "plain";
+      return (
+        <FormSection
+          className="component-field-group-example"
+          description={t("components.preview.fieldDescription")}
+          headingAs="h3"
+          leading={<Settings aria-hidden="true" />}
+          title={t("components.preview.modalSectionTitle")}
+        >
+          <FieldGroup appearance={plain ? "plain" : "subtle"} dividers={state === "divided"}>
+            <FieldRow>
+              <Field
+                controlWidth="fill"
+                label={t("components.preview.modalProviderName")}
+                labelWidth="md"
+                orientation="horizontal"
+                required
+              >
+                <Input defaultValue="OpenBitFun" />
+              </Field>
+            </FieldRow>
+            <FieldRow>
+              <Field
+                controlWidth="fill"
+                label={t("components.preview.modalApiUrl")}
+                labelWidth="md"
+                orientation="horizontal"
+              >
+                <Input defaultValue="https://api.openbitfun.com" />
+              </Field>
+            </FieldRow>
+          </FieldGroup>
+        </FormSection>
+      );
+    }
+
+    if (component.name === "Card") {
+      if (state === "media") {
+        return (
+          <Card
+            appearance="neutral"
+            className="component-card-example component-card-example--media"
+            clip
+            radius="md"
+          >
+            <CardMedia>
+              <div className="component-card-media-visual">
+                <Monitor aria-hidden="true" />
+              </div>
+            </CardMedia>
+            <CardBody align={cardContentAlign} padding="sm">
+              <CardHeader
+                contentAlign={cardContentAlign}
+                description={t("components.preview.cardMediaDescription")}
+                title={t("components.preview.cardMediaTitle")}
+              />
+            </CardBody>
+          </Card>
+        );
+      }
+
+      if (state === "subtle") {
+        return (
+          <Card
+            appearance="subtle"
+            className="component-card-example component-card-example--compact"
+            gap="sm"
+            padding="sm"
+            radius="sm"
+          >
+            <CardHeader
+              actions={(
+                <IconButton
+                  aria-label={t("components.preview.more")}
+                  icon={<MoreHorizontal aria-hidden="true" />}
+                  size="xs"
+                />
+              )}
+              align="center"
+              contentAlign={cardContentAlign}
+              description={t("components.preview.activityDescription")}
+              leading={<Terminal aria-hidden="true" />}
+              title={t("components.preview.session")}
+            />
+          </Card>
+        );
+      }
+
+      return (
+        <Card
+          appearance="raised"
+          className="component-card-example"
+          gap="md"
+          padding="md"
+          radius="lg"
+        >
+          <CardHeader
+            contentAlign={cardContentAlign}
+            description={t("components.preview.cardDescription")}
+            title={t("components.preview.cardTitle")}
+          />
+          <CardBody>
+            <div className="component-card-command-grid">
+              {["components.preview.menuItemOne", "components.preview.menuItemTwo", "components.preview.settings"].map((key) => (
+                <Card appearance="subtle" key={key} padding="sm" radius="sm">
+                  <CardHeader
+                    align="center"
+                    leading={<Command aria-hidden="true" />}
+                    title={t(key as MessageKey)}
+                  />
+                </Card>
+              ))}
+            </div>
+          </CardBody>
+          <CardFooter align="end">
+            <Button size="sm">{t("components.preview.settings")}</Button>
+          </CardFooter>
+        </Card>
+      );
+    }
+
+    if (component.name === "Menu") {
+      const itemCount = state === "scrolling" ? 12 : 3;
+      return (
+        <Menu
+          aria-label={t("components.preview.menuLabel")}
+          scrollbarVisibility={menuShowScrollbar ? "auto" : "hidden"}
+        >
+          <MenuSection
+            actions={[{
+              icon: <Plus aria-hidden="true" />,
+              id: "add",
+              label: t("components.preview.add"),
+            }]}
+            title={t("components.preview.menuSectionTitle")}
+          >
+            {Array.from({ length: itemCount }, (_, index) => (
+              <MenuItem
+                checked={state === "checked-item" && index === 0}
+                className={state === "focus-within" && index === 0 ? "lab-force-focus" : undefined}
+                disabled={state === "disabled-item" && index === 1}
+                key={index}
+                leading={<MessageCircle aria-hidden="true" />}
+                role={state === "checked-item" && index === 0 ? "menuitemcheckbox" : "menuitem"}
+              >
+                {index === 0
+                  ? t("components.preview.menuItemOne")
+                  : index === 1
+                    ? t("components.preview.menuItemTwo")
+                    : t("components.preview.menuItem", { index: index + 1 })}
+              </MenuItem>
+            ))}
+          </MenuSection>
+          <MenuSeparator />
+          <MenuSection aria-label={t("components.preview.menuMoreSection")}>
+            <MenuItem>{t("components.preview.menuMoreItem")}</MenuItem>
+          </MenuSection>
+        </Menu>
+      );
+    }
+
+    if (component.name === "Composer") {
+      const showContext = composerShowContext || state === "with-context";
+      return (
+        <Composer
+          aria-label={t("components.preview.composerLabel")}
+          className={state === "focus-within" ? "component-composer-example lab-force-focus" : "component-composer-example"}
+          contextBar={showContext ? (
+            <ComposerContextBar
+              leading={(
+                <>
+                  <span className="component-composer-context-label">
+                    <Monitor aria-hidden="true" />
+                    {t("components.preview.composerDevice")}
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                  <ComposerDivider />
+                  <span className="component-composer-context-label">
+                    {t("components.preview.composerWorkspace")}
+                    <ChevronDown aria-hidden="true" />
+                  </span>
+                </>
+              )}
+              trailing={(
+                <span className="component-composer-mode">
+                  {t("components.preview.composerMode")}
+                </span>
+              )}
+            />
+          ) : undefined}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          toolbar={composerShowToolbar ? (
+            <ComposerToolbar
+              leading={(
+                <>
+                  <IconButton
+                    aria-label={t("components.preview.composerAdd")}
+                    icon={<Plus aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="fill"
+                  />
+                  <Button size="sm" variant="text">
+                    {t("components.preview.composerStandard")}
+                  </Button>
+                </>
+              )}
+              trailing={(
+                <>
+                  <Button
+                    size="sm"
+                    trailingIcon={<ChevronDown aria-hidden="true" />}
+                    variant="text"
+                  >
+                    {t("components.preview.composerModel")}
+                  </Button>
+                  <IconButton
+                    aria-label={t("components.preview.composerVoice")}
+                    icon={<Mic aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="quiet"
+                  />
+                  <IconButton
+                    aria-label={t("components.preview.composerSend")}
+                    icon={<ArrowUp aria-hidden="true" />}
+                    shape="circle"
+                    size="sm"
+                    variant="primary"
+                  />
+                </>
+              )}
+            />
+          ) : undefined}
+        >
+          <textarea
+            aria-label={t("components.preview.composerEditorLabel")}
+            disabled={state === "disabled"}
+            placeholder={t("components.preview.composerPlaceholder")}
+            readOnly
+          />
+        </Composer>
+      );
+    }
+
+    if (component.name === "ConfirmDialog") {
+      const confirmType = state === "pending" ? "warning" : state as ConfirmDialogType;
+      return (
+        <ConfirmDialog
+          cancelText={t("components.preview.modalCancel")}
+          confirmDanger={confirmType === "error"}
+          confirmText={confirmType === "error"
+            ? t("components.preview.confirmDelete")
+            : t("components.preview.modalSave")}
+          dialogClassName="component-confirm-dialog-preview-dialog"
+          isOpen
+          message={t("components.preview.confirmMessage")}
+          onClose={() => undefined}
+          onConfirm={() => undefined}
+          overlayClassName="component-confirm-dialog-preview-overlay"
+          pendingAction={state === "pending" ? "confirm" : null}
+          portalled={false}
+          preventScroll={false}
+          preview="/workspace/project"
+          title={t("components.preview.confirmTitle")}
+          type={confirmType}
+        />
+      );
     }
 
     if (component.name === "Modal") {
@@ -550,7 +1179,9 @@ export function ComponentDetailPage({
           )}
           align={pageHeaderAlign}
           description={t("components.preview.appearanceDescription")}
+          leading={<Settings aria-hidden="true" />}
           level={2}
+          required={pageHeaderRequired}
           size={pageHeaderSize}
           title={t("components.preview.appearance")}
         />
@@ -576,6 +1207,107 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "NavigationPanel") {
+      const itemCount = state === "scrolling" ? 14 : 5;
+      return (
+        <NavigationPanel
+          aria-label={t("components.preview.navigationPanelLabel")}
+          className="component-navigation-panel-example"
+          footer={(
+            <>
+              <NavigationPanelItem
+                className="component-navigation-panel-example__device"
+                leading={<Monitor aria-hidden="true" />}
+              >
+                {t("components.preview.navigationPanelDevice")}
+              </NavigationPanelItem>
+              <IconButton
+                aria-label={t("components.preview.settings")}
+                icon={<Settings aria-hidden="true" />}
+                size="sm"
+                variant="quiet"
+              />
+            </>
+          )}
+          header={(
+            <SearchField
+              aria-label={t("components.preview.searchLabel")}
+              leadingIcon={<SearchIcon aria-hidden="true" />}
+              placeholder={t("components.preview.searchPlaceholder")}
+            />
+          )}
+          scrollbarVisibility={navigationPanelShowScrollbar ? "auto" : "hidden"}
+        >
+          <NavigationPanelSection title={t("components.preview.navigationPanelSectionTitle")}>
+            {Array.from({ length: itemCount }, (_, index) => (
+              <NavigationPanelItem
+                disabled={state === "disabled-item" && index === 1}
+                key={index}
+                leading={index % 3 === 0 ? <MessageCircle aria-hidden="true" /> : undefined}
+                reserveLeadingSpace
+                selected={state === "selected-item" && index === 0}
+              >
+                {index === 0
+                  ? t("components.preview.menuItemOne")
+                  : index === 1
+                    ? t("components.preview.menuItemTwo")
+                    : t("components.preview.menuItem", { index: index + 1 })}
+              </NavigationPanelItem>
+            ))}
+          </NavigationPanelSection>
+          <NavigationPanelSeparator />
+          <NavigationPanelSection title={t("components.preview.navigationPanelMoreSection")}>
+            <NavigationPanelItem reserveLeadingSpace>
+              {t("components.preview.navigationPanelMoreItem")}
+            </NavigationPanelItem>
+          </NavigationPanelSection>
+        </NavigationPanel>
+      );
+    }
+
+    if (component.name === "ScrollArea") {
+      return (
+        <ScrollArea
+          aria-label={t("components.preview.scrollAreaLabel")}
+          className="component-scroll-area-example"
+          orientation={scrollAreaOrientation}
+          scrollbarVisibility={state as ScrollbarVisibility}
+        >
+          <div className="component-scroll-area-example__content">
+            {Array.from({ length: 7 }, (_, index) => (
+              <span className="component-scroll-area-example__item" key={index}>
+                {t("components.preview.scrollAreaItem", { index: index + 1 })}
+              </span>
+            ))}
+          </div>
+        </ScrollArea>
+      );
+    }
+
+    if (component.name === "SegmentedControl") {
+      const defaultMode = state === "unselected" ? "agent" : "chat";
+      return (
+        <SegmentedControl
+          aria-label={t("components.preview.segmentedLabel")}
+          data-bf-preview-state={state === "hover" ? "hover" : undefined}
+          defaultValue={defaultMode}
+          disabled={state === "disabled"}
+          key={state}
+          options={[
+            {
+              icon: <MessageCircle aria-hidden="true" size={12} strokeWidth={1.75} />,
+              label: t("components.preview.segmentedChat"),
+              value: "chat",
+            },
+            {
+              label: t("components.preview.segmentedAgent"),
+              value: "agent",
+            },
+          ]}
+        />
+      );
+    }
+
     if (component.name === "TabGroup") {
       const defaultTab = state === "unselected" ? "settings" : "welcome";
       return (
@@ -597,6 +1329,63 @@ export function ComponentDetailPage({
             },
           ]}
           key={state}
+        />
+      );
+    }
+
+    if (component.name === "Toolbar") {
+      const tabItems = Array.from({ length: state === "overflow" ? 9 : 2 }, (_, index) => ({
+        icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+        label: index === 0
+          ? t("components.preview.welcome")
+          : index === 1
+            ? t("components.preview.settings")
+            : t("components.preview.menuItem", { index: index + 1 }),
+        value: `tab-${index + 1}`,
+      }));
+
+      return (
+        <Toolbar
+          aria-label={t("components.preview.tabGroupLabel")}
+          center={state === "with-center" ? (
+            <ToolbarGroup>
+              <ToolbarBadge>18</ToolbarBadge>
+              <strong>{t("components.preview.session")}</strong>
+            </ToolbarGroup>
+          ) : undefined}
+          className="component-toolbar-example"
+          leading={state === "with-center" ? (
+            <ToolbarGroup>
+              <Button size="xs" trailingIcon={<ChevronDown aria-hidden="true" />} variant="text">
+                {t("components.preview.welcome")}
+              </Button>
+              <ChangeCount additions={6} deletions={0} />
+            </ToolbarGroup>
+          ) : (
+            <TabGroup
+              aria-label={t("components.preview.tabGroupLabel")}
+              defaultValue="tab-1"
+              items={tabItems}
+            />
+          )}
+          leadingOverflow={state === "overflow" ? "scroll" : "visible"}
+          size={toolbarSize}
+          trailing={(
+            <ToolbarGroup>
+              {state !== "with-center" && <ChangeCount additions={6} deletions={2} />}
+              <ToolbarSeparator />
+              <IconButton
+                aria-label={t("components.preview.searchLabel")}
+                icon={<SearchIcon aria-hidden="true" />}
+                size="xs"
+              />
+              <IconButton
+                aria-label={t("components.preview.more")}
+                icon={<MoreHorizontal aria-hidden="true" />}
+                size="xs"
+              />
+            </ToolbarGroup>
+          )}
         />
       );
     }
@@ -654,7 +1443,14 @@ export function ComponentDetailPage({
               density={density}
               tokenOverrides={tokenOverrides}
             >
-              {component.name === "Modal" ? (
+              {component.name === "ConfirmDialog" ? (
+                <div className="component-confirm-dialog-preview-stage">
+                  <span className="component-confirm-dialog-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Modal" ? (
                 <div className="component-modal-preview-stage">
                   {renderModalExample(false)}
                   <div className="component-modal-preview-stage__actions">
@@ -663,6 +1459,34 @@ export function ComponentDetailPage({
                     </Button>
                   </div>
                   {renderModalExample(true)}
+                </div>
+              ) : component.name === "Card" ? (
+                <div className="component-card-preview-stage">
+                  <span className="component-card-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "ActivityItem" ? (
+                <div className="component-activity-item-preview-stage">
+                  <span className="component-activity-item-preview-stage__label">
+                    {t(optionLabelKeys[activityItemAppearance] ?? "detail.option.default")} · {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Composer" ? (
+                <div className="component-composer-preview-stage">
+                  <span className="component-composer-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Toolbar" ? (
+                <div className="component-toolbar-preview-stage">
+                  <span className="component-toolbar-preview-stage__label">
+                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                  </span>
+                  {renderPreview(previewState)}
                 </div>
               ) : component.name === "Button" ? (
                 <div
@@ -695,6 +1519,15 @@ export function ComponentDetailPage({
                         </div>
                       ))}
                     </Fragment>
+                  ))}
+                </div>
+              ) : component.name === "Icon" ? (
+                <div className="component-icon-catalog">
+                  {iconNames.map((name) => (
+                    <div className="component-icon-catalog__item" key={name}>
+                      <Icon name={name} size="lg" />
+                      <code>{name}</code>
+                    </div>
                   ))}
                 </div>
               ) : component.name === "IconButton" ? (
@@ -730,19 +1563,35 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionItem" || component.name === "Field" || component.name === "Input" || component.name === "KeyHint" || component.name === "PageHeader" || component.name === "SearchField" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" ? (
                 <div
                   className="component-preview-matrix"
-                  data-component={component.name === "ActionItem"
-                    ? "action-item"
+                  data-component={component.name === "ActionCard"
+                    ? "action-card"
+                    : component.name === "ActionItem"
+                      ? "action-item"
                     : component.name === "Field"
                       ? "field"
+                    : component.name === "StatusPill"
+                      ? "status-pill"
+                    : component.name === "SegmentedControl"
+                      ? "segmented-control"
+                    : component.name === "Select"
+                      ? "select"
+                    : component.name === "FieldGroup"
+                      ? "field-group"
                     : component.name === "Input"
                       ? "input"
                     : component.name === "KeyHint"
                       ? "key-hint"
                       : component.name === "PageHeader"
                         ? "page-header"
+                      : component.name === "Menu"
+                        ? "menu"
+                      : component.name === "NavigationPanel"
+                        ? "navigation-panel"
+                      : component.name === "ScrollArea"
+                        ? "scroll-area"
                       : "search-field"}
                   data-state-count={states.length}
                 >
@@ -900,6 +1749,70 @@ export function ComponentDetailPage({
                       value={pageHeaderAlign}
                     />
                   )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.name")}
+                      onChange={(value) => setIconName(value as IconName)}
+                      options={iconNames}
+                      translateOptions={false}
+                      value={iconName}
+                    />
+                  )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setIconSize(value as IconSize)}
+                      options={iconSizes}
+                      translateOptions={false}
+                      value={iconSize}
+                    />
+                  )}
+                  {component.name === "Icon" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setIconTone(value as IconTone)}
+                      options={iconTones}
+                      translateOptions={false}
+                      value={iconTone}
+                    />
+                  )}
+                  {component.name === "Card" && (
+                    <InspectorSelect
+                      label={t("detail.alignment")}
+                      onChange={(value) => setCardContentAlign(value as CardContentAlignment)}
+                      options={cardContentAlignments}
+                      value={cardContentAlign}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowLabelAction}
+                      label={t("detail.showLabelAction")}
+                      onCheckedChange={setFieldShowLabelAction}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowControlLeading}
+                      label={t("detail.showLeadingControl")}
+                      onCheckedChange={setFieldShowControlLeading}
+                    />
+                  )}
+                  {component.name === "Field" && (
+                    <InspectorToggle
+                      checked={fieldShowControlTrailing}
+                      label={t("detail.showTrailingAction")}
+                      onCheckedChange={setFieldShowControlTrailing}
+                    />
+                  )}
+                  {component.name === "ScrollArea" && (
+                    <InspectorSelect
+                      label={t("detail.orientation")}
+                      onChange={(value) => setScrollAreaOrientation(value as ScrollAreaOrientation)}
+                      options={scrollAreaOrientations}
+                      value={scrollAreaOrientation}
+                    />
+                  )}
                   {(component.name === "Button" || component.name === "IconButton") && (
                     <InspectorSelect
                       label={t("detail.size")}
@@ -912,13 +1825,87 @@ export function ComponentDetailPage({
                     label={t("detail.state")}
                     onChange={setPreviewState}
                     options={inspectorStates}
+                    translateOptions={component.name !== "StatusPill"}
                     value={previewState}
                   />
+                  {component.name === "ActivityItem" && (
+                    <InspectorSelect
+                      label={t("detail.variant")}
+                      onChange={(value) => setActivityItemAppearance(value as ActivityItemAppearance)}
+                      options={activityItemAppearances}
+                      value={activityItemAppearance}
+                    />
+                  )}
+                  {component.name === "ActivityItem" && (
+                    <InspectorToggle
+                      checked={activityShowDetail}
+                      label={t("detail.showDetailArea")}
+                      onCheckedChange={setActivityShowDetail}
+                    />
+                  )}
+                  {component.name === "PageHeader" && (
+                    <InspectorToggle
+                      checked={pageHeaderRequired}
+                      label={t("detail.showAsterisk")}
+                      onCheckedChange={setPageHeaderRequired}
+                    />
+                  )}
+                  {component.name === "ActionItem" && (
+                    <InspectorToggle
+                      checked={actionItemShowMetadata}
+                      label={t("detail.showMetadata")}
+                      onCheckedChange={setActionItemShowMetadata}
+                    />
+                  )}
+                  {component.name === "ActionCard" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setActionCardSize(value as ActionCardSize)}
+                      options={actionCardSizes}
+                      value={actionCardSize}
+                    />
+                  )}
+                  {component.name === "Toolbar" && (
+                    <InspectorSelect
+                      label={t("detail.size")}
+                      onChange={(value) => setToolbarSize(value as ToolbarSize)}
+                      options={["sm", "md"]}
+                      value={toolbarSize}
+                    />
+                  )}
+                  {component.name === "Composer" && (
+                    <InspectorToggle
+                      checked={composerShowContext}
+                      label={t("detail.showContextBar")}
+                      onCheckedChange={setComposerShowContext}
+                    />
+                  )}
+                  {component.name === "Composer" && (
+                    <InspectorToggle
+                      checked={composerShowToolbar}
+                      label={t("detail.showToolbar")}
+                      onCheckedChange={setComposerShowToolbar}
+                    />
+                  )}
                   {component.name === "Modal" && (
                     <InspectorToggle
                       checked={modalShowScrollbar}
                       label={t("detail.showScrollbar")}
                       onCheckedChange={setModalShowScrollbar}
+                    />
+                  )}
+                  {component.name === "Menu" && (
+                    <InspectorToggle
+                      checked={menuShowScrollbar}
+                      label={t("detail.showScrollbar")}
+                      onCheckedChange={setMenuShowScrollbar}
+                    />
+                  )}
+                  {component.name === "NavigationPanel" && (
+                    <InspectorToggle
+                      checked={navigationPanelShowScrollbar}
+                      label={t("detail.showScrollbar")}
+                      onCheckedChange={setNavigationPanelShowScrollbar}
                     />
                   )}
                   {(component.name === "Button" || component.name === "IconButton") && (

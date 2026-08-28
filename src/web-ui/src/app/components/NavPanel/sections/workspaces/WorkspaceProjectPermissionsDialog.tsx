@@ -1,7 +1,8 @@
-import { Button, IconButton, Input, Modal } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Select, confirmDanger, type SelectOption, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   permissionAPI,
   type PermissionGrant,
@@ -321,22 +322,22 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
               {draftRules.map((rule, index) => (
                 <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="rule" key={rule.localId} className="workspace-project-permissions-dialog__rule-row">
                   <Select
-                    size="small"
+                    size="sm"
                     value={rule.effect}
                     options={effectOptions}
                     aria-label={t('projectPermissions.effect')}
                     disabled={isBusy}
-                    onChange={(value) => updateDraftRule(rule.localId, { effect: value as ProjectPermissionEffect })}
+                    onValueChange={(value) => updateDraftRule(rule.localId, { effect: value as ProjectPermissionEffect })}
                   />
                   <Select
-                    size="small"
+                    size="sm"
                     value={rule.action}
                     options={PROJECT_PERMISSION_ACTION_OPTIONS}
                     placeholder={t('projectPermissions.action')}
                     aria-label={t('projectPermissions.action')}
                     disabled={isBusy}
-                    error={!rule.action.trim()}
-                    onChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
+                    invalid={!rule.action.trim()}
+                    onValueChange={(value) => updateDraftRule(rule.localId, { action: value as string })}
                   />
                   <Input
                     value={rule.resource}

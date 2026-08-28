@@ -1,0 +1,143 @@
+@layer bf.components {
+  .root,
+  .select,
+  .leading,
+  .indicator {
+    box-sizing: border-box;
+  }
+
+  .root {
+    --_select-height: var(--bf-control-height-md);
+    --_select-leading-space: 0px;
+
+    position: relative;
+    display: inline-grid;
+    min-inline-size: 0;
+    inline-size: 100%;
+    color: var(--bf-color-content-primary);
+  }
+
+  .root[data-size="sm"] {
+    --_select-height: var(--bf-control-height-sm);
+  }
+
+  .root[data-size="lg"] {
+    --_select-height: var(--bf-control-height-lg);
+  }
+
+  .root[data-has-leading="true"] {
+    --_select-leading-space: calc(
+      var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+    );
+  }
+
+  .select {
+    grid-area: 1 / 1;
+    min-inline-size: 0;
+    inline-size: 100%;
+    block-size: var(--_select-height);
+    margin: 0;
+    padding-block: 0;
+    padding-inline-start: calc(
+      var(--bf-control-select-padding-inline)
+      + var(--_select-leading-space)
+    );
+    padding-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+    );
+    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
+    border-radius: var(--bf-control-select-radius);
+    outline: 0;
+    color: inherit;
+    background: var(--bf-color-field-background);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-tight);
+    appearance: none;
+    cursor: pointer;
+    transition:
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .select:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-field-background-hover);
+  }
+
+  .select:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
+    border-color: var(--bf-color-field-border-focus);
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  }
+
+  .root[data-invalid="true"] .select {
+    border-color: var(--bf-color-status-danger-border);
+  }
+
+  .root[data-invalid="true"] .select:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-status-danger-surface);
+  }
+
+  .root[data-disabled="true"] {
+    color: var(--bf-color-content-disabled);
+    opacity: var(--bf-opacity-disabled);
+  }
+
+  .select:disabled {
+    cursor: not-allowed;
+  }
+
+  .leading,
+  .indicator {
+    z-index: 1;
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-control-select-indicator-size);
+    block-size: var(--bf-control-select-indicator-size);
+    color: var(--bf-color-content-muted);
+    pointer-events: none;
+  }
+
+  .leading {
+    justify-self: start;
+    margin-inline-start: var(--bf-control-select-leading-inset);
+  }
+
+  .indicator {
+    justify-self: end;
+    margin-inline-end: var(--bf-control-select-trailing-inset);
+  }
+
+  .leading > :where(svg, img, [data-bf-component="icon"]) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .select {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .select,
+    .root[data-invalid="true"] .select {
+      border-color: ButtonText;
+      background: Field;
+    }
+
+    .select:focus-visible {
+      border-color: Highlight;
+      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+    }
+  }
+}

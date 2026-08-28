@@ -17,6 +17,10 @@
     "keyHint": {
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },
+    "scrollbar": {
+      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
+    },
     "content": {
       "primary": { "$type": "color", "$value": "{ref.color.neutral.900}" },
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.750}" },
@@ -25,8 +29,9 @@
       "inverse": { "$type": "color", "$value": "{ref.color.neutral.0}" }
     },
     "accent": {
-      "default": { "$type": "color", "$value": "{ref.color.navy.950}" },
-      "hover": { "$type": "color", "$value": "{ref.color.neutral.900}" }
+      "default": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+      "hover": { "$type": "color", "$value": "{ref.color.cyan.500}" },
+      "disabled": { "$type": "color", "$value": "rgba(5, 156, 176, 0.30)" }
     },
     "border": {
       "subtle": { "$type": "color", "$value": "rgba(16, 26, 39, 0.08)" },
@@ -63,7 +68,7 @@
     },
     "field": {
       "background": { "$type": "color", "$value": "{ref.color.neutral.0}" },
-      "backgroundHover": { "$type": "color", "$value": "{ref.color.neutral.50}" },
+      "backgroundHover": { "$type": "color", "$value": "{color.field.background}" },
       "border": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" },
       "borderHover": { "$type": "color", "$value": "rgba(16, 26, 39, 0.24)" },
       "borderFocus": { "$type": "color", "$value": "{ref.color.navy.950}" }
@@ -109,7 +114,9 @@
     "lg": { "$value": "0 8px 16px rgba(16, 26, 39, 0.09)" },
     "xl": { "$value": "0 12px 24px rgba(16, 26, 39, 0.11)" },
     "raised": { "$value": "{shadow.sm}" },
-    "overlay": { "$value": "{shadow.lg}" }
+    "composer": { "$value": "0 2px 6px rgba(0, 0, 0, 0.08)" },
+    "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.12)" },
+    "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.12)" }
   },
   "effect": {
     "blur": {

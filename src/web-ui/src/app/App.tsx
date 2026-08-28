@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
-import { ModalProvider } from '@bitfun/ui';
+import { ConfirmDialogProvider, ModalProvider } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
@@ -10,7 +10,7 @@ import { ContextMenuRenderer } from '../shared/context-menu-system/components/Co
 import { NotificationContainer, notificationService } from '../shared/notification-system';
 import { NotificationCenter } from '../shared/notification-system/components/NotificationCenter';
 import { AnnouncementProvider } from '../shared/announcement-system';
-import { ConfirmDialogRenderer } from '../component-library';
+import { ConfirmDialogRenderer } from '@/infrastructure/confirm-dialog';
 import { SessionUsageModal } from '../flow_chat/components/usage/SessionUsageModal';
 import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
@@ -912,7 +912,11 @@ function App() {
       closeLabel={tComponents('modal.close')}
       portalContainer={getAppearanceOverlayHost}
     >
-      <ChatProvider>
+      <ConfirmDialogProvider
+        cancelLabel={tComponents('dialog.confirm.cancel')}
+        confirmLabel={tComponents('dialog.confirm.ok')}
+      >
+        <ChatProvider>
         <ViewModeProvider defaultMode="coder">
           <SSHRemoteProvider>
             <RealtimeVoiceCallProvider>
@@ -953,7 +957,8 @@ function App() {
             </RealtimeVoiceCallProvider>
           </SSHRemoteProvider>
         </ViewModeProvider>
-      </ChatProvider>
+        </ChatProvider>
+      </ConfirmDialogProvider>
     </ModalProvider>
   );
 }

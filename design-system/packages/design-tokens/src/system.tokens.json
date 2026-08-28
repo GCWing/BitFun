@@ -67,6 +67,14 @@
     "relaxed": { "$value": 1.6 }
   },
   "control": {
+    "icon": {
+      "$type": "dimension",
+      "size2xs": { "$value": "8px" },
+      "sizeXs": { "$value": "12px" },
+      "sizeSm": { "$value": "14px" },
+      "sizeMd": { "$value": "16px" },
+      "sizeLg": { "$value": "24px" }
+    },
     "height": {
       "$type": "dimension",
       "sm": { "$value": "32px" },
@@ -96,10 +104,187 @@
       "itemActionSize": { "$value": "{space.5}" },
       "itemActionInset": { "$value": "{space.2}" },
       "itemRadius": { "$value": "{radius.pill}" }
+    },
+    "segmentedControl": {
+      "$type": "dimension",
+      "gap": { "$value": "2px" },
+      "padding": { "$value": "2px" },
+      "radius": { "$value": "{radius.pill}" },
+      "segmentHeight": { "$value": "22px" },
+      "segmentPaddingInline": { "$value": "{space.2}" },
+      "segmentGap": { "$value": "{space.1}" },
+      "segmentRadius": { "$value": "{radius.pill}" },
+      "iconSize": { "$value": "12px" },
+      "fontSize": { "$value": "11px" }
+    },
+    "composer": {
+      "$type": "dimension",
+      "minBlockSize": { "$value": "120px" },
+      "contextOffset": { "$value": "32px" },
+      "contextPaddingBlock": { "$value": "6px" },
+      "contextPaddingInline": { "$value": "{space.2}" },
+      "contextGap": { "$value": "{space.2}" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "surfaceGap": { "$value": "{space.3}" },
+      "surfaceRadius": { "$value": "{radius.xl}" },
+      "editorPadding": { "$value": "{space.1}" },
+      "toolbarGap": { "$value": "{space.2}" },
+      "dividerBlockSize": { "$value": "16px" }
+    },
+    "activityItem": {
+      "$type": "dimension",
+      "inlineGap": { "$value": "{space.1}" },
+      "inlineIconSize": { "$value": "12px" },
+      "inlineFontSize": { "$value": "11px" },
+      "inlineLineHeight": { "$value": "17px" },
+      "surfaceHeight": { "$value": "30px" },
+      "surfaceGap": { "$value": "{space.2}" },
+      "surfacePaddingBlock": { "$value": "{space.1}" },
+      "surfacePaddingInlineStart": { "$value": "{space.2}" },
+      "surfacePaddingInlineEnd": { "$value": "3px" },
+      "surfaceRadius": { "$value": "{radius.base}" },
+      "surfaceIconSize": { "$value": "14px" },
+      "contentGap": { "$value": "{space.1}" },
+      "dividerBlockSize": { "$value": "16px" }
+    },
+    "actionCard": {
+      "$type": "dimension",
+      "smMinBlockSize": { "$value": "54px" },
+      "mdMinBlockSize": { "$value": "62px" },
+      "paddingBlock": { "$value": "{space.2}" },
+      "paddingInline": { "$value": "{space.3}" },
+      "gap": { "$value": "{space.2}" },
+      "leadingSize": { "$value": "30px" },
+      "iconSize": { "$value": "16px" },
+      "contentGap": { "$value": "{space.1}" },
+      "actionsGap": { "$value": "0px" },
+      "actionsPaddingInlineEnd": { "$value": "{space.2}" },
+      "radius": { "$value": "{radius.base}" }
+    },
+    "changeCount": {
+      "$type": "dimension",
+      "gap": { "$value": "{space.1}" },
+      "paddingBlock": { "$value": "2px" },
+      "paddingInline": { "$value": "{space.1}" },
+      "radius": { "$value": "{radius.xs}" },
+      "fontSize": { "$value": "11px" }
+    },
+    "statusPill": {
+      "$type": "dimension",
+      "gap": { "$value": "2px" },
+      "paddingBlock": { "$value": "3px" },
+      "paddingInline": { "$value": "6px" },
+      "radius": { "$value": "{radius.pill}" },
+      "iconSize": { "$value": "14px" },
+      "fontSize": { "$value": "11px" }
+    },
+    "select": {
+      "$type": "dimension",
+      "paddingInline": { "$value": "{space.3}" },
+      "leadingInset": { "$value": "{space.3}" },
+      "trailingInset": { "$value": "{space.3}" },
+      "contentGap": { "$value": "{space.2}" },
+      "indicatorSize": { "$value": "14px" },
+      "radius": { "$value": "{radius.base}" }
+    },
+    "iconButton": {
+      "$type": "dimension",
+      "xsSize": { "$value": "22px" },
+      "xsIconSize": { "$value": "14px" }
+    },
+    "button": {
+      "$type": "dimension",
+      "xsHeight": { "$value": "24px" },
+      "xsPaddingInline": { "$value": "6px" },
+      "xsLeadingIconSize": { "$value": "12px" },
+      "xsTrailingIconSize": { "$value": "10px" },
+      "xsFontSize": { "$value": "11px" }
     }
   },
   "layout": {
     "$type": "dimension",
+    "field": {
+      "rootGap": { "$value": "{space.2}" },
+      "horizontalGap": { "$value": "{space.5}" },
+      "horizontalGapWide": { "$value": "{space.10}" },
+      "labelWidthSm": { "$value": "150px" },
+      "labelWidthMd": { "$value": "200px" },
+      "labelWidthLg": { "$value": "400px" },
+      "contentGap": { "$value": "{space.1}" },
+      "labelGap": { "$value": "2px" },
+      "labelActionGap": { "$value": "{space.2}" },
+      "controlGap": { "$value": "{space.2}" }
+    },
+    "formSection": {
+      "gap": { "$value": "{space.4}" },
+      "headerGap": { "$value": "{space.5}" },
+      "titleDescriptionGap": { "$value": "{space.1}" },
+      "titleFontSize": { "$value": "15px" }
+    },
+    "fieldGroup": {
+      "radius": { "$value": "{radius.lg}" },
+      "rowPaddingBlock": { "$value": "{space.4}" },
+      "rowPaddingInline": { "$value": "{space.5}" }
+    },
+    "confirmDialog": {
+      "contentGap": { "$value": "{space.4}" },
+      "messageGap": { "$value": "{space.3}" },
+      "iconSize": { "$value": "32px" },
+      "iconGlyphSize": { "$value": "18px" },
+      "previewPaddingBlock": { "$value": "{space.3}" },
+      "previewPaddingInline": { "$value": "{space.4}" },
+      "previewRadius": { "$value": "{radius.base}" }
+    },
+    "card": {
+      "paddingSm": { "$value": "{space.3}" },
+      "paddingMd": { "$value": "{space.5}" },
+      "gapSm": { "$value": "{space.2}" },
+      "gapMd": { "$value": "{space.3}" },
+      "gapLg": { "$value": "30px" },
+      "radiusSm": { "$value": "{radius.base}" },
+      "radiusMd": { "$value": "{radius.lg}" },
+      "radiusLg": { "$value": "28px" },
+      "headerGap": { "$value": "{space.2}" },
+      "titleDescriptionGap": { "$value": "{space.1}" },
+      "footerGap": { "$value": "{space.2}" },
+      "mediaMinBlockSize": { "$value": "120px" }
+    },
+    "toolbar": {
+      "smHeight": { "$value": "33px" },
+      "mdHeight": { "$value": "45px" },
+      "contentGap": { "$value": "40px" },
+      "smPaddingBlock": { "$value": "{space.1}" },
+      "smPaddingInline": { "$value": "{space.2}" },
+      "mdPaddingBlockStart": { "$value": "{space.2}" },
+      "mdPaddingBlockEnd": { "$value": "6px" },
+      "mdPaddingInlineStart": { "$value": "{space.2}" },
+      "mdPaddingInlineEnd": { "$value": "11px" },
+      "groupGapSm": { "$value": "{space.1}" },
+      "groupGapMd": { "$value": "{space.2}" },
+      "badgeSize": { "$value": "24px" },
+      "badgeFontSize": { "$value": "11px" },
+      "separatorBlockSize": { "$value": "16px" },
+      "overflowFadeExtent": { "$value": "16px" }
+    },
+    "navigationPanel": {
+      "inlineSize": { "$value": "216px" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "contentGap": { "$value": "{space.4}" },
+      "sectionGap": { "$value": "{space.1}" },
+      "headingHeight": { "$value": "22px" },
+      "headingPaddingInline": { "$value": "{space.2}" },
+      "headingGap": { "$value": "{space.5}" },
+      "headingFontSize": { "$value": "11px" },
+      "headingActionSize": { "$value": "22px" },
+      "itemHeight": { "$value": "30px" },
+      "itemPaddingInline": { "$value": "{space.2}" },
+      "itemGap": { "$value": "{space.2}" },
+      "itemRadius": { "$value": "{radius.base}" },
+      "itemIconSize": { "$value": "14px" },
+      "scrollbarGap": { "$value": "2px" },
+      "footerHeight": { "$value": "40px" },
+      "footerPadding": { "$value": "{space.2}" }
+    },
     "splitView": {
       "contentPanelRadius": {
         "$description": "Corner radius for the content panel where it meets a companion navigation panel.",
@@ -107,7 +292,37 @@
       }
     }
   },
+  "scrollbar": {
+    "$type": "dimension",
+    "width": {
+      "$description": "Reference thickness for compact application scrollbars.",
+      "$value": "6px"
+    },
+    "radius": {
+      "$description": "Corner radius for the scrollbar thumb.",
+      "$value": "{radius.pill}"
+    }
+  },
   "overlay": {
+    "menu": {
+      "$type": "dimension",
+      "inlineSize": { "$value": "220px" },
+      "maxBlockSize": { "$value": "480px" },
+      "surfacePadding": { "$value": "{space.2}" },
+      "surfaceRadius": { "$value": "{radius.xl}" },
+      "sectionGap": { "$value": "{space.2}" },
+      "headingHeight": { "$value": "24px" },
+      "headingPaddingInline": { "$value": "{space.2}" },
+      "headingGap": { "$value": "{space.5}" },
+      "headingFontSize": { "$value": "11px" },
+      "headingActionSize": { "$value": "22px" },
+      "itemHeight": { "$value": "30px" },
+      "itemPaddingInline": { "$value": "{space.2}" },
+      "itemGap": { "$value": "{space.2}" },
+      "itemRadius": { "$value": "{radius.base}" },
+      "itemIconSize": { "$value": "14px" },
+      "scrollbarGap": { "$value": "2px" }
+    },
     "modal": {
       "$type": "dimension",
       "viewportGutter": {
@@ -121,7 +336,7 @@
       "backdropBlur": {
         "$description": "Background blur applied by the reference modal scrim.",
         "$type": "filter",
-        "$value": "blur(40px)"
+        "$value": "blur(20px)"
       },
       "surfaceRadius": {
         "$description": "Reference corner radius for the modal surface.",
@@ -147,7 +362,7 @@
         "$value": 700
       },
       "scrollbarWidth": {
-        "$value": "6px"
+        "$value": "{scrollbar.width}"
       },
       "contentPaddingSm": { "$value": "{space.3}" },
       "contentPaddingMd": { "$value": "{space.4}" },
@@ -174,7 +389,7 @@
       "footerBlur": {
         "$description": "Backdrop blur applied to content passing beneath the floating modal action bar.",
         "$type": "filter",
-        "$value": "blur(20px)"
+        "$value": "blur(10px)"
       },
       "footerActionMinWidth": { "$value": "100px" },
       "maxInlineSizeSmall": { "$value": "420px" },

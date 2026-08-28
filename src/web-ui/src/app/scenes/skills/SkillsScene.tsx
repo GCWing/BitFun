@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Modal } from '@bitfun/ui';
+import { Button, Switch, IconButton, Modal, ConfirmDialog, Field, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -20,7 +20,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, ConfirmDialog, Input, Search, Select } from '@/component-library';
+import { Badge, Input, Search } from '@/component-library';
+
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
@@ -946,20 +947,21 @@ const SkillsScene: React.FC = () => {
         size="small"
       >
         <div className="bitfun-skills-scene__modal-form">
-          <Select
-            label={t('form.level.label')}
-            options={[
-              { label: t('form.level.user'), value: 'user' },
-              {
-                label: `${t('form.level.project')}${installed.hasWorkspace && !installed.isRemoteWorkspace ? '' : t('form.level.projectDisabled')}`,
-                value: 'project',
-                disabled: !installed.hasWorkspace || installed.isRemoteWorkspace,
-              },
-            ]}
-            value={installed.formLevel}
-            onChange={(value) => installed.setFormLevel(value as SkillLevel)}
-            size="medium"
-          />
+          <Field label={t('form.level.label')} controlWidth="fill">
+            <Select
+              options={[
+                { label: t('form.level.user'), value: 'user' },
+                {
+                  label: `${t('form.level.project')}${installed.hasWorkspace && !installed.isRemoteWorkspace ? '' : t('form.level.projectDisabled')}`,
+                  value: 'project',
+                  disabled: !installed.hasWorkspace || installed.isRemoteWorkspace,
+                },
+              ]}
+              value={installed.formLevel}
+              onValueChange={(value) => installed.setFormLevel(value as SkillLevel)}
+              size="md"
+            />
+          </Field>
 
           {installed.formLevel === 'project' && installed.hasWorkspace ? (
             <div className="bitfun-skills-scene__form-hint">

@@ -188,14 +188,14 @@
     min-block-size: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    scrollbar-color: var(--bf-color-action-neutral-surface-hover) transparent;
+    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     color: var(--bf-color-content-secondary);
   }
 
   .content::-webkit-scrollbar {
-    inline-size: var(--bf-overlay-modal-scrollbar-width);
+    inline-size: var(--bf-scrollbar-width);
   }
 
   .content::-webkit-scrollbar-track {
@@ -203,8 +203,12 @@
   }
 
   .content::-webkit-scrollbar-thumb {
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-action-neutral-surface-hover);
+    border-radius: var(--bf-scrollbar-radius);
+    background: var(--bf-color-scrollbar-thumb);
+  }
+
+  .content::-webkit-scrollbar-thumb:hover {
+    background: var(--bf-color-scrollbar-thumb-hover);
   }
 
   .content[data-bf-layout="flex"],

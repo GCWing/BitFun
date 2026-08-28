@@ -39,6 +39,14 @@ test("Switch geometry preserves the compact reference contract", () => {
   assert.equal(tokens["control.switch.thumbTravelReverse"], "-12px");
 });
 
+test("Icon geometry exposes every catalog size without product semantics", () => {
+  assert.equal(tokens["control.icon.size2xs"], "8px");
+  assert.equal(tokens["control.icon.sizeXs"], "12px");
+  assert.equal(tokens["control.icon.sizeSm"], "14px");
+  assert.equal(tokens["control.icon.sizeMd"], "16px");
+  assert.equal(tokens["control.icon.sizeLg"], "24px");
+});
+
 test("TabGroup geometry preserves the capsule selected and outline contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
@@ -53,6 +61,82 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.itemRadius"], "9999px");
 });
 
+test("SegmentedControl geometry preserves the compact mode-switch pill contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.segmentedControl.gap"], "2px");
+  assert.equal(tokens["control.segmentedControl.padding"], "2px");
+  assert.equal(tokens["control.segmentedControl.segmentHeight"], "22px");
+  assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
+  assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
+  assert.equal(tokens["control.segmentedControl.iconSize"], "12px");
+  assert.equal(tokens["control.segmentedControl.fontSize"], "11px");
+  assert.equal(systemDocument.control.segmentedControl.radius.$value, "{radius.pill}");
+  assert.equal(systemDocument.control.segmentedControl.segmentRadius.$value, "{radius.pill}");
+});
+
+test("Composer geometry preserves independent context, editor, and action regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.composer.minBlockSize"], "120px");
+  assert.equal(tokens["control.composer.contextOffset"], "32px");
+  assert.equal(tokens["control.composer.contextPaddingBlock"], "6px");
+  assert.equal(tokens["control.composer.dividerBlockSize"], "16px");
+  assert.equal(systemDocument.control.composer.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.control.composer.surfaceGap.$value, "{space.3}");
+  assert.equal(systemDocument.control.composer.surfaceRadius.$value, "{radius.xl}");
+  assert.equal(systemDocument.control.composer.editorPadding.$value, "{space.1}");
+});
+
+test("Activity geometry preserves inline and surfaced status compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.activityItem.inlineIconSize"], "12px");
+  assert.equal(tokens["control.activityItem.inlineFontSize"], "11px");
+  assert.equal(tokens["control.activityItem.inlineLineHeight"], "17px");
+  assert.equal(tokens["control.activityItem.surfaceHeight"], "30px");
+  assert.equal(tokens["control.activityItem.surfaceIconSize"], "14px");
+  assert.equal(tokens["control.activityItem.dividerBlockSize"], "16px");
+  assert.equal(tokens["control.changeCount.paddingBlock"], "2px");
+  assert.equal(tokens["control.iconButton.xsSize"], "22px");
+  assert.equal(tokens["control.iconButton.xsIconSize"], "14px");
+  assert.equal(systemDocument.control.activityItem.surfaceRadius.$value, "{radius.base}");
+  assert.equal(systemDocument.control.changeCount.radius.$value, "{radius.xs}");
+});
+
+test("StatusPill geometry preserves compact semantic status anatomy", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.statusPill.gap"], "2px");
+  assert.equal(tokens["control.statusPill.paddingBlock"], "3px");
+  assert.equal(tokens["control.statusPill.paddingInline"], "6px");
+  assert.equal(tokens["control.statusPill.iconSize"], "14px");
+  assert.equal(tokens["control.statusPill.fontSize"], "11px");
+  assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
+});
+
+test("Select geometry preserves independent content and indicator regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.select.paddingInline"], "12px");
+  assert.equal(tokens["control.select.leadingInset"], "12px");
+  assert.equal(tokens["control.select.trailingInset"], "12px");
+  assert.equal(tokens["control.select.contentGap"], "8px");
+  assert.equal(tokens["control.select.indicatorSize"], "14px");
+  assert.equal(systemDocument.control.select.radius.$value, "{radius.base}");
+});
+
+test("ActionCard geometry preserves compact and descriptive entry compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.actionCard.smMinBlockSize"], "54px");
+  assert.equal(tokens["control.actionCard.mdMinBlockSize"], "62px");
+  assert.equal(tokens["control.actionCard.paddingInline"], "12px");
+  assert.equal(tokens["control.actionCard.leadingSize"], "30px");
+  assert.equal(tokens["control.actionCard.iconSize"], "16px");
+  assert.equal(systemDocument.control.actionCard.radius.$value, "{radius.base}");
+});
+
 test("split-view content panels preserve the elevated shell curvature contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
@@ -64,8 +148,116 @@ test("split-view content panels preserve the elevated shell curvature contract",
   assert.equal(tokens["layout.splitView.contentPanelRadius"], "24px");
 });
 
-test("Modal tokens preserve the reference surface and chrome contract", () => {
-  assert.equal(tokens["overlay.modal.backdropBlur"], "blur(40px)");
+test("shared scrollbar geometry preserves the compact native scrollbar contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["scrollbar.width"], "6px");
+  assert.equal(systemDocument.scrollbar.radius.$value, "{radius.pill}");
+  assert.equal(tokens["scrollbar.radius"], "9999px");
+});
+
+test("Menu tokens preserve the compact grouped surface contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["overlay.menu.inlineSize"], "220px");
+  assert.equal(tokens["overlay.menu.maxBlockSize"], "480px");
+  assert.equal(tokens["overlay.menu.headingHeight"], "24px");
+  assert.equal(tokens["overlay.menu.itemHeight"], "30px");
+  assert.equal(tokens["overlay.menu.itemIconSize"], "14px");
+  assert.equal(systemDocument.overlay.menu.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.overlay.menu.surfaceRadius.$value, "{radius.xl}");
+  assert.equal(systemDocument.overlay.menu.itemRadius.$value, "{radius.base}");
+});
+
+test("NavigationPanel tokens preserve the grouped sidebar composition contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.navigationPanel.inlineSize"], "216px");
+  assert.equal(tokens["layout.navigationPanel.headingHeight"], "22px");
+  assert.equal(tokens["layout.navigationPanel.itemHeight"], "30px");
+  assert.equal(tokens["layout.navigationPanel.itemIconSize"], "14px");
+  assert.equal(tokens["layout.navigationPanel.footerHeight"], "40px");
+  assert.equal(systemDocument.layout.navigationPanel.surfacePadding.$value, "{space.2}");
+  assert.equal(systemDocument.layout.navigationPanel.itemRadius.$value, "{radius.base}");
+});
+
+test("Card tokens preserve raised, compact, and media surface compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.card.paddingSm"], "12px");
+  assert.equal(tokens["layout.card.paddingMd"], "20px");
+  assert.equal(tokens["layout.card.gapLg"], "30px");
+  assert.equal(tokens["layout.card.radiusSm"], "8px");
+  assert.equal(tokens["layout.card.radiusMd"], "12px");
+  assert.equal(tokens["layout.card.radiusLg"], "28px");
+  assert.equal(tokens["layout.card.mediaMinBlockSize"], "120px");
+  assert.equal(systemDocument.layout.card.paddingSm.$value, "{space.3}");
+  assert.equal(systemDocument.layout.card.radiusMd.$value, "{radius.lg}");
+});
+
+test("Field tokens preserve independent label, description, and control regions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.field.rootGap"], "8px");
+  assert.equal(tokens["layout.field.horizontalGap"], "20px");
+  assert.equal(tokens["layout.field.horizontalGapWide"], "40px");
+  assert.equal(tokens["layout.field.labelWidthSm"], "150px");
+  assert.equal(tokens["layout.field.labelWidthMd"], "200px");
+  assert.equal(tokens["layout.field.labelWidthLg"], "400px");
+  assert.equal(tokens["layout.field.contentGap"], "4px");
+  assert.equal(tokens["layout.field.labelGap"], "2px");
+  assert.equal(tokens["layout.field.labelActionGap"], "8px");
+  assert.equal(tokens["layout.field.controlGap"], "8px");
+  assert.equal(systemDocument.layout.field.rootGap.$value, "{space.2}");
+  assert.equal(systemDocument.layout.field.labelActionGap.$value, "{space.2}");
+});
+
+test("Form grouping tokens preserve section, surface, and row composition", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.formSection.gap"], "16px");
+  assert.equal(tokens["layout.formSection.headerGap"], "20px");
+  assert.equal(tokens["layout.formSection.titleDescriptionGap"], "4px");
+  assert.equal(tokens["layout.formSection.titleFontSize"], "15px");
+  assert.equal(tokens["layout.fieldGroup.radius"], "12px");
+  assert.equal(tokens["layout.fieldGroup.rowPaddingBlock"], "16px");
+  assert.equal(tokens["layout.fieldGroup.rowPaddingInline"], "20px");
+  assert.equal(systemDocument.layout.formSection.gap.$value, "{space.4}");
+  assert.equal(systemDocument.layout.fieldGroup.radius.$value, "{radius.lg}");
+});
+
+test("ConfirmDialog tokens preserve semantic content and preview composition", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.confirmDialog.contentGap"], "16px");
+  assert.equal(tokens["layout.confirmDialog.messageGap"], "12px");
+  assert.equal(tokens["layout.confirmDialog.iconSize"], "32px");
+  assert.equal(tokens["layout.confirmDialog.iconGlyphSize"], "18px");
+  assert.equal(tokens["layout.confirmDialog.previewPaddingBlock"], "12px");
+  assert.equal(tokens["layout.confirmDialog.previewPaddingInline"], "16px");
+  assert.equal(tokens["layout.confirmDialog.previewRadius"], "8px");
+  assert.equal(systemDocument.layout.confirmDialog.contentGap.$value, "{space.4}");
+  assert.equal(systemDocument.layout.confirmDialog.previewRadius.$value, "{radius.base}");
+});
+
+test("Toolbar tokens preserve independent compact and tab-strip compositions", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.button.xsHeight"], "24px");
+  assert.equal(tokens["control.button.xsPaddingInline"], "6px");
+  assert.equal(tokens["layout.toolbar.smHeight"], "33px");
+  assert.equal(tokens["layout.toolbar.mdHeight"], "45px");
+  assert.equal(tokens["layout.toolbar.badgeSize"], "24px");
+  assert.equal(tokens["layout.toolbar.separatorBlockSize"], "16px");
+  assert.equal(tokens["layout.toolbar.overflowFadeExtent"], "16px");
+  assert.equal(systemDocument.layout.toolbar.smPaddingBlock.$value, "{space.1}");
+  assert.equal(systemDocument.layout.toolbar.groupGapMd.$value, "{space.2}");
+});
+
+test("Modal tokens preserve the reference surface and chrome contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["overlay.modal.backdropBlur"], "blur(20px)");
   assert.equal(tokens["overlay.modal.surfaceRadius"], "28px");
   assert.equal(tokens["overlay.modal.headerGap"], "20px");
   assert.equal(tokens["overlay.modal.headerPaddingBlockStart"], "24px");
@@ -73,8 +265,9 @@ test("Modal tokens preserve the reference surface and chrome contract", () => {
   assert.equal(tokens["overlay.modal.headerPaddingInline"], "24px");
   assert.equal(tokens["overlay.modal.titleFontSize"], "24px");
   assert.equal(tokens["overlay.modal.titleFontWeight"], 700);
+  assert.equal(systemDocument.overlay.modal.scrollbarWidth.$value, "{scrollbar.width}");
   assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
-  assert.equal(tokens["overlay.modal.footerBlur"], "blur(20px)");
+  assert.equal(tokens["overlay.modal.footerBlur"], "blur(10px)");
   assert.equal(tokens["overlay.modal.footerFadeExtent"], "24px");
   assert.equal(tokens["overlay.modal.footerContentInset"], "104px");
 });

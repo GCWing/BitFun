@@ -15,7 +15,7 @@ import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appe
 import { avatarAppearanceDescriptor } from '@/component-library/components/Avatar/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
-import { confirmDialogAppearanceDescriptor } from '@/component-library/components/ConfirmDialog/appearance';
+import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
 import { cubeLogoAppearanceDescriptor } from '@/component-library/components/CubeLogo/appearance';
 import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';

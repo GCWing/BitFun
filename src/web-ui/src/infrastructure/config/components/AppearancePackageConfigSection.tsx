@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton } from '@bitfun/ui';
-import { Tooltip, confirmDialog } from '@/component-library';
+import { Tooltip } from '@/component-library';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,

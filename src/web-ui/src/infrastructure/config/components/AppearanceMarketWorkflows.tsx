@@ -1,7 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, Field, Select } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
-import { confirmDialog, Input, Select, Textarea } from '@/component-library';
+import { Input, Textarea } from '@/component-library';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   appearanceMarketAPI,
   type AppearanceAdminSubmissionDetail,
@@ -244,19 +245,20 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             slug: event.target.value.toLowerCase(),
           }))}
         />
-        <Select
-          label={t('package.market.submissions.manual.licenseType')}
-          value={manualDraft.licenseKind}
-          options={[
-            { value: 'spdx', label: t('package.market.submissions.manual.spdx') },
-            { value: 'custom', label: t('package.market.submissions.manual.custom') },
-          ]}
-          onChange={value => setManualDraft(current => ({
-            ...current,
-            licenseKind: value as ManualLicenseKind,
-            licenseValue: '',
-          }))}
-        />
+        <Field label={t('package.market.submissions.manual.licenseType')} controlWidth="fill">
+          <Select
+            value={manualDraft.licenseKind}
+            options={[
+              { value: 'spdx', label: t('package.market.submissions.manual.spdx') },
+              { value: 'custom', label: t('package.market.submissions.manual.custom') },
+            ]}
+            onValueChange={value => setManualDraft(current => ({
+              ...current,
+              licenseKind: value as ManualLicenseKind,
+              licenseValue: '',
+            }))}
+          />
+        </Field>
         <Input
           label={manualDraft.licenseKind === 'spdx'
             ? t('package.market.submissions.manual.spdxExpression')

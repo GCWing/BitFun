@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, ConfirmDialog, Field, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Select, Input, Search, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
+import { Input, Search, Card, CardBody, Tooltip } from '@/component-library';
+
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -231,20 +232,21 @@ const SkillsConfig: React.FC = () => {
           </Tooltip>
         </div>
         <div className="bitfun-collection-form__body" data-bf-component="skills-config" data-bf-part="formBody">
-          <Select
-            label={t('form.level.label')}
-            options={[
-              { label: t('form.level.user'), value: 'user' },
-              {
-                label: `${t('form.level.project')}${!hasWorkspace ? t('form.level.projectDisabled') : ''}`,
-                value: 'project',
-                disabled: !hasWorkspace
-              }
-            ]}
-            value={formLevel}
-            onChange={(value) => setFormLevel(value as SkillLevel)}
-            size="medium"
-          />
+          <Field label={t('form.level.label')} controlWidth="fill">
+            <Select
+              options={[
+                { label: t('form.level.user'), value: 'user' },
+                {
+                  label: `${t('form.level.project')}${!hasWorkspace ? t('form.level.projectDisabled') : ''}`,
+                  value: 'project',
+                  disabled: !hasWorkspace
+                }
+              ]}
+              value={formLevel}
+              onValueChange={(value) => setFormLevel(value as SkillLevel)}
+              size="md"
+            />
+          </Field>
           {formLevel === 'project' && hasWorkspace && (
             <div className="bitfun-skills-config__form-hint">
               {t('form.level.currentWorkspace', { path: workspacePath })}

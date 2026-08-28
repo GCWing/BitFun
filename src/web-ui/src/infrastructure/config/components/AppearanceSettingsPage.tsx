@@ -1,9 +1,9 @@
-import { Switch } from '@bitfun/ui';
+import { Select, Switch } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useMouseGlowPreference } from '@/infrastructure/mouse-glow';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@/component-library';
+import { Select as LegacySelect } from '@/component-library';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -159,10 +159,10 @@ function AppearanceSelectionSection() {
               data-bf-part="language"
             >
               <Select
-                size="small"
+                size="sm"
                 value={currentLanguage}
-                onChange={(value) =>
-                  selectLanguage(String(Array.isArray(value) ? value[0] ?? '' : value) as LocaleId)
+                onValueChange={(value) =>
+                  selectLanguage(String(value) as LocaleId)
                 }
                 options={supportedLocales.map((locale) => ({
                   value: locale.id,
@@ -174,7 +174,7 @@ function AppearanceSelectionSection() {
                 }))}
                 disabled={isChanging}
                 placeholder={t('appearance.language')}
-                triggerTestId="appearance-language-select"
+                data-testid="appearance-language-select"
               />
             </div>
           </ConfigPageRow>
@@ -193,7 +193,7 @@ function AppearanceSelectionSection() {
                 data-bf-component="appearance-settings"
                 data-bf-part="paletteSelect"
               >
-                <Select
+                <LegacySelect
                   size="small"
                   value={selectedAppearanceId}
                   onChange={(value) => handleAppearanceChange(value as string)}
@@ -239,7 +239,7 @@ function AppearanceSelectionSection() {
               data-bf-component="appearance-settings"
               data-bf-part="packageSelect"
             >
-              <Select
+              <LegacySelect
                 size="small"
                 value={selectedPackageId}
                 options={packageOptions}

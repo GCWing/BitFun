@@ -1,4 +1,4 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -15,7 +15,8 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Search, Select, confirmDanger, Tooltip } from '@/component-library';
+import { Badge, Search, Select as LegacySelect, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
   GalleryDetailModal,
@@ -792,11 +793,11 @@ const AgentsHomeView: React.FC = () => {
                   </span>
                   <Select
                     className="bitfun-agents-scene__agent-filter-select"
-                    size="small"
+                    size="sm"
                     value={agentFilterLevel}
                     options={sourceFilterOptions}
-                    triggerAriaLabel={t('filters.source')}
-                    onChange={(value) => setAgentFilterLevel(
+                    aria-label={t('filters.source')}
+                    onValueChange={(value) => setAgentFilterLevel(
                       normalizeSelectValue(value) as AgentFilterLevel,
                     )}
                   />
@@ -810,11 +811,11 @@ const AgentsHomeView: React.FC = () => {
                   </span>
                   <Select
                     className="bitfun-agents-scene__agent-filter-select"
-                    size="small"
+                    size="sm"
                     value={agentFilterType}
                     options={typeFilterOptions}
-                    triggerAriaLabel={t('filters.kind')}
-                    onChange={(value) => setAgentFilterType(
+                    aria-label={t('filters.kind')}
+                    onValueChange={(value) => setAgentFilterType(
                       normalizeSelectValue(value) as AgentFilterType,
                     )}
                   />
@@ -1296,7 +1297,7 @@ const AgentsHomeView: React.FC = () => {
                 {currentCapabilityTab === 'model'
                 && selectedAgent.agentKind === 'subagent'
                 && !selectedAgentIsExternal ? (
-                  <Select
+                  <LegacySelect
                     size="small"
                     searchable
                     className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"

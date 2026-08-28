@@ -40,6 +40,18 @@ test("IconButton exposes presentation, shape, tone, and size independently", () 
   assert.match(markup, /data-size="lg"/);
 });
 
+test("IconButton exposes an extra-compact size for dense row actions", () => {
+  const markup = renderToStaticMarkup(
+    createElement(IconButton, {
+      "aria-label": "Copy",
+      icon: createElement("svg"),
+      size: "xs",
+    }),
+  );
+
+  assert.match(markup, /data-size="xs"/);
+});
+
 test("loading preserves the label while disabling activation", () => {
   const markup = renderToStaticMarkup(
     createElement(IconButton, {
@@ -61,6 +73,7 @@ test("IconButton styles consume shared action and geometry tokens", async () => 
   assert.match(styles, /--bf-color-action-neutral-surface-hover/);
   assert.match(styles, /--bf-color-action-primary-background/);
   assert.match(styles, /--bf-control-height-sm/);
+  assert.match(styles, /--bf-control-icon-button-xs-size/);
   assert.match(styles, /--bf-radius-sm/);
   assert.match(styles, /--bf-radius-pill/);
 });

@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Select } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select, Textarea, Tooltip, type SelectOption } from '@/component-library';
+import { NumberInput, Select as LegacySelect, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -363,7 +363,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             <span className="bitfun-reasoning-preset-editor__primary-setting-label">
               {t('reasoningPresets.catalogSource')}
             </span>
-            <Select
+            <LegacySelect
               value={catalog.source}
               disabled={disabled}
               size="small"
@@ -401,10 +401,10 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             <Select
               value={value.default_preset ?? ''}
               disabled={disabled}
-              size="small"
-              triggerAriaLabel={t('reasoningPresets.defaultPreset')}
+              size="sm"
+              aria-label={t('reasoningPresets.defaultPreset')}
               options={defaultOptions}
-              onChange={(next) => update({ ...value, default_preset: String(next) || undefined })}
+              onValueChange={(next) => update({ ...value, default_preset: String(next) || undefined })}
             />
           </div>
         </div>
@@ -520,7 +520,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
-              <Select
+              <LegacySelect
                 size="small"
                 triggerAriaLabel={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
@@ -541,7 +541,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
-              <Select
+              <LegacySelect
                 size="small"
                 triggerAriaLabel={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
@@ -785,14 +785,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         data-bf-part="action"
                       >
                         <Select
-                          size="small"
+                          size="sm"
                           value={action.type}
                           disabled={disabled}
                           options={actionOptions.filter(option => (
                             availableReasoningActionTypes(preset.actions ?? [], actionIndex)
                               .includes(option.value as ReasoningPresetAction['type'])
                           ))}
-                          onChange={(next) => {
+                          onValueChange={(next) => {
                             setJsonValidation(jsonKey, false);
                             setJsonDrafts(previous => {
                               const nextDrafts = { ...previous };
@@ -808,7 +808,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         />
                         {action.type === 'effort' && (
                           <div className="bitfun-reasoning-preset-editor__effort-control">
-                            <Select
+                            <LegacySelect
                               size="small"
                               value={action.value}
                               disabled={disabled}

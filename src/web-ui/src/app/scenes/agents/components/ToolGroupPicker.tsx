@@ -10,7 +10,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { confirmDanger, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import type { UserToolGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
 import {

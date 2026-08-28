@@ -9,7 +9,8 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { Badge, confirmDanger, type BadgeVariant, Tooltip } from '@/component-library';
+import { Badge, type BadgeVariant, Tooltip } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   speechAPI,
   workspaceAPI,

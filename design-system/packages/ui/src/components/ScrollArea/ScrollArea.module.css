@@ -1,0 +1,72 @@
+@layer bf.components {
+  .root {
+    min-inline-size: 0;
+    min-block-size: 0;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .root[data-bf-orientation="vertical"] {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .root[data-bf-orientation="horizontal"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .root[data-bf-orientation="both"] {
+    overflow: auto;
+  }
+
+  .root[data-bf-orientation="vertical"][data-bf-scrollbar-visibility="always"] {
+    overflow-y: scroll;
+  }
+
+  .root[data-bf-orientation="horizontal"][data-bf-scrollbar-visibility="always"] {
+    overflow-x: scroll;
+  }
+
+  .root[data-bf-orientation="both"][data-bf-scrollbar-visibility="always"] {
+    overflow: scroll;
+  }
+
+  .root::-webkit-scrollbar {
+    inline-size: var(--bf-scrollbar-width);
+    block-size: var(--bf-scrollbar-width);
+  }
+
+  .root::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .root::-webkit-scrollbar-thumb {
+    border-radius: var(--bf-scrollbar-radius);
+    background: var(--bf-color-scrollbar-thumb);
+  }
+
+  .root::-webkit-scrollbar-thumb:hover {
+    background: var(--bf-color-scrollbar-thumb-hover);
+  }
+
+  .root[data-bf-scrollbar-visibility="hidden"] {
+    scrollbar-width: none;
+  }
+
+  .root[data-bf-scrollbar-visibility="hidden"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      scrollbar-color: CanvasText transparent;
+    }
+
+    .root::-webkit-scrollbar-thumb,
+    .root::-webkit-scrollbar-thumb:hover {
+      background: CanvasText;
+    }
+  }
+}

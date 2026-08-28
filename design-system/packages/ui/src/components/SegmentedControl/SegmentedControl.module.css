@@ -1,0 +1,111 @@
+@layer bf.components {
+  .root,
+  .segment,
+  .icon,
+  .label {
+    box-sizing: border-box;
+  }
+
+  .root {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bf-control-segmented-control-gap);
+    padding: var(--bf-control-segmented-control-padding);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-control-segmented-control-radius);
+    background: var(--bf-color-surface-subtle);
+  }
+
+  .segment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    gap: var(--bf-control-segmented-control-segment-gap);
+    block-size: var(--bf-control-segmented-control-segment-height);
+    margin: 0;
+    padding-block: 0;
+    padding-inline: var(--bf-control-segmented-control-segment-padding-inline);
+    border: 0;
+    border-radius: var(--bf-control-segmented-control-segment-radius);
+    color: var(--bf-color-action-neutral-content);
+    background: transparent;
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-control-segmented-control-font-size);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-tight);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .segment[aria-checked="true"] {
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-raised);
+    font-weight: var(--bf-font-weight-medium);
+  }
+
+  .segment:hover:not(:disabled)[aria-checked="false"],
+  .root[data-bf-preview-state="hover"] .segment[aria-checked="false"]:not(:disabled) {
+    background: var(--bf-color-action-neutral-surface-hover);
+  }
+
+  .segment:active:not(:disabled)[aria-checked="false"] {
+    background: var(--bf-color-action-neutral-surface-pressed);
+  }
+
+  .segment:focus-visible {
+    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline-offset: var(--bf-focus-offset);
+  }
+
+  .segment:disabled {
+    color: var(--bf-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-control-segmented-control-icon-size);
+    block-size: var(--bf-control-segmented-control-icon-size);
+    color: currentColor;
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .label {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .segment {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: ButtonText;
+    }
+
+    .segment[aria-checked="true"] {
+      color: HighlightText;
+      background: Highlight;
+    }
+
+    .segment:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

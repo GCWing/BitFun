@@ -40,7 +40,6 @@
   .field[data-disabled="true"] {
     color: var(--bf-color-content-disabled);
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
   }
 
   .field[data-size="md"] {
@@ -61,6 +60,7 @@
     padding: 0;
     border: 0;
     outline: 0;
+    caret-color: var(--bf-color-accent-default);
     color: inherit;
     background: transparent;
     font-family: var(--bf-font-family-control);

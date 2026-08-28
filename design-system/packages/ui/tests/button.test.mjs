@@ -83,6 +83,7 @@ test("primary and text variants expose semantic emphasis without changing button
   assert.match(styles, /--bf-color-action-primary-background/);
   assert.match(styles, /--bf-color-action-primary-content/);
   assert.match(styles, /--bf-color-accent-default/);
+  assert.match(styles, /--bf-color-accent-disabled/);
   assert.match(styles, /text-decoration:underline/);
 });
 
@@ -100,6 +101,14 @@ test("Button owns the reference pill geometry and typography", async () => {
   assert.match(styles, /padding-block:var\(--_button-padding-block\)/);
   assert.match(styles, /padding-inline:var\(--_button-padding-inline\)/);
   assert.match(styles, /--_button-padding-inline:\s*var\(--bf-space-5\)/);
+  assert.match(
+    styles,
+    /\[data-size=xs\]\{[^}]*--_button-height:\s*var\(--bf-control-button-xs-height\)/,
+  );
+  assert.match(
+    styles,
+    /\[data-size=xs\]\{[^}]*--_button-padding-inline:\s*var\(--bf-control-button-xs-padding-inline\)/,
+  );
   assert.match(
     styles,
     /\[data-size=sm\]\{[^}]*--_button-padding-inline:\s*var\(--bf-space-4\)/,

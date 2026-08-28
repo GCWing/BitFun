@@ -1,21 +1,10 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Modal, ConfirmDialog } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import {
-  ConfirmDialog,
-  InputDialog,
-  PresenceBoundary,
-  BITFUN_ICON_SIZE,
-  SessionGroupAssistantIcon,
-  SessionGroupAssistantSelectedIcon,
-  SessionGroupRemoteWorkspaceIcon,
-  SessionGroupRemoteWorkspaceSelectedIcon,
-  SessionGroupWorkspaceIcon,
-  SessionGroupWorkspaceSelectedIcon,
-  Tooltip,
-} from '@/component-library';
+import { InputDialog, PresenceBoundary, BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon, Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
