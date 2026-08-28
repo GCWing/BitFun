@@ -61,7 +61,7 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Meta,
     },
     BuiltinSkillSpec {
-        dir_name: "evidence-debugging",
+        dir_name: "debug",
         group: BuiltinSkillGroup::Debugging,
     },
     BuiltinSkillSpec {

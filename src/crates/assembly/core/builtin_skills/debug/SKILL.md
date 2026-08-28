@@ -1,5 +1,5 @@
 ---
-name: evidence-debugging
+name: debug
 description: Use this skill to locate a runtime bug. Add targeted instrumentation, collect reproduction evidence, and confirm the root cause before changing code.
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Frontend debug log receiver for the evidence-debugging skill.
+ * Frontend debug log receiver for the debug skill.
  *
  * Start it from any project root:
  *   node <skill_dir>/scripts/debug-log-server.mjs
