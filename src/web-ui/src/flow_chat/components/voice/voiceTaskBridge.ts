@@ -207,10 +207,10 @@ async function waitForSettledSession(sessionId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const subscription = { dispose: () => undefined as void };
     let finished = false;
-    const finish = () => {
+    const finish = (activeTimeoutId: number) => {
       if (finished) return;
       finished = true;
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(activeTimeoutId);
       subscription.dispose();
       resolve();
     };
@@ -222,12 +222,12 @@ async function waitForSettledSession(sessionId: string): Promise<void> {
     }, TASK_TIMEOUT_MS);
     subscription.dispose = stateMachineManager.subscribeGlobal((changedSessionId) => {
       if (changedSessionId !== sessionId || !isSettled()) return;
-      finish();
+      finish(timeoutId);
     });
     // Close the check/subscribe race: a very short task or cancellation can
     // settle after the first check and before the global listener is attached.
     if (finished) subscription.dispose();
-    else if (isSettled()) finish();
+    else if (isSettled()) finish(timeoutId);
   });
 }
 
