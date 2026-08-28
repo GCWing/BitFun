@@ -30,18 +30,6 @@ vi.mock('@bitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
-  Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
-  ),
-  Modal: ({ children, isOpen, title }: {
-    children: React.ReactNode;
-    isOpen: boolean;
-    title?: string;
-  }) => (isOpen ? <div role="dialog" aria-label={title}>{children}</div> : null),
-}));
-
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
   ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
     confirmText?: string;
     isOpen: boolean;
@@ -54,6 +42,14 @@ vi.mock('@/component-library', () => ({
       <button type="button" onClick={onConfirm}>{confirmText}</button>
     </div>
   ) : null),
+  Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
+  ),
+  Modal: ({ children, isOpen, title }: {
+    children: React.ReactNode;
+    isOpen: boolean;
+    title?: string;
+  }) => (isOpen ? <div role="dialog" aria-label={title}>{children}</div> : null),
 }));
 
 vi.mock('@/component-library', () => ({
