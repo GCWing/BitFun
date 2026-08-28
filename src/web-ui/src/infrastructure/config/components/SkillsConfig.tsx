@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, IconButton, ConfirmDialog, Field, Input, SearchField, Select } from '@bitfun/ui';
+import { Button, Card, CardBody, IconButton, ConfirmDialog, Field, Input, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp, Search as SearchIcon } from 'lucide-react';
-import { Card, CardBody, Tooltip } from '@/component-library';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
@@ -390,7 +390,7 @@ const SkillsConfig: React.FC = () => {
           {Array.from({ length: 5 }).map((_, index) => (
             <Card
               key={`market-loading-${index}`}
-              variant="elevated"
+              appearance="raised"
               padding="none"
               className="bitfun-skills-config__market-item is-loading"
               data-bf-component="skills-config"
@@ -439,7 +439,7 @@ const SkillsConfig: React.FC = () => {
           return (
             <Card
               key={skill.installId}
-              variant="elevated"
+              appearance="raised"
               padding="none"
               className={`bitfun-skills-config__market-item${isInstalled ? ' is-installed' : ''}`}
               data-bf-component="skills-config"

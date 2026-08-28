@@ -1,5 +1,4 @@
 @use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 // Gutter aligned with GalleryLayout ($gutter) so the tab strip lines up
 // with the page header content of every tab pane.
@@ -16,81 +15,23 @@ $scene-gutter: clamp(28px, 4vw, 64px);
   overflow: hidden;
   background: var(--bf-appearance-token-color-bg-scene);
 
-  // Layout glue: make the component-library Tabs fill the scene so each
+  &__nav {
+    flex: 0 0 auto;
+    padding: $size-gap-3 $scene-gutter;
+    background: var(--bf-appearance-token-color-bg-scene);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  }
+
+  // Layout glue: keep the active pane in the flex sizing chain so each
   // pane's GalleryLayout keeps its own internal scroll.
-  &__tabs {
+  &__content {
+    display: flex;
     flex: 1 1 auto;
+    min-width: 0;
     min-height: 0;
+    overflow: hidden;
 
-    > .bitfun-tabs__nav {
-      flex: 0 0 auto;
-      padding: $size-gap-3 $scene-gutter;
-      background: var(--bf-appearance-token-color-bg-scene);
-      border-bottom-color: var(--bf-appearance-token-border-subtle);
-    }
-
-    > .bitfun-tabs__nav .bitfun-tabs__nav-list {
-      flex: 0 0 auto;
-      width: fit-content;
-      gap: 2px;
-      padding: 2px;
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-full;
-      background: var(--bf-appearance-token-element-bg-subtle);
-      box-shadow: var(--bf-appearance-token-shadow-xs);
-    }
-
-    > .bitfun-tabs__nav .bitfun-tabs__tab {
-      min-height: 30px;
-      padding: 0;
-      margin-bottom: 0;
-      border-bottom: 0;
-      border-radius: $size-radius-full;
-      color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-
-      &:not(.bitfun-tabs__tab--active):hover {
-        background: var(--bf-appearance-token-element-bg-soft);
-        color: var(--bf-appearance-token-color-text-primary);
-      }
-
-      &--active {
-        @include btn-primary.btn-primary-surface-default;
-
-        &:hover {
-          @include btn-primary.btn-primary-surface-hover;
-        }
-      }
-    }
-
-    > .bitfun-tabs__nav .bitfun-tabs__tab-button {
-      height: 30px;
-      padding: 0 10px;
-    }
-
-    > .bitfun-tabs__nav .bitfun-tabs__ink-bar {
-      display: none;
-    }
-
-    > .bitfun-tabs__content {
-      display: flex;
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    // Tabs wraps the active pane in ViewTransitionBoundary. Keep that
-    // intermediate view in the flex sizing chain so GalleryLayout receives a
-    // definite height and its body remains the page's scroll owner.
-    > .bitfun-tabs__content > .bitfun-tabs__content-view {
-      display: flex;
-      flex: 1 1 auto;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    .bitfun-tab-pane {
+    > * {
       display: flex;
       flex: 1 1 auto;
       min-width: 0;
@@ -100,11 +41,7 @@ $scene-gutter: clamp(28px, 4vw, 64px);
 }
 
 @media (max-width: 560px) {
-  .miniapp-gallery-scene__tabs > .bitfun-tabs__nav {
+  .miniapp-gallery-scene__nav {
     padding-inline: $size-gap-3;
-  }
-
-  .miniapp-gallery-scene__tabs > .bitfun-tabs__nav .bitfun-tabs__tab-button {
-    padding-inline: $size-gap-2;
   }
 }

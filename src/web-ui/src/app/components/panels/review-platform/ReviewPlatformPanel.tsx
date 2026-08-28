@@ -1,4 +1,4 @@
-import { Button, Field, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
+import { Button, Field, IconButton, Input as DesignInput, Modal, TabGroup } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { MarkdownRenderer, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { MarkdownRenderer, Select, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -2254,14 +2254,19 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 </div>
               </div>
 
-              <Tabs
-                activeKey={activeTab}
-                onChange={(key) => setActiveTab(key as DetailTab)}
-                type="pill"
-                size="small"
-                className="review-platform__tabs"
-              >
-                <TabPane tabKey="overview" label="Overview">
+              <div className="review-platform__tabs" data-bf-component="review-platform" data-bf-part="tabs">
+                <div className="review-platform__tab-bar" data-bf-component="review-platform" data-bf-part="tabBar">
+                  <TabGroup
+                    items={[
+                      { value: 'overview', label: 'Overview' },
+                      { value: 'changes', label: 'Changes' },
+                      { value: 'commits', label: 'Commits' },
+                    ]}
+                    value={activeTab}
+                    onValueChange={(value) => setActiveTab(value as DetailTab)}
+                  />
+                </div>
+                {activeTab === 'overview' && (
                   <div className="review-platform__tab-content review-platform__overview-scroll" data-bf-component="review-platform" data-bf-part="tabContent">
                     <section className="review-platform__detail-section" data-bf-component="review-platform" data-bf-part="section">
                       <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
@@ -2441,9 +2446,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       {renderDetailPagination('Comments', reviewPage, reviewThreads.length, setReviewPageIndex)}
                     </section>
                   </div>
-                </TabPane>
+                )}
 
-                <TabPane tabKey="changes" label="Changes">
+                {activeTab === 'changes' && (
                   <section className="review-platform__tab-content review-platform__file-list" data-bf-component="review-platform" data-bf-part="fileList">
                     {detailError && (
                       <div className="review-platform__detail-error">
@@ -2511,9 +2516,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     )}
                     {renderDetailPagination('Files', changePage, changedFiles.length, setChangePageIndex)}
                   </section>
-                </TabPane>
+                )}
 
-                <TabPane tabKey="commits" label="Commits">
+                {activeTab === 'commits' && (
                   <section className="review-platform__tab-content review-platform__timeline">
                     <div className="review-platform__section-heading">
                       <span>Commits</span>
@@ -2547,9 +2552,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     )}
                     {renderDetailPagination('Commits', commitPage, commits.length, setCommitPageIndex)}
                   </section>
-                </TabPane>
-
-              </Tabs>
+                )}
+              </div>
             </>
           )}
         </main>

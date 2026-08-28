@@ -724,74 +724,22 @@
   }
 
   &__tabs {
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     flex: 1;
+  }
 
-    &.bitfun-tabs,
-    .bitfun-tabs__content,
-    .bitfun-tab-pane {
-      min-height: 0;
-      height: 100%;
-    }
-
-    .bitfun-tabs__nav {
-      padding: 8px 12px 0;
-      border-bottom: 1px solid var(--bf-appearance-token-border-base);
-      background: transparent;
-    }
-
-    .bitfun-tabs__nav-list {
-      gap: 2px;
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-    }
-
-    .bitfun-tabs__tab {
-      position: relative;
-      min-height: 30px;
-      padding: 0 10px 8px;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: var(--bf-appearance-token-color-text-secondary);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0;
-      box-shadow: none;
-
-      &::after {
-        content: '';
-        position: absolute;
-        right: 10px;
-        bottom: -1px;
-        left: 10px;
-        height: 2px;
-        border-radius: 2px;
-        background: transparent;
-      }
-
-      &:hover {
-        color: var(--bf-appearance-token-color-text-primary);
-        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 56%, transparent);
-      }
-
-      &.active,
-      &.bitfun-tabs__tab--active,
-      &[aria-selected='true'] {
-        color: var(--bf-appearance-token-color-text-primary);
-        background: transparent;
-
-        &::after {
-          background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 72%, var(--bf-appearance-token-color-text-primary));
-        }
-      }
-    }
+  &__tab-bar {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
   }
 
   &__tab-content {
     box-sizing: border-box;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     padding: 12px 14px;
   }
