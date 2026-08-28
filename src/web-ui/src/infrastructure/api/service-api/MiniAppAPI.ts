@@ -97,6 +97,13 @@ export interface AiModelInfo {
 
 // ─── Agent bridge types ───────────────────────────────────────────────────────
 
+export interface AgentContextFile {
+  /** Plain file name written under the reserved `.miniapp-context` directory. */
+  name: string;
+  /** UTF-8 app-supplied context treated as untrusted data by the Agent prompt. */
+  content: string;
+}
+
 export interface AgentRunOptions {
   runId?: string;
   sessionName?: string;
@@ -119,6 +126,11 @@ export interface AgentRunOptions {
    * or a concrete model config id). Applied on create and on session reuse.
    */
   model?: string;
+  /**
+   * Bounded context files materialized inside the MiniApp appdata workspace.
+   * Marketplace Agents may Read/Grep only this reserved context directory.
+   */
+  contextFiles?: AgentContextFile[];
 }
 
 export interface AgentRunStartedResult {
@@ -735,6 +747,7 @@ export class MiniAppAPI {
           sessionId: options?.sessionId,
           appDataWorkspace: options?.appDataWorkspace,
           model: options?.model,
+          contextFiles: options?.contextFiles,
         }
       });
     } catch (error) {

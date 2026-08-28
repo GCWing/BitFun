@@ -1240,6 +1240,7 @@ mod path_resolution_tests {
             temp_root.to_string_lossy().as_ref(),
             ToolRuntimeRestrictions {
                 path_policy: ToolPathPolicy {
+                    read_roots: vec![allowed_root.to_string_lossy().to_string()],
                     write_roots: vec![allowed_root.to_string_lossy().to_string()],
                     ..Default::default()
                 },
@@ -1253,6 +1254,9 @@ mod path_resolution_tests {
         context
             .enforce_path_operation(ToolPathOperation::Write, &allowed)
             .expect("path within configured root should be allowed");
+        context
+            .enforce_path_operation(ToolPathOperation::Read, &allowed)
+            .expect("read path within configured root should be allowed");
 
         let blocked = context
             .resolve_tool_path(&temp_root.join("blocked/file.txt").to_string_lossy())
@@ -1262,6 +1266,10 @@ mod path_resolution_tests {
             .expect_err("path outside configured root should be blocked");
 
         assert!(err.to_string().contains("is not allowed for write"));
+        let err = context
+            .enforce_path_operation(ToolPathOperation::Read, &blocked)
+            .expect_err("read path outside configured root should be blocked");
+        assert!(err.to_string().contains("is not allowed for read"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

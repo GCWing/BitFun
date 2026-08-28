@@ -27,6 +27,8 @@ describe('MiniAppAPI agent bridge', () => {
       {
         sessionId: 'session-1',
         displayText: '随便做几页测试页',
+        appDataWorkspace: 'chat',
+        contextFiles: [{ name: 'stocks.ndjson', content: '{"code":"688256"}\n' }],
       },
     );
 
@@ -37,6 +39,8 @@ describe('MiniAppAPI agent bridge', () => {
         displayText: '随便做几页测试页',
         sessionId: 'session-1',
         workspacePath: '/tmp/workspace',
+        appDataWorkspace: 'chat',
+        contextFiles: [{ name: 'stocks.ndjson', content: '{"code":"688256"}\n' }],
       }),
     });
   });

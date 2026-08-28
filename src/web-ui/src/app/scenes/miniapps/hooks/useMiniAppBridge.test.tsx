@@ -181,9 +181,14 @@ describe('useMiniAppBridge floating Agent routing', () => {
       sessionId: 'session-1',
       prompt: 'Summarize the market',
       displayText: 'Summarize the market',
+      appDataWorkspace: 'chat',
+      contextFiles: [{ name: 'stocks.ndjson', content: '{"code":"688256"}\n' }],
     });
 
     expect(mocks.agentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.agentRun.mock.calls[0][3].contextFiles).toEqual([
+      { name: 'stocks.ndjson', content: '{"code":"688256"}\n' },
+    ]);
     expect(mocks.openMainSession).not.toHaveBeenCalled();
   });
 

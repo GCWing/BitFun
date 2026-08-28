@@ -1,4 +1,5 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::ToolPathOperation;
 use crate::service::search::{
     get_global_workspace_search_service, remote_workspace_search_service_for_path,
     workspace_search_feature_enabled, workspace_search_runtime_available, ContentSearchOutputMode,
@@ -619,6 +620,7 @@ Usage:
         // Remote workspace: use shell-based grep/rg
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let resolved = context.resolve_tool_path(search_path)?;
+        context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
         crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
             context,
             &resolved.resolved_path,
@@ -899,14 +901,56 @@ mod tests {
         render_workspace_search_result_lines, GrepTool, DEFAULT_HEAD_LIMIT,
         WORKSPACE_PROBE_PENDING_NOTE,
     };
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::{ToolPathPolicy, ToolRuntimeRestrictions};
+    use crate::agentic::WorkspaceBinding;
     use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
     use crate::service::search::{
         ContentSearchResult, WorkspaceSearchBackend, WorkspaceSearchHit, WorkspaceSearchLine,
         WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
         WorkspaceSearchRepoStatus,
     };
+    use bitfun_runtime_ports::ToolRuntimeHandles;
     use serde_json::json;
+    use std::collections::HashMap;
     use tool_runtime::search::grep_search::relativize_result_text;
+
+    #[tokio::test]
+    async fn grep_tool_enforces_runtime_read_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("Agent".to_string()),
+            session_id: None,
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: Some(WorkspaceBinding::new(
+                Some("grep-context-workspace".to_string()),
+                dir.path().to_path_buf(),
+            )),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                path_policy: ToolPathPolicy {
+                    read_roots: vec![".miniapp-context".to_string()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            runtime_handles: ToolRuntimeHandles::default(),
+        };
+
+        let error = GrepTool::new()
+            .call_impl(
+                &json!({ "pattern": "blocked", "path": "storage.json" }),
+                &context,
+            )
+            .await
+            .expect_err("Grep must not search app storage outside reserved context");
+        assert!(error.to_string().contains("is not allowed for read"));
+    }
 
     #[test]
     fn head_limit_defaults_and_zero_escape_hatch() {

@@ -1077,6 +1077,7 @@ fn runtime_restrictions_keep_current_snake_case_wire_shape() {
         "allowed_tool_names": ["Read"],
         "denied_tool_names": ["Write"],
         "path_policy": {
+            "read_roots": ["context"],
             "write_roots": ["src"],
             "edit_roots": ["docs"],
             "delete_roots": ["target/generated"]
@@ -1087,6 +1088,7 @@ fn runtime_restrictions_keep_current_snake_case_wire_shape() {
         serde_json::from_value(value.clone()).expect("deserialize restrictions");
     assert!(restrictions.is_tool_allowed("Read"));
     assert!(!restrictions.is_tool_allowed("Write"));
+    assert_eq!(restrictions.path_policy.read_roots, vec!["context"]);
     assert_eq!(restrictions.path_policy.write_roots, vec!["src"]);
     assert_eq!(restrictions.path_policy.edit_roots, vec!["docs"]);
     assert_eq!(

@@ -416,6 +416,9 @@ export function useMiniAppBridge(
                 sessionId: params.sessionId as string | undefined,
                 appDataWorkspace: params.appDataWorkspace as string | undefined,
                 model: typeof params.model === 'string' ? params.model : undefined,
+                contextFiles: Array.isArray(params.contextFiles)
+                  ? (params.contextFiles as Array<{ name: string; content: string }>)
+                  : undefined,
               },
             );
             agentSessionIdsRef.current.add(result.sessionId);

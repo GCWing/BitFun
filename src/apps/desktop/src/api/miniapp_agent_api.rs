@@ -1,9 +1,9 @@
 //! MiniApp agent bridge API.
 //!
-//! Lets a MiniApp (gated by the `agent` permission group) run full host agent
-//! turns — the complete agent loop with tools (WebSearch/WebFetch/Read/...)
-//! and skills — instead of the raw single-call LLM access provided by the
-//! `ai` permission group.
+//! Lets a MiniApp (gated by the `agent` permission group) run host agent turns
+//! instead of the raw single-call LLM access provided by the `ai` permission
+//! group. Marketplace runs use a strict tool profile: read-only web research
+//! plus Read/Grep confined to bounded app-supplied context files.
 //!
 //! A run creates or reuses a hidden subagent session (invisible in the session
 //! list), owned by `miniapp-agent:{app_id}:{run_id}`, and submits one dialog
@@ -13,7 +13,8 @@
 
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Component, Path};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -45,6 +46,11 @@ static AGENT_RATE_LIMITER: OnceLock<MiniAppAgentRateLimiter> = OnceLock::new();
 
 static AGENT_RUN_COUNTER: AtomicU64 = AtomicU64::new(1);
 const DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT: &str = "MiniApp agent run";
+const MINIAPP_AGENT_CONTEXT_DIR: &str = ".miniapp-context";
+const MAX_MINIAPP_AGENT_CONTEXT_FILES: usize = 8;
+const MAX_MINIAPP_AGENT_CONTEXT_FILE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_MINIAPP_AGENT_CONTEXT_TOTAL_BYTES: usize = 8 * 1024 * 1024;
+const MAX_MINIAPP_AGENT_CONTEXT_FILE_NAME_BYTES: usize = 128;
 
 fn agent_run_registry() -> &'static MiniAppAgentRunRegistry {
     AGENT_RUN_REGISTRY.get_or_init(MiniAppAgentRunRegistry::default)
@@ -73,6 +79,129 @@ fn resolve_agent_display_text(display_text: Option<&str>) -> String {
         .to_string()
 }
 
+fn is_safe_agent_context_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_MINIAPP_AGENT_CONTEXT_FILE_NAME_BYTES
+        && Path::new(name)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+        && Path::new(name).components().count() == 1
+}
+
+fn materialize_agent_context_files(
+    workspace_path: &Path,
+    app_data_dir: &Path,
+    app_data_workspace: Option<&str>,
+    context_files: &[MiniAppAgentContextFile],
+) -> Result<(), String> {
+    if context_files.is_empty() {
+        return Ok(());
+    }
+    if app_data_workspace
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        return Err(
+            "contextFiles requires appDataWorkspace so context stays inside MiniApp storage"
+                .to_string(),
+        );
+    }
+    if context_files.len() > MAX_MINIAPP_AGENT_CONTEXT_FILES {
+        return Err(format!(
+            "contextFiles supports at most {} files",
+            MAX_MINIAPP_AGENT_CONTEXT_FILES
+        ));
+    }
+
+    let mut names = HashSet::with_capacity(context_files.len());
+    let mut total_bytes = 0usize;
+    for file in context_files {
+        if !is_safe_agent_context_file_name(&file.name) {
+            return Err(format!(
+                "Invalid context file name '{}': use one plain file name",
+                file.name
+            ));
+        }
+        if !names.insert(file.name.as_str()) {
+            return Err(format!("Duplicate context file name: {}", file.name));
+        }
+        let file_bytes = file.content.len();
+        if file_bytes > MAX_MINIAPP_AGENT_CONTEXT_FILE_BYTES {
+            return Err(format!(
+                "Context file '{}' exceeds the {} byte limit",
+                file.name, MAX_MINIAPP_AGENT_CONTEXT_FILE_BYTES
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(file_bytes)
+            .ok_or_else(|| "contextFiles total size overflowed".to_string())?;
+        if total_bytes > MAX_MINIAPP_AGENT_CONTEXT_TOTAL_BYTES {
+            return Err(format!(
+                "contextFiles exceeds the {} byte total limit",
+                MAX_MINIAPP_AGENT_CONTEXT_TOTAL_BYTES
+            ));
+        }
+    }
+
+    let canonical_app_data = std::fs::canonicalize(app_data_dir)
+        .map_err(|error| format!("Failed to resolve MiniApp appdata directory: {error}"))?;
+    let canonical_workspace = std::fs::canonicalize(workspace_path)
+        .map_err(|error| format!("Failed to resolve MiniApp agent workspace: {error}"))?;
+    if !canonical_workspace.starts_with(&canonical_app_data) {
+        return Err("MiniApp agent workspace escaped app storage".to_string());
+    }
+
+    let context_root = canonical_workspace.join(MINIAPP_AGENT_CONTEXT_DIR);
+    if std::fs::symlink_metadata(&context_root)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err("MiniApp agent context directory must not be a symlink".to_string());
+    }
+    std::fs::create_dir_all(&context_root)
+        .map_err(|error| format!("Failed to create MiniApp agent context directory: {error}"))?;
+
+    let canonical_context_root = std::fs::canonicalize(&context_root)
+        .map_err(|error| format!("Failed to resolve MiniApp agent context directory: {error}"))?;
+    if !canonical_context_root.starts_with(&canonical_workspace) {
+        return Err("MiniApp agent context directory escaped app storage".to_string());
+    }
+
+    for file in context_files {
+        let target = canonical_context_root.join(&file.name);
+        let temp =
+            canonical_context_root.join(format!(".{}.{}.tmp", file.name, uuid::Uuid::new_v4()));
+        std::fs::write(&temp, file.content.as_bytes()).map_err(|error| {
+            format!(
+                "Failed to write MiniApp agent context file '{}': {error}",
+                file.name
+            )
+        })?;
+        if target.exists()
+            || std::fs::symlink_metadata(&target)
+                .map(|_| true)
+                .unwrap_or(false)
+        {
+            if let Err(error) = std::fs::remove_file(&target) {
+                let _ = std::fs::remove_file(&temp);
+                return Err(format!(
+                    "Failed to replace MiniApp agent context file '{}': {error}",
+                    file.name
+                ));
+            }
+        }
+        if let Err(error) = std::fs::rename(&temp, &target) {
+            let _ = std::fs::remove_file(&temp);
+            return Err(format!(
+                "Failed to publish MiniApp agent context file '{}': {error}",
+                file.name
+            ));
+        }
+    }
+    Ok(())
+}
+
 async fn require_agent_permission(
     state: &AppState,
     app_id: &str,
@@ -86,6 +215,16 @@ async fn require_agent_permission(
 }
 
 // ============== Request/Response DTOs ==============
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppAgentContextFile {
+    /// Plain file name placed under the reserved `.miniapp-context` directory.
+    pub name: String,
+    /// UTF-8 context controlled by the MiniApp and treated as untrusted data by
+    /// the receiving Agent prompt.
+    pub content: String,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +271,11 @@ pub struct MiniAppAgentRunRequest {
     /// MiniApp can switch models mid-task.
     #[serde(default)]
     pub model: Option<String>,
+    /// Bounded app-supplied context materialized under `.miniapp-context` in
+    /// the appdata workspace before the turn starts. Marketplace Agents can
+    /// Read/Grep only this reserved directory, never the general filesystem.
+    #[serde(default)]
+    pub context_files: Vec<MiniAppAgentContextFile>,
 }
 
 #[derive(Debug, Serialize)]
@@ -418,6 +562,12 @@ pub async fn miniapp_agent_run(
         std::fs::create_dir_all(&workspace_plan.path)
             .map_err(|e| format!("Failed to create MiniApp agent workspace: {}", e))?;
     }
+    materialize_agent_context_files(
+        &workspace_plan.path,
+        &app_data_dir,
+        request.app_data_workspace.as_deref(),
+        &request.context_files,
+    )?;
     let workspace_path = workspace_plan.workspace_path.clone();
     let run_sequence = if request
         .run_id
@@ -637,8 +787,9 @@ pub async fn miniapp_agent_cancel_stale_runs(
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_agent_display_text, MiniAppAgentEnsureSessionRequest, MiniAppAgentRunRequest,
-        DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT,
+        materialize_agent_context_files, resolve_agent_display_text, MiniAppAgentContextFile,
+        MiniAppAgentEnsureSessionRequest, MiniAppAgentRunRequest,
+        DEFAULT_MINIAPP_AGENT_DISPLAY_TEXT, MINIAPP_AGENT_CONTEXT_DIR,
     };
     use bitfun_core::miniapp::agent_bridge::is_clean_relative_subdir;
     use serde_json::json;
@@ -654,6 +805,7 @@ mod tests {
         assert!(legacy.enable_tools.unwrap_or(true));
         assert!(legacy.session_id.is_none());
         assert!(legacy.display_text.is_none());
+        assert!(legacy.context_files.is_empty());
 
         let render: MiniAppAgentRunRequest = serde_json::from_value(json!({
             "appId": "builtin-ppt-live",
@@ -682,7 +834,11 @@ mod tests {
         let request: MiniAppAgentRunRequest = serde_json::from_value(json!({
             "appId": "builtin-ppt-live",
             "prompt": "plan a deck",
-            "appDataWorkspace": "decks/deck-123"
+            "appDataWorkspace": "decks/deck-123",
+            "contextFiles": [{
+                "name": "summary.json",
+                "content": "{\"topic\":\"quarterly review\"}"
+            }]
         }))
         .expect("appdata-workspace MiniApp agent request should deserialize");
         assert_eq!(
@@ -690,6 +846,92 @@ mod tests {
             Some("decks/deck-123")
         );
         assert!(request.workspace_path.is_none());
+        assert_eq!(request.context_files.len(), 1);
+        assert_eq!(request.context_files[0].name, "summary.json");
+    }
+
+    #[test]
+    fn miniapp_agent_run_materializes_bounded_context_inside_appdata_workspace() {
+        let temp = tempfile::tempdir().expect("create context workspace");
+        let app_data = temp.path().join("app-data");
+        let workspace = app_data.join("chat");
+        std::fs::create_dir_all(&workspace).expect("create appdata workspace");
+        let files = vec![
+            MiniAppAgentContextFile {
+                name: "stocks.ndjson".to_string(),
+                content: "{\"code\":\"688256\"}\n".to_string(),
+            },
+            MiniAppAgentContextFile {
+                name: "summary.json".to_string(),
+                content: "{\"market\":\"CN\"}".to_string(),
+            },
+        ];
+
+        materialize_agent_context_files(&workspace, &app_data, Some("chat"), &files)
+            .expect("materialize context files");
+
+        assert_eq!(
+            std::fs::read_to_string(
+                workspace
+                    .join(MINIAPP_AGENT_CONTEXT_DIR)
+                    .join("stocks.ndjson")
+            )
+            .unwrap(),
+            "{\"code\":\"688256\"}\n"
+        );
+    }
+
+    #[test]
+    fn miniapp_agent_context_files_reject_paths_and_user_workspaces() {
+        let temp = tempfile::tempdir().expect("create context workspace");
+        let app_data = temp.path().join("app-data");
+        let workspace = app_data.join("chat");
+        std::fs::create_dir_all(&workspace).expect("create appdata workspace");
+        let escaped = vec![MiniAppAgentContextFile {
+            name: "../storage.json".to_string(),
+            content: "secret".to_string(),
+        }];
+        assert!(
+            materialize_agent_context_files(&workspace, &app_data, Some("chat"), &escaped)
+                .unwrap_err()
+                .contains("Invalid context file name")
+        );
+
+        let valid = vec![MiniAppAgentContextFile {
+            name: "summary.json".to_string(),
+            content: "{}".to_string(),
+        }];
+        assert!(
+            materialize_agent_context_files(&workspace, &app_data, None, &valid)
+                .unwrap_err()
+                .contains("requires appDataWorkspace")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn miniapp_agent_context_files_reject_symlinked_appdata_workspaces() {
+        let temp = tempfile::tempdir().expect("create context workspace");
+        let app_data = temp.path().join("app-data");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&app_data).expect("create appdata");
+        std::fs::create_dir_all(&outside).expect("create outside directory");
+        std::os::unix::fs::symlink(&outside, app_data.join("chat"))
+            .expect("create workspace symlink");
+        let files = vec![MiniAppAgentContextFile {
+            name: "summary.json".to_string(),
+            content: "{}".to_string(),
+        }];
+
+        let error = materialize_agent_context_files(
+            &app_data.join("chat"),
+            &app_data,
+            Some("chat"),
+            &files,
+        )
+        .expect_err("symlinked workspace must not escape appdata");
+        assert!(error.contains("workspace escaped app storage"));
+        assert!(!outside.join(MINIAPP_AGENT_CONTEXT_DIR).exists());
     }
 
     #[test]

@@ -2154,6 +2154,7 @@ pub fn posix_resolve_path_with_workspace(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolPathOperation {
+    Read,
     Write,
     Edit,
     Delete,
@@ -2162,6 +2163,7 @@ pub enum ToolPathOperation {
 impl ToolPathOperation {
     pub fn verb(self) -> &'static str {
         match self {
+            Self::Read => "read",
             Self::Write => "write",
             Self::Edit => "edit",
             Self::Delete => "delete",
@@ -2171,6 +2173,8 @@ impl ToolPathOperation {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolPathPolicy {
+    #[serde(default)]
+    pub read_roots: Vec<String>,
     #[serde(default)]
     pub write_roots: Vec<String>,
     #[serde(default)]
@@ -2182,6 +2186,7 @@ pub struct ToolPathPolicy {
 impl ToolPathPolicy {
     pub fn roots_for(&self, operation: ToolPathOperation) -> &[String] {
         match operation {
+            ToolPathOperation::Read => &self.read_roots,
             ToolPathOperation::Write => &self.write_roots,
             ToolPathOperation::Edit => &self.edit_roots,
             ToolPathOperation::Delete => &self.delete_roots,
@@ -2326,15 +2331,18 @@ pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
 /// Tool set for a marketplace MiniApp agent turn.
 ///
 /// Marketplace MiniApps are third-party code, so their hidden agent sessions
-/// must not reach the filesystem, the shell, or any host control surface. They
-/// do need to answer questions about the live world, so the allowlist keeps
-/// read-only web research and the clock that dates it. The deferred gateway pair
-/// stays allowed because the execution gate matches the effective tool name, so
-/// an allowlisted tool that resolves as deferred still has to pass this list.
-/// An allowlist (rather than a longer deny list) keeps newly registered tools
-/// closed by default.
+/// must not reach the general filesystem, the shell, or any host control
+/// surface. The host may materialize bounded, app-supplied context under the
+/// reserved `.miniapp-context` workspace directory; Read and Grep are confined
+/// to that directory. Read-only web research and the clock remain available for
+/// live-world questions. The deferred gateway pair stays allowed because the
+/// execution gate matches the effective tool name, so an allowlisted tool that
+/// resolves as deferred still has to pass this list. An allowlist (rather than a
+/// longer deny list) keeps newly registered tools closed by default.
 pub fn miniapp_market_strict_agent_tool_restrictions() -> ToolRuntimeRestrictions {
     const ALLOWED_TOOLS: &[&str] = &[
+        "Read",
+        "Grep",
         "WebSearch",
         "WebFetch",
         "GetToolSpec",
@@ -2347,6 +2355,7 @@ pub fn miniapp_market_strict_agent_tool_restrictions() -> ToolRuntimeRestriction
         .iter()
         .map(|name| (*name).to_string())
         .collect();
+    restrictions.path_policy.read_roots = vec![".miniapp-context".to_string()];
     restrictions
 }
 
@@ -2773,14 +2782,20 @@ mod tests {
     }
 
     #[test]
-    fn market_strict_miniapp_runs_keep_web_research_and_drop_host_reach() {
+    fn market_strict_miniapp_runs_keep_scoped_context_and_drop_host_reach() {
         let restrictions = miniapp_market_strict_agent_tool_restrictions();
 
+        assert!(restrictions.is_tool_allowed("Read"));
+        assert!(restrictions.is_tool_allowed("Grep"));
         assert!(restrictions.is_tool_allowed("WebSearch"));
         assert!(restrictions.is_tool_allowed("WebFetch"));
         assert!(restrictions.is_tool_allowed("GetToolSpec"));
+        assert_eq!(
+            restrictions.path_policy.read_roots,
+            vec![".miniapp-context"]
+        );
 
-        for denied in ["Read", "Write", "Edit", "ExecCommand", "Task", "Skill"] {
+        for denied in ["Write", "Edit", "ExecCommand", "Task", "Skill"] {
             assert!(
                 !restrictions.is_tool_allowed(denied),
                 "{denied} must stay closed for marketplace MiniApp agent runs"

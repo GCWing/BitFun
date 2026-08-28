@@ -7,6 +7,7 @@ use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -707,6 +708,7 @@ Usage:
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
         crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
             context,
             &resolved.resolved_path,
@@ -885,7 +887,7 @@ mod tests {
     use super::MAX_DOCUMENT_INPUT_BYTES;
     use super::{FileReadTool, ReadRenderMode};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::{ToolPathPolicy, ToolRuntimeRestrictions};
     use crate::agentic::WorkspaceBinding;
     #[cfg(feature = "document-read")]
     use async_trait::async_trait;
@@ -1031,6 +1033,34 @@ mod tests {
             properties["render"]["enum"],
             json!(["auto", "source", "markdown"])
         );
+    }
+
+    #[tokio::test]
+    async fn read_tool_enforces_runtime_read_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let allowed_root = dir.path().join(".miniapp-context");
+        fs::create_dir_all(&allowed_root).expect("create context root");
+        fs::write(allowed_root.join("stocks.ndjson"), "allowed").expect("write allowed file");
+        fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions.path_policy = ToolPathPolicy {
+            read_roots: vec![".miniapp-context".to_string()],
+            ..Default::default()
+        };
+        let tool = FileReadTool::new();
+
+        tool.call_impl(
+            &json!({ "file_path": ".miniapp-context/stocks.ndjson" }),
+            &context,
+        )
+        .await
+        .expect("reserved context file should be readable");
+        let error = tool
+            .call_impl(&json!({ "file_path": "storage.json" }), &context)
+            .await
+            .expect_err("app storage outside reserved context must stay blocked");
+        assert!(error.to_string().contains("is not allowed for read"));
     }
 
     #[cfg(not(feature = "document-read"))]
