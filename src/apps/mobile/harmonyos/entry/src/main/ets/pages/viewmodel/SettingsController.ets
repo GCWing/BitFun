@@ -250,11 +250,17 @@ export class SettingsController {
         desktopReported: false
       };
     } catch (err) {
+      // Once the user is confirming the account, every failure belongs to the
+      // login attempt itself. Do not reinterpret a rejected password or an old
+      // relay response as a cue to ask the desktop.
+      if (password.length > 0) {
+        throw err instanceof Error ? err : new Error('Watch account verification failed.');
+      }
       if (err instanceof CloudAccountRequestError && (err.statusCode === 401 || err.statusCode === 403)) {
         RemoteLogger.info('phone account may not mint a device credential; deferring to the desktop');
         return undefined;
       }
-      if (err instanceof CloudAccountRequestError && err.statusCode >= 500 &&
+      if (err instanceof CloudAccountRequestError && (err.statusCode === 404 || err.statusCode >= 500) &&
         cloud.remoteState.accountUsername.trim().length > 0) {
         RemoteLogger.info('relay device provisioning unavailable; requesting account confirmation');
         return {
