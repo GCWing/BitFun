@@ -1,90 +1,184 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { ToolCollapsePolicy } from '../policy/ToolCollapsePolicy';
-import { ChatTypingDots } from './ChatMessageChrome';
-import { INK, LINE, MUTED, SOFT } from './Theme';
+import { ConversationUiMessageItem, ConversationUiQuestionAnswer } from '../state/ConversationUiModels';
+import { ChatMessageStructurePolicy } from '../policy/ChatMessageStructurePolicy';
+import { CARD, INK, LINE, MUTED, RED, SOFT } from './Theme';
+import { ThinkingBlock } from './ThinkingBlock';
+import { ToolStatusList } from './ToolStatusList';
+import { ToolGlyph } from './ToolGlyphs';
 
 @ComponentV2
 export struct SubagentTaskCard {
   @Param title: string = '';
-  @Param running: boolean = false;
-  @Param content: string = '';
-  @Param hasChildren: boolean = false;
-  @BuilderParam childItems: () => void = this.EmptyChildren;
+  @Param status: string = 'completed';
+  @Param items: ConversationUiMessageItem[] = [];
+  @Param renderRevision: number = 0;
+  @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
+    (_toolId: string, _updatedInput?: Object) => {};
+  @Event onRejectTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onCancelTool: (toolId: string) => void = (_toolId: string) => {};
+  @Event onAnswerQuestion: (toolId: string, answers: ConversationUiQuestionAnswer) => void =
+    (_toolId: string, _answers: ConversationUiQuestionAnswer) => {};
+  @Event onOpenFilePreview: (path: string, label: string) => void =
+    (_path: string, _label: string) => {};
   @Local expanded: boolean = false;
-  @Local userToggled: boolean = false;
-
-  aboutToAppear(): void {
-    this.userToggled = false;
-    this.expanded = ToolCollapsePolicy.defaultSubagentExpanded(this.running);
-  }
-
-  @Monitor('running')
-  onRunningChanged(): void {
-    this.expanded = ToolCollapsePolicy.subagentExpandedForStatus(
-      this.running,
-      this.userToggled,
-      this.expanded
-    );
-    if (!this.running) {
-      this.userToggled = false;
-    }
-  }
 
   build() {
-    Column({ space: 8 }) {
+    Column() {
       Row({ space: 8 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          // The Stack is the slot that keeps the title from shifting between
-          // the two states; the glyph must stay unsized, or a chevron_right
-          // (whose natural box is half as wide as it is tall) gets drawn
-          // against the left edge of a box forced square.
-          SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
-            .fontSize(14)
-            .fontColor([MUTED])
+        Stack({ alignContent: Alignment.BottomEnd }) {
+          Stack({ alignContent: Alignment.Center }) {
+            ToolGlyph({ kind: 'task', color: this.isError() ? RED : MUTED })
+          }
+          .width(18)
+          .height(18)
+          .backgroundColor(SOFT)
+          .borderRadius(5)
+          .border({ width: 1, color: this.isError() ? RED : LINE })
+          if (this.isRunning() || this.isError()) {
+            Text(this.isError() ? '!' : '•')
+              .width(10)
+              .height(10)
+              .fontSize(MobileDesignTypography.labelSmall.size)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(CARD)
+              .textAlign(TextAlign.Center)
+              .backgroundColor(this.isError() ? RED : MUTED)
+              .borderRadius(5)
+              .border({ width: 1, color: CARD })
+          }
         }
-        .width(18)
-        .height(32)
+        .width(20)
+        .height(20)
         Text(this.title)
           .fontSize(MobileDesignTypography.bodySmall.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
+          .fontColor(this.isError() ? RED : MUTED)
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.statusText())
+          .fontSize(MobileDesignTypography.labelSmall.size)
+          .fontColor(this.isError() ? RED : MUTED)
+          .maxLines(1)
+        if (this.hasProcessItems()) {
+          SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+            .fontSize(13)
+            .fontColor([MUTED])
+            .width(16)
+            .height(16)
+        }
       }
       .width('100%')
-      .height(32)
+      .height(28)
       .alignItems(VerticalAlign.Center)
       .onClick(() => {
-        this.userToggled = this.running;
-        this.expanded = !this.expanded;
+        if (this.hasProcessItems()) {
+          this.expanded = !this.expanded;
+        }
       })
-      .accessibilityText(this.expanded ? RemoteI18n.t('chat.showLess') : RemoteI18n.t('chat.showMore'))
-      if (this.expanded) {
-        if (this.running) {
-          ChatTypingDots()
-        }
-        if (this.content.trim().length > 0) {
-          Text(this.content)
-            .fontSize(MobileDesignTypography.bodySmall.size)
-            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-            .fontColor(MUTED)
-            .width('100%')
-        }
-        if (this.hasChildren) {
-          this.childItems()
-        }
+      if (this.expanded && this.hasProcessItems()) {
+        this.ProcessItems()
       }
     }
     .width('100%')
-    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-    .backgroundColor(SOFT)
-    .borderRadius(12)
-    .border({ width: 1, color: LINE })
+    .padding({
+      left: this.isEmphasized() ? 10 : 0,
+      right: this.isEmphasized() ? 10 : 0,
+      top: this.isEmphasized() ? 6 : 0,
+      bottom: this.isEmphasized() ? 6 : 0
+    })
+    .backgroundColor(this.isEmphasized() || this.expanded ? SOFT : '#00000000')
+    .borderRadius(this.isEmphasized() ? 14 : 8)
+    .border({ width: this.isEmphasized() || this.expanded ? 1 : 0, color: LINE })
+    .accessibilityText(`${this.title}, ${this.statusText()}`)
   }
 
   @Builder
-  EmptyChildren() {
+  private ProcessItems() {
+    Column({ space: 6 }) {
+      ForEach(this.visibleProcessItems(), (entry: ConversationUiMessageItem, index: number) => {
+        if (ChatMessageStructurePolicy.isThinkingEntry(entry)) {
+          ThinkingBlock({
+            text: entry.content || '',
+            status: this.childStatus(index),
+            keepExpandedWhenDone: false,
+            streaming: this.childStatus(index) === 'running',
+            streamKey: `${this.title}-subagent-thinking-${index}`
+          })
+        } else if (entry.tool) {
+          ToolStatusList({
+            tools: [entry.tool],
+            renderRevision: this.renderRevision,
+            isBusy: this.isRunning(),
+            onApproveTool: this.onApproveTool,
+            onRejectTool: this.onRejectTool,
+            onCancelTool: this.onCancelTool,
+            onAnswerQuestion: this.onAnswerQuestion,
+            onOpenFilePreview: this.onOpenFilePreview
+          })
+        } else if ((entry.content || '').trim().length > 0) {
+          Column({ space: 3 }) {
+            Text(RemoteI18n.t('chat.subagentOutput'))
+              .fontSize(MobileDesignTypography.labelSmall.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(MUTED)
+            Text(this.processTextPreview(entry.content || ''))
+              .fontSize(MobileDesignTypography.bodySmall.size)
+              .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
+              .fontColor(INK)
+              .width('100%')
+              .maxLines(4)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+        }
+      }, (entry: ConversationUiMessageItem, index: number) =>
+        ChatMessageStructurePolicy.structuredItemKey(entry, `subagent-${index}`))
+    }
+    .width('100%')
+    .padding({ left: 14, top: 6, bottom: 4 })
+    .border({ width: { left: 1 }, color: LINE })
+  }
+
+  private isRunning(): boolean {
+    const normalized = this.status.toLowerCase();
+    return normalized === 'running' || normalized === 'active' || normalized === 'preparing' ||
+      normalized === 'pending' || normalized === 'queued';
+  }
+
+  private isError(): boolean {
+    const normalized = this.status.toLowerCase();
+    return normalized === 'failed' || normalized === 'error' || normalized === 'timeout' ||
+      normalized === 'cancelled' || normalized === 'canceled' || normalized === 'rejected';
+  }
+
+  private statusText(): string {
+    if (this.isRunning()) return RemoteI18n.t('common.running');
+    return RemoteI18n.t(this.isError() ? 'common.failed' : 'common.done');
+  }
+
+  private isEmphasized(): boolean {
+    return this.isRunning() || this.isError();
+  }
+
+  private visibleProcessItems(): ConversationUiMessageItem[] {
+    return this.items.filter((entry: ConversationUiMessageItem) =>
+      !!entry.tool || (entry.content || '').trim().length > 0 ||
+        (!!entry.subItems && entry.subItems.length > 0));
+  }
+
+  private hasProcessItems(): boolean {
+    return this.visibleProcessItems().length > 0;
+  }
+
+  private childStatus(index: number): string {
+    return this.isRunning() && index === this.visibleProcessItems().length - 1 ? 'running' : 'done';
+  }
+
+  private processTextPreview(raw: string): string {
+    const text = raw.trim();
+    if (text.length <= 320) return text;
+    return `${text.slice(0, 320).trim()}…`;
   }
 }

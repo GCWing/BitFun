@@ -326,12 +326,10 @@ export struct SidebarWorkspaceSection {
   private selectedEntry(): DeviceDirectoryEntry | undefined {
     const entries = this.deviceEntries();
     const selectedId = this.directoryState.selectedDeviceId.trim();
-    const selected = entries.find((entry: DeviceDirectoryEntry): boolean => entry.deviceId === selectedId);
-    if (selected) {
-      return selected;
+    if (selectedId.length === 0) {
+      return undefined;
     }
-    const activeId = this.controlTargetDeviceId.trim();
-    return entries.find((entry: DeviceDirectoryEntry): boolean => entry.deviceId === activeId) || entries[0];
+    return entries.find((entry: DeviceDirectoryEntry): boolean => entry.deviceId === selectedId);
   }
 
   private isSelected(entry: DeviceDirectoryEntry): boolean {

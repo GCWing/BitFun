@@ -73,10 +73,13 @@ export class SettingsController {
   private readonly cloud?: CloudAccountSettingsDependencies;
   private cloudSession?: CloudAccountSession;
   private cloudRelayUrl: string = '';
+  /** Account login identity; pairing projections must never overwrite it. */
+  private cloudAccountUsername: string = '';
   private accountDevices: CloudAccountDevice[] = [];
   private lastAccountDevicesAt: number = 0;
   private presenceTicker?: RemoteHeartbeatController;
   private restoringControlTarget: boolean = false;
+  private accountDeviceSelectionVersion: number = 0;
 
   constructor(
     store: GeneralChatConfigStore,
@@ -216,7 +219,7 @@ export class SettingsController {
     const cloud = this.requireCloud();
     try {
       if (password.length > 0) {
-        const username = cloud.remoteState.accountUsername.trim();
+        const username = this.cloudAccountUsername;
         if (username.length === 0) {
           throw new Error('The signed-in account name is unavailable.');
         }
@@ -260,9 +263,10 @@ export class SettingsController {
         RemoteLogger.info('phone account may not mint a device credential; deferring to the desktop');
         return undefined;
       }
-      if (err instanceof CloudAccountRequestError && (err.statusCode === 404 || err.statusCode >= 500) &&
-        cloud.remoteState.accountUsername.trim().length > 0) {
-        RemoteLogger.info('relay device provisioning unavailable; requesting account confirmation');
+      if (err instanceof CloudAccountRequestError &&
+        (err.statusCode === 404 || err.statusCode === 409 || err.statusCode >= 500) &&
+        this.cloudAccountUsername.length > 0) {
+        RemoteLogger.info('relay cannot provision watch directly; requesting account confirmation');
         return {
           ok: false,
           passwordRequired: true,
@@ -313,17 +317,15 @@ export class SettingsController {
     const remoteState = this.requireCloud().remoteState;
     this.cloudSession = session;
     this.cloudRelayUrl = relayUrl.trim();
+    this.cloudAccountUsername = username.trim();
     remoteState.setAccountUserId(session.userId);
-    remoteState.setAccountUsername(username.trim());
+    remoteState.setAccountUsername(this.cloudAccountUsername);
   }
 
   async logoutCloudAccount(): Promise<void> {
     const cloud = this.requireCloud();
     cloud.hooks.invalidatePreview();
-    if (cloud.remoteState.controlTargetType === 'account_device') {
-      this.resetAccountDeviceConnection(true);
-    }
-    this.clearCloudAccountProjection(cloud);
+    this.teardownCloudAccountProjection(cloud);
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
@@ -549,6 +551,7 @@ export class SettingsController {
     if (deviceId.length === 0 || deviceId === cloud.hooks.deviceId()) {
       return;
     }
+    const selectionVersion = ++this.accountDeviceSelectionVersion;
     if (deviceId === cloud.remoteState.controlTargetDeviceId && cloud.remoteState.connectionState === 'connected') {
       cloud.hooks.closeConnectSheet();
       if (navigateHome) {
@@ -567,6 +570,10 @@ export class SettingsController {
         session,
         deviceId
       );
+      if (selectionVersion !== this.accountDeviceSelectionVersion) {
+        RemoteLogger.info(`stale device switch completion ignored device=${deviceId}`);
+        return;
+      }
       cloud.remoteState.setControlTarget('account_device', deviceId, device.deviceName);
       cloud.remoteState.setDesktopIdentity(device.deviceName, deviceId);
       cloud.remoteState.setWorkspace(
@@ -609,6 +616,10 @@ export class SettingsController {
       // the cross-workspace scan runs behind a list that is already usable.
       void cloud.hooks.loadRecentWorkspaces();
     } catch (err) {
+      if (selectionVersion !== this.accountDeviceSelectionVersion) {
+        RemoteLogger.info(`stale device switch failure ignored device=${deviceId}`);
+        return;
+      }
       if (err instanceof CloudAccountRequestError && err.statusCode === 401) {
         await this.expireCloudAccountSession();
       }
@@ -620,8 +631,10 @@ export class SettingsController {
       await this.restoreControlTarget(previousTarget);
       throw new Error(message);
     } finally {
-      cloud.remoteState.setLoadingHome(false);
-      cloud.remoteState.setBusy(false);
+      if (selectionVersion === this.accountDeviceSelectionVersion) {
+        cloud.remoteState.setLoadingHome(false);
+        cloud.remoteState.setBusy(false);
+      }
     }
   }
 
@@ -779,13 +792,10 @@ export class SettingsController {
   private async expireCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
     cloud.hooks.invalidatePreview();
-    if (cloud.remoteState.controlTargetType === 'account_device') {
-      this.resetAccountDeviceConnection(true);
-    }
     // Publish the signed-out projection before awaiting storage. A revoked
     // credential must never leave stale account devices actionable merely
     // because preferences or cache cleanup is slow (or fails).
-    this.clearCloudAccountProjection(cloud);
+    this.teardownCloudAccountProjection(cloud);
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
@@ -793,11 +803,22 @@ export class SettingsController {
     RemoteLogger.info('cloud account session expired');
   }
 
-  /** Drops every observable fact owned by the account session. */
-  private clearCloudAccountProjection(cloud: CloudAccountSettingsDependencies): void {
+  /** Publishes the complete signed-out projection as one synchronous transition. */
+  private teardownCloudAccountProjection(cloud: CloudAccountSettingsDependencies): void {
+    // Invalidate late device-selection completions before touching observable
+    // state. During an in-flight switch the target is deliberately `none`, but
+    // its busy/status/session projection still belongs to the account.
+    this.accountDeviceSelectionVersion += 1;
+    this.resetAccountDeviceConnection(true);
+    this.clearCloudAccountIdentity(cloud);
+  }
+
+  /** Drops the remaining account identity facts after remote teardown. */
+  private clearCloudAccountIdentity(cloud: CloudAccountSettingsDependencies): void {
     this.stopPresencePolling();
     this.cloudSession = undefined;
     this.cloudRelayUrl = '';
+    this.cloudAccountUsername = '';
     this.accountDevices = [];
     this.lastAccountDevicesAt = 0;
     cloud.hooks.onAccountDevices([]);
@@ -831,9 +852,9 @@ export class SettingsController {
     cloud.hooks.stopPolling();
     cloud.hooks.stopHeartbeat();
     cloud.sessionManager.reset();
-    cloud.remoteState.setHostCapabilities([]);
-    cloud.remoteState.clearActiveSession();
-    cloud.remoteState.setSessions([], false);
+    cloud.remoteState.resetConversationContext();
+    cloud.hooks.resetTimeline();
+    cloud.hooks.resetKnownRemoteState();
     if (clearWorkspace) {
       cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
       cloud.remoteState.setAuthenticatedUserId('');

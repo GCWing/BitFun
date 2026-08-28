@@ -125,6 +125,24 @@ export class ConversationCoreState {
     this.selectedImages = [];
   }
 
+  /**
+   * Drops the complete observable projection of one conversation context.
+   *
+   * Account logout, disconnect and workspace replacement must not rebuild this
+   * list field-by-field: leaving even one field behind makes the next surface
+   * look as if it still belongs to the previous identity.
+   */
+  reset(): void {
+    this.sessions = [];
+    this.clearActiveSession();
+    this.isBusy = false;
+    this.modelCatalog = RemoteUiState.emptyModelCatalog();
+    this.selectedModelId = '';
+    this.statusText = '';
+    this.clearComposer();
+    this.isVoiceListening = false;
+  }
+
   setVoiceListening(isVoiceListening: boolean): void {
     this.isVoiceListening = isVoiceListening;
   }

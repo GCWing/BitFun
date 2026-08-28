@@ -4,6 +4,7 @@ export enum FilePreviewPlacement {
   Hidden = 'hidden',
   CompactFullPage = 'compact_full_page',
   WideFocusSplit = 'wide_focus_split',
+  WideMasterPreviewFocus = 'wide_master_preview_focus',
   WideTriplePane = 'wide_triple_pane'
 }
 
@@ -14,6 +15,8 @@ export class FilePreviewLayout {
   readonly conversationPaneWidth: number;
   readonly conversationPreviewGap: number;
   readonly previewPaneWidth: number;
+  readonly masterConversationGapIsCrease: boolean;
+  readonly conversationPreviewGapIsCrease: boolean;
 
   constructor(
     placement: FilePreviewPlacement,
@@ -21,7 +24,9 @@ export class FilePreviewLayout {
     masterConversationGap: number = 0,
     conversationPaneWidth: number = 0,
     conversationPreviewGap: number = 0,
-    previewPaneWidth: number = 0
+    previewPaneWidth: number = 0,
+    masterConversationGapIsCrease: boolean = false,
+    conversationPreviewGapIsCrease: boolean = false
   ) {
     this.placement = placement;
     this.masterPaneWidth = masterPaneWidth;
@@ -29,6 +34,8 @@ export class FilePreviewLayout {
     this.conversationPaneWidth = conversationPaneWidth;
     this.conversationPreviewGap = conversationPreviewGap;
     this.previewPaneWidth = previewPaneWidth;
+    this.masterConversationGapIsCrease = masterConversationGapIsCrease;
+    this.conversationPreviewGapIsCrease = conversationPreviewGapIsCrease;
   }
 }
 
@@ -36,6 +43,10 @@ export class FilePreviewPlacementPolicy {
   static readonly MIN_MASTER_WIDTH: number = 280;
   static readonly MIN_CONVERSATION_WIDTH: number = 360;
   static readonly MIN_PREVIEW_WIDTH: number = 360;
+  // A physical tri-fold panel is a stronger boundary than the generic tablet
+  // minimum. Current tri-fold right panels are about 290vp: that is still the
+  // complete screen and must not make preview hide the master pane.
+  static readonly MIN_CREASE_ALIGNED_PREVIEW_WIDTH: number = 280;
   static readonly PANE_DIVIDER_WIDTH: number = 1;
 
   static resolve(
@@ -57,7 +68,8 @@ export class FilePreviewPlacementPolicy {
     largeScreenLayout: boolean,
     viewportWidth: number,
     creases: ConversationLayoutCrease[],
-    preferredMasterWidth: number = FilePreviewPlacementPolicy.MIN_MASTER_WIDTH
+    preferredMasterWidth: number = FilePreviewPlacementPolicy.MIN_MASTER_WIDTH,
+    previewExpanded: boolean = false
   ): FilePreviewLayout {
     if (!previewVisible) {
       return new FilePreviewLayout(FilePreviewPlacement.Hidden);
@@ -71,6 +83,15 @@ export class FilePreviewPlacementPolicy {
         0,
         Math.max(0, viewportWidth)
       );
+    }
+    if (previewExpanded) {
+      const triFoldPreviewFocus = FilePreviewPlacementPolicy.creaseAlignedMasterPreviewFocus(
+        viewportWidth,
+        creases
+      );
+      if (triFoldPreviewFocus) {
+        return triFoldPreviewFocus;
+      }
     }
     const creaseLayout = FilePreviewPlacementPolicy.creaseAlignedTriplePane(viewportWidth, creases);
     if (creaseLayout) {
@@ -173,7 +194,9 @@ export class FilePreviewPlacementPolicy {
       0,
       conversationWidth,
       crease.width,
-      previewWidth
+      previewWidth,
+      false,
+      true
     );
   }
 
@@ -198,7 +221,9 @@ export class FilePreviewPlacementPolicy {
       0,
       conversationWidth,
       crease.width,
-      previewWidth
+      previewWidth,
+      false,
+      true
     );
   }
 
@@ -217,7 +242,7 @@ export class FilePreviewPlacementPolicy {
     const previewWidth = viewportWidth - second.left - second.width;
     if (masterWidth < FilePreviewPlacementPolicy.MIN_MASTER_WIDTH ||
       conversationWidth < FilePreviewPlacementPolicy.MIN_CONVERSATION_WIDTH ||
-      previewWidth < FilePreviewPlacementPolicy.MIN_PREVIEW_WIDTH) {
+      previewWidth < FilePreviewPlacementPolicy.MIN_CREASE_ALIGNED_PREVIEW_WIDTH) {
       return undefined;
     }
     return new FilePreviewLayout(
@@ -226,7 +251,46 @@ export class FilePreviewPlacementPolicy {
       first.width,
       conversationWidth,
       second.width,
-      previewWidth
+      previewWidth,
+      true,
+      true
+    );
+  }
+
+  /**
+   * When requested by the user, preserve navigation on the first panel and
+   * promote a narrow physical right-panel preview to the two-panel detail canvas.
+   * This is deliberately limited to geometry where the middle conversation
+   * panel was otherwise valid: malformed fold reports still use conservative
+   * focus fallbacks instead of being mistaken for a tri-fold device.
+   */
+  private static creaseAlignedMasterPreviewFocus(
+    viewportWidth: number,
+    creases: ConversationLayoutCrease[]
+  ): FilePreviewLayout | undefined {
+    const visible = FilePreviewPlacementPolicy.visibleCreases(viewportWidth, creases);
+    if (visible.length < 2) return undefined;
+    const first = visible[0];
+    const second = visible[1];
+    const masterWidth = first.left;
+    const middleWidth = second.left - first.left - first.width;
+    const rightWidth = viewportWidth - second.left - second.width;
+    const previewWidth = viewportWidth - first.left - first.width;
+    if (masterWidth < FilePreviewPlacementPolicy.MIN_MASTER_WIDTH ||
+      middleWidth < FilePreviewPlacementPolicy.MIN_CONVERSATION_WIDTH ||
+      rightWidth < FilePreviewPlacementPolicy.MIN_CREASE_ALIGNED_PREVIEW_WIDTH ||
+      rightWidth >= FilePreviewPlacementPolicy.MIN_PREVIEW_WIDTH) {
+      return undefined;
+    }
+    return new FilePreviewLayout(
+      FilePreviewPlacement.WideMasterPreviewFocus,
+      masterWidth,
+      first.width,
+      0,
+      0,
+      previewWidth,
+      true,
+      false
     );
   }
 

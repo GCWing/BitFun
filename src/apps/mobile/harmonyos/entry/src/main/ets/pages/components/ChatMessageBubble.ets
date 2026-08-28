@@ -166,9 +166,42 @@ export struct ChatMessageBubble {
       )
     }
     if (this.shouldRenderStructuredItems(this.item)) {
-      this.StructuredItems(this.item.items || [], this.shouldOmitStructuredThinking(this.item))
+      // Read the observed message here. Passing its plain items array through
+      // an @Builder parameter freezes the first tool-only snapshot on current
+      // ArkUI builds, even though the retained message row itself keeps
+      // receiving revisions.
+      ForEach([
+        this.structuredRenderKey(this.structuredProcessItems(this.item.items || []))
+      ], (_frameKey: string) => {
+        Column({ space: 10 }) {
+          ForEach(
+            this.structuredGroups(this.structuredProcessItems(this.item.items || []), 'item'),
+            (group: StructuredRenderGroup) => {
+              this.StructuredGroup(group, this.shouldOmitStructuredThinking(this.item))
+            },
+            (group: StructuredRenderGroup) => group.key
+          )
+        }
+        .width('100%')
+      }, (frameKey: string) => frameKey)
       if (this.uncoveredTools(this.item).length > 0) {
         this.Tools(this.uncoveredTools(this.item))
+      }
+      if (this.trailingStructuredText(this.item).length > 0) {
+        // Keep the growing answer outside the keyed structured ForEach. The
+        // latter intentionally rebuilds entries whose content hash changes,
+        // which turns a streamed answer into a sequence of static snapshots.
+        MessageBodyMarkdown({
+          text: this.trailingStructuredText(this.item),
+          renderRevision: this.renderRevision,
+          active: this.isStreamingAssistant(),
+          streamKey: `${this.item.id}-trailing-body`,
+          onCopyText: this.onCopyMessage,
+          onOpenLink: this.onOpenFilePreview
+        })
+        if (this.fileReferences(this.trailingStructuredText(this.item)).length > 0) {
+          this.FileCards(this.trailingStructuredText(this.item))
+        }
       }
     } else {
       if (this.item.tools && this.item.tools.length > 0) {
@@ -200,16 +233,6 @@ export struct ChatMessageBubble {
         this.isStreamingAssistant()
       )
     }
-  }
-
-  @Builder
-  StructuredItems(items: ConversationUiMessageItem[], omitActiveThinking: boolean = false) {
-    Column({ space: 10 }) {
-      ForEach(this.structuredGroups(items, 'item'), (group: StructuredRenderGroup) => {
-        this.StructuredGroup(group, omitActiveThinking)
-      }, (group: StructuredRenderGroup) => group.key)
-    }
-    .width('100%')
   }
 
   @Builder
@@ -306,17 +329,17 @@ export struct ChatMessageBubble {
   }
 
   @Builder
-  SubagentGroup(entry: ConversationUiMessageItem, path: string, activeScope: boolean = false) {
+  SubagentGroup(entry: ConversationUiMessageItem, _path: string, activeScope: boolean = false) {
     SubagentTaskCard({
       title: this.subagentTitle(entry),
-      running: !!(entry.tool && this.isRunningTool(entry.tool)),
-      content: this.subagentBody(entry),
-      hasChildren: !!(entry.subItems && entry.subItems.length > 0),
-      childItems: () => {
-        if (entry.subItems && entry.subItems.length > 0) {
-          this.ChildItems(entry.subItems, path, activeScope)
-        }
-      }
+      status: entry.tool?.status || (activeScope ? 'running' : 'completed'),
+      items: entry.subItems || [],
+      renderRevision: this.renderRevision,
+      onApproveTool: this.onApproveTool,
+      onRejectTool: this.onRejectTool,
+      onCancelTool: this.onCancelTool,
+      onAnswerQuestion: this.onAnswerQuestion,
+      onOpenFilePreview: this.onOpenFilePreview
     })
   }
 
@@ -348,6 +371,7 @@ export struct ChatMessageBubble {
     ToolStatusList({
       tools,
       thinkingParts,
+      renderRevision: this.renderRevision,
       isBusy: this.isBusy,
       onApproveTool: (toolId: string, updatedInput?: Object) => {
         this.onApproveTool(toolId, updatedInput);
@@ -431,6 +455,14 @@ export struct ChatMessageBubble {
     return this.toolsNotCoveredByItems(item.tools || [], item.items || []);
   }
 
+  private structuredProcessItems(items: ConversationUiMessageItem[]): ConversationUiMessageItem[] {
+    return ChatMessageStructurePolicy.withoutTrailingTopLevelText(items);
+  }
+
+  private trailingStructuredText(item: ConversationUiMessage): string {
+    return ChatMessageStructurePolicy.trailingTopLevelText(item.items || []);
+  }
+
   private shouldPinThinkingToBottom(item: ConversationUiMessage): boolean {
     return AssistantProcessLayoutPolicy.pinsThinkingAfterTools() &&
       this.isStreamingAssistant() &&
@@ -479,13 +511,6 @@ export struct ChatMessageBubble {
       }
       return !!entry.subItems && this.hasToolOrTextItems(entry.subItems);
     });
-  }
-
-  private subagentBody(entry: ConversationUiMessageItem): string {
-    if (!entry.content || this.isTextEntry(entry) || this.isThinkingEntry(entry)) {
-      return '';
-    }
-    return entry.content;
   }
 
   private shouldOmitStructuredThinking(_item: ConversationUiMessage): boolean {
@@ -584,6 +609,15 @@ export struct ChatMessageBubble {
     );
   }
 
+  private structuredRenderKey(items: ConversationUiMessageItem[]): string {
+    return ChatMessageStructurePolicy.structuredRenderKey(
+      items,
+      'item',
+      this.isStreamingAssistant(),
+      this.item.status || 'active'
+    );
+  }
+
   private activityGroupTools(group: StructuredRenderGroup): ConversationUiToolStatus[] {
     return ChatMessageStructurePolicy.activityGroupTools(group);
   }
@@ -636,7 +670,8 @@ export struct ChatMessageBubble {
   }
 
   private subagentTitle(entry: ConversationUiMessageItem): string {
-    return ChatMessageStructurePolicy.subagentTitle(entry);
+    const title = ChatMessageStructurePolicy.subagentTitle(entry);
+    return title.length > 0 ? title : RemoteI18n.t('chat.toolTaskFallback');
   }
 
   private isRunningTool(tool: ConversationUiToolStatus): boolean {

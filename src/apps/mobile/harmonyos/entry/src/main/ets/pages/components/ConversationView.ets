@@ -1,14 +1,11 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { KeyboardAvoidMode } from '@kit.ArkUI';
-import { RecentWorkspaceEntry } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ChatTimelineItem, ObservableChatTimelineItem } from '../../model/ChatTimelineModels';
 import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresenter';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { ChatComposerCapabilities } from '../state/ChatComposerCapabilities';
 import { ChatSurface } from '../state/ChatSurface';
-import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 import { ConversationViewState } from '../state/ConversationViewState';
 import { ConversationIntent, ConversationIntents, ConversationIntentType } from '../actions/ConversationIntent';
 import { ChatStatusBar } from './ChatStatusBar';
@@ -16,8 +13,7 @@ import { ChatTimeline } from './ChatTimeline';
 import { ConversationLoadingState } from './ConversationLoadingState';
 import {
   ConversationViewContract,
-  ConversationViewOptions,
-  RemoteCreateViewActions
+  ConversationViewOptions
 } from './ConversationViewContract';
 import {
   ConversationUiModelCatalog,
@@ -29,14 +25,11 @@ import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
 import { FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
-import { RemoteCreateContextControls } from './RemoteCreateContextControls';
 
 @ComponentV2
 export struct ConversationView {
   @Param state: ConversationViewState = new ConversationViewState();
   @Param options: ConversationViewOptions = new ConversationViewOptions();
-  @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
-  @Param createActions: RemoteCreateViewActions = new RemoteCreateViewActions();
   @Event onIntent: (intent: ConversationIntent) => void = (_intent: ConversationIntent) => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Local showHeaderActions: boolean = false;
@@ -106,14 +99,7 @@ export struct ConversationView {
     if (this.shouldShowStatusBar()) {
       this.ExecutionStatusBar()
     }
-    if (this.surface === ChatSurface.Create) {
-      Blank()
-        .layoutWeight(1)
-        .width('100%')
-        .onClick(() => {
-          this.onBackgroundTap();
-        })
-    } else if (this.shouldCenterInlineStatus()) {
+    if (this.shouldCenterInlineStatus()) {
       this.CenteredInlineStatus()
     } else {
       // Keep the list subtree alive while a slow transcript is loading. The
@@ -259,17 +245,6 @@ export struct ConversationView {
   @Builder
   Composer() {
     Column() {
-      if (this.showRemoteCreateContext) {
-        RemoteCreateContextControls({
-          state: this.remoteCreateState,
-          presentation: this.composerPresentation,
-          onToggleDeviceMenu: () => this.onToggleCreateDeviceMenu(),
-          onToggleWorkspaceMenu: () => this.onToggleCreateWorkspaceMenu(),
-          onSelectDevice: (device: CloudAccountDevice) => this.onSelectCreateDevice(device),
-          onSelectWorkspace: (workspace?: RecentWorkspaceEntry) => this.onSelectCreateWorkspace(workspace),
-          onSelectHarness: (profile: RemoteHarnessProfile) => this.onSelectCreateHarness(profile)
-        })
-      }
       ComposerBar({
       presentation: this.composerPresentation,
       capabilities: this.composerCapabilities,
@@ -415,7 +390,7 @@ export struct ConversationView {
     if (this.connectionState === 'reconnecting') {
       return RemoteI18n.t('chat.emptyReconnecting');
     }
-    return RemoteI18n.t('status.messagesSynced');
+    return ConnectionStatusPresenter.label(this.connectionState);
   }
 
   private taskSummaryDetail(): string {
@@ -426,7 +401,10 @@ export struct ConversationView {
   private shouldShowStatusBar(): boolean {
     return this.surface === ChatSurface.Remote &&
       !this.isLoadingConversation &&
-      this.connectionState !== 'connected';
+      this.connectionState !== 'connected' &&
+      (this.activeSession.sessionId.length > 0 ||
+        this.connectionState === 'failed' ||
+        this.connectionState === 'reconnecting');
   }
 
   private headerTitle(): string {
@@ -501,16 +479,6 @@ export struct ConversationView {
   private get composerPresentation(): ComposerPresentation { return this.options.composerPresentation; }
   private get composerInputId(): string { return this.options.composerInputId; }
   private get hoverOperateMode(): boolean { return this.options.hoverOperateMode; }
-  private get showRemoteCreateContext(): boolean { return this.options.showRemoteCreateContext; }
-
-  private onToggleCreateDeviceMenu(): void { this.createActions.toggleDeviceMenu(); }
-  private onToggleCreateWorkspaceMenu(): void { this.createActions.toggleWorkspaceMenu(); }
-  private onSelectCreateDevice(device: CloudAccountDevice): void { this.createActions.selectDevice(device); }
-  private onSelectCreateWorkspace(workspace?: RecentWorkspaceEntry): void {
-    this.createActions.selectWorkspace(workspace);
-  }
-  private onSelectCreateHarness(profile: RemoteHarnessProfile): void { this.createActions.selectHarness(profile); }
-  private onBackgroundTap(): void { this.createActions.backgroundTap(); }
   private onOpenSidebar(): void { this.dispatchSimple(ConversationIntentType.OpenSidebar); }
   private onBack(): void { this.dispatchSimple(ConversationIntentType.Back); }
   private onTogglePinSession(): void { this.dispatchSimple(ConversationIntentType.TogglePin); }

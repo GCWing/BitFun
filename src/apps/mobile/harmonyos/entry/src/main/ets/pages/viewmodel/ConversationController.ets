@@ -4,13 +4,11 @@ import {
   SelectedImageAttachment,
   SessionSummary
 } from '../../model/RemoteModels';
-import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ChatTimelineItem } from '../../model/ChatTimelineModels';
 import { VoiceInputRouteSnapshot } from '../../services/VoiceInputLifecycleController';
 import { AppRootRouteState } from '../navigation/AppRootRouteState';
 import { AppRoute, AppRouteContract } from '../navigation/AppRouteContract';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
-import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { RemotePageState } from '../state/RemotePageState';
 import { RemoteChatPollingSnapshot } from '../../services/RemoteChatPollingLifecycleController';
 import {
@@ -32,7 +30,6 @@ export {
 export class ConversationController {
   private readonly general: GeneralChatPageState;
   private readonly remote: RemotePageState;
-  private readonly remoteCreate: RemoteCreateSessionState;
   private readonly hooks: ConversationControllerHooks;
   private readonly remoteRuntime?: RemoteConversationDependencies;
   private readonly transcript: RemoteTranscriptController;
@@ -42,19 +39,17 @@ export class ConversationController {
   constructor(
     general: GeneralChatPageState,
     remote: RemotePageState,
-    remoteCreate: RemoteCreateSessionState,
     hooks: ConversationControllerHooks,
     remoteRuntime?: RemoteConversationDependencies
   ) {
     this.general = general;
     this.remote = remote;
-    this.remoteCreate = remoteCreate;
     this.hooks = hooks;
     this.remoteRuntime = remoteRuntime;
     this.transcript = new RemoteTranscriptController(remote, remoteRuntime, (message: string) => {
       this.showHomeToast(message);
     });
-    this.createFlow = new RemoteCreateFlowController(remote, remoteCreate, remoteRuntime);
+    this.createFlow = new RemoteCreateFlowController(remote, remoteRuntime);
     this.visible = new VisibleConversationController(
       general,
       remote,
@@ -69,9 +64,7 @@ export class ConversationController {
   }
 
   visibleChatInput(): string {
-    const route = this.hooks.currentRoute();
-    return route === AppRoute.RemoteCreate ? this.remoteCreate.draft :
-      AppRootRouteState.chatInput(route, this.general, this.remote);
+    return AppRootRouteState.chatInput(this.hooks.currentRoute(), this.general, this.remote);
   }
 
   visibleSelectedImages(): SelectedImageAttachment[] {
@@ -79,16 +72,10 @@ export class ConversationController {
   }
 
   visibleVoiceListening(): boolean {
-    const route = this.hooks.currentRoute();
-    return route === AppRoute.RemoteCreate ? this.remoteCreate.isVoiceListening :
-      AppRootRouteState.voiceListening(route, this.general, this.remote);
+    return AppRootRouteState.voiceListening(this.hooks.currentRoute(), this.general, this.remote);
   }
 
   setChatInput(route: AppRoute, value: string): void {
-    if (route === AppRoute.RemoteCreate) {
-      this.remoteCreate.setDraft(value);
-      return;
-    }
     AppRootRouteState.setChatInput(route, value, this.general, this.remote);
   }
 
@@ -101,17 +88,12 @@ export class ConversationController {
   }
 
   setVoiceListening(route: AppRoute, isVoiceListening: boolean): void {
-    if (route === AppRoute.RemoteCreate) {
-      this.remoteCreate.isVoiceListening = isVoiceListening;
-      return;
-    }
     AppRootRouteState.setVoiceListening(route, isVoiceListening, this.general, this.remote);
   }
 
   clearAllVoiceListening(): void {
     this.general.setVoiceListening(false);
     this.remote.setVoiceListening(false);
-    this.remoteCreate.isVoiceListening = false;
   }
 
   visibleBusy(): boolean {
@@ -133,15 +115,6 @@ export class ConversationController {
   }
 
   voiceInputSnapshot(route: AppRoute): VoiceInputRouteSnapshot {
-    if (route === AppRoute.RemoteCreate) {
-      return {
-        routeId: `${route}`,
-        isListening: this.remoteCreate.isVoiceListening,
-        isBusy: this.remoteCreate.isSubmitting,
-        inputText: this.remoteCreate.draft,
-        selectedImageCount: 0
-      };
-    }
     return AppRootRouteState.snapshot(route, this.visibleBusy(), this.general, this.remote);
   }
 
@@ -187,22 +160,6 @@ export class ConversationController {
   async createRemoteSession(agentType: string, inPlace: boolean = false): Promise<void> {
     await this.createFlow.createRemoteSession(agentType, inPlace);
   }
-  openRemoteCreateSession(): void { this.createFlow.openRemoteCreateSession(); }
-  async openRemoteCreateSessionInWorkspace(path: string, deviceId?: string): Promise<void> {
-    await this.createFlow.openRemoteCreateSessionInWorkspace(path, deviceId);
-  }
-  closeRemoteCreateSession(): void { this.createFlow.closeRemoteCreateSession(); }
-  async loadRemoteCreateChoices(): Promise<void> { await this.createFlow.loadRemoteCreateChoices(); }
-  async loadRemoteCreateModelCatalog(): Promise<void> { await this.createFlow.loadRemoteCreateModelCatalog(); }
-  async loadRemoteCreateDevices(): Promise<void> { await this.createFlow.loadRemoteCreateDevices(); }
-  async loadRemoteCreateWorkspaces(): Promise<void> { await this.createFlow.loadRemoteCreateWorkspaces(); }
-  toggleRemoteCreateDevices(): void { this.createFlow.toggleRemoteCreateDevices(); }
-  toggleRemoteCreateWorkspaces(): void { this.createFlow.toggleRemoteCreateWorkspaces(); }
-  async selectRemoteCreateDevice(device: CloudAccountDevice): Promise<void> {
-    await this.createFlow.selectRemoteCreateDevice(device);
-  }
-  selectRemoteCreateWorkspace(path: string): void { this.createFlow.selectRemoteCreateWorkspace(path); }
-  async submitRemoteCreateSession(): Promise<void> { await this.createFlow.submitRemoteCreateSession(); }
   async createRemoteSessionInWorkspace(
     path: string,
     agentType: string = 'code',

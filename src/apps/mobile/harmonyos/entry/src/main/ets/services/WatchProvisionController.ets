@@ -213,7 +213,7 @@ export class WatchProvisionController {
         this.state.requirePassword(RemoteI18n.t('watchProvision.errors.passwordFailed'));
         return false;
       }
-      await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.desktopUnreachable'));
+      await this.failAttempt(request.requestId, RemoteI18n.t('watchProvision.errors.accountUnavailable'));
       return true;
     }
     if (outcome.passwordRequired) {
@@ -224,8 +224,9 @@ export class WatchProvisionController {
       // A desktop that answered and refused knows why; a desktop that never
       // answered is either offline or on a build that does not know this
       // command, and the copy has to cover both because they look the same.
-      const message = outcome.desktopReported && outcome.failure.length > 0 ?
-        outcome.failure : RemoteI18n.t('watchProvision.errors.desktopUnreachable');
+      const message = outcome.desktopReported ?
+        RemoteI18n.t('watchProvision.errors.desktopAuthorizationFailed') :
+        RemoteI18n.t('watchProvision.errors.desktopUnreachable');
       await this.failAttempt(request.requestId, message);
       return true;
     }

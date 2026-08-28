@@ -44,10 +44,13 @@ export struct FilePreviewSurface {
   @Param downloadPath: string = '';
   @Param downloadedPath: string = '';
   @Param downloadStatus: string = '';
+  @Param previewExpanded: boolean = false;
+  @Param canToggleExpanded: boolean = false;
   @Event onClose: () => void = () => {};
   @Event onRefresh: () => void = () => {};
   @Event onDownload: (path: string) => void = (_path: string) => {};
   @Event onOpenLink: (reference: string, label: string) => void = (_reference: string, _label: string) => {};
+  @Event onToggleExpanded: () => void = () => {};
 
   aboutToDisappear(): void {
     this.clearRestoreScrollTimer();
@@ -109,6 +112,24 @@ export struct FilePreviewSurface {
         ))
         .onClick(() => {
           this.toggleImageSize();
+        })
+      }
+
+      if (this.canToggleExpanded) {
+        Stack({ alignContent: Alignment.Center }) {
+          SymbolGlyph(this.previewExpanded ?
+            $r('sys.symbol.arrow_down_right_and_arrow_up_left') :
+            $r('sys.symbol.arrow_up_left_and_arrow_down_right'))
+            .fontSize(20)
+            .fontColor([INK])
+        }
+        .width(44)
+        .height(44)
+        .accessibilityText(RemoteI18n.t(
+          this.previewExpanded ? 'filePreview.restoreSize' : 'filePreview.expand'
+        ))
+        .onClick(() => {
+          this.onToggleExpanded();
         })
       }
 
@@ -317,12 +338,12 @@ export struct FilePreviewSurface {
               })
           }, (token: CodeSyntaxToken) => token.id)
         }
-          .fontSize(MobileDesignTypography.labelSmall.size)
-          .lineHeight(MobileDesignTypography.labelSmall.lineHeight)
+          .fontSize(MobileDesignTypography.bodySmall.size)
+          .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
           .fontColor(INK)
           .fontFamily('monospace')
           .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
-          .padding({ left: 14, right: 20, top: 14, bottom: 24 })
+          .padding({ left: 12, right: 12, top: 14, bottom: 24 })
           .constraintSize({ minWidth: '100%' })
       }
       .scrollable(ScrollDirection.FREE)
@@ -351,7 +372,8 @@ export struct FilePreviewSurface {
           this.onOpenLink(reference, label);
         }
       })
-        .padding({ left: 20, right: 20, top: 16, bottom: 28 })
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 16, bottom: 28 })
     }
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Auto)

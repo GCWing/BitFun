@@ -71,12 +71,27 @@ export class ChatTimelineRowStore {
   private signaturesByKey: Map<string, string> = new Map<string, string>();
 
   reconcile(items: ChatTimelineItem[]): ObservableChatTimelineItem[] {
+    // A lazy container requires unique keys. Keep the final projection for a
+    // key as a defensive boundary even if an upstream adapter temporarily
+    // exposes both a persisted assistant stub and its active turn snapshot.
+    const orderedKeys: string[] = [];
+    const itemsByKey: Map<string, ChatTimelineItem> = new Map<string, ChatTimelineItem>();
+    items.forEach((item: ChatTimelineItem) => {
+      const key = ChatTimelineRevisionTracker.itemKey(item);
+      if (!itemsByKey.has(key)) {
+        orderedKeys.push(key);
+      }
+      itemsByKey.set(key, item);
+    });
     const nextRowsByKey: Map<string, ObservableChatTimelineItem> =
       new Map<string, ObservableChatTimelineItem>();
     const nextSignaturesByKey: Map<string, string> = new Map<string, string>();
     const rows: ObservableChatTimelineItem[] = [];
-    items.forEach((item: ChatTimelineItem) => {
-      const key = ChatTimelineRevisionTracker.itemKey(item);
+    orderedKeys.forEach((key: string) => {
+      const item = itemsByKey.get(key);
+      if (!item) {
+        return;
+      }
       const signature = ChatTimelineRevisionTracker.itemSignature(item);
       let row = this.rowsByKey.get(key);
       if (row) {

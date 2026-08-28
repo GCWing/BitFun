@@ -83,7 +83,7 @@ export struct AppSidebarSurface {
       onOpenSession: this.actions.onSidebar.openSession,
       onCreateInWorkspace: (deviceId: string, path: string) => {
         this.actions.onSidebar.close();
-        this.actions.onRemoteHome.openCreateInWorkspace(path, deviceId);
+        this.actions.onRemoteHome.createInWorkspace(path, 'code', deviceId);
       },
       onOpenWorkspace: (deviceId: string, path: string) => {
         this.actions.onRemoteHome.selectWorkspace(path, deviceId);

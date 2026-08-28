@@ -3,7 +3,6 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { ConversationIntent } from './ConversationIntent';
 import { AppRoute } from '../navigation/AppRouteContract';
-import { RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 
 export interface AppRootPresentationActions {
   readonly onNavigationBack: (route: AppRoute) => boolean;
@@ -12,7 +11,6 @@ export interface AppRootPresentationActions {
   readonly onCompactLayoutEntered: () => void;
   readonly onLayoutModeChanged: (wideLayout: boolean) => void;
   readonly onRemoteHome: RemoteHomePresentationActions;
-  readonly onRemoteCreate: RemoteCreatePresentationActions;
   readonly onSidebar: SidebarPresentationActions;
   readonly onSettings: SettingsPresentationActions;
   readonly onConnect: ConnectPresentationActions;
@@ -25,19 +23,6 @@ export interface FilePreviewPresentationActions {
   readonly refresh: () => void;
   readonly download: (path: string) => void;
   readonly openLink: (reference: string, label: string) => void;
-}
-
-export interface RemoteCreatePresentationActions {
-  readonly back: () => void;
-  readonly toggleDevices: () => void;
-  readonly toggleWorkspaces: () => void;
-  readonly selectDevice: (device: CloudAccountDevice) => void;
-  readonly selectWorkspace: (path: string) => void;
-  readonly draftChanged: (value: string) => void;
-  readonly voiceInput: () => void;
-  readonly selectModel: (modelId: string) => void;
-  readonly selectHarness: (profile: RemoteHarnessProfile) => void;
-  readonly send: () => void;
 }
 
 export interface RemoteHomePresentationActions {
@@ -60,8 +45,6 @@ export interface RemoteHomePresentationActions {
   readonly clearPairing: () => void;
   readonly create: (agentType: string) => void;
   readonly createInPlace: (agentType: string) => void;
-  readonly createAssistant: () => void;
-  readonly openCreateInWorkspace: (path: string, deviceId?: string) => void;
   readonly createInWorkspace: (path: string, agentType: string, deviceId?: string) => void;
   readonly createInWorkspaceInPlace: (path: string, agentType: string, deviceId?: string) => void;
   readonly selectDirectoryDevice: (deviceId: string) => void;
@@ -136,16 +119,10 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       refresh: () => {}, showWorkspaces: () => {}, showAssistants: () => {}, selectWorkspace: () => {},
       selectAssistant: () => {}, cancelWorkspace: () => {}, cancelAssistant: () => {}, queryChanged: () => {},
       search: () => {}, loadMore: () => {}, reconnect: () => {}, disconnect: () => {}, clearPairing: () => {},
-      create: () => {}, createInPlace: () => {}, createAssistant: () => {}, openCreateInWorkspace: () => {},
-      createInWorkspace: () => {},
+      create: () => {}, createInPlace: () => {}, createInWorkspace: () => {},
       createInWorkspaceInPlace: () => {}, selectDirectoryDevice: () => {}, addDirectoryWorkspace: () => {},
       retryDirectoryDevice: () => {}, loadWorkspaceSessions: async () => {},
       openSession: () => {}, openSessionInPlace: () => {}, deleteSession: () => {}
-    },
-    onRemoteCreate: {
-      back: () => {}, toggleDevices: () => {}, toggleWorkspaces: () => {}, selectDevice: () => {},
-      selectWorkspace: () => {}, draftChanged: () => {}, voiceInput: () => {}, selectModel: () => {},
-      selectHarness: () => {}, send: () => {}
     },
     onSidebar: {
       close: () => {}, newChat: () => {}, enterCode: () => {}, scanDesktop: () => {}, addDesktop: () => {},

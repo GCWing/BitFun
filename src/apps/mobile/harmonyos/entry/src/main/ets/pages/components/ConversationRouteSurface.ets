@@ -6,12 +6,9 @@ import {
 import { AppRoute } from '../navigation/AppRouteContract';
 import { FilePreviewPhase, FilePreviewState } from '../state/FilePreviewState';
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
-import { RemoteCreateSessionState } from '../state/RemoteCreateSessionState';
 import { RemotePageState } from '../state/RemotePageState';
 import { ComposerPresentation } from './ComposerBar';
 import { ConversationViewHost } from './ConversationViewHost';
-import { toConversationUiModelCatalog } from '../state/ConversationUiModels';
-import { RemoteCreateSessionView } from './RemoteCreateSessionView';
 import {
   RemoteSurfaceHost,
   RemoteSurfaceMode,
@@ -24,7 +21,6 @@ import { PAGE_BG } from './Theme';
 export struct ConversationRouteSurface {
   @Param route: AppRoute = AppRoute.ChatHome;
   @Param remotePageState: RemotePageState = new RemotePageState();
-  @Param remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
   @Param remoteSurfaceState: RemoteSurfaceState = new RemoteSurfaceState();
@@ -46,35 +42,13 @@ export struct ConversationRouteSurface {
           actions: this.actions,
           onOpenSidebar: this.actions.onRemoteHome.openSidebar
         })
-      } else if (this.route === AppRoute.RemoteCreate) {
-        RemoteCreateSessionView({
-          state: this.remoteCreateState,
-          presentation: this.useWidePresentation ? ComposerPresentation.Floating : ComposerPresentation.Create,
-          isVoiceListening: this.remoteCreateState.isVoiceListening,
-          modelCatalog: toConversationUiModelCatalog(this.remotePageState.conversation.modelCatalog),
-          selectedModelId: this.remoteCreateState.selectedModelId,
-          showSidebarRestoreButton: this.showSidebarRestoreButton,
-          hoverOperateMode: this.hoverOperateMode,
-          onRestoreSidebar: this.onRestoreSidebar,
-          onBack: this.actions.onRemoteCreate.back,
-          onToggleDeviceMenu: this.actions.onRemoteCreate.toggleDevices,
-          onToggleWorkspaceMenu: this.actions.onRemoteCreate.toggleWorkspaces,
-          onSelectDevice: this.actions.onRemoteCreate.selectDevice,
-          onSelectWorkspace: (workspace) => this.actions.onRemoteCreate.selectWorkspace(workspace?.path || ''),
-          onDraftChange: this.actions.onRemoteCreate.draftChanged,
-          onVoiceInput: this.actions.onRemoteCreate.voiceInput,
-          onSelectModel: this.actions.onRemoteCreate.selectModel,
-          onSelectHarness: this.actions.onRemoteCreate.selectHarness,
-          onSend: this.actions.onRemoteCreate.send
-        })
       } else {
         ConversationViewHost({
           viewState: ConversationViewState.project(
             this.route,
             this.remotePageState,
             this.generalPageState,
-            this.actions.generalStatus(),
-            this.remoteCreateState
+            this.actions.generalStatus()
           ),
           activeFilePreviewPath: this.route === AppRoute.RemoteChat && this.filePreviewState.visible ?
             this.filePreviewState.target.remotePath : '',
@@ -83,15 +57,27 @@ export struct ConversationRouteSurface {
           showSidebarButton: this.showSidebarButton,
           showBackButton: this.showBackButton,
           showSidebarRestoreButton: this.showSidebarRestoreButton,
-          composerPresentation: this.useWidePresentation ? ComposerPresentation.Floating : ComposerPresentation.Compact,
+          composerPresentation: this.composerPresentation(),
+          composerInputId: 'conversation-composer-input',
           hoverOperateMode: this.hoverOperateMode,
           onRestoreSidebar: this.onRestoreSidebar,
-          onIntent: (intent: ConversationIntent) => this.actions.onConversationIntent(this.route, intent)
+          onIntent: (intent: ConversationIntent) => this.dispatchConversationIntent(intent)
         })
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(PAGE_BG)
+  }
+
+  private composerPresentation(): ComposerPresentation {
+    if (this.useWidePresentation) {
+      return ComposerPresentation.Floating;
+    }
+    return ComposerPresentation.Compact;
+  }
+
+  private dispatchConversationIntent(intent: ConversationIntent): void {
+    this.actions.onConversationIntent(this.route, intent);
   }
 }
