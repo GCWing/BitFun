@@ -206,7 +206,8 @@ export class SettingsController {
   async provisionWatchCredential(
     deviceId: string,
     deviceName: string,
-    requestId: string
+    requestId: string,
+    password: string = ''
   ): Promise<WatchProvisionOutcome | undefined> {
     const session = this.cloudSession;
     if (!session || this.cloudRelayUrl.length === 0) {
@@ -214,11 +215,32 @@ export class SettingsController {
     }
     const cloud = this.requireCloud();
     try {
+      if (password.length > 0) {
+        const username = cloud.remoteState.accountUsername.trim();
+        if (username.length === 0) {
+          throw new Error('The signed-in account name is unavailable.');
+        }
+        const provisioned = await cloud.client.loginWatch(
+          this.cloudRelayUrl, username, password, session, deviceId, deviceName, requestId);
+        RemoteLogger.info(`watch credential obtained through account login device=${provisioned.deviceId}`);
+        return {
+          ok: true,
+          passwordRequired: false,
+          relayUrl: this.cloudRelayUrl,
+          token: provisioned.token,
+          userId: provisioned.userId,
+          masterKeyBase64: Encoding.bytesToBase64(session.masterKey),
+          deviceId: provisioned.deviceId,
+          failure: '',
+          desktopReported: false
+        };
+      }
       const provisioned = await cloud.client.provisionDevice(
         this.cloudRelayUrl, session, deviceId, deviceName, requestId);
       RemoteLogger.info(`watch credential minted from the phone account device=${provisioned.deviceId}`);
       return {
         ok: true,
+        passwordRequired: false,
         relayUrl: this.cloudRelayUrl,
         token: provisioned.token,
         userId: provisioned.userId,
@@ -231,6 +253,16 @@ export class SettingsController {
       if (err instanceof CloudAccountRequestError && (err.statusCode === 401 || err.statusCode === 403)) {
         RemoteLogger.info('phone account may not mint a device credential; deferring to the desktop');
         return undefined;
+      }
+      if (err instanceof CloudAccountRequestError && err.statusCode >= 500 &&
+        cloud.remoteState.accountUsername.trim().length > 0) {
+        RemoteLogger.info('relay device provisioning unavailable; requesting account confirmation');
+        return {
+          ok: false,
+          passwordRequired: true,
+          relayUrl: '', token: '', userId: '', masterKeyBase64: '', deviceId: '', failure: '',
+          desktopReported: false
+        };
       }
       throw err instanceof Error ? err : new Error('Watch credential provisioning failed.');
     }

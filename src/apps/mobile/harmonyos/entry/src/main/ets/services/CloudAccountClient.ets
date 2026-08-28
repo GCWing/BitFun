@@ -26,6 +26,7 @@ interface LoginRequest {
   device_id: string;
   device_name: string;
   device_kind: string;
+  request_id?: string;
 }
 interface RelayErrorResponse { error?: string; }
 
@@ -146,10 +147,49 @@ export class CloudAccountClient {
   private readonly cipher: HarmonyRemoteCryptoCipher = new HarmonyRemoteCryptoCipher();
 
   async login(relayUrl: string, username: string, password: string, deviceId: string): Promise<CloudAccountSession> {
+    return this.loginDevice(
+      relayUrl, username, password, deviceId, 'HarmonyOS Phone', DEVICE_KIND_MOBILE);
+  }
+
+  /**
+   * Compatibility path for relays whose dedicated device-provisioning route is
+   * present but cannot mint against their existing account database.
+   *
+   * This is still a real device login: the watch receives its own token and
+   * device row. Only the password proof travels to the relay, while the
+   * plaintext password and the account master key stay on this phone.
+   */
+  async loginWatch(
+    relayUrl: string,
+    username: string,
+    password: string,
+    currentSession: CloudAccountSession,
+    deviceId: string,
+    deviceName: string,
+    requestId: string
+  ): Promise<CloudProvisionedDevice> {
+    const watchSession = await this.loginDevice(
+      relayUrl, username, password, deviceId, deviceName, DEVICE_KIND_WATCH, requestId);
+    if (watchSession.userId !== currentSession.userId ||
+      !CloudAccountClient.sameBytes(watchSession.masterKey, currentSession.masterKey)) {
+      throw new Error('The confirmed account does not match the signed-in account.');
+    }
+    return { token: watchSession.token, userId: watchSession.userId, deviceId };
+  }
+
+  private async loginDevice(
+    relayUrl: string,
+    username: string,
+    password: string,
+    deviceId: string,
+    deviceName: string,
+    deviceKind: string,
+    requestId: string = ''
+  ): Promise<CloudAccountSession> {
     const normalizedRelayUrl = relayUrl.trim() || DEFAULT_CLOUD_RELAY_URL;
     const normalizedUser = username.trim();
     const startedAt = Date.now();
-    RemoteLogger.info(`cloud login start relay=${normalizedRelayUrl}`);
+    RemoteLogger.info(`cloud device login start relay=${normalizedRelayUrl} kind=${deviceKind}`);
     if (normalizedUser.length === 0 || normalizedUser.length > 128 || password.length === 0 || password.length > 1024) {
       throw new Error('Invalid account credentials.');
     }
@@ -169,12 +209,26 @@ export class CloudAccountClient {
       username: normalizedUser,
       password_hash: Encoding.bytesToBase64(passwordHash),
       device_id: deviceId,
-      device_name: 'HarmonyOS Phone',
-      device_kind: DEVICE_KIND_MOBILE
+      device_name: deviceName,
+      device_kind: deviceKind
     };
+    if (requestId.length > 0) {
+      loginRequest.request_id = requestId;
+    }
     const auth = await this.post<AccountAuthResponse>(normalizedRelayUrl, '/api/auth/login', loginRequest);
     RemoteLogger.info(`cloud login authenticated elapsed_ms=${Date.now() - startedAt}`);
     return { token: auth.token, userId: auth.user_id, masterKey };
+  }
+
+  private static sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
+    let difference = 0;
+    for (let index = 0; index < left.length; index += 1) {
+      difference |= left[index] ^ right[index];
+    }
+    return difference === 0;
   }
 
   /**
