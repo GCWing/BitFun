@@ -2,7 +2,7 @@ import { isSkillAvailableForUserInvocation } from './skillPromptReference';
 
 const QUICK_SKILL_DEFINITIONS = [
   { id: 'plan', skillName: 'plan', label: 'Plan' },
-  { id: 'debug', skillName: 'evidence-debugging', label: 'Debug' },
+  { id: 'debug', skillName: 'debug', label: 'Debug' },
   { id: 'multitask', skillName: 'multitask', label: 'Multitask' },
 ] as const;
 

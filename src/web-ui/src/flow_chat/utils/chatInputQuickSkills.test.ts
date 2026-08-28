@@ -19,7 +19,7 @@ function skill(
 describe('resolveChatInputQuickSkillShortcuts', () => {
   it('projects Plan, Debug, and Multitask in stable menu order', () => {
     const shortcuts = resolveChatInputQuickSkillShortcuts([
-      skill('evidence-debugging'),
+      skill('debug'),
       skill('unrelated'),
       skill(' MULTITASK '),
       skill('Plan'),
@@ -31,7 +31,7 @@ describe('resolveChatInputQuickSkillShortcuts', () => {
       skillName: shortcut.skill.name,
     }))).toEqual([
       { id: 'plan', label: 'Plan', skillName: 'Plan' },
-      { id: 'debug', label: 'Debug', skillName: 'evidence-debugging' },
+      { id: 'debug', label: 'Debug', skillName: 'debug' },
       { id: 'multitask', label: 'Multitask', skillName: ' MULTITASK ' },
     ]);
   });
@@ -40,7 +40,7 @@ describe('resolveChatInputQuickSkillShortcuts', () => {
     const shortcuts = resolveChatInputQuickSkillShortcuts([
       skill('plan', { selectedForRuntime: false }),
       skill('multitask', { allowUserInvocation: false }),
-      skill('evidence-debugging'),
+      skill('debug'),
     ]);
 
     expect(shortcuts.map(shortcut => shortcut.id)).toEqual(['debug']);

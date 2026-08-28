@@ -17,10 +17,7 @@ mod tests {
         }
         assert_eq!(builtin_skill_group_key("create-bitfun-skin"), Some("meta"));
         assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
-        assert_eq!(
-            builtin_skill_group_key("evidence-debugging"),
-            Some("debugging")
-        );
+        assert_eq!(builtin_skill_group_key("debug"), Some("debugging"));
         assert_eq!(builtin_skill_group_key("multitask"), Some("coordination"));
         assert_eq!(builtin_skill_group_key("plan"), Some("planning"));
         assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));

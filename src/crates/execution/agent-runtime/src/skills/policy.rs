@@ -75,6 +75,11 @@ const DISABLE_CREATION: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
+const DISABLE_DEBUGGING: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::Debugging),
+    effect: PolicyEffect::Disable,
+};
+
 // ControlHub's browser domain is the single default browser-automation path.
 // The computer-use skill group (agent-browser) stays opt-in in every mode so the
 // model never sees two parallel browser stacks; users can still enable it via
@@ -120,9 +125,26 @@ const AGENTIC_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     ],
 };
 
+const CLAW_POLICY: ModeSkillPolicy = ModeSkillPolicy {
+    builtin_default: PolicyEffect::Enable,
+    rules: &[
+        DISABLE_OFFICE,
+        DISABLE_GSTACK,
+        DISABLE_COMPUTER_USE,
+        DISABLE_MINIAPP,
+        DISABLE_CREATION,
+        DISABLE_DEBUGGING,
+    ],
+};
+
 const CREATIVE_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
-    rules: &[DISABLE_OFFICE, DISABLE_GSTACK, DISABLE_COMPUTER_USE],
+    rules: &[
+        DISABLE_OFFICE,
+        DISABLE_GSTACK,
+        DISABLE_COMPUTER_USE,
+        DISABLE_DEBUGGING,
+    ],
 };
 
 const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
@@ -143,7 +165,8 @@ const DEEP_RESEARCH_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
     let policy_scope = resolve_mode_config_profile_id(mode_id);
     match SkillModeId::parse(policy_scope.as_ref()) {
-        SkillModeId::CodingShared | SkillModeId::Claw => AGENTIC_POLICY,
+        SkillModeId::CodingShared => AGENTIC_POLICY,
+        SkillModeId::Claw => CLAW_POLICY,
         SkillModeId::Creative => CREATIVE_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
         SkillModeId::DeepResearch => DEEP_RESEARCH_POLICY,
@@ -178,7 +201,7 @@ pub fn resolve_builtin_default_enabled(dir_name: &str, mode_id: &str) -> Option<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::SHARED_CODING_MODE_IDS;
+    use crate::agents::{SHARED_CODING_MODE_CONFIG_PROFILE_ID, SHARED_CODING_MODE_IDS};
     use crate::skills::catalog::BUILTIN_SKILL_SPECS;
 
     #[test]
@@ -202,9 +225,12 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_modes_use_identical_builtin_skill_defaults() {
+    fn shared_coding_modes_use_their_profile_builtin_skill_defaults() {
         for spec in BUILTIN_SKILL_SPECS {
-            let expected = resolve_builtin_default_enabled(spec.dir_name, "agentic");
+            let expected = resolve_builtin_default_enabled(
+                spec.dir_name,
+                SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+            );
             for mode_id in SHARED_CODING_MODE_IDS {
                 assert_eq!(
                     resolve_builtin_default_enabled(spec.dir_name, mode_id),
@@ -218,20 +244,28 @@ mod tests {
     }
 
     #[test]
-    fn evidence_debugging_replaces_debug_mode_in_coding_workflows() {
-        for mode_id in ["agentic", "coding_shared", "Claw"] {
+    fn debug_skill_defaults_on_only_in_agentic() {
+        for mode_id in ["agentic", "coding_shared"] {
             assert_eq!(
-                resolve_builtin_default_enabled("evidence-debugging", mode_id),
+                resolve_builtin_default_enabled("debug", mode_id),
                 Some(true),
-                "evidence-debugging should be available in {mode_id}"
+                "debug should default on for agentic profile identity {mode_id}"
             );
         }
 
-        for mode_id in ["Cowork", "ComputerUse", "DeepResearch", "SomeUnknownMode"] {
+        for mode_id in [
+            "Claw",
+            "Creative",
+            "Cowork",
+            "ComputerUse",
+            "DeepResearch",
+            "Team",
+            "SomeUnknownMode",
+        ] {
             assert_eq!(
-                resolve_builtin_default_enabled("evidence-debugging", mode_id),
+                resolve_builtin_default_enabled("debug", mode_id),
                 Some(false),
-                "evidence-debugging should remain opt-in in {mode_id}"
+                "debug should default off outside agentic: {mode_id}"
             );
         }
     }
