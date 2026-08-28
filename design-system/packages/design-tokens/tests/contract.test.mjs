@@ -61,6 +61,20 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.itemRadius"], "9999px");
 });
 
+test("SegmentedControl geometry preserves the compact mode-switch pill contract", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["control.segmentedControl.gap"], "2px");
+  assert.equal(tokens["control.segmentedControl.padding"], "2px");
+  assert.equal(tokens["control.segmentedControl.segmentHeight"], "22px");
+  assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
+  assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
+  assert.equal(tokens["control.segmentedControl.iconSize"], "12px");
+  assert.equal(tokens["control.segmentedControl.fontSize"], "11px");
+  assert.equal(systemDocument.control.segmentedControl.radius.$value, "{radius.pill}");
+  assert.equal(systemDocument.control.segmentedControl.segmentRadius.$value, "{radius.pill}");
+});
+
 test("Composer geometry preserves independent context, editor, and action regions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

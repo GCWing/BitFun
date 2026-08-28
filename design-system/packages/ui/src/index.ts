@@ -136,6 +136,11 @@ export {
 } from "./components/ScrollArea";
 export { SearchField, type SearchFieldProps } from "./components/SearchField";
 export {
+  SegmentedControl,
+  type SegmentedControlOption,
+  type SegmentedControlProps,
+} from "./components/SegmentedControl";
+export {
   Select,
   type SelectOption,
   type SelectProps,

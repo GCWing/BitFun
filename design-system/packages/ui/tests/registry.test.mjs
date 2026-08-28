@@ -10,7 +10,7 @@ test("component names remain unique", () => {
 test("registry exposes only the formal stable components", () => {
   assert.deepEqual(
     componentRegistry.map((component) => component.name),
-    ["ActionCard", "ActionItem", "ActivityItem", "Button", "Card", "Composer", "ConfirmDialog", "Field", "FieldGroup", "Icon", "IconButton", "Input", "KeyHint", "Menu", "Modal", "NavigationPanel", "PageHeader", "ScrollArea", "SearchField", "Select", "StatusPill", "Switch", "TabGroup", "Toolbar"],
+    ["ActionCard", "ActionItem", "ActivityItem", "Button", "Card", "Composer", "ConfirmDialog", "Field", "FieldGroup", "Icon", "IconButton", "Input", "KeyHint", "Menu", "Modal", "NavigationPanel", "PageHeader", "ScrollArea", "SearchField", "SegmentedControl", "Select", "StatusPill", "Switch", "TabGroup", "Toolbar"],
   );
   assert.equal(
     componentRegistry.every((component) => component.maturity === "stable"),

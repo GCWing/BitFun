@@ -105,6 +105,18 @@
       "itemActionInset": { "$value": "{space.2}" },
       "itemRadius": { "$value": "{radius.pill}" }
     },
+    "segmentedControl": {
+      "$type": "dimension",
+      "gap": { "$value": "2px" },
+      "padding": { "$value": "2px" },
+      "radius": { "$value": "{radius.pill}" },
+      "segmentHeight": { "$value": "22px" },
+      "segmentPaddingInline": { "$value": "{space.2}" },
+      "segmentGap": { "$value": "{space.1}" },
+      "segmentRadius": { "$value": "{radius.pill}" },
+      "iconSize": { "$value": "12px" },
+      "fontSize": { "$value": "11px" }
+    },
     "composer": {
       "$type": "dimension",
       "minBlockSize": { "$value": "120px" },
