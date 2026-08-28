@@ -872,7 +872,16 @@ async fn initialize_core_services_for_deployment(
         bootstrap_profile,
         BootstrapProfile::Interactive | BootstrapProfile::Execution
     ) {
-        plugin_host_activation::ensure_configured_plugin_execution_supported().await?;
+        if let Err(error) =
+            plugin_host_activation::ensure_configured_plugin_execution_supported().await
+        {
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "CLI startup configuration",
+                Some(workspace_root),
+                error,
+            )
+            .await;
+        }
     }
     if bootstrap_profile.starts_plugin_host() {
         match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
@@ -883,7 +892,14 @@ async fn initialize_core_services_for_deployment(
         {
             Ok(bitfun_core::plugin_host::PluginHostStartup::Disabled) => {}
             Ok(status) => tracing::info!("Plugin host initialization completed: {:?}", status),
-            Err(error) => tracing::error!("Failed to initialize configured plugin host: {error}"),
+            Err(error) => {
+                bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                    "CLI startup",
+                    Some(workspace_root),
+                    error,
+                )
+                .await;
+            }
         }
     }
     let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()

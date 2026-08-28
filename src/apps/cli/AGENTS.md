@@ -112,8 +112,11 @@ restrictions remain enforced.
   closure with `product-full` or a CLI-named umbrella; add a Core feature only
   when a production CLI path consumes that owner.
 - CLI consumes typed external-source summaries and actions. It does not parse
-  source files, import executable modules, start plugin workers, duplicate
-  approval state, or treat static discovery as runtime availability.
+  source files, import executable modules, implement or supervise plugin workers,
+  duplicate approval state, or treat static discovery as runtime availability.
+  A local product host may request Core-owned configured Plugin Host startup and
+  instance activation; the lifecycle, worker, and protocol owners remain below
+  the CLI surface.
 - ACP agents, configuration import, executable plugins, Hooks, and Peer Device
   hosting have separate trust and lifecycle state. Do not infer one from
   another.

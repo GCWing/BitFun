@@ -2906,7 +2906,20 @@ impl WorkspaceExternalSourceService {
     }
 
     fn snapshot(&self) -> ExternalSourceCatalogSnapshot {
-        lock_snapshot(&self.snapshot).clone()
+        let mut snapshot = lock_snapshot(&self.snapshot).clone();
+        for message in crate::plugin_host::configured_plugin_activation_failures(
+            self.workspace_root.as_deref(),
+        ) {
+            if !snapshot.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "plugin.activation_failed" && diagnostic.message == message
+            }) {
+                snapshot.diagnostics.push(
+                    ExternalSourceDiagnostic::warning("plugin.activation_failed", message, None)
+                        .with_asset_kind(ExternalSourceAssetKind::Hook),
+                );
+            }
+        }
+        snapshot
     }
 
     fn source_location(&self, stable_key: &str) -> Result<PathBuf, String> {

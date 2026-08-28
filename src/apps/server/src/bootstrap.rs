@@ -160,18 +160,34 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
             .map(|w| w.root_path)
     };
 
-    bitfun_core::plugin_host::initialize_configured_plugin_host(
+    if let Err(error) = bitfun_core::plugin_host::initialize_configured_plugin_host(
         bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
     )
-    .await?;
+    .await
+    {
+        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            "server startup",
+            initial_workspace_path.as_deref(),
+            error,
+        )
+        .await;
+    }
     if let Some(workspace_path) = initial_workspace_path.as_ref() {
-        bitfun_core::plugin_host::ensure_configured_plugin_instance(
+        if let Err(error) = bitfun_core::plugin_host::ensure_configured_plugin_instance(
             bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
             workspace_path.clone(),
             workspace_path.clone(),
             None,
         )
-        .await?;
+        .await
+        {
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "server workspace activation",
+                Some(workspace_path),
+                error,
+            )
+            .await;
+        }
     }
 
     let state = Arc::new(ServerAppState {
