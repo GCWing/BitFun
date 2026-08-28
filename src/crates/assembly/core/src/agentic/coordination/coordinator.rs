@@ -16055,7 +16055,7 @@ mod tests {
         runtime
             .update_session_mode(AgentSessionModeUpdateRequest {
                 session_id: session.session_id.clone(),
-                mode_id: " Plan ".to_string(),
+                mode_id: " Cowork ".to_string(),
             })
             .await
             .expect("runtime mode port should update the Core owner");
