@@ -10,6 +10,7 @@ export {
   ActionItem,
   type ActionItemAction,
   type ActionItemProps,
+  type ActionItemTone,
 } from "./components/ActionItem";
 export {
   ActivityItem,
