@@ -391,6 +391,10 @@
   width: 100%;
 }
 
+.user-message-edit-composer__spinner {
+  animation: user-message-item-spin 1s linear infinite;
+}
+
 .user-message-item__rollback-btn {
   display: inline-flex;
   align-items: center;

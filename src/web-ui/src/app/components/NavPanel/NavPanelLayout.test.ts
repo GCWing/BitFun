@@ -68,6 +68,17 @@ describe('NavPanel layout styles', () => {
     }
   });
 
+  it('centers footer actions with symmetric vertical padding', () => {
+    const stylesheet = readNavPanelStylesheet();
+    const footerBlocks = [...stylesheet.matchAll(
+      /\.bitfun-nav-panel__footer\s*\{(?<body>[\s\S]*?)\n\s*\}/g,
+    )].map(match => match.groups?.body ?? '');
+
+    expect(footerBlocks).toHaveLength(2);
+    expect(footerBlocks[0]).toContain('padding: 2px $size-gap-2;');
+    expect(footerBlocks[1]).toContain('padding: 2px 6px;');
+  });
+
   it('keeps category rows flat on hover', () => {
     const stylesheet = readNavPanelStylesheet();
 

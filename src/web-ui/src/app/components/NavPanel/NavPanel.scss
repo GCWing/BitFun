@@ -1679,7 +1679,7 @@ $_section-header-height: 22px;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  padding: $size-gap-1 $size-gap-2 0;
+  padding: 2px $size-gap-2;
   border-top: 1px solid;
   @include shell-surfaces.sidebar-hairline-color;
   gap: $size-gap-1;
@@ -3343,7 +3343,7 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel__footer {
   min-height: 50px;
-  padding: 4px 6px 0;
+  padding: 2px 6px;
 }
 
 .bitfun-nav-panel__footer-btn--icon,

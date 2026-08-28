@@ -111,7 +111,7 @@
       "max": 10
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 1
+      "max": 0
     },
     "cssVarDefinitions.unresolvedUnique": {
       "max": 0
@@ -285,7 +285,7 @@
       "max": 0
     },
     "colorDomainScopes.terminal.occurrences": {
-      "max": 1
+      "max": 0
     },
     "colorDomainScopes.debugOverlay.occurrences": {
       "max": 0

@@ -223,18 +223,27 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
         {(hasMessage || hasPreview) && (
           <div className={styles.content} data-bf-component="confirm-dialog" data-bf-part="content">
             {hasMessage && (
-      <div className={styles.messageRow} data-bf-part="messageRow">
+              <div
+                className={styles.messageRow}
+                data-bf-component="confirm-dialog"
+                data-bf-part="messageRow"
+              >
                 {resolvedIcon !== null && (
                   <span
                     aria-hidden="true"
                     className={styles.icon}
+                    data-bf-component="confirm-dialog"
                     data-bf-part="icon"
                     data-bf-status={type === "error" ? "danger" : type}
                   >
                     {resolvedIcon}
                   </span>
                 )}
-                <div className={styles.message} data-bf-part="message">
+                <div
+                  className={styles.message}
+                  data-bf-component="confirm-dialog"
+                  data-bf-part="message"
+                >
                   {message}
                 </div>
               </div>
@@ -242,6 +251,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
             {hasPreview && (
               <div
                 className={styles.preview}
+                data-bf-component="confirm-dialog"
                 data-bf-part="preview"
                 style={{ maxBlockSize: previewMaxHeight }}
               >
