@@ -149,6 +149,31 @@ function traceTargetForCommand(command: string, payload: unknown): string | unde
   return undefined;
 }
 
+async function waitForTransport<T>(request: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    const error = new Error('Request timeout');
+    error.name = 'AbortError';
+    throw error;
+  }
+
+  let rejectOnAbort!: (error: Error) => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectOnAbort = reject;
+  });
+  const handleAbort = () => {
+    const error = new Error('Request timeout');
+    error.name = 'AbortError';
+    rejectOnAbort(error);
+  };
+  signal.addEventListener('abort', handleAbort, { once: true });
+
+  try {
+    return await Promise.race([request, aborted]);
+  } finally {
+    signal.removeEventListener('abort', handleAbort);
+  }
+}
+
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
   private activeRequests = new Map<string, AbortController>();
@@ -343,7 +368,11 @@ export class ApiClient implements IApiClient {
           this.assertRequestSurface(req, traceCommand);
           if (req.type === 'tauri') {
             transportTiming = {};
-            return this.executeTauriCommand(req.config as TauriCommandConfig, transportTiming);
+            return this.executeTauriCommand(
+              req.config as TauriCommandConfig,
+              transportTiming,
+              controller.signal,
+            );
           } else {
             return this.executeHttpRequest(req.config as HttpRequestConfig, controller.signal);
           }
@@ -482,11 +511,15 @@ export class ApiClient implements IApiClient {
 
   private async executeTauriCommand(
     config: TauriCommandConfig,
-    transportTiming?: TransportRequestTiming
+    transportTiming: TransportRequestTiming | undefined,
+    signal: AbortSignal,
   ): Promise<ApiResponse> {
     try {
       
-      const data = await this.adapter.request(config.command, config.args || {}, transportTiming);
+      const data = await waitForTransport(
+        this.adapter.request(config.command, config.args || {}, transportTiming),
+        signal,
+      );
       
       return {
         success: true,
@@ -496,6 +529,9 @@ export class ApiClient implements IApiClient {
     } catch (error) {
       if (isSurfaceChangedError(error)) {
         throw error;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw this.createApiError('REQUEST_TIMEOUT', 'Request timeout', error);
       }
       const errorMessage = transportErrorMessage(error);
       

@@ -806,6 +806,7 @@
     "boostSkills": "Skills",
     "modeSection": "指令",
     "boostSkillsLoading": "正在加载 Skills…",
+    "boostSkillsLoadFailed": "Skills 加载失败，点击重试",
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",

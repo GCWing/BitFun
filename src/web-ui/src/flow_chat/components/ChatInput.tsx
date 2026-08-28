@@ -1140,6 +1140,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const openCreateAgent = useAgentsStore(s => s.openCreateAgent);
   const [resolvedModeSkills, setResolvedModeSkills] = useState<ModeSkillInfo[]>([]);
   const [resolvedModeSkillsLoading, setResolvedModeSkillsLoading] = useState(false);
+  const [resolvedModeSkillsLoadFailed, setResolvedModeSkillsLoadFailed] = useState(false);
+  const [resolvedModeSkillsRequestVersion, setResolvedModeSkillsRequestVersion] = useState(0);
   const [subagentToolInfo, setSubagentToolInfo] = useState<SubagentInfo | null>(null);
   const [targetModeEnabledTools, setTargetModeEnabledTools] = useState<string[] | null>(null);
   const [targetModeToolsResolved, setTargetModeToolsResolved] = useState(false);
@@ -2929,10 +2931,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!shouldLoadResolvedModeSkills) {
       setResolvedModeSkills([]);
       setResolvedModeSkillsLoading(false);
+      setResolvedModeSkillsLoadFailed(false);
       return;
     }
     let cancelled = false;
     setResolvedModeSkillsLoading(true);
+    setResolvedModeSkillsLoadFailed(false);
     (async () => {
       try {
         const list = await configAPI.getModeSkillConfigs({
@@ -2950,6 +2954,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         });
         if (!cancelled) {
           setResolvedModeSkills([]);
+          setResolvedModeSkillsLoadFailed(true);
         }
       } finally {
         if (!cancelled) {
@@ -2960,7 +2965,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [shouldLoadResolvedModeSkills, skillResolutionModeId, targetWorkspacePath]);
+  }, [
+    resolvedModeSkillsRequestVersion,
+    shouldLoadResolvedModeSkills,
+    skillResolutionModeId,
+    targetWorkspacePath,
+  ]);
+
+  const retryResolvedModeSkills = useCallback(() => {
+    setResolvedModeSkillsRequestVersion(version => version + 1);
+  }, []);
 
   useEffect(() => {
     if (!modeState.dropdownOpen) {
@@ -5930,6 +5944,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                               ? t('chatInput.boostSkillsLoading')
                               : t('chatInput.loadingMcpPrompts')}
                           </div>
+                        ) : items.length === 0 && resolvedModeSkillsLoadFailed ? (
+                          <button
+                            type="button"
+                            className="bitfun-chat-input__slash-command-empty bitfun-chat-input__slash-command-empty--retry"
+                            data-bf-component="chat-input"
+                            data-bf-part="commandEmpty"
+                            onClick={retryResolvedModeSkills}
+                          >
+                            {t('chatInput.boostSkillsLoadFailed')}
+                          </button>
                         ) : items.length > 0 ? (
                           items.map((item, index) => {
                             const commandText = item.kind === 'mode' ? `/${item.id}` : item.command;
@@ -6056,6 +6080,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <div className="bitfun-chat-input__slash-command-empty" data-bf-component="chat-input" data-bf-part="commandEmpty">
                             {t('chatInput.boostSkillsLoading')}
                           </div>
+                        ) : items.length === 0 && resolvedModeSkillsLoadFailed ? (
+                          <button
+                            type="button"
+                            className="bitfun-chat-input__slash-command-empty bitfun-chat-input__slash-command-empty--retry"
+                            data-bf-component="chat-input"
+                            data-bf-part="commandEmpty"
+                            onClick={retryResolvedModeSkills}
+                          >
+                            {t('chatInput.boostSkillsLoadFailed')}
+                          </button>
                         ) : items.length > 0 ? (
                           items.map((item, index) => {
                             const commandText = item.kind === 'mode' ? `/${item.id}` : item.command;
@@ -6403,6 +6437,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     <Loader2 size={14} className="bitfun-chat-input__boost-submenu-spinner" aria-hidden />
                                     <span>{t('chatInput.boostSkillsLoading')}</span>
                                   </div>
+                                ) : resolvedModeSkillsLoadFailed ? (
+                                  <button
+                                    type="button"
+                                    className="bitfun-chat-input__boost-submenu-empty bitfun-chat-input__boost-submenu-retry"
+                                    data-bf-component="chat-input"
+                                    data-bf-part="boostSubmenuState"
+                                    onClick={event => {
+                                      event.stopPropagation();
+                                      retryResolvedModeSkills();
+                                    }}
+                                  >
+                                    <RotateCcw size={13} aria-hidden />
+                                    <span>{t('chatInput.boostSkillsLoadFailed')}</span>
+                                  </button>
                                 ) : userInvocableSkills.length === 0 ? (
                                   <div className="bitfun-chat-input__boost-submenu-empty" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="empty">{t('chatInput.boostSkillsEmpty')}</div>
                                 ) : (

@@ -806,6 +806,7 @@
     "boostSkills": "Skills",
     "modeSection": "Directives",
     "boostSkillsLoading": "Loading skills…",
+    "boostSkillsLoadFailed": "Skills failed to load. Retry",
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",

@@ -220,6 +220,31 @@ describe('ApiClient startup trace classification', () => {
     await expect(pending).resolves.toEqual({ loggedIn: true });
   });
 
+  it('enforces the configured timeout for stalled Tauri commands', async () => {
+    vi.useFakeTimers();
+    try {
+      adapterMocks.request.mockReturnValueOnce(new Promise(() => {}));
+      const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+      const outcome = client
+        .invoke('get_mode_skill_configs', {}, { timeout: 60_000 })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await expect(outcome).resolves.toMatchObject({
+        code: 'REQUEST_TIMEOUT',
+        message: 'Request timeout',
+      });
+      expect(client.getStats()).toMatchObject({
+        successfulRequests: 0,
+        failedRequests: 1,
+        activeRequests: 0,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('uses the message from plain structured Tauri errors', async () => {
     const transportError = {
       code: 'worktree_not_found',

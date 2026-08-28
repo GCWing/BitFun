@@ -1348,6 +1348,19 @@
     color: var(--bf-appearance-token-color-accent-500);
   }
 
+  &__boost-submenu-retry {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
+  }
+
   &__boost-submenu-list {
     flex: 1;
     min-height: 0;
@@ -1860,6 +1873,18 @@
     text-align: center;
     font-size: flow-type.$support-size;
     color: var(--bf-appearance-token-color-text-muted);
+
+    &--retry {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+
+      &:hover {
+        background: var(--bf-appearance-token-element-bg-medium);
+        color: var(--bf-appearance-token-color-text-secondary);
+      }
+    }
   }
 
   // Popovers: heavy blur + dark shadows read as gray/black on light theme
