@@ -251,7 +251,7 @@ window.BitfunCanvasRuntime.mount(Canvas);
       expect(dom.window.document.querySelector('.bf-collapsible-section')).toBeTruthy();
       expect(dom.window.document.querySelector('.bf-diagram')).toBeTruthy();
       expect(dom.window.document.querySelector('.bitfun-tabs')).toBeTruthy();
-      expect(dom.window.document.querySelector('.bitfun-input-wrapper')).toBeTruthy();
+      expect(dom.window.document.querySelector('[data-bf-component="input"]')).toBeTruthy();
       expect(dom.window.document.querySelector('.bitfun-empty')).toBeTruthy();
     } finally {
       dom.window.close();

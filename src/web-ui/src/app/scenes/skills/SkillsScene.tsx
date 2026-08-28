@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Modal, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Input } from '@/component-library';
+import { Badge } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { GalleryDetailModal } from '@/app/components';
@@ -979,13 +979,13 @@ const SkillsScene: React.FC = () => {
           ) : null}
 
           <div className="bitfun-skills-scene__path-input">
-            <Input
-              label={t('form.path.label')}
-              placeholder={t('form.path.placeholder')}
-              value={installed.formPath}
-              onChange={(e) => installed.setFormPath(e.target.value)}
-              variant="outlined"
-            />
+            <Field label={t('form.path.label')} controlWidth="fill">
+              <Input
+                placeholder={t('form.path.placeholder')}
+                value={installed.formPath}
+                onChange={(e) => installed.setFormPath(e.target.value)}
+              />
+            </Field>
             <IconButton
               size="md"
               onClick={installed.handleBrowse}

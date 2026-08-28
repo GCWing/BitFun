@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input } from '@/component-library';
+import { Input } from '@bitfun/ui';
 
 export interface ConfigInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
    
@@ -39,9 +39,8 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
   const inputElement = (
     <Input
       ref={ref}
-      suffix={rightIcon}
-      error={!!error}
-      errorMessage={error}
+      trailing={rightIcon}
+      invalid={!!error}
       className={className}
       {...props}
     />

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, IconButton, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
+import { Button, IconButton, ConfirmDialog, Field, Input, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp, Search as SearchIcon } from 'lucide-react';
-import { Input, Card, CardBody, Tooltip } from '@/component-library';
+import { Card, CardBody, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
@@ -255,13 +255,13 @@ const SkillsConfig: React.FC = () => {
             </div>
           )}
           <div className="bitfun-skills-config__path-input">
-            <Input
-              label={t('form.path.label')}
-              placeholder={t('form.path.placeholder')}
-              value={formPath}
-              onChange={(e) => setFormPath(e.target.value)}
-              variant="outlined"
-            />
+            <Field label={t('form.path.label')} controlWidth="fill">
+              <Input
+                placeholder={t('form.path.placeholder')}
+                value={formPath}
+                onChange={(e) => setFormPath(e.target.value)}
+              />
+            </Field>
             <Tooltip content={t('form.path.browseTooltip')}>
               <IconButton
                 aria-label={t('form.path.browseTooltip')}

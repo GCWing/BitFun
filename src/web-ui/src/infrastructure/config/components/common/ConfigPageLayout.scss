@@ -212,7 +212,7 @@
   justify-content: flex-end;
   justify-self: stretch;
 
-  > .bitfun-input-wrapper,
+  > [data-bf-component='input'],
   > .select,
   > .bitfun-number-input {
     width: 100%;
@@ -225,13 +225,13 @@
    * that row's dropdown would render narrower than every other row's.
    */
   > div:has(> .select),
-  > div:has(> .bitfun-input-wrapper),
+  > div:has(> [data-bf-component='input']),
   > div:has(> .bitfun-number-input) {
     width: 100%;
     min-width: 0;
 
     > .select,
-    > .bitfun-input-wrapper,
+    > [data-bf-component='input'],
     > .bitfun-number-input {
       width: 100%;
       min-width: 0;

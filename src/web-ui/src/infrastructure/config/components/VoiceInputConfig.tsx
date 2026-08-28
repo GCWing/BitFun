@@ -1,10 +1,9 @@
-import { Button, Select, Switch, type SelectOption } from '@bitfun/ui';
+import { Button, Input, Select, Switch, type SelectOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CloudOff, Download, HardDrive, PhoneCall } from 'lucide-react';
 import {
   Badge,
-  Input,
   type BadgeVariant,
 } from '@/component-library';
 import {
@@ -459,7 +458,7 @@ const VoiceInputConfig: React.FC = () => {
               <Input
                 className="voice-input-config__credential-input"
                 type="password"
-                size="small"
+                size="sm"
                 autoComplete="off"
                 value={voiceCallDraft.apiKey}
                 placeholder={t('voiceCall.apiKey.placeholder')}
@@ -477,7 +476,7 @@ const VoiceInputConfig: React.FC = () => {
             >
               <Input
                 className="voice-input-config__credential-input"
-                size="small"
+                size="sm"
                 value={voiceCallDraft.voice}
                 disabled={!voiceCallDraft.enabled || !speechRuntimeSupported}
                 onChange={(event) => setVoiceCallDraft(previous => previous ? ({

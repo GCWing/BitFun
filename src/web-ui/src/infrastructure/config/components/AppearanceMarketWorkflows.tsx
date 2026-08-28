@@ -1,7 +1,7 @@
-import { Button, Field, Select } from '@bitfun/ui';
+import { Button, Field, Input, Select } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
-import { Input, Textarea } from '@/component-library';
+import { Textarea } from '@/component-library';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   appearanceMarketAPI,
@@ -222,29 +222,34 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
         </div>
       </div>
       <div className="appearance-market__manual-package-row">
-        <Input
+        <Field
           label={t('package.market.submissions.manual.package')}
-          value={manualDraft.packagePath}
-          placeholder={t('package.market.submissions.manual.packagePlaceholder')}
-          readOnly
+          controlWidth="fill"
           required
-        />
+        >
+          <Input
+            value={manualDraft.packagePath}
+            placeholder={t('package.market.submissions.manual.packagePlaceholder')}
+            readOnly
+          />
+        </Field>
         <Button type="button" variant="outline" onClick={() => void choosePackage()} disabled={submitting}>
           {t('package.market.submissions.manual.choose')}
         </Button>
       </div>
       <div className="appearance-market__manual-submit-grid">
-        <Input
-          label={t('package.market.submissions.manual.slug')}
-          value={manualDraft.slug}
-          placeholder={t('package.market.submissions.manual.slugPlaceholder')}
-          pattern="[a-z0-9][a-z0-9-]{2,62}"
-          maxLength={63}
-          onChange={event => setManualDraft(current => ({
-            ...current,
-            slug: event.target.value.toLowerCase(),
-          }))}
-        />
+        <Field label={t('package.market.submissions.manual.slug')} controlWidth="fill">
+          <Input
+            value={manualDraft.slug}
+            placeholder={t('package.market.submissions.manual.slugPlaceholder')}
+            pattern="[a-z0-9][a-z0-9-]{2,62}"
+            maxLength={63}
+            onChange={event => setManualDraft(current => ({
+              ...current,
+              slug: event.target.value.toLowerCase(),
+            }))}
+          />
+        </Field>
         <Field label={t('package.market.submissions.manual.licenseType')} controlWidth="fill">
           <Select
             value={manualDraft.licenseKind}
@@ -259,42 +264,51 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             }))}
           />
         </Field>
-        <Input
+        <Field
           label={manualDraft.licenseKind === 'spdx'
             ? t('package.market.submissions.manual.spdxExpression')
             : t('package.market.submissions.manual.customLicenseUrl')}
-          value={manualDraft.licenseValue}
-          placeholder={manualDraft.licenseKind === 'spdx'
-            ? 'MIT'
-            : 'https://example.com/license'}
-          type={manualDraft.licenseKind === 'custom' ? 'url' : 'text'}
+          controlWidth="fill"
           required
-          maxLength={manualDraft.licenseKind === 'spdx' ? 120 : 2048}
-          onChange={event => setManualDraft(current => ({
-            ...current,
-            licenseValue: event.target.value,
-          }))}
-        />
-        <Input
+        >
+          <Input
+            value={manualDraft.licenseValue}
+            placeholder={manualDraft.licenseKind === 'spdx'
+              ? 'MIT'
+              : 'https://example.com/license'}
+            type={manualDraft.licenseKind === 'custom' ? 'url' : 'text'}
+            maxLength={manualDraft.licenseKind === 'spdx' ? 120 : 2048}
+            onChange={event => setManualDraft(current => ({
+              ...current,
+              licenseValue: event.target.value,
+            }))}
+          />
+        </Field>
+        <Field
           label={t('package.market.submissions.manual.minVersion')}
-          value={manualDraft.minBitfunVersion}
+          controlWidth="fill"
           required
+        >
+          <Input
+            value={manualDraft.minBitfunVersion}
+            onChange={event => setManualDraft(current => ({
+              ...current,
+              minBitfunVersion: event.target.value,
+            }))}
+          />
+        </Field>
+      </div>
+      <Field label={t('package.market.submissions.manual.repository')} controlWidth="fill">
+        <Input
+          value={manualDraft.repositoryUrl}
+          placeholder="https://github.com/owner/repository"
+          type="url"
           onChange={event => setManualDraft(current => ({
             ...current,
-            minBitfunVersion: event.target.value,
+            repositoryUrl: event.target.value,
           }))}
         />
-      </div>
-      <Input
-        label={t('package.market.submissions.manual.repository')}
-        value={manualDraft.repositoryUrl}
-        placeholder="https://github.com/owner/repository"
-        type="url"
-        onChange={event => setManualDraft(current => ({
-          ...current,
-          repositoryUrl: event.target.value,
-        }))}
-      />
+      </Field>
       <Textarea
         label={t('package.market.submissions.manual.changelog')}
         hint={t('package.market.submissions.manual.changelogHint')}

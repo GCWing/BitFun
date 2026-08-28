@@ -27,14 +27,11 @@
 
    &__input {
     width: 100%;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 4px;
 
-    .bitfun-input-container {
-      height: 28px;
-      padding: 0 8px;
-      border-radius: 4px;
-    }
-
-    .bitfun-input {
+    input {
       font-size: 12px;
       font-family: $font-family-mono;
     }

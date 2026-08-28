@@ -1,4 +1,4 @@
-import { Button, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
+import { Button, Field, IconButton, Input as DesignInput, Modal } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { Input, MarkdownRenderer, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
+import { MarkdownRenderer, Select, Tabs, TabPane, Tooltip, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -2584,20 +2584,19 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               {authError && <span className="review-platform__gh-auth-error">{authError}</span>}
             </div>
           ) : (
-            <Input
-              type="password"
-              autoComplete="off"
-              autoFocus
-              label="Token"
-              value={authToken}
-              disabled={authSaving}
-              error={Boolean(authError)}
-              errorMessage={authError ?? undefined}
-              onChange={event => {
-                setAuthToken(event.target.value);
-                if (authError) setAuthError(null);
-              }}
-            />
+            <Field label="Token" controlWidth="fill" error={authError ?? undefined}>
+              <DesignInput
+                type="password"
+                autoComplete="off"
+                autoFocus
+                value={authToken}
+                disabled={authSaving}
+                onChange={event => {
+                  setAuthToken(event.target.value);
+                  if (authError) setAuthError(null);
+                }}
+              />
+            </Field>
           )}
           <div className="review-platform__auth-actions">
             <Button

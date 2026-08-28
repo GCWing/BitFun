@@ -7,7 +7,7 @@ import {
   CardHeader as BitFunCardHeader,
 } from '@/component-library/components/Card';
 import { Empty as BitFunEmpty } from '@/component-library/components/Empty';
-import { Input as BitFunInput } from '@/component-library/components/Input';
+import { Field as DesignField, Input as DesignInput } from '@bitfun/ui';
 import { TabPane as BitFunTabPane, Tabs as BitFunTabs } from '@/component-library/components/Tabs';
 import { Tag as BitFunTag } from '@/component-library/components/Tag';
 import type {
@@ -161,8 +161,40 @@ export function Tabs({ items, children, ...props }: CanvasTabsProps) {
   );
 }
 
-export function Input({ size, ...props }: CanvasInputProps) {
-  return <BitFunInput {...props} size={size} />;
+function designInputSize(size: CanvasInputProps['size']): 'sm' | 'md' | 'lg' {
+  if (size === 'small') return 'sm';
+  if (size === 'large') return 'lg';
+  return 'md';
+}
+
+export function Input({
+  size,
+  label,
+  hint,
+  prefix,
+  suffix,
+  error,
+  errorMessage,
+  ...props
+}: CanvasInputProps) {
+  const control = (
+    <DesignInput
+      {...props}
+      invalid={error}
+      leading={prefix}
+      trailing={suffix}
+      size={designInputSize(size)}
+    />
+  );
+  const fieldError = error ? errorMessage : undefined;
+  if (label === undefined && hint === undefined && fieldError === undefined) {
+    return control;
+  }
+  return (
+    <DesignField label={label} description={hint} error={fieldError} controlWidth="fill">
+      {control}
+    </DesignField>
+  );
 }
 
 export function Empty(props: CanvasEmptyProps) {

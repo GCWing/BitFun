@@ -4,7 +4,6 @@ import type { ComponentCategory } from '../types';
 import { Button } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
-import { Input } from '@components/Input';
 import { Select } from '@components/Select';
 import { Checkbox } from '@components/Checkbox';
 import { Textarea } from '@components/Textarea';
@@ -350,33 +349,6 @@ export const componentRegistry: ComponentCategory[] = [
     description: '输入类表单组件',
     layoutType: 'grid-2',
     components: [
-      {
-        id: 'input-demo',
-name: 'Input - Demo',
-        description: 'Demo',
-        category: 'form',
-        component: () => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
-            <Input placeholder="Enter text" />
-            <Input label="Label" placeholder="Placeholder" />
-            <Input
-              label="邮箱"
-              type="email"
-              placeholder="example@email.com"
-              prefix="@"
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="Enter password"
-              error
-              errorMessage="Error message"
-            />
-            <Input variant="filled" placeholder="Filled variant" />
-            <Input variant="outlined" placeholder="Outlined variant" />
-          </div>
-        ),
-      },
       {
         id: 'select-basic',
         name: 'Select - 基础选择',

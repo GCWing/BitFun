@@ -1654,6 +1654,8 @@
       "pickCertificateDialogTitle": "选择 OpenSSH 证书",
       "passphrase": "密码短语",
       "passphraseOptional": "留空表示无密码短语",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码",
       "agentFingerprint": "Agent 密钥指纹",
       "agentFallbackKey": "Agent 不可用时的备用私钥",
       "challengePassword": "交互认证密码",
