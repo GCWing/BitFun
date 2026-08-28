@@ -6,7 +6,13 @@ import {
 import { classNames } from "../../internal/classNames";
 import styles from "./StatusPill.module.css";
 
-export type StatusPillTone = "neutral" | "info" | "success" | "warning" | "danger";
+export type StatusPillTone =
+  | "neutral"
+  | "accent"
+  | "info"
+  | "success"
+  | "warning"
+  | "danger";
 
 export interface StatusPillProps
   extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {

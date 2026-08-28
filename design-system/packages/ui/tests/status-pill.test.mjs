@@ -14,6 +14,12 @@ test("StatusPill exposes semantic tone and independent label anatomy", () => {
   assert.match(markup, />Review</);
 });
 
+test("StatusPill renders the brand accent tone", () => {
+  const markup = renderToStaticMarkup(createElement(StatusPill, { tone: "accent" }, "Builtin"));
+
+  assert.match(markup, /data-tone="accent"/);
+});
+
 test("StatusPill keeps its optional leading indicator decorative", () => {
   const markup = renderToStaticMarkup(createElement(
     StatusPill,

@@ -8,12 +8,13 @@ export const statusPillMeta = {
   props: [
     { name: "children", type: "ReactNode" },
     { name: "leading", type: "ReactNode" },
-    { defaultValue: "success", name: "tone", type: "neutral | info | success | warning | danger" },
+    { defaultValue: "success", name: "tone", type: "neutral | accent | info | success | warning | danger" },
   ],
-  states: ["neutral", "info", "success", "warning", "danger"],
+  states: ["neutral", "accent", "info", "success", "warning", "danger"],
   tokens: [
     "color.surface.subtle",
     "color.content.secondary",
+    "color.accent.default",
     "color.status.info.content",
     "color.status.info.surface",
     "color.status.success.content",
