@@ -33,6 +33,24 @@ test("SearchField source preserves consumer key handling before Enter submission
   assert.match(source, /onSearch\?\.\(event\.currentTarget\.value\)/);
 });
 
+test("SearchField renders custom trailing content before the clear action", () => {
+  const markup = renderToStaticMarkup(
+    createElement(SearchField, {
+      "aria-label": "Search",
+      clearLabel: "Clear search",
+      onClear: () => {},
+      trailing: createElement("span", { "data-part": "matches" }, "1 / 5"),
+      value: "query",
+    }),
+  );
+
+  const trailingIndex = markup.indexOf('data-part="matches"');
+  const clearIndex = markup.indexOf('aria-label="Clear search"');
+  assert.ok(trailingIndex >= 0);
+  assert.ok(clearIndex >= 0);
+  assert.ok(trailingIndex < clearIndex);
+});
+
 test("SearchField exposes a labeled clear action without hiding it from assistive technology", () => {
   const markup = renderToStaticMarkup(
     createElement(SearchField, {

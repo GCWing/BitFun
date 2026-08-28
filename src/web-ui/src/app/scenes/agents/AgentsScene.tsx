@@ -1,4 +1,4 @@
-import { Button, IconButton, Select } from '@bitfun/ui';
+import { Button, IconButton, SearchField, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -11,11 +11,13 @@ import {
   Pencil,
   Plus,
   Puzzle,
+  Search as SearchIcon,
   Trash2,
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Search, Select as LegacySelect, Tooltip } from '@/component-library';
+import { Badge, Select as LegacySelect, Tooltip } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import {
@@ -186,6 +188,7 @@ function subagentTooltipFields(
 
 const AgentsHomeView: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
+  const { t: tComponents } = useI18n('components');
   const notification = useNotification();
   const [deletingAgent, setDeletingAgent] = useState(false);
   const {
@@ -676,14 +679,16 @@ const AgentsHomeView: React.FC = () => {
         subtitle={t('page.subtitle')}
         actions={(
           <>
-            <Search
+            <SearchField
               className="bitfun-agents-scene__search"
               value={searchQuery}
-              onChange={setSearchQuery}
+              onValueChange={setSearchQuery}
+              leadingIcon={<SearchIcon size={14} aria-hidden />}
               placeholder={t('page.searchPlaceholder')}
-              inputAriaLabel={t('page.searchPlaceholder')}
-              size="small"
-              clearable
+              aria-label={t('page.searchPlaceholder')}
+              size="sm"
+              clearLabel={searchQuery ? tComponents('search.clear') : undefined}
+              onClear={searchQuery ? () => setSearchQuery('') : undefined}
               data-testid="agents-search"
             />
             <Button

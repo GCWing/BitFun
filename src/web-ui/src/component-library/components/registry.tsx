@@ -5,7 +5,6 @@ import { Button } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
 import { Input } from '@components/Input';
-import { Search } from '@components/Search';
 import { Select } from '@components/Select';
 import { Checkbox } from '@components/Checkbox';
 import { Textarea } from '@components/Textarea';
@@ -377,97 +376,6 @@ name: 'Input - Demo',
             <Input variant="outlined" placeholder="Outlined variant" />
           </div>
         ),
-      },
-      {
-        id: 'search-demo',
-name: 'Search - Demo',
-        description: 'Demo',
-        category: 'form',
-        component: () => {
-          const [value, setValue] = React.useState('');
-          const [loading, setLoading] = React.useState(false);
-          const [searchOptions, setSearchOptions] = React.useState({
-            caseSensitive: false,
-            useRegex: false,
-          });
-
-          const handleSearch = (val: string) => {
-            setLoading(true);
-            setTimeout(() => {
-              setLoading(false);
-            }, 1500);
-          };
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
-              <Search
-                placeholder="搜索关键词.."
-                onChange={(val) => setValue(val)}
-              />
-              <Search
-                placeholder="Search"
-                showSearchButton
-                onSearch={handleSearch}
-                loading={loading}
-              />
-              <Search
-                placeholder="With suffix"
-                suffixContent={
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      style={{
-                        padding: '4px 6px',
-                        background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                        borderRadius: '4px',
-                        color: searchOptions.caseSensitive ? 'var(--bf-appearance-token-color-accent-500)' : 'var(--bf-appearance-token-color-text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
-                      title="Option"
-                    >
-                      Aa
-                    </button>
-                    <button
-                      style={{
-                        padding: '4px 6px',
-                        background: searchOptions.useRegex ? 'color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--bf-appearance-token-color-overlay-white-12)',
-                        borderRadius: '4px',
-                        color: searchOptions.useRegex ? 'var(--bf-appearance-token-color-accent-500)' : 'var(--bf-appearance-token-color-text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
-                      title="Option"
-                    >
-                      .*
-                    </button>
-                  </div>
-                }
-              />
-              <Search
-                placeholder="Search..."
-                expandOnFocus
-              />
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Search size="small" placeholder="Search" />
-                <Search size="medium" placeholder="Search" />
-                <Search size="large" placeholder="Search" />
-              </div>
-              <Search
-                placeholder="Disabled"
-                disabled
-              />
-              <Search
-                placeholder="Error"
-                error
-                errorMessage="Error message"
-              />
-            </div>
-          );
-        },
       },
       {
         id: 'select-basic',

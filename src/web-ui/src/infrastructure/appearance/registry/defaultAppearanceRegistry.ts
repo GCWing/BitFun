@@ -6,7 +6,6 @@ import { popupCloseButtonAppearanceDescriptor } from '@/component-library/compon
 import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
 import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
 import { numberInputAppearanceDescriptor } from '@/component-library/components/NumberInput/appearance';
-import { searchAppearanceDescriptor } from '@/component-library/components/Search/appearance';
 import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
 import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
@@ -302,7 +301,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(checkboxAppearanceDescriptor)
     .registerComponent(textareaAppearanceDescriptor)
     .registerComponent(numberInputAppearanceDescriptor)
-    .registerComponent(searchAppearanceDescriptor)
     .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
     .registerComponent(alertAppearanceDescriptor)

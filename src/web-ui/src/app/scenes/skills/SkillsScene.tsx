@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Modal, ConfirmDialog, Field, Select } from '@bitfun/ui';
+import { Button, Switch, IconButton, Modal, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   Package,
   Plus,
   Puzzle,
+  Search as SearchIcon,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -20,7 +21,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Input, Search } from '@/component-library';
+import { Badge, Input } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
@@ -98,6 +100,7 @@ const CATEGORIES: CategoryInfo[] = [
 
 const SkillsScene: React.FC = () => {
   const { t } = useTranslation('scenes/skills');
+  const { t: tComponents } = useI18n('components');
   const notification = useNotification();
   const peerDevice = usePeerDeviceModeOptional();
   const remoteConnectionActive = peerDevice?.peerMode.active === true;
@@ -321,14 +324,16 @@ const SkillsScene: React.FC = () => {
               ) : (
                 <>
                   <div className="skills-main__toolbar" data-bf-scene="skills" data-bf-part="toolbar">
-                    <Search
+                    <SearchField
                       className="skills-main__toolbar-search"
                       value={installedSearch}
-                      onChange={setInstalledSearch}
-                      onClear={() => setInstalledSearch('')}
+                      onValueChange={setInstalledSearch}
+                      leadingIcon={<SearchIcon size={14} aria-hidden />}
                       placeholder={t('toolbar.searchPlaceholder')}
-                      size="small"
-                      clearable
+                      aria-label={t('toolbar.searchPlaceholder')}
+                      size="sm"
+                      clearLabel={installedSearch ? tComponents('search.clear') : undefined}
+                      onClear={installedSearch ? () => setInstalledSearch('') : undefined}
                     />
                     <button
                       type="button"
@@ -609,16 +614,20 @@ const SkillsScene: React.FC = () => {
                   {t('market.subtitle')}
                 </p>
                 <div className="skills-discover__search-wrapper" data-bf-scene="skills" data-bf-part="discoverSearch">
-                  <Search
+                  <SearchField
                     className="skills-discover__search"
                     value={searchDraft}
-                    onChange={setSearchDraft}
+                    onValueChange={setSearchDraft}
                     onSearch={submitMarketQuery}
-                    onClear={submitMarketQuery}
+                    leadingIcon={<SearchIcon size={15} aria-hidden />}
                     placeholder={t('market.searchPlaceholder')}
-                    size="medium"
-                    clearable
-                    enterToSearch
+                    aria-label={t('market.searchPlaceholder')}
+                    size="md"
+                    clearLabel={searchDraft ? tComponents('search.clear') : undefined}
+                    onClear={searchDraft ? () => {
+                      setSearchDraft('');
+                      submitMarketQuery();
+                    } : undefined}
                   />
                 </div>
               </div>

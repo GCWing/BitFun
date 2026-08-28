@@ -2,10 +2,10 @@
 /** Git commit graph view (branch graph). */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, SearchField } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { GitBranch, ChevronUp, ChevronDown } from 'lucide-react';
-import { Search } from '@/component-library';
+import { GitBranch, ChevronUp, ChevronDown, Loader2, Search as SearchIcon } from 'lucide-react';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
@@ -43,6 +43,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   className = ''
 }) => {
   const { t } = useTranslation('panels/git');
+  const { t: tComponents } = useI18n('components');
   const { current: appearance } = useAppearance();
   const viewConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
@@ -309,16 +310,18 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
             }
           }}
         >
-          <Search
+          <SearchField
             value={searchQuery}
-            onChange={handleSearch}
-            onSearch={goToNextMatch}
+            onValueChange={handleSearch}
             placeholder={t('graph.searchPlaceholder')}
-            size="small"
-            clearable
-            enterToSearch={false}
-            loading={searchQuery !== debouncedSearchQuery}
-            suffixContent={
+            aria-label={t('graph.searchPlaceholder')}
+            size="sm"
+            clearLabel={searchQuery ? tComponents('search.clear') : undefined}
+            onClear={searchQuery ? () => handleSearch('') : undefined}
+            leadingIcon={searchQuery !== debouncedSearchQuery
+              ? <Loader2 className="git-graph-view__search-loading" size={14} aria-hidden />
+              : <SearchIcon size={14} aria-hidden />}
+            trailing={
               searchFilter && debouncedSearchQuery && searchFilter.totalMatches > 0 ? (
                 <div className="git-graph-view__search-navigation">
                   <span className="git-graph-view__search-count">

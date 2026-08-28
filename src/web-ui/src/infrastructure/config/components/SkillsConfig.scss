@@ -90,16 +90,13 @@
   }
 
   &__market-toolbar {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
     margin-bottom: $size-gap-3;
 
-    .search__wrapper {
-      background: linear-gradient(
-        180deg,
-        var(--bf-appearance-token-color-overlay-white-08) 0%,
-        var(--bf-appearance-token-color-overlay-white-04) 100%
-      );
-      border: 1px solid var(--bf-appearance-token-border-subtle);
-      border-radius: $size-radius-lg;
+    > [data-bf-component='search-field'] {
+      flex: 1;
     }
   }
 

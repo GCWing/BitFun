@@ -2,7 +2,7 @@
  * BranchesView — Left: branch list (switch/create/delete). Right: commit history for selected branch.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, SearchField } from '@bitfun/ui';
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,8 +15,10 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  Search as SearchIcon,
 } from 'lucide-react';
-import { Tooltip, Search as SearchComponent } from '@/component-library';
+import { Tooltip } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitService } from '@/tools/git/services';
 import { useGitOperations } from '@/tools/git/hooks';
 import { useNotification } from '@/shared/notification-system';
@@ -30,6 +32,7 @@ interface BranchesViewProps {
 
 const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
   const { t } = useTranslation('panels/git');
+  const { t: tComponents } = useI18n('components');
   const notification = useNotification();
 
   const [branches, setBranches] = useState<GitBranchType[]>([]);
@@ -218,11 +221,15 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
       <div data-bf-component="branches-view" data-bf-part="left" className="bitfun-git-scene-branches__left">
         <div data-bf-component="branches-view" data-bf-part="toolbar" className="bitfun-git-scene-branches__toolbar">
           <div data-bf-component="branches-view" data-bf-part="search" className="bitfun-git-scene-branches__toolbar-search">
-            <SearchComponent
+            <SearchField
+              size="sm"
+              leadingIcon={<SearchIcon size={14} aria-hidden />}
               placeholder={t('search.branches')}
+              aria-label={t('search.branches')}
               value={branchSearchQuery}
-              onChange={setBranchSearchQuery}
-              onClear={() => setBranchSearchQuery('')}
+              onValueChange={setBranchSearchQuery}
+              clearLabel={branchSearchQuery ? tComponents('search.clear') : undefined}
+              onClear={branchSearchQuery ? () => setBranchSearchQuery('') : undefined}
             />
           </div>
           <div data-bf-component="branches-view" data-bf-part="actions" className="bitfun-git-scene-branches__toolbar-actions">
@@ -306,11 +313,15 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
           <span data-bf-component="branches-view" data-bf-part="historyTitle" className="bitfun-git-scene-branches__history-title">
             {selectedBranchName ? t('tabs.branchCommitHistory', { branch: selectedBranchName }) : t('tabs.commits')}
           </span>
-          <SearchComponent
+          <SearchField
+            size="sm"
+            leadingIcon={<SearchIcon size={14} aria-hidden />}
             placeholder={t('search.commits')}
+            aria-label={t('search.commits')}
             value={commitSearchQuery}
-            onChange={setCommitSearchQuery}
-            onClear={() => setCommitSearchQuery('')}
+            onValueChange={setCommitSearchQuery}
+            clearLabel={commitSearchQuery ? tComponents('search.clear') : undefined}
+            onClear={commitSearchQuery ? () => setCommitSearchQuery('') : undefined}
           />
         </div>
         <div data-bf-component="branches-view" data-bf-part="historyList" className="bitfun-git-scene-branches__history-list">

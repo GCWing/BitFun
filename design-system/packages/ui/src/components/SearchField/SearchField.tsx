@@ -17,6 +17,8 @@ export interface SearchFieldProps
   onClear?: MouseEventHandler<HTMLButtonElement>;
   onSearch?: (value: string) => void;
   shortcut?: ReactNode;
+  /** Custom inline content before the clear action, e.g. match counts or a busy indicator. */
+  trailing?: ReactNode;
 }
 
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(function SearchField({
@@ -27,6 +29,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   onKeyDown,
   onSearch,
   shortcut,
+  trailing,
   ...props
 }, ref) {
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
@@ -46,6 +49,17 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
         />
       )
     : undefined;
+  const endAdornment = clearAction ?? (shortcut === undefined ? undefined : (
+    <span aria-hidden="true" className={styles.shortcut}>{shortcut}</span>
+  ));
+  const trailingContent = trailing === undefined && endAdornment === undefined
+    ? undefined
+    : (
+        <>
+          {trailing}
+          {endAdornment}
+        </>
+      );
 
   return (
     <span className={classNames(styles.root, className)} data-bf-component="search-field">
@@ -57,9 +71,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
         )}
         onKeyDown={handleKeyDown}
         ref={ref}
-        trailing={clearAction ?? (shortcut === undefined ? undefined : (
-          <span aria-hidden="true" className={styles.shortcut}>{shortcut}</span>
-        ))}
+        trailing={trailingContent}
         type="search"
       />
     </span>

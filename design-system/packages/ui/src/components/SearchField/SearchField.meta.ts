@@ -11,6 +11,7 @@ export const searchFieldMeta = {
     { name: "placeholder", type: "string" },
     { name: "leadingIcon", type: "ReactNode" },
     { name: "shortcut", type: "ReactNode" },
+    { name: "trailing", type: "ReactNode" },
     { name: "clearLabel", type: "string" },
     { defaultValue: "sm", name: "size", type: "sm | md | lg" },
     { defaultValue: "false", name: "invalid", type: "boolean" },

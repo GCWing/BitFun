@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, IconButton, ConfirmDialog, Field, Select } from '@bitfun/ui';
+import { Button, IconButton, ConfirmDialog, Field, SearchField, Select } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Input, Search, Card, CardBody, Tooltip } from '@/component-library';
+import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp, Search as SearchIcon } from 'lucide-react';
+import { Input, Card, CardBody, Tooltip } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -24,6 +25,7 @@ const log = createLogger('SkillsConfig');
 
 const SkillsConfig: React.FC = () => {
   const { t } = useTranslation('settings/skills');
+  const { t: tShared } = useI18n(['components', 'common']);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedSkillIds, setExpandedSkillIds] = useState<Set<string>>(new Set());
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -658,15 +660,20 @@ const SkillsConfig: React.FC = () => {
           )}
         >
           <div className="bitfun-skills-config__market-toolbar" data-bf-component="skills-config" data-bf-part="marketToolbar">
-            <Search
+            <SearchField
               placeholder={t('market.searchPlaceholder')}
+              aria-label={t('market.searchPlaceholder')}
+              leadingIcon={<SearchIcon size={14} aria-hidden />}
               value={marketKeyword}
-              onChange={(value) => setMarketKeyword(value)}
+              onValueChange={(value) => setMarketKeyword(value)}
               onSearch={handleMarketSearch}
-              showSearchButton
-              clearable
-              size="small"
+              clearLabel={marketKeyword ? tShared('components:search.clear') : undefined}
+              onClear={marketKeyword ? () => setMarketKeyword('') : undefined}
+              size="sm"
             />
+            <Button size="sm" variant="fill" onClick={handleMarketSearch}>
+              {tShared('common:actions.search')}
+            </Button>
           </div>
           {renderMarketList()}
         </ConfigPageSection>

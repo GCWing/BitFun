@@ -3,10 +3,10 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, SearchField } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List } from 'lucide-react';
+import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
 import {
   FileExplorer,
   getNewItemParentPath,
@@ -14,7 +14,8 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Search, Tooltip, Badge } from '@/component-library';
+import { Tooltip, Badge } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
@@ -123,6 +124,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   onExplorerToolbarApi,
 }) => {
   const { t } = useTranslation('panels/files');
+  const { t: tComponents } = useI18n('components');
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   
   const panelRef = useRef<HTMLDivElement>(null);
@@ -1065,14 +1067,17 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       <div className="bitfun-files-panel__content" data-bf-component="files-panel" data-bf-part="content">
         {workspacePath && viewMode === 'search' && (
           <div className="bitfun-files-panel__search" data-bf-component="files-panel" data-bf-part="search" data-bf-search-mode={searchMode}>
-            <Search
+            <SearchField
               placeholder={t('search.placeholder')}
+              aria-label={t('search.placeholder')}
               value={searchQuery}
-              onChange={(val) => setSearchQuery(val)}
-              onClear={handleClearSearch}
-              clearable
-              size="small"
-              loading={isSearching}
+              onValueChange={(val) => setSearchQuery(val)}
+              clearLabel={searchQuery ? tComponents('search.clear') : undefined}
+              onClear={searchQuery ? handleClearSearch : undefined}
+              size="sm"
+              leadingIcon={isSearching
+                ? <Loader2 className="bitfun-files-panel__search-spinner" size={14} aria-hidden />
+                : <SearchIcon size={14} aria-hidden />}
             />
             <div className="bitfun-files-panel__search-toolbar" data-bf-component="files-panel" data-bf-part="searchToolbar">
               <div className="bitfun-files-panel__search-modes">
