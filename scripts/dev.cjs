@@ -736,6 +736,34 @@ async function main() {
   if (prepFailed) {
     process.exit(1);
   }
+
+  if (desktopMode) {
+    const baselineHelperUrl = pathToFileURL(
+      path.join(__dirname, 'frontend-workbench-dev-baseline.mjs')
+    ).href;
+    const { getFrontendWorkbenchDevBaselinePlan } = await import(baselineHelperUrl);
+    const baselinePlan = getFrontendWorkbenchDevBaselinePlan(ROOT_DIR);
+    if (baselinePlan.shouldBuild) {
+      printInfo(`${baselinePlan.reason}; building the editable desktop frontend baseline`);
+      const baselineResult = await runCommandPrefixed(
+        'frontend-workbench',
+        'pnpm',
+        ['--dir', 'src/web-ui', 'run', 'build:desktop'],
+      );
+      if (!baselineResult.ok) {
+        printError('FrontendWorkbench baseline build failed');
+        if (baselineResult.error?.message) {
+          printError(baselineResult.error.message);
+        }
+        if (baselineResult.code !== null && baselineResult.code !== undefined) {
+          printError(`Exit code: ${baselineResult.code}`);
+        }
+        process.exit(1);
+      }
+    } else {
+      printInfo(baselinePlan.reason);
+    }
+  }
   printSuccess('Preparation tasks complete');
 
   const prepTime = ((Date.now() - startTime) / 1000).toFixed(1);
