@@ -101,7 +101,6 @@ import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/Voi
 import { AppShellState } from '../main/ets/pages/state/AppShellState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
-import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSessionState';
 import { RemoteSessionViewModel } from '../main/ets/pages/viewmodel/RemoteSessionViewModel';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import {
@@ -746,6 +745,8 @@ export default function remoteControllersUnitTest() {
       expect(creased.conversationPaneWidth).assertEqual(428);
       expect(creased.conversationPreviewGap).assertEqual(16);
       expect(creased.previewPaneWidth).assertEqual(484);
+      expect(creased.masterConversationGapIsCrease).assertTrue();
+      expect(creased.conversationPreviewGapIsCrease).assertTrue();
     });
 
     it('shrinks the flat master pane at the triple-pane threshold without narrowing content panes', 0, () => {
@@ -791,7 +792,7 @@ export default function remoteControllersUnitTest() {
       expect(layout.previewPaneWidth).assertEqual(1094);
     });
 
-    it('keeps tri-fold preview on a crease instead of splitting the full window in half', 0, () => {
+    it('keeps tri-fold preview on the right panel until the user expands it', 0, () => {
       const single = FilePreviewPlacementPolicy.resolveLayout(true, true, 1107, [
         new ConversationLayoutCrease(351, 44)
       ]);
@@ -799,15 +800,30 @@ export default function remoteControllersUnitTest() {
       expect(single.conversationPaneWidth).assertEqual(351);
       expect(single.conversationPreviewGap).assertEqual(44);
       expect(single.previewPaneWidth).assertEqual(712);
+      expect(single.conversationPreviewGapIsCrease).assertTrue();
 
       const dual = FilePreviewPlacementPolicy.resolveLayout(true, true, 1107, [
         new ConversationLayoutCrease(351, 44),
         new ConversationLayoutCrease(773, 44)
       ]);
-      expect(dual.placement).assertEqual(FilePreviewPlacement.WideFocusSplit);
-      expect(dual.conversationPaneWidth).assertEqual(773);
+      expect(dual.placement).assertEqual(FilePreviewPlacement.WideTriplePane);
+      expect(dual.masterPaneWidth).assertEqual(351);
+      expect(dual.masterConversationGap).assertEqual(44);
+      expect(dual.conversationPaneWidth).assertEqual(378);
       expect(dual.conversationPreviewGap).assertEqual(44);
       expect(dual.previewPaneWidth).assertEqual(290);
+      expect(dual.masterConversationGapIsCrease).assertTrue();
+      expect(dual.conversationPreviewGapIsCrease).assertTrue();
+
+      const expanded = FilePreviewPlacementPolicy.resolveLayout(true, true, 1107, [
+        new ConversationLayoutCrease(351, 44),
+        new ConversationLayoutCrease(773, 44)
+      ], FilePreviewPlacementPolicy.MIN_MASTER_WIDTH, true);
+      expect(expanded.placement).assertEqual(FilePreviewPlacement.WideMasterPreviewFocus);
+      expect(expanded.masterPaneWidth).assertEqual(351);
+      expect(expanded.masterConversationGap).assertEqual(44);
+      expect(expanded.conversationPaneWidth).assertEqual(0);
+      expect(expanded.previewPaneWidth).assertEqual(712);
     });
 
     it('falls back from crease-aligned focus when one side is too narrow', 0, () => {
@@ -818,84 +834,6 @@ export default function remoteControllersUnitTest() {
       expect(layout.conversationPaneWidth).assertEqual(449);
       expect(layout.conversationPreviewGap).assertEqual(1);
       expect(layout.previewPaneWidth).assertEqual(450);
-    });
-  });
-
-  describe('RemoteCreateSessionState', () => {
-    it('keeps selected device and workspace labels aligned with refreshed choices', 0, () => {
-      const state = new RemoteCreateSessionState();
-      state.prepare('desktop-b', 'stale device label');
-      state.selectWorkspace({
-        name: 'stale workspace label', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
-      });
-      state.setDevices([
-        { deviceId: 'desktop-a', deviceName: 'Desktop A', online: true },
-        { deviceId: 'desktop-b', deviceName: 'Desktop B', online: true }
-      ]);
-      state.setWorkspaces([
-        { name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal' },
-        { name: 'flashgrep', path: '/workspace/flashgrep', lastOpened: '', workspaceKind: 'normal' }
-      ]);
-
-      expect(state.selectedDeviceName).assertEqual('Desktop B');
-      expect(state.selectedWorkspaceName).assertEqual('BitFun');
-    });
-
-    it('freezes the selected creation target and defaults workspace sessions to Standard Harness', 0, () => {
-      const state = new RemoteCreateSessionState();
-      state.prepare('desktop-b', 'Desktop B', '', true);
-      state.setWorkspaces([{
-        name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
-      }]);
-      state.selectWorkspace({
-        name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
-      });
-
-      const context = state.submissionContext();
-
-      expect(context.deviceId).assertEqual('desktop-b');
-      expect(context.workspacePath).assertEqual('/workspace/BitFun');
-      expect(context.agentType).assertEqual('agentic');
-      expect(state.supportsHarnessProfiles).assertTrue();
-      expect(state.selectedHarnessProfile).assertEqual('balanced');
-    });
-
-    it('maps Minimal and Ultimate Harness choices to their runtime agent modes', 0, () => {
-      const state = new RemoteCreateSessionState();
-      state.prepare('desktop-b', 'Desktop B', '', true);
-      state.selectWorkspace({
-        name: 'BitFun', path: '/workspace/BitFun', lastOpened: '', workspaceKind: 'normal'
-      });
-
-      state.setSelectedHarnessProfile('minimal');
-      expect(state.submissionContext().agentType).assertEqual('minimal');
-      state.setSelectedHarnessProfile('ultimate');
-      expect(state.submissionContext().agentType).assertEqual('Ultra');
-    });
-
-    it('refreshes Harness support and defaults to Standard when the creation target changes', 0, () => {
-      const state = new RemoteCreateSessionState();
-      state.prepare('desktop-a', 'Desktop A', '', true);
-      state.setSelectedHarnessProfile('ultimate');
-
-      state.selectDevice({ deviceId: 'desktop-b', deviceName: 'Desktop B', online: true }, false);
-      expect(state.supportsHarnessProfiles).assertFalse();
-      expect(state.selectedHarnessProfile).assertEqual('balanced');
-
-      state.selectDevice({ deviceId: 'desktop-c', deviceName: 'Desktop C', online: true }, true);
-      expect(state.supportsHarnessProfiles).assertTrue();
-      expect(state.selectedHarnessProfile).assertEqual('balanced');
-    });
-
-    it('keeps the chat option on the assistant agent so the desktop binds its assistant workspace', 0, () => {
-      const state = new RemoteCreateSessionState();
-      state.prepare('desktop-b', 'Desktop B');
-      state.selectWorkspace(undefined);
-
-      const context = state.submissionContext();
-
-      expect(context.workspacePath).assertEqual('');
-      expect(context.agentType).assertEqual('Claw');
     });
   });
 
@@ -1368,6 +1306,45 @@ export default function remoteControllersUnitTest() {
       expect(created?.workspacePath || '').assertEqual('/other');
     });
 
+    it('hands an allocated session to the conversation before its initial turn settles', 0, async () => {
+      const client = new FakeRemoteSessionClient();
+      client.emitAllocationBeforeCreateReturn = true;
+      client.createdSession = {
+        sessionId: 'allocated-session',
+        title: 'Allocated Session',
+        workspacePath: '/workspace',
+        agentType: 'code',
+        initialTurnId: 'turn-ready'
+      };
+      const activeSessions: SessionSummary[] = [];
+      const openedSessions: SessionSummary[] = [];
+      const controller = new RemoteSessionController(client, 8, {
+        onSessions: (_sessions: RemoteSession[], _hasMore: boolean) => {},
+        onActiveSession: (session: SessionSummary) => {
+          activeSessions.push(session);
+        },
+        onStatusText: (_statusText: string) => {},
+        onBusy: (_isBusy: boolean) => {},
+        onLoading: (_isLoading: boolean) => {},
+        onSessionError: (_errorText: string) => {},
+        onReconnecting: () => {},
+        onConnected: () => {},
+        onConnectionFailed: (_err: Object) => {},
+        onStartHeartbeat: () => {}
+      });
+
+      await controller.create('code', false, true, async (session: SessionSummary): Promise<void> => {
+        openedSessions.push(session);
+      }, 'prompt', 'model-a', '/workspace');
+
+      expect(activeSessions.length).assertEqual(2);
+      expect(activeSessions[0].sessionId).assertEqual('allocated-session');
+      expect(activeSessions[0].initialTurnId || '').assertEqual('');
+      expect(activeSessions[1].initialTurnId || '').assertEqual('turn-ready');
+      expect(openedSessions.length).assertEqual(1);
+      expect(openedSessions[0].initialTurnId || '').assertEqual('');
+    });
+
     it('returns no created session when the remote create command fails', 0, async () => {
       const client = new FakeRemoteSessionClient();
       client.shouldFailCreate = true;
@@ -1498,6 +1475,7 @@ export default function remoteControllersUnitTest() {
         new FakeRemoteFileSaver()
       );
       const reconciled: SessionSummary[] = [];
+      const routedSessions: string[] = [];
       const viewModel = new RemoteSessionViewModel(pageState, sessions, chat, models, files, {
         remoteAvailable: (): boolean => true,
         isConnected: (): boolean => true,
@@ -1509,6 +1487,7 @@ export default function remoteControllersUnitTest() {
         onRouteHome: (): void => {},
         onStopPolling: (): void => {},
         onStartPolling: (): void => {},
+        onNudgePolling: (): void => {},
         onResetTimeline: (_sessionId: string): void => {},
         onClearRemoteFiles: (): void => {},
         onKnownStateReset: (): void => {},
@@ -1520,12 +1499,23 @@ export default function remoteControllersUnitTest() {
         onSelectWorkspace: async (_path: string): Promise<void> => {}
       });
 
-      await viewModel.createSessionInWorkspace('/other');
+      await viewModel.createSessionInWorkspace(
+        '/other',
+        'introduce this project',
+        'code',
+        (sessionId: string): void => {
+          routedSessions.push(sessionId);
+        },
+        '',
+        false
+      );
 
       expect(reconciled.length).assertEqual(1);
       expect(reconciled[0].sessionId).assertEqual('created-in-other');
       expect(reconciled[0].workspacePath).assertEqual('/other');
       expect(sessionClient.listRequests.length).assertEqual(0);
+      expect(routedSessions.length).assertEqual(1);
+      expect(routedSessions[0]).assertEqual('created-in-other');
     });
   });
 
@@ -2436,10 +2426,8 @@ export default function remoteControllersUnitTest() {
       expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertFalse();
       expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertFalse();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteHome)).assertTrue();
-      expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteCreate)).assertTrue();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteChat)).assertTrue();
       expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteCreate)).assertFalse();
     });
 
     it('resumes an in-flight remote session instead of landing on the picker', 0, () => {
@@ -2665,7 +2653,7 @@ export default function remoteControllersUnitTest() {
     it('buckets by day only when sorting by time', 0, () => {
       const now = new Date();
       const recent = session('recent-1', 'Today', 'code', '/workspace/bitfun');
-      recent.updatedAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+      recent.updatedAt = now.toISOString();
       const old = session('old-1', 'Older', 'code', '/workspace/bitfun');
       old.updatedAt = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 

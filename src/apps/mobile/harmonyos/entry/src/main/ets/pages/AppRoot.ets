@@ -41,7 +41,6 @@ struct AppRoot {
         navigationStack: this.runtime.navigationStack,
         remotePageState: this.runtime.remotePageState,
         deviceDirectoryState: this.runtime.deviceDirectoryState,
-        remoteCreateState: this.runtime.remoteCreateState,
         generalPageState: this.runtime.generalChatPageState,
         filePreviewState: this.runtime.filePreviewState,
         deviceId: this.runtime.remoteConnectionController.getDeviceId(),

@@ -10,6 +10,10 @@ import { ChatMessage } from '../main/ets/model/RemoteModels';
 import { AppShellViewModel } from '../main/ets/pages/viewmodel/AppShellViewModel';
 import { AppNavigationBackAction } from '../main/ets/pages/navigation/AppRouteContract';
 import { WideLayoutGeometry } from '../main/ets/pages/layout/WideLayoutGeometry';
+import {
+  FilePreviewLayout,
+  FilePreviewPlacement
+} from '../main/ets/pages/policy/FilePreviewPlacementPolicy';
 import { SidebarDirectoryPreviewPolicy } from '../main/ets/pages/policy/SidebarDirectoryPreviewPolicy';
 import { AdaptiveLayoutInput } from '../main/ets/pages/policy/AdaptiveLayoutInput';
 import {
@@ -159,9 +163,20 @@ export default function architectureUnitTest() {
     });
 
     it('keeps wide layout geometry pure and deterministic', 0, () => {
+      const focusPreview = new FilePreviewLayout(FilePreviewPlacement.WideFocusSplit);
+      const masterPreview = new FilePreviewLayout(FilePreviewPlacement.WideMasterPreviewFocus, 351);
+      const triplePreview = new FilePreviewLayout(FilePreviewPlacement.WideTriplePane);
       expect(WideLayoutGeometry.detailOffset(false, 24, 8)).assertEqual(24);
       expect(WideLayoutGeometry.detailOffset(true, 24, 8)).assertEqual(8);
       expect(WideLayoutGeometry.detailWidth(true, 900, 1200)).assertEqual(1200);
+      expect(WideLayoutGeometry.showsMasterRestoreButton(false, focusPreview)).assertTrue();
+      expect(WideLayoutGeometry.showsMasterRestoreButton(true, triplePreview)).assertTrue();
+      expect(WideLayoutGeometry.showsMasterRestoreButton(false, triplePreview)).assertFalse();
+      expect(WideLayoutGeometry.restoreMasterClosesPreview(focusPreview)).assertTrue();
+      expect(WideLayoutGeometry.masterPaneWidth(masterPreview, 344)).assertEqual(351);
+      expect(WideLayoutGeometry.showsMasterRestoreButton(false, masterPreview)).assertFalse();
+      expect(WideLayoutGeometry.restoreMasterClosesPreview(masterPreview)).assertFalse();
+      expect(WideLayoutGeometry.restoreMasterClosesPreview(triplePreview)).assertFalse();
       expect(WideLayoutGeometry.areaLength('1080')).assertEqual(1080);
       expect(WideLayoutGeometry.areaLength('invalid')).assertEqual(0);
     });

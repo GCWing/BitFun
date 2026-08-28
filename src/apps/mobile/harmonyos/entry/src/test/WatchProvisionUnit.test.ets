@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@ohos/hypium';
+import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import {
   WatchProvisionController,
   WatchProvisionOutcome,
@@ -111,6 +112,28 @@ export default function watchProvisionUnitTest() {
 
       expect(display.phase).assertEqual('password');
       expect(display.message.length > 0).assertTrue();
+    });
+
+    it('does not report a phone account failure as a desktop outage', 0, async () => {
+      const display = new FakeWatchProvisionDisplay();
+      const port: WatchProvisionPort = {
+        canProvision: (): boolean => true,
+        provision: async (
+          _deviceId: string,
+          _deviceName: string,
+          _requestId: string,
+          _password: string
+        ): Promise<WatchProvisionOutcome> => {
+          throw new Error('relay unavailable');
+        }
+      };
+      const controller = new WatchProvisionController(display, port);
+      controller.onRequestPayload(watchRequest());
+
+      await controller.approve();
+
+      expect(display.phase).assertEqual('failed');
+      expect(display.message).assertEqual(RemoteI18n.t('watchProvision.errors.accountUnavailable'));
     });
   });
 }

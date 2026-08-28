@@ -252,7 +252,7 @@ export struct RemoteSurfaceHost {
           .width(148).height(46).fontSize(MobileDesignTypography.titleSmall.size).fontWeight(FontWeight.Medium)
           .fontColor(PRIMARY_ACTION_TEXT).backgroundColor(PRIMARY_ACTION)
           .textAlign(TextAlign.Center).borderRadius(23).margin({ top: 12 })
-          .onClick(() => this.actions.onRemoteHome.createAssistant())
+          .onClick(() => this.createSession('code'))
       }
     }
     .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
@@ -346,10 +346,7 @@ export struct RemoteSurfaceHost {
   }
 
   private createAssistantSession(): void {
-    if (this.compact) {
-      this.actions.onSidebar.close();
-    }
-    this.actions.onRemoteHome.createAssistant();
+    this.createSession('code');
   }
 
   /**

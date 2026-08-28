@@ -128,7 +128,7 @@ export struct SettingsSheet {
             cloudListDevices: this.cloudListDevices,
             cloudSelectDevice: this.cloudSelectDevice,
             onReconnect: this.onReconnect,
-            onLoggedOut: this.onOpenAccount,
+            onLoggedOut: this.onClose,
             embeddedInSettings: true,
             preferences: () => {
               this.GeneralSettingsSection()

@@ -18,16 +18,11 @@ export struct BitFunAccountLoginPage {
   @Local showAdvanced: boolean = false;
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
+    Column({ space: 0 }) {
+      this.NavigationHeader()
+
       Scroll() {
         Column({ space: 0 }) {
-          Text(RemoteI18n.t('remote.settings.accountLoginTitle'))
-            .fontSize(MobileDesignTypography.displayLarge.size)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(INK)
-            .width('100%')
-            .margin({ top: 0 })
-
           Text(RemoteI18n.t('remote.settings.accountLoginBody'))
             .fontSize(MobileDesignTypography.bodyLarge.size)
             .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
@@ -107,31 +102,41 @@ export struct BitFunAccountLoginPage {
               .width('100%')
               .margin({ top: 12 })
           }
-
-          Button(this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
-            RemoteI18n.t('remote.settings.accountSignIn'))
-            .height(56)
-            .width('100%')
-            .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(PRIMARY_ACTION_TEXT)
-            .backgroundColor(PRIMARY_ACTION)
-            .borderRadius(18)
-            .margin({ top: this.errorText.length > 0 ? 22 : 30 })
-            .opacity(this.canSubmit() ? 1 : 0.28)
-            .enabled(this.canSubmit())
-            .onClick(async () => {
-              await this.submit();
-            })
         }
         .width('100%')
-        .padding({ left: 28, right: 28, top: 24, bottom: 44 })
+        .padding({ left: 28, right: 28, top: 24, bottom: 18 })
         .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .height('100%')
+      .layoutWeight(1)
       .scrollBar(BarState.Off)
 
+      Row() {
+        Button(this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
+          RemoteI18n.t('remote.settings.accountSignIn'))
+          .height(56)
+          .layoutWeight(1)
+          .fontSize(MobileDesignTypography.labelLarge.size)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(PRIMARY_ACTION_TEXT)
+          .backgroundColor(PRIMARY_ACTION)
+          .borderRadius(18)
+          .opacity(this.canSubmit() ? 1 : 0.28)
+          .enabled(this.canSubmit())
+          .onClick(async () => {
+            await this.submit();
+          })
+      }
+      .width('100%')
+      .padding({ left: 28, right: 28, top: 12, bottom: 28 })
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  private NavigationHeader() {
+    Row() {
       Button() {
         TemplateIcon({
           src: $r('app.media.remote_ref_back'),
@@ -144,14 +149,22 @@ export struct BitFunAccountLoginPage {
       .padding(0)
       .type(ButtonType.Circle)
       .backgroundColor('#00000000')
-      .position({ x: 28, y: 22 })
       .accessibilityText(RemoteI18n.t('common.back'))
       .onClick(() => {
         this.onBack();
       })
+
+      Text(RemoteI18n.t('remote.settings.accountLoginTitle'))
+        .fontSize(MobileDesignTypography.headlineMedium.size)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(INK)
+        .layoutWeight(1)
+        .margin({ left: 10 })
     }
     .width('100%')
-    .height('100%')
+    .height(72)
+    .padding({ left: 18, right: 18 })
+    .alignItems(VerticalAlign.Center)
   }
 
   private canSubmit(): boolean {

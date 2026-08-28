@@ -363,7 +363,7 @@ export struct ConversationViewSettings {
 
   private agentFilterLabel(value: string): string {
     if (value === 'chat') {
-      return RemoteI18n.t('remote.create.chat');
+      return RemoteI18n.t('remote.newChat');
     }
     return value === 'cowork' ? 'Cowork' : 'Code';
   }

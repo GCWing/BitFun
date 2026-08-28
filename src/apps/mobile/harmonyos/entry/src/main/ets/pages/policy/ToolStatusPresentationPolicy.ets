@@ -11,6 +11,18 @@ interface QuestionPreviewPayload {
   questions?: QuestionPreview[];
 }
 
+interface TaskPreviewPayload {
+  description?: string;
+  task?: string;
+  task_name?: string;
+  taskName?: string;
+  prompt?: string;
+  message?: string;
+  content?: string;
+  title?: string;
+  name?: string;
+}
+
 /** Pure tool classification and payload projection used by the ArkUI renderer. */
 export class ToolStatusPresentationPolicy {
   static normalizedName(tool: ConversationUiToolStatus): string {
@@ -186,6 +198,16 @@ export class ToolStatusPresentationPolicy {
     return '';
   }
 
+  static taskTitle(tool: ConversationUiToolStatus): string {
+    const payload = ToolStatusPresentationPolicy.taskPayload(tool);
+    const title = payload.description || payload.task || payload.title || payload.prompt || payload.message ||
+      payload.task_name || payload.taskName || payload.name || payload.content || '';
+    if (title.trim().length > 0) return title.trim();
+    const preview = ToolStatusPresentationPolicy.inputPreview(tool).trim();
+    if (preview.length > 0 && !preview.startsWith('{') && !preview.startsWith('[')) return preview;
+    return '';
+  }
+
   static resultPreview(tool: ConversationUiToolStatus): string {
     const parts: string[] = [];
     if (tool.result_preview && tool.result_preview.length > 0) parts.push(tool.result_preview);
@@ -243,6 +265,16 @@ export class ToolStatusPresentationPolicy {
       ToolStatusPresentationPolicy.objectSignature(tool.tool_output)
     ];
     return ToolStatusPresentationPolicy.stableTextHash(parts.join('|'));
+  }
+
+  private static taskPayload(tool: ConversationUiToolStatus): TaskPreviewPayload {
+    const preview = ToolStatusPresentationPolicy.inputPreview(tool);
+    if (preview.trim().length === 0) return {};
+    try {
+      return JSON.parse(preview) as TaskPreviewPayload;
+    } catch (_err) {
+      return {};
+    }
   }
 
   private static objectSignature(value?: Object): string {

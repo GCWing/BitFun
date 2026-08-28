@@ -835,6 +835,7 @@ export class FakeRemoteSessionClient implements RemoteSessionClient {
   shouldFailList: boolean = false;
   shouldFailCreate: boolean = false;
   shouldFailDelete: boolean = false;
+  emitAllocationBeforeCreateReturn: boolean = false;
 
   async listSessions(limit: number, offset: number, query: string, agentType: string): Promise<SessionListResult> {
     this.listRequests.push(`${limit}:${offset}:${query}:${agentType}`);
@@ -848,12 +849,23 @@ export class FakeRemoteSessionClient implements RemoteSessionClient {
     return result;
   }
 
-  async createSession(options: CreateSessionOptions): Promise<SessionSummary> {
+  async createSession(
+    options: CreateSessionOptions,
+    onAllocated?: (session: SessionSummary) => Promise<void>
+  ): Promise<SessionSummary> {
     this.createRequests.push(
       `${options.agentType}:${options.title}:${options.instruction}:${options.workspacePath || ''}`
     );
     if (this.shouldFailCreate) {
       throw new Error('Expected session create failure.');
+    }
+    if (this.emitAllocationBeforeCreateReturn && onAllocated) {
+      await onAllocated({
+        sessionId: this.createdSession.sessionId,
+        title: this.createdSession.title,
+        workspacePath: this.createdSession.workspacePath,
+        agentType: this.createdSession.agentType
+      });
     }
     return this.createdSession;
   }

@@ -12,6 +12,7 @@ export class AdaptiveSheetOptions {
     if (placement.mode === SettingsPlacementMode.FoldOperate) {
       return {
         height: placement.height,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
         backgroundColor: '#00000000',
         maskColor: '#44000000',
         showClose: false,
@@ -22,6 +23,7 @@ export class AdaptiveSheetOptions {
       return {
         height: placement.height,
         width: placement.width,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
         preferType: SheetType.SIDE,
         backgroundColor: '#00000000',
         maskColor: '#44000000',
@@ -33,6 +35,7 @@ export class AdaptiveSheetOptions {
       return {
         height: placement.height,
         width: placement.width,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
         preferType: SheetType.CENTER,
         backgroundColor: '#00000000',
         maskColor: '#44000000',
@@ -43,6 +46,7 @@ export class AdaptiveSheetOptions {
     if (placement.height > 0) {
       return {
         height: placement.height,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
         backgroundColor: '#00000000',
         maskColor: '#44000000',
         showClose: false,
@@ -51,6 +55,7 @@ export class AdaptiveSheetOptions {
     }
     return {
       height: SheetSize.LARGE,
+      keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       backgroundColor: '#00000000',
       maskColor: '#44000000',
       showClose: false,

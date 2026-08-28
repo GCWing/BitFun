@@ -241,19 +241,30 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     };
   }
 
-  async createSession(options: CreateSessionOptions): Promise<SessionSummary> {
+  async createSession(
+    options: CreateSessionOptions,
+    onAllocated?: (session: SessionSummary) => Promise<void>
+  ): Promise<SessionSummary> {
     const workspacePath = options.workspacePath?.trim() || this.workspace?.path || '';
     const command = RemoteCommandFactory.createSession(options, workspacePath);
     const response = await this.send<CreateSessionResponse>(command);
     const sessionId = response.session_id || response.id || '';
-    const modelId = options.modelId?.trim() || '';
-    if (modelId.length > 0) {
-      await this.setSessionModel(sessionId, modelId);
-    }
     const normalizedAgentType = options.agentType.toLowerCase();
     const fallbackTitle = normalizedAgentType === 'claw' || normalizedAgentType === 'assistant' || normalizedAgentType === 'chat' ?
       'Assistant Session' : normalizedAgentType === 'cowork' ? 'Cowork Session' : 'Code Session';
     const title = response.title || fallbackTitle;
+    if (onAllocated) {
+      await onAllocated({
+        sessionId,
+        title,
+        workspacePath,
+        agentType: options.agentType
+      });
+    }
+    const modelId = options.modelId?.trim() || '';
+    if (modelId.length > 0) {
+      await this.setSessionModel(sessionId, modelId);
+    }
     let initialTurnId = '';
     if (options.instruction.trim().length > 0) {
       initialTurnId = await this.sendMessage(sessionId, options.instruction.trim(), options.agentType);

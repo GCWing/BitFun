@@ -4,12 +4,10 @@ import { ChatComposerPolicy, ComposerPrimaryAction } from '../main/ets/services/
 import { ChatSurface } from '../main/ets/pages/state/ChatSurface';
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
-  REMOTE_CHAT_COMPOSER_CAPABILITIES,
-  REMOTE_CREATE_COMPOSER_CAPABILITIES
+  REMOTE_CHAT_COMPOSER_CAPABILITIES
 } from '../main/ets/pages/state/ChatComposerCapabilities';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
-import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSessionState';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { AppRoute } from '../main/ets/pages/navigation/AppRouteContract';
 import { ConversationHeaderPolicy } from '../main/ets/pages/policy/ConversationHeaderPolicy';
@@ -27,7 +25,11 @@ import { ConversationMessageRenderPolicy } from '../main/ets/pages/policy/Conver
 import { ToolCollapsePolicy } from '../main/ets/pages/policy/ToolCollapsePolicy';
 import { ChatMessageStructurePolicy } from '../main/ets/pages/policy/ChatMessageStructurePolicy';
 import { ToolStatusPresentationPolicy } from '../main/ets/pages/policy/ToolStatusPresentationPolicy';
-import { ConversationUiMessage, ConversationUiToolStatus } from '../main/ets/pages/state/ConversationUiModels';
+import {
+  ConversationUiMessage,
+  ConversationUiMessageItem,
+  ConversationUiToolStatus
+} from '../main/ets/pages/state/ConversationUiModels';
 import {
   ConnectSheetLandingPolicy,
   ConnectSheetStatusPolicy,
@@ -64,6 +66,13 @@ export default function conversationPresentationUnitTest() {
   });
 
   describe('ThinkingPresentationPolicy', () => {
+    it('reserves enough width for every running dot and inter-dot gap', 0, () => {
+      expect(ThinkingPresentationPolicy.runningDotsWidth()).assertEqual(30);
+      expect(ThinkingPresentationPolicy.runningDotsWidth() >=
+        ThinkingPresentationPolicy.RUNNING_DOT_WIDTH * ThinkingPresentationPolicy.RUNNING_DOT_COUNT +
+        ThinkingPresentationPolicy.RUNNING_DOT_GAP * (ThinkingPresentationPolicy.RUNNING_DOT_COUNT - 1)).assertTrue();
+    });
+
     it('treats active and running as in-progress thinking', 0, () => {
       expect(ThinkingPresentationPolicy.isRunning('active')).assertTrue();
       expect(ThinkingPresentationPolicy.isRunning('running')).assertTrue();
@@ -241,6 +250,58 @@ export default function conversationPresentationUnitTest() {
       expect(groups[1].type).assertEqual('item');
     });
 
+    it('routes Task tools through the subagent item renderer instead of the generic tool list', 0, () => {
+      const task = toolStatus('task-1', 'Task', 'running');
+      task.input_preview = '{"description":"Read the README introduction"}';
+      const groups = ChatMessageStructurePolicy.structuredGroups([
+        { type: 'tool', tool: task, content: 'Running task' }
+      ], 'item', true, 'active');
+      expect(groups.length).assertEqual(1);
+      expect(groups[0].type).assertEqual('item');
+      expect(groups[0].items.length).assertEqual(1);
+      expect(groups[0].tools.length).assertEqual(0);
+      expect(ChatMessageStructurePolicy.subagentTitle(groups[0].items[0]))
+        .assertEqual('Read the README introduction');
+    });
+
+    it('nests marked subagent execution inside its Task while preserving interleaved parent tools', 0, () => {
+      const task = toolStatus('task-1', 'Task', 'running');
+      const internalRead = toolStatus('read-1', 'Read', 'running');
+      const directRead = toolStatus('read-parent', 'Read', 'completed');
+      const groups = ChatMessageStructurePolicy.structuredGroups([
+        { type: 'tool', tool: task },
+        { type: 'tool', tool: directRead },
+        { type: 'thinking', content: 'Inspect child files', is_subagent: true },
+        { type: 'tool', tool: internalRead, is_subagent: true }
+      ], 'item', true, 'active');
+      expect(groups.length).assertEqual(2);
+      expect(groups[0].items.length).assertEqual(1);
+      expect(groups[0].items[0].tool?.name || '').assertEqual('Task');
+      expect(groups[0].items[0].subItems?.length || 0).assertEqual(2);
+      expect(groups[1].tools.length).assertEqual(1);
+      expect(groups[1].tools[0].id).assertEqual('read-parent');
+    });
+
+    it('scopes legacy unmarked process output only while a Task is running', 0, () => {
+      const runningTask = toolStatus('task-running', 'Task', 'running');
+      const childRead = toolStatus('child-read', 'Read', 'running');
+      const scoped = ChatMessageStructurePolicy.scopeSubagentItems([
+        { type: 'tool', tool: runningTask },
+        { type: 'thinking', content: 'Legacy child thinking' },
+        { type: 'tool', tool: childRead }
+      ]);
+      expect(scoped.length).assertEqual(1);
+      expect(scoped[0].subItems?.length || 0).assertEqual(2);
+
+      const completedTask = toolStatus('task-done', 'Task', 'completed');
+      const parentOutput = ChatMessageStructurePolicy.scopeSubagentItems([
+        { type: 'tool', tool: completedTask },
+        { type: 'thinking', content: 'Parent resumes' }
+      ]);
+      expect(parentOutput.length).assertEqual(2);
+      expect(parentOutput[0].subItems?.length || 0).assertEqual(0);
+    });
+
     it('keeps one plain assistant text item on the lightweight markdown path', 0, () => {
       expect(ChatMessageStructurePolicy.requiresStructuredRendering([
         { type: 'text', content: 'Hello' }
@@ -252,6 +313,46 @@ export default function conversationPresentationUnitTest() {
         { type: 'thinking', content: 'Inspect' },
         { type: 'text', content: 'Done' }
       ])).assertTrue();
+    });
+
+    it('peels a trailing composite reply onto a stable streaming markdown leaf', 0, () => {
+      const items: ConversationUiMessageItem[] = [
+        { type: 'thinking', content: 'Inspect' },
+        { type: 'tool', tool: toolStatus('read-1', 'Read', 'completed') },
+        { type: 'text', content: 'Growing answer' }
+      ];
+      const processItems = ChatMessageStructurePolicy.withoutTrailingTopLevelText(items);
+      expect(processItems.length).assertEqual(2);
+      expect(ChatMessageStructurePolicy.trailingTopLevelText(items)).assertEqual('Growing answer');
+
+      const toolAfterText: ConversationUiMessageItem[] = [
+        { type: 'text', content: 'Intermediate note' },
+        { type: 'tool', tool: toolStatus('write-1', 'Write', 'running') }
+      ];
+      expect(ChatMessageStructurePolicy.trailingTopLevelText(toolAfterText)).assertEqual('');
+      expect(ChatMessageStructurePolicy.withoutTrailingTopLevelText(toolAfterText).length).assertEqual(2);
+    });
+
+    it('invalidates structured rendering when tool topology changes without keying growing reply text', 0, () => {
+      const first: ConversationUiMessageItem[] = [
+        { type: 'thinking', content: 'Inspect' },
+        { type: 'tool', tool: toolStatus('skill-1', 'Skill', 'running') }
+      ];
+      const moreTools: ConversationUiMessageItem[] = [
+        { type: 'thinking', content: 'Inspect' },
+        { type: 'tool', tool: toolStatus('skill-1', 'Skill', 'completed') },
+        { type: 'tool', tool: toolStatus('read-1', 'Read', 'running') }
+      ];
+      const firstKey = ChatMessageStructurePolicy.structuredRenderKey(first, 'item', true, 'active');
+      const moreToolsKey = ChatMessageStructurePolicy.structuredRenderKey(moreTools, 'item', true, 'active');
+      expect(firstKey === moreToolsKey).assertFalse();
+
+      const replyA = moreTools.concat([{ type: 'text', content: 'A' }]);
+      const replyB = moreTools.concat([{ type: 'text', content: 'A growing answer' }]);
+      const processA = ChatMessageStructurePolicy.withoutTrailingTopLevelText(replyA);
+      const processB = ChatMessageStructurePolicy.withoutTrailingTopLevelText(replyB);
+      expect(ChatMessageStructurePolicy.structuredRenderKey(processA, 'item', true, 'active'))
+        .assertEqual(ChatMessageStructurePolicy.structuredRenderKey(processB, 'item', true, 'active'));
     });
 
     it('does not render a top-level tool twice when structured items already contain it', 0, () => {
@@ -360,11 +461,37 @@ export default function conversationPresentationUnitTest() {
       expect(groups[3].tools[0].name).assertEqual('Write');
     });
 
-    it('expands a subagent card only while that task is running', 0, () => {
-      expect(ToolCollapsePolicy.defaultSubagentExpanded(true)).assertTrue();
-      expect(ToolCollapsePolicy.defaultSubagentExpanded(false)).assertFalse();
-      expect(ToolCollapsePolicy.subagentExpandedForStatus(true, true, false)).assertFalse();
-      expect(ToolCollapsePolicy.subagentExpandedForStatus(false, true, true)).assertFalse();
+    it('presents subagent progress as a plain label without repeating it as body copy', 0, () => {
+      const progress: ConversationUiMessageItem = {
+        type: 'subagent',
+        is_subagent: true,
+        content: '**Planning exploration of AGENTS subcrates**'
+      };
+      expect(ChatMessageStructurePolicy.subagentTitle(progress))
+        .assertEqual('Planning exploration of AGENTS subcrates');
+      expect(ChatMessageStructurePolicy.subagentBody(progress)).assertEqual('');
+
+      const task = toolStatus('task-2', 'Task', 'running');
+      task.input_preview = '{"description":"Inspect workspace structure"}';
+      const taskProgress: ConversationUiMessageItem = {
+        type: 'tool',
+        tool: task,
+        content: 'Running “Inspect workspace structure”'
+      };
+      expect(ChatMessageStructurePolicy.subagentTitle(taskProgress)).assertEqual('Inspect workspace structure');
+      expect(ChatMessageStructurePolicy.subagentBody(taskProgress)).assertEqual('');
+
+      const structuredTask = toolStatus('task-3', 'Task', 'running');
+      structuredTask.tool_input = JSON.parse('{"description":"Read the README first paragraph"}') as Object;
+      expect(ToolStatusPresentationPolicy.taskTitle(structuredTask))
+        .assertEqual('Read the README first paragraph');
+
+      const codexTask = toolStatus('task-4', 'Task', 'running');
+      codexTask.tool_input = JSON.parse(
+        '{"task_name":"read_readme","message":"Read the first README paragraph."}'
+      ) as Object;
+      expect(ToolStatusPresentationPolicy.taskTitle(codexTask))
+        .assertEqual('Read the first README paragraph.');
     });
 
     it('keeps the summary row and lists members when the group is expanded', 0, () => {
@@ -605,41 +732,6 @@ export default function conversationPresentationUnitTest() {
       expect(branded.subtitle).assertEqual('BitFun · feat/ui');
     });
 
-    it('treats create as a titled conversation chrome without actions or rename', 0, () => {
-      const create = ConversationHeaderPolicy.present(ChatSurface.Create, 'ignored', 'Studio', 'main', true);
-      expect(create.fallbackKey).assertEqual('remote.create.title');
-      expect(create.title).assertEqual('');
-      expect(create.subtitle).assertEqual('');
-      expect(create.allowRename).assertFalse();
-      expect(create.showActions).assertFalse();
-    });
-  });
-
-  describe('Create conversation projection', () => {
-    it('projects remote create onto the shared conversation view with create capabilities', 0, () => {
-      const remote = new RemotePageState();
-      remote.desktopName = 'Studio';
-      const create = new RemoteCreateSessionState();
-      create.setDraft('hello from create');
-      create.setSelectedModelId('model-1');
-      create.isSubmitting = true;
-      create.errorText = 'device mismatch';
-      const projection = ConversationViewState.project(
-        AppRoute.RemoteCreate,
-        remote,
-        new GeneralChatPageState(),
-        '',
-        create
-      );
-      expect(projection.surface).assertEqual(ChatSurface.Create);
-      expect(projection.composerCapabilities.supportsAttachments).assertFalse();
-      expect(projection.composerCapabilities.showAddButton).assertFalse();
-      expect(projection.chatInput).assertEqual('hello from create');
-      expect(projection.isBusy).assertTrue();
-      expect(projection.inlineStatusText).assertEqual('device mismatch');
-      expect(projection.timelineItems.length).assertEqual(0);
-      expect(projection.desktopName).assertEqual('Studio');
-    });
   });
 
   describe('ModelServiceSettingsPolicy', () => {

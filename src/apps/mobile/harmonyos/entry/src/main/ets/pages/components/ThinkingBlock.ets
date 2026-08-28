@@ -103,30 +103,32 @@ export struct ThinkingBlock {
 
   @Builder
   RunningDots() {
-    Row({ space: 6 }) {
+    Row({ space: ThinkingPresentationPolicy.RUNNING_DOT_GAP }) {
       Text('•')
-        .width(6)
+        .width(ThinkingPresentationPolicy.RUNNING_DOT_WIDTH)
         .height(18)
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(0))
         .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
-        .width(6)
+        .width(ThinkingPresentationPolicy.RUNNING_DOT_WIDTH)
         .height(18)
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(1))
         .animation({ duration: 180, curve: Curve.EaseInOut })
       Text('•')
-        .width(6)
+        .width(ThinkingPresentationPolicy.RUNNING_DOT_WIDTH)
         .height(18)
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(MUTED)
         .opacity(this.dotOpacity(2))
         .animation({ duration: 180, curve: Curve.EaseInOut })
     }
-    .width(22)
+    // Reserve the full intrinsic strip width. A narrower fixed width lets the
+    // last dots paint into the following "Thinking" label in ArkUI Rows.
+    .width(ThinkingPresentationPolicy.runningDotsWidth())
     .height(18)
   }
 

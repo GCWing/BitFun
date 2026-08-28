@@ -137,11 +137,10 @@ export class DeviceDirectoryViewModel {
     if (this.state.find(this.state.selectedDeviceId)) {
       return;
     }
-    if (this.state.find(activeId)) {
-      this.state.select(activeId);
-      return;
-    }
-    this.state.select(activeId.length === 0 && next.length > 0 ? next[0].deviceId : '');
+    // A live control target is transport state, not a user selection in the
+    // directory. Expanding it here made a freshly signed-in sidebar show a
+    // workspace loader before the user had chosen any device.
+    this.state.select('');
   }
 
   async hydrateKnownDevices(): Promise<void> {

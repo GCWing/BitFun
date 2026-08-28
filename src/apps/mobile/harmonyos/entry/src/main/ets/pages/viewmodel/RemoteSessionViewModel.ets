@@ -18,6 +18,7 @@ export interface RemoteSessionViewModelHooks {
   readonly onRouteHome: () => void;
   readonly onStopPolling: () => void;
   readonly onStartPolling: () => void;
+  readonly onNudgePolling: () => void;
   readonly onResetTimeline: (sessionId: string) => void;
   readonly onClearRemoteFiles: () => void;
   readonly onKnownStateReset: () => void;
@@ -101,16 +102,17 @@ export class RemoteSessionViewModel {
     agentType: string,
     instruction: string = '',
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
-    modelId: string = ''
+    modelId: string = '',
+    routeBeforeCreate: boolean = true
   ): Promise<void> {
     if (this.hooks.isBusy() || !this.hooks.remoteAvailable()) {
       return;
     }
     const previousSession: SessionSummary = this.copySession(this.pageState.activeSession);
-    this.beginSessionCreation(onRouteChat);
+    this.beginSessionCreation(onRouteChat, routeBeforeCreate);
     try {
       const created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId);
-      if (!created) {
+      if (!created && routeBeforeCreate) {
         this.restoreAfterFailedCreation(previousSession, onRouteChat);
       }
     } finally {
@@ -126,7 +128,7 @@ export class RemoteSessionViewModel {
     modelId: string,
     workspacePath: string = ''
   ): Promise<SessionSummary | undefined> {
-    return await this.sessions.create(
+    const created = await this.sessions.create(
       agentType,
       this.hooks.isBusy(),
       this.hooks.remoteAvailable(),
@@ -136,6 +138,10 @@ export class RemoteSessionViewModel {
         this.hooks.onKnownStateReset();
         this.hooks.onResetTimeline(session.sessionId);
         onRouteChat(session.sessionId);
+        // The create surface has already handed its optimistic instruction to
+        // the remote projection. Do not cover it with a loading veil while the
+        // empty initial transcript and first turn are being synchronized.
+        this.pageState.setConversationLoading(false);
         // Same ordering as openSession: whatever the new session already has to
         // show goes up first. The model picker needs no request of its own —
         // the poll started here carries the catalog back with it.
@@ -147,6 +153,14 @@ export class RemoteSessionViewModel {
       modelId,
       workspacePath
     );
+    if (created && (created.initialTurnId || '').length > 0) {
+      // The first poll may have observed the newly allocated session before
+      // send_message reached the host and backed off as idle. Wake it as soon
+      // as the initial turn is accepted instead of hiding up to ten seconds of
+      // otherwise available streaming output.
+      this.hooks.onNudgePolling();
+    }
+    return created;
   }
 
   async createSessionInWorkspace(
@@ -154,17 +168,18 @@ export class RemoteSessionViewModel {
     instruction: string = '',
     agentType: string = 'code',
     onRouteChat: (sessionId: string) => void = this.hooks.onRouteChat,
-    modelId: string = ''
+    modelId: string = '',
+    routeBeforeCreate: boolean = true
   ): Promise<void> {
     if (this.hooks.isBusy() || !this.hooks.remoteAvailable()) {
       return;
     }
     const previousSession: SessionSummary = this.copySession(this.pageState.activeSession);
-    this.beginSessionCreation(onRouteChat);
+    this.beginSessionCreation(onRouteChat, routeBeforeCreate);
     let created: SessionSummary | undefined;
     try {
       created = await this.performCreateSession(agentType, instruction, onRouteChat, modelId, path);
-      if (!created) {
+      if (!created && routeBeforeCreate) {
         this.restoreAfterFailedCreation(previousSession, onRouteChat);
       }
     } finally {
@@ -173,11 +188,16 @@ export class RemoteSessionViewModel {
     }
   }
 
-  private beginSessionCreation(onRouteChat: (sessionId: string) => void): void {
+  private beginSessionCreation(
+    onRouteChat: (sessionId: string) => void,
+    routeBeforeCreate: boolean
+  ): void {
     this.hooks.onStopPolling();
     this.pageState.setPendingSessionId('');
     this.pageState.setConversationLoading(true);
-    onRouteChat('');
+    if (routeBeforeCreate) {
+      onRouteChat('');
+    }
   }
 
   private restoreAfterFailedCreation(

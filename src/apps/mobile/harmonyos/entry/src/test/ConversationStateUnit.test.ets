@@ -3,7 +3,7 @@ import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
 import { ChatComposerPolicy } from '../main/ets/services/ChatComposerPolicy';
 import { ChatTimelineItem, ChatTimelineProjector } from '../main/ets/services/ChatTimelineProjector';
-import { ChatTimelineRevisionTracker } from '../main/ets/model/ChatTimelineModels';
+import { ChatTimelineRevisionTracker, ChatTimelineRowStore } from '../main/ets/model/ChatTimelineModels';
 import { ChatTimelineStore } from '../main/ets/services/ChatTimelineStore';
 import { ConversationEvent } from '../main/ets/services/ConversationEvent';
 import { AsyncLifecycleGate } from '../main/ets/services/AsyncLifecycleGate';
@@ -84,7 +84,6 @@ import { VoiceInputCallbacks, VoiceInputService } from '../main/ets/services/Voi
 import { AppShellState } from '../main/ets/pages/state/AppShellState';
 import { ConversationCoreState } from '../main/ets/pages/state/ConversationCoreState';
 import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageState';
-import { RemoteCreateSessionState } from '../main/ets/pages/state/RemoteCreateSessionState';
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import { ConversationController } from '../main/ets/pages/viewmodel/ConversationController';
@@ -276,16 +275,33 @@ export default function conversationStateUnitTest() {
       expect(items[0].type).assertEqual('assistant_message');
     });
 
-    it('keeps active turn when matching persisted assistant has no final text yet', 0, () => {
+    it('uses one active row when matching persisted assistant has no final text yet', 0, () => {
       const activeTurn = activeChatMessage('turn-final-wait-1', 'final answer', 'completed');
       const pendingFinal = chatMessage('turn-final-wait-1_assistant', 'assistant', '');
       pendingFinal.text = 'Still reasoning';
       pendingFinal.thinking = 'Still reasoning';
       const items = ChatTimelineProjector.project([pendingFinal], [], activeTurn, false);
 
-      expect(items.length).assertEqual(2);
-      expect(items[1].type).assertEqual('assistant_live_turn');
-      expect(items[1].isFinalizing).assertEqual(true);
+      expect(items.length).assertEqual(1);
+      expect(items[0].type).assertEqual('assistant_live_turn');
+      expect(items[0].isFinalizing).assertEqual(true);
+      expect(ChatTimelineRevisionTracker.itemKey(items[0])).assertEqual('assistant_turn:turn-final-wait-1');
+    });
+
+    it('defensively reconciles duplicate assistant turn keys to one row', 0, () => {
+      const activeTurn = activeChatMessage('turn-row-duplicate-1', '', 'active');
+      const pendingFinal = chatMessage('turn-row-duplicate-1_assistant', 'assistant', 'Still reasoning');
+      pendingFinal.turnId = 'turn-row-duplicate-1';
+      pendingFinal.thinking = 'Still reasoning';
+      const persistedItems = ChatTimelineProjector.project([
+        pendingFinal
+      ], [], chatMessage('', 'assistant', ''), false);
+      const activeItems = ChatTimelineProjector.project([], [], activeTurn, false);
+      const rows = new ChatTimelineRowStore().reconcile([persistedItems[0], activeItems[0]]);
+
+      expect(rows.length).assertEqual(1);
+      expect(rows[0].type).assertEqual('assistant_live_turn');
+      expect(ChatTimelineRevisionTracker.itemKey(rows[0])).assertEqual('assistant_turn:turn-row-duplicate-1');
     });
 
     it('offers retry only for the latest unresolved failed message', 0, () => {
@@ -726,6 +742,42 @@ export default function conversationStateUnitTest() {
       expect(items[0].tool ? (items[0].tool.duration_ms || 0) : 0).assertEqual(50);
     });
 
+    it('preserves Task invocation metadata when a completion snapshot omits it', 0, () => {
+      const store = new ChatTimelineStore();
+      store.reset('session-1');
+      const first = activeChatMessage('turn-task-title-1', '');
+      first.items = [{
+        type: 'tool',
+        tool: {
+          id: 'task-1',
+          name: 'Task',
+          status: 'running',
+          input_preview: '{"description":"Read the README introduction"}'
+        }
+      }];
+      const second = activeChatMessage('turn-task-title-1', '', 'active', 2);
+      second.items = [{
+        type: 'tool',
+        tool: {
+          id: 'task-1',
+          name: 'Task',
+          status: 'completed',
+          result_preview: 'Done'
+        }
+      }];
+
+      store.setActiveTurn(first);
+      store.setActiveTurn(second);
+
+      const state = store.snapshot();
+      const items = state.activeTurn && state.activeTurn.items ? state.activeTurn.items : [];
+      const tool = items.length > 0 ? items[0].tool : undefined;
+      expect(tool ? (tool.status || '') : '').assertEqual('completed');
+      expect(tool ? (tool.input_preview || '') : '')
+        .assertEqual('{"description":"Read the README introduction"}');
+      expect(tool ? (tool.result_preview || '') : '').assertEqual('Done');
+    });
+
     it('clears active turn when persisted assistant id matches turn id', 0, () => {
       const store = new ChatTimelineStore();
       store.reset('session-1');
@@ -895,24 +947,19 @@ export default function conversationStateUnitTest() {
     it('keeps composer state isolated while the visible route changes', 0, () => {
       const general = new GeneralChatPageState();
       const remote = new RemotePageState();
-      const remoteCreate = new RemoteCreateSessionState();
       let route = AppRoute.ChatHome;
       const controller = new ConversationController(
         general,
         remote,
-        remoteCreate,
         { currentRoute: (): AppRoute => route }
       );
 
       controller.setChatInput(AppRoute.ChatHome, 'general draft');
       controller.setChatInput(AppRoute.RemoteChat, 'remote draft');
-      controller.setChatInput(AppRoute.RemoteCreate, 'create draft');
 
       expect(controller.visibleChatInput()).assertEqual('general draft');
       route = AppRoute.RemoteChat;
       expect(controller.visibleChatInput()).assertEqual('remote draft');
-      route = AppRoute.RemoteCreate;
-      expect(controller.visibleChatInput()).assertEqual('create draft');
       expect(general.chatInput).assertEqual('general draft');
       expect(remote.chatInput).assertEqual('remote draft');
     });
@@ -920,22 +967,18 @@ export default function conversationStateUnitTest() {
     it('clears voice state for every conversation surface on teardown', 0, () => {
       const general = new GeneralChatPageState();
       const remote = new RemotePageState();
-      const remoteCreate = new RemoteCreateSessionState();
       const controller = new ConversationController(
         general,
         remote,
-        remoteCreate,
-        { currentRoute: (): AppRoute => AppRoute.RemoteCreate }
+        { currentRoute: (): AppRoute => AppRoute.RemoteChat }
       );
       controller.setVoiceListening(AppRoute.ChatHome, true);
       controller.setVoiceListening(AppRoute.RemoteChat, true);
-      controller.setVoiceListening(AppRoute.RemoteCreate, true);
 
       controller.clearAllVoiceListening();
 
       expect(general.isVoiceListening).assertFalse();
       expect(remote.isVoiceListening).assertFalse();
-      expect(remoteCreate.isVoiceListening).assertFalse();
     });
   });
 

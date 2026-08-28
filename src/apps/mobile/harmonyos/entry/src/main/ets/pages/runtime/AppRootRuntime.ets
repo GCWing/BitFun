@@ -29,6 +29,8 @@ import {
 const DEVICE_PRESENCE_MAX_AGE_MS: number = 15000;
 
 export class AppRootRuntime extends AppRootRuntimeComposition {
+  private directorySelectionVersion: number = 0;
+
   constructor(host: AppRootHostPort) {
     super(host);
   }
@@ -237,13 +239,20 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   async selectDirectoryDevice(deviceId: string): Promise<void> {
+    const selectionVersion = ++this.directorySelectionVersion;
     await this.deviceDirectoryViewModel.selectDevice(deviceId);
+    if (selectionVersion !== this.directorySelectionVersion) {
+      return;
+    }
     const entry = this.deviceDirectoryState.find(deviceId);
     if (entry && !entry.online && !this.isConnectedDirectoryTarget(deviceId)) {
       return;
     }
     try {
       await this.conversationController.ensureRemoteControlTarget(deviceId);
+      if (selectionVersion !== this.directorySelectionVersion) {
+        return;
+      }
       this.filePreviewController.close();
       if (this.appShellState.wideLayout) {
         await this.enterRemoteSurfaceWide();

@@ -2,7 +2,6 @@ export enum AppRoute {
   ChatHome = 'ChatHome',
   GeneralChat = 'GeneralChat',
   RemoteHome = 'RemoteHome',
-  RemoteCreate = 'RemoteCreate',
   RemoteChat = 'RemoteChat'
 }
 
@@ -104,9 +103,6 @@ export class AppRouteContract {
       return AppNavigationBackAction.CloseActiveChat;
     }
     if (route === AppRoute.RemoteHome) {
-      return AppNavigationBackAction.PopRemoteHome;
-    }
-    if (route === AppRoute.RemoteCreate) {
       return AppNavigationBackAction.PopRemoteHome;
     }
     return AppNavigationBackAction.AllowSystem;

@@ -325,6 +325,53 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
   }
 }
 
+/** Holds one switch so a newer device choice can finish first. */
+class GatedAccountSessionManager extends ScriptedAccountSessionManager {
+  private releaseHeldSwitch: () => void = () => {};
+  private markHeldSwitchStarted: () => void = () => {};
+  private readonly heldSwitch: Promise<void>;
+  readonly heldSwitchStarted: Promise<void>;
+
+  constructor() {
+    super();
+    this.heldSwitch = new Promise<void>((resolve: () => void) => {
+      this.releaseHeldSwitch = resolve;
+    });
+    this.heldSwitchStarted = new Promise<void>((resolve: () => void) => {
+      this.markHeldSwitchStarted = resolve;
+    });
+  }
+
+  async connectAccountDevice(
+    _accountClient: CloudAccountClient,
+    _relayUrl: string,
+    session: CloudAccountSession,
+    targetDeviceId: string
+  ): Promise<InitialSyncResult> {
+    this.dialled.push(targetDeviceId);
+    if (targetDeviceId === 'desk-a') {
+      this.markHeldSwitchStarted();
+      await this.heldSwitch;
+    }
+    return {
+      workspace: {
+        path: `/w/${targetDeviceId}`,
+        name: targetDeviceId,
+        hasWorkspace: true,
+        gitBranch: 'main',
+        workspaceKind: 'normal'
+      },
+      sessions: [],
+      hasMoreSessions: false,
+      authenticatedUserId: session.userId
+    };
+  }
+
+  release(): void {
+    this.releaseHeldSwitch();
+  }
+}
+
 /** HUKS and preferences are not reachable from a local unit run. */
 class InMemoryCloudAccountSessionStore extends CloudAccountSessionStore {
   readonly saved: PersistedCloudAccountSession[] = [];
@@ -391,16 +438,22 @@ class WatchLoginFailureAccountClient extends CloudAccountClient {
 
 class AccountDeviceSwitchHarness {
   readonly remoteState: RemotePageState = new RemotePageState();
-  readonly sessionManager: ScriptedAccountSessionManager = new ScriptedAccountSessionManager();
+  readonly sessionManager: ScriptedAccountSessionManager;
   readonly sessionStore: InMemoryCloudAccountSessionStore = new InMemoryCloudAccountSessionStore();
   heartbeatStarts: number = 0;
   heartbeatStops: number = 0;
+  timelineResets: number = 0;
+  knownRemoteStateResets: number = 0;
   cachedRemoteClears: number = 0;
   settingsClosings: number = 0;
   readonly accountDeviceSnapshots: CloudAccountDevice[][] = [];
   readonly controller: SettingsController;
 
-  constructor(client: CloudAccountClient = new CloudAccountClient()) {
+  constructor(
+    client: CloudAccountClient = new CloudAccountClient(),
+    sessionManager: ScriptedAccountSessionManager = new ScriptedAccountSessionManager()
+  ) {
+    this.sessionManager = sessionManager;
     const hooks: CloudAccountSettingsHooks = {
       deviceId: (): string => 'phone',
       remoteAvailable: (): boolean => true,
@@ -410,8 +463,8 @@ class AccountDeviceSwitchHarness {
       stopPolling: (): void => {},
       stopHeartbeat: (): void => { this.heartbeatStops += 1; },
       startHeartbeat: (): void => { this.heartbeatStarts += 1; },
-      resetTimeline: (): void => {},
-      resetKnownRemoteState: (): void => {},
+      resetTimeline: (): void => { this.timelineResets += 1; },
+      resetKnownRemoteState: (): void => { this.knownRemoteStateResets += 1; },
       clearCachedRemoteData: async (): Promise<void> => { this.cachedRemoteClears += 1; },
       closeSettings: (): void => { this.settingsClosings += 1; },
       closeConnectSheet: (): void => {},
@@ -1068,6 +1121,23 @@ export default function transportAndGeneralChatUnitTest() {
       expect(outcome?.passwordRequired).assertTrue();
     });
 
+    it('asks for account confirmation when the watch is already registered', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(409));
+      // An expired QR pairing projects an empty username into the shared page
+      // state during startup. The cloud account identity must survive that UI
+      // projection because its encrypted session is still valid.
+      harness.remoteState.setAccountPairing(false, '');
+
+      const outcome = await harness.controller.provisionWatchCredential(
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'HarmonyOS Watch',
+        '12345678-1234-4234-8234-123456789abc'
+      );
+
+      expect(outcome !== undefined).assertTrue();
+      expect(outcome?.passwordRequired).assertTrue();
+    });
+
     it('does not treat an authorization refusal as a legacy relay', 0, async () => {
       const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(403));
 
@@ -1082,6 +1152,7 @@ export default function transportAndGeneralChatUnitTest() {
 
     it('reports a rejected compatibility login instead of deferring to the desktop', 0, async () => {
       const harness = new AccountDeviceSwitchHarness(new WatchLoginFailureAccountClient());
+      harness.remoteState.setAccountPairing(false, '');
       let statusCode = 0;
 
       try {
@@ -1179,6 +1250,71 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.cachedRemoteClears).assertEqual(1);
     });
 
+    it('atomically clears account-owned conversation state on logout', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      harness.remoteState.setControlTarget('account_device', 'desk-a', 'Desktop A');
+      harness.remoteState.setConnectionState('connected');
+      harness.remoteState.setActiveSession({
+        sessionId: 'session-a', title: 'Previous account', workspacePath: '/repo', agentType: 'code'
+      });
+      harness.remoteState.setStatusText(RemoteI18n.t('status.messagesSynced'));
+      harness.remoteState.setBusy(true);
+      harness.remoteState.setChatInput('unsent account draft');
+
+      await harness.controller.logoutCloudAccount();
+
+      expect(harness.controller.hasCloudAccountSession()).assertFalse();
+      expect(harness.remoteState.accountUserId).assertEqual('');
+      expect(harness.remoteState.controlTargetType).assertEqual('none');
+      expect(harness.remoteState.connectionState).assertEqual('disconnected');
+      expect(harness.remoteState.activeSession.sessionId).assertEqual('');
+      expect(harness.remoteState.statusText).assertEqual('');
+      expect(harness.remoteState.isBusy).assertFalse();
+      expect(harness.remoteState.chatInput).assertEqual('');
+      expect(harness.timelineResets).assertEqual(1);
+      expect(harness.knownRemoteStateResets).assertEqual(1);
+    });
+
+    it('clears an in-flight account switch even after its target was temporarily removed', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      harness.remoteState.clearControlTarget();
+      harness.remoteState.setConnectionState('reconnecting');
+      harness.remoteState.setLoadingHome(true);
+      harness.remoteState.setBusy(true);
+      harness.remoteState.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
+      harness.remoteState.setActiveSession({
+        sessionId: 'stale-session', title: 'Stale', workspacePath: '/stale', agentType: 'code'
+      });
+
+      await harness.controller.logoutCloudAccount();
+
+      expect(harness.remoteState.connectionState).assertEqual('disconnected');
+      expect(harness.remoteState.isLoadingHome).assertFalse();
+      expect(harness.remoteState.isBusy).assertFalse();
+      expect(harness.remoteState.statusText).assertEqual('');
+      expect(harness.remoteState.activeSession.sessionId).assertEqual('');
+      expect(harness.timelineResets).assertEqual(1);
+    });
+
+    it('does not leave a separately paired room half-connected after account logout', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      harness.remoteState.setControlTarget('room', 'room-device', 'Paired Desktop');
+      harness.remoteState.setConnectionState('connected');
+      harness.remoteState.setActiveSession({
+        sessionId: 'room-session', title: 'Paired room', workspacePath: '/room', agentType: 'code'
+      });
+      harness.remoteState.setStatusText('Room is connected');
+
+      await harness.controller.logoutCloudAccount();
+
+      expect(harness.remoteState.accountUserId).assertEqual('');
+      expect(harness.remoteState.controlTargetType).assertEqual('none');
+      expect(harness.remoteState.connectionState).assertEqual('disconnected');
+      expect(harness.remoteState.activeSession.sessionId).assertEqual('');
+      expect(harness.remoteState.statusText).assertEqual('');
+      expect(harness.timelineResets).assertEqual(1);
+    });
+
     it('puts the phone back on the previous desktop when a device switch fails', 0, async () => {
       const harness = new AccountDeviceSwitchHarness();
       harness.sessionManager.unreachable.add('desk-b');
@@ -1228,6 +1364,24 @@ export default function transportAndGeneralChatUnitTest() {
       await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
 
       expect(harness.settingsClosings).assertEqual(0);
+    });
+
+    it('keeps the newest device when an older switch completes late', 0, async () => {
+      const manager = new GatedAccountSessionManager();
+      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), manager);
+
+      const older = harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+      await manager.heldSwitchStarted;
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-b'), false);
+      manager.release();
+      await older;
+
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('desk-b');
+      expect(harness.remoteState.workspacePath).assertEqual('/w/desk-b');
+      expect(harness.remoteState.connectionState).assertEqual('connected');
+      expect(harness.sessionStore.saved.length).assertEqual(1);
+      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-b');
+      expect(manager.dialled.join(',')).assertEqual('desk-a,desk-b');
     });
   });
 
@@ -1584,6 +1738,29 @@ export default function transportAndGeneralChatUnitTest() {
       expect(projection.items[1].tool?.status || '').assertEqual('completed');
       expect(projection.items[2].content).assertEqual('after');
       expect(projection.tools.length).assertEqual(1);
+    });
+
+    it('keeps Task input metadata when a completion event only carries the result', 0, () => {
+      let projection = GeneralChatEventMapper.emptyProjection('chat-1', 'turn-1');
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'task-started', version: 1, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'tool.started',
+        tool: {
+          id: 'task-1', name: 'Task', status: 'running',
+          input_preview: '{"description":"Inspect the workspace"}'
+        }
+      });
+      projection = GeneralChatEventMapper.apply(projection, {
+        event_id: 'task-completed', version: 2, session_id: 'chat-1', turn_id: 'turn-1',
+        type: 'tool.completed',
+        tool: { id: 'task-1', name: 'Task', status: 'completed', result_preview: 'Done' }
+      });
+
+      expect(projection.tools[0].input_preview || '')
+        .assertEqual('{"description":"Inspect the workspace"}');
+      expect(projection.items[0].tool?.input_preview || '')
+        .assertEqual('{"description":"Inspect the workspace"}');
+      expect(projection.items[0].tool?.result_preview || '').assertEqual('Done');
     });
 
     it('projects permission and capability states and ignores late terminal events', 0, () => {

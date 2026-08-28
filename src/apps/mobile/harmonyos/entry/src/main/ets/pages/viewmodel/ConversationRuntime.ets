@@ -80,10 +80,6 @@ export function routeCreatedRemoteSession(
   if (remoteRuntime.appShell.isRoute(AppRoute.RemoteChat)) {
     return;
   }
-  if (remoteRuntime.appShell.isRoute(AppRoute.RemoteCreate)) {
-    remoteRuntime.appShell.replaceCurrentRoute(AppRoute.RemoteChat, sessionId);
-    return;
-  }
   remoteRuntime.appShell.pushRoute(AppRoute.RemoteChat, sessionId);
 }
 
