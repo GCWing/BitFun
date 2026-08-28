@@ -16,6 +16,7 @@ export interface PageHeaderProps
   headingClassName?: string;
   leading?: ReactNode;
   level?: 1 | 2 | 3 | 4 | 5 | 6;
+  required?: boolean;
   size?: "display" | "lg" | "md" | "sm";
   title: ReactNode;
 }
@@ -28,6 +29,7 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
   headingClassName,
   leading,
   level = 1,
+  required = false,
   size = "md",
   title,
   ...props
@@ -41,6 +43,7 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
       data-align={align}
       data-bf-component="page-header"
       data-level={level}
+      data-required={required ? "true" : "false"}
       data-size={size}
       ref={ref}
     >
@@ -52,6 +55,11 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
       <span className={styles.content} data-bf-part="content">
         <Heading className={classNames(styles.heading, headingClassName)} data-bf-part="heading">
           {title}
+          {required && (
+            <span aria-hidden="true" className={styles.required} data-bf-part="required">
+              *
+            </span>
+          )}
         </Heading>
         {description !== undefined && description !== null && (
           <span className={styles.description} data-bf-part="description">

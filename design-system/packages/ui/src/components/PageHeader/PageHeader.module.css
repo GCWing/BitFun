@@ -54,6 +54,11 @@
     font-size: var(--bf-font-size-display);
   }
 
+  .required {
+    margin-inline-start: var(--bf-space-1);
+    color: var(--bf-color-accent-default);
+  }
+
   .description {
     color: var(--bf-color-content-muted);
     font-family: var(--bf-font-family-sans);
@@ -70,5 +75,11 @@
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
+  }
+
+  @media (forced-colors: active) {
+    .required {
+      color: Highlight;
+    }
   }
 }

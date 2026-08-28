@@ -13,9 +13,11 @@ export const pageHeaderMeta = {
     { defaultValue: "1", name: "level", type: "1 | 2 | 3 | 4 | 5 | 6" },
     { defaultValue: "md", name: "size", type: "sm | md | lg | display" },
     { defaultValue: "start", name: "align", type: "start | center" },
+    { defaultValue: "false", name: "required", type: "boolean" },
   ],
   states: ["default"],
   tokens: [
+    "color.accent.default",
     "color.content.primary",
     "color.content.muted",
     "font.family.sans",
