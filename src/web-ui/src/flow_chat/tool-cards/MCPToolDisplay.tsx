@@ -4,11 +4,11 @@
  */
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CubeLoading, IconButton } from '../../component-library';
+import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { MCPAPI, MCP_APPS_PROTOCOL_VERSION, type McpUiResourceCsp, type McpUiResourcePermissions, type McpUiMessageParams, type McpUiMessageResult, type McpAppMessageEvent, type McpAppMessageResponseEvent } from '@/infrastructure/api/service-api/MCPAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -622,7 +622,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderHeader = () => (
-    <ToolCardHeader
+    <ProminentToolCardHeader
       icon={renderToolIcon()}
       iconClassName="mcp-icon"
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
@@ -638,22 +638,6 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               {contentSummary}
             </span>
           )}
-          
-          {!isFailed && hasContent && (
-            <IconButton
-              className="preview-toggle-btn"
-              variant="ghost"
-              size="xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpanded();
-              }}
-              tooltip={isExpanded ? t('toolCards.common.collapseContent') : t('toolCards.common.expandContent')}
-            >
-              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </IconButton>
-          )}
-          
           {isFailed && (
             <div className="error-expand-indicator">
               <span className="error-text">Failed</span>
@@ -748,7 +732,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       data-tool-card-id={toolId ?? ''}
       style={{ '--private-mcp-tool-identity-color': APPEARANCE_DOMAIN_TOKENS.toolIdentity.mcp } as React.CSSProperties}
     >
-      <BaseToolCard
+      <ProminentToolCard
         status={status}
         isExpanded={isExpanded}
         onClick={handleCardClick}

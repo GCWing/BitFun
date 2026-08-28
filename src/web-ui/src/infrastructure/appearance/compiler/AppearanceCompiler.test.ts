@@ -697,16 +697,6 @@ describe('AppearanceCompiler', () => {
             },
           },
         },
-        'file-operation-tool-card': {
-          parts: {
-            root: {
-              contexts: [{
-                when: { facets: { action: 'modify' }, states: ['expanded'] },
-                style: { borderColor: accent },
-              }],
-            },
-          },
-        },
         'acp-agents-config': {
           parts: {
             root: { facets: { view: { json: { backgroundColor: accent } } } },
@@ -845,11 +835,6 @@ describe('AppearanceCompiler', () => {
             expanded: { states: { expanded: { backgroundColor: accent } } },
           },
         },
-        'terminal-tool-card': {
-          parts: {
-            root: { facets: { status: { running: { borderColor: accent } } } },
-          },
-        },
         'skills-config': {
           parts: {
             marketItem: { states: { installed: { borderColor: accent } } },
@@ -878,14 +863,8 @@ describe('AppearanceCompiler', () => {
         'session-usage-report-card': {
           parts: { loading: { states: { loading: { backgroundColor: accent } } } },
         },
-        'ask-user-question-card': {
-          parts: { root: { states: { completed: { borderColor: accent } } } },
-        },
         'create-plan-display': {
           parts: { todos: { states: { expanded: { backgroundColor: accent } } } },
-        },
-        'exec-process-tool-card': {
-          parts: { waiting: { states: { waiting: { backgroundColor: accent } } } },
         },
         'editor-config': {
           parts: { saving: { states: { saving: { color: accent } } } },
@@ -952,7 +931,6 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="remote-connect-dialog"][data-bf-part="overviewAction"][data-bf-group="account"][data-bf-state~="authenticated"]');
     expect(snapshot.cssText).toContain('[data-bf-scene="agents"][data-bf-part="catalogGrid"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-usage-panel"][data-bf-part="tab"][data-bf-tab="models"][data-bf-state~="active"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="file-operation-tool-card"][data-bf-part="root"][data-bf-action="modify"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="acp-agents-config"][data-bf-part="root"][data-bf-view="json"]');
     expect(snapshot.cssText).toContain('[data-bf-component="acp-agents-config"][data-bf-part="remoteServer"]');
     expect(snapshot.cssText).toContain('[data-bf-component="tiptap-editor"][data-bf-part="inlineAiPanel"]');
@@ -982,7 +960,6 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="task-detail-panel"][data-bf-part="root"][data-bf-state~="empty"]');
     expect(snapshot.cssText).toContain('[data-bf-component="toolbar-mode"][data-bf-part="root"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="mcp-tool-display"][data-bf-part="expanded"][data-bf-state~="expanded"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="terminal-tool-card"][data-bf-part="root"][data-bf-status="running"]');
     expect(snapshot.cssText).toContain('[data-bf-component="skills-config"][data-bf-part="marketItem"][data-bf-state~="installed"]');
     expect(snapshot.cssText).toContain('[data-bf-component="diff-editor"][data-bf-part="loading"][data-bf-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-bf-component="agent-companion-desktop-pet"][data-bf-part="hitbox"][data-bf-state~="attention"]');
@@ -991,9 +968,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="export-image"][data-bf-part="trigger"][data-bf-state~="exporting"]');
     expect(snapshot.cssText).toContain('[data-bf-component="user-message-item"][data-bf-part="root"][data-bf-state~="failed"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-usage-report-card"][data-bf-part="loading"][data-bf-state~="loading"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="ask-user-question-card"][data-bf-part="root"][data-bf-state~="completed"]');
     expect(snapshot.cssText).toContain('[data-bf-component="create-plan-display"][data-bf-part="todos"][data-bf-state~="expanded"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="exec-process-tool-card"][data-bf-part="waiting"][data-bf-state~="waiting"]');
     expect(snapshot.cssText).toContain('[data-bf-component="editor-config"][data-bf-part="saving"][data-bf-state~="saving"]');
     expect(snapshot.cssText).toContain('[data-bf-component="workspace-project-permissions-dialog"][data-bf-part="rule"]');
     expect(snapshot.cssText).toContain('[data-bf-component="workspace-session-batch-modal"][data-bf-part="row"][data-bf-state~="selected"]');

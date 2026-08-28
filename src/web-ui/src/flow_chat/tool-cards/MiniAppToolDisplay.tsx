@@ -1,5 +1,5 @@
 /**
- * MiniAppToolDisplay — InitMiniApp result; layout aligned with GitToolDisplay (BaseToolCard).
+ * MiniAppToolDisplay — InitMiniApp result on the prominent FlowChat framework.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { Button } from '@bitfun/ui';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { AppWindow, ExternalLink } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import './MiniAppToolDisplay.scss';
@@ -86,7 +86,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   };
 
   const renderHeader = () => (
-    <ToolCardHeader
+    <ProminentToolCardHeader
       icon={<AppWindow size={16} />}
       iconClassName="miniapp-icon"
       action={`${t('toolCards.initMiniApp.title')}:`}
@@ -204,7 +204,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       data-app-id={appId || ''}
       data-expanded={isExpanded ? 'true' : 'false'}
     >
-      <BaseToolCard
+      <ProminentToolCard
         status={status}
         isExpanded={isExpanded}
         onClick={hasExpandableDetails ? handleCardClick : undefined}

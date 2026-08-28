@@ -22,6 +22,10 @@ export function createDesignSystemSourceAliases(command: 'serve' | 'build') {
 
   return [
     {
+      find: /^@bitfun\/ui\/flow-chat$/,
+      replacement: path.join(designSystemUiSourceDirectory, 'flow-chat.ts'),
+    },
+    {
       find: /^@bitfun\/ui\/registry$/,
       replacement: path.join(designSystemUiSourceDirectory, 'registry.ts'),
     },

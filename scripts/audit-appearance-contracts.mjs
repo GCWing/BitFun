@@ -303,10 +303,20 @@ function datasetPropertyForAttribute(attribute) {
   return attribute.replace(/^data-/, '').replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 }
 
+const sharedToolCardHostTags = new Set([
+  'AmbientToolCard',
+  'CommandToolCard',
+  'ContextCompressionToolCard',
+  'FileOperationCardView',
+  'FileOperationToolCard',
+  'ProminentToolCard',
+  'ReadFileToolCard',
+]);
+
 function analyzeStyledOwnerContract(file, source, visualClassIds) {
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let hasIntrinsicContract = false;
-  let hasBaseToolCardContract = false;
+  let hasSharedToolCardContract = false;
   let hasConfigPageLayoutContract = false;
   let styledIntrinsicNodeCount = 0;
   const declaredPartIds = new Set();
@@ -339,8 +349,8 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
       }
 
       const tagName = jsxTagName(node);
-      if (tagName === 'BaseToolCard') {
-        hasBaseToolCardContract = true;
+      if (sharedToolCardHostTags.has(tagName)) {
+        hasSharedToolCardContract = true;
       }
       if (tagName === 'ConfigPageLayout' && surface && part) {
         hasConfigPageLayoutContract = true;
@@ -356,7 +366,7 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
 
   return {
     hasIntrinsicContract,
-    hasBaseToolCardContract,
+    hasSharedToolCardContract,
     hasConfigPageLayoutContract,
     styledIntrinsicNodeCount,
     declaredPartIds,
@@ -665,14 +675,26 @@ for (const [file, source] of productionSources) {
   }
   for (const match of source.matchAll(/&(__[A-Za-z_][\w-]*)/g)) allVisualClassIds.add(match[1]);
 }
-const baseToolCardSource = sources.get(path.join(sourceRoot, 'flow_chat', 'tool-cards', 'BaseToolCard.tsx')) ?? '';
-if (!baseToolCardSource.includes('data-bf-component="tool-card"')
-  || !baseToolCardSource.includes('data-bf-part="root"')
-  || !baseToolCardSource.includes('data-bf-part="surface"')
-  || !baseToolCardSource.includes('data-bf-part="header"')
-  || !baseToolCardSource.includes('data-bf-part="expanded"')
-  || !baseToolCardSource.includes('data-bf-part="error"')) {
-  failures.push('BaseToolCard must project the shared multi-part tool-card Appearance contract');
+const flowChatToolCardFile = path.join(
+  repoRoot,
+  'design-system',
+  'packages',
+  'ui',
+  'src',
+  'flow-chat',
+  'tool-cards',
+  'FlowChatToolCard.tsx',
+);
+const flowChatToolCardSource = fs.existsSync(flowChatToolCardFile)
+  ? fs.readFileSync(flowChatToolCardFile, 'utf8')
+  : '';
+if (!flowChatToolCardSource.includes('data-bf-component="flow-chat-tool-card"')
+  || !flowChatToolCardSource.includes('data-bf-part="root"')
+  || !flowChatToolCardSource.includes('data-bf-part="surface"')
+  || !flowChatToolCardSource.includes('data-bf-part="header"')
+  || !flowChatToolCardSource.includes('part: "error" | "expanded"')
+  || !flowChatToolCardSource.includes('data-bf-part={part}')) {
+  failures.push('@bitfun/ui FlowChat tool cards must project the shared multi-part Appearance contract');
 }
 const configPageLayoutSource = sources.get(path.join(sourceRoot, 'infrastructure', 'config', 'components', 'common', 'ConfigPageLayout.tsx')) ?? '';
 if (!configPageLayoutSource.includes('...props')
@@ -685,7 +707,7 @@ for (const [file, source] of styledProductionTsx) {
   const visualClassIds = importedVisualClassIds(file, source);
   const contract = analyzeStyledOwnerContract(file, source, visualClassIds);
   if (!contract.hasIntrinsicContract
-    && !contract.hasBaseToolCardContract
+    && !contract.hasSharedToolCardContract
     && !contract.hasConfigPageLayoutContract) {
     failures.push(`${relative(file)}: styled production component must expose a direct DOM Appearance contract or an approved host-forwarded contract`);
     continue;
@@ -712,7 +734,7 @@ for (const [file, source] of productionCodeSources.filter(([candidate]) => candi
   if (styledProductionTsx.some(([styledFile]) => styledFile === file)) continue;
   const contract = analyzeStyledOwnerContract(file, source, allVisualClassIds);
   if (contract.usedVisualClassIds.size < 8 || contract.hasIntrinsicContract
-    || contract.hasBaseToolCardContract || contract.hasConfigPageLayoutContract) continue;
+    || contract.hasSharedToolCardContract || contract.hasConfigPageLayoutContract) continue;
   warnings.push(`${relative(file)}: uses ${contract.usedVisualClassIds.size} shared visual classes without a direct Appearance contract; review whether it needs a dedicated surface`);
 }
 

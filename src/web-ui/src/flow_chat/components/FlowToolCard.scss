@@ -1,0 +1,33 @@
+.flowchat-flow-item,
+.flowchat-tool-wrapper {
+  margin: 0 0 var(--bf-appearance-token-flowchat-card-gap) 0;
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+}
+
+.flow-tool-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
+}
+
+.flow-tool-card-note {
+  margin-inline-start: 0;
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-font-size-small);
+  line-height: var(--bf-line-height-base);
+  opacity: var(--bf-opacity-muted);
+}
+
+.flow-tool-card-wrapper--permission-pending > :first-child {
+  outline: var(--bf-border-width-default) solid var(--bf-color-status-warning-border);
+  outline-offset: calc(-1 * var(--bf-border-width-default));
+  border-radius: var(--bf-radius-lg);
+  background: var(--bf-color-status-warning-surface);
+}
+
+@media (forced-colors: active) {
+  .flow-tool-card-wrapper--permission-pending > :first-child {
+    outline-color: Highlight;
+  }
+}

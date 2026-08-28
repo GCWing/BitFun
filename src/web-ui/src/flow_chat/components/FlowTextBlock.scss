@@ -9,7 +9,7 @@
   margin: 0 0 var(--bf-appearance-token-flowchat-flow-item-gap) 0;
   font-size: var(--bf-appearance-token-flowchat-font-size-base);
   line-height: var(--bf-appearance-token-flowchat-text-line-height);
-  /* Transparent border to match the box-sizing of bordered cards (BaseToolCard,
+  /* Transparent border to match the box-sizing of bordered FlowChat cards,
    * TerminalRegion, etc.) so that text and card content share the same left edge. */
   border: 1px solid transparent;
   box-sizing: border-box;

@@ -1,18 +1,29 @@
 /**
- * AskUserQuestion tool card component
- * Displays multiple questions, collects user answers and submits them
+ * Product adapter for the public AskUser design-system component.
+ *
+ * This file owns tool payload parsing, per-surface draft persistence,
+ * localization, submission, and FlowChat virtualization coordination.
+ * AskUser owns the rendered anatomy, interaction semantics, and styling.
  */
 
-import { Button } from '@bitfun/ui';
-import React, { useState, useCallback, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
-import { Loader2, AlertCircle, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  AskUser,
+  type AskUserAnswers,
+  type AskUserQuestion,
+  type AskUserState,
+} from '@bitfun/ui/flow-chat';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@/component-library';
-import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
+import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import {
   askUserQuestionDraftKey,
   askUserQuestionDraftStore,
@@ -20,78 +31,92 @@ import {
   useAskUserQuestionDraftStore,
   type AskUserQuestionSubmissionPhase,
 } from '../store/askUserQuestionDraftStore';
-import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
-import './AskUserQuestionCard.scss';
+import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 const log = createLogger('AskUserQuestionCard');
+const OTHER_OPTION_VALUE = 'Other';
 
 interface QuestionOption {
-  label: string;
   description: string;
+  label: string;
 }
 
 interface QuestionData {
-  question: string;
   header: string;
-  options: QuestionOption[];
   multiSelect: boolean;
+  options: QuestionOption[];
+  question: string;
 }
 
-/** Renders option description with tooltip for truncated text */
-const OptionDescription: React.FC<{ description: string }> = ({ description }) => {
-  const descRef = useRef<HTMLDivElement>(null);
-  const [isTruncated, setIsTruncated] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = descRef.current;
-    if (el) {
-      setIsTruncated(el.scrollWidth > el.clientWidth);
-    }
-  }, [description]);
-
-  const descElement = (
-    <div ref={descRef} className="option-description">{description}</div>
-  );
-
-  if (isTruncated) {
-    return (
-      <Tooltip content={description} placement="top" delay={300}>
-        {descElement}
-      </Tooltip>
-    );
-  }
-
-  return descElement;
-};
+type ToolAnswer = string | string[];
 
 function normalizeQuestionsFromParams(input: unknown): QuestionData[] {
   if (!input || typeof input !== 'object') return [];
-  const raw = input as Record<string, unknown>;
-  const qs = raw.questions;
-  if (!Array.isArray(qs)) return [];
-  return qs.map((q: any) => ({
-    question: q.question || '',
-    header: q.header || '',
-    options: Array.isArray(q.options) ? q.options : [],
-    multiSelect: Boolean(q.multiSelect),
-  }));
+  const rawQuestions = (input as Record<string, unknown>).questions;
+  if (!Array.isArray(rawQuestions)) return [];
+
+  return rawQuestions.flatMap((candidate): QuestionData[] => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const rawQuestion = candidate as Record<string, unknown>;
+    const rawOptions = Array.isArray(rawQuestion.options)
+      ? rawQuestion.options
+      : [];
+    const options = rawOptions.flatMap((option): QuestionOption[] => {
+      if (!option || typeof option !== 'object') return [];
+      const rawOption = option as Record<string, unknown>;
+      if (typeof rawOption.label !== 'string') return [];
+      return [{
+        description: typeof rawOption.description === 'string'
+          ? rawOption.description
+          : '',
+        label: rawOption.label,
+      }];
+    });
+
+    return [{
+      header: typeof rawQuestion.header === 'string' ? rawQuestion.header : '',
+      multiSelect: Boolean(rawQuestion.multiSelect),
+      options,
+      question: typeof rawQuestion.question === 'string'
+        ? rawQuestion.question
+        : '',
+    }];
+  });
+}
+
+function normalizeToolResult(input: unknown): Record<string, unknown> | null {
+  if (input === null || input === undefined) return null;
+  try {
+    const parsed = typeof input === 'string' ? JSON.parse(input) : input;
+    return parsed && typeof parsed === 'object'
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeToolAnswer(input: unknown): ToolAnswer | undefined {
+  if (typeof input === 'string') return input;
+  if (Array.isArray(input)) {
+    return input.filter((value): value is string => typeof value === 'string');
+  }
+  return undefined;
 }
 
 /** Same source as FileOperationToolCard: partial JSON while streaming, then final toolCall.input. */
 function isAwaitingQuestionPayload(
   questionsLength: number,
   isParamsStreaming: boolean | undefined,
-  status: FlowToolItem['status']
+  status: FlowToolItem['status'],
 ): boolean {
   if (questionsLength > 0) return false;
   if (isParamsStreaming) return true;
-  const s = status as string;
-  return (
-    status === 'preparing' ||
-    status === 'streaming' ||
-    status === 'pending' ||
-    s === 'receiving'
-  );
+  const rawStatus = status as string;
+  return status === 'preparing'
+    || status === 'streaming'
+    || status === 'pending'
+    || rawStatus === 'receiving';
 }
 
 export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
@@ -101,19 +126,17 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult, isParamsStreaming, partialParams } = toolItem;
-
   const paramsSource = partialParams || toolCall?.input;
   const questions = useMemo(
     () => normalizeQuestionsFromParams(paramsSource),
-    [paramsSource]
+    [paramsSource],
   );
-
   const awaitingPayload = isAwaitingQuestionPayload(
     questions.length,
     isParamsStreaming,
-    status
+    status,
   );
-  
+
   const toolId = toolItem.id ?? toolCall?.id;
   const draftToolId = toolCall?.id || toolId;
   const activeSurfaceId = getActiveSurfaceId();
@@ -123,11 +146,10 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       : null,
     [activeSurfaceId, draftToolId, sessionId],
   );
-  const storedDraft = useAskUserQuestionDraftStore(state => (
+  const storedDraft = useAskUserQuestionDraftStore((state) => (
     draftKey ? state.drafts[draftKey] : undefined
   ));
   const [localDraft, setLocalDraft] = useState(createEmptyAskUserQuestionDraft);
-  const composingOtherInputsRef = useRef(new Set<number>());
   const draft = storedDraft ?? localDraft;
   const { answers, otherInputs, submissionPhase } = draft;
   const isSubmitting = submissionPhase === 'submitting';
@@ -140,10 +162,9 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
   });
 
   useLayoutEffect(() => {
-    const shouldCompactCompleted =
-      status === 'completed' &&
-      isLastItem !== true &&
-      !showCompletedSummary;
+    const shouldCompactCompleted = status === 'completed'
+      && isLastItem !== true
+      && !showCompletedSummary;
 
     if (shouldCompactCompleted) {
       applyExpandedState(true, false, (nextExpanded) => {
@@ -176,7 +197,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       askUserQuestionDraftStore.getState().setSubmissionPhase(draftKey, phase);
       return;
     }
-    setLocalDraft(current => ({
+    setLocalDraft((current) => ({
       ...current,
       submissionPhase: phase,
       updatedAt: Date.now(),
@@ -185,17 +206,17 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
 
   const isAllAnswered = useCallback(() => {
     if (questions.length === 0) return false;
-    
-    for (let i = 0; i < questions.length; i++) {
-      const answer = answers[i];
+
+    for (let index = 0; index < questions.length; index += 1) {
+      const answer = answers[index];
       if (!answer) return false;
-      const otherInput = otherInputs[i]?.trim() || '';
+      const otherInput = otherInputs[index]?.trim() || '';
       if (
         Array.isArray(answer)
-        && !answer.some(value => value !== 'Other' || otherInput.length > 0)
+        && !answer.some((value) => value !== OTHER_OPTION_VALUE || otherInput.length > 0)
       ) return false;
       if (typeof answer === 'string' && answer === '') return false;
-      if (answer === 'Other' && otherInput.length === 0) return false;
+      if (answer === OTHER_OPTION_VALUE && otherInput.length === 0) return false;
     }
     return true;
   }, [answers, otherInputs, questions.length]);
@@ -205,7 +226,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       askUserQuestionDraftStore.getState().setSingleAnswer(draftKey, questionIndex, value);
       return;
     }
-    setLocalDraft(current => ({
+    setLocalDraft((current) => ({
       ...current,
       answers: {
         ...current.answers,
@@ -215,7 +236,11 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     }));
   }, [draftKey]);
 
-  const handleMultiChange = useCallback((questionIndex: number, value: string, checked: boolean) => {
+  const handleMultiChange = useCallback((
+    questionIndex: number,
+    value: string,
+    checked: boolean,
+  ) => {
     if (draftKey) {
       askUserQuestionDraftStore.getState().setMultiAnswer(
         draftKey,
@@ -225,12 +250,12 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       );
       return;
     }
-    setLocalDraft(current => {
+    setLocalDraft((current) => {
       const currentAnswer = current.answers[questionIndex];
       const currentValues = Array.isArray(currentAnswer) ? currentAnswer : [];
       const nextValues = checked
-        ? (currentValues.includes(value) ? currentValues : [...currentValues, value])
-        : currentValues.filter(candidate => candidate !== value);
+        ? currentValues.includes(value) ? currentValues : [...currentValues, value]
+        : currentValues.filter((candidate) => candidate !== value);
       return {
         ...current,
         answers: {
@@ -256,7 +281,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
       );
       return;
     }
-    setLocalDraft(current => {
+    setLocalDraft((current) => {
       const isEmpty = value.trim().length === 0;
       const currentAnswer = current.answers[questionIndex];
       let nextAnswers = current.answers;
@@ -264,13 +289,17 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
         isEmpty
         && !preserveOtherSelection
         && Array.isArray(currentAnswer)
-        && currentAnswer.includes('Other')
+        && currentAnswer.includes(OTHER_OPTION_VALUE)
       ) {
         nextAnswers = {
           ...current.answers,
-          [questionIndex]: currentAnswer.filter(answer => answer !== 'Other'),
+          [questionIndex]: currentAnswer.filter((answer) => answer !== OTHER_OPTION_VALUE),
         };
-      } else if (isEmpty && !preserveOtherSelection && currentAnswer === 'Other') {
+      } else if (
+        isEmpty
+        && !preserveOtherSelection
+        && currentAnswer === OTHER_OPTION_VALUE
+      ) {
         nextAnswers = { ...current.answers };
         delete nextAnswers[questionIndex];
       }
@@ -292,354 +321,249 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     setSubmissionPhase('submitting');
     try {
       const processedAnswers: Record<string, string | string[]> = {};
-      
-      for (let i = 0; i < questions.length; i++) {
-        const answer = answers[i];
-        const otherInput = otherInputs[i]?.trim() || '';
-        
+
+      for (let index = 0; index < questions.length; index += 1) {
+        const answer = answers[index];
+        const otherInput = otherInputs[index]?.trim() || '';
+
         if (Array.isArray(answer)) {
-          processedAnswers[String(i)] = answer.flatMap(value => (
-            value === 'Other'
-              ? (otherInput ? [otherInput] : [])
+          processedAnswers[String(index)] = answer.flatMap((value) => (
+            value === OTHER_OPTION_VALUE
+              ? otherInput ? [otherInput] : []
               : [value]
           ));
-        } else if (answer === 'Other') {
-          if (otherInput) {
-            processedAnswers[String(i)] = otherInput;
-          }
+        } else if (answer === OTHER_OPTION_VALUE) {
+          if (otherInput) processedAnswers[String(index)] = otherInput;
         } else {
-          processedAnswers[String(i)] = answer;
+          processedAnswers[String(index)] = answer;
         }
       }
 
-      const answersPayload = processedAnswers;
-      
-      await toolAPI.submitUserAnswers(toolId, answersPayload);
-      
+      await toolAPI.submitUserAnswers(toolId, processedAnswers);
       setSubmissionPhase('submitted');
     } catch (error) {
       log.error('Failed to submit answers', { toolId, error });
       setSubmissionPhase('idle');
     }
-  }, [answers, isAllAnswered, isSubmitted, isSubmitting, otherInputs, questions.length, setSubmissionPhase, toolId]);
+  }, [
+    answers,
+    isAllAnswered,
+    isSubmitted,
+    isSubmitting,
+    otherInputs,
+    questions.length,
+    setSubmissionPhase,
+    toolId,
+  ]);
 
-  const getStatusIcon = () => {
-    if (status === 'completed') {
-      return null;
-    }
-    if (isSubmitting) {
-      return <Loader2 size={16} className="status-icon-loading animate-spin" />;
-    }
-    return <AlertCircle size={16} className="status-icon-waiting" />;
-  };
+  const normalizedResult = useMemo(
+    () => normalizeToolResult(toolResult?.result),
+    [toolResult?.result],
+  );
+  const resultAnswers = normalizedResult?.answers;
 
-  const getStatusText = () => {
-    if (status === 'completed') return t('toolCards.askUser.completed');
-    if (isSubmitted) return t('toolCards.askUser.submittedWaiting');
-    if (isSubmitting) return t('toolCards.askUser.submitting');
-    return t('toolCards.askUser.waitingAnswer');
-  };
-
-  const getEffectiveAnswer = useCallback((questionIndex: number): string | string[] | undefined => {
+  const getEffectiveAnswer = useCallback((questionIndex: number): ToolAnswer | undefined => {
     const localAnswer = answers[questionIndex];
     if (localAnswer !== undefined) return localAnswer;
-
-    if (status === 'completed' && toolResult?.result) {
-      const result = typeof toolResult.result === 'string'
-        ? JSON.parse(toolResult.result)
-        : toolResult.result;
-      return result?.answers?.[String(questionIndex)];
-    }
-    return undefined;
-  }, [answers, status, toolResult]);
-
-  const renderQuestion = (q: QuestionData, questionIndex: number) => {
-    const answer = getEffectiveAnswer(questionIndex);
-    const otherInput = otherInputs[questionIndex] || '';
-    
-    const isOtherSelected = q.multiSelect 
-      ? Array.isArray(answer) && answer.includes('Other')
-      : answer === 'Other';
-
-    const inputName = `question-${questionIndex}`;
-
-    return (
-      <div data-bf-component="ask-user-question-card" data-bf-part="question" key={questionIndex} className="ask-question-item">
-        <div className="question-item-header" data-bf-component="ask-user-question-card" data-bf-part="header">
-          <span className="question-header-chip">{q.header}</span>
-          <span className="question-text">{q.question}</span>
-        </div>
-        
-        <div className="question-options" data-bf-component="ask-user-question-card" data-bf-part="options">
-          {q.options.map((option, optIdx) => (
-            <label key={optIdx} className="option-label" data-bf-component="ask-user-question-card" data-bf-part="option">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value={option.label}
-                    checked={Array.isArray(answer) && answer.includes(option.label)}
-                    onChange={(e) => handleMultiChange(questionIndex, option.label, e.target.checked)}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value={option.label}
-                    checked={answer === option.label}
-                    onChange={(e) => handleSingleChange(questionIndex, e.target.value)}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <div className="option-content">
-                <div className="option-label-text">{option.label}</div>
-                <OptionDescription description={option.description} />
-              </div>
-            </label>
-          ))}
-          
-          {!isOtherSelected ? (
-            <label className="option-label option-other" data-bf-component="ask-user-question-card" data-bf-part="option">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value="Other"
-                    checked={false}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        handleMultiChange(questionIndex, 'Other', true);
-                      }
-                    }}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value="Other"
-                    checked={false}
-                    onChange={() => handleSingleChange(questionIndex, 'Other')}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <div className="option-content">
-                <div className="option-label-text">{t('toolCards.askUser.other')}</div>
-                <div className="option-description">{t('toolCards.askUser.customInputHint')}</div>
-              </div>
-            </label>
-          ) : (
-            <div className="option-other-input" data-bf-component="ask-user-question-card" data-bf-part="customInput">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value="Other"
-                    checked={true}
-                    onChange={(e) => {
-                      if (!e.target.checked) {
-                        handleMultiChange(questionIndex, 'Other', false);
-                      }
-                    }}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value="Other"
-                    checked={true}
-                    onChange={() => {}}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <input
-                type="text"
-                className="other-input-inline"
-                placeholder={t('toolCards.askUser.pleaseSpecify')}
-                value={otherInput}
-                onChange={(e) => handleOtherInputChange(
-                  questionIndex,
-                  e.target.value,
-                  composingOtherInputsRef.current.has(questionIndex)
-                    || (e.nativeEvent as InputEvent).isComposing,
-                )}
-                onCompositionStart={() => {
-                  composingOtherInputsRef.current.add(questionIndex);
-                }}
-                onCompositionEnd={(e) => {
-                  // WebKit can emit the final input event immediately after
-                  // compositionend. Keep Other selected through that event so
-                  // a transient empty IME value cannot unmount this input.
-                  handleOtherInputChange(questionIndex, e.currentTarget.value, true);
-                  queueMicrotask(() => {
-                    composingOtherInputsRef.current.delete(questionIndex);
-                  });
-                }}
-                disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                autoFocus
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const getAnswerDisplay = (questionIndex: number): string => {
-    const answer = getEffectiveAnswer(questionIndex);
-    const otherInput = otherInputs[questionIndex] || '';
-    
-    if (!answer) return '';
-    if (Array.isArray(answer)) {
-      return answer.map(value => value === 'Other' ? otherInput || 'Other' : value).join(', ');
-    }
-    return answer === 'Other' ? otherInput || 'Other' : String(answer);
-  };
-
-  const getAnswersSummary = (): string => {
-    return questions.map((q, idx) => {
-      const answerText = getAnswerDisplay(idx);
-      return `${q.header}: ${answerText || t('toolCards.askUser.notAnswered')}`;
-    }).join(' | ');
-  };
-
-  const renderResult = () => {
-    if (!toolResult?.result) return null;
-    
-    const result = typeof toolResult.result === 'string' 
-      ? JSON.parse(toolResult.result) 
-      : toolResult.result;
-    
-    if (result.status === 'timeout') {
-      return (
-        <div data-bf-component="ask-user-question-card" data-bf-part="status" className="result-timeout">
-          <AlertCircle size={16} />
-          <span>{t('toolCards.askUser.timeout')}</span>
-        </div>
+    if (
+      status === 'completed'
+      && resultAnswers
+      && typeof resultAnswers === 'object'
+      && !Array.isArray(resultAnswers)
+    ) {
+      return normalizeToolAnswer(
+        (resultAnswers as Record<string, unknown>)[String(questionIndex)],
       );
     }
-    
-    return null;
-  };
+    return undefined;
+  }, [answers, resultAnswers, status]);
+
+  const presentation = useMemo(() => {
+    const nextAnswers: Record<string, readonly string[]> = {};
+    const nextCustomAnswers: Record<string, string> = {};
+
+    questions.forEach((question, questionIndex) => {
+      const answer = getEffectiveAnswer(questionIndex);
+      const answerValues = Array.isArray(answer)
+        ? answer
+        : answer === undefined || answer === '' ? [] : [answer];
+      const knownValues = new Set(question.options.map((option) => option.label));
+      const selectedValues: string[] = [];
+      const customValues: string[] = [];
+
+      answerValues.forEach((value) => {
+        if (value === OTHER_OPTION_VALUE) {
+          selectedValues.push(OTHER_OPTION_VALUE);
+        } else if (knownValues.has(value)) {
+          selectedValues.push(value);
+        } else if (value) {
+          if (!selectedValues.includes(OTHER_OPTION_VALUE)) {
+            selectedValues.push(OTHER_OPTION_VALUE);
+          }
+          customValues.push(value);
+        }
+      });
+
+      nextAnswers[String(questionIndex)] = selectedValues;
+      nextCustomAnswers[String(questionIndex)] = otherInputs[questionIndex]
+        || customValues.join(', ');
+    });
+
+    return {
+      answers: nextAnswers as AskUserAnswers,
+      customAnswers: nextCustomAnswers,
+    };
+  }, [getEffectiveAnswer, otherInputs, questions]);
+
+  const designQuestions = useMemo<AskUserQuestion[]>(
+    () => questions.map((question, questionIndex) => ({
+      customOption: {
+        description: t('toolCards.askUser.customInputHint'),
+        inputLabel: t('toolCards.askUser.pleaseSpecify'),
+        label: t('toolCards.askUser.other'),
+        placeholder: t('toolCards.askUser.pleaseSpecify'),
+        value: OTHER_OPTION_VALUE,
+      },
+      id: String(questionIndex),
+      options: question.options.map((option) => ({
+        description: option.description,
+        label: option.label,
+        value: option.label,
+      })),
+      prompt: question.question,
+      selectionMode: question.multiSelect ? 'multiple' : 'single',
+    })),
+    [questions, t],
+  );
+
+  const handleAnswersChange = useCallback((
+    questionId: string,
+    nextValues: readonly string[],
+  ) => {
+    const questionIndex = Number(questionId);
+    const question = questions[questionIndex];
+    if (!question || !Number.isInteger(questionIndex)) return;
+
+    if (!question.multiSelect) {
+      handleSingleChange(questionIndex, nextValues[0] ?? '');
+      return;
+    }
+
+    const currentAnswer = answers[questionIndex];
+    const currentValues = Array.isArray(currentAnswer) ? currentAnswer : [];
+    const changedValue = [...new Set([...currentValues, ...nextValues])]
+      .find((value) => currentValues.includes(value) !== nextValues.includes(value));
+    if (changedValue !== undefined) {
+      handleMultiChange(questionIndex, changedValue, nextValues.includes(changedValue));
+    }
+  }, [answers, handleMultiChange, handleSingleChange, questions]);
+
+  const getAnswerDisplay = useCallback((questionIndex: number): string => {
+    const answer = getEffectiveAnswer(questionIndex);
+    const otherInput = otherInputs[questionIndex] || '';
+    if (!answer) return '';
+    if (Array.isArray(answer)) {
+      return answer.map((value) => (
+        value === OTHER_OPTION_VALUE ? otherInput || OTHER_OPTION_VALUE : value
+      )).join(', ');
+    }
+    return answer === OTHER_OPTION_VALUE
+      ? otherInput || OTHER_OPTION_VALUE
+      : String(answer);
+  }, [getEffectiveAnswer, otherInputs]);
+
+  const answersSummary = useMemo(
+    () => questions.map((question, questionIndex) => {
+      const answerText = getAnswerDisplay(questionIndex);
+      const label = question.header || question.question;
+      return `${label}: ${answerText || t('toolCards.askUser.notAnswered')}`;
+    }).join(' | '),
+    [getAnswerDisplay, questions, t],
+  );
+
+  const statusText = status === 'completed'
+    ? t('toolCards.askUser.completed')
+    : isSubmitted
+      ? t('toolCards.askUser.submittedWaiting')
+      : isSubmitting
+        ? t('toolCards.askUser.submitting')
+        : t('toolCards.askUser.waitingAnswer');
 
   if (awaitingPayload) {
     return (
-      <div data-bf-component="ask-user-question-card" data-bf-part="loading" data-bf-state="loading"
-        ref={cardRootRef}
+      <AskUser
         data-tool-card-id={toolId ?? ''}
-        className={`ask-user-question-card params-loading status-${status}`}
-      >
-        <div className="params-loading-row">
-          <Loader2 size={16} className="status-icon-loading animate-spin" />
-          <span className="params-loading-text">{t('toolCards.askUser.loadingQuestions')}</span>
-        </div>
-      </div>
+        questions={[]}
+        ref={cardRootRef}
+        state="loading"
+        statusLabel={t('toolCards.askUser.loadingQuestions')}
+      />
     );
   }
 
   if (questions.length === 0) {
     return (
-      <div data-bf-component="ask-user-question-card" data-bf-part="root" data-bf-state="error" className="ask-user-question-card status-error">
-        <div className="error-message" data-bf-component="ask-user-question-card" data-bf-part="error">{t('toolCards.askUser.parseError')}</div>
-      </div>
+      <AskUser
+        data-tool-card-id={toolId ?? ''}
+        questions={[]}
+        ref={cardRootRef}
+        state="error"
+        statusLabel={t('toolCards.askUser.parseError')}
+      />
     );
   }
 
+  const timedOut = normalizedResult?.status === 'timeout';
+  const componentState: AskUserState = timedOut
+    ? 'timeout'
+    : status === 'completed'
+      ? 'completed'
+      : isSubmitting
+        ? 'submitting'
+        : isSubmitted
+          ? 'submitted'
+          : 'asking';
+  const showSubmit = componentState === 'asking'
+    || componentState === 'submitting'
+    || componentState === 'submitted';
+
   return (
-    <div data-bf-component="ask-user-question-card" data-bf-part="root"
-      data-bf-state={status === 'completed' ? 'completed' : undefined}
-      ref={cardRootRef}
+    <AskUser
+      answers={presentation.answers}
+      aria-label={t('toolCards.askUser.questionsCount', { count: questions.length })}
+      customAnswers={presentation.customAnswers}
       data-tool-card-id={toolId ?? ''}
-      className={`ask-user-question-card status-${status}`}
-    >
-      {!showCompletedSummary ? (
-        <>
-          <div className="card-header-row" data-bf-component="ask-user-question-card" data-bf-part="header">
-            <div className="card-title">
-              <span className="questions-count">{t('toolCards.askUser.questionsCount', { count: questions.length })}</span>
-            </div>
-          </div>
-
-          <div className="questions-container" data-bf-component="ask-user-question-card" data-bf-part="questions">
-            {questions.map((q, idx) => renderQuestion(q, idx))}
-          </div>
-
-          <div className="card-footer-row" data-bf-component="ask-user-question-card" data-bf-part="footer">
-            <div className="footer-actions">
-              <Button
-                variant="fill"
-                size="sm"
-                leadingIcon={<ArrowUp size={14} />}
-                onClick={handleSubmit}
-                disabled={!isAllAnswered() || isSubmitting || isSubmitted || Boolean(isParamsStreaming)}
-                loading={isSubmitting}
-                title={!isAllAnswered() ? t('toolCards.askUser.answerAllBeforeSubmit') : ""}
-              >
-                {isSubmitting ? (
-                  <span>{t('toolCards.askUser.submitting')}</span>
-                ) : (
-                  <span>{t('toolCards.askUser.submit')}</span>
-                )}
-              </Button>
-              <div className="tool-status" data-bf-component="ask-user-question-card" data-bf-part="status">
-                {getStatusIcon()}
-                <span className="status-text">{getStatusText()}</span>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div 
-            className="completed-summary"
-            data-bf-component="ask-user-question-card"
-            data-bf-part="summary"
-            onClick={() => applyExpandedState(isExpanded, !isExpanded, setIsExpanded)}
-          >
-            <div className="summary-content">
-              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <span className="summary-questions-count">{t('toolCards.askUser.questionsAnswered', { count: questions.length })}</span>
-              <span className="summary-arrow">→</span>
-              <span className="summary-answer">{getAnswersSummary()}</span>
-            </div>
-            <div className="tool-status">
-              {getStatusIcon()}
-              <span className="status-text">{getStatusText()}</span>
-            </div>
-          </div>
-
-          <SmoothHeightCollapse
-            isOpen={isExpanded}
-            className="ask-user-question-card__answers-collapse"
-          >
-            <div className="questions-container expanded" data-bf-component="ask-user-question-card" data-bf-part="questions">
-              {questions.map((q, idx) => renderQuestion(q, idx))}
-            </div>
-          </SmoothHeightCollapse>
-
-          {renderResult()}
-        </>
-      )}
-    </div>
+      disabled={Boolean(isParamsStreaming)}
+      expanded={showCompletedSummary ? isExpanded : undefined}
+      header={showCompletedSummary
+        ? undefined
+        : t('toolCards.askUser.questionsCount', { count: questions.length })}
+      onAnswersChange={handleAnswersChange}
+      onCustomAnswerChange={(questionId, value, meta) => {
+        handleOtherInputChange(Number(questionId), value, meta.isComposing);
+      }}
+      onExpandedChange={showCompletedSummary
+        ? (nextExpanded) => {
+            applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
+          }
+        : undefined}
+      onSubmit={handleSubmit}
+      questions={designQuestions}
+      ref={cardRootRef}
+      state={componentState}
+      statusLabel={timedOut
+        ? t('toolCards.askUser.timeout')
+        : showCompletedSummary ? undefined : statusText}
+      submitDisabled={!isAllAnswered() || isSubmitted || Boolean(isParamsStreaming)}
+      submitLabel={showSubmit ? t('toolCards.askUser.submit') : undefined}
+      submittingLabel={t('toolCards.askUser.submitting')}
+      submitTitle={!isAllAnswered()
+        ? t('toolCards.askUser.answerAllBeforeSubmit')
+        : undefined}
+      summaryDetail={showCompletedSummary ? answersSummary : undefined}
+      summaryLabel={showCompletedSummary
+        ? t('toolCards.askUser.questionsAnswered', { count: questions.length })
+        : undefined}
+    />
   );
 };

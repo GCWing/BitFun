@@ -1,14 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Hourglass } from 'lucide-react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityItem } from '@bitfun/ui';
 
-import { Tooltip } from '@/component-library';
 import { flowChatStore } from '../store/FlowChatStore';
 import type { Session, ToolCardProps, ToolCardDisplayContext } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
-import './AgentWaitToolCard.scss';
+import { AgentWaitToolCard as AgentWaitToolCardView } from '@bitfun/ui/flow-chat';
 
 const RUNNING_STATUSES = new Set(['pending', 'preparing', 'running', 'streaming', 'receiving']);
 
@@ -17,32 +13,6 @@ interface AgentWaitResult {
   results?: unknown[];
   pending_bg_task_ids?: string[];
 }
-
-const TruncatedSteeringHint: React.FC<{ text: string }> = ({ text }) => {
-  const hintRef = useRef<HTMLSpanElement>(null);
-  const [isTruncated, setIsTruncated] = useState(false);
-
-  useEffect(() => {
-    const hint = hintRef.current;
-    if (!hint) return undefined;
-
-    const measure = () => setIsTruncated(hint.scrollWidth > hint.clientWidth + 1);
-    measure();
-
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
-    observer.observe(hint);
-    return () => observer.disconnect();
-  }, [text]);
-
-  return (
-    <Tooltip content={text} placement="top" delay={300} disabled={!isTruncated}>
-      <span ref={hintRef} className="agent-wait-tool-card__steering-hint-inline">
-        {text}
-      </span>
-    </Tooltip>
-  );
-};
 
 export function shouldShowAgentWaitSteeringHint(
   status: ToolCardProps['toolItem']['status'],
@@ -96,27 +66,13 @@ export const AgentWaitToolCard: React.FC<ToolCardProps> = ({
     return t('toolCards.agentWait.title');
   }, [result, status, t, toolResult?.error]);
 
-  const state = status === 'error' ? 'failed' : undefined;
-
   return (
-    <div
-      data-bf-component="agent-wait-tool-card"
-      data-bf-part="root"
-      data-bf-state={state}
+    <AgentWaitToolCardView
+      action={t('toolCards.agentWait.title')}
       data-tool-card-id={toolId ?? ''}
-      className="agent-wait-tool-card"
-    >
-      <ActivityItem
-        appearance="inline"
-        className="agent-wait-tool-card__activity"
-        data-bf-status={status}
-        label={t('toolCards.agentWait.title')}
-        leading={<ToolCardStatusSlot status={status} toolIcon={<Hourglass size={16} />} />}
-      >
-        {showSteeringHint
-          ? <TruncatedSteeringHint text={steeringHint} />
-          : summary}
-      </ActivityItem>
-    </div>
+      status={status}
+      summary={showSteeringHint ? steeringHint : summary}
+      summaryTitle={showSteeringHint ? steeringHint : undefined}
+    />
   );
 };

@@ -111,6 +111,8 @@ interface ModelSelectorProps {
   persistSharedModeDefault?: boolean;
   /** Whether lifecycle ownership currently prevents Session setting changes. */
   disabled?: boolean;
+  /** Compact trigger treatment supplied by the owning composer. */
+  reasoningTriggerPresentation?: 'meter' | 'label';
 }
 
 interface ModelInfo {
@@ -265,6 +267,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   modeDefaultModelId,
   persistSharedModeDefault = true,
   disabled = false,
+  reasoningTriggerPresentation = 'meter',
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -1319,6 +1322,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             selectedPreset={externalSelection.selectedReasoningPreset === 'auto'
               ? undefined
               : externalSelection.selectedReasoningPreset}
+            triggerPresentation={reasoningTriggerPresentation}
             disabled={disabled || externalSelection.disabled}
             loading={false}
             dropdownPlacement={dropdownPlacement}
@@ -1494,6 +1498,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           <ReasoningPresetSelector
             projection={acpReasoning.projection}
             selectedPreset={acpReasoning.selectedPreset}
+            triggerPresentation={reasoningTriggerPresentation}
             disabled={disabled || loading}
             loading={reasoningLoading}
             dropdownPlacement={dropdownPlacement}
@@ -1659,6 +1664,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         <ReasoningPresetSelector
           projection={currentReasoningProjection}
           selectedPreset={selectedReasoningPreset}
+          triggerPresentation={reasoningTriggerPresentation}
           disabled={disabled || loading}
           loading={reasoningLoading}
           dropdownPlacement={dropdownPlacement}

@@ -113,8 +113,8 @@ describe('GitToolDisplay', () => {
       root.render(<GitToolDisplay toolItem={toolItem} config={config} />);
     });
 
-    expect(container.querySelector('.base-tool-card')).not.toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
     expect(container.textContent).toContain('git status --short');
     expect(container.textContent).not.toContain('Gitgit status --short');
 

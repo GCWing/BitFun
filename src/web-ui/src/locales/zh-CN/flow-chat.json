@@ -1576,7 +1576,7 @@
       "expandPreview": "展开预览",
       "collapsePreview": "收起预览",
       "openFullCodeHint": "打开全量代码",
-      "viewGitDiff": "查看 Diff",
+      "changeSummary": "新增 {{additions}} 行，删除 {{deletions}} 行",
       "viewBaselineDiff": "查看基线 Diff"
     },
     "getFileDiff": {
@@ -2112,6 +2112,7 @@
       "noSummaryNotice": "本次压缩没有生成额外的总结内容。",
       "tokenChange": "{{before}} → {{after}} tokens",
       "savingsTag": "节省 {{saved}} · 压缩率 {{ratio}}%",
+      "resultSummary": "压缩后上下文长度 {{length}}（压缩比例 {{ratio}}%）",
       "compressingContext": "正在压缩上下文...",
       "compressionCount": "第 {{count}} 次压缩"
     },

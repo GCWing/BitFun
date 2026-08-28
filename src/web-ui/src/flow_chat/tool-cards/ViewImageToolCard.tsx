@@ -1,14 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
-
-import { Modal } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { ViewImageToolCard as ViewImageToolCardView } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
-import './ViewImageToolCard.scss';
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/png',
@@ -98,75 +92,28 @@ export const ViewImageToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpand 
         : viewingText;
 
   return (
-    <div data-bf-component="view-image-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', imageFailed && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div data-bf-adapter="view-image" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+      <ViewImageToolCardView
         status={toolItem.status}
-        isExpanded={false}
-        onClick={handleToggle}
-        clickable={Boolean(source)}
-        className="view-image-tool-card"
-        header={(
-          <CompactToolCardHeader
-            icon={(
-              <ToolCardStatusSlot
-                status={toolItem.status}
-                toolIcon={<ImageIcon size={16} />}
-              />
-            )}
-            action={statusText}
-            rightStatusIcon={source ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : undefined}
-          />
-        )}
+        isExpanded={isExpanded}
+        onToggle={source ? handleToggle : undefined}
+        alt={title}
+        source={source ?? undefined}
+        width={result.width ?? undefined}
+        height={result.height ?? undefined}
+        statusText={statusText}
+        previewLabel={t('toolCards.common.viewDetails')}
+        imageFailed={imageFailed}
+        errorText={t('toolCards.default.failed')}
+        onImageError={() => setImageFailed(true)}
+        onOpenPreview={(event) => {
+          event.stopPropagation();
+          setIsLightboxOpen(true);
+        }}
+        lightboxOpen={isLightboxOpen}
+        lightboxTitle={title}
+        onLightboxClose={() => setIsLightboxOpen(false)}
       />
-
-      <SmoothHeightCollapse
-        isOpen={Boolean(source && isExpanded)}
-        className="view-image-tool-card__collapse"
-      >
-        {source ? (
-          <div data-bf-component="view-image-tool-card" data-bf-part="content" className="view-image-tool-card__content">
-            {imageFailed ? (
-              <div data-bf-component="view-image-tool-card" data-bf-part="error" className="view-image-tool-card__error" role="alert">
-                {t('toolCards.default.failed')}
-              </div>
-            ) : (
-              <button
-                type="button"
-                data-bf-component="view-image-tool-card"
-                data-bf-part="preview"
-                className="view-image-tool-card__preview-button"
-                aria-label={t('toolCards.common.viewDetails')}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsLightboxOpen(true);
-                }}
-              >
-                <img
-                  data-bf-component="view-image-tool-card"
-                  data-bf-part="image"
-                  src={source}
-                  alt={title}
-                  width={result.width ?? undefined}
-                  height={result.height ?? undefined}
-                  title={path ?? undefined}
-                  onError={() => setImageFailed(true)}
-                />
-              </button>
-            )}
-          </div>
-        ) : null}
-      </SmoothHeightCollapse>
-
-      <Modal
-        isOpen={isLightboxOpen && Boolean(source) && !imageFailed}
-        onClose={() => setIsLightboxOpen(false)}
-        title={title}
-        size="large"
-      >
-        <div data-bf-component="view-image-tool-card" data-bf-part="lightbox" className="view-image-tool-card__lightbox">
-          <img src={source ?? ''} alt={title} />
-        </div>
-      </Modal>
     </div>
   );
 };

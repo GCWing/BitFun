@@ -375,7 +375,9 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
 
-    const card = container.querySelector<HTMLElement>('.base-tool-card');
+    const card = container.querySelector<HTMLElement>(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="prominent"]',
+    );
     expect(card).toBeTruthy();
 
     await act(async () => {
@@ -1549,7 +1551,9 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(container.querySelector('.task-failed-badge')).toBeNull();
-    expect(container.querySelector('.status-cancelled')).toBeTruthy();
+    expect(container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-status="cancelled"]',
+    )).toBeTruthy();
     expect(container.textContent).not.toContain('Failed');
   });
 
@@ -1590,9 +1594,9 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(container.querySelector('.task-header-rail__hit')).toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeTruthy();
     expect(container.textContent).toContain('Cancel session: subagent-session-1');
-    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
     expect(taskCollapseStateManager.isCollapsed('task-tool-cancel')).toBe(true);
   });
 });

@@ -83,12 +83,14 @@ describe('FlowChat semantic typography roles', () => {
     expectRole(chatInput, '&__placeholder {', 'control');
     expectRole(chatInput, '&__slash-command-label {', 'support');
     expectRole(chatInput, '&__slash-command-status {', 'meta');
-    // The status track is a footnote under the capsule: one meta step for
-    // every label on it, facts and controls alike.
+    // The context track is a quiet meta line above the composer surface: one
+    // step for every label on it, facts and controls alike.
     expectRole(workspaceStrip, '&__permission-trigger {', 'meta');
     expectRole(modelRound, '.model-round-item__retry-toggle {', 'control');
     expectRole(modelRound, '.model-round-item__attempt-diagnostic-section pre {', 'support');
-    expectRole(modelRound, '.model-round-item__meta {', 'meta');
+    expect(extractBlock(modelRound, '.model-round-item__meta {')).toContain(
+      'font-size: var(--bf-font-size-meta);',
+    );
     expectRole(userMessage, '.user-message-item__content {', 'body');
     expectRole(userMessage, '.user-message-item__timestamp {', 'meta');
     expectRole(userMessage, '.user-message-item__steering-tag {', 'micro');
@@ -96,5 +98,21 @@ describe('FlowChat semantic typography roles', () => {
       '--user-message-failed-font-size: #{flow-type.$control-size};',
     );
     expectRole(flowTextBlock, '.markdown-renderer .inline-code {', 'control');
+  });
+
+  it('keeps completion metadata as an unlabeled two-value row on public tokens', () => {
+    const component = readSource('./modern/ModelRoundItem.tsx');
+    const stylesheet = readSource('./modern/ModelRoundItem.scss');
+    const meta = extractBlock(stylesheet, '.model-round-item__meta {');
+
+    expect(component).not.toContain('model-round-item__meta-label');
+    expect(component).not.toContain('model-round-item__meta-value');
+    expect(component).toContain('aria-label={`${item.label}: ${item.value}`}');
+    expect(meta).toContain('gap: var(--bf-space-2);');
+    expect(meta).toContain('color: var(--bf-color-content-muted);');
+    expect(meta).toContain('font-family: var(--bf-font-family-control);');
+    expect(meta).toContain('font-size: var(--bf-font-size-meta);');
+    expect(meta).toContain('font-weight: var(--bf-font-weight-regular);');
+    expect(meta).toContain('line-height: var(--bf-line-height-body);');
   });
 });

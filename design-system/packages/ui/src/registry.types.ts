@@ -7,7 +7,7 @@ export interface ComponentPropMeta {
 }
 
 export interface ComponentMeta {
-  category: "primitive" | "action" | "form" | "feedback" | "navigation";
+  category: "primitive" | "action" | "form" | "feedback" | "navigation" | "flow-chat";
   description: string;
   maturity: ComponentMaturity;
   name: string;

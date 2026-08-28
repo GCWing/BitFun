@@ -1,18 +1,20 @@
 /**
- * InitMiniApp tool display — matches GitToolDisplay / BaseToolCard patterns.
+ * InitMiniApp tool display on the prominent FlowChat tool-card framework.
  */
 
-@use './_tool-card-common.scss';
-
-.base-tool-card-wrapper.miniapp-tool-display .base-tool-card--header-expandable .base-tool-card-header {
+.miniapp-tool-display[data-bf-attention='prominent'][data-bf-expandable='true']
+  > [data-bf-part='surface']
+  > [data-bf-part='header'] {
   cursor: pointer;
 }
 
-.base-tool-card-wrapper.miniapp-tool-display .base-tool-card:not(.base-tool-card--header-expandable) .base-tool-card-header {
+.miniapp-tool-display[data-bf-attention='prominent'][data-bf-expandable='false']
+  > [data-bf-part='surface']
+  > [data-bf-part='header'] {
   cursor: default;
 }
 
-.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {
+.miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {
   margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
   margin-right: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
   margin-bottom: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-y));
@@ -25,7 +27,7 @@
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
-  .tool-card-icon.miniapp-icon {
+  [data-bf-part='iconGraphic'].miniapp-icon {
     color: var(--bf-appearance-token-color-text-secondary);
   }
 

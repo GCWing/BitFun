@@ -1,5 +1,5 @@
 /**
- * Two fixed rails under the composer capsule.
+ * Two fixed rails in the composer's upper context band.
  *
  * The left rail is the situation the session is in — where it runs, on which
  * branch, and whether that branch is isolated in a worktree. The right rail is

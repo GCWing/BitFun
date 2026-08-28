@@ -137,6 +137,34 @@ test("ActionCard geometry preserves compact and descriptive entry compositions",
   assert.equal(systemDocument.control.actionCard.radius.$value, "{radius.base}");
 });
 
+test("AskUser geometry preserves the answered question reference contract", () => {
+  assert.equal(tokens["control.askUser.bodyGap"], "12px");
+  assert.equal(tokens["control.askUser.bodyPadding"], "16px");
+  assert.equal(tokens["control.askUser.descriptionLineHeight"], "20px");
+  assert.equal(tokens["control.askUser.descriptionMaxWidth"], "500px");
+  assert.equal(tokens["control.askUser.headerHeight"], "30px");
+  assert.equal(tokens["control.askUser.iconSize"], "14px");
+  assert.equal(tokens["control.askUser.optionContentGap"], "8px");
+  assert.equal(tokens["control.askUser.optionGap"], "4px");
+  assert.equal(tokens["control.askUser.optionPaddingBlock"], "7px");
+  assert.equal(tokens["control.askUser.optionPaddingInline"], "8px");
+  assert.equal(tokens["control.askUser.questionOptionsGap"], "12px");
+  assert.equal(tokens["control.askUser.questionPaddingInline"], "4px");
+  assert.equal(tokens["control.askUser.summaryActionSize"], "22px");
+  assert.equal(tokens["control.askUser.summaryPaddingBlock"], "4px");
+  assert.equal(tokens["control.askUser.summaryPaddingInlineEnd"], "4px");
+  assert.equal(tokens["control.askUser.summaryPaddingInlineStart"], "8px");
+});
+
+test("ChatComposer geometry preserves the scaled compact capsule contract", () => {
+  assert.equal(tokens["control.chatComposer.compactGap"], "9px");
+  assert.equal(tokens["control.chatComposer.compactHeight"], "45px");
+  assert.equal(tokens["control.chatComposer.compactPaddingBlock"], "9px");
+  assert.equal(tokens["control.chatComposer.compactPaddingInline"], "9px");
+  assert.equal(tokens["control.chatComposer.compactTrackHeight"], "25px");
+  assert.equal(tokens["control.chatComposer.controlHeight"], "25px");
+});
+
 test("split-view content panels preserve the elevated shell curvature contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
@@ -329,11 +357,18 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
       "space.16": "64px",
     },
   );
-  assert.equal(tokens["font.family.control"].startsWith("'SF Pro Text'"), true);
-  assert.equal(tokens["font.family.control"].includes("'Noto Sans SC'"), true);
+  const controlFontFamily = tokens["font.family.control"];
+  assert.equal(controlFontFamily.startsWith("'SF Pro Text'"), true);
+  assert.equal(controlFontFamily.includes("'Segoe UI Variable Text'"), true);
+  assert.equal(controlFontFamily.includes("'Noto Sans SC'"), true);
+  assert.ok(
+    controlFontFamily.indexOf("'Segoe UI Variable Text'")
+      < controlFontFamily.indexOf("'Noto Sans SC'"),
+  );
   assert.equal(tokens["font.family.sans"].startsWith("'Noto Sans SC'"), true);
   assert.equal(tokens["font.family.mono"].startsWith("'JetBrains Mono'"), true);
   assert.equal(tokens["font.size.micro"], "10px");
+  assert.equal(tokens["font.size.meta"], "11px");
   assert.equal(tokens["font.size.xs"], "12px");
   assert.equal(tokens["font.size.small"], "13px");
   assert.equal(tokens["font.size.4xl"], "26px");

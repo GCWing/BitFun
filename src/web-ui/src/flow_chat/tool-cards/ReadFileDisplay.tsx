@@ -3,11 +3,9 @@
  */
 
 import React, { useMemo } from 'react';
-import { FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { ReadFileToolCard } from '@bitfun/ui/flow-chat';
 import { isSessionViewPreviewText } from '../utils/sessionViewPreview';
 
 export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
@@ -122,8 +120,8 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       return (
         <>
           {t('toolCards.readFile.readFile')}: {fileName}
-          {lineRange && <span className="read-file-meta"> {lineRange}</span>}
-          {fileSize && <span className="read-file-meta"> ({fileSize})</span>}
+          {lineRange && <> {lineRange}</>}
+          {fileSize && <> ({fileSize})</>}
         </>
       );
     }
@@ -131,7 +129,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       return (
         <>
           {t('toolCards.readFile.readingFile')} {fileName}
-          {lineRange && <span className="read-file-meta"> {lineRange}</span>}
+          {lineRange && <> {lineRange}</>}
           ...
         </>
       );
@@ -140,7 +138,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       return (
         <>
           {t('toolCards.readFile.permissionRequest')} {permissionTargetPath}
-          {lineRange && <span className="read-file-meta"> {lineRange}</span>}
+          {lineRange && <> {lineRange}</>}
         </>
       );
     }
@@ -148,7 +146,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       return (
         <>
           {t('toolCards.readFile.preparingRead')} {fileName}
-          {lineRange && <span className="read-file-meta"> {lineRange}</span>}
+          {lineRange && <> {lineRange}</>}
         </>
       );
     }
@@ -156,18 +154,11 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
   };
 
   return (
-    <CompactToolCard
+    <ReadFileToolCard
       status={status}
-      isExpanded={false}
-      onClick={() => canOpenFile && handleOpenInEditor()}
-      className="read-file-card"
-      clickable={canOpenFile}
-      header={
-        <CompactToolCardHeader
-          icon={<ToolCardStatusSlot status={status} toolIcon={<FileText size={16} className="read-file-card-icon" />} />}
-          content={renderContent()}
-        />
-      }
+      interactive={canOpenFile}
+      onOpen={canOpenFile ? handleOpenInEditor : undefined}
+      summary={renderContent()}
     />
   );
 });

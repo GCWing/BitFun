@@ -1,5 +1,5 @@
 /**
- * Compact, borderless execution-status track under the floating chat input.
+ * Compact, borderless execution-status track above the composer surface.
  *
  * Two fixed rails, never a conditional column template: the left rail holds the
  * situation and the right rail holds the next turn's contract. A control that
@@ -32,17 +32,6 @@
 // separators: parts of one segment sit close, segments sit apart.
 $track-part-gap: 4px;
 $track-item-gap: 10px;
-
-// Where the capsule's own first and last control sit, measured from the same
-// origin the track starts from: the drop zone's 8px inset, plus the capsule's
-// 1px border and 8px pad. The track lines its *ink* up with that, so the two
-// rows share a left and a right edge instead of staggering by ~2px.
-$track-edge: 17px;
-// A rail's outermost item hides some of that inset inside its own transparent
-// padding: 7px for a label pill on the left, 3px for the ring centred in its
-// square target on the right.
-$track-pad-left: $track-edge - 7px;
-$track-pad-right: $track-edge - 3px;
 
 // The single control shape. Full radius rather than a corner value: the
 // composer capsule directly above is a pill, and the track reads as its
@@ -101,19 +90,15 @@ $track-pad-right: $track-edge - 3px;
 }
 
 .bitfun-chat-input-workspace-strip {
-  position: absolute;
-  // Lifted off the zone's bottom edge so the band the capsule reserves below
-  // it (36px) splits into equal air: 10px to the capsule, 6px here plus the
-  // zone's own 4px off the window edge to the bottom.
-  bottom: 6px;
-  z-index: 4;
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
   column-gap: 12px;
   min-height: 20px;
-  padding: 0 $track-pad-right 0 $track-pad-left;
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -126,10 +111,6 @@ $track-pad-right: $track-edge - 3px;
   user-select: text;
   pointer-events: auto;
 
-  /* Always full-width — capsule is no longer narrowed in the new two-mode design */
-  left: 0;
-  right: 0;
-  transform: none;
   width: 100%;
   max-width: none;
 

@@ -3,16 +3,22 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { ListTodo, CheckCircle2, Circle, XCircle } from 'lucide-react';
-import { TaskRunningIndicator } from '../../component-library';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useDialogTurnTodos } from '../hooks/useDialogTurnTodos';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import {
+  TodoToolCard as TodoToolCardView,
+  type TodoToolCardItemStatus,
+} from '@bitfun/ui/flow-chat';
 import { createTodoRenderItems, type TodoLike } from './todoRenderItems';
-import './TodoWriteDisplay.scss';
+
+function normalizeTodoStatus(status: TodoLike['status']): TodoToolCardItemStatus {
+  if (status === 'completed' || status === 'in_progress' || status === 'cancelled') {
+    return status;
+  }
+  return 'pending';
+}
 
 export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -66,13 +72,6 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     [todosToDisplay.length, taskStats],
   );
 
-  const statusSlotProps =
-    status === 'error' || status === 'cancelled'
-      ? { status, defaultIcon: 'status' as const }
-      : isAllCompleted
-        ? { status: 'completed' as const, defaultIcon: 'status' as const }
-        : { status, defaultIcon: 'tool' as const };
-
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
 
   const displayMode = config?.displayMode || 'compact';
@@ -93,155 +92,71 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded, todosToDisplay.length]);
 
-  const renderTodoItem = (todo: TodoLike, key: string) => (
-    <div key={key} data-bf-component="todo-write-display" data-bf-part="item" className={`todo-item status-${todo.status}`}>
-      <div className="todo-item-left">
-        {todo.status === 'completed' && (
-          <CheckCircle2 size={12} className="todo-status-icon todo-status-icon--completed" />
-        )}
-        {todo.status === 'in_progress' && (
-          <TaskRunningIndicator size="xs" className="todo-status-icon todo-status-icon--in-progress" />
-        )}
-        {todo.status === 'pending' && (
-          <Circle size={12} className="todo-status-icon todo-status-icon--pending" />
-        )}
-        {todo.status === 'cancelled' && (
-          <XCircle size={12} className="todo-status-icon todo-status-icon--cancelled" />
-        )}
-        <span data-bf-component="todo-write-display" data-bf-part="itemContent" className="todo-content">{todo.content}</span>
-      </div>
-    </div>
-  );
-
   /* ---------- Compact (single-line) display mode ---------- */
 
   if (displayMode === 'compact') {
     return (
-      <div data-bf-component="todo-write-display" data-bf-part="root" data-bf-mode="compact" data-bf-state={[isLoading && 'loading', isAllCompleted && 'completed'].filter(Boolean).join(' ')} className={`tool-display-compact todo-write-compact status-${status}`}>
-        <span data-bf-component="todo-write-display" data-bf-part="compactIcon" className="tool-icon">
-          {isLoading ? (
-            <TaskRunningIndicator size="sm" className="todo-compact-loading-icon" />
-          ) : (
-            <ListTodo size={14} />
-          )}
-        </span>
-        {todosToDisplay.length > 0 && (
-          <>
-            <span data-bf-component="todo-write-display" data-bf-part="count" className="todo-count">
-              {t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length })}
-            </span>
-            <span data-bf-component="todo-write-display" data-bf-part="progress" className="todo-progress">
-              {t('toolCards.todoWrite.progress', {
-                completed: taskStats.completed,
-                total: taskStats.total,
-              })}
-            </span>
-          </>
-        )}
-      </div>
+      <TodoToolCardView
+        allCompleted={isAllCompleted}
+        compactCountLabel={todosToDisplay.length > 0
+          ? t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length })
+          : undefined}
+        compactProgressLabel={todosToDisplay.length > 0 ? t('toolCards.todoWrite.progress', {
+          completed: taskStats.completed,
+          total: taskStats.total,
+        }) : undefined}
+        completedCount={taskStats.completed}
+        items={[]}
+        loading={isLoading}
+        mode="compact"
+        status={status}
+        title={t('toolCards.todoWrite.tasks')}
+        totalCount={taskStats.total}
+      />
     );
   }
 
   /* ---------- Standard display mode ---------- */
 
   const hasTodos = todosToDisplay.length > 0;
-  const headerExpanded = isExpanded && hasTodos;
   const tasksLabel = t('toolCards.todoWrite.tasks');
-
-  const statsSuffix =
-    hasTodos && taskStats.total > 0 ? (
-      <span className="todo-stats todo-stats--suffix">
-        {' '}
-        ({taskStats.completed}/{taskStats.total})
-      </span>
-    ) : null;
-
-  const headerActionCollapsed =
-    hasTodos ? (
-      <span className="todo-header-action-cluster">
-        <span className="todo-header-tasks-label">{tasksLabel}</span>
-        <span className="todo-stats">({taskStats.completed}/{taskStats.total})</span>
-      </span>
-    ) : (
-      tasksLabel
-    );
-
   const headerContent = (() => {
     if (!hasTodos && isLoading) {
-      return (
-        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--muted">{tasksLabel}…</span>
-      );
+      return `${tasksLabel}…`;
     }
     if (isAllCompleted) {
-      return (
-        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--success">
-          {t('toolCards.todoWrite.allCompleted')}
-          {headerExpanded ? statsSuffix : null}
-        </span>
-      );
+      return t('toolCards.todoWrite.allCompleted');
     }
     if (currentDisplayTask) {
-      return (
-        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content">
-          <span className="todo-header-current">{currentDisplayTask.content}</span>
-          {inProgressTasks.length > 1 && (
-            <span className="todo-header-more">+{inProgressTasks.length - 1}</span>
-          )}
-          {headerExpanded ? statsSuffix : null}
-        </span>
-      );
+      return `${currentDisplayTask.content ?? ''}${inProgressTasks.length > 1 ? ` +${inProgressTasks.length - 1}` : ''}`;
     }
     if (hasTodos) {
-      return (
-        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--muted">
-          {t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length })}
-          {headerExpanded ? statsSuffix : null}
-        </span>
-      );
+      return t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length });
     }
     return null;
   })();
 
-  const headerAction = headerExpanded ? undefined : headerActionCollapsed;
-
-  const expandedContent = hasTodos ? (
-    <div data-bf-component="todo-write-display" data-bf-part="expanded" className="todo-expanded-body">
-      <div data-bf-component="todo-write-display" data-bf-part="list" className="todo-full-list">
-        {todoRenderItems.map(({ todo, key }) => renderTodoItem(todo, key))}
-      </div>
-    </div>
-  ) : undefined;
-
   return (
-    <div data-bf-component="todo-write-display" data-bf-part="root" data-bf-mode="standard"
-      data-bf-state={[isExpanded && 'expanded', isLoading && 'loading', isAllCompleted && 'completed'].filter(Boolean).join(' ')}
+    <div data-bf-adapter="todo-write"
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
-      className={`todo-write-host mode-${displayMode} status-${status}`}
     >
-      <CompactToolCard
+      <TodoToolCardView
         status={status}
         isExpanded={isExpanded && hasTodos}
-        onClick={hasTodos ? handleToggleExpanded : undefined}
-        clickable={hasTodos}
-        toggleTestId="todo-write-toggle"
-        className="todo-write-card"
-        header={
-          <CompactToolCardHeader
-            icon={
-              <ToolCardStatusSlot
-                status={statusSlotProps.status}
-                toolIcon={<ListTodo size={16} className="todo-card-icon" />}
-                defaultIcon={statusSlotProps.defaultIcon}
-              />
-            }
-            action={headerAction}
-            content={headerContent}
-            expandable={hasTodos}
-            isExpanded={isExpanded && hasTodos}
-          />
-        }
-        expandedContent={expandedContent}
+        onToggle={hasTodos ? handleToggleExpanded : undefined}
+        allCompleted={isAllCompleted}
+        completedCount={taskStats.completed}
+        items={todoRenderItems.map(({ todo, key }) => ({
+          content: todo.content,
+          key,
+          status: normalizeTodoStatus(todo.status),
+        }))}
+        loading={isLoading}
+        mode="standard"
+        summary={headerContent}
+        title={tasksLabel}
+        totalCount={taskStats.total}
       />
     </div>
   );

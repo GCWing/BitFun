@@ -132,9 +132,11 @@ describe('GetToolSpecCard', () => {
     expect(container.textContent).not.toContain('Inspect and operate on the Git repository.');
     expect(container.textContent).not.toContain('"command"');
 
-    const card = container.querySelector('.compact-tool-card');
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+    );
     expect(card).not.toBeNull();
-    expect(card?.className).not.toContain('clickable');
+    expect(card?.getAttribute('data-bf-interactive')).toBe('false');
   });
 
   it('shows already-loaded summary without expanded detail affordance', () => {
@@ -148,7 +150,9 @@ describe('GetToolSpecCard', () => {
     });
 
     expect(container.textContent).toContain('WebFetch is already loaded');
-    const card = container.querySelector('.compact-tool-card');
-    expect(card?.className).not.toContain('clickable');
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+    );
+    expect(card?.getAttribute('data-bf-interactive')).toBe('false');
   });
 });

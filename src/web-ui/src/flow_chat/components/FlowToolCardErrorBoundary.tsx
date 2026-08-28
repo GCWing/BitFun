@@ -1,7 +1,7 @@
 import { Button } from '@bitfun/ui';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Component, type ReactNode } from 'react';
-import { CompactToolCard, CompactToolCardHeader } from '../tool-cards/CompactToolCard';
+import { AmbientToolCard, AmbientToolCardHeader } from '@bitfun/ui/flow-chat';
 import type { FlowToolItem } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -68,11 +68,11 @@ function RenderFallback({
 
   return (
     <div data-tool-card-id={toolId} role="alert">
-      <CompactToolCard
+      <AmbientToolCard
         status="error"
         isExpanded={true}
         header={(
-          <CompactToolCardHeader
+          <AmbientToolCardHeader
             icon={<AlertTriangle size={16} />}
             action={displayName}
             content="Tool card render failed"

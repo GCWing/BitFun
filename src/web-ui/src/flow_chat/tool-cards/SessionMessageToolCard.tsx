@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { SessionMessageToolCard as SessionMessageToolCardView } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 interface SessionMessageInput {
@@ -76,76 +74,28 @@ export const SessionMessageToolCard: React.FC<ToolCardProps> = React.memo(({
     return <>{t('toolCards.sessionMessage.preparingSend', { session: targetLabel })}</>;
   };
 
-  const expandedContent = hasDetails ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {targetSessionId && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionMessage.targetSession')}:</span>
-          <span className="detail-value">{targetSessionId}</span>
-        </div>
-      )}
-
-      {workspace && (
-        <div className="detail-item">
-          <span className="detail-label">{t('shared:features.workspace')}:</span>
-          <span className="detail-value">{workspace}</span>
-        </div>
-      )}
-
-      {agentType && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionMessage.agentType')}:</span>
-          <span className="detail-value">{agentType}</span>
-        </div>
-      )}
-
-      {message && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span className="detail-label">{t('toolCards.sessionMessage.message')}:</span>
-          <pre
-            style={{
-              margin: 0,
-              padding: '10px 12px',
-              borderRadius: 8,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              background: 'var(--bf-appearance-token-element-bg-subtle)',
-              fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)'
-            }}
-          >
-            {message}
-          </pre>
-        </div>
-      )}
-
-      {toolResult?.error && (
-        <div style={{ color: 'var(--bf-appearance-token-color-error)', whiteSpace: 'pre-wrap' }}>
-          {toolResult.error}
-        </div>
-      )}
-    </div>
-  ) : null;
+  const fields = [
+    targetSessionId
+      ? { label: `${t('toolCards.sessionMessage.targetSession')}:`, value: targetSessionId, monospace: true }
+      : null,
+    workspace ? { label: `${t('shared:features.workspace')}:`, value: workspace, monospace: true } : null,
+    agentType ? { label: `${t('toolCards.sessionMessage.agentType')}:`, value: agentType } : null,
+  ].filter((field): field is NonNullable<typeof field> => Boolean(field));
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="session-message" data-tool-card-id={toolId ?? ''}>
+      <SessionMessageToolCardView
         status={status}
         isExpanded={isExpanded}
-        onClick={() => {
-          if (hasDetails) {
-            applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
-          }
-        }}
-        className="session-message-card"
-        clickable={hasDetails}
-        header={(
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<MessageSquare size={16} />} />}
-            action={`${t('toolCards.sessionMessage.title')}:`}
-            content={renderContent()}
-          />
-        )}
-        expandedContent={expandedContent}
+        onToggle={hasDetails
+          ? () => applyExpandedState(isExpanded, !isExpanded, setIsExpanded)
+          : undefined}
+        action={`${t('toolCards.sessionMessage.title')}:`}
+        summary={renderContent()}
+        fields={fields}
+        message={message || undefined}
+        messageLabel={message ? `${t('toolCards.sessionMessage.message')}:` : undefined}
+        error={toolResult?.error}
       />
     </div>
   );

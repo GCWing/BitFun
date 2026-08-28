@@ -6,6 +6,10 @@ import {
 } from './flowChatScrollLayout';
 
 describe('computeFlowChatInputStackFooterPx', () => {
+  it('keeps the runtime scroll inset aligned with the 24px composer bottom gap', () => {
+    expect(CHAT_INPUT_DROP_ZONE_BOTTOM_PX).toBe(24);
+  });
+
   it('uses the current measured input height without retaining an active height', () => {
     expect(computeFlowChatInputStackFooterPx(40)).toBe(
       40 + CHAT_INPUT_DROP_ZONE_BOTTOM_PX + FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX,

@@ -79,7 +79,7 @@ describe('TodoWriteDisplay expansion', () => {
     document.body.append(container);
     root = createRoot(container);
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      const height = (this as HTMLElement).querySelector?.('.todo-expanded-body') ? 320 : 64;
+      const height = (this as HTMLElement).querySelector?.('[data-bf-part="todoList"]') ? 320 : 64;
       return {
         bottom: height,
         height,
@@ -106,30 +106,30 @@ describe('TodoWriteDisplay expansion', () => {
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
-    expect(container.querySelector('.todo-expanded-body')).toBeNull();
+    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
 
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('in_progress')} config={config} />);
     });
-    expect(container.querySelector('.todo-expanded-body')).toBeNull();
+    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
 
     act(() => {
-      container.querySelector<HTMLElement>('[data-testid="todo-write-toggle"]')?.click();
+      container.querySelector<HTMLElement>('[data-testid="todo-tool-card-toggle"]')?.click();
     });
-    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="todoList"]')).not.toBeNull();
 
     act(() => {
       root.render(<TodoWriteDisplay toolItem={createTodoWriteItem('pending')} config={config} />);
     });
-    expect(container.querySelector('.todo-expanded-body')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="todoList"]')).not.toBeNull();
 
     act(() => {
-      container.querySelector<HTMLElement>('[data-testid="todo-write-toggle"]')?.click();
+      container.querySelector<HTMLElement>('[data-testid="todo-tool-card-toggle"]')?.click();
     });
     act(() => {
       vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS);
     });
-    expect(container.querySelector('.todo-expanded-body')).toBeNull();
+    expect(container.querySelector('[data-bf-part="todoList"]')).toBeNull();
   });
 
   it('shows the first task when all tasks are pending', () => {
@@ -145,7 +145,8 @@ describe('TodoWriteDisplay expansion', () => {
       );
     });
 
-    expect(container.querySelector('.todo-header-current')?.textContent).toBe('First task');
-    expect(container.querySelector('.todo-header-more')).toBeNull();
+    const summary = container.querySelector('[data-bf-tool-card="todo"] [data-bf-part="summary"]');
+    expect(summary?.textContent).toContain('First task');
+    expect(summary?.textContent).not.toContain('Second task');
   });
 });

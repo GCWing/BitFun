@@ -1,0 +1,335 @@
+@layer bf.components {
+  .command {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .summary,
+  .fileCount {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .summary[data-tone="warning"] {
+    color: var(--bf-color-status-warning-content);
+  }
+
+  .summary[data-tone="danger"] {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .output {
+    display: flex;
+    max-block-size: 20rem;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-3);
+    overflow: auto;
+  }
+
+  .outputBlock,
+  .textPreview {
+    margin: 0;
+    padding: var(--bf-space-3);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-canvas);
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .outputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+  }
+
+  .outputLabel,
+  .sectionLabel {
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .outputGroup[data-tone="warning"] .outputBlock {
+    color: var(--bf-color-status-warning-content);
+    background: color-mix(in srgb, var(--bf-color-status-warning-content) 7%, transparent);
+  }
+
+  .outputGroup[data-tone="danger"] .outputBlock {
+    color: var(--bf-color-status-danger-content);
+    background: color-mix(in srgb, var(--bf-color-status-danger-content) 7%, transparent);
+  }
+
+  .footer {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .footerItem {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: baseline;
+    gap: var(--bf-space-1);
+  }
+
+  .footerItem[data-grow="true"] {
+    flex: 1 1 12rem;
+  }
+
+  .footerLabel {
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .footerValue {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--bf-color-content-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .footerItem[data-monospace="true"] .footerValue {
+    font-family: var(--bf-font-family-mono);
+  }
+
+  .footerItem[data-tone="success"] .footerValue {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .footerItem[data-tone="danger"] .footerValue {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .error {
+    color: var(--bf-color-status-danger-content);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .errorMeta {
+    margin-block-start: var(--bf-space-2);
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .diffPath {
+    display: block;
+    overflow: hidden;
+    min-inline-size: 0;
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .diffBody {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-3);
+  }
+
+  .message {
+    padding-block-end: var(--bf-space-2);
+    border-block-end: 1px solid var(--bf-color-border-subtle);
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .reviewDetails,
+  .lifecycleDetails {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-3);
+  }
+
+  .reviewSummary {
+    margin: 0;
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+  }
+
+  .fileList {
+    display: grid;
+    gap: var(--bf-space-1);
+    margin: 0;
+    padding-inline-start: var(--bf-space-4);
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--bf-space-2);
+  }
+
+  .field {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .fieldLabel {
+    color: var(--bf-color-content-muted);
+    font-weight: var(--bf-font-weight-semibold);
+  }
+
+  .fieldValue {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .field[data-monospace="true"] .fieldValue {
+    font-family: var(--bf-font-family-mono);
+  }
+
+  .agentHeader {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--bf-space-2);
+  }
+
+  .agentPill {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: min(52%, 15rem);
+    align-items: center;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-1) var(--bf-space-2) var(--bf-space-1) var(--bf-space-1);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-surface-raised);
+    color: var(--bf-color-content-primary);
+    font: inherit;
+  }
+
+  button.agentPill {
+    cursor: pointer;
+  }
+
+  button.agentPill:is(:hover, :focus-visible) {
+    border-color: var(--bf-color-border-strong);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bf-color-focus-ring);
+  }
+
+  .agentAvatar {
+    display: inline-flex;
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+    flex: 0 0 1.375rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .agentName,
+  .agentStatus {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agentName {
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-medium);
+  }
+
+  .agentStatus {
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-small);
+  }
+
+  .agentStatus[data-tone="success"] {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .agentStatus[data-tone="warning"] {
+    color: var(--bf-color-status-warning-content);
+  }
+
+  .agentStatus[data-tone="danger"] {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .agentIndicator {
+    display: inline-flex;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    margin-inline-start: auto;
+    flex: 0 0 1.125rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--bf-color-content-muted);
+    opacity: 0;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .agentRoot:is(:hover, :focus-within) .agentIndicator,
+  .agentRoot[data-bf-preview-state="hover"] .agentIndicator {
+    opacity: 1;
+  }
+
+  .agentPrompt {
+    max-block-size: 15rem;
+    overflow: auto;
+    padding: var(--bf-space-3);
+    border: 1px solid var(--bf-color-border-default);
+    border-radius: var(--bf-radius-sm);
+    background: var(--bf-color-surface-canvas);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .agentIndicator {
+      transition: none;
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Loader2, CheckCircle, XCircle, AlertCircle, type LucideIcon } from 'lucide-react';
-import { ToolProcessingDots } from '@/component-library';
+import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import type { ToolExecutionStatus } from '../../shared/types/tool-events';
 
 interface ToolStatusIndicatorProps {

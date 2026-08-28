@@ -1,0 +1,58 @@
+@layer bf.components {
+  .root {
+    position: relative;
+    display: inline-flex;
+    inline-size: 100%;
+    block-size: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .statusLayer,
+  .iconLayer {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .statusLayer > :where(svg, img),
+  .iconLayer > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .iconLayer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+  }
+
+  .root[data-default-icon="tool"] .statusLayer {
+    opacity: 0;
+  }
+
+  .root[data-default-icon="tool"] .iconLayer {
+    opacity: 1;
+  }
+
+  .success {
+    color: var(--bf-color-status-success-content);
+  }
+
+  .danger {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .muted {
+    color: var(--bf-color-content-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .statusLayer,
+    .iconLayer {
+      transition: none;
+    }
+  }
+}

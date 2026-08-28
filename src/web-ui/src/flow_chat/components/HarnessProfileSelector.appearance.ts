@@ -13,6 +13,11 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
   ],
   facets: [
     {
+      id: 'presentation',
+      attribute: 'data-bf-presentation',
+      values: ['standalone', 'menu-item'],
+    },
+    {
       id: 'profile',
       attribute: 'data-bf-profile',
       values: ['minimal', 'balanced', 'ultimate', 'creative', 'other'],

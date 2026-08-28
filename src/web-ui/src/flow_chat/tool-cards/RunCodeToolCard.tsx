@@ -9,17 +9,14 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Code2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
 import { CodePreview } from '../components/CodePreview';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
-import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
+import { RunCodeToolCard as RunCodeToolCardView } from '@bitfun/ui/flow-chat';
+import { ToolCardCopyAction } from './ToolCardCopyAction';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
-import './RunCodeToolCard.scss';
 
 /** Enough of the program to recognize it in a collapsed header. */
 const SUMMARY_CHARS = 80;
@@ -104,72 +101,40 @@ export const RunCodeToolCard: React.FC<ToolCardProps> = ({
 
   return (
     <div
-      data-bf-component="run-code-tool-card"
-      data-bf-part="root"
-      data-bf-state={[isExpanded && 'expanded', Boolean(errorMessage) && 'failed'].filter(Boolean).join(' ')}
+      data-bf-adapter="run-code-tool-card"
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
     >
-      <CompactToolCard
+      <RunCodeToolCardView
         status={status}
         isExpanded={isExpanded}
-        onClick={handleToggleExpand}
-        className="run-code-tool-card"
-        clickable={canExpand}
-        header={(
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Code2 size={16} />} />}
-            action={t('toolCards.runCode.title')}
-            content={summary}
-            extra={code ? (
-              <ToolCardHeaderActions className="run-code-tool-card__actions">
-                <ToolCardCopyAction
-                  className="run-code-tool-card__copy"
-                  getText={getCopyCodeText}
-                  tooltip={t('toolCards.runCode.copyCode')}
-                  copiedTooltip={t('toolCards.runCode.codeCopied')}
-                  successMessage={t('toolCards.runCode.codeCopied')}
-                  failureMessage={t('toolCards.runCode.copyCodeFailed')}
-                  ariaLabel={t('toolCards.runCode.copyCode')}
-                  showSuccessNotification={false}
-                />
-              </ToolCardHeaderActions>
-            ) : undefined}
+        onToggle={canExpand ? handleToggleExpand : undefined}
+        action={t('toolCards.runCode.title')}
+        summary={summary}
+        headerActions={code ? (
+          <ToolCardCopyAction
+            getText={getCopyCodeText}
+            tooltip={t('toolCards.runCode.copyCode')}
+            copiedTooltip={t('toolCards.runCode.codeCopied')}
+            successMessage={t('toolCards.runCode.codeCopied')}
+            failureMessage={t('toolCards.runCode.copyCodeFailed')}
+            ariaLabel={t('toolCards.runCode.copyCode')}
+            showSuccessNotification={false}
           />
-        )}
-        expandedContent={canExpand ? (
-          <div data-bf-component="run-code-tool-card" data-bf-part="expanded" className="run-code-tool-card__expanded">
-            {code && (
-              <section data-bf-component="run-code-tool-card" data-bf-part="section" className="run-code-tool-card__section">
-                <div data-bf-component="run-code-tool-card" data-bf-part="label" className="run-code-tool-card__label">
-                  {t('toolCards.runCode.programLabel')}
-                </div>
-                <CodePreview
-                  content={code}
-                  language="typescript"
-                  showLineNumbers={false}
-                  maxHeight={320}
-                  autoScrollToBottom={false}
-                />
-              </section>
-            )}
-
-            {(output || errorMessage) && (
-              <section data-bf-component="run-code-tool-card" data-bf-part="section" className="run-code-tool-card__section">
-                <div data-bf-component="run-code-tool-card" data-bf-part="label" className="run-code-tool-card__label">
-                  {t('toolCards.runCode.outputLabel')}
-                </div>
-                {errorMessage ? (
-                  <div data-bf-component="run-code-tool-card" data-bf-part="error" className="run-code-tool-card__error">{errorMessage}</div>
-                ) : (
-                  <div data-bf-component="run-code-tool-card" data-bf-part="output" className="compact-result-content run-code-tool-card__output">
-                    <pre>{output}</pre>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
         ) : undefined}
+        program={code ? (
+          <CodePreview
+            content={code}
+            language="typescript"
+            showLineNumbers={false}
+            maxHeight={320}
+            autoScrollToBottom={false}
+          />
+        ) : undefined}
+        programLabel={t('toolCards.runCode.programLabel')}
+        output={output || undefined}
+        outputLabel={t('toolCards.runCode.outputLabel')}
+        error={errorMessage || undefined}
       />
     </div>
   );

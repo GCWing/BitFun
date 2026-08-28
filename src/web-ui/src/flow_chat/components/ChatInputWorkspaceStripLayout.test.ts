@@ -11,7 +11,7 @@ const readWorkspaceStripStylesheet = () => readLocalFile('ChatInputWorkspaceStri
 const readChatInputStylesheet = () => readLocalFile('ChatInput.scss');
 const readWorkspaceStripComponent = () => readLocalFile('ChatInputWorkspaceStrip.tsx');
 
-describe('status track layout', () => {
+describe('composer context track layout', () => {
   it('is two fixed rails rather than a conditional column template', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
@@ -42,7 +42,7 @@ describe('status track layout', () => {
     const stylesheet = readWorkspaceStripStylesheet();
 
     // One role for the whole track, declared once per species. The rail sets
-    // the meta size — a quiet footnote under the capsule above — and its
+    // the meta size — a quiet context line above the input surface — and its
     // facts inherit it; every control restates the same step through the
     // shared mixin, so the row reads as a single hushed line.
     expect(stylesheet).toContain(
@@ -128,27 +128,29 @@ describe('status track layout', () => {
     expect(stylesheet).toMatch(/&__location \{[\s\S]*?gap: \$track-part-gap;/);
   });
 
-  it('lines the track up with the capsule it belongs to, ink to ink', () => {
+  it('mounts the track in ChatComposer contextBar without a second positioning system', () => {
     const stylesheet = readWorkspaceStripStylesheet();
     const chatInput = readChatInputStylesheet();
-
-    // The two rows share an origin, so the track can only look attached if it
-    // accounts for the capsule's border and pad — and for the transparent
-    // padding its own outermost items carry.
-    const capsule = chatInput.slice(
-      chatInput.indexOf('    // Capsule (single-line) mode appearance'),
-      chatInput.indexOf('    &--multi-line {'),
+    const component = readLocalFile('ChatInput.tsx');
+    const stripRoot = stylesheet.slice(
+      stylesheet.indexOf('.bitfun-chat-input-workspace-strip {'),
+      stylesheet.indexOf('  &__context {'),
     );
-    expect(capsule).toContain('padding: 0 8px;');
-    expect(capsule).toContain('border: 1px solid');
-    // …and the drop zone's own inset, the third term in the 17px.
+
+    expect(component).toContain('contextBar={workspaceStrip}');
+    expect(component).toContain('<ChatInputWorkspaceStrip');
     expect(chatInput).toMatch(
       /\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 \$size-gap-2;/,
     );
-    expect(stylesheet).toContain('$track-edge: 17px;');
-    expect(stylesheet).toContain('$track-pad-left: $track-edge - 7px;');
-    expect(stylesheet).toContain('$track-pad-right: $track-edge - 3px;');
-    expect(stylesheet).toContain('padding: 0 $track-pad-right 0 $track-pad-left;');
+    expect(chatInput).toMatch(
+      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: \$size-gap-6;/,
+    );
+    expect(stripRoot).toContain('position: relative;');
+    expect(stripRoot).toContain('padding: 0;');
+    expect(stripRoot).not.toContain('position: absolute;');
+    expect(stripRoot).not.toContain('bottom:');
+    expect(stylesheet).not.toContain('$track-edge');
+    expect(chatInput).not.toContain('padding-bottom: 36px;');
   });
 
   it('orders the left rail as situation and the right rail as the next turn', () => {
@@ -198,24 +200,35 @@ describe('status track layout', () => {
     expect(readLocalFile('ModelSelector.tsx')).not.toContain('reasoningControlHost');
   });
 
-  it('keeps one Harness/main-Agent control beside the add menu', () => {
+  it('places the compact Harness/main-Agent row inside the add menu', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
+    const addMenuIndex = chatInput.indexOf('modeState.dropdownOpen && createPortal');
     const harnessIndex = chatInput.indexOf('<HarnessProfileSelector');
     const agentBoostIndex = chatInput.indexOf('data-testid="chat-input-agent-boost"');
+    const addMenuEndIndex = chatInput.indexOf('getAppearanceOverlayHost()', harnessIndex);
     const newSessionHandlerIndex = chatInput.indexOf(
-      'onStartNewSession={requestHarnessNewSession}',
+      'onStartNewSession: requestHarnessNewSession',
     );
 
     expect(harnessIndex).toBeGreaterThan(-1);
     expect(agentBoostIndex).toBeGreaterThan(-1);
+    expect(addMenuIndex).toBeGreaterThan(agentBoostIndex);
     expect(harnessIndex).toBeGreaterThan(agentBoostIndex);
-    expect(newSessionHandlerIndex).toBeGreaterThan(harnessIndex);
+    expect(harnessIndex).toBeGreaterThan(addMenuIndex);
+    expect(addMenuEndIndex).toBeGreaterThan(harnessIndex);
+    expect(chatInput.match(/<HarnessProfileSelector/g)).toHaveLength(2);
+    expect(chatInput).toContain('presentation="menu-item"');
+    expect(chatInput).toContain('presentation="standalone"');
+    expect(chatInput).toContain(
+      "onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}",
+    );
+    expect(newSessionHandlerIndex).toBeGreaterThan(-1);
     expect(chatInput).toContain(
       'composer.setValue(newSessionId, transferredDraft.value)',
     );
     expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
     expect(chatInput).not.toContain("modeState.current !== 'agentic'");
-    expect(chatInput).toContain('executionLevelPolicy.userConfigurable ? (');
+    expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 
   it('keeps enabled workflow Skills as shortcuts at the top of the add menu', () => {
@@ -235,58 +248,129 @@ describe('status track layout', () => {
     expect(chatInput).toContain('data-testid={`chat-input-quick-skill-${shortcut.id}`}');
   });
 
-  it('carries the Harness gear and the model pair inside the capsule', () => {
+  it('moves Harness beside add in expanded layout and keeps the model pair trailing', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
+    const startActionsIndex = chatInput.indexOf('<ChatComposerStartActions>');
+    const menuHarnessIndex = chatInput.indexOf('presentation="menu-item"');
+    const standaloneHarnessIndex = chatInput.indexOf('presentation="standalone"');
+    const endActionsIndex = chatInput.indexOf('<ChatComposerEndActions>');
+    const modelIndex = chatInput.indexOf('<ModelSelector', endActionsIndex);
 
-    expect(chatInput).toContain('<HarnessProfileSelector');
+    expect(menuHarnessIndex).toBeGreaterThan(startActionsIndex);
+    expect(standaloneHarnessIndex).toBeGreaterThan(menuHarnessIndex);
+    expect(standaloneHarnessIndex).toBeLessThan(endActionsIndex);
+    expect(chatInput).toContain('isMultiLine && executionLevelPolicy.userConfigurable ? (');
+    expect(stylesheet).toMatch(
+      /&\[data-bf-layout='expanded'\] \{[\s\S]*?\.bitfun-harness-selector__trigger \{[\s\S]*?height: var\(--bf-control-chat-composer-control-height\);/,
+    );
+    expect(modelIndex).toBeGreaterThan(endActionsIndex);
     expect(chatInput).not.toContain('harnessControl');
-    // Reasoning belongs beside the model it configures, so the capsule no
-    // longer hides it; the context reading stays on the status track, as a
-    // ring rather than a number.
+    // Reasoning belongs beside the model it configures; context usage remains
+    // a ring in the upper context track rather than repeating as a number.
     expect(stylesheet).not.toContain('.bitfun-reasoning-preset-selector,');
     expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
-    expect(stylesheet).toContain('.bitfun-reasoning-preset-selector__trigger {');
+    expect(stylesheet).toContain(
+      ".bitfun-reasoning-preset-selector[data-bf-presentation='label']",
+    );
   });
 
-  it('centres the status track in the band the capsule reserves below it', () => {
-    const chatInput = readChatInputStylesheet();
-    const stylesheet = readWorkspaceStripStylesheet();
+  it('measures wrapping against ChatComposer compact layout after expansion', () => {
+    const component = readLocalFile('ChatInput.tsx');
 
-    // 36px band = 10px of air + the 20px track + a 6px offset, and the drop
-    // zone floats 4px off the window edge, so the track keeps the same air
-    // below (6 + 4) as above (10). Change any one of the four numbers and the
-    // row drifts off-centre.
-    expect(chatInput).toContain('padding-bottom: 36px;');
-    expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: 4px;/,
+    expect(component).toContain(
+      "clone.querySelector(\n      '.bitfun-chat-input__composer-surface'",
     );
-    expect(stylesheet).toContain('min-height: 20px;');
-    expect(stylesheet).toContain('bottom: 6px;');
+    expect(component).toContain("cloneComposerSurfaceEl.dataset.bfLayout = 'compact';");
+    expect(component).toContain('const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;');
+    expect(component).toContain('naturalHeightMeasured > singleLineThreshold');
+    expect(component).not.toContain('naturalHeightMeasured > 32');
+    expect(component).not.toContain("cloneBoxEl.classList.add('bitfun-chat-input__box--capsule')");
+  });
+
+  it('keeps a new session expanded until its first submission starts the session', () => {
+    const component = readLocalFile('ChatInput.tsx');
+
+    expect(component).toContain(
+      'const effectiveTargetSessionStarted = effectiveTargetSessionHasTurns',
+    );
+    expect(component).toContain(
+      "|| Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());",
+    );
+    expect(component).toContain(
+      'const isNewSessionComposer = !effectiveTargetSessionStarted;',
+    );
+    expect(component).toContain(
+      'const [isMultiLine, setIsMultiLine] = useState(isNewSessionComposer);',
+    );
+    expect(component).toMatch(
+      /const measureIsMultiLine = useCallback[\s\S]*?if \(isNewSessionComposer\) \{\s*setIsMultiLine\(true\);\s*return;/,
+    );
+    expect(component).toContain(
+      'const harnessProfileLocked = effectiveTargetSessionStarted;',
+    );
   });
 
   it('keeps the model pair borderless at rest, on hover, and while open', () => {
     const stylesheet = readChatInputStylesheet();
+    const modelPair = stylesheet.slice(
+      stylesheet.indexOf('    .bitfun-model-selector {'),
+      stylesheet.indexOf('    .bitfun-model-selector__trigger {'),
+    );
 
-    expect(stylesheet).toMatch(
-      /\.bitfun-model-selector \{[\s\S]*?border: 1px solid transparent;[\s\S]*?&:hover \{\s*background: var\(--bf-appearance-token-element-bg-soft\);\s*\}/,
+    expect(modelPair).toContain('border: 0;');
+    expect(modelPair).toMatch(
+      /&:hover,\s*&\[data-bf-state='open'\] \{\s*background: var\(--bf-appearance-token-element-bg-soft\);/,
     );
-    expect(stylesheet).toMatch(
-      /&\[data-bf-state='open'\] \{\s*background: var\(--bf-appearance-token-element-bg-soft\);\s*\}/,
-    );
-    expect(stylesheet).not.toMatch(
-      /\.bitfun-model-selector \{[\s\S]{0,900}?border-color:/,
-    );
+    expect(modelPair).not.toContain('border-color:');
   });
 
   it('gives the add icon a background without adding a border', () => {
     const stylesheet = readChatInputStylesheet();
-
-    expect(stylesheet).toMatch(
-      /\.bitfun-chat-input__agent-boost-add \{[\s\S]*?border: 1px solid transparent !important;[\s\S]*?background: var\(--bf-appearance-token-element-bg-subtle\) !important;[\s\S]*?&:hover,[\s\S]*?\.bitfun-chat-input__box:focus-within & \{\s*background: var\(--bf-appearance-token-element-bg-soft\) !important;/,
+    const addControl = stylesheet.slice(
+      stylesheet.indexOf('    .bitfun-chat-input__agent-boost-add {'),
+      stylesheet.indexOf('    .bitfun-chat-input__model-usage-group,'),
     );
-    expect(stylesheet).not.toMatch(
-      /\.bitfun-chat-input__agent-boost-add \{[\s\S]{0,900}?border-color:/,
+
+    expect(addControl).toContain(
+      'width: var(--bf-control-chat-composer-control-height) !important;',
+    );
+    expect(addControl).toContain(
+      'height: var(--bf-control-chat-composer-control-height) !important;',
+    );
+    expect(addControl).toContain('border: 0 !important;');
+    expect(addControl).toContain(
+      'background: var(--bf-appearance-token-element-bg-subtle) !important;',
+    );
+    expect(addControl).toMatch(
+      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?element-bg-soft/,
+    );
+    expect(addControl).not.toContain('border-color:');
+  });
+
+  it('uses the scaled 45px capsule and keeps 25px controls stable across layouts', () => {
+    const component = readLocalFile('ChatInput.tsx');
+    const stylesheet = readChatInputStylesheet();
+    const compactControls = stylesheet.slice(
+      stylesheet.indexOf("    &[data-bf-layout='compact'] {"),
+      stylesheet.indexOf('  &--capsule {'),
+    );
+    expect(compactControls).toContain('height: 100%;');
+    expect(stylesheet).toContain(
+      'height: var(--bf-control-chat-composer-control-height);',
+    );
+    expect(compactControls).not.toContain(
+      'width: var(--bf-control-chat-composer-compact-track-height) !important;',
+    );
+    expect(component).toContain('className="bitfun-chat-input__agent-boost-trigger"');
+    expect(stylesheet).toMatch(
+      /&__agent-boost-trigger \{[\s\S]*?display: inline-flex;[\s\S]*?height: 100%;[\s\S]*?align-items: center;[\s\S]*?line-height: 0;/,
+    );
+    expect(readLocalFile('voice/ComposerVoiceInputButton.tsx')).toContain(
+      'className="bitfun-chat-input__voice-control-shell"',
+    );
+    expect(stylesheet).toMatch(
+      /\.bitfun-chat-input__voice-control-shell \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?line-height: 0;/,
     );
   });
 
@@ -305,20 +389,21 @@ describe('status track layout', () => {
     expect(stylesheet).not.toMatch(/__trigger-value \{[\s\S]*?display: none;/);
   });
 
-  it('states thinking strength with a compact concentric mark so the pill cannot widen', () => {
+  it('uses a text reasoning label in ChatInput while preserving the default meter', () => {
     const component = readLocalFile('ReasoningPresetSelector.tsx');
     const stylesheet = readLocalFile('ReasoningPresetSelector.scss');
+    const chatInput = readLocalFile('ChatInput.tsx');
 
     expect(component).toContain('__status-meter');
-    // A word beside the concentric mark only repeats it, and it does so where the
-    // capsule has the least width to spare. The level stays in the name.
-    expect(component).not.toContain('__label');
+    expect(component).toContain("triggerPresentation === 'label'");
+    expect(component).toContain('__trigger-label');
+    expect(component).toContain('<ReasoningIntensityMark level={intensityLevel} compact />');
     expect(component).toContain('aria-label={tooltip}');
     expect(stylesheet).toMatch(/&__trigger \{[\s\S]*?width: 18px;[\s\S]*?height: 18px;/);
-    expect(stylesheet).not.toContain('max-width: 116px;');
-    expect(readChatInputStylesheet()).toMatch(
-      /\.bitfun-reasoning-preset-selector__trigger \{\n {10}width: 22px;\n {10}height: 22px;/,
+    expect(stylesheet).toMatch(
+      /&__trigger-label \{[\s\S]*?font-size: flow-type\.\$control-size;/,
     );
+    expect(chatInput).toContain('reasoningTriggerPresentation="label"');
   });
 
   it('lifts the permission risk ramp onto the trigger, not just the menu rows', () => {

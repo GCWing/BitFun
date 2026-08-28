@@ -4,6 +4,9 @@ import test from "node:test";
 
 const detailSource = new URL("../src/pages/ComponentDetailPage.tsx", import.meta.url);
 const catalogSource = new URL("../src/pages/ComponentsPage.tsx", import.meta.url);
+const appSource = new URL("../src/App.tsx", import.meta.url);
+const flowChatPreviewSource = new URL("../src/preview/FlowChatPreviewRegistry.tsx", import.meta.url);
+const flowChatGallerySource = new URL("../src/preview/FlowChatToolGallery.tsx", import.meta.url);
 const stylesSource = new URL("../src/styles.css", import.meta.url);
 
 test("every preview matrix declares its state-column count", async () => {
@@ -34,6 +37,148 @@ test("preview matrices define horizontal columns for every registered state coun
     source,
     /\.component-preview-matrix\[data-state-count="5"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(5, minmax\(144px, 1fr\)\)/s,
   );
+  assert.match(
+    source,
+    /\.component-preview-matrix\[data-state-count="6"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(6, minmax\(144px, 1fr\)\)/s,
+  );
+});
+
+test("FlowChat component details are registry-driven and stack every state vertically", async () => {
+  const [detail, catalog, preview, styles] = await Promise.all([
+    readFile(detailSource, "utf8"),
+    readFile(catalogSource, "utf8"),
+    readFile(flowChatPreviewSource, "utf8"),
+    readFile(stylesSource, "utf8"),
+  ]);
+
+  assert.match(detail, /if \(flowChatPreview\) \{\s*return component\.states;/);
+  assert.match(detail, /className="flow-chat-state-list"/);
+  assert.match(detail, /className="flow-chat-state-list__item"/);
+  assert.match(detail, /data-component-name=\{component\.name\}/);
+  assert.doesNotMatch(detail, /component-preview-matrix[^]*data-component="flow-chat-tool-card"/);
+  assert.match(catalog, /definition\.section === "framework"/);
+  assert.match(preview, /flowChatPreviewDefinitions/);
+  assert.match(preview, /AmbientToolCard/);
+  assert.match(preview, /ProminentToolCard/);
+  assert.match(preview, /CommandToolCard/);
+  assert.match(preview, /ContextCompressionToolCard/);
+  assert.match(preview, /FileOperationToolCard/);
+  assert.match(preview, /ReadFileToolCard/);
+  assert.match(preview, /ToolCardHeaderActions/);
+  assert.match(styles, /\.flow-chat-state-list\s*\{[^}]*display:\s*grid/s);
+  assert.match(styles, /\.flow-chat-state-list__item\s*\{[^}]*border-bottom:/s);
+  assert.match(
+    styles,
+    /\.flow-chat-state-list__preview\[data-component-name="AskUser"\]\s*\{[^}]*width:\s*min\(100%,\s*680px\)/s,
+  );
+  assert.doesNotMatch(styles, /\.component-preview-matrix\[data-component="flow-chat-tool-card"\]/);
+});
+
+test("FlowChat gallery renders only the real migrated tool-card components", async () => {
+  const [app, catalog, gallery, preview] = await Promise.all([
+    readFile(appSource, "utf8"),
+    readFile(catalogSource, "utf8"),
+    readFile(flowChatGallerySource, "utf8"),
+    readFile(flowChatPreviewSource, "utf8"),
+  ]);
+  const specimenNames = [...preview.matchAll(/\{ tool: "([^"]+)" \}/g)]
+    .map((match) => match[1]);
+  const productOwnedDeclaration = /const productOwnedToolExamples = \[([^\]]+)\] as const;/.exec(gallery);
+  const productOwnedNames = productOwnedDeclaration
+    ? [...productOwnedDeclaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1])
+    : [];
+  const migratedToolNames = [
+    "AgentSpawn",
+    "AgentSendInput",
+    "AgentWait",
+    "AskUserQuestion",
+    "Bash",
+    "ExecCommand",
+    "WriteStdin",
+    "ExecControl",
+    "ContextCompression",
+    "ControlHub",
+    "FinalizeMiniApp",
+    "PublishMiniApp",
+    "PublishAppearance",
+    "UnregisteredTool",
+    "LS",
+    "GetFileDiff",
+    "Write",
+    "Edit",
+    "Delete",
+    "GetToolSpec",
+    "Git",
+    "Glob",
+    "Grep",
+    "PageDeploy",
+    "PagePublish",
+    "Read",
+    "ReviewSessionSummary",
+    "RunCode",
+    "SessionControl",
+    "SessionMessage",
+    "Skill",
+    "TerminalControl",
+    "TodoWrite",
+    "view_image",
+    "WebFetch",
+    "WebSearch",
+  ];
+  const productOwnedToolNames = [
+    "CreatePlan",
+    "Task",
+    "LaunchReviewAgent",
+    "submit_code_review",
+    "MCP",
+    "InitMiniApp",
+    "GenerativeUI",
+    "ComputerUse",
+    "CreateCanvas",
+    "ReadCanvas",
+    "UpdateCanvas",
+    "PatchCanvas",
+  ];
+
+  assert.match(app, /const flowChatComponents = componentRegistry\.filter/);
+  assert.match(app, /route === "flow-chat"/);
+  assert.match(app, /<ComponentsPage\s+category="flow-chat"/);
+  assert.match(catalog, /category === "flow-chat"/);
+  assert.match(catalog, /<FlowChatToolGallery onOpenComponent=\{onOpenComponent\} \/>/);
+  assert.match(gallery, /<FlowChatComponentPreview/);
+  assert.match(gallery, /definition\.section === "tool-card"/);
+  assert.deepEqual(specimenNames, migratedToolNames);
+  assert.deepEqual(productOwnedNames, productOwnedToolNames);
+  assert.equal(new Set(specimenNames).size, specimenNames.length);
+  assert.equal(new Set(productOwnedNames).size, productOwnedNames.length);
+  assert.equal(
+    specimenNames.some((toolName) => productOwnedNames.includes(toolName)),
+    false,
+  );
+  assert.match(gallery, /const productOwnedToolExamples/);
+});
+
+test("CommandToolCard previews follow the runtime command-state presentation", async () => {
+  const preview = await readFile(flowChatPreviewSource, "utf8");
+  const commandPreview = /function CommandPreview[\s\S]*?\n}\n\nfunction resolveFileOperation/.exec(preview)?.[0];
+
+  assert.ok(commandPreview);
+  assert.match(
+    commandPreview,
+    /state === "expanded" \|\| state === "loading"/,
+  );
+  assert.match(commandPreview, /outputDensity=\{loading \? "compact" : "expanded"}/);
+  assert.match(
+    commandPreview,
+    /statusLabel=\{state === "error"[\s\S]*?: undefined}/,
+  );
+  assert.match(commandPreview, /action=\{t\(sample\.actionKey\)\}/);
+  assert.match(commandPreview, /<Timer aria-hidden="true" \/>/);
+  assert.doesNotMatch(
+    commandPreview,
+    /statusLabel=\{[\s\S]*?components\.preview\.flowChat\.completed/,
+  );
+  assert.match(commandPreview, /const footerItems = completed \?/);
 });
 
 test("Button preview exposes the public presentation variants", async () => {

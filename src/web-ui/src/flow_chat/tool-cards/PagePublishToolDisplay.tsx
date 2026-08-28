@@ -4,10 +4,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Button } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Rocket } from 'lucide-react';
-import { CubeLoading } from '../../component-library';
+import { ExternalLink } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { PagePublishToolCard } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -66,16 +65,6 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded]);
 
-  const handleCardClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (!hasExpandableDetails) return;
-      const target = e.target as HTMLElement;
-      if (target.closest('.page-publish-action-buttons')) return;
-      toggleExpanded();
-    },
-    [hasExpandableDetails, toggleExpanded]
-  );
-
   const getErrorMessage = () => {
     if (toolResult && 'error' in toolResult && toolResult.error) {
       return String(toolResult.error);
@@ -90,110 +79,64 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     return slug || t('toolCards.pagePublish.untitled');
   }, [isLoading, slug, t]);
 
-  const renderStatusIcon = () => {
-    if (isLoading) {
-      return <CubeLoading size="small" />;
-    }
-    return null;
-  };
-
-  const renderHeader = () => (
-    <ToolCardHeader
-      icon={<Rocket size={16} />}
-      action={`${t('toolCards.pagePublish.title')}:`}
-      content={
-        <span className="command-text" data-testid="chat-page-publish-title">
-          {commandText}
-          {versionId ? ` @ ${versionId}` : ''}
-        </span>
-      }
-      statusIcon={renderStatusIcon()}
-    />
-  );
-
-  const renderExpandedSuccess = () => (
-    <div className="page-publish-result">
-      {slug && (
-        <div>
-          {t('toolCards.pagePublish.labelSlug')}: {slug}
-        </div>
-      )}
-      {versionId && (
-        <div>
-          {t('toolCards.pagePublish.labelVersion')}: {versionId}
-        </div>
-      )}
-      {deployed && urlPath && (
-        <div>
-          {t('toolCards.pagePublish.labelPath')}: {urlPath}
-        </div>
-      )}
-      {!deployed && previewPath && (
-        <div>
-          {t('toolCards.pagePublish.labelPreview')}: {previewPath}
-        </div>
-      )}
-      <div className="page-publish-action-buttons">
-        {deployed && urlPath && (
-          <Button
-            type="button"
-            variant="fill"
-            size="sm"
-            leadingIcon={<ExternalLink size={12} />}
-            data-testid="chat-page-publish-open-prod-btn"
-            onClick={() => void openPage(slug, generation).catch(() => {
-              notificationService.error(t('toolCards.pagePublish.openFailed'));
-            })}
-          >
-            {t('toolCards.pagePublish.openProduction')}
-          </Button>
-        )}
-        {previewPath && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            leadingIcon={<ExternalLink size={12} />}
-            data-testid="chat-page-publish-open-preview-btn"
-            onClick={() => void openPage(slug, generation, versionId).catch(() => {
-              notificationService.error(t('toolCards.pagePublish.openFailed'));
-            })}
-          >
-            {t('toolCards.pagePublish.openPreview')}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderExpandedError = () => (
-    <div className="error-content">
-      <div className="error-message">{getErrorMessage()}</div>
-    </div>
-  );
-
-  const renderDetailsWhenExpanded = (): React.ReactNode => {
-    if (isFailed) return renderExpandedError();
-    if (success) return renderExpandedSuccess();
-    return null;
-  };
+  const fields = success ? [
+    slug ? { label: `${t('toolCards.pagePublish.labelSlug')}:`, value: slug, monospace: true } : null,
+    versionId ? { label: `${t('toolCards.pagePublish.labelVersion')}:`, value: versionId, monospace: true } : null,
+    deployed && urlPath ? { label: `${t('toolCards.pagePublish.labelPath')}:`, value: urlPath, monospace: true } : null,
+    !deployed && previewPath ? { label: `${t('toolCards.pagePublish.labelPreview')}:`, value: previewPath, monospace: true } : null,
+  ].filter((field): field is NonNullable<typeof field> => Boolean(field)) : [];
 
   return (
     <div
       ref={cardRootRef}
+      data-bf-adapter="page-publish"
       data-testid="chat-page-publish-card"
       data-tool-card-id={toolId ?? ''}
       data-status={status}
       data-expanded={isExpanded ? 'true' : 'false'}
     >
-      <BaseToolCard
-        status={status}
+      <PagePublishToolCard
+        status={isFailed ? 'error' : status}
         isExpanded={isExpanded}
-        onClick={hasExpandableDetails ? handleCardClick : undefined}
-        className="page-publish-tool-display"
-        header={renderHeader()}
-        expandedContent={isExpanded ? renderDetailsWhenExpanded() : null}
-        headerExpandAffordance={hasExpandableDetails}
+        onToggle={hasExpandableDetails ? toggleExpanded : undefined}
+        action={`${t('toolCards.pagePublish.title')}:`}
+        subject={commandText}
+        version={versionId || undefined}
+        loading={isLoading}
+        fields={fields}
+        error={isFailed ? getErrorMessage() : undefined}
+        actions={success ? (
+          <>
+            {deployed && urlPath && (
+              <Button
+                type="button"
+                variant="fill"
+                size="sm"
+                leadingIcon={<ExternalLink size={12} />}
+                data-testid="chat-page-publish-open-prod-btn"
+                onClick={() => void openPage(slug, generation).catch(() => {
+                  notificationService.error(t('toolCards.pagePublish.openFailed'));
+                })}
+              >
+                {t('toolCards.pagePublish.openProduction')}
+              </Button>
+            )}
+            {previewPath && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leadingIcon={<ExternalLink size={12} />}
+                data-testid="chat-page-publish-open-preview-btn"
+                onClick={() => void openPage(slug, generation, versionId).catch(() => {
+                  notificationService.error(t('toolCards.pagePublish.openFailed'));
+                })}
+              >
+                {t('toolCards.pagePublish.openPreview')}
+              </Button>
+            )}
+          </>
+        ) : undefined}
       />
     </div>
   );

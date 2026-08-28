@@ -3,13 +3,10 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Globe, Link } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { Tooltip } from '@/component-library';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { WebSearchToolCard } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
@@ -107,71 +104,26 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
     return t('toolCards.webSearch.searchTitle', { term: searchTerm });
   };
 
-  const renderExpandedContent = () => {
-    if (hasResults) {
-      return (
-        <div className="compact-expanded-results-list">
-          {searchResults?.results.map((result: any, index: number) => (
-            <div key={index} className="compact-expanded-result-item">
-              <Tooltip content={t('toolCards.webSearch.clickToOpenLink')}>
-                <div
-                  className="compact-expanded-result-title"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenLink(result.url);
-                  }}
-                >
-                  <Link size={12} className="inline-icon" />
-                  {result.title || t('toolCards.webSearch.noTitle')}
-                </div>
-              </Tooltip>
-              {result.snippet && (
-                <div className="compact-expanded-result-snippet">{result.snippet}</div>
-              )}
-              <div className="compact-expanded-result-url">{result.url}</div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    if (hasSummary) {
-      return (
-        <div className="compact-result-content">
-          <pre style={{
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            fontSize: '12px',
-            maxHeight: '400px',
-            overflow: 'auto'
-          }}>
-            {searchResults!.summary}
-          </pre>
-        </div>
-      );
-    }
-
-    return undefined;
-  };
-
   if (status === 'error') {
     return null;
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="web-search" data-tool-card-id={toolId ?? ''}>
+      <WebSearchToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
-        clickable={isExpandable}
-        header={
-          <CompactToolCardHeader
-          icon={<ToolCardStatusSlot status={status} toolIcon={<Globe size={16} className="web-search-card-icon" />} />}
-          content={renderContent()}
-          />
-        }
-        expandedContent={isExpandable ? renderExpandedContent() : undefined}
+        onToggle={isExpandable ? handleClick : undefined}
+        summary={renderContent()}
+        results={hasResults ? searchResults?.results.map((result: any, index: number) => ({
+          description: result.snippet,
+          icon: 'link' as const,
+          key: `${result.url || result.title}-${index}`,
+          onOpen: result.url ? () => void handleOpenLink(result.url) : undefined,
+          title: result.title || t('toolCards.webSearch.noTitle'),
+          url: result.url,
+        })) : undefined}
+        resultText={hasSummary ? String(searchResults!.summary) : undefined}
       />
     </div>
   );

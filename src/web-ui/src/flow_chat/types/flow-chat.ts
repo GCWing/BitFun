@@ -691,6 +691,8 @@ export interface ParsedChunk {
 }
 
 export interface ToolCardConfig {
+  attention: 'ambient' | 'prominent';
+  presentation: 'standard' | 'dedicated';
   toolName: string;
   displayName: string;
   icon: string;

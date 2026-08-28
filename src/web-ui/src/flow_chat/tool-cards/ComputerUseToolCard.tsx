@@ -23,8 +23,7 @@ import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { AmbientToolCard, AmbientToolCardHeader, ToolCardStatusSlot } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './ComputerUseToolCard.scss';
 
@@ -228,14 +227,13 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
 
   return (
     <div data-bf-component="computer-use-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', status === 'error' && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+      <AmbientToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
+        onClick={isExpandable ? handleClick : undefined}
         className="computer-use-tool-card"
-        clickable={isExpandable}
         header={(
-          <CompactToolCardHeader
+          <AmbientToolCardHeader
             icon={(
               <ToolCardStatusSlot
                 status={status}

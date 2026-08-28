@@ -234,6 +234,12 @@ import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
 import { IconButton } from '@bitfun/ui';
+import {
+  ChatComposer,
+  ChatComposerContent,
+  ChatComposerEndActions,
+  ChatComposerStartActions,
+} from '@bitfun/ui/flow-chat';
 
 const log = createLogger('ChatInput');
 
@@ -564,6 +570,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const effectiveTargetSessionHasTurns = effectiveTargetSession
+    ? !isProjectedSessionEmpty(effectiveTargetSession)
+    : false;
+  // A submission keeps the session started even if every surviving Turn is
+  // later rolled back. Before that first submission, the composer intentionally
+  // stays expanded instead of collapsing as the empty draft is measured.
+  const effectiveTargetSessionStarted = effectiveTargetSessionHasTurns
+    || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
+  const isNewSessionComposer = !effectiveTargetSessionStarted;
   const dispatchObserverJob = dispatchJobStore(state => {
     const jobId = effectiveTargetSession?.config.dispatchJobId;
     return jobId ? state.jobs[jobId] : undefined;
@@ -654,8 +669,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   armedTurnPermissionModeRef.current = armedTurnPermissionMode;
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
-  // isMultiLine: true when content overflows a single line (scrollHeight > threshold or has newlines)
-  const [isMultiLine, setIsMultiLine] = useState(false);
+  // New sessions start expanded. Once the first Turn has been submitted, this
+  // returns to content-driven measurement (newlines, attachments, or wrapping).
+  const [isMultiLine, setIsMultiLine] = useState(isNewSessionComposer);
   // showPlaceholder is true when the editor DOM is truly empty (value empty AND no residual <br>)
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const liveCapsuleInputWidthRef = useRef<number | null>(null);
@@ -697,12 +713,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clone.classList.add('bitfun-chat-input--capsule');
     clone.classList.remove('bitfun-chat-input--multi-line');
 
-    const cloneBoxEl = clone.querySelector('.bitfun-chat-input__box') as HTMLElement | null;
+    const cloneComposerSurfaceEl = clone.querySelector(
+      '.bitfun-chat-input__composer-surface',
+    ) as HTMLElement | null;
     const cloneInputAreaEl = clone.querySelector('.bitfun-chat-input__input-area') as HTMLElement | null;
 
-    if (cloneBoxEl) {
-      cloneBoxEl.classList.add('bitfun-chat-input__box--capsule');
-      cloneBoxEl.classList.remove('bitfun-chat-input__box--multi-line');
+    if (cloneComposerSurfaceEl) {
+      // ChatComposer owns the compact/expanded grid. Force its public layout
+      // contract on the off-screen clone so collapse checks never measure the
+      // wider expanded content track by accident.
+      cloneComposerSurfaceEl.dataset.bfLayout = 'compact';
     }
 
     document.body.appendChild(clone);
@@ -740,6 +760,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Shared measurement: temporarily unconstrain the editor and use the capsule input
   // width so the result is consistent between capsule ↔ multi-line transitions.
   const measureIsMultiLine = useCallback((source: 'value-effect' | 'mutation-observer' | 'collapse-confirmation' | 'layout-change' = 'value-effect') => {
+    if (isNewSessionComposer) {
+      setIsMultiLine(true);
+      return;
+    }
     const hasNewline = inputState.value.includes('\n');
     const hasImages = imageContexts.length > 0;
     if (hasNewline || hasImages || showTargetSwitcher) {
@@ -791,12 +815,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     el.style.flex = 'none';
     el.style.minHeight = '0';
     el.style.width = `${measurementWidth}px`;
+    const measurementStyle = window.getComputedStyle(el);
+    const computedLineHeight = Number.parseFloat(measurementStyle.lineHeight);
+    const computedFontSize = Number.parseFloat(measurementStyle.fontSize);
+    const singleLineHeight = Number.isFinite(computedLineHeight)
+      ? computedLineHeight
+      : Number.isFinite(computedFontSize)
+        ? computedFontSize * 1.45
+        : 20;
+    const paddingBlock =
+      (Number.parseFloat(measurementStyle.paddingTop) || 0) +
+      (Number.parseFloat(measurementStyle.paddingBottom) || 0);
     const naturalHeightMeasured = el.scrollHeight;
     el.style.flex = prevFlex;
     el.style.minHeight = prevMinH;
     el.style.width = prevWidth;
-    // ~1.45 × 14px ≈ 20px per line; threshold of 32px means "needs > 1 line"
-    const nextIsMultiLine = naturalHeightMeasured > 32;
+    // The midpoint between one and two line boxes absorbs sub-pixel rounding
+    // while following the active layout's real line height. A fixed pixel
+    // threshold can oscillate when compact geometry crosses that fixed value:
+    // compact expands, expanded collapses, and the cycle repeats.
+    const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;
+    const nextIsMultiLine = naturalHeightMeasured > singleLineThreshold;
     const shouldVerifyCollapse =
       isMultiLine &&
       !nextIsMultiLine &&
@@ -826,7 +865,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     lockedCapsuleInputWidthRef.current = nextLockedWidth;
     setIsMultiLine(nextIsMultiLine);
-  }, [inputState.value, imageContexts.length, isMultiLine, measureCapsuleInputWidth, showTargetSwitcher]);
+  }, [inputState.value, imageContexts.length, isMultiLine, isNewSessionComposer, measureCapsuleInputWidth, showTargetSwitcher]);
   measureIsMultiLineRef.current = measureIsMultiLine;
 
   // Re-measure when value or image count changes (handles typing / deleting)
@@ -2501,13 +2540,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [effectiveSendAgentType, permissionMode, t, workspace]);
 
-  const effectiveTargetSessionHasTurns = effectiveTargetSession
-    ? !isProjectedSessionEmpty(effectiveTargetSession)
-    : false;
-  // Once the runtime accepts the first submission, the execution level remains fixed even
-  // if the user later rolls back all surviving Turns.
-  const harnessProfileLocked = effectiveTargetSessionHasTurns
-    || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
+  const harnessProfileLocked = effectiveTargetSessionStarted;
   const dispatchControl = useMemo(() => {
     if (
       registration ||
@@ -5458,6 +5491,85 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   };
 
+  const workspaceStripVisible = Boolean(
+    chatStripWorkspaceLabel.trim()
+    || dispatchControl
+    || showPermissionModeControl
+    || (
+      effectiveTargetSessionId
+      && effectiveTargetSession
+      && caps.usageReport
+    ),
+  );
+  const workspaceStrip = workspaceStripVisible ? (
+    <ChatInputWorkspaceStrip
+      repositoryPath={chatStripRepositoryPath}
+      workspaceLabel={chatStripWorkspaceLabel}
+      executionTarget={effectiveTargetSession?.config.executionTarget}
+      dispatchControl={dispatchControl}
+      worktreeControl={worktreeControl}
+      deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
+      permissionControl={showPermissionModeControl
+        ? caps.sessionScopedApproval
+          ? {
+              mode: dispatchPermissionMode,
+              disabled: dispatchSubmissionOptionsLocked,
+              options: DISPATCH_PERMISSION_MODES,
+              scopeLabel: t('chatInput.dispatch.sessionScope'),
+              onChange: handleDispatchPermissionModeChange,
+              onHide: handleHidePermissionModeControl,
+            }
+          : {
+              mode: permissionMode,
+              saving: permissionModeSaving,
+              scopeLabel: activePermissionTurnId
+                ? t('chatInput.permissionMode.activeTurnScope')
+                : temporaryPermissionMode
+                  ? t('chatInput.permissionMode.turnScope')
+                  : t('chatInput.permissionMode.sessionScope'),
+              overridden: permissionModeOverridden,
+              nextTurnMode: temporaryPermissionMode
+                ? chatInputPermissionMode(temporaryPermissionMode)
+                : null,
+              activeTurn: activePermissionTurnId !== null,
+              onChangeForNextTurn: isAcpTargetSession
+                ? undefined
+                : handlePermissionModeForNextTurn,
+              onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
+              onResetToDefault: isAcpTargetSession
+                ? undefined
+                : handleResetPermissionModeToDefault,
+              onOpenDefaultSettings: isAcpTargetSession
+                ? undefined
+                : handleOpenPermissionDefaultSettings,
+              onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
+            }
+        : undefined}
+      usageReport={
+        effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
+          ? {
+              visible: true,
+              currentTokens: tokenUsage.current,
+              maxTokens: tokenUsage.max,
+              onOpen: handleToolbarUsageReport,
+            }
+          : undefined
+      }
+    />
+  ) : undefined;
+
+  const harnessProfileSelectorProps = {
+    legacySession: !canSwitchModes,
+    sessionStarted: harnessProfileLocked,
+    selectedProfile: selectedHarnessProfile,
+    selectedAgentId: selectedHarnessProfile === 'other' ? currentMode : undefined,
+    otherAgents: otherAgentOptions,
+    disabled: isModeChangePending || isHarnessSessionCreating,
+    onSelectProfile: requestHarnessProfileChange,
+    onSelectAgent: requestMainAgentChange,
+    onStartNewSession: requestHarnessNewSession,
+  } satisfies React.ComponentProps<typeof HarnessProfileSelector>;
+
   return (
     <>
       {deepReviewConsentDialog}
@@ -5520,7 +5632,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onRespondBatch={respondPermissionBatch}
             />
           ) : null}
-          <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`} data-bf-component="chat-input" data-bf-part="box">
+          <div className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
+            <ChatComposer
+              className="bitfun-chat-input__composer"
+              surfaceClassName="bitfun-chat-input__composer-surface"
+              contextBar={workspaceStrip}
+              layout={isMultiLine ? 'expanded' : 'compact'}
+              busy={Boolean(derivedState?.isProcessing || caps.transferInFlight)}
+              disabled={caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
+            >
+              <ChatComposerContent>
+                <div className="bitfun-chat-input__content">
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-bf-component="chat-input" data-bf-part="targetSwitcher" data-testid="chat-input-target-switcher">
                 <span className="bitfun-chat-input__target-switcher-label" data-bf-component="chat-input" data-bf-part="targetLabel">{t('chatInput.conversationTarget')}</span>
@@ -5915,8 +6037,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 return null;
               })(), getAppearanceOverlayHost())}
             </div>
-            
-            <div className="bitfun-chat-input__actions" data-bf-component="chat-input" data-bf-part="actions">
+                </div>
+              </ChatComposerContent>
+
+              <ChatComposerStartActions>
               <div className="bitfun-chat-input__actions-left" data-bf-component="chat-input" data-bf-part="actionsLeft">
                 <div
                   className="bitfun-chat-input__agent-boost"
@@ -5926,7 +6050,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   ref={agentBoostRef}
                 >
                   {!isAcpTargetSession && (
-                    <span ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
+                    <span className="bitfun-chat-input__agent-boost-trigger" ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
                       <Tooltip content={t('chatInput.addBoostTooltip')}>
                         <IconButton
                           aria-label={t('chatInput.addBoostTooltip')}
@@ -5996,6 +6120,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
                         </>
                       )}
+                      {!isMultiLine && executionLevelPolicy.userConfigurable ? (
+                        <>
+                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
+                            <HarnessProfileSelector
+                              {...harnessProfileSelectorProps}
+                              presentation="menu-item"
+                              onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}
+                            />
+                          </div>
+                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                        </>
+                      ) : null}
 
                       {canSwitchModes && showStandardExecutionOptions && (
                         <>
@@ -6238,21 +6374,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     getAppearanceOverlayHost(),
                   )}
                 </div>
-                {/* Harness is the persistent execution/main-Agent control. */}
-                {executionLevelPolicy.userConfigurable ? (
+                {isMultiLine && executionLevelPolicy.userConfigurable ? (
                   <HarnessProfileSelector
-                    legacySession={!canSwitchModes}
-                    sessionStarted={harnessProfileLocked}
-                    selectedProfile={selectedHarnessProfile}
-                    selectedAgentId={selectedHarnessProfile === 'other' ? currentMode : undefined}
-                    otherAgents={otherAgentOptions}
-                    disabled={isModeChangePending || isHarnessSessionCreating}
-                    onSelectProfile={requestHarnessProfileChange}
-                    onSelectAgent={requestMainAgentChange}
-                    onStartNewSession={requestHarnessNewSession}
+                    {...harnessProfileSelectorProps}
+                    presentation="standalone"
                   />
                 ) : null}
               </div>
+
+              </ChatComposerStartActions>
+
+              <ChatComposerEndActions>
               <div className="bitfun-chat-input__actions-right" data-bf-component="chat-input" data-bf-part="actionsRight">
                 {voiceInput.phase === 'idle' ? (
                   <div className="bitfun-chat-input__model-usage-group" data-bf-component="chat-input" data-bf-part="model">
@@ -6268,6 +6400,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
                     disabled={isInterruptedTurnRecoveryInFlight}
+                    reasoningTriggerPresentation="label"
                   />
                   </div>
                 ) : null}
@@ -6279,64 +6412,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}
               </div>
-            </div>
+              </ChatComposerEndActions>
+            </ChatComposer>
           </div>
         </div>
       </div>
-      <ChatInputWorkspaceStrip
-        repositoryPath={chatStripRepositoryPath}
-        workspaceLabel={chatStripWorkspaceLabel}
-        executionTarget={effectiveTargetSession?.config.executionTarget}
-        dispatchControl={dispatchControl}
-        worktreeControl={worktreeControl}
-        deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        permissionControl={showPermissionModeControl
-          ? caps.sessionScopedApproval
-            ? {
-                mode: dispatchPermissionMode,
-                disabled: dispatchSubmissionOptionsLocked,
-                options: DISPATCH_PERMISSION_MODES,
-                scopeLabel: t('chatInput.dispatch.sessionScope'),
-                onChange: handleDispatchPermissionModeChange,
-                onHide: handleHidePermissionModeControl,
-              }
-            : {
-                mode: permissionMode,
-                saving: permissionModeSaving,
-                scopeLabel: activePermissionTurnId
-                  ? t('chatInput.permissionMode.activeTurnScope')
-                  : temporaryPermissionMode
-                    ? t('chatInput.permissionMode.turnScope')
-                  : t('chatInput.permissionMode.sessionScope'),
-                overridden: permissionModeOverridden,
-                nextTurnMode: temporaryPermissionMode
-                  ? chatInputPermissionMode(temporaryPermissionMode)
-                  : null,
-                activeTurn: activePermissionTurnId !== null,
-                onChangeForNextTurn: isAcpTargetSession
-                  ? undefined
-                  : handlePermissionModeForNextTurn,
-                onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
-                onResetToDefault: isAcpTargetSession
-                  ? undefined
-                  : handleResetPermissionModeToDefault,
-                onOpenDefaultSettings: isAcpTargetSession
-                  ? undefined
-                  : handleOpenPermissionDefaultSettings,
-                onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
-              }
-          : undefined}
-        usageReport={
-          effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
-            ? {
-                visible: true,
-                currentTokens: tokenUsage.current,
-                maxTokens: tokenUsage.max,
-                onOpen: handleToolbarUsageReport,
-              }
-            : undefined
-        }
-      />
       {effectiveTargetSession && canUseThreadGoal ? (
         <ThreadGoalDialogs
           controller={threadGoalController}

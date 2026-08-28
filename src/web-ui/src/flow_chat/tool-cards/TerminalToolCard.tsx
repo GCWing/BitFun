@@ -16,23 +16,22 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { Terminal, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { DotMatrixLoader, IconButton } from '../../component-library';
+import {
+  CommandToolCard,
+  type CommandToolCardFooterItem,
+} from '@bitfun/ui/flow-chat';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
-import { getTerminalViewState, resolveCanCancelTool, type TerminalViewState } from './terminalToolCardState';
+import { getTerminalViewState, resolveCanCancelTool } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
-import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { CopyableTextPreview } from '../components/CopyableTextPreview';
+import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
-import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
 const TERMINAL_COLLAPSED_STATUSES = new Set(['completed', 'cancelled', 'error', 'rejected']);
@@ -89,111 +88,6 @@ function getAutoExpandedStateForTerminalStatus(
   }
 
   return null;
-}
-
-function renderTerminalExpandedContent(params: {
-  viewState: TerminalViewState;
-  liveOutput: string;
-  parsedResult: ParsedTerminalResult;
-  waitingMessage: string | null;
-  compactSettledPreview: boolean;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}): React.ReactNode {
-  const {
-    viewState,
-    liveOutput,
-    parsedResult,
-    waitingMessage,
-    compactSettledPreview,
-    t,
-  } = params;
-
-  const isStreamingPhase =
-    viewState.displayPhase === 'live_output' ||
-    viewState.displayPhase === 'receiving_params' ||
-    viewState.displayPhase === 'executing';
-
-  const maxRows = isStreamingPhase || compactSettledPreview
-    ? TERMINAL_OUTPUT_STREAMING_MAX_ROWS
-    : TERMINAL_OUTPUT_EXPANDED_MAX_ROWS;
-
-  return (
-    <>
-      {viewState.displayPhase === 'live_output' && (
-        <div className="terminal-execution-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
-          <LazyTerminalOutputRenderer
-            content={liveOutput}
-            className="terminal-xterm-output"
-            maxRows={maxRows}
-          />
-        </div>
-      )}
-
-      {(viewState.displayPhase === 'receiving_params' || viewState.displayPhase === 'executing') && waitingMessage && (
-        <div className="terminal-execution-output terminal-waiting" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="waiting">
-          <span className="waiting-text">{waitingMessage}</span>
-        </div>
-      )}
-
-      {viewState.showCompletedResult && (
-        <div className="terminal-result-container" data-bf-component="terminal-tool-card" data-bf-part="result">
-          {parsedResult.output && (
-            <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
-              <LazyTerminalOutputRenderer
-                content={parsedResult.output}
-                className="terminal-xterm-output"
-                maxRows={maxRows}
-              />
-            </div>
-          )}
-          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
-            {parsedResult.workingDir && (
-              <>
-                <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
-                <span className="terminal-result-value">{parsedResult.workingDir}</span>
-              </>
-            )}
-            <span
-              className={`terminal-exit-code ${parsedResult.exitCode === 0 ? 'success' : 'error'}`}
-              data-testid="chat-shell-command-exit-code"
-              data-exit-code={parsedResult.exitCode}
-              data-status={parsedResult.exitCode === 0 ? 'success' : 'error'}
-            >
-              {t('toolCards.terminal.exitCode', { code: parsedResult.exitCode })}
-            </span>
-            {parsedResult.executionTimeMs && (
-              <span className="terminal-execution-time">
-                {parsedResult.executionTimeMs}ms
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {viewState.showCancelledResult && (
-        <div className="terminal-result-container cancelled" data-bf-component="terminal-tool-card" data-bf-part="result" data-bf-state="cancelled">
-          <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
-            <LazyTerminalOutputRenderer
-              content={liveOutput}
-              className="terminal-xterm-output"
-              maxRows={maxRows}
-            />
-          </div>
-          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
-            <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function renderTerminalErrorContent(errorMessage: string): React.ReactNode {
-  return (
-    <div data-bf-component="terminal-tool-card" data-bf-part="error" data-bf-state="error" className="error-content">
-      <div className="error-message">{errorMessage}</div>
-    </div>
-  );
 }
 
 function parseTerminalResult(raw: unknown, durationMs?: number): ParsedTerminalResult {
@@ -321,8 +215,6 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [applyTerminalExpandedState, isExpanded]);
 
   const [interruptRequested, setInterruptRequested] = useState(false);
-  const [isCommandTruncated, setIsCommandTruncated] = useState(false);
-  const commandRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (status !== 'running') {
@@ -348,51 +240,17 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     status,
   ]);
 
-  const updateCommandTruncation = useCallback(() => {
-    const element = commandRef.current;
-    if (!element) {
-      setIsCommandTruncated(false);
-      return;
-    }
-
-    const nextValue = element.scrollWidth - element.clientWidth > 1;
-    setIsCommandTruncated((prev) => (prev === nextValue ? prev : nextValue));
-  }, []);
-
-  useEffect(() => {
-    const element = commandRef.current;
-    if (!element) {
-      setIsCommandTruncated(false);
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(updateCommandTruncation);
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-          updateCommandTruncation();
-        })
-      : null;
-
-    resizeObserver?.observe(element);
-    if (element.parentElement) {
-      resizeObserver?.observe(element.parentElement);
-    }
-
-    window.addEventListener('resize', updateCommandTruncation);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', updateCommandTruncation);
-    };
-  }, [command, updateCommandTruncation]);
-
   const showConfirmButtons = status === 'pending_confirmation';
   const canExecuteCommand = Boolean(command?.trim());
   const getCopyCommandText = useCallback(
     () => (typeof command === 'string' ? command : ''),
     [command],
   );
+  const { copied: commandCopied, copy: copyCommand } = useCopyTextAction({
+    getText: getCopyCommandText,
+    successMessage: t('toolCards.terminal.commandCopied'),
+    failureMessage: t('toolCards.terminal.copyCommandFailed'),
+  });
 
   // The Interrupt button is only meaningful if the current host can actually
   // cancel a running tool. Resolution is centralized in resolveCanCancelTool so
@@ -465,190 +323,117 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     createTerminalTab(terminalSessionId, terminalName);
   }, [terminalSessionId]);
 
-  const handleCardClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('.tool-card-header-actions, .terminal-action-btn')) {
-      return;
-    }
-
-    toggleExpanded();
-  }, [toggleExpanded]);
-
-  const renderLoadingStatusIcon = () => {
-    if (viewState.isLoading) {
-      return <DotMatrixLoader size="medium" />;
-    }
-
-    return null;
-  };
-
-  const renderOpenInPanelButton = () => {
-    if (!terminalSessionId) {
-      return null;
-    }
-
-    return (
-      <IconButton
-        className="terminal-action-btn external-btn terminal-open-panel-btn"
-        variant="ghost"
-        size="xs"
-        onClick={handleOpenInPanel}
-        tooltip={t('toolCards.terminal.openInPanel')}
-        data-testid="chat-shell-tool-open-panel"
-      >
-        <ExternalLink size={12} />
-      </IconButton>
-    );
-  };
-
-  const renderCopyCommandButton = () => (
-    <ToolCardCopyAction
-      className="terminal-action-btn copy-command-btn"
-      getText={getCopyCommandText}
-      disabled={!canExecuteCommand}
-      tooltip={t('toolCards.terminal.copyCommand')}
-      copiedTooltip={t('toolCards.terminal.commandCopied')}
-      successMessage={t('toolCards.terminal.commandCopied')}
-      failureMessage={t('toolCards.terminal.copyCommandFailed')}
-      ariaLabel={t('toolCards.terminal.copyCommand')}
-    />
-  );
-
-  const renderTimeoutIndicator = () => (
-    <span className="terminal-header-duration">
-      <ToolTimeoutIndicator
-        startTime={toolItem.startTime}
-        isRunning={status === 'preparing' || status === 'streaming' || status === 'running'}
-        timeoutMs={
-          typeof toolCall?.input?.timeout_ms === 'number' && toolCall.input.timeout_ms > 0
-            ? toolCall.input.timeout_ms
-            : undefined
-        }
-        showControls={false}
-        completedDurationMs={
-          status === 'completed' && parsedResult?.executionTimeMs
-            ? parsedResult.executionTimeMs
-            : undefined
-        }
-      />
-    </span>
-  );
-
-  const renderStatusText = () => {
-    if (!viewState.statusLabel || !viewState.statusClassName) {
-      return null;
-    }
-
-    return (
-      <span data-bf-component="terminal-tool-card" data-bf-part="status" className={`terminal-status-text ${viewState.statusClassName}`}>
-        {t(`toolCards.terminal.${viewState.statusLabel}`)}
-      </span>
-    );
-  };
-
-  const renderHeaderExtra = (includeInterrupt: boolean) => (
-    <span className="terminal-header-extra" data-bf-component="terminal-tool-card" data-bf-part="actions">
-      {/* Always visible while running: interrupt */}
-      {includeInterrupt && viewState.showInterruptButton && (
-        <span className="terminal-critical-actions">
-          <IconButton
-            className="terminal-action-btn interrupt-btn"
-            variant="warning"
-            size="xs"
-            onClick={handleInterrupt}
-            tooltip={t('toolCards.terminal.interrupt')}
-          >
-            <Square size={12} fill="currentColor" />
-          </IconButton>
-        </span>
-      )}
-
-      {/* Expanded header: duration + status text always visible */}
-      {includeInterrupt && (
-        <>
-          {renderTimeoutIndicator()}
-          {viewState.hasHeaderExtra && renderStatusText()}
-          <ToolCardHeaderActions className="terminal-header-actions">
-            {renderCopyCommandButton()}
-            {renderOpenInPanelButton()}
-          </ToolCardHeaderActions>
-        </>
-      )}
-    </span>
-  );
-
-  const renderCommandContent = (variant: 'default' | 'compact' = 'default') => {
-    const commandText = typeof command === 'string' ? command : '';
-    const emptyText = t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand');
-
-    return (
-      <CopyableTextPreview
-        ref={commandRef}
-        as={variant === 'compact' ? 'span' : 'code'}
-        text={commandText}
-        emptyText={emptyText}
-        className={
-          variant === 'compact'
-            ? 'terminal-command-compact copyable-text-preview--compact'
-            : 'terminal-command'
-        }
-        tooltipContent={commandText && isCommandTruncated ? commandText : undefined}
-        data-testid="chat-shell-command-text"
-      />
-    );
-  };
-
-  const renderHeader = () => (
-    <ToolCardHeader
-      icon={<Terminal size={16} className="terminal-card-icon" />}
-      action={t('toolCards.terminal.executeCommand')}
-      content={renderCommandContent()}
-      extra={renderHeaderExtra(true)}
-      statusIcon={renderLoadingStatusIcon()}
-    />
-  );
-
   const compactSettledPreview =
     isExpanded &&
     isLastItem === true &&
     isCollapsedTerminalStatus(status) &&
     !userToggledRef.current;
-  const expandedContent = isExpanded
-    ? renderTerminalExpandedContent({
-        viewState,
-        liveOutput,
-        parsedResult,
-        waitingMessage,
-        compactSettledPreview,
-        t,
-      })
-    : null;
-  const errorContent = viewState.isFailed
-    ? renderTerminalErrorContent(toolResult?.error || t('toolCards.terminal.executionFailed'))
-    : null;
+  const isStreamingPhase =
+    viewState.displayPhase === 'live_output' ||
+    viewState.displayPhase === 'receiving_params' ||
+    viewState.displayPhase === 'executing';
+  const maxRows = isStreamingPhase || compactSettledPreview
+    ? TERMINAL_OUTPUT_STREAMING_MAX_ROWS
+    : TERMINAL_OUTPUT_EXPANDED_MAX_ROWS;
+  const outputText = viewState.displayPhase === 'live_output' || viewState.showCancelledResult
+    ? liveOutput
+    : viewState.showCompletedResult
+      ? parsedResult.output
+      : '';
+  const footerItems: CommandToolCardFooterItem[] = [];
+
+  if (viewState.showCompletedResult) {
+    if (parsedResult.workingDir) {
+      footerItems.push({
+        grow: true,
+        label: t('toolCards.terminal.workingDirectory'),
+        value: parsedResult.workingDir,
+      });
+    }
+    footerItems.push({
+      monospace: true,
+      tone: parsedResult.exitCode === 0 ? 'success' : 'danger',
+      value: (
+        <span
+          data-testid="chat-shell-command-exit-code"
+          data-exit-code={parsedResult.exitCode}
+          data-status={parsedResult.exitCode === 0 ? 'success' : 'error'}
+        >
+          {t('toolCards.terminal.exitCode', { code: parsedResult.exitCode })}
+        </span>
+      ),
+    });
+    if (parsedResult.executionTimeMs !== undefined) {
+      footerItems.push({ monospace: true, value: `${parsedResult.executionTimeMs}ms` });
+    }
+  } else if (viewState.showCancelledResult) {
+    footerItems.push({
+      tone: 'warning',
+      value: t('toolCards.terminal.commandInterrupted'),
+    });
+  }
 
   return (
-    <div data-bf-component="terminal-tool-card" data-bf-part="root"
-      data-bf-status={status}
-      data-bf-state={[isExpanded && 'expanded', viewState.isFailed && 'error'].filter(Boolean).join(' ') || undefined}
-      ref={cardRootRef}
-      data-testid="chat-shell-command-card"
-      data-tool-card-id={toolId ?? ''}
-      data-status={status}
-      data-expanded={isExpanded ? 'true' : 'false'}
-      data-terminal-session-id={terminalSessionId || ''}
-    >
-      <BaseToolCard
-        status={status}
+    <div ref={cardRootRef} data-bf-adapter="terminal-tool-card" data-tool-card-id={toolId ?? ''}>
+      <CommandToolCard
+        action={t('toolCards.terminal.executeCommand')}
+        command={typeof command === 'string' ? command : ''}
+        commandTestId="chat-shell-command-text"
+        copyAction={{
+          copied: commandCopied,
+          copiedLabel: t('toolCards.terminal.commandCopied'),
+          disabled: !canExecuteCommand,
+          label: t('toolCards.terminal.copyCommand'),
+          onPress: copyCommand,
+        }}
+        data-bf-state={[isExpanded && 'expanded', viewState.isFailed && 'error'].filter(Boolean).join(' ') || undefined}
+        data-expanded={isExpanded ? 'true' : 'false'}
+        data-status={status}
+        data-terminal-session-id={terminalSessionId || ''}
+        data-testid="chat-shell-command-card"
+        emptyCommand={t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand')}
+        error={viewState.isFailed
+          ? toolResult?.error || t('toolCards.terminal.executionFailed')
+          : undefined}
+        footerItems={footerItems}
+        interruptAction={viewState.showInterruptButton ? {
+          label: t('toolCards.terminal.interrupt'),
+          onPress: handleInterrupt,
+        } : undefined}
         isExpanded={isExpanded}
-        onClick={handleCardClick}
-        className={`terminal-tool-card${!isExpanded ? ' terminal-tool-card--compact-truncated' : ''}`}
-        header={renderHeader()}
-        expandedContent={expandedContent}
-        errorContent={errorContent}
-        isFailed={viewState.isFailed}
+        onToggle={toggleExpanded}
+        openAction={terminalSessionId ? {
+          label: t('toolCards.terminal.openInPanel'),
+          onPress: handleOpenInPanel,
+          testId: 'chat-shell-tool-open-panel',
+        } : undefined}
+        output={outputText ? (
+          <div data-testid="chat-shell-command-output">
+            <LazyTerminalOutputRenderer content={outputText} maxRows={maxRows} />
+          </div>
+        ) : undefined}
+        outputDensity={isStreamingPhase || compactSettledPreview ? 'compact' : 'expanded'}
         requiresConfirmation={showConfirmButtons}
+        status={status}
+        statusLabel={viewState.statusLabel
+          ? t(`toolCards.terminal.${viewState.statusLabel}`)
+          : undefined}
+        statusSummary={(
+          <ToolTimeoutIndicator
+            startTime={toolItem.startTime}
+            isRunning={status === 'preparing' || status === 'streaming' || status === 'running'}
+            timeoutMs={
+              typeof toolCall?.input?.timeout_ms === 'number' && toolCall.input.timeout_ms > 0
+                ? toolCall.input.timeout_ms
+                : undefined
+            }
+            showControls={false}
+            completedDurationMs={status === 'completed' ? parsedResult.executionTimeMs : undefined}
+          />
+        )}
+        statusTone={viewState.statusClassName === 'status-error' ? 'danger' : 'warning'}
         toggleTestId="chat-shell-command-toggle"
+        waitingContent={waitingMessage ?? undefined}
       />
     </div>
   );

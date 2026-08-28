@@ -3,15 +3,13 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { GitCompare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { FileDiffToolCard } from '@bitfun/ui/flow-chat';
 import { InlineDiffPreview } from '../components/InlineDiffPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import './GetFileDiffDisplay.scss';
+import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('GetFileDiffDisplay');
 
@@ -57,13 +55,6 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
     }
   }, [toolResult]);
 
-  const renderStatusIcon = () => {
-    if (status === 'running' || status === 'streaming' || status === 'preparing') {
-      return <CubeLoading size="small" />;
-    }
-    return null;
-  };
-
   const filePath = useMemo(() => {
     if (resultData?.file_path) {
       return resultData.file_path;
@@ -91,18 +82,6 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
     return filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
   }, [filePath, t]);
 
-  const diffTypeLabel = useMemo(() => {
-    if (!resultData?.diff_type) return null;
-    
-    const typeMap: Record<string, string> = {
-      'baseline': 'Baseline',
-      'git': 'Git HEAD',
-      'full': 'Full'
-    };
-    
-    return typeMap[resultData.diff_type] || resultData.diff_type;
-  }, [resultData]);
-
   const stats = useMemo(() => {
     return resultData?.stats || null;
   }, [resultData]);
@@ -121,10 +100,6 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
     }
   }, [hasDiffContent, status, toggleExpanded]);
 
-  const renderToolIcon = () => {
-    return <GitCompare size={16} />;
-  };
-
   const isFailed = status === 'error';
 
   const getActionText = () => {
@@ -140,105 +115,53 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
     return t('toolCards.getFileDiff.diffFile');
   };
 
-  const renderHeader = () => (
-    <ToolCardHeader
-      icon={renderToolIcon()}
-      iconClassName="diff-icon"
-      action={`${getActionText()}:`}
-      content={
-        <span data-bf-component="get-file-diff-display" data-bf-part="info" className="diff-tool-info">
-          <span data-bf-component="get-file-diff-display" data-bf-part="fileName" className="diff-file-name">{fileName}</span>
-          {diffTypeLabel && status === 'completed' && (
-            <span data-bf-component="get-file-diff-display" data-bf-part="diffType" className="diff-type-tag">{diffTypeLabel}</span>
-          )}
-        </span>
-      }
-      extra={
-        <>
-          {!isFailed && status === 'completed' && stats && (stats.additions !== undefined || stats.deletions !== undefined) && (
-            <span data-bf-component="get-file-diff-display" data-bf-part="stats" className="diff-stats">
-              {stats.additions !== undefined && stats.additions > 0 && (
-                <span className="additions">+{stats.additions}</span>
-              )}
-              {stats.deletions !== undefined && stats.deletions > 0 && (
-                <span className="deletions">-{stats.deletions}</span>
-              )}
-            </span>
-          )}
-        </>
-      }
-      statusIcon={renderStatusIcon()}
-    />
-  );
-
-  const renderExpandedContent = () => {
-    if (!resultData) return null;
-
-    const { original_content, modified_content, diff_content, diff_type } = resultData;
-
-    if (diff_type === 'full' && modified_content) {
-      return (
-        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
-          <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
-          <pre data-bf-component="get-file-diff-display" data-bf-part="preview" className="diff-content-preview">{modified_content}</pre>
-        </div>
-      );
-    }
-
-    if (original_content !== undefined && modified_content !== undefined) {
-      return (
-        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
-          {resultData.message && (
-            <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
-          )}
-          <InlineDiffPreview
-            originalContent={original_content}
-            modifiedContent={modified_content}
-            filePath={filePath}
-            maxHeight={400}
-            showLineNumbers={true}
-            lineNumberMode="dual"
-            showPrefix={true}
-            contextLines={-1}
-          />
-        </div>
-      );
-    }
-
-    if (diff_content) {
-      return (
-        <div data-bf-component="get-file-diff-display" data-bf-part="expanded" className="diff-expanded-content">
-          {resultData.message && (
-            <div data-bf-component="get-file-diff-display" data-bf-part="message" className="diff-message">{resultData.message}</div>
-          )}
-          <pre data-bf-component="get-file-diff-display" data-bf-part="preview" className="diff-content-preview">{diff_content}</pre>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  const renderErrorContent = () => (
-    <div data-bf-component="get-file-diff-display" data-bf-part="error" className="error-content">
-      <div className="error-message">
-        {t('toolCards.getFileDiff.failed')}
-      </div>
-    </div>
-  );
+  const inlinePreview = resultData?.original_content !== undefined && resultData.modified_content !== undefined
+    ? (
+        <InlineDiffPreview
+          originalContent={resultData.original_content}
+          modifiedContent={resultData.modified_content}
+          filePath={filePath}
+          maxHeight={400}
+          showLineNumbers={true}
+          lineNumberMode="dual"
+          showPrefix={true}
+          contextLines={-1}
+        />
+      )
+    : undefined;
+  const textPreview = resultData?.diff_type === 'full' && resultData.modified_content
+    ? resultData.modified_content
+    : resultData?.diff_content;
+  const showChangeSummary =
+    !isFailed &&
+    status === 'completed' &&
+    (stats?.additions !== undefined || stats?.deletions !== undefined);
+  const formattedAdditions = i18nService.formatNumber(stats?.additions ?? 0);
+  const formattedDeletions = i18nService.formatNumber(stats?.deletions ?? 0);
 
   return (
-    <div data-bf-component="get-file-diff-display" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <BaseToolCard
+    <div data-bf-adapter="get-file-diff" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+      <FileDiffToolCard
+        data-diff-type={resultData?.diff_type}
         status={status}
         isExpanded={isExpanded}
-        onClick={handleCardClick}
-        className="get-file-diff-card"
-        header={renderHeader()}
-        expandedContent={renderExpandedContent()}
-        errorContent={isFailed ? renderErrorContent() : null}
-        isFailed={isFailed}
-        headerExpandAffordance={Boolean(hasDiffContent && status === 'completed')}
+        onToggle={hasDiffContent && status === 'completed' ? handleCardClick : undefined}
+        action={`${getActionText()}:`}
+        path={filePath}
+        pathLabel={fileName}
+        changeSummary={showChangeSummary ? {
+          additions: formattedAdditions,
+          deletions: formattedDeletions,
+          label: t('toolCards.file.changeSummary', {
+            additions: formattedAdditions,
+            deletions: formattedDeletions,
+          }),
+        } : undefined}
+        loading={status === 'running' || status === 'streaming' || status === 'preparing'}
+        message={resultData?.message}
+        preview={inlinePreview}
+        textPreview={textPreview}
+        error={isFailed ? t('toolCards.getFileDiff.failed') : undefined}
       />
     </div>
   );

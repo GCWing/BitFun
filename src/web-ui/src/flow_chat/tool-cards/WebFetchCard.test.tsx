@@ -146,7 +146,9 @@ describe('WebFetchCard', () => {
     expect(container.textContent).not.toContain('20 chars');
     expect(container.textContent).not.toContain('Fetched body content');
 
-    const card = container.querySelector('.compact-tool-card');
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+    );
     expect(card).not.toBeNull();
 
     act(() => {
@@ -158,7 +160,9 @@ describe('WebFetchCard', () => {
     expect(container.textContent).toContain('20 chars');
     expect(container.querySelector('button[aria-label="Copy result"]')).not.toBeNull();
 
-    const detailPills = Array.from(container.querySelectorAll('.web-fetch-card__detail-pill'))
+    const detailPills = Array.from(container.querySelectorAll(
+      '[data-bf-tool-card="web-fetch"] [data-bf-part="detail"]',
+    ))
       .map((node) => node.textContent?.trim());
     expect(detailPills).toEqual(expect.arrayContaining(['text', '20 chars']));
   });
@@ -173,12 +177,16 @@ describe('WebFetchCard', () => {
       );
     });
 
-    const card = container.querySelector('.compact-tool-card');
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+    );
     act(() => {
       card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    const linkRow = container.querySelector('.compact-expanded-result-title');
+    const linkRow = container.querySelector(
+      '[data-bf-tool-card="web-fetch"] [data-bf-part="sourceLink"]',
+    );
     expect(linkRow).not.toBeNull();
 
     act(() => {
@@ -198,7 +206,9 @@ describe('WebFetchCard', () => {
       );
     });
 
-    const card = container.querySelector('.compact-tool-card');
+    const card = container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+    );
     act(() => {
       card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });

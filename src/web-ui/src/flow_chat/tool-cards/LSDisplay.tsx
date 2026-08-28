@@ -3,11 +3,9 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { FolderOpen, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { DirectoryListToolCard } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 interface LSEntry {
   name: string;
@@ -107,85 +105,36 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
     return directoryPath;
   };
 
-  const renderExpandedContent = () => (
-    <>
-      <div className="compact-detail-info-inline">
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.ls.labelPath')}:</span>
-          <span className="compact-detail-inline-value">{directoryPath}</span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.ls.labelStats')}:</span>
-          <span className="compact-detail-inline-value">
-            {stats.directories > 0 
-              ? t('toolCards.ls.filesAndDirs', { files: stats.files, directories: stats.directories })
-              : t('toolCards.ls.filesCount', { count: stats.files })}
-          </span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.ls.labelSort')}:</span>
-          <span className="compact-detail-inline-value">{t('toolCards.ls.sortByModifiedTime')}</span>
-        </span>
-      </div>
-      <div className="compact-detail-list" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {entries.slice(0, 50).map((entry: LSEntry, index: number) => (
-          <div key={index} className="compact-list-item" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            padding: '4px 0', 
-            fontSize: '11px',
-            color: 'var(--bf-appearance-token-color-text-secondary)'
-          }}>
-            {entry.is_dir ? (
-              <Folder size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
-            ) : (
-              <File size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
-            )}
-            <span style={{ flex: 1, fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)', wordBreak: 'break-all' }}>
-              {entry.name}
-            </span>
-            <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: '10px', flexShrink: 0 }}>
-              {entry.modified_time}
-            </span>
-          </div>
-        ))}
-        {entries.length > 50 && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '8px 0', 
-            color: 'var(--bf-appearance-token-color-text-muted)',
-            fontSize: '11px', 
-            fontStyle: 'italic' 
-          }}>
-            {t('toolCards.ls.moreEntries', { count: entries.length - 50 })}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
   if (status === 'error') {
     return null;
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="directory-list" data-tool-card-id={toolId ?? ''}>
+      <DirectoryListToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
-        className="ls-display-card"
-        clickable={hasDetails}
-        header={
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<FolderOpen size={16} className="ls-display-card-icon" />} />}
-            content={renderContent()}
-          />
-        }
-        expandedContent={hasDetails ? renderExpandedContent() : undefined}
+        onToggle={hasDetails ? handleClick : undefined}
+        summary={renderContent()}
+        details={hasDetails ? [
+          { label: `${t('toolCards.ls.labelPath')}:`, value: directoryPath, monospace: true },
+          {
+            label: `${t('toolCards.ls.labelStats')}:`,
+            value: stats.directories > 0
+              ? t('toolCards.ls.filesAndDirs', { files: stats.files, directories: stats.directories })
+              : t('toolCards.ls.filesCount', { count: stats.files }),
+          },
+          { label: `${t('toolCards.ls.labelSort')}:`, value: t('toolCards.ls.sortByModifiedTime') },
+        ] : undefined}
+        results={hasDetails ? entries.slice(0, 50).map((entry, index) => ({
+          icon: entry.is_dir ? 'directory' as const : 'file' as const,
+          key: `${entry.path || entry.name}-${index}`,
+          meta: entry.modified_time,
+          title: entry.name,
+        })) : undefined}
+        moreResultsLabel={entries.length > 50
+          ? t('toolCards.ls.moreEntries', { count: entries.length - 50 })
+          : undefined}
       />
     </div>
   );
