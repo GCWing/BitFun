@@ -5,7 +5,9 @@ import {
 } from '@/infrastructure/api/service-api/AgentAPI';
 import {
   selectActivePermissionBatch,
+  selectActivePermissionBatchOwnedBySession,
   selectPermissionRequestsForSession,
+  selectPermissionRequestsOwnedBySession,
 } from './permissionRequestRouting';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { driverForSession } from '../../session-drivers/registry';
@@ -86,6 +88,24 @@ export function usePermissionRequests(sessionId?: string) {
     () => selectActivePermissionBatch(effectiveRequests, sessionId),
     [effectiveRequests, sessionId],
   );
+  const ownedRequests = useMemo(
+    () => selectPermissionRequestsOwnedBySession(effectiveRequests, sessionId),
+    [effectiveRequests, sessionId],
+  );
+  const ownedActiveBatch = useMemo(
+    () => selectActivePermissionBatchOwnedBySession(effectiveRequests, sessionId),
+    [effectiveRequests, sessionId],
+  );
 
-  return { requests: sessionRequests, activeBatch, respond, respondBatch };
+  // Keep the broad projection for transcript/task-card state, while exposing
+  // the owner-only projection for permission UI so one request has one
+  // actionable surface.
+  return {
+    requests: sessionRequests,
+    activeBatch,
+    ownedRequests,
+    ownedActiveBatch,
+    respond,
+    respondBatch,
+  };
 }
