@@ -8,8 +8,9 @@
 
 import React, { useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import type { NavItem as NavItemConfig } from '../types';
+import { Tooltip } from '@bitfun/ui';
 
 interface NavItemProps {
   item: NavItemConfig;

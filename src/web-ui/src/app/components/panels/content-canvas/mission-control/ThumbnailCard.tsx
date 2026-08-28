@@ -6,10 +6,11 @@
 import React, { useCallback, useMemo } from 'react';
 import { X, Pin, FileCode, FileText, Image, Terminal, GitBranch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { CanvasTab, EditorGroupId } from '../types';
 import { isFileViewerType } from '../types';
 import './ThumbnailCard.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface ThumbnailCardProps {
   /** Tab data */

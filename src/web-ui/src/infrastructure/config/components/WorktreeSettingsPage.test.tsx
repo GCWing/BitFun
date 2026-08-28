@@ -70,7 +70,6 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
   ConfigPageMessage: ({
     message,
@@ -104,6 +103,7 @@ vi.mock('@/component-library', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),

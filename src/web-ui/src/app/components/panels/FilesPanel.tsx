@@ -3,7 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, IconButton, SearchField, StatusPill } from '@bitfun/ui';
+import { Button, IconButton, SearchField, StatusPill, Tooltip } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
@@ -14,7 +14,7 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';

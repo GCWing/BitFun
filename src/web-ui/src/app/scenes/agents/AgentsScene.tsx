@@ -1,4 +1,4 @@
-import { Button, IconButton, SearchField, Select, StatusPill } from '@bitfun/ui';
+import { Button, IconButton, SearchField, Select, StatusPill, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -16,7 +16,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Select as LegacySelect, Tooltip } from '@/component-library';
+import { Select as LegacySelect } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';

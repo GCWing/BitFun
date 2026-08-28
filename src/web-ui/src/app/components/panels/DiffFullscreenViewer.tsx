@@ -1,9 +1,9 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, CheckCircle, XCircle } from 'lucide-react';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { DiffEditor } from '../../../tools/editor';

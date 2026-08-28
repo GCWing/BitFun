@@ -11,13 +11,14 @@
 
 import React, { useCallback, useMemo, useRef } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
 import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
+import { Tooltip } from '@bitfun/ui';
 
 const log = createLogger('NavBar');
 

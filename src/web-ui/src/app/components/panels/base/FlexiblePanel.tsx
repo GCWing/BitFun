@@ -1,7 +1,7 @@
 import React, { useCallback, memo } from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { Download, Copy, X, AlertCircle } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';

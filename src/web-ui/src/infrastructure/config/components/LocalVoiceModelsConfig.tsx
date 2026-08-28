@@ -1,4 +1,4 @@
-import { Button, IconButton, Modal, StatusPill, type StatusPillTone } from '@bitfun/ui';
+import { Button, IconButton, Modal, StatusPill, type StatusPillTone, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   speechAPI,

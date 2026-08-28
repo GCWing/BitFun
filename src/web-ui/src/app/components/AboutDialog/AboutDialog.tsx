@@ -4,10 +4,10 @@
  * persistent GitHub repository entry point.
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Modal, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Alert, Tooltip } from '@/component-library';
+import { Alert } from '@/component-library';
 import {
   ArrowRight,
   CalendarDays,

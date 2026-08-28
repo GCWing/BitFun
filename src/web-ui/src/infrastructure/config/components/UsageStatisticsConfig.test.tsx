@@ -34,6 +34,7 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   IconButton: ({
     children,
     icon,
@@ -85,7 +86,6 @@ vi.mock('@bitfun/ui', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
   ConfigPageMessage: ({
     message,

@@ -2,12 +2,12 @@ import React, { useMemo } from 'react';
 import {
   BITFUN_ICON_SIZE,
   NavigationMiniAppIcon,
-  Tooltip,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import { useMiniAppActivity } from '@/app/scenes/miniapps/hooks/useMiniAppActivity';
 import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
+import { Tooltip } from '@bitfun/ui';
 
 const MAX_VISIBLE_ACTIVE_APPS = 3;
 

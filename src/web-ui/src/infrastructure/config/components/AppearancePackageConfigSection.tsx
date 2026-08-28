@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, IconButton } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
+
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   SYSTEM_APPEARANCE_ID,

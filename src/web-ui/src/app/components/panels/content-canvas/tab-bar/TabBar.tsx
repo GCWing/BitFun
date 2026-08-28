@@ -6,12 +6,13 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { Tab } from './Tab';
 import { TabOverflowMenu } from './TabOverflowMenu';
 import type { CanvasTab, EditorGroupId, TabDragPayload } from '../types';
 import { createLogger } from '@/shared/utils/logger';
 import './TabBar.scss';
+import { Tooltip } from '@bitfun/ui';
 
 const log = createLogger('TabBar');
 const TAB_REORDER_DURATION_MS = 160;

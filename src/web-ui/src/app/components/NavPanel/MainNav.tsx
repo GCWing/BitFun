@@ -12,7 +12,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyHint, Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
+import { KeyHint, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
@@ -21,7 +21,6 @@ import {
   BITFUN_ICON_SIZE,
   NavigationExtensionsCompatibilityIcon,
   NavigationSessionContextAddIcon,
-  Tooltip,
 } from '@/component-library';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';

@@ -18,11 +18,12 @@ import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { X, Pin, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import type { PanelContent } from '../types';
 import './QuickLook.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface QuickLookProps {
   /** Whether visible */

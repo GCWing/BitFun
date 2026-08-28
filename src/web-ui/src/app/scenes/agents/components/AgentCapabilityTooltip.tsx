@@ -1,7 +1,8 @@
 import React from 'react';
-import { Tooltip } from '@/component-library';
+
 import type { AgentCapabilityTooltipField } from './agentCapabilityTooltipUtils';
 import './AgentCapabilityTooltip.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export type { AgentCapabilityTooltipField } from './agentCapabilityTooltipUtils';
 

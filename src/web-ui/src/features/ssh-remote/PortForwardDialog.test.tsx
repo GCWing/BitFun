@@ -95,10 +95,10 @@ vi.mock('@bitfun/ui', () => ({
       data-testid={testId}
     />
   )),
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Checkbox: ({
     checked,
     onChange,

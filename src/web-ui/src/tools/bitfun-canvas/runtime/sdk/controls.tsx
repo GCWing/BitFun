@@ -1,10 +1,10 @@
 import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
-import { Tooltip as BitFunTooltip } from '@/component-library/components/Tooltip/Tooltip';
 import {
   Field as DesignField,
   IconButton as BitFunIconButton,
   Input as DesignInput,
   Switch as BitFunSwitch,
+  Tooltip as BitFunTooltip,
 } from '@bitfun/ui';
 import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {

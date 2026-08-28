@@ -13,9 +13,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { IconButton, Input } from '@bitfun/ui';
+import { IconButton, Input, Tooltip } from '@bitfun/ui';
 import { CalendarDays } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import DateTimePickerPopover from './DateTimePickerPopover';
 import {

@@ -3,9 +3,9 @@ import {
   BITFUN_ICON_SIZE,
   NavigationSessionViewAllIcon,
   NavigationSessionViewGroupedIcon,
-  Tooltip,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { Tooltip } from '@bitfun/ui';
 import {
   getNextWorkspaceSessionGrouping,
   useWorkspaceSessionViewStore,

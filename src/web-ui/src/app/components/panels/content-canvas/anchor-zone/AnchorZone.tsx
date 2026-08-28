@@ -6,10 +6,11 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { ChevronDown, ChevronUp, X, Terminal, Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { AnchorPosition } from '../types';
 import { LAYOUT_CONFIG, clampAnchorSize } from '../types';
 import './AnchorZone.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface AnchorZoneProps {
   /** Position */

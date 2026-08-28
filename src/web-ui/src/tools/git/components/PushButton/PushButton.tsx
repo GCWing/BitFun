@@ -1,9 +1,9 @@
 /** Push button with optional force-push dropdown. */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ArrowUp, AlertTriangle } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import './PushButton.scss';
 

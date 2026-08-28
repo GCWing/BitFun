@@ -1,7 +1,7 @@
-import { Button, IconButton, Select, type SelectOption } from '@bitfun/ui';
+import { Button, IconButton, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, Square } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import {
   DEFAULT_SPEECH_SAMPLE_RATE,
   speechAPI,

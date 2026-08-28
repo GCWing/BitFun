@@ -5,10 +5,10 @@
  * several rows with different times.
  */
 
-import { IconButton, Switch } from '@bitfun/ui';
+import { IconButton, Switch, Tooltip } from '@bitfun/ui';
 import React from 'react';
 import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import type { CronJob } from '@/infrastructure/api';
 import type { WorkspaceInfo } from '@/shared/types';

@@ -2,7 +2,7 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -11,7 +11,7 @@ import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/Min
 import { useAppearance } from '@/infrastructure/appearance';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@/component-library';
+
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useMiniAppStore } from './miniAppStore';

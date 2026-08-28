@@ -62,6 +62,10 @@ vi.mock('@bitfun/ui', () => ({
     </select>
   ),
   Field: ({ label, children }: any) => <label>{label}{children}</label>,
+  Input: ({ leading, trailing, ...props }: any) => (
+    <span>{leading}<input {...props} />{trailing}</span>
+  ),
+  Tooltip: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock('@/component-library', () => ({

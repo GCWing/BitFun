@@ -1,4 +1,4 @@
-import { Button, IconButton, Switch } from '@bitfun/ui';
+import { Button, IconButton, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -15,7 +15,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';

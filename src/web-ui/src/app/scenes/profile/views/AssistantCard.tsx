@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, IconButton, StatusPill } from '@bitfun/ui';
+import { Button, IconButton, StatusPill, Tooltip } from '@bitfun/ui';
 import {
   ChevronRight,
   MessageSquarePlus,
@@ -9,7 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
 

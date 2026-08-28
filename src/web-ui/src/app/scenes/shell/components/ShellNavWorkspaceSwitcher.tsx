@@ -2,8 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Check, ChevronDown } from 'lucide-react';
-import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@/component-library/components/Tooltip';
+import { Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 interface ShellNavWorkspaceSwitcherProps {

@@ -7,12 +7,12 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { Folder, Search as SearchIcon, List, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
-import { Tooltip } from '@/component-library';
+
 import type { FileExplorerToolbarHandlers } from '@/tools/file-system';
 import FilesPanel from '../../components/panels/FilesPanel';
 import './FileViewerNav.scss';

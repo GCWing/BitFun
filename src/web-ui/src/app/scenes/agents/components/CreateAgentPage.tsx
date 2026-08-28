@@ -1,4 +1,4 @@
-import { Button, Switch, Input } from '@bitfun/ui';
+import { Button, Switch, Input, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Textarea, Tooltip } from '@/component-library';
+import { Textarea } from '@/component-library';
 import {
   CustomAgentAPI,
   type CustomAgentKind,

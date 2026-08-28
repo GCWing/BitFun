@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import type { UserSkillGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';

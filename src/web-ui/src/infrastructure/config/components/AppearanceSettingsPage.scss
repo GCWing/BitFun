@@ -1479,7 +1479,7 @@
 
 
 .appearance-preview-tooltip {
-  .bitfun-tooltip__content {
+  [data-bf-part='content'] {
     padding: 0 !important;
     background: transparent !important;
     border: none !important;

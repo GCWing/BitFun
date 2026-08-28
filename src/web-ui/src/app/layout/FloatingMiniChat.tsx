@@ -19,8 +19,8 @@ import type {
   ChatInputRegistration,
   ChatInputSubmission,
 } from '@/flow_chat/components/chatInputRegistration';
-import { IconButton } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { IconButton, Tooltip } from '@bitfun/ui';
+
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
 import { useSceneStore } from '@/app/stores/sceneStore';

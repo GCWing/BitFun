@@ -7,9 +7,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Download, Maximize2 } from 'lucide-react';
-import { Button, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator } from '@bitfun/ui';
+import { Button, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import './ImageViewer.scss';
 

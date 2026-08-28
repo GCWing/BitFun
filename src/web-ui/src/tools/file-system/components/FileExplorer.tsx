@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { Folder, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { VirtualFileTree } from './VirtualFileTree';
@@ -8,7 +8,7 @@ import { flattenFileTree } from '../utils/treeFlattening';
 import { getNewItemParentPath } from '../utils/getNewItemParentPath';
 import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { expandedFoldersContains, pathsEquivalentFs } from '@/shared/utils/pathUtils';
-import { Tooltip } from '@/component-library';
+
 import { filterTreeByPredicate, filterTreeBySearch } from '@/tools/file-explorer';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { commandExecutor } from '@/shared/context-menu-system/commands/CommandExecutor';

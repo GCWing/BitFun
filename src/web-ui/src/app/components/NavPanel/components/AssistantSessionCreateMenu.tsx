@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Plus } from 'lucide-react';
-import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Menu, MenuItem, Tooltip } from '@bitfun/ui';
+
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { WorkspaceInfo } from '@/shared/types';

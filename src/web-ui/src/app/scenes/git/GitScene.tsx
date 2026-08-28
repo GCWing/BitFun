@@ -4,14 +4,14 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { CubeLoading, Tooltip } from '@/component-library';
+import { CubeLoading } from '@/component-library';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';

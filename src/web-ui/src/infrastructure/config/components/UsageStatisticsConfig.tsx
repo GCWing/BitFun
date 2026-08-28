@@ -4,7 +4,6 @@ import {
   ConfigPageLoading,
   ConfigPageMessage,
   ConfigPageRefreshButton,
-  Tooltip,
 } from '@/component-library';
 import {
   TokenUsageStatisticsUnavailableError,
@@ -24,7 +23,7 @@ import {
   ConfigPageSectionStack,
 } from './common';
 import './UsageStatisticsConfig.scss';
-import { IconButton, Input, Select } from '@bitfun/ui';
+import { IconButton, Input, Select, Tooltip } from '@bitfun/ui';
 
 // ---------------------------------------------------------------------------
 // Chart palette — appearance tokens only (literal vars so the theme color

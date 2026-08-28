@@ -17,7 +17,7 @@ import {
   RefreshCw,
   Server,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -31,6 +31,7 @@ import type {
 } from './types';
 import { useDispatchTargets } from './useDispatchTargets';
 import './DispatchTargetPicker.scss';
+import { Tooltip } from '@bitfun/ui';
 
 interface DispatchTargetPickerProps {
   target: DispatchTarget;

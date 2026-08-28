@@ -39,6 +39,31 @@ vi.mock('@bitfun/ui', () => ({
   }) => (
     <button type="button" data-component="icon-button" {...props}>{icon}</button>
   ),
+  SegmentedControl: ({
+    options,
+    value,
+    onValueChange,
+    'aria-label': ariaLabel,
+  }: {
+    options: Array<{ value: string; label: React.ReactNode }>;
+    value: string;
+    onValueChange?: (value: string) => void;
+    'aria-label'?: string;
+  }) => (
+    <div role="radiogroup" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={option.value === value}
+          onClick={() => onValueChange?.(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('../meditor', () => ({

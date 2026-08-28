@@ -33,11 +33,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) => (
     isOpen ? <div role="dialog">{children}</div> : null
   ),

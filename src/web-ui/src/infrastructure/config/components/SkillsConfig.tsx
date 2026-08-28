@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, Card, CardBody, IconButton, ConfirmDialog, Field, Input, SearchField, Select } from '@bitfun/ui';
+import { Button, Card, CardBody, IconButton, ConfirmDialog, Field, Input, SearchField, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp, Search as SearchIcon } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';

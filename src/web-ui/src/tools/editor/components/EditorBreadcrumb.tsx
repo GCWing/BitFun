@@ -7,8 +7,9 @@ import { ChevronRight, File, Folder, Code, Loader2, ArrowLeft } from 'lucide-rea
 import { getFileIconType } from '@/tools/file-system/utils/fileIcons';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@/component-library';
+
 import './EditorBreadcrumb.scss';
+import { Tooltip } from '@bitfun/ui';
 
 const log = createLogger('EditorBreadcrumb');
 

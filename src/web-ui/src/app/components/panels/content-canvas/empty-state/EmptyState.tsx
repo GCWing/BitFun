@@ -6,8 +6,9 @@
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import './EmptyState.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface EmptyStateProps {
   onClose?: () => void;

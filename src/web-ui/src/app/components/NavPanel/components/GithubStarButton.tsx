@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { Star } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
+import { Tooltip } from '@bitfun/ui';
 import {
   GITHUB_STAR_URL,
   isGithubStarCtaDismissed,

@@ -5,13 +5,13 @@
  */
 
 import React, { useCallback } from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { GitBranch, Layers2, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { useGitSceneStore, type GitSceneView } from './gitSceneStore';
 import { useGitState } from '../../../tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { Tooltip } from '@/component-library';
+
 import './GitNav.scss';
 
 const NAV_ITEMS: { id: GitSceneView; icon: React.ElementType; labelKey: string }[] = [

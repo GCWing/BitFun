@@ -6,8 +6,8 @@ import {
   PictureInPicture2,
   Palette,
 } from 'lucide-react';
-import { Menu, MenuItem, MenuSeparator, Modal } from '@bitfun/ui';
-import { Tooltip, PresenceBoundary } from '@/component-library';
+import { Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
+import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { activateProductAction } from '@/app/global-search/productActionActivator';

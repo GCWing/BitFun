@@ -1,7 +1,7 @@
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   permissionAPI,

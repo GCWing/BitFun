@@ -1,7 +1,7 @@
 import React from 'react';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import { WandSparkles } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 
 interface MiniAppCustomizeEntryProps {

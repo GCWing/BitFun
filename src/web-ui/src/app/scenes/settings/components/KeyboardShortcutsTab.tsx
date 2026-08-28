@@ -10,10 +10,10 @@
  * - Reset button restores all defaults
  */
 
-import { Button, SearchField } from '@bitfun/ui';
+import { Button, SearchField, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search as SearchIcon } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
 import {

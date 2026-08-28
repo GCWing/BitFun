@@ -8,11 +8,11 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyHint } from '@bitfun/ui';
+import { KeyHint, Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { CanvasTab } from '../types';
 import './TabOverflowMenu.scss';
 export interface TabOverflowMenuProps {

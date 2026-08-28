@@ -10,7 +10,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -29,7 +29,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { IconButton, Input } from '@bitfun/ui';
+import { IconButton, Input, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 

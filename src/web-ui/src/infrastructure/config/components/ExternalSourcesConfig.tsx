@@ -1,4 +1,4 @@
-import { Button, Switch, ConfirmDialog, Select } from '@bitfun/ui';
+import { Button, Switch, ConfirmDialog, Select, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import {
   Settings2,
   ShieldCheck,
 } from 'lucide-react';
-import { ConfigPageLoading, Select as LegacySelect, Tooltip } from '@/component-library';
+import { ConfigPageLoading, Select as LegacySelect } from '@/component-library';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';

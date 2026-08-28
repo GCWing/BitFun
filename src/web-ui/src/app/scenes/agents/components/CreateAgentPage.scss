@@ -515,9 +515,10 @@
 .th-create-panel__context-tooltip {
   min-width: 0;
 
-  .bitfun-tooltip__content {
+  [data-bf-part='content'] {
     width: max-content;
     max-width: min(520px, calc(100vw - 32px));
+    max-inline-size: none;
     white-space: pre-wrap;
   }
 }

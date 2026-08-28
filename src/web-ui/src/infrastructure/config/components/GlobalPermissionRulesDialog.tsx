@@ -1,4 +1,4 @@
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
+import { Button, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 

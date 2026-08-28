@@ -3,12 +3,12 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Button, Field, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
+import { Button, Field, IconButton, Input as DesignInput, Modal, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
-import { Alert, Tooltip } from '@/component-library';
+import { Alert } from '@/component-library';
 import {
   ArrowDownToLine,
   CheckCircle2,

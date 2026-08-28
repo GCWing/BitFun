@@ -94,10 +94,24 @@ vi.mock('@bitfun/ui', () => ({
       ))}
     </select>
   ),
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  // The real Field associates its label with the child control; the mock
+  // mirrors that accessible name via aria-label so queries stay realistic.
+  Field: ({
+    label,
+    error,
+    children,
+  }: { label?: React.ReactNode; error?: React.ReactNode; children: React.ReactElement }) => (
+    <div>
+      {React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        'aria-label': typeof label === 'string' ? label : undefined,
+      })}
+      {error}
+    </div>
+  ),
 }));
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Input: ({
     label,
     value,
