@@ -1670,10 +1670,12 @@ pub async fn create_session(
         )
         .await
     {
-        warn!(
-            "Configured workspace plugin activation failed before session creation: {}",
-            error
-        );
+        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            "Desktop session creation",
+            Some(std::path::Path::new(&resolved_execution_target.root_path)),
+            error,
+        )
+        .await;
     }
 
     if is_idempotent_managed_create {

@@ -99,7 +99,7 @@ struct ConfiguredPluginSubmissionPort {
 
 #[cfg(feature = "opencode-plugin-host")]
 impl ConfiguredPluginSubmissionPort {
-    async fn ensure_workspace(request: &AgentSessionCreateRequest) -> PortResult<()> {
+    async fn try_ensure_workspace(request: &AgentSessionCreateRequest) -> PortResult<()> {
         let Some(execution_root) = configured_plugin_execution_root(request)? else {
             return Ok(());
         };
@@ -114,7 +114,23 @@ impl ConfiguredPluginSubmissionPort {
         .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))
     }
 
-    async fn ensure_session(&self, session_id: &str) -> PortResult<()> {
+    async fn ensure_workspace(request: &AgentSessionCreateRequest) {
+        if let Err(error) = Self::try_ensure_workspace(request).await {
+            let workspace = request
+                .execution_target
+                .as_ref()
+                .map(|target| Path::new(&target.root_path))
+                .or_else(|| request.workspace_path.as_deref().map(Path::new));
+            crate::plugin_host::report_configured_plugin_activation_failure(
+                "session creation",
+                workspace,
+                error,
+            )
+            .await;
+        }
+    }
+
+    async fn try_ensure_session(&self, session_id: &str) -> PortResult<()> {
         let Some(session) = self
             .coordinator
             .get_session_manager()
@@ -140,6 +156,17 @@ impl ConfiguredPluginSubmissionPort {
         .await
         .map(|_| ())
         .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))
+    }
+
+    async fn ensure_session(&self, session_id: &str) {
+        if let Err(error) = self.try_ensure_session(session_id).await {
+            crate::plugin_host::report_configured_plugin_activation_failure(
+                "existing session",
+                None,
+                error,
+            )
+            .await;
+        }
     }
 }
 
@@ -185,7 +212,7 @@ impl AgentSubmissionPort for ConfiguredPluginSubmissionPort {
         &self,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Self::ensure_workspace(&request).await?;
+        Self::ensure_workspace(&request).await;
         self.inner.create_session(request).await
     }
 
@@ -194,7 +221,7 @@ impl AgentSubmissionPort for ConfiguredPluginSubmissionPort {
         session_id: String,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Self::ensure_workspace(&request).await?;
+        Self::ensure_workspace(&request).await;
         self.inner.create_session_with_id(session_id, request).await
     }
 
@@ -203,7 +230,7 @@ impl AgentSubmissionPort for ConfiguredPluginSubmissionPort {
         session_id: String,
         request: AgentSessionCreateRequest,
     ) -> PortResult<AgentSessionCreateResult> {
-        Self::ensure_workspace(&request).await?;
+        Self::ensure_workspace(&request).await;
         self.inner
             .create_transient_session_with_id(session_id, request)
             .await
@@ -216,7 +243,7 @@ impl AgentSubmissionPort for ConfiguredPluginSubmissionPort {
         // Every existing-session turn is a recovery trigger. The ensure call
         // is idempotent while the Host is healthy and republishes the same
         // workspace generation after a process loss before execution resumes.
-        self.ensure_session(&request.session_id).await?;
+        self.ensure_session(&request.session_id).await;
         self.inner.submit_message(request).await
     }
 
@@ -259,7 +286,7 @@ impl AgentSessionRestorePort for ConfiguredPluginSessionRestorePort {
         // the storage-path hint before that target has been reconstructed.
         self.submission
             .ensure_session(&restored.session.session_id)
-            .await?;
+            .await;
         Ok(restored)
     }
 }
@@ -2890,6 +2917,17 @@ mod tests {
             .expect("remote session remains outside the local Host"),
             None
         );
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[tokio::test]
+    async fn configured_plugin_failure_does_not_block_native_session_creation() {
+        let mut request = plugin_session_request();
+        request.workspace_path = None;
+        request.execution_target = None;
+
+        let outcome: () = ConfiguredPluginSubmissionPort::ensure_workspace(&request).await;
+        assert_eq!(outcome, ());
     }
 
     #[test]

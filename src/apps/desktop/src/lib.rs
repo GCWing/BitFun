@@ -640,6 +640,12 @@ pub async fn run() {
         Ok(status) => log::info!("Plugin host initialization completed: {:?}", status),
         Err(error) => {
             log::error!("Failed to initialize configured plugin host: {}", error);
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "Desktop startup",
+                None,
+                error,
+            )
+            .await;
         }
     }
     startup_timings.record_elapsed("initialize_plugin_host", step_started);

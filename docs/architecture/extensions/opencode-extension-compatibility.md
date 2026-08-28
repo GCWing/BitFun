@@ -104,14 +104,21 @@ sidecar 尚未交付，因此安装包还不能宣称插件运行时完全自包
 
 Rust 侧只暴露一个类型化 `HookFunctionRuntime` 数据面，覆盖启动及完整注册快照、`tool.execute.before/after`、插件
 Tool 执行与取消、dispose，以及插件反向调用的 metadata/ask。OpenCode wire JSON 和 RPC lease 留在 adapter 内，
-`PluginRuntimeClient` 继续负责通用插件状态/诊断控制面。`tool.execute.before` 先于 native `PreToolUse`，两者完成后
+当前 package-plugin 的逻辑代际与诊断由 Core lifecycle 接入既有 owner/read-only surface；`PluginRuntimeClient` 只继续
+服务 legacy managed-package 路径。`tool.execute.before` 先于 native `PreToolUse`，两者完成后
 重新做 schema 和权限判断；Tool 只执行一次，`tool.execute.after` 再先于 native `PostToolUse`。运行型插件 Hook
 失败会停止当前有序 Hook 链；after 失败只把已执行结果标成错误并反馈给模型，不进入 Tool 重试。
 
-Config Hook、插件 Agent/权限/Skill 投影、Tool 注册和模型可见 output 已接入现有归属模块。Host 会在完整 after Hook
-链中继续传递 `title`、`output`、`metadata`；BitFun 当前稳定 `ToolResult` 只有 model-visible output 是可变展示字段，
-因此最终只消费 output，原始 Tool 结果保持不可变。title/metadata 需要出现真实 UI 或持久化消费方后再增加一个小的
-展示契约，不能写回原始审计结果或临时塞入无关字段。
+Config Hook 的输入复用 adapter 现有本地来源计划，按 user global、显式文件、project、配置目录和 inline 的顺序
+合并完整 JSON/JSONC 对象；`$schema` 不是必填项，未知字段原样保留。Config Hook、插件 Agent/权限/Skill 投影、Tool
+注册和模型可见 output 已接入现有归属模块。插件 Tool 的真实 `title`、`output`、`metadata` 会进入完整 after Hook 链，
+原始结构化结果继续保留这些字段；after Hook 对 title/metadata 的变换尚无稳定 UI/持久化消费方，当前只把变换后的
+output 作为模型展示结果，后续有真实消费方时再扩展小型展示契约。
+
+插件 Host 初始化、workspace 激活或 Session 恢复失败会发布可从 external-source snapshot 查询的 workspace-scoped
+`plugin.activation_failed` 诊断，并继续原生 Agent Session。初次激活失败时插件贡献不可用；刷新失败时已确认的
+上一代贡献可能继续服务，诊断只表示本次激活/刷新失败，成功 ensure 后清除。插件 Tool 结束会同步取消其反向 ask
+所创建的待审批请求，避免执行路由撤下后遗留权限状态。
 
 当前信任边界是“配置中显式声明的插件等同受信任本地可执行扩展”。此前的 activation review/approve 接口没有进入
 执行门禁，继续保留会让调用方误以为已有安全保证，现已删除。此切片保持完整功能，但不满足本文第 7 节的安全完成
@@ -166,7 +173,7 @@ Config Hook、插件 Agent/权限/Skill 投影、Tool 注册和模型可见 outp
 |---|---|---|---|---|---|---|
 | `.opencode/tools/*.js` | 补基础能力 | 受支持单文件子集已接入 Tool Runtime | 可完整适配 | OC-R2 | 当前 Node worker 支持基础 schema、默认值、字符串结果、取消/超时/撤下；完整 Zod、模块依赖、`metadata`/`ask` 和附件结果继续走类型化进程通信扩展 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
 | `.opencode/tools/*.ts` | 补基础能力 | 已识别，执行不支持 | 可完整适配 | OC-R2 | 当前静态显示不 import；后续由固定样例选择 Node 转译或 Bun/TypeScript worker，保留真实 schema 与 execute，不在 Rust 猜测 TS 语义 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
-| 插件 `tool` map | 补基础能力 + 补扩展接口 | 已实现：受管 Host 注册、执行、取消和 generation 隔离 | 可完整适配 | OC-R2 | 继续扩充固定兼容样例；附件结果在产品有真实消费方前保持显式不支持 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
+| 插件 `tool` map | 补基础能力 + 补扩展接口 | 已实现：受管 Host 注册、执行、取消和 generation 隔离 | 可完整适配 | OC-R2 | 真实 title/output/metadata 已传给 after Hook；附件保留在结构化结果中，但通用文件/模型消费等待真实产品消费方 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
 | 项目与用户目录插件 | 补基础能力 | 部分实现：配置显式声明的本地文件/目录可执行，自动目录发现未实现 | 可完整适配 | OC-R2 | 补完整来源顺序下的自动发现与状态 UX；运行继续复用受管 Host | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
 | 配置中的软件包插件 | 补基础能力 | 已实现：受管缓存准备、禁用 lifecycle scripts、Bun Host 加载 | 可完整适配 | OC-R2 | 安装/更新 provenance、不可变快照和激活权限按 2.1 的安全后续项补齐 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
 | 全局插件加载 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 自动发现全局配置和 ConfigPaths 全局目录，并按完整来源顺序生成 `plugin_origins`；首次可执行启用按来源、插件身份和执行域确认，决定只提示一次且可按项目覆盖 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
@@ -176,7 +183,7 @@ Config Hook、插件 Agent/权限/Skill 投影、Tool 注册和模型可见 outp
 | `client` | 补扩展接口 | 主要实现：Plugin 所需方法经实例回环 gateway 转发现有后端 owner | 可主要适配 | OC-R2 | 按真实插件补方法；未知写操作稳定失败 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
 | `serverUrl` | 补扩展接口 | 已实现：每实例独立 loopback gateway，支持流式 HTTP/SSE | 可主要适配 | OC-R2 | WebSocket 明确不支持；完整外部 Server 协议不在本切片 | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
 | `$` 与脚本环境 | 补基础能力 | 已实现：受管 Bun Host 注入公开 `$` 能力 | 可完整适配 | OC-R2 | 受限模式仍依赖后续真实 OS/容器安全边界 | [默认策略](opencode-plugin-runtime-adapter-design.md#3-默认策略与可调权限) |
-| 加载、停用、更新与崩溃恢复 | 补基础能力 | 已实现：共享 Host、逻辑实例 dispose、代际 fencing、进程树回收和下一次 ensure 重启 | 可主要适配 | OC-R2 | 不可变旧版本恢复和安全更新策略按 2.1 后续项补齐 | [生命周期](opencode-plugin-runtime-adapter-design.md#9-生命周期) |
+| 加载、停用、更新与崩溃恢复 | 补基础能力 | 已实现：共享 Host、逻辑实例 dispose、代际 fencing、进程树回收、失败诊断和下一次 ensure 重启；插件失败不阻断原生 Session | 可主要适配 | OC-R2 | 不可变旧版本恢复和安全更新策略按 2.1 后续项补齐 | [生命周期](opencode-plugin-runtime-adapter-design.md#9-生命周期) |
 | 同一 Host 内未文档化全局共享 | 明确限制 | 已实现共享 Host，但不承诺未文档化全局协作 | 可主要适配 | OC-R2 | 保留公开 PluginInput、Hook 顺序和显式接口 | [故障域](opencode-plugin-runtime-adapter-design.md#81-故障域) |
 
 本类整体风险是第三方代码副作用、依赖安装失败、Hook 顺序不一致和 Plugin Host 失控。默认权限可以开放，但 Rust 主应用与 Plugin Host 的进程隔离、超时、取消、队列上限、结果大小和故障恢复必须始终启用。
@@ -191,7 +198,7 @@ package plugin 则由受管 Host import，并通过类型化 `HookFunctionRuntim
 |---|---|---|---|---|---|
 | `dispose` | 直接桥接 | 已实现：有界清理；drain/dispose 超时使 Host 代际失效并回收进程树 | 可完整适配 | OC-R3 | 补真实阻塞插件的跨平台 Host 重启样例。 |
 | `event` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 提供版本化事件代理并隔离插件异常。 |
-| `config` | 补扩展接口 + 融合现有能力 | 已实现：按插件顺序执行并投影 Agent、权限、Tool、Skill | 可完整适配 | OC-R3 | 继续由各归属模块做最终校验，不扩大 adapter ownership。 |
+| `config` | 补扩展接口 + 融合现有能力 | 已实现：完整本地合并配置作为输入，按插件顺序执行并投影 Agent、权限、Tool、Skill | 可完整适配 | OC-R3 | 继续由各归属模块做最终校验；后续按字段迁移遗留的 OpenCode 专属归一化，不扩大 Core ownership。 |
 | `tool` | 补基础能力 + 补扩展接口 | 已实现：真实定义、执行、取消和 generation-fenced 路由 | 可完整适配 | OC-R2 | 附件结果等待产品消费方。 |
 | `auth` | 补扩展接口 | 静态目录可见，运行未实现 | 可主要适配 | OC-R3 | 提供 API/OAuth 方法和脱敏凭据代理。 |
 | `provider` | 补扩展接口 + 融合现有能力 | 静态目录可见，运行未实现 | 可主要适配 | OC-R3 | 将动态模型列表接入 Provider 归属模块。 |
@@ -372,6 +379,12 @@ Node 进程永久累积；这不是 package-plugin 的 workspace-scoped runtime 
 | `experimental_workspace.register` | 暂不承诺 | 接口未稳定且会改变工作区与远程连接归属 | 继续使用 BitFun Workspace/Remote 归属模块，稳定后重评。 |
 | 受限策略下拦截任意脚本副作用 | 只能部分控制 | 插件可以直接调用脚本运行时，绕过细粒度能力代理 | 来源激活后默认兼容策略放开；用户收紧时明确列出被禁用或无法拦截的能力。 |
 | 无硬资源限制平台上的系统资源耗尽 | 不能保证完全隔离 | 已有进程树可回收受管后代，但仍不能阻止内存、CPU、网络或逃逸进程拖慢整机 | 在真实需求下增加 cgroup/rlimit/容器等平台额度；缺少硬限制时显示残余风险。 |
+| Plugin Tool 通用附件消费 | 后续产品 PR | 当前已保留 OpenCode attachment 的 mime/url/filename，尚无跨模型、文件 UI 与持久化共同认可的消费合同 | 本 PR 不把已完成的副作用误报为失败；后续由真实消费方定义文件授权、下载/读取、Remote 和模型可见规则。 |
+| OS 级强制终止本身失败 | 后续可靠性 PR | 这是极端平台故障；当前代际会撤下贡献并报告故障，但缺少“确认进程死亡前永久禁止同进程重启”的持久 poisoned gate | 增加可验证的进程存活探测和 sticky poisoned 状态；只有确认旧树死亡或应用重启后才允许新 Host，覆盖 Windows/Unix 故障注入。 |
+| 代际替换与长时 backend 写请求精确并发 | 后续可靠性 PR | 当前会停止新 Hook/Tool、取消 instance stream 并 dispose，但尚无 instance-scoped backend RPC admission/drain；极端并发下旧代已接收的写请求可能晚到完成 | 在 backend bridge 增加 instance-scoped 拒绝新请求和有界 drain；超时标记 OutcomeUnknown，且不得确认 replacement 完成。 |
+| 多 workspace 同名 Tool 激活与退役精确并发 | 后续可靠性 PR | 当前 mux 路由与全局注册表分别受锁保护；极端的最后一条旧路由退役和新路由激活交错时，可能短暂撤下仍有新路由的 mux | 统一两层状态的锁序或保留空 mux，并增加同名 Tool 激活/退役并发测试；常规顺序切换和 workspace 隔离已由本 PR 覆盖。 |
+| workspace 在扫描前已被删除或移动 | 后续清理 PR | workspace 路径无法规范化时不会猜测等价身份；已激活实例可能保留到显式停用或应用退出 | 保存已确认的 canonical identity，并在来源撤销通知中按该 identity 退役；补删除、移动和符号链接变化样例。 |
+| Core 内遗留的 OpenCode Config 投影细节 | 分字段迁移 | 当前 Core 负责 generation 原子提交及 Agent/权限/Skill owner 对接，仍含少量 OpenCode 专属归一化；一次性搬迁会扩大本 PR 并增加回归面 | 保留当前稳定边界；后续在出现真实字段消费方时把生态解析/归一化下推 adapter，Core 只保留产品 owner 校验与原子提交。 |
 
 这些限制已经作为当前架构决策：项目状态只能表述为“兼容矩阵已审计、已实现项按证据列示”，不能表述为“稳定
 扩展面已完整实现”或“所有插件完整兼容”。只有真实需求和新证据可以重新开启延期项。

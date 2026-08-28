@@ -5,8 +5,8 @@ use bitfun_events::ToolExecutionProgressInfo;
 use bitfun_runtime_ports::{
     HookFunctionCancelRequest, HookFunctionGeneration, HookFunctionReverseAsk,
     HookFunctionReverseMetadata, HookFunctionReverseReply, HookFunctionReverseSink,
-    HookFunctionRuntime, HookFunctionToolContext, HookFunctionToolRequest, PortError,
-    PortErrorKind, PortResult,
+    HookFunctionRuntime, HookFunctionToolContext, HookFunctionToolRequest, HookFunctionToolResult,
+    PortError, PortErrorKind, PortResult,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -36,6 +36,7 @@ struct PluginToolExecutionRoute {
     tool_call_id: Option<String>,
     generation_key: String,
     revision: String,
+    cancelled: tokio::sync::watch::Receiver<bool>,
 }
 
 fn executions() -> &'static dashmap::DashMap<(String, String), PluginToolExecutionRoute> {
@@ -46,6 +47,7 @@ fn executions() -> &'static dashmap::DashMap<(String, String), PluginToolExecuti
 
 struct PluginToolExecutionGuard {
     key: (String, String),
+    cancel: tokio::sync::watch::Sender<bool>,
 }
 
 fn dispatched_tool_cancel_error(stopped: bool) -> BitFunError {
@@ -59,6 +61,7 @@ fn dispatched_tool_cancel_error(stopped: bool) -> BitFunError {
 
 impl Drop for PluginToolExecutionGuard {
     fn drop(&mut self) {
+        let _ = self.cancel.send(true);
         executions().remove(&self.key);
     }
 }
@@ -116,13 +119,17 @@ impl PluginHostToolMux {
     }
     fn route_for(&self, context: Option<&ToolUseContext>) -> Option<PluginHostToolRoute> {
         let context = context?;
+        if context.is_remote() {
+            return None;
+        }
         let runtime_agent_key = context.agent_type.as_deref()?;
         let scope = context
             .workspace_root()
             .and_then(crate::plugin_host::canonical_plugin_workspace_scope)?;
-        self.routes_for_scope(&scope)
-            .into_iter()
-            .find(|route| route.allowed_runtime_agent_keys.contains(runtime_agent_key))
+        self.routes_for_scope(&scope).into_iter().find(|route| {
+            route.allowed_runtime_agent_keys.is_empty()
+                || route.allowed_runtime_agent_keys.contains(runtime_agent_key)
+        })
     }
 }
 
@@ -209,6 +216,7 @@ impl Tool for PluginHostToolMux {
             revision: route.revision.clone(),
         };
         let execution_key = (route.instance_id.clone(), execution_id.clone());
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
         executions().insert(
             execution_key.clone(),
             PluginToolExecutionRoute {
@@ -219,10 +227,12 @@ impl Tool for PluginHostToolMux {
                 tool_call_id: context.tool_call_id.clone(),
                 generation_key: route.generation_key.clone(),
                 revision: route.revision.clone(),
+                cancelled,
             },
         );
         let _execution_guard = PluginToolExecutionGuard {
             key: execution_key.clone(),
+            cancel,
         };
         let call = route.runtime.execute_tool(
             HookFunctionToolRequest {
@@ -298,27 +308,42 @@ impl Tool for PluginHostToolMux {
             )
             .await;
         }
-        let result = result?;
-        if !result.attachments.is_empty() {
-            return Err(BitFunError::service("unsupported_tool_attachment"));
-        }
-        let (data, assistant) = match result.output {
-            Value::String(value) => (Value::String(value.clone()), Some(value)),
-            Value::Object(object) => {
-                let output = object.get("output").cloned().unwrap_or(Value::Null);
-                let assistant = object
-                    .get("output")
-                    .and_then(Value::as_str)
-                    .map(str::to_string);
-                (
-                    Value::Object(object),
-                    assistant.or_else(|| Some(output.to_string())),
-                )
-            }
-            other => (other.clone(), Some(other.to_string())),
-        };
-        Ok(vec![ToolResult::ok(data, assistant)])
+        Ok(vec![map_plugin_tool_result(result?)])
     }
+}
+
+fn map_plugin_tool_result(result: HookFunctionToolResult) -> ToolResult {
+    let mut output = result.output;
+    if !result.attachments.is_empty() {
+        let attachments = serde_json::to_value(result.attachments).unwrap_or(Value::Null);
+        match &mut output {
+            Value::Object(object) => {
+                object.insert("attachments".to_string(), attachments);
+            }
+            other => {
+                output = serde_json::json!({
+                    "output": std::mem::take(other),
+                    "attachments": attachments,
+                });
+            }
+        }
+    }
+    let (data, assistant) = match output {
+        Value::String(value) => (Value::String(value.clone()), Some(value)),
+        Value::Object(object) => {
+            let output = object.get("output").cloned().unwrap_or(Value::Null);
+            let assistant = object
+                .get("output")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            (
+                Value::Object(object),
+                assistant.or_else(|| Some(output.to_string())),
+            )
+        }
+        other => (other.clone(), Some(other.to_string())),
+    };
+    ToolResult::ok(data, assistant)
 }
 
 struct PluginToolReverseSink;
@@ -393,6 +418,7 @@ async fn handle_tool_ask(params: HookFunctionReverseAsk) -> PortResult<HookFunct
                 "plugin tool execution is no longer active",
             )
         })?;
+    let mut cancelled = route.cancelled.clone();
     validate_reverse_generation(&params.generation, &route)?;
     let instance = crate::plugin_host::plugin_host_instance_by_id(instance_id)
         .await
@@ -443,10 +469,11 @@ async fn handle_tool_ask(params: HookFunctionReverseAsk) -> PortResult<HookFunct
     }
     let manager = crate::product_runtime::core_permission_request_manager()
         .map_err(|error| PortError::new(PortErrorKind::Backend, error))?;
+    let request_id = uuid::Uuid::new_v4().to_string();
     let mut pending = manager
         .register_batch_for_turn(
             vec![bitfun_runtime_ports::PermissionRequest {
-                request_id: uuid::Uuid::new_v4().to_string(),
+                request_id: request_id.clone(),
                 round_id: route.dialog_turn_id.clone(),
                 order: 0,
                 tool_call_id: route
@@ -474,7 +501,22 @@ async fn handle_tool_ask(params: HookFunctionReverseAsk) -> PortResult<HookFunct
     let pending = pending
         .pop()
         .expect("single permission batch must return one receiver");
-    match pending.wait().await {
+    let outcome = tokio::select! {
+        outcome = pending.wait() => outcome,
+        changed = cancelled.changed() => {
+            let reason = if changed.is_ok() && *cancelled.borrow() {
+                "Plugin tool execution ended while permission was pending"
+            } else {
+                "Plugin tool execution route closed while permission was pending"
+            };
+            manager
+                .cancel_request(&request_id, reason)
+                .await
+                .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?;
+            return Err(PortError::new(PortErrorKind::Cancelled, reason));
+        }
+    };
+    match outcome {
         bitfun_agent_runtime::permission::PermissionWaitOutcome::Replied(
             bitfun_runtime_ports::PermissionReply::Once,
         ) => Ok(HookFunctionReverseReply::Once),
@@ -607,12 +649,14 @@ pub(crate) async fn unregister_workspace_tools(
 mod tests {
     use super::{
         dispatched_tool_cancel_error, executions, handle_tool_ask, handle_tool_metadata,
-        PluginHostToolMux, PluginHostToolRoute, PluginToolExecutionRoute,
+        map_plugin_tool_result, PluginHostToolMux, PluginHostToolRoute, PluginToolExecutionGuard,
+        PluginToolExecutionRoute,
     };
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use bitfun_opencode_plugin_host::JsonRpcPeer;
     use bitfun_runtime_ports::{
-        HookFunctionGeneration, HookFunctionReverseAsk, HookFunctionReverseMetadata, PortErrorKind,
+        HookFunctionGeneration, HookFunctionReverseAsk, HookFunctionReverseMetadata,
+        HookFunctionToolAttachment, HookFunctionToolResult, PortErrorKind,
     };
     use serde_json::json;
     use std::collections::BTreeSet;
@@ -684,6 +728,62 @@ mod tests {
         let error = dispatched_tool_cancel_error(true);
 
         assert!(matches!(error, crate::BitFunError::OutcomeUnknown(_)));
+    }
+
+    #[test]
+    fn dropping_an_execution_route_cancels_reverse_permission_waits() {
+        let key = ("drop-instance".to_string(), "drop-execution".to_string());
+        let (cancel, mut cancelled) = tokio::sync::watch::channel(false);
+        executions().insert(
+            key.clone(),
+            PluginToolExecutionRoute {
+                session_id: "session-a".to_string(),
+                dialog_turn_id: "turn-a".to_string(),
+                agent: "agentic".to_string(),
+                tool_name: "plugin-tool".to_string(),
+                tool_call_id: Some("tool-call-a".to_string()),
+                generation_key: "generation-a".to_string(),
+                revision: "revision-a".to_string(),
+                cancelled: cancelled.clone(),
+            },
+        );
+
+        drop(PluginToolExecutionGuard {
+            key: key.clone(),
+            cancel,
+        });
+
+        assert!(*cancelled.borrow_and_update());
+        assert!(!executions().contains_key(&key));
+    }
+
+    #[test]
+    fn plugin_tool_result_preserves_presentation_fields_and_attachments() {
+        let result = map_plugin_tool_result(HookFunctionToolResult {
+            output: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": {"path": "report.md"}
+            }),
+            attachments: vec![HookFunctionToolAttachment {
+                mime: "text/markdown".to_string(),
+                url: "file:///workspace/report.md".to_string(),
+                filename: Some("report.md".to_string()),
+            }],
+        });
+
+        let crate::agentic::tools::framework::ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = result
+        else {
+            panic!("plugin result should be terminal");
+        };
+        assert_eq!(data["title"], "Generated report");
+        assert_eq!(data["metadata"]["path"], "report.md");
+        assert_eq!(data["attachments"][0]["filename"], "report.md");
+        assert_eq!(result_for_assistant.as_deref(), Some("report ready"));
     }
 
     #[tokio::test]
@@ -810,6 +910,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tool_only_plugin_route_is_available_to_native_agents() {
+        use bitfun_agent_runtime::native_hooks::{RuntimeHookActivation, RuntimeHookSource};
+
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let scope = crate::plugin_host::canonical_plugin_workspace_scope(&workspace)
+            .expect("canonical workspace scope");
+        let registry = bitfun_agent_runtime::native_hooks::RuntimeHookRegistry::default();
+        registry.set_source_activation_for_workspace(
+            RuntimeHookSource::Plugin,
+            Some(&scope),
+            RuntimeHookActivation::Ready,
+        );
+        let mux = PluginHostToolMux::new("tool-only".to_string(), registry.clone());
+        let mut route = route(client().await, "tool-only-instance");
+        route.allowed_runtime_agent_keys.clear();
+        mux.set_route(scope.clone(), route);
+
+        let workspace_text = workspace.to_string_lossy();
+        let context = context(&workspace_text, "Agentic");
+        assert!(mux.route_for(Some(&context)).is_some());
+
+        registry.clear_source_workspace(RuntimeHookSource::Plugin, &scope);
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_cannot_match_a_local_plugin_tool_route() {
+        use bitfun_agent_runtime::native_hooks::{RuntimeHookActivation, RuntimeHookSource};
+
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let scope = crate::plugin_host::canonical_plugin_workspace_scope(&workspace)
+            .expect("canonical workspace scope");
+        let registry = bitfun_agent_runtime::native_hooks::RuntimeHookRegistry::default();
+        registry.set_source_activation_for_workspace(
+            RuntimeHookSource::Plugin,
+            Some(&scope),
+            RuntimeHookActivation::Ready,
+        );
+        let mux = PluginHostToolMux::new("remote-collision".to_string(), registry.clone());
+        let mut route = route(client().await, "local-instance");
+        route.allowed_runtime_agent_keys.clear();
+        mux.set_route(scope.clone(), route);
+
+        let workspace_text = workspace.to_string_lossy();
+        let mut remote = context(&workspace_text, "Agentic");
+        remote.workspace.as_mut().expect("workspace").backend =
+            crate::agentic::workspace::WorkspaceBackend::Remote {
+                connection_id: "remote-a".to_string(),
+                connection_name: "Remote A".to_string(),
+            };
+
+        assert!(mux.route_for(Some(&remote)).is_none());
+        registry.clear_source_workspace(RuntimeHookSource::Plugin, &scope);
+    }
+
+    #[tokio::test]
     async fn ask_for_missing_execution_route_is_rejected() {
         let error = handle_tool_ask(HookFunctionReverseAsk {
             generation: HookFunctionGeneration {
@@ -862,6 +1017,7 @@ mod tests {
                 tool_call_id: Some("tool-call-a".to_string()),
                 generation_key: "generation-a".to_string(),
                 revision: "revision-a".to_string(),
+                cancelled: tokio::sync::watch::channel(false).1,
             },
         );
 

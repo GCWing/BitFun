@@ -46,6 +46,20 @@ pub(crate) async fn ensure_configured_plugin_execution_supported() -> BitFunResu
 pub(crate) async fn ensure_plugin_workspace_ready(
     binding: &AgentSessionWorkspaceBinding,
 ) -> BitFunResult<()> {
+    if let Err(error) = try_ensure_plugin_workspace_ready(binding).await {
+        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            "CLI workspace activation",
+            Some(std::path::Path::new(&binding.workspace_path)),
+            error,
+        )
+        .await;
+    }
+    Ok(())
+}
+
+async fn try_ensure_plugin_workspace_ready(
+    binding: &AgentSessionWorkspaceBinding,
+) -> BitFunResult<()> {
     if !ensure_configured_plugin_execution_supported().await? {
         return Ok(());
     }

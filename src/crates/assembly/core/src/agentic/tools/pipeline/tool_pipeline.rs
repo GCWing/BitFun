@@ -13,6 +13,8 @@ use crate::agentic::tools::registry::ToolRegistry;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
+#[cfg(feature = "opencode-plugin-host")]
+use crate::agentic::WorkspaceBinding;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -75,6 +77,48 @@ fn persisted_effective_tool_name(
     effective_tool_name: &str,
 ) -> Option<String> {
     (wire_tool_name != effective_tool_name).then(|| effective_tool_name.to_string())
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+struct PluginAfterPresentation {
+    title: String,
+    output: String,
+    metadata: serde_json::Value,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn plugin_after_presentation(
+    tool_name: &str,
+    tool_result: &ModelToolResult,
+) -> PluginAfterPresentation {
+    let object = tool_result.result.as_object();
+    let title = object
+        .and_then(|value| value.get("title"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(tool_name)
+        .to_string();
+    let output = object
+        .and_then(|value| value.get("output"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .or_else(|| tool_result.result_for_assistant.clone())
+        .unwrap_or_else(|| tool_result.result.to_string());
+    let metadata = object
+        .and_then(|value| value.get("metadata"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({"isError": tool_result.is_error}));
+    PluginAfterPresentation {
+        title,
+        output,
+        metadata,
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn local_plugin_workspace_scope(workspace: &WorkspaceBinding) -> Option<String> {
+    (!workspace.is_remote())
+        .then(|| crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path()))
+        .flatten()
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -882,9 +926,12 @@ impl ToolPipeline {
             }
             let tool_name = task.invocation.effective_tool_name.clone();
             #[cfg(feature = "opencode-plugin-host")]
-            if let Some(workspace_scope) = task.context.workspace.as_ref().and_then(|workspace| {
-                crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path())
-            }) {
+            if let Some(workspace_scope) = task
+                .context
+                .workspace
+                .as_ref()
+                .and_then(local_plugin_workspace_scope)
+            {
                 match native_hooks::dispatch_plugin_tool_before(
                     &workspace_scope,
                     &tool_name,
@@ -1026,13 +1073,13 @@ impl ToolPipeline {
         tool_result: &mut ModelToolResult,
     ) {
         #[cfg(feature = "opencode-plugin-host")]
-        if let Some(workspace_scope) = task.context.workspace.as_ref().and_then(|workspace| {
-            crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path())
-        }) {
-            let output = tool_result
-                .result_for_assistant
-                .clone()
-                .unwrap_or_else(|| tool_result.result.to_string());
+        if let Some(workspace_scope) = task
+            .context
+            .workspace
+            .as_ref()
+            .and_then(local_plugin_workspace_scope)
+        {
+            let presentation = plugin_after_presentation(tool_name, tool_result);
             match native_hooks::dispatch_plugin_tool_after(
                 &workspace_scope,
                 tool_name,
@@ -1040,9 +1087,9 @@ impl ToolPipeline {
                 Some(tool_id),
                 Some(&task.context.agent_type),
                 task.invocation.effective_arguments.clone(),
-                tool_name.to_string(),
-                output,
-                serde_json::json!({"isError": tool_result.is_error}),
+                presentation.title,
+                presentation.output,
+                presentation.metadata,
             )
             .await
             {
@@ -2656,6 +2703,44 @@ mod tests {
             tool_name: tool_name.to_string(),
             catalog_generation,
         }
+    }
+
+    #[test]
+    fn plugin_after_presentation_prefers_the_plugin_result_contract() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": {"path": "report.md"}
+            }),
+            result_for_assistant: Some("report ready".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("report", &result);
+        assert_eq!(presentation.title, "Generated report");
+        assert_eq!(presentation.output, "report ready");
+        assert_eq!(presentation.metadata["path"], "report.md");
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn remote_workspace_never_resolves_a_local_plugin_hook_scope() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let local = WorkspaceBinding::new(None, workspace.path().to_path_buf());
+        let mut remote = local.clone();
+        remote.backend = crate::agentic::workspace::WorkspaceBackend::Remote {
+            connection_id: "remote-a".to_string(),
+            connection_name: "Remote A".to_string(),
+        };
+
+        assert!(local_plugin_workspace_scope(&local).is_some());
+        assert!(local_plugin_workspace_scope(&remote).is_none());
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use bitfun_agent_runtime::native_hooks::RuntimeHookCommitToken;
 use bitfun_opencode_plugin_host::{
-    BackendDiagnosticError, BackendDiagnosticEvent, PluginDeclaration, PluginHost,
-    PluginHostConfig, PluginHostShutdownPolicy, PluginHostShutdownReport, PluginPrepareRequest,
-    GENERATION_FENCING_V1,
+    BackendDiagnostic, BackendDiagnosticError, BackendDiagnosticEvent, BackendDiagnosticSeverity,
+    PluginDeclaration, PluginHost, PluginHostConfig, PluginHostShutdownPolicy,
+    PluginHostShutdownReport, PluginPrepareRequest, GENERATION_FENCING_V1,
 };
 use bitfun_runtime_ports::{
     HookFunctionDisposeRequest, HookFunctionGeneration, HookFunctionPluginDeclaration,
@@ -75,6 +75,8 @@ static PLUGIN_HOST_INSTANCES: OnceCell<Mutex<HashMap<String, PluginHostInstance>
 static PLUGIN_HOST_ENSURE_LOCKS: OnceCell<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     OnceCell::const_new();
 static PLUGIN_HOST_PTY_OWNERS: OnceCell<Mutex<HashMap<String, String>>> = OnceCell::const_new();
+static PLUGIN_ACTIVATION_FAILURES: std::sync::OnceLock<std::sync::RwLock<HashMap<String, String>>> =
+    std::sync::OnceLock::new();
 static NEXT_INSTANCE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const MAX_PLUGIN_HOST_DIAGNOSTICS: usize = 100;
 
@@ -222,7 +224,10 @@ pub async fn initialize_configured_plugin_host_with_log_file(
     }
     let config_service = get_global_config_service().await?;
     let config: GlobalConfig = config_service.get_config(None).await?;
-    initialize_configured_plugin_host_from_config(launch_policy, log_file, &config).await
+    let startup =
+        initialize_configured_plugin_host_from_config(launch_policy, log_file, &config).await?;
+    clear_configured_plugin_activation_failure(None);
+    Ok(startup)
 }
 
 async fn initialize_configured_plugin_host_from_config(
@@ -378,6 +383,7 @@ pub async fn ensure_configured_plugin_instance(
 
     if launch_policy == PluginHostLaunchPolicy::Disabled {
         withdraw_configured_plugin_workspace(&directory).await;
+        clear_configured_plugin_activation_failure(Some(&directory));
         return Ok(());
     }
     if directory.as_os_str().is_empty() || !directory.is_dir() {
@@ -408,9 +414,11 @@ pub async fn ensure_configured_plugin_instance(
     if !global_config.has_configured_plugins() {
         withdraw_configured_plugin_workspace_locked(&canonical_directory, &comparable_directory)
             .await;
+        clear_configured_plugin_activation_failure(Some(&canonical_directory));
         return Ok(());
     }
     initialize_configured_plugin_host_from_config(launch_policy, None, &global_config).await?;
+    clear_configured_plugin_activation_failure(None);
     // Shutdown sets its gate before waiting for active ensure leases. Holding
     // this lease through prepare/open/register/publish prevents teardown from
     // clearing the instance table while a generation is still being published.
@@ -562,6 +570,7 @@ pub async fn ensure_configured_plugin_instance(
                 "Configured plugin Host faulted while retiring a superseded generation".to_string(),
             ));
         }
+        clear_configured_plugin_activation_failure(Some(&canonical_directory));
         return Ok(());
     }
 
@@ -681,7 +690,20 @@ pub async fn ensure_configured_plugin_instance(
             )));
         }
     }
-    let registration_batch = registrations.take()?;
+    let registration_batch = match registrations.take() {
+        Ok(batch) => batch,
+        Err(error) => {
+            discard_opening_plugin_instance(
+                &client,
+                runtime.clone(),
+                instances,
+                &instance_key,
+                &generation,
+            )
+            .await;
+            return Err(error);
+        }
+    };
     let config_projection = match crate::plugin_config_projection::prepare(
         &canonical_directory,
         &generation_key,
@@ -831,6 +853,7 @@ pub async fn ensure_configured_plugin_instance(
             "Configured plugin Host faulted while retiring a superseded generation".to_string(),
         ));
     }
+    clear_configured_plugin_activation_failure(Some(&canonical_directory));
     Ok(())
 }
 
@@ -1254,6 +1277,12 @@ async fn retire_plugin_instance(
         .await
     };
     close_plugin_host_ptys(&instance.instance_id).await;
+    if closed {
+        crate::plugin_config_projection::release_workspace_generation(
+            &instance.directory,
+            &instance.generation_key,
+        );
+    }
     closed
 }
 
@@ -1372,6 +1401,112 @@ pub(crate) async fn publish_plugin_host_diagnostic(
         ))
     })?;
     Ok(())
+}
+
+fn plugin_activation_diagnostic(
+    operation: &str,
+    workspace: Option<&Path>,
+    error: &str,
+) -> BackendDiagnosticEvent {
+    BackendDiagnosticEvent {
+        instance_id: None,
+        diagnostic: BackendDiagnostic {
+            severity: BackendDiagnosticSeverity::Warning,
+            code: "plugin.activation_failed".to_string(),
+            message: error.to_string(),
+            plugin: None,
+            method: Some(operation.to_string()),
+            data: workspace
+                .map(|workspace| serde_json::json!({"workspace": workspace.to_string_lossy()})),
+        },
+    }
+}
+
+/// Report an optional configured-plugin activation failure without changing
+/// the outcome of the native session operation that triggered it.
+pub async fn report_configured_plugin_activation_failure(
+    operation: &str,
+    workspace: Option<&Path>,
+    error: impl std::fmt::Display,
+) {
+    let error = error.to_string();
+    record_configured_plugin_activation_failure(operation, workspace, &error);
+    log::warn!(
+        "Configured plugin activation failed; continuing with native capabilities: operation={}, workspace={}, error={}",
+        operation,
+        workspace
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "<none>".to_string()),
+        error
+    );
+    if let Err(publish_error) =
+        publish_plugin_host_diagnostic(plugin_activation_diagnostic(operation, workspace, &error))
+            .await
+    {
+        log::debug!(
+            "Configured plugin activation diagnostic could not be published: {:?}",
+            publish_error
+        );
+    }
+}
+
+fn plugin_activation_workspace_key(workspace: Option<&Path>) -> String {
+    workspace
+        .map(|path| {
+            canonical_plugin_workspace_scope(path)
+                .unwrap_or_else(|| comparable_instance_directory(&path.to_string_lossy()))
+        })
+        .unwrap_or_else(|| "<global>".to_string())
+}
+
+fn activation_failure_store() -> &'static std::sync::RwLock<HashMap<String, String>> {
+    PLUGIN_ACTIVATION_FAILURES.get_or_init(|| std::sync::RwLock::new(HashMap::new()))
+}
+
+fn record_configured_plugin_activation_failure(
+    operation: &str,
+    workspace: Option<&Path>,
+    error: &str,
+) {
+    let mut message = format!("Configured plugin activation failed during {operation}: {error}");
+    if message.len() > 2048 {
+        let boundary = message
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= 2045)
+            .last()
+            .unwrap_or(0);
+        message.truncate(boundary);
+        message.push_str("...");
+    }
+    activation_failure_store()
+        .write()
+        .expect("plugin activation failure lock poisoned")
+        .insert(plugin_activation_workspace_key(workspace), message);
+}
+
+fn clear_configured_plugin_activation_failure(workspace: Option<&Path>) {
+    activation_failure_store()
+        .write()
+        .expect("plugin activation failure lock poisoned")
+        .remove(&plugin_activation_workspace_key(workspace));
+}
+
+pub(crate) fn configured_plugin_activation_failures(workspace: Option<&Path>) -> Vec<String> {
+    let failures = activation_failure_store()
+        .read()
+        .expect("plugin activation failure lock poisoned");
+    let mut result = Vec::new();
+    if let Some(global) = failures.get("<global>") {
+        result.push(global.clone());
+    }
+    let workspace_key = plugin_activation_workspace_key(workspace);
+    if workspace_key != "<global>" {
+        if let Some(workspace) = failures.get(&workspace_key) {
+            result.push(workspace.clone());
+        }
+    }
+    result
 }
 
 fn push_plugin_host_diagnostic(snapshot: &mut Vec<Value>, diagnostic: Value) {
@@ -1631,9 +1766,6 @@ async fn register_plugin_tools(
     let mut seen_ids = std::collections::BTreeSet::new();
     for tool in tools {
         let allowed_runtime_agent_keys = projection.allowed_runtime_agent_keys_for_tool(tool)?;
-        if allowed_runtime_agent_keys.is_empty() {
-            continue;
-        }
         if !seen_ids.insert(tool.id.clone()) {
             return Err(crate::BitFunError::Validation(format!(
                 "Plugin tool id is duplicated in the registration batch: {}",
@@ -1826,10 +1958,10 @@ fn absolutize_existing_entry(
 mod tests {
     use super::{
         bundled_host_entry_candidates, development_host_entry, initialize_configured_plugin_host,
-        instance_directories_equal, plugin_host_pty_ids_for_instance, plugin_host_pty_owned_by,
-        push_plugin_host_diagnostic, register_plugin_host_pty, unregister_plugin_host_pty,
-        PluginHostLaunchPolicy, PluginHostLaunchSpec, PluginHostStartup,
-        MAX_PLUGIN_HOST_DIAGNOSTICS,
+        instance_directories_equal, plugin_activation_diagnostic, plugin_host_pty_ids_for_instance,
+        plugin_host_pty_owned_by, push_plugin_host_diagnostic, register_plugin_host_pty,
+        unregister_plugin_host_pty, PluginHostLaunchPolicy, PluginHostLaunchSpec,
+        PluginHostStartup, MAX_PLUGIN_HOST_DIAGNOSTICS,
     };
     use std::path::Path;
 
@@ -1926,5 +2058,41 @@ mod tests {
             snapshot.last().unwrap()["index"],
             MAX_PLUGIN_HOST_DIAGNOSTICS
         );
+    }
+
+    #[test]
+    fn activation_failure_diagnostic_is_stable_and_workspace_scoped() {
+        let event = plugin_activation_diagnostic(
+            "session creation",
+            Some(Path::new("C:/workspace/project")),
+            "Bun executable was not found",
+        );
+
+        assert_eq!(event.diagnostic.code, "plugin.activation_failed");
+        assert_eq!(event.diagnostic.severity.as_str(), "warning");
+        assert_eq!(event.diagnostic.method.as_deref(), Some("session creation"));
+        assert_eq!(
+            event.diagnostic.data.as_ref().unwrap()["workspace"],
+            "C:/workspace/project"
+        );
+    }
+
+    #[test]
+    fn activation_failure_status_is_workspace_scoped_and_clearable() {
+        let first = tempfile::tempdir().expect("first workspace");
+        let second = tempfile::tempdir().expect("second workspace");
+        super::record_configured_plugin_activation_failure(
+            "session creation",
+            Some(first.path()),
+            "Bun executable was not found",
+        );
+
+        let first_status = super::configured_plugin_activation_failures(Some(first.path()));
+        assert_eq!(first_status.len(), 1);
+        assert!(first_status[0].contains("session creation"));
+        assert!(super::configured_plugin_activation_failures(Some(second.path())).is_empty());
+
+        super::clear_configured_plugin_activation_failure(Some(first.path()));
+        assert!(super::configured_plugin_activation_failures(Some(first.path())).is_empty());
     }
 }

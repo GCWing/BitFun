@@ -168,14 +168,37 @@ impl PluginConfigProjectionPlan {
 }
 
 pub(crate) fn release_workspace(workspace_root: &Path) {
+    let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
     get_agent_registry().release_external_subagent_route_overlay(
-        workspace_root,
+        &workspace_root,
         OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER,
     );
     skill_generations()
         .write()
         .expect("plugin skill generation lock poisoned")
-        .remove(workspace_root);
+        .remove(&workspace_root);
+}
+
+pub(crate) fn release_workspace_generation(
+    workspace_root: &Path,
+    expected_generation_key: &str,
+) -> bool {
+    let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
+    let mut generations = skill_generations()
+        .write()
+        .expect("plugin skill generation lock poisoned");
+    if generations
+        .get(&workspace_root)
+        .is_none_or(|generation| generation.generation_key != expected_generation_key)
+    {
+        return false;
+    }
+    get_agent_registry().release_external_subagent_route_overlay(
+        &workspace_root,
+        OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER,
+    );
+    generations.remove(&workspace_root);
+    true
 }
 
 pub(crate) fn skill_roots_for_agent(
@@ -923,6 +946,26 @@ mod tests {
             hooks: Vec::new(),
             tools,
         }
+    }
+
+    #[test]
+    fn generation_scoped_release_never_withdraws_a_replacement() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        PluginConfigProjectionPlan::empty(workspace.path(), "generation-a").commit();
+
+        assert!(!release_workspace_generation(
+            workspace.path(),
+            "generation-b"
+        ));
+        assert_eq!(
+            active_generation_key(workspace.path()).as_deref(),
+            Some("generation-a")
+        );
+        assert!(release_workspace_generation(
+            workspace.path(),
+            "generation-a"
+        ));
+        assert_eq!(active_generation_key(workspace.path()), None);
     }
 
     #[test]
