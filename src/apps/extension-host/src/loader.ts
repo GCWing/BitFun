@@ -228,7 +228,7 @@ export function parseNpmPluginSpecifier(spec: string, baseDirectory = process.cw
   const canonical = parsed.saveSpec ?? parsed.fetchSpec ?? parsed.raw
   const installSpec =
     parsed.type === "directory" || parsed.type === "file"
-      ? `file:${parsed.fetchSpec}`
+      ? pathToFileURL(String(parsed.fetchSpec)).href
       : parsed.registry && parsed.raw === parsed.name
         ? `${parsed.name}@latest`
         : spec

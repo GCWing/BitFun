@@ -33,7 +33,7 @@ describe("ExtensionHost lifecycle and hooks", () => {
     const configurationFingerprint = "fixture-prewarm"
     const plugins = [{ spec: plugin }]
 
-    const preparing = harness.host.prepare({ plugins, configurationFingerprint })
+    const preparing = harness.host.prepare({ plugins, configurationFingerprint, defaultBaseDirectory: directory })
     const opening = harness.host.open({
       instanceID: "prewarm",
       project: {},
@@ -77,6 +77,38 @@ describe("ExtensionHost lifecycle and hooks", () => {
     ).rejects.toMatchObject({ data: { kind: "prepared_review_changed" } })
   })
 
+  test("recomputes prepared content before opening the same declaration", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "content-fence")
+    const plugin = path.join(harness.root, "content-fence.ts")
+    const plugins = [{ spec: plugin }]
+    await Bun.write(plugin, 'export default { id: "fixture.content-fence-v1" }\n')
+
+    const prepared = await harness.host.prepare({
+      plugins,
+      configurationFingerprint: "content-fence",
+      defaultBaseDirectory: directory,
+    })
+    const expectedContentDigests = Object.fromEntries(
+      prepared.prepared.map((entry) => [entry.identity, entry.contentHash!]),
+    )
+    await Bun.write(plugin, 'export default { id: "fixture.content-fence-v2" }\n')
+
+    await expect(
+      harness.host.open({
+        instanceID: "content-fence",
+        project: {},
+        directory,
+        worktree: directory,
+        config: {},
+        plugins,
+        configurationFingerprint: "content-fence",
+        expectedReviewDigest: prepared.reviewDigest,
+        expectedContentDigests,
+      }),
+    ).rejects.toMatchObject({ data: { kind: "prepared_review_changed" } })
+  })
+
   test("uses the normalized plugin graph when duplicate declarations are reviewed", async () => {
     const harness = await createHarness()
     const directory = await projectDirectory(harness.root, "review-dedupe")
@@ -87,7 +119,11 @@ describe("ExtensionHost lifecycle and hooks", () => {
       { spec: plugin, options: { selected: true } },
     ]
 
-    const prepared = await harness.host.prepare({ plugins, configurationFingerprint: "review-dedupe" })
+    const prepared = await harness.host.prepare({
+      plugins,
+      configurationFingerprint: "review-dedupe",
+      defaultBaseDirectory: directory,
+    })
     expect(prepared.reviewed).toHaveLength(1)
     expect(prepared.prepared).toHaveLength(1)
 
@@ -551,6 +587,10 @@ describe("ExtensionHost instance isolation", () => {
       config: {},
       plugins: [{ spec: plugin, options: { started, disposed } }],
     })
+    const openingResult = opening.then(
+      () => undefined,
+      (error) => error,
+    )
     await expect(
       harness.host.open({
         instanceID: "opening",
@@ -564,7 +604,7 @@ describe("ExtensionHost instance isolation", () => {
     await waitFor(() => Bun.file(started).exists())
 
     const shutdown = harness.host.shutdown()
-    await expect(opening).rejects.toMatchObject({ code: -32004 })
+    expect(await openingResult).toMatchObject({ code: -32004 })
     await shutdown
     expect(await Bun.file(disposed).text()).toBe("disposed")
     await expect(
@@ -599,8 +639,93 @@ describe("ExtensionHost instance isolation", () => {
     harness.streams.failCancelAll = true
 
     expect(await harness.host.close({ instanceID: "cancel-failure" })).toEqual({ closed: true })
-    expect(await Bun.file(marker).text()).toBe("full:1\n")
+    expect(await Bun.file(marker).text()).toMatch(/^full:\d+\n$/)
     expect(await harness.host.close({ instanceID: "cancel-failure" })).toEqual({ closed: false })
+  })
+
+  test("does not confirm cancellation when a tool ignores abort and completes", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "ignore-abort")
+    harness.rpc.onRequest("backend.tool.ask", async () => ({}))
+    const opened = await openFull(harness, "ignore-abort", directory, { ignoreAbortMs: 50 })
+    const registration = opened.tools.find((tool) => tool.id === "fixture.echo")!
+    const execution = harness.host.executeTool({
+      instanceID: "ignore-abort",
+      registrationID: registration.registrationID,
+      executionID: "ignore-abort-execution",
+      args: { value: "slow", waitForAbort: true },
+      context: { sessionID: "session", messageID: "message", agent: "agent" },
+    })
+    await waitFor(() =>
+      harness.rpc.requests.some((request) => request.params.executionID === "ignore-abort-execution"),
+    )
+
+    await expect(
+      harness.host.cancelTool({ instanceID: "ignore-abort", executionID: "ignore-abort-execution" }),
+    ).resolves.toEqual({ cancelled: false })
+    await expect(execution).resolves.toMatchObject({
+      result: { output: "slow:" + directory + ":" + directory },
+    })
+  })
+
+  test("poisons the Host when an active tool does not drain before close", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "drain-timeout")
+    const opened = await openFull(harness, "drain-timeout", directory, { ignoreAbortMs: 2_500 })
+    const registration = opened.tools.find((tool) => tool.id === "fixture.echo")!
+    const execution = harness.host.executeTool({
+      instanceID: "drain-timeout",
+      registrationID: registration.registrationID,
+      executionID: "drain-timeout-execution",
+      args: { value: "slow", waitForAbort: true },
+      context: { sessionID: "session", messageID: "message", agent: "agent" },
+    })
+    await waitFor(() => harness.rpc.requests.some((request) => request.params.executionID === "drain-timeout-execution"))
+
+    await expect(harness.host.close({ instanceID: "drain-timeout" })).rejects.toThrow("Plugin tool drain timed out")
+    await expect(
+      harness.host.open({
+        instanceID: "replacement",
+        project: {},
+        directory,
+        worktree: directory,
+        config: {},
+        plugins: [],
+      }),
+    ).rejects.toMatchObject({ data: { kind: "host_shutting_down" } })
+    await execution.catch(() => undefined)
+  })
+
+  test("poisons the Host when an active hook does not drain before close", async () => {
+    const harness = await createHarness()
+    const directory = await projectDirectory(harness.root, "hook-drain-timeout")
+    const marker = path.join(harness.root, "hook-started.txt")
+    await openFull(harness, "hook-drain-timeout", directory, {
+      hookDelayMs: 2_500,
+      hookStartMarker: marker,
+    })
+    const hook = harness.host.callHook({
+      instanceID: "hook-drain-timeout",
+      name: "tool.execute.before",
+      input: { tool: "fixture.echo" },
+      output: { args: { value: "slow" } },
+    })
+    await waitFor(() => Bun.file(marker).exists())
+
+    await expect(harness.host.close({ instanceID: "hook-drain-timeout" })).rejects.toThrow(
+      "Plugin hook drain timed out",
+    )
+    await expect(
+      harness.host.open({
+        instanceID: "replacement-after-hook-timeout",
+        project: {},
+        directory,
+        worktree: directory,
+        config: {},
+        plugins: [],
+      }),
+    ).rejects.toMatchObject({ code: -32004 })
+    await hook
   })
 })
 

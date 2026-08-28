@@ -2,24 +2,27 @@
 
 use bitfun_agent_runtime::native_hooks::{
     AgentHookMatcher, PluginHookCall, PluginHookExecutor, PluginHookResult, RuntimeHookCommitToken,
-    RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistration, RuntimeHookRegistry,
-    RuntimeHookSource,
+    RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistration,
+    RuntimeHookRegistry, RuntimeHookSource,
 };
-use bitfun_runtime_ports::{PluginHookInvocationRequest, PluginRuntimeInvocationPort};
+use bitfun_runtime_ports::{
+    HookFunctionAfterOutput, HookFunctionAfterRequest, HookFunctionBeforeRequest,
+    HookFunctionGeneration, HookFunctionRuntime,
+};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) struct PluginHostHookExecutor {
-    invoker: Arc<dyn PluginRuntimeInvocationPort>,
+    runtime: Arc<dyn HookFunctionRuntime>,
     deadline: Duration,
 }
 
 impl PluginHostHookExecutor {
-    pub(crate) fn new(invoker: Arc<dyn PluginRuntimeInvocationPort>) -> Self {
+    pub(crate) fn new(runtime: Arc<dyn HookFunctionRuntime>) -> Self {
         Self {
-            invoker,
+            runtime,
             deadline: Duration::from_secs(30),
         }
     }
@@ -28,29 +31,64 @@ impl PluginHostHookExecutor {
 #[async_trait::async_trait]
 impl PluginHookExecutor for PluginHostHookExecutor {
     async fn execute(&self, call: PluginHookCall) -> Result<PluginHookResult, String> {
-        let result = self
-            .invoker
-            .invoke_hook(
-                PluginHookInvocationRequest {
-                    instance_id: call.instance_id.clone(),
-                    generation_key: call.generation_key.clone(),
-                    revision: call.revision.clone(),
-                    hook_name: call.hook_name.clone(),
-                    input: call.input,
-                    output: call.output,
-                },
-                self.deadline,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        let input = result
-            .get("input")
-            .cloned()
-            .ok_or_else(|| "host.hook.call response is missing input".to_string())?;
-        let output = result
-            .get("output")
-            .cloned()
-            .ok_or_else(|| "host.hook.call response is missing output".to_string())?;
+        let generation = HookFunctionGeneration {
+            instance_id: call.instance_id.clone(),
+            generation_key: call.generation_key.clone(),
+            revision: call.revision.clone(),
+        };
+        let input = call.input.clone();
+        let output = match call.hook_name.as_str() {
+            "tool.execute.before" => {
+                let result = self
+                    .runtime
+                    .transform_tool_before(
+                        HookFunctionBeforeRequest {
+                            generation,
+                            tool_name: string_field(&call.input, "tool"),
+                            session_id: string_field(&call.input, "sessionID"),
+                            call_id: string_field(&call.input, "callID"),
+                            args: call.output.get("args").cloned().ok_or_else(|| {
+                                "tool.execute.before input is missing args".to_string()
+                            })?,
+                        },
+                        self.deadline,
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+                serde_json::json!({"args": result.args})
+            }
+            "tool.execute.after" => {
+                let metadata = call
+                    .output
+                    .get("metadata")
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .ok_or_else(|| {
+                        "tool.execute.after output metadata must be an object".to_string()
+                    })?;
+                let result = self
+                    .runtime
+                    .transform_tool_after(
+                        HookFunctionAfterRequest {
+                            generation,
+                            tool_name: string_field(&call.input, "tool"),
+                            session_id: string_field(&call.input, "sessionID"),
+                            call_id: string_field(&call.input, "callID"),
+                            args: call.input.get("args").cloned().unwrap_or(Value::Null),
+                            output: HookFunctionAfterOutput {
+                                title: string_field(&call.output, "title"),
+                                output: string_field(&call.output, "output"),
+                                metadata,
+                            },
+                        },
+                        self.deadline,
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+                serde_json::to_value(result).map_err(|error| error.to_string())?
+            }
+            other => return Err(format!("unsupported operational plugin hook: {other}")),
+        };
         Ok(PluginHookResult {
             instance_id: call.instance_id,
             generation_key: call.generation_key,
@@ -62,24 +100,28 @@ impl PluginHookExecutor for PluginHostHookExecutor {
     }
 }
 
+fn string_field(value: &Value, field: &str) -> String {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[cfg(test)]
 pub(crate) fn register_plugin_hooks(
     registry: &RuntimeHookRegistry,
     workspace_scope: &str,
-    client: bitfun_opencode_plugin_host::PluginHostClient,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instance_id: &str,
     generation_key: &str,
     revision: &str,
     hook_names: &[String],
 ) -> Result<Option<RuntimeHookCommitToken>, String> {
-    register_plugin_hooks_with_invoker(
+    register_plugin_hooks_with_runtime(
         registry,
         workspace_scope,
-        bitfun_opencode_plugin_host::invocation_port(
-            client,
-            instance_id.to_string(),
-            generation_key.to_string(),
-            revision.to_string(),
-        ),
+        runtime,
         instance_id,
         generation_key,
         revision,
@@ -87,10 +129,10 @@ pub(crate) fn register_plugin_hooks(
     )
 }
 
-pub(crate) fn register_plugin_hooks_with_invoker(
+pub(crate) fn register_plugin_hooks_with_runtime(
     registry: &RuntimeHookRegistry,
     workspace_scope: &str,
-    invoker: Arc<dyn PluginRuntimeInvocationPort>,
+    runtime: Arc<dyn HookFunctionRuntime>,
     instance_id: &str,
     generation_key: &str,
     revision: &str,
@@ -102,7 +144,7 @@ pub(crate) fn register_plugin_hooks_with_invoker(
         instance_id,
         hook_names.len()
     );
-    let executor: Arc<dyn PluginHookExecutor> = Arc::new(PluginHostHookExecutor::new(invoker));
+    let executor: Arc<dyn PluginHookExecutor> = Arc::new(PluginHostHookExecutor::new(runtime));
     let entries = hook_names
         .iter()
         .map(|hook_name| {
@@ -114,7 +156,12 @@ pub(crate) fn register_plugin_hooks_with_invoker(
                     id,
                     RuntimeHookKind::PluginHook(hook_name.clone()),
                     RuntimeHookSource::Plugin,
-                ),
+                )
+                // The adapter owns a 30s RPC deadline. Keep the registry's
+                // outer guard slightly longer so it observes that terminal
+                // error instead of dropping an in-flight Host request.
+                .with_timeout_millis(31_000)
+                .with_error_policy(RuntimeHookErrorPolicy::DenyTool),
                 hook_name,
                 instance_id,
                 generation_key,
@@ -179,14 +226,16 @@ pub(crate) fn withdraw_plugin_workspace(registry: &RuntimeHookRegistry, workspac
     registry.withdraw_plugin_workspace(workspace_scope);
 }
 
-pub(crate) fn hook_names(open_result: &Value) -> Vec<String> {
-    open_result
-        .get("hooks")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .filter(|name| matches!(*name, "tool.execute.before" | "tool.execute.after"))
+pub(crate) fn hook_names(
+    batch: &bitfun_runtime_ports::HookFunctionRegistrationBatch,
+) -> Vec<String> {
+    batch
+        .hooks
+        .iter()
+        .map(|hook| match hook {
+            bitfun_runtime_ports::HookFunctionHookKind::ToolExecuteBefore => "tool.execute.before",
+            bitfun_runtime_ports::HookFunctionHookKind::ToolExecuteAfter => "tool.execute.after",
+        })
         .map(str::to_string)
         .collect()
 }
@@ -221,7 +270,7 @@ mod tests {
         let token = register_plugin_hooks(
             &registry,
             "C:/workspace",
-            client().await,
+            bitfun_opencode_plugin_host::hook_function_runtime(client().await),
             "instance-a",
             "generation-a",
             "revision-a",
@@ -245,7 +294,7 @@ mod tests {
         let first = register_plugin_hooks(
             &registry,
             "C:/workspace",
-            client().await,
+            bitfun_opencode_plugin_host::hook_function_runtime(client().await),
             "instance-a",
             "generation-a",
             "revision-a",
@@ -256,7 +305,7 @@ mod tests {
         assert!(register_plugin_hooks(
             &registry,
             "C:/workspace",
-            client().await,
+            bitfun_opencode_plugin_host::hook_function_runtime(client().await),
             "instance-a",
             "generation-a",
             "revision-a",

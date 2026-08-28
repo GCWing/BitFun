@@ -383,6 +383,7 @@ opencode-plugin-host = [
     "remote-connect",
     "git",
     "dep:bitfun-opencode-plugin-host",
+    "bitfun-runtime-ports/hook-function-runtime",
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",

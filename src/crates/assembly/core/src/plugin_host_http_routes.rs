@@ -541,8 +541,8 @@ include!("plugin_host_http_routes_impl.rs");
 #[cfg(test)]
 mod tests {
     use super::{
-        app_log, assistant_parts, file_list, file_read, find_files, find_text, parse_pty_shell,
-        lsp_status, project_list, project_value, provider_projection, pty_create, pty_value,
+        app_log, assistant_parts, file_list, file_read, find_files, find_text, lsp_status,
+        parse_pty_shell, project_list, project_value, provider_projection, pty_create, pty_value,
         resolve_scoped_path, search_line_offsets, session_create, session_update, tool_list,
     };
     use crate::plugin_host::PluginHostInstance;
@@ -565,7 +565,7 @@ mod tests {
             host_generation: 1,
             generation_key: "generation-test".to_string(),
             revision: "revision-test".to_string(),
-            open_result: json!({}),
+            registration_batch: None,
             ready: true,
             hook_commit_token: None,
             transformed_config_health_snapshot: None,
@@ -596,9 +596,7 @@ mod tests {
             .await
             .expect_err("explore keeps LSP retired");
 
-        assert_eq!(failure.status, 501);
-        assert_eq!(failure.code, "unsupported_capability");
-        assert!(failure.message.contains("retired"));
+        assert!(failure.message().contains("retired"));
     }
 
     #[test]

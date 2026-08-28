@@ -93,7 +93,7 @@ use api::tool_api::*;
 use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
 
 pub(crate) fn ensure_rustls_crypto_provider() {
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();

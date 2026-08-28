@@ -4061,6 +4061,37 @@ export const rustWebUiSourceBoundaryRule = {
 export const forbiddenContentUnderRules = [
   rustWebUiSourceBoundaryRule,
   {
+    path: 'src/crates/assembly/core/src',
+    reason:
+      'OpenCode backend wire parsing, raw RPC handlers, and wire errors belong to the opencode-plugin-host adapter',
+    patterns: [
+      {
+        regex:
+          /\b(?:BackendHttp(?:Request|Response)|Stream(?:Read|Cancel)Params|RpcHandlerError|RawDiagnostic(?:PublishParams)?)\b/,
+        message: 'core must not consume OpenCode backend wire DTOs or RPC errors',
+      },
+      {
+        regex: /["']backend\.[a-z0-9_.-]+["']/i,
+        message: 'core must not own raw OpenCode backend RPC method names',
+      },
+      {
+        regex: /register_handler\s*\(\s*["']backend\./,
+        message: 'core must not register raw OpenCode backend RPC handlers',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/opencode-plugin-host/src',
+    reason:
+      'raw OpenCode RPC handler registration is an adapter-internal implementation detail',
+    patterns: [
+      {
+        regex: /\bpub\s+async\s+fn\s+register_handler\b/,
+        message: 'the raw JSON-RPC handler registration API must not be public',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/agent-runtime-ipc/src',
     reason: 'agent-runtime-ipc transport is restricted to Named Pipe and Unix Domain Socket',
     patterns: [

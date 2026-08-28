@@ -17,7 +17,7 @@ export function stagePluginHostResources(destination, sourceDirectory = PLUGIN_H
     const source = join(sourceDirectory, entry);
     if (!existsSync(source)) {
       throw new Error(
-        `CLI plugin Host resource was not produced: ${source}. Run pnpm run plugin-host:prepare.`,
+        `Plugin Host resource was not produced: ${source}. Run pnpm run plugin-host:prepare.`,
       );
     }
   }

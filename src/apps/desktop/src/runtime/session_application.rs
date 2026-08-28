@@ -390,7 +390,7 @@ impl DesktopSessionApplication {
         &self,
         request: DesktopSessionScopeRequest,
         project_id: Option<String>,
-    ) -> DesktopSessionApplicationResult<Option<serde_json::Value>> {
+    ) -> DesktopSessionApplicationResult<()> {
         let scope = self.resolved_scope(request).await;
         self.ensure_runtime_ownership(&scope)?;
         if scope.remote_connection_id.is_some() {
@@ -398,7 +398,7 @@ impl DesktopSessionApplication {
                 .await
                 .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?
             {
-                return Ok(None);
+                return Ok(());
             }
             return Err(DesktopSessionApplicationError::Core(format!(
                 "OpenCode plugin hooks are unavailable for remote workspace {} because the remote execution domain does not provide a plugin host",

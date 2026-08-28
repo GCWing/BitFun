@@ -122,7 +122,7 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'agent-runtime optional dependencies must stay behind the full runtime or native-hook owner slice',
     dependencies: [
-      { depName: 'async-trait', ownerFeatures: ['agent-runtime'] },
+      { depName: 'async-trait', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
       { depName: 'bitfun-agent-stream', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-agent-tools', ownerFeatures: ['agent-runtime'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['agent-runtime'] },
@@ -137,7 +137,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'serde_json', ownerFeatures: ['agent-runtime', 'native-hook-runtime', 'native-hook-settings'] },
       { depName: 'serde_yaml', ownerFeatures: ['agent-runtime'] },
       { depName: 'sha2', ownerFeatures: ['agent-runtime'] },
-      { depName: 'thiserror', ownerFeatures: ['agent-runtime'] },
+      { depName: 'thiserror', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
       { depName: 'tokio', ownerFeatures: ['agent-runtime', 'native-hook-runtime'] },
       { depName: 'tokio-util', ownerFeatures: ['agent-runtime'] },
       { depName: 'uuid', ownerFeatures: ['agent-runtime'] },
@@ -379,6 +379,7 @@ export const capabilityContractDependencyRules = [
       default: [],
       'agent-api': ['dep:bitfun-core-types'],
       'git-port': [],
+      'hook-function-runtime': [],
       permission: ['dep:bitfun-product-domains'],
       'plugin-runtime': [],
       'product-search': ['dep:bitfun-product-domains'],
@@ -435,6 +436,7 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('agent-runtime', 'terminal-port'),
           capabilityForwarder('agent-runtime', 'tool-runtime-handles'),
           capabilityForwarder('agent-runtime', 'workspace-ports'),
+          capabilityForwarder('opencode-plugin-host', 'hook-function-runtime'),
           capabilityForwarder('plugin-runtime', 'plugin-runtime'),
           capabilityForwarder('product-search', 'product-search'),
           capabilityForwarder('script-tool-runtime', 'script-tool-runtime'),
@@ -449,6 +451,9 @@ export const capabilityContractDependencyRules = [
       ['bitfun-opencode-adapter', capabilityConsumer([
         capabilityEdge(['plugin-runtime']),
         capabilityEdge(['script-tool-runtime'], { kind: 'dev' }),
+      ])],
+      ['bitfun-opencode-plugin-host', capabilityConsumer([
+        capabilityEdge(['hook-function-runtime']),
       ])],
       ['bitfun-dsh-adapter', capabilityConsumer([
         capabilityEdge(['plugin-runtime']),
@@ -574,10 +579,12 @@ export const capabilityContractDependencyRules = [
       'native-hook-settings': ['dep:regex', 'dep:serde_json'],
       'native-hook-runtime': [
         'native-hook-settings',
+        'dep:async-trait',
         'dep:log',
         'dep:serde',
         'dep:serde_json',
         'dep:tokio',
+        'dep:thiserror',
         'tokio/io-util',
         'tokio/macros',
         'tokio/process',
@@ -1017,6 +1024,7 @@ export const coreClosedFeatureProfileRules = [
       'remote-connect',
       'git',
       'dep:bitfun-opencode-plugin-host',
+      'bitfun-runtime-ports/hook-function-runtime',
     ],
     allowedTransitiveFeatureRefs: [
       'agent-runtime',
@@ -1043,7 +1051,7 @@ export const coreClosedFeatureProfileRules = [
     ],
     exact: true,
     reason:
-      'the managed OpenCode Host must keep its product-shaped route dependencies separate from the portable plugin runtime client boundary without restoring the retired LSP runtime',
+      'the managed OpenCode Host must compose one typed Hook/function execution port without restoring the retired LSP runtime or exposing Host wire DTOs',
   },
   {
     manifestPath: 'src/crates/assembly/core/Cargo.toml',

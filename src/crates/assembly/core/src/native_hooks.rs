@@ -88,7 +88,7 @@ pub(crate) async fn dispatch_plugin_tool_before(
     call_id: Option<&str>,
     runtime_agent_key: Option<&str>,
     args: Value,
-) -> Option<Value> {
+) -> Result<Option<Value>, String> {
     let generation = match runtime_agent_key {
         Some(runtime_agent_key) => {
             let generation = crate::plugin_host::plugin_hook_generation_for_agent(
@@ -99,7 +99,7 @@ pub(crate) async fn dispatch_plugin_tool_before(
             if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
                 && generation.is_none()
             {
-                return None;
+                return Ok(None);
             }
             generation
         }
@@ -120,11 +120,14 @@ pub(crate) async fn dispatch_plugin_tool_before(
     for warning in &result.warnings {
         warn!("OpenCode plugin hook warning (tool.execute.before): {warning}");
     }
-    result
+    if let Some(failure) = result.failure {
+        return Err(failure);
+    }
+    Ok(result
         .output
         .get("args")
         .cloned()
-        .filter(|updated| updated != &serde_json::Value::Null)
+        .filter(|updated| updated != &serde_json::Value::Null))
 }
 
 #[cfg(feature = "opencode-plugin-host")]
@@ -138,7 +141,7 @@ pub(crate) async fn dispatch_plugin_tool_after(
     title: String,
     output: String,
     metadata: Value,
-) -> Option<PluginToolAfterOutput> {
+) -> Result<Option<PluginToolAfterOutput>, String> {
     let generation = match runtime_agent_key {
         Some(runtime_agent_key) => {
             let generation = crate::plugin_host::plugin_hook_generation_for_agent(
@@ -149,7 +152,7 @@ pub(crate) async fn dispatch_plugin_tool_after(
             if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
                 && generation.is_none()
             {
-                return None;
+                return Ok(None);
             }
             generation
         }
@@ -175,12 +178,12 @@ pub(crate) async fn dispatch_plugin_tool_after(
     for warning in &result.warnings {
         warn!("OpenCode plugin hook warning (tool.execute.after): {warning}");
     }
+    if let Some(failure) = result.failure {
+        return Err(failure);
+    }
     match serde_json::from_value::<PluginToolAfterOutput>(result.output) {
-        Ok(output) => Some(output),
-        Err(error) => {
-            warn!("Ignoring invalid tool.execute.after output: {error}");
-            None
-        }
+        Ok(output) => Ok(Some(output)),
+        Err(error) => Err(format!("Invalid tool.execute.after output: {error}")),
     }
 }
 
@@ -191,6 +194,25 @@ pub(crate) struct PluginToolAfterOutput {
     pub(crate) title: String,
     pub(crate) output: String,
     pub(crate) metadata: Value,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+impl PluginToolAfterOutput {
+    pub(crate) fn into_model_output(self) -> String {
+        let Self {
+            title,
+            output,
+            metadata,
+        } = self;
+        // The Host carries title and metadata through the complete ordered
+        // OpenCode Hook chain. BitFun's stable ToolResult contract currently
+        // has one mutable presentation field: the model-visible output. Keep
+        // the raw result immutable and avoid inventing a second persistence/UI
+        // schema until a product consumer for these two presentation facts is
+        // specified.
+        drop((title, metadata));
+        output
+    }
 }
 
 #[cfg(feature = "opencode-plugin-host")]

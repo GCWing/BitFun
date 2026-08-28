@@ -1,3 +1,4 @@
+mod backend;
 mod frame;
 mod host_log;
 mod http;
@@ -9,28 +10,30 @@ use bitfun_services_core::process_tree::{CleanupOutcome, ProcessTreeChild};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 
+pub use backend::{
+    register_backend_handlers, BackendDiagnostic, BackendDiagnosticError, BackendDiagnosticEvent,
+    BackendDiagnosticSeverity, BackendRouteFailure, BackendRouteRequest, OpenCodeBackendHandler,
+    PluginHostBackendBridge,
+};
 use frame::{read_frame, write_frame};
-pub use http::{
-    json_error_body, match_http_route, read_host_stream, BackendHttpRequest, BackendHttpResponse,
-    HostStreamReadError, HttpRouteError, HttpRouteMatch, OpenCodeClientRoute, StreamDescriptor,
-    MAX_HTTP_BODY_BYTES, MAX_STREAM_CHUNK_BYTES,
-};
+pub use http::OpenCodeClientRoute;
+#[cfg(test)]
+pub(crate) use http::{read_host_stream, HostStreamReadError, StreamDescriptor};
 pub use peer::{
-    invocation_port, JsonRpcPeer, OpenCodePluginRuntimeInvoker, PluginHostClient, RpcHandlerError,
-};
-pub use stream_registry::{
-    PluginHostStreamRegistry, StreamCancelParams, StreamCancelResult, StreamReadParams,
-    StreamReadResult, StreamRegistryError,
+    hook_function_runtime, JsonRpcPeer, OpenCodeHookFunctionRuntime, PluginHostClient,
+    RpcHandlerError,
 };
 
 const PROTOCOL_VERSION: u64 = 1;
@@ -119,6 +122,17 @@ pub struct PluginPrepareRequest {
     pub allow_install: Option<bool>,
 }
 
+/// Adapter-owned, protocol-independent facts needed by product assembly to
+/// fence a reviewed plugin graph before import.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginPreparationSummary {
+    pub review_digest: String,
+    pub reviewed_count: usize,
+    pub prepared_count: usize,
+    pub failed_count: usize,
+    pub content_digests: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInstanceOpenRequest {
@@ -191,6 +205,7 @@ pub enum PluginHostError {
 pub struct PluginHost {
     child: ProcessTreeChild,
     client: PluginHostClient,
+    runtime: Arc<dyn bitfun_runtime_ports::HookFunctionRuntime>,
     host_log: Option<host_log::HostLogDrain>,
     max_frame_bytes: usize,
 }
@@ -297,9 +312,12 @@ impl PluginHost {
             negotiation.max_frame_bytes,
             negotiation.capabilities,
         );
+        let client = peer.client();
+        let runtime = hook_function_runtime(client.clone());
         Ok(Self {
             child,
-            client: peer.client(),
+            client,
+            runtime,
             host_log: Some(host_log),
             max_frame_bytes: negotiation.max_frame_bytes,
         })
@@ -311,6 +329,10 @@ impl PluginHost {
 
     pub fn client(&self) -> PluginHostClient {
         self.client.clone()
+    }
+
+    pub fn runtime(&self) -> Arc<dyn bitfun_runtime_ports::HookFunctionRuntime> {
+        self.runtime.clone()
     }
 
     pub fn is_connected(&mut self) -> Result<bool, PluginHostError> {

@@ -871,7 +871,7 @@ impl ToolPipeline {
     /// but cannot relax non-relaxable validation of the original input.
     async fn apply_pre_tool_use_hooks(&self, task_ids: &[String]) {
         for task_id in task_ids {
-            let Some(task) = self.state_manager.get_task(task_id) else {
+            let Some(mut task) = self.state_manager.get_task(task_id) else {
                 continue;
             };
             if task.invocation_resolution_error.is_some()
@@ -881,6 +881,49 @@ impl ToolPipeline {
                 continue;
             }
             let tool_name = task.invocation.effective_tool_name.clone();
+            #[cfg(feature = "opencode-plugin-host")]
+            if let Some(workspace_scope) = task.context.workspace.as_ref().and_then(|workspace| {
+                crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path())
+            }) {
+                match native_hooks::dispatch_plugin_tool_before(
+                    &workspace_scope,
+                    &tool_name,
+                    Some(&task.context.session_id),
+                    Some(&task.tool_call.tool_id),
+                    Some(&task.context.agent_type),
+                    task.invocation.effective_arguments.clone(),
+                )
+                .await
+                {
+                    Ok(Some(updated_input)) => {
+                        if self.apply_hook_input_rewrite(&task, updated_input).await {
+                            info!(
+                                "OpenCode plugin hook rewrite was rejected by original-input constraints: tool_name={}, tool_id={}",
+                                tool_name, task_id
+                            );
+                            continue;
+                        }
+                        let Some(updated_task) = self.state_manager.get_task(task_id) else {
+                            continue;
+                        };
+                        task = updated_task;
+                    }
+                    Ok(None) => {}
+                    Err(reason) => {
+                        error!(
+                            "OpenCode plugin before hook rejected tool execution: tool_name={}, tool_id={}, error={}",
+                            tool_name, task_id, reason
+                        );
+                        self.permission_plans.lock().await.insert(
+                            task_id.clone(),
+                            PermissionExecutionPlan::Rejected {
+                                reason: format!("OpenCode plugin before hook failed: {reason}"),
+                            },
+                        );
+                        continue;
+                    }
+                }
+            }
             let decision = native_hooks::dispatch_pre_tool_use(
                 native_hook_session_facts(&task.context, &task.options),
                 &tool_name,
@@ -973,9 +1016,66 @@ impl ToolPipeline {
             .collect()
     }
 
-    /// Run PostToolUse hooks for a completed tool call and fold blocking
+    /// Give the OpenCode after-hook the complete model-visible output before
+    /// large-result storage replaces it with a file reference.
+    async fn apply_plugin_post_tool_use_hook(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_id: &str,
+        tool_result: &mut ModelToolResult,
+    ) {
+        #[cfg(feature = "opencode-plugin-host")]
+        if let Some(workspace_scope) = task.context.workspace.as_ref().and_then(|workspace| {
+            crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path())
+        }) {
+            let output = tool_result
+                .result_for_assistant
+                .clone()
+                .unwrap_or_else(|| tool_result.result.to_string());
+            match native_hooks::dispatch_plugin_tool_after(
+                &workspace_scope,
+                tool_name,
+                Some(&task.context.session_id),
+                Some(tool_id),
+                Some(&task.context.agent_type),
+                task.invocation.effective_arguments.clone(),
+                tool_name.to_string(),
+                output,
+                serde_json::json!({"isError": tool_result.is_error}),
+            )
+            .await
+            {
+                Ok(Some(transformed)) => {
+                    // Keep the canonical raw tool result immutable for audit
+                    // and persistence. OpenCode's presentation output is the
+                    // model-visible result consumed by the rest of the turn.
+                    tool_result.result_for_assistant = Some(transformed.into_model_output());
+                }
+                Ok(None) => {}
+                Err(reason) => {
+                    // The tool has already executed. Surface the hook failure
+                    // on this result without returning to the retry loop.
+                    error!(
+                        "OpenCode plugin after hook failed after tool execution: tool_name={}, tool_id={}, error={}",
+                        tool_name, tool_id, reason
+                    );
+                    let original = tool_result.result_for_assistant.take().unwrap_or_default();
+                    let failure = format!("OpenCode plugin after hook failed: {reason}");
+                    tool_result.result_for_assistant = Some(if original.is_empty() {
+                        failure
+                    } else {
+                        format!("{original}\n\n{failure}")
+                    });
+                    tool_result.is_error = true;
+                }
+            }
+        }
+    }
+
+    /// Run native PostToolUse hooks after storage compaction and fold blocking
     /// feedback and additional context into the model-visible result text.
-    async fn apply_post_tool_use_hooks(
+    async fn apply_native_post_tool_use_hooks(
         &self,
         task: &ToolTask,
         tool_name: &str,
@@ -2028,6 +2128,12 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
+                let mut tool_result = tool_result;
+                tool_result.duration_ms = Some(duration_ms);
+
+                self.apply_plugin_post_tool_use_hook(&task, &tool_name, &tool_id, &mut tool_result)
+                    .await;
+
                 let mut tool_result =
                     tool_result_storage::maybe_persist_large_tool_result_for_tool(
                         tool_result,
@@ -2035,7 +2141,6 @@ impl ToolPipeline {
                         &tool_context,
                     )
                     .await;
-                tool_result.duration_ms = Some(duration_ms);
 
                 if !matches!(repair_kind, ToolArgumentRepairKind::None) || recovered_from_truncation
                 {
@@ -2057,8 +2162,13 @@ impl ToolPipeline {
                     });
                 }
 
-                self.apply_post_tool_use_hooks(&task, &tool_name, &tool_id, &mut tool_result)
-                    .await;
+                self.apply_native_post_tool_use_hooks(
+                    &task,
+                    &tool_name,
+                    &tool_id,
+                    &mut tool_result,
+                )
+                .await;
 
                 self.state_manager
                     .update_state(

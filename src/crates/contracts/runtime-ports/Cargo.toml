@@ -26,6 +26,11 @@ path = "tests/script_tool_port_contracts.rs"
 required-features = ["script-tool-runtime"]
 
 [[test]]
+name = "hook_function_runtime_contracts"
+path = "tests/hook_function_runtime_contracts.rs"
+required-features = ["hook-function-runtime"]
+
+[[test]]
 name = "session_store_contracts"
 path = "tests/session_store_contracts.rs"
 required-features = ["workspace-ports"]
@@ -45,6 +50,7 @@ ts-rs = { workspace = true, optional = true }
 default = []
 agent-api = ["dep:bitfun-core-types"]
 plugin-runtime = []
+hook-function-runtime = []
 script-tool-runtime = []
 workspace-ports = ["dep:anyhow", "dep:tokio-util"]
 terminal-port = ["dep:tokio"]

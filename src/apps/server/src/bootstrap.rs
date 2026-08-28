@@ -160,6 +160,20 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
             .map(|w| w.root_path)
     };
 
+    bitfun_core::plugin_host::initialize_configured_plugin_host(
+        bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
+    )
+    .await?;
+    if let Some(workspace_path) = initial_workspace_path.as_ref() {
+        bitfun_core::plugin_host::ensure_configured_plugin_instance(
+            bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
+            workspace_path.clone(),
+            workspace_path.clone(),
+            None,
+        )
+        .await?;
+    }
+
     let state = Arc::new(ServerAppState {
         ai_client_factory,
         workspace_service,

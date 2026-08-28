@@ -13,6 +13,8 @@ pub use bitfun_core_types::{
     WorktreeSummary,
 };
 
+#[cfg(feature = "hook-function-runtime")]
+mod hook_function;
 #[cfg(feature = "workspace-ports")]
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
@@ -40,6 +42,8 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
+#[cfg(feature = "hook-function-runtime")]
+pub use hook_function::*;
 #[cfg(feature = "workspace-ports")]
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
@@ -57,16 +61,14 @@ pub use plugin::{
     PluginCapabilityRef, PluginConfigValidationIssue, PluginConfigValidationState,
     PluginConfigValidationStatus, PluginDataClassification, PluginDiagnostic,
     PluginDiagnosticDetail, PluginDiagnosticSeverity, PluginDispatchEnvelope,
-    PluginEffectCandidate, PluginEffectCandidatePayload, PluginHookInvocationRequest,
-    PluginHostLifecyclePhase, PluginManifestRef, PluginOwnerKind, PluginOwnerRef,
-    PluginPayloadRedaction, PluginPayloadRef, PluginPermissionGate, PluginQuarantineClearCondition,
-    PluginQuarantineReason, PluginQuarantineScope, PluginQuarantineState, PluginResponseEnvelope,
-    PluginRiskLevel, PluginRollbackMode, PluginRollbackPolicy, PluginRuntimeAvailability,
-    PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeInvocationPort,
-    PluginRuntimeReadRequest, PluginRuntimeReadResponse, PluginRuntimeUnavailableReason,
-    PluginSourceKind, PluginSourceRef, PluginStatusKind, PluginStatusSnapshot, PluginTargetRef,
-    PluginToolCancellationRequest, PluginToolInvocationRequest, PluginTrustLevel,
-    ProjectionOnlyPluginRuntimeClient,
+    PluginEffectCandidate, PluginEffectCandidatePayload, PluginHostLifecyclePhase,
+    PluginManifestRef, PluginOwnerKind, PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef,
+    PluginPermissionGate, PluginQuarantineClearCondition, PluginQuarantineReason,
+    PluginQuarantineScope, PluginQuarantineState, PluginResponseEnvelope, PluginRiskLevel,
+    PluginRollbackMode, PluginRollbackPolicy, PluginRuntimeAvailability, PluginRuntimeBinding,
+    PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
+    PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
+    PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
 };
 #[cfg(feature = "product-search")]
 pub use product_search::ProductSearchPort;

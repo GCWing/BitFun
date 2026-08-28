@@ -645,15 +645,6 @@ enum ConfigAction {
 enum ExternalConfigAction {
     /// Show effective global and project compatibility settings
     Status,
-    /// Preview the exact configured OpenCode executable activation envelope
-    ReviewActivation,
-    /// Approve the exact activation envelope identified by its fingerprint
-    ApproveActivation {
-        /// Fingerprint printed by `review-activation`
-        fingerprint: String,
-    },
-    /// Revoke the current configured OpenCode executable activation envelope
-    RevokeActivation,
     /// Enable or disable external compatibility
     SetEnabled {
         /// Whether external compatibility is enabled
