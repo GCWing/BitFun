@@ -45,7 +45,6 @@ interface HarnessProfileSelectorProps {
   sessionStarted?: boolean;
   selectedProfile: HarnessProfileId;
   selectedAgentId?: string;
-  directiveLabel?: string;
   otherAgents?: HarnessAgentOption[];
   disabled?: boolean;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
@@ -139,15 +138,13 @@ function HarnessProfileMark({
 /**
  * Before the first Turn this is the Session execution picker. Afterwards it
  * becomes a lightweight Session signature; alternative choices are disclosed only
- * through the explicit new-Session action. Per-task directives remain in the
- * adjacent add menu.
+ * through the explicit new-Session action.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
   sessionStarted = false,
   selectedProfile,
   selectedAgentId,
-  directiveLabel,
   otherAgents = [],
   disabled = false,
   onSelectProfile,
@@ -269,26 +266,14 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       : knownSelectedProfile
         ? t(`chatInput.harness.profiles.${knownSelectedProfile}.name`)
         : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
-  const triggerLabel = directiveLabel
-    ? `${primaryLabel} · ${directiveLabel}`
-    : primaryLabel;
+  const triggerLabel = primaryLabel;
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
     : !selectedProfileAvailable
       ? t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile })
       : sessionStarted
-        ? directiveLabel
-          ? t('chatInput.harness.fixedTooltipWithDirective', {
-              name: primaryLabel,
-              directive: directiveLabel,
-            })
-          : t('chatInput.harness.fixedTooltip', { name: primaryLabel })
-        : directiveLabel
-          ? t('chatInput.harness.selectorTooltipWithDirective', {
-            name: primaryLabel,
-            directive: directiveLabel,
-          })
-          : t('chatInput.harness.selectorTooltip', { name: primaryLabel });
+        ? t('chatInput.harness.fixedTooltip', { name: primaryLabel })
+        : t('chatInput.harness.selectorTooltip', { name: primaryLabel });
   const triggerState = [open ? 'open' : '', fixedSession ? 'fixed' : '']
     .filter(Boolean)
     .join(' ') || undefined;
@@ -354,11 +339,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
               >
                 <span className="bitfun-harness-selector__session-value">{primaryLabel}</span>
                 <Check size={13} strokeWidth={2.4} aria-hidden />
-                {directiveLabel ? (
-                  <span className="bitfun-harness-selector__session-directive">
-                    {t('chatInput.harness.nextMessageDirective', { directive: directiveLabel })}
-                  </span>
-                ) : null}
               </div>
               {onStartNewSession ? (
                 <>

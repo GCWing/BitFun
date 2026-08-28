@@ -198,11 +198,10 @@ describe('status track layout', () => {
     expect(readLocalFile('ModelSelector.tsx')).not.toContain('reasoningControlHost');
   });
 
-  it('projects one-turn directives into the single Harness/main-Agent control', () => {
+  it('keeps one Harness/main-Agent control beside the add menu', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const harnessIndex = chatInput.indexOf('<HarnessProfileSelector');
     const agentBoostIndex = chatInput.indexOf('data-testid="chat-input-agent-boost"');
-    const directiveLabelIndex = chatInput.indexOf('directiveLabel={armedTurnDirective');
     const newSessionHandlerIndex = chatInput.indexOf(
       'onStartNewSession={requestHarnessNewSession}',
     );
@@ -210,13 +209,10 @@ describe('status track layout', () => {
     expect(harnessIndex).toBeGreaterThan(-1);
     expect(agentBoostIndex).toBeGreaterThan(-1);
     expect(harnessIndex).toBeGreaterThan(agentBoostIndex);
-    expect(directiveLabelIndex).toBeGreaterThan(harnessIndex);
     expect(newSessionHandlerIndex).toBeGreaterThan(harnessIndex);
     expect(chatInput).toContain(
       'composer.setValue(newSessionId, transferredDraft.value)',
     );
-    expect(chatInput).not.toContain('data-testid="chat-input-turn-directive-chip"');
-    expect(chatInput).not.toContain('bitfun-chat-input__directive-capsule');
     expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
     expect(chatInput).not.toContain("modeState.current !== 'agentic'");
     expect(chatInput).toContain('executionLevelPolicy.userConfigurable ? (');
