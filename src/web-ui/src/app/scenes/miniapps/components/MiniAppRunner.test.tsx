@@ -83,7 +83,7 @@ describe('MiniAppRunner strict bridge startup', () => {
     expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
     expect(iframe.getAttribute('src')).toBe('blob:market-lens-1');
     expect(iframe.getAttribute('srcdoc')).toBeNull();
-    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-downloads');
 
     const updatedApp = {
       ...app,
