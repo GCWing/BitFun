@@ -577,7 +577,7 @@ mod tests {
             .nth(1)
             .expect("gstack-ship should have YAML frontmatter");
         assert!(ship_frontmatter.contains("explicit `/ship`"));
-        assert!(ship_frontmatter.contains("use the\n  built-in `commit-push-pr` skill instead"));
+        assert!(ship_frontmatter.contains("built-in `commit-push-pr` skill instead"));
     }
 
     #[test]
