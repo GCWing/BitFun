@@ -16,6 +16,7 @@ const labels = {
 const skills: GroupableSkill[] = [
   { key: 'builtin::docs', name: 'Docs', description: '', isBuiltin: true, groupKey: 'office' },
   { key: 'builtin::slides', name: 'Slides', description: '', isBuiltin: true, groupKey: 'office' },
+  { key: 'builtin::plan', name: 'Plan', description: '', isBuiltin: true, groupKey: 'planning' },
   { key: 'user::review', name: 'Review', description: '', isBuiltin: false },
 ];
 
@@ -27,7 +28,12 @@ describe('skillGroups', () => {
       skillKeys: ['user::review', 'builtin::docs'],
     }], labels);
 
-    expect(groups.map((group) => group.id)).toEqual(['user:daily', 'builtin:office', 'other']);
+    expect(groups.map((group) => group.id)).toEqual([
+      'user:daily',
+      'builtin:office',
+      'builtin:planning',
+      'other',
+    ]);
     expect(groups[0].skills.map((skill) => skill.key)).toEqual(['builtin::docs', 'user::review']);
   });
 

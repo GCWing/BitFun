@@ -16065,7 +16065,7 @@ mod tests {
                 .get_session(&session.session_id)
                 .map(|session| session.agent_type.clone())
                 .as_deref(),
-            Some("Plan")
+            Some("Cowork")
         );
         let _ = std::fs::remove_dir_all(workspace_path);
     }

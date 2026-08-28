@@ -45,8 +45,7 @@ Use this pattern when:
 
 Choose the session type intentionally:
 
-- `agentic` for implementation, debugging, and code changes.
-- `Plan` for requirement clarification, scoping, and planning before coding.
+- `agentic` for implementation, debugging, code changes, and planning tasks; ask it to use the built-in `plan` Skill when a plan artifact is the deliverable.
 - `Cowork` for research, documents, presentations, summaries, and other office-related work.
 
 Local computer/desktop work is not a SessionControl session type; delegate it through `Task` with the `ComputerUse` sub-agent when that subagent type is available.

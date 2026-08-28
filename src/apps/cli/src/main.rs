@@ -2199,8 +2199,8 @@ mod harness_profile_compatibility_tests {
             "minimal"
         );
         assert_eq!(
-            agent_type_with_harness_profile("Plan".to_string(), Some("balanced")),
-            "Plan"
+            agent_type_with_harness_profile("Cowork".to_string(), Some("balanced")),
+            "Cowork"
         );
     }
 

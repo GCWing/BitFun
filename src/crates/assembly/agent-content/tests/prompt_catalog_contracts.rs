@@ -74,14 +74,6 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/memories/phase2_system.md"),
     ),
     (
-        "plan_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/plan_mode_first_entry_reminder.md"),
-    ),
-    (
-        "plan_mode_ongoing_reminder",
-        include_bytes!("../prompts/agents/plan_mode_ongoing_reminder.md"),
-    ),
-    (
         "research_specialist_agent",
         include_bytes!("../prompts/agents/research_specialist_agent.md"),
     ),

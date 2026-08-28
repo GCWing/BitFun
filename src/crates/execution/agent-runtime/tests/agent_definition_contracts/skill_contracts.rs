@@ -300,6 +300,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     assert_eq!(builtin_skill_group_key("pr-review-canvas"), Some("canvas"));
     assert_eq!(builtin_skill_group_key("docs-canvas"), Some("canvas"));
     assert_eq!(builtin_skill_group_key("multitask"), Some("coordination"));
+    assert_eq!(builtin_skill_group_key("plan"), Some("planning"));
     assert_eq!(builtin_skill_group_key("gstack-review"), Some("gstack"));
     assert_eq!(builtin_skill_group_key("unknown-skill"), None);
 
@@ -358,6 +359,21 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
             resolve_builtin_default_enabled("multitask", mode_id),
             Some(expected),
             "unexpected multitask default for {mode_id}"
+        );
+    }
+    for (mode_id, expected) in [
+        ("agentic", true),
+        ("coding_shared", true),
+        ("Claw", true),
+        ("Cowork", true),
+        ("Creative", true),
+        ("ComputerUse", false),
+        ("DeepResearch", false),
+    ] {
+        assert_eq!(
+            resolve_builtin_default_enabled("plan", mode_id),
+            Some(expected),
+            "unexpected plan default for {mode_id}"
         );
     }
     assert_eq!(

@@ -40,7 +40,7 @@
 
 范围：
 
-- 评测 Plan、Debug、Review、严格审查、Agentic、Mini App、remote、MCP 等模式。
+- 评测 Plan/Debug Skill、Review、严格审查、Agentic、Mini App、remote、MCP 等工作流与能力。
 - 评测工具接口、上下文策略、hook 策略、审批/安全策略。
 - 评测配置化策略是否误升级、漏提示或过度打断。
 - 评测安全边界是否降低风险且不制造无意义确认。

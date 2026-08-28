@@ -907,7 +907,6 @@
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
-      "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
       "ComputerUse": "Dedicated desktop automation agent for perceiving and operating apps, browsers, and OS UI",
       "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports",
@@ -916,7 +915,6 @@
     "modeNames": {
       "agentic": "Agentic",
       "Claw": "Claw",
-      "Plan": "Plan",
       "Cowork": "Cowork",
       "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",

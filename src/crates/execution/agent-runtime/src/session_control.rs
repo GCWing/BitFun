@@ -30,8 +30,6 @@ impl SessionControlAction {
 pub enum SessionControlAgentType {
     #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
     Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
     #[serde(
@@ -46,7 +44,6 @@ impl SessionControlAgentType {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Agentic => "agentic",
-            Self::Plan => "Plan",
             Self::Cowork => "Cowork",
             Self::DeepResearch => "DeepResearch",
         }

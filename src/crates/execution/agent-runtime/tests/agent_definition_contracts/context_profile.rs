@@ -22,7 +22,7 @@ fn context_profile_maps_long_running_agents_to_long_task_profile() {
 
 #[test]
 fn context_profile_maps_conversation_agents_to_conversation_profile() {
-    for agent_type in ["Cowork", "Plan", "Claw", "unknown-custom-agent"] {
+    for agent_type in ["Cowork", "Claw", "unknown-custom-agent"] {
         assert_eq!(
             ContextProfile::for_agent_type(agent_type),
             ContextProfile::Conversation,

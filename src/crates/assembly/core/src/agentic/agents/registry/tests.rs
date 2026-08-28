@@ -236,7 +236,6 @@ fn top_level_modes_default_to_auto() {
         "agentic",
         "Cowork",
         "Creative",
-        "Plan",
         "Claw",
         "DeepResearch",
         "Ultra",

@@ -1835,7 +1835,6 @@ pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("claw") | Some("Claw") | Some("assistant") | Some("chat") => "Claw",
-        Some("plan") | Some("Plan") => "Plan",
         _ => "agentic",
     }
 }

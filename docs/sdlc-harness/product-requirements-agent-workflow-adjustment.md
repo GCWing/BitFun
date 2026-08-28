@@ -63,7 +63,7 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 
 ### 4.1 从固定模式改为自适应执行
 
-现有体验容易把 Agentic、Plan、Debug、Review、DeepReview 等理解为不同模式。后续应调整为：
+现有体验曾经容易把 Agentic、Plan、Debug、Review、DeepReview 等理解为不同模式；Plan 和 Debug 现已收敛为 Skill，后续仍应继续按以下方向调整：
 
 ```text
 用户表达目标

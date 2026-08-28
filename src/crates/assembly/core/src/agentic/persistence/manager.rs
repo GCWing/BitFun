@@ -6111,7 +6111,7 @@ mod tests {
             async move {
                 manager
                     .update_session_metadata(&workspace_path, &session_id, |metadata| {
-                        metadata.agent_type = "Plan".to_string();
+                        metadata.agent_type = "Cowork".to_string();
                     })
                     .await
             }
@@ -6149,7 +6149,7 @@ mod tests {
             .await
             .expect("metadata should load")
             .expect("metadata should exist");
-        assert_eq!(metadata.agent_type, "Plan");
+        assert_eq!(metadata.agent_type, "Cowork");
         assert_eq!(metadata.turn_count, 1);
     }
 
