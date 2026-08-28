@@ -23,6 +23,7 @@ export interface ActionItemProps
   children: ReactNode;
   className?: string;
   leading?: ReactNode;
+  metadata?: ReactNode;
   reserveLeadingSpace?: boolean;
   shortcut?: ReactNode;
   triggerClassName?: string;
@@ -34,6 +35,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
   className,
   disabled,
   leading,
+  metadata,
   reserveLeadingSpace = false,
   shortcut,
   triggerClassName,
@@ -62,6 +64,11 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
           </span>
         )}
         <span className={styles.label} data-bf-part="label">{children}</span>
+        {metadata !== undefined && metadata !== null && (
+          <span className={styles.metadata} data-bf-part="metadata">
+            {metadata}
+          </span>
+        )}
         {shortcut !== undefined && shortcut !== null && (
           <span aria-hidden="true" className={styles.shortcut} data-bf-part="shortcut">
             {shortcut}

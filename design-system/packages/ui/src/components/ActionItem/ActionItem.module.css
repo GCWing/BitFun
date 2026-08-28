@@ -87,11 +87,24 @@
     white-space: nowrap;
   }
 
+  .metadata,
   .shortcut,
   .actions {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
+  }
+
+  .metadata {
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-tight);
+    white-space: nowrap;
+  }
+
+  .root[data-disabled="true"] .metadata {
+    color: inherit;
   }
 
   .actions {

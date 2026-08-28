@@ -46,6 +46,24 @@ test("ActionItem renders end actions as sibling buttons and disables the whole c
   assert.match(markup, /aria-label="More"/);
 });
 
+test("ActionItem renders trailing metadata between the label and the shortcut", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ActionItem, {
+      metadata: "12",
+      shortcut: createElement(KeyHint, null, "K"),
+    }, "Sessions"),
+  );
+
+  const label = markup.indexOf('data-bf-part="label"');
+  const metadata = markup.indexOf('data-bf-part="metadata"');
+  const shortcut = markup.indexOf('data-bf-part="shortcut"');
+
+  assert.match(markup, /data-bf-part="metadata"[^>]*>12<\/span>/);
+  assert.doesNotMatch(markup, /data-bf-part="metadata"[^>]*aria-hidden/);
+  assert.ok(label < metadata);
+  assert.ok(metadata < shortcut);
+});
+
 test("ActionItem can reserve an empty leading gutter for aligned lists", () => {
   const markup = renderToStaticMarkup(
     createElement(ActionItem, { reserveLeadingSpace: true }, "Aligned item"),
