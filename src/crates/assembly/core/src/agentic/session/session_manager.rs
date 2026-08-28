@@ -5921,8 +5921,16 @@ impl SessionManager {
                 session.config.agent_route_key.as_deref(),
             );
             if let Some(binding) = persisted_binding {
+                // A missing local route key is a valid legacy binding. Local
+                // resolution is already constrained by the persisted owner, so
+                // avoid rewriting the runtime state solely to backfill it.
+                // External bindings still persist their exact provider route
+                // key to prevent a same-name provider from taking over.
+                let external_route_key_changed = session.config.agent_route_owner
+                    == SessionAgentRouteOwner::External
+                    && session.config.agent_route_key != binding.route_key;
                 if session.config.agent_route_owner != binding.route_owner
-                    || session.config.agent_route_key != binding.route_key
+                    || external_route_key_changed
                 {
                     session.config.agent_route_owner = binding.route_owner;
                     session.config.agent_route_key = binding.route_key;

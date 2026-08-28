@@ -336,6 +336,7 @@ enum WorkspaceRoute {
     },
     Live {
         tool: Arc<dyn Tool>,
+        native_agent_visible: bool,
         conflict: Option<ConflictExpectation>,
     },
     Unavailable {
@@ -521,16 +522,20 @@ impl ExternalToolMux {
             .get(&workspace_key)
             .cloned()
         {
-            Some(WorkspaceRoute::Live { tool, .. })
-                if tool.dynamic_provider_id() == Some("opencode-plugin") =>
-            {
-                if context
+            #[cfg(feature = "opencode-plugin-host")]
+            Some(WorkspaceRoute::Live {
+                tool,
+                native_agent_visible,
+                ..
+            }) if tool.dynamic_provider_id() == Some("opencode-plugin") => {
+                let uses_plugin_agent = context
                     .and_then(|context| context.agent_type.as_deref())
-                    .is_some_and(crate::plugin_config_projection::is_plugin_agent_runtime_key)
-                {
+                    .is_some_and(crate::plugin_config_projection::is_plugin_agent_runtime_key);
+                let original = self.original();
+                if uses_plugin_agent || native_agent_visible || original.is_none() {
                     Some(tool)
                 } else {
-                    self.original()
+                    original
                 }
             }
             Some(WorkspaceRoute::External { tool, .. }) => Some(tool),
@@ -759,6 +764,7 @@ struct ExternalToolRouter {
 #[derive(Clone)]
 struct LiveExternalToolCandidate {
     tool: Arc<dyn Tool>,
+    native_agent_visible: bool,
     candidate: ExternalToolConflictCandidate,
 }
 
@@ -779,6 +785,7 @@ impl ExternalToolRouter {
         tool: Arc<dyn Tool>,
         provider_id: &str,
         content_version: String,
+        native_agent_visible: bool,
     ) {
         let name = tool.name().to_string();
         let candidate_id = format!("external:live:{provider_id}:{name}");
@@ -798,7 +805,14 @@ impl ExternalToolRouter {
             .or_default()
             .entry(name)
             .or_default()
-            .insert(candidate_id, LiveExternalToolCandidate { tool, candidate });
+            .insert(
+                candidate_id,
+                LiveExternalToolCandidate {
+                    tool,
+                    native_agent_visible,
+                    candidate,
+                },
+            );
     }
 
     fn unregister_live_candidate(&self, workspace_key: &str, name: &str, provider_id: &str) {
@@ -845,6 +859,7 @@ impl ExternalToolRouter {
         workspace_key: &str,
         name: &str,
         tool: Arc<dyn Tool>,
+        native_agent_visible: bool,
     ) {
         let mut routes = self.workspace_routes(workspace_key);
         if let Some(existing) = routes.get(name).cloned() {
@@ -865,20 +880,36 @@ impl ExternalToolRouter {
                     );
                     self.apply_routes(workspace_key, routes).await;
                 }
+                WorkspaceRoute::Live { conflict: None, .. } => {
+                    routes.insert(
+                        name.to_string(),
+                        WorkspaceRoute::Live {
+                            tool,
+                            native_agent_visible,
+                            conflict: None,
+                        },
+                    );
+                    self.apply_routes(workspace_key, routes).await;
+                }
                 _ => {}
             }
             return;
         }
-        let route = if tool.dynamic_provider_id() == Some("opencode-plugin") {
+        let has_original = self.original_tool(name).await.is_some();
+        let route = if tool.dynamic_provider_id() == Some("opencode-plugin")
+            && (!native_agent_visible || !has_original)
+        {
             WorkspaceRoute::Live {
                 tool,
+                native_agent_visible,
                 conflict: None,
             }
-        } else if self.original_tool(name).await.is_some() {
+        } else if has_original {
             WorkspaceRoute::Original { conflict: None }
         } else {
             WorkspaceRoute::Live {
                 tool,
+                native_agent_visible,
                 conflict: None,
             }
         };
@@ -1116,6 +1147,23 @@ impl ExternalToolRouter {
         }
     }
 
+    fn resolve_registered_tool_for_context(
+        &self,
+        tool: Arc<dyn Tool>,
+        context: &ToolUseContext,
+    ) -> Option<Arc<dyn Tool>> {
+        let mux = self
+            .muxes
+            .lock()
+            .expect("external tool router lock poisoned")
+            .get(tool.name())
+            .cloned();
+        match mux {
+            Some(mux) => mux.selected(Some(context)),
+            None => Some(tool),
+        }
+    }
+
     fn workspace_routes(&self, workspace_key: &str) -> BTreeMap<String, WorkspaceRoute> {
         self.muxes
             .lock()
@@ -1142,12 +1190,19 @@ pub(crate) async fn register_live_external_tool_candidate(
     tool: Arc<dyn Tool>,
     provider_id: &str,
     content_version: String,
+    native_agent_visible: bool,
 ) {
     let workspace_key = workspace_route_key(Some(workspace_root));
-    router().register_live_candidate(&workspace_key, tool.clone(), provider_id, content_version);
+    router().register_live_candidate(
+        &workspace_key,
+        tool.clone(),
+        provider_id,
+        content_version,
+        native_agent_visible,
+    );
     let name = tool.name().to_string();
     router()
-        .apply_initial_live_candidate_route(&workspace_key, &name, tool)
+        .apply_initial_live_candidate_route(&workspace_key, &name, tool, native_agent_visible)
         .await;
     crate::external_sources::notify_external_tool_registry_changed();
 }
@@ -1178,6 +1233,13 @@ pub(crate) fn resolve_external_tool_for_workspace(
     workspace_root: Option<&Path>,
 ) -> Option<Arc<dyn Tool>> {
     router().resolve_registered_tool(tool, workspace_root)
+}
+
+pub(crate) fn resolve_external_tool_for_context(
+    tool: Arc<dyn Tool>,
+    context: &ToolUseContext,
+) -> Option<Arc<dyn Tool>> {
+    router().resolve_registered_tool_for_context(tool, context)
 }
 
 pub(crate) fn external_tool_route_root(
@@ -2184,6 +2246,7 @@ pub(super) async fn reconcile_external_tools(
                     name,
                     WorkspaceRoute::Live {
                         tool: candidate.tool.clone(),
+                        native_agent_visible: candidate.native_agent_visible,
                         conflict: None,
                     },
                 );
@@ -2234,6 +2297,7 @@ pub(super) async fn reconcile_external_tools(
                 {
                     WorkspaceRoute::Live {
                         tool: candidate.tool.clone(),
+                        native_agent_visible: candidate.native_agent_visible,
                         conflict: conflict.clone(),
                     }
                 } else {
@@ -2419,10 +2483,12 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
     struct PluginTestTool {
         name: String,
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
     #[async_trait]
     impl Tool for PluginTestTool {
         fn name(&self) -> &str {
@@ -2454,6 +2520,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
     fn local_tool_context(workspace_root: &Path, runtime_agent_key: &str) -> ToolUseContext {
         crate::agentic::tools::tool_context_runtime::build_tool_description_context(
             runtime_agent_key,
@@ -2595,6 +2662,7 @@ mod tests {
         assert!(has_tool_conflict_history(&choices, "domain", "read"));
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
     #[test]
     fn live_plugin_route_is_visible_only_to_opencode_plugin_agents() {
         let workspace = std::env::current_dir().expect("absolute workspace");
@@ -2610,16 +2678,25 @@ mod tests {
             workspace_route_key(Some(&workspace)),
             WorkspaceRoute::Live {
                 tool: plugin.clone(),
+                native_agent_visible: false,
                 conflict: None,
             },
         );
+        let router = ExternalToolRouter::default();
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(mux.name.clone(), Arc::new(mux));
 
         let plugin_context = local_tool_context(
             &workspace,
             "external_subagent_runtime:opencode-plugin:generation-agent",
         );
         assert!(Arc::ptr_eq(
-            &mux.selected(Some(&plugin_context)).expect("plugin route"),
+            &router
+                .resolve_registered_tool_for_context(original.clone(), &plugin_context)
+                .expect("plugin route"),
             &plugin
         ));
 
@@ -2631,10 +2708,120 @@ mod tests {
         ] {
             let context = local_tool_context(&workspace, runtime_agent_key);
             assert!(Arc::ptr_eq(
-                &mux.selected(Some(&context)).expect("native fallback"),
+                &router
+                    .resolve_registered_tool_for_context(original.clone(), &context)
+                    .expect("native fallback"),
                 &original
             ));
         }
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_only_live_route_is_visible_to_native_agents() {
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let tool_name = "plugin_only_native_scope_contract".to_string();
+        let plugin: Arc<dyn Tool> = Arc::new(PluginTestTool {
+            name: tool_name.clone(),
+        });
+        let mux = Arc::new(ExternalToolMux::new(tool_name, None));
+        mux.set_route(
+            workspace_route_key(Some(&workspace)),
+            WorkspaceRoute::Live {
+                tool: plugin.clone(),
+                native_agent_visible: true,
+                conflict: None,
+            },
+        );
+        let router = ExternalToolRouter::default();
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(mux.name.clone(), mux.clone());
+        let registered: Arc<dyn Tool> = mux;
+
+        let context = local_tool_context(&workspace, "Agentic");
+        assert!(Arc::ptr_eq(
+            &router
+                .resolve_registered_tool_for_context(registered, &context)
+                .expect("plugin-only route"),
+            &plugin
+        ));
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn selected_tool_only_plugin_route_overrides_native_tool() {
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let tool_name = "selected_plugin_tool_only_conflict_contract".to_string();
+        let original: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let plugin: Arc<dyn Tool> = Arc::new(PluginTestTool {
+            name: tool_name.clone(),
+        });
+        let mux = ExternalToolMux::new(tool_name, Some(original.clone()));
+        mux.set_route(
+            workspace_route_key(Some(&workspace)),
+            WorkspaceRoute::Live {
+                tool: plugin.clone(),
+                native_agent_visible: true,
+                conflict: None,
+            },
+        );
+        let router = ExternalToolRouter::default();
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(mux.name.clone(), Arc::new(mux));
+
+        let context = local_tool_context(&workspace, "Agentic");
+        assert!(Arc::ptr_eq(
+            &router
+                .resolve_registered_tool_for_context(original, &context)
+                .expect("selected plugin route"),
+            &plugin
+        ));
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[tokio::test]
+    async fn initial_tool_only_plugin_collision_keeps_native_tool() {
+        let workspace = std::env::current_dir().expect("absolute workspace");
+        let workspace_key = workspace_route_key(Some(&workspace));
+        let tool_name = "initial_plugin_tool_only_conflict_contract".to_string();
+        let original: Arc<dyn Tool> = Arc::new(TestTool {
+            name: tool_name.clone(),
+        });
+        let plugin: Arc<dyn Tool> = Arc::new(PluginTestTool {
+            name: tool_name.clone(),
+        });
+        let mux = Arc::new(ExternalToolMux::new(
+            tool_name.clone(),
+            Some(original.clone()),
+        ));
+        let router = ExternalToolRouter::default();
+        router
+            .muxes
+            .lock()
+            .expect("router lock")
+            .insert(tool_name.clone(), mux.clone());
+
+        router
+            .apply_initial_live_candidate_route(&workspace_key, &tool_name, plugin, true)
+            .await;
+
+        assert!(matches!(
+            router.workspace_routes(&workspace_key).get(&tool_name),
+            Some(WorkspaceRoute::Original { conflict: None })
+        ));
+        let context = local_tool_context(&workspace, "Agentic");
+        assert!(Arc::ptr_eq(
+            &mux.selected(Some(&context)).expect("native route"),
+            &original
+        ));
     }
 
     #[tokio::test]
@@ -2711,6 +2898,7 @@ mod tests {
             live.clone(),
             "opencode-plugin",
             "plugin-v1".to_string(),
+            true,
         );
         let empty_ecosystems = BTreeSet::new();
         let empty_strings = BTreeSet::new();
@@ -2812,6 +3000,7 @@ mod tests {
             "workspace".to_string(),
             WorkspaceRoute::Live {
                 tool: live,
+                native_agent_visible: true,
                 conflict: None,
             },
         );
@@ -2882,7 +3071,7 @@ mod tests {
             name: tool_name.clone(),
         });
         router
-            .apply_initial_live_candidate_route("workspace", &tool_name, live)
+            .apply_initial_live_candidate_route("workspace", &tool_name, live, true)
             .await;
 
         assert!(matches!(

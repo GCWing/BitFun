@@ -93,7 +93,7 @@ pub(crate) struct PluginSkillRootContribution {
 #[derive(Debug, Clone)]
 struct PublishedSkillGeneration {
     generation_key: String,
-    roots_by_runtime_agent: BTreeMap<String, Vec<PluginSkillRootContribution>>,
+    workspace_roots: Vec<PluginSkillRootContribution>,
 }
 
 fn skill_generations() -> &'static RwLock<HashMap<PathBuf, PublishedSkillGeneration>> {
@@ -108,7 +108,7 @@ pub(crate) struct PluginConfigProjectionPlan {
     registrations: Vec<ExternalSubagentRegistration>,
     routes: BTreeMap<String, ExternalSubagentRoute>,
     runtime_agent_keys: BTreeSet<String>,
-    skill_roots_by_runtime_agent: BTreeMap<String, Vec<PluginSkillRootContribution>>,
+    workspace_skill_roots: Vec<PluginSkillRootContribution>,
     tool_runtime_agent_keys: BTreeMap<(PluginIdentity, String), BTreeSet<String>>,
 }
 
@@ -120,7 +120,7 @@ impl PluginConfigProjectionPlan {
             registrations: Vec::new(),
             routes: BTreeMap::new(),
             runtime_agent_keys: BTreeSet::new(),
-            skill_roots_by_runtime_agent: BTreeMap::new(),
+            workspace_skill_roots: Vec::new(),
             tool_runtime_agent_keys: BTreeMap::new(),
         }
     }
@@ -161,7 +161,7 @@ impl PluginConfigProjectionPlan {
             self.workspace_root,
             PublishedSkillGeneration {
                 generation_key: self.generation_key,
-                roots_by_runtime_agent: self.skill_roots_by_runtime_agent,
+                workspace_roots: self.workspace_skill_roots,
             },
         );
     }
@@ -203,10 +203,9 @@ pub(crate) fn release_workspace_generation(
 
 pub(crate) fn skill_roots_for_agent(
     workspace_root: Option<&Path>,
-    runtime_agent_key: Option<&str>,
+    _runtime_agent_key: Option<&str>,
 ) -> Vec<PluginSkillRootContribution> {
-    let (Some(workspace_root), Some(runtime_agent_key)) = (workspace_root, runtime_agent_key)
-    else {
+    let Some(workspace_root) = workspace_root else {
         return Vec::new();
     };
     let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
@@ -214,8 +213,7 @@ pub(crate) fn skill_roots_for_agent(
         .read()
         .expect("plugin skill generation lock poisoned")
         .get(&workspace_root)
-        .and_then(|generation| generation.roots_by_runtime_agent.get(runtime_agent_key))
-        .cloned()
+        .map(|generation| generation.workspace_roots.clone())
         .unwrap_or_default()
 }
 
@@ -225,6 +223,7 @@ pub(crate) fn prepare(
     initial_config: &Map<String, Value>,
     registration_batch: &HookFunctionRegistrationBatch,
 ) -> crate::BitFunResult<PluginConfigProjectionPlan> {
+    let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
     let contributors = registration_batch
         .config_contributors
         .iter()
@@ -235,7 +234,7 @@ pub(crate) fn prepare(
         .collect::<Vec<_>>();
     if contributors.is_empty() {
         return Ok(PluginConfigProjectionPlan::empty(
-            workspace_root,
+            &workspace_root,
             generation_key,
         ));
     }
@@ -250,7 +249,7 @@ pub(crate) fn prepare(
         })
         .collect::<Vec<_>>();
     let contributions = config_contribution_sequence(&contributions, &contributors, config)?;
-    let attribution = attribute_config(initial_config, &contributions, config)?;
+    let attribution = attribute_config(initial_config, &contributions, config, &workspace_root)?;
     let final_agents = config_object_field(config, "agent")?;
     let plugin_tools = plugin_tool_ids_by_owner(&registration_batch.tools)?;
     let tool_owners = plugin_tools
@@ -297,7 +296,7 @@ pub(crate) fn prepare(
         }
         let (permission_constraints, denied_plugin_tools) =
             parse_permissions(definition.get("permission"), &all_plugin_tools, &logical_id)?;
-        let mut tools = native_tool_baseline(&logical_id, mode, workspace_root);
+        let mut tools = native_tool_baseline(&logical_id, mode, &workspace_root);
         let permitted_plugin_tools = eligible_tools
             .iter()
             .filter(|tool| !denied_plugin_tools.contains(*tool))
@@ -381,23 +380,19 @@ pub(crate) fn prepare(
         runtime_agent_keys.insert(runtime_key);
     }
 
-    let skill_roots_by_plugin = attributed_skill_roots(config, &attribution.skill_owners)?;
-    let mut skill_roots_by_runtime_agent = BTreeMap::new();
-    for (plugin, runtime_keys) in &runtime_agent_keys_by_plugin {
-        let Some(roots) = skill_roots_by_plugin.get(plugin) else {
-            continue;
-        };
-        for runtime_key in runtime_keys {
-            skill_roots_by_runtime_agent.insert(runtime_key.clone(), roots.clone());
-        }
-    }
+    let mut workspace_skill_roots =
+        attributed_skill_roots(config, &attribution.skill_owners, &workspace_root)?
+            .into_values()
+            .flatten()
+            .collect::<Vec<_>>();
+    workspace_skill_roots.sort_by_key(|root| root.precedence);
     Ok(PluginConfigProjectionPlan {
-        workspace_root: crate::agentic::workspace::canonical_local_workspace_path(workspace_root),
+        workspace_root,
         generation_key: generation_key.to_string(),
         registrations,
         routes,
         runtime_agent_keys,
-        skill_roots_by_runtime_agent,
+        workspace_skill_roots,
         tool_runtime_agent_keys,
     })
 }
@@ -450,6 +445,7 @@ fn attribute_config(
     initial_config: &Map<String, Value>,
     contributions: &[ConfigContribution],
     final_config: &Map<String, Value>,
+    workspace_root: &Path,
 ) -> crate::BitFunResult<ConfigAttribution> {
     let mut previous = initial_config;
     let mut agent_owners = BTreeMap::new();
@@ -457,8 +453,8 @@ fn attribute_config(
     let mut skill_owners = BTreeMap::new();
     let mut previous_skills = skill_paths(initial_config)?
         .into_iter()
-        .map(|path| normalized_skill_path_identity(&path))
-        .collect::<BTreeSet<_>>();
+        .map(|path| normalized_skill_path_identity(&path, workspace_root))
+        .collect::<crate::BitFunResult<BTreeSet<_>>>()?;
 
     for contribution in contributions {
         validate_plugin_identity(&contribution.plugin)?;
@@ -507,8 +503,8 @@ fn attribute_config(
 
         let next_skills = skill_paths(&contribution.config)?
             .into_iter()
-            .map(|path| normalized_skill_path_identity(&path))
-            .collect::<BTreeSet<_>>();
+            .map(|path| normalized_skill_path_identity(&path, workspace_root))
+            .collect::<crate::BitFunResult<BTreeSet<_>>>()?;
         skill_owners.retain(|path, _| next_skills.contains(path));
         for added in next_skills.difference(&previous_skills) {
             skill_owners.insert(added.clone(), contribution.plugin.clone());
@@ -780,18 +776,52 @@ fn skill_paths(config: &Map<String, Value>) -> crate::BitFunResult<Vec<PathBuf>>
         .collect()
 }
 
-fn normalized_skill_path_identity(path: &Path) -> PathBuf {
-    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+fn resolve_plugin_skill_path(path: &Path, workspace_root: &Path) -> crate::BitFunResult<PathBuf> {
+    let value = path.to_string_lossy();
+    let value = value.trim();
+    if value.is_empty() || value.contains('\0') {
+        return Err(crate::BitFunError::Validation(
+            "Plugin skill root path is invalid".to_string(),
+        ));
+    }
+    if let Some(relative) = value
+        .strip_prefix("~/")
+        .or_else(|| value.strip_prefix("~\\"))
+    {
+        return dirs::home_dir()
+            .map(|home| home.join(relative))
+            .ok_or_else(|| {
+                crate::BitFunError::Validation(
+                    "Plugin skill root uses '~/' but the home directory is unavailable".to_string(),
+                )
+            });
+    }
+    let path = PathBuf::from(value);
+    Ok(if path.is_absolute() {
+        path
+    } else {
+        workspace_root.join(path)
+    })
+}
+
+fn normalized_skill_path_identity(
+    path: &Path,
+    workspace_root: &Path,
+) -> crate::BitFunResult<PathBuf> {
+    let resolved = resolve_plugin_skill_path(path, workspace_root)?;
+    Ok(dunce::canonicalize(&resolved).unwrap_or(resolved))
 }
 
 fn attributed_skill_roots(
     final_config: &Map<String, Value>,
     owners: &BTreeMap<PathBuf, PluginIdentity>,
+    workspace_root: &Path,
 ) -> crate::BitFunResult<BTreeMap<PluginIdentity, Vec<PluginSkillRootContribution>>> {
     let mut seen = BTreeSet::new();
     let mut roots = BTreeMap::<PluginIdentity, Vec<PluginSkillRootContribution>>::new();
     for path in skill_paths(final_config)? {
-        let identity = normalized_skill_path_identity(&path);
+        let path = resolve_plugin_skill_path(&path, workspace_root)?;
+        let identity = normalized_skill_path_identity(&path, workspace_root)?;
         let Some(owner) = owners.get(&identity) else {
             continue;
         };
@@ -803,25 +833,19 @@ fn attributed_skill_roots(
                 "Plugin skill root count exceeds the limit".to_string(),
             ));
         }
-        if !path.is_absolute() {
-            return Err(crate::BitFunError::Validation(
-                "Plugin skill root must be absolute".to_string(),
-            ));
-        }
-        let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
-            crate::BitFunError::Validation(format!("Plugin skill root is unavailable: {error}"))
-        })?;
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            log::warn!("Skipping unavailable OpenCode plugin skill root");
+            continue;
+        };
         if bitfun_services_core::bounded_fs::is_symlink_or_reparse(&metadata) || !metadata.is_dir()
         {
-            return Err(crate::BitFunError::Validation(
-                "Plugin skill root must be a regular directory".to_string(),
-            ));
+            log::warn!("Skipping invalid OpenCode plugin skill root");
+            continue;
         }
-        let canonical = dunce::canonicalize(&path).map_err(|error| {
-            crate::BitFunError::Validation(format!(
-                "Plugin skill root cannot be canonicalized: {error}"
-            ))
-        })?;
+        let Ok(canonical) = dunce::canonicalize(&path) else {
+            log::warn!("Skipping OpenCode plugin skill root that cannot be canonicalized");
+            continue;
+        };
         let owned_roots = roots.entry(owner.clone()).or_default();
         owned_roots.push(PluginSkillRootContribution {
             path: canonical,
@@ -969,6 +993,115 @@ mod tests {
     }
 
     #[test]
+    fn publishes_plugin_skill_roots_to_all_workspace_agents() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let skill_root = tempfile::tempdir().expect("plugin skill root");
+        let plugin = plugin();
+        let config = json!({"skills": {"paths": [skill_root.path()]}});
+        let result = json!({
+            "configContributors": [{"plugin": plugin.clone(), "outcome": "applied"}],
+            "config": config.clone(),
+            "configContributions": [{
+                "plugin": plugin,
+                "outcome": "applied",
+                "config": config
+            }],
+            "tools": []
+        });
+
+        let plan = prepare(
+            workspace.path(),
+            "skill-only-generation",
+            &Map::new(),
+            &registration_batch(&result),
+        )
+        .expect("skill-only plugin projection");
+        assert!(plan.registrations.is_empty());
+        plan.commit();
+
+        for agent in [Some("build"), Some("external-agent"), None] {
+            let roots = skill_roots_for_agent(Some(workspace.path()), agent);
+            assert_eq!(roots.len(), 1);
+            assert_eq!(
+                roots[0].path,
+                dunce::canonicalize(skill_root.path()).unwrap()
+            );
+        }
+        release_workspace(workspace.path());
+    }
+
+    #[test]
+    fn resolves_plugin_skill_roots_relative_to_the_workspace() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let skill_root = workspace.path().join("skills");
+        std::fs::create_dir(&skill_root).expect("plugin skill root");
+        let plugin = plugin();
+        let config = json!({"skills": {"paths": ["./skills"]}});
+        let result = json!({
+            "configContributors": [{"plugin": plugin.clone(), "outcome": "applied"}],
+            "config": config.clone(),
+            "configContributions": [{
+                "plugin": plugin,
+                "outcome": "applied",
+                "config": config
+            }],
+            "tools": []
+        });
+
+        let plan = prepare(
+            workspace.path(),
+            "relative-skill-generation",
+            &Map::new(),
+            &registration_batch(&result),
+        )
+        .expect("relative plugin skill root");
+
+        assert_eq!(plan.workspace_skill_roots.len(), 1);
+        assert_eq!(
+            plan.workspace_skill_roots[0].path,
+            dunce::canonicalize(skill_root).unwrap()
+        );
+    }
+
+    #[test]
+    fn resolves_home_relative_plugin_skill_roots() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let home = dirs::home_dir().expect("home directory");
+
+        assert_eq!(
+            resolve_plugin_skill_path(Path::new("~/skills"), workspace.path()).unwrap(),
+            home.join("skills")
+        );
+    }
+
+    #[test]
+    fn unavailable_plugin_skill_roots_do_not_cancel_the_generation() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let plugin = plugin();
+        let config = json!({"skills": {"paths": ["./not-created"]}});
+        let result = json!({
+            "configContributors": [{"plugin": plugin.clone(), "outcome": "applied"}],
+            "config": config.clone(),
+            "configContributions": [{
+                "plugin": plugin,
+                "outcome": "applied",
+                "config": config
+            }],
+            "tools": []
+        });
+
+        let plan = prepare(
+            workspace.path(),
+            "unavailable-skill-generation",
+            &Map::new(),
+            &registration_batch(&result),
+        )
+        .expect("unavailable skill root is isolated");
+
+        assert!(plan.workspace_skill_roots.is_empty());
+    }
+
+    #[test]
     fn maps_target_agent_fields_and_plugin_tool_permissions() {
         let plan = prepare(
             Path::new("C:/workspace"),
@@ -1034,15 +1167,15 @@ mod tests {
 
     #[test]
     fn displaced_local_baseline_is_case_insensitive() {
-        use crate::agentic::agents::{Agent, PlanMode};
+        use crate::agentic::agents::{Agent, CoworkMode};
 
         assert_eq!(
             native_tool_baseline(
-                "plan",
+                "cowork",
                 ExternalSubagentMode::Primary,
                 Path::new("C:/workspace")
             ),
-            PlanMode::new().default_tools()
+            CoworkMode::new().default_tools()
         );
     }
 
@@ -1263,10 +1396,11 @@ mod tests {
             config: final_config.clone(),
         };
         let attribution =
-            attribute_config(&initial, &[contributor], &final_config).expect("skill attribution");
+            attribute_config(&initial, &[contributor], &final_config, directory.path())
+                .expect("skill attribution");
         assert!(attribution.skill_owners.is_empty());
         assert!(
-            attributed_skill_roots(&final_config, &attribution.skill_owners)
+            attributed_skill_roots(&final_config, &attribution.skill_owners, directory.path())
                 .expect("skill roots")
                 .is_empty()
         );
@@ -1309,23 +1443,23 @@ mod tests {
             },
         ];
 
-        let attribution =
-            attribute_config(&initial, &contributions, &final_config).expect("skill attribution");
+        let attribution = attribute_config(&initial, &contributions, &final_config, base.path())
+            .expect("skill attribution");
         assert_eq!(
             attribution
                 .skill_owners
-                .get(&normalized_skill_path_identity(first.path())),
+                .get(&normalized_skill_path_identity(first.path(), base.path()).unwrap()),
             Some(&plugin_a)
         );
         assert_eq!(
             attribution
                 .skill_owners
-                .get(&normalized_skill_path_identity(second.path())),
+                .get(&normalized_skill_path_identity(second.path(), base.path()).unwrap()),
             Some(&plugin_b)
         );
         assert!(!attribution
             .skill_owners
-            .contains_key(&normalized_skill_path_identity(base.path())));
+            .contains_key(&normalized_skill_path_identity(base.path(), base.path()).unwrap()));
 
         let removed_config = json!({"skills": {"paths": [base.path(), second.path()]}})
             .as_object()
@@ -1337,11 +1471,11 @@ mod tests {
             outcome: ContributorOutcome::Applied,
             config: removed_config.clone(),
         });
-        let removed = attribute_config(&initial, &removal_sequence, &removed_config)
+        let removed = attribute_config(&initial, &removal_sequence, &removed_config, base.path())
             .expect("skill removal attribution");
         assert!(!removed
             .skill_owners
-            .contains_key(&normalized_skill_path_identity(first.path())));
+            .contains_key(&normalized_skill_path_identity(first.path(), base.path()).unwrap()));
     }
 
     #[test]
@@ -1390,8 +1524,13 @@ mod tests {
             },
         ];
 
-        let attribution =
-            attribute_config(&initial, &contributions, &final_config).expect("agent attribution");
+        let attribution = attribute_config(
+            &initial,
+            &contributions,
+            &final_config,
+            Path::new("C:/workspace"),
+        )
+        .expect("agent attribution");
         assert_eq!(attribution.agent_owners.get("build"), Some(&plugin_b));
         assert_eq!(
             attribution

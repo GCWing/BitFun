@@ -143,7 +143,7 @@ describe("ExtensionHost lifecycle and hooks", () => {
     expect(opened.instanceID).toBe("review-dedupe")
   })
 
-  test("isolates config and dispose failures while preserving shared sequential mutations", async () => {
+  test("rolls back failed config mutations while preserving successful sequential mutations", async () => {
     const harness = await createHarness()
     const directory = await projectDirectory(harness.root, "project")
     const disposeMarker = path.join(harness.root, "dispose.txt")
@@ -162,18 +162,18 @@ describe("ExtensionHost lifecycle and hooks", () => {
       ],
     })
 
-    expect(opened.config).toMatchObject({ order: ["a", "b"] })
+    expect(opened.config).toMatchObject({ order: ["b"] })
     expect(opened.configContributors).toHaveLength(2)
     expect(opened.configContributions).toHaveLength(2)
     expect(opened.configContributions[0]).toMatchObject({
       plugin: expect.objectContaining({ id: "fixture.sequence-a" }),
       outcome: "failed",
-      config: { order: ["a"] },
+      config: { order: [] },
     })
     expect(opened.configContributions[1]).toMatchObject({
       plugin: expect.objectContaining({ id: "fixture.sequence-b" }),
       outcome: "applied",
-      config: { order: ["a", "b"] },
+      config: { order: ["b"] },
     })
     expect(opened.diagnostics).toHaveLength(1)
     expect(opened.diagnostics[0]).toMatchObject({ code: "runtime", method: "runtime" })

@@ -312,6 +312,61 @@ fn configured_plugin_session_restore_port(
     }
 }
 
+#[cfg(feature = "opencode-plugin-host")]
+struct ConfiguredPluginDialogTurnPort {
+    inner: Arc<dyn AgentDialogTurnPort>,
+    submission: ConfiguredPluginSubmissionPort,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+#[async_trait::async_trait]
+impl AgentDialogTurnPort for ConfiguredPluginDialogTurnPort {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> PortResult<DialogSubmitOutcome> {
+        self.submission.ensure_session(&request.session_id).await;
+        self.inner.submit_dialog_turn(request).await
+    }
+
+    async fn steer_dialog_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentDialogSteerRequest,
+    ) -> PortResult<bitfun_runtime_ports::DialogSteerOutcome> {
+        self.inner.steer_dialog_turn(request).await
+    }
+
+    async fn recover_interrupted_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentDialogTurnRecoveryRequest,
+    ) -> PortResult<bitfun_runtime_ports::AgentDialogTurnRecoveryOutcome> {
+        self.submission.ensure_session(&request.session_id).await;
+        self.inner.recover_interrupted_turn(request).await
+    }
+}
+
+fn configured_plugin_dialog_turn_port(
+    coordinator: Arc<ConversationCoordinator>,
+    inner: Arc<dyn AgentDialogTurnPort>,
+) -> Arc<dyn AgentDialogTurnPort> {
+    #[cfg(feature = "opencode-plugin-host")]
+    {
+        let submission_inner: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        Arc::new(ConfiguredPluginDialogTurnPort {
+            inner,
+            submission: ConfiguredPluginSubmissionPort {
+                inner: submission_inner,
+                coordinator,
+            },
+        })
+    }
+    #[cfg(not(feature = "opencode-plugin-host"))]
+    {
+        let _ = coordinator;
+        inner
+    }
+}
+
 #[cfg(feature = "remote-connect")]
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
@@ -1759,8 +1814,9 @@ impl CoreServiceAgentRuntime {
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let hook_registry = coordinator.hook_registry().clone();
-        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
-        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator.clone();
+        let dialog_turn =
+            configured_plugin_dialog_turn_port(coordinator.clone(), scheduler.clone());
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
@@ -1847,9 +1903,11 @@ impl CoreServiceAgentRuntime {
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
+        let session_restore = configured_plugin_session_restore_port(coordinator.clone());
         let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
-        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
-        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator.clone();
+        let dialog_turn =
+            configured_plugin_dialog_turn_port(coordinator.clone(), scheduler.clone());
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
 
         AgentRuntimeBuilder::new()
@@ -1860,6 +1918,7 @@ impl CoreServiceAgentRuntime {
             .with_session_mode_port(session_mode)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
+            .with_session_restore_port(session_restore)
             .with_local_command_turn_port(local_command_turn)
             .with_dialog_turn_port(dialog_turn)
             .with_cancellation_port(cancellation)
@@ -1893,9 +1952,10 @@ impl CoreServiceAgentRuntime {
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let hook_registry = coordinator.hook_registry().clone();
-        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
+        let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
-        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let dialog_turn =
+            configured_plugin_dialog_turn_port(coordinator.clone(), scheduler.clone());
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
             submission,
@@ -1999,6 +2059,7 @@ impl CoreServiceAgentRuntime {
         session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
         services: bitfun_runtime_services::RuntimeServices,
     ) -> Result<AgentRuntime, String> {
+        let dialog_turn = configured_plugin_dialog_turn_port(coordinator.clone(), dialog_turn);
         let submission = configured_plugin_submission_port(coordinator.clone());
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
@@ -3138,6 +3199,36 @@ mod tests {
         assert!(builder
             .contains("let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();"));
         assert!(builder.contains(".with_session_mode_port(session_mode)"));
+        assert!(builder.contains(
+            "let session_restore = configured_plugin_session_restore_port(coordinator.clone());"
+        ));
+        assert!(builder.contains(".with_session_restore_port(session_restore)"));
+        assert!(builder.contains("configured_plugin_dialog_turn_port("));
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn configured_dialog_turn_port_recovers_plugins_before_session_execution() {
+        let source = include_str!("service_agent_runtime.rs");
+        let body = source
+            .split("impl AgentDialogTurnPort for ConfiguredPluginDialogTurnPort")
+            .nth(1)
+            .and_then(|source| source.split("fn configured_plugin_dialog_turn_port").next())
+            .expect("configured plugin dialog turn port");
+
+        for method in ["submit_dialog_turn", "recover_interrupted_turn"] {
+            let method_body = body
+                .split(&format!("async fn {method}"))
+                .nth(1)
+                .expect("dialog method implementation");
+            let ensure = method_body
+                .find("self.submission.ensure_session")
+                .expect("plugin recovery gate");
+            let delegate = method_body
+                .find(&format!("self.inner.{method}"))
+                .expect("dialog delegate");
+            assert!(ensure < delegate, "{method} must recover plugins first");
+        }
     }
 
     #[test]

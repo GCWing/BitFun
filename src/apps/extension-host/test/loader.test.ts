@@ -99,6 +99,25 @@ describe("plugin loader", () => {
     expect(await Bun.file(marker).exists()).toBe(true)
   })
 
+  test("changes the content digest when a local plugin dependency changes", async () => {
+    const directory = await temporaryDirectory()
+    const plugin = path.join(directory, "plugin.ts")
+    const dependency = path.join(directory, "dependency.ts")
+    await Bun.write(dependency, 'export const id = "first"\n')
+    await Bun.write(
+      plugin,
+      'import { id } from "./dependency"\nexport default { id, server: async () => ({}) }\n',
+    )
+
+    const first = await preparePlugins({ declarations: [plugin], cacheDirectory: directory })
+    await Bun.write(dependency, 'export const id = "second"\n')
+    const second = await preparePlugins({ declarations: [plugin], cacheDirectory: directory })
+
+    expect(first.prepared[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(second.prepared[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(second.prepared[0]?.contentHash).not.toBe(first.prepared[0]?.contentHash)
+  })
+
   test("deduplicates legacy exports by exported value identity", async () => {
     const module = await import(pathToFileURL(path.join(fixtures, "legacy.ts")).href)
     const entrypoints = extractServerEntrypoints({

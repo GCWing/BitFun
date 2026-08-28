@@ -590,6 +590,7 @@ pub(crate) async fn register_workspace_tool(
     hasher.update([0]);
     hasher.update(config_fingerprint.as_bytes());
     let content_version = format!("sha256:{}", hex::encode(hasher.finalize()));
+    let native_agent_visible = allowed_runtime_agent_keys.is_empty();
     mux.set_route(
         workspace_scope.to_string(),
         PluginHostToolRoute {
@@ -609,6 +610,7 @@ pub(crate) async fn register_workspace_tool(
         mux,
         "opencode-plugin",
         content_version,
+        native_agent_visible,
     )
     .await;
 }

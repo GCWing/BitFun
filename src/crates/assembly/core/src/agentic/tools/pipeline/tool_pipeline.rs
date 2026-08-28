@@ -41,7 +41,6 @@ use bitfun_runtime_ports::{
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -55,19 +54,15 @@ use tool_runtime::pipeline::{
 
 fn resolve_contextual_tool(
     tool: Arc<dyn crate::agentic::tools::framework::Tool>,
-    workspace_root: Option<&Path>,
-    remote: bool,
+    context: &ToolUseContext,
 ) -> Option<Arc<dyn crate::agentic::tools::framework::Tool>> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::resolve_external_tool_for_workspace(
-            tool,
-            crate::external_tools::external_tool_route_root(workspace_root, remote),
-        );
+        return crate::external_tools::resolve_external_tool_for_context(tool, context);
     }
     #[cfg(not(feature = "external-sources"))]
     {
-        let _ = (workspace_root, remote);
+        let _ = context;
         Some(tool)
     }
 }
@@ -105,6 +100,7 @@ fn plugin_after_presentation(
         .unwrap_or_else(|| tool_result.result.to_string());
     let metadata = object
         .and_then(|value| value.get("metadata"))
+        .filter(|value| value.is_object())
         .cloned()
         .unwrap_or_else(|| serde_json::json!({"isError": tool_result.is_error}));
     PluginAfterPresentation {
@@ -858,25 +854,13 @@ impl ToolPipeline {
             return None;
         }
 
+        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let tool = {
             let registry = self.tool_registry.read().await;
             registry
                 .get_tool(task.effective_tool_name())
-                .and_then(|tool| {
-                    resolve_contextual_tool(
-                        tool,
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .map(|workspace| workspace.root_path()),
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .is_some_and(|workspace| workspace.is_remote()),
-                    )
-                })
+                .and_then(|tool| resolve_contextual_tool(tool, &tool_context))
         }?;
-        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let validation = tool
             .validate_input_rewrite_invariants(
                 &task.original_effective_arguments,
@@ -1030,21 +1014,10 @@ impl ToolPipeline {
                 if task.invocation_resolution_error.is_some() {
                     return (false, false);
                 }
+                let tool_context = self.build_tool_use_context(&task, CancellationToken::new());
                 let tool = registry
                     .get_tool(task.effective_tool_name())
-                    .and_then(|tool| {
-                        resolve_contextual_tool(
-                            tool,
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .map(|workspace| workspace.root_path()),
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .is_some_and(|workspace| workspace.is_remote()),
-                        )
-                    });
+                    .and_then(|tool| resolve_contextual_tool(tool, &tool_context));
                 let tool_is_concurrency_safe = tool
                     .as_ref()
                     .map(|tool| tool.is_concurrency_safe(Some(task.effective_arguments())))
@@ -2436,11 +2409,7 @@ impl ToolPipeline {
 
         let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
-        let timeout_owner = resolve_contextual_tool(
-            Arc::clone(&tool),
-            tool_context.workspace_root(),
-            tool_context.is_remote(),
-        );
+        let timeout_owner = resolve_contextual_tool(Arc::clone(&tool), &tool_context);
         let pipeline_timeout_secs = if timeout_owner
             .as_ref()
             .is_some_and(|selected| selected.manages_own_execution_timeout())
@@ -2726,6 +2695,28 @@ mod tests {
         assert_eq!(presentation.title, "Generated report");
         assert_eq!(presentation.output, "report ready");
         assert_eq!(presentation.metadata["path"], "report.md");
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_normalizes_non_object_metadata() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": ["legacy"]
+            }),
+            result_for_assistant: Some("report ready".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("report", &result);
+        assert_eq!(presentation.metadata, json!({"isError": false}));
     }
 
     #[cfg(feature = "opencode-plugin-host")]

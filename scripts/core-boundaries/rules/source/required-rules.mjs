@@ -8399,23 +8399,31 @@ export const requiredContentRules = [
   {
     path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
     reason:
-      'web-ui file operation surface must continue owning snapshot-to-local diff fallback until product surface migration is reviewed',
+      'web-ui file operation surface must preserve snapshot-independent inline diffs after the design-system migration',
     patterns: [
       {
-        regex: /\bopenLocalDiff\b/,
-        message: 'missing local tool diff fallback',
+        regex: /\bInlineDiffPreview\b/,
+        message: 'missing snapshot-independent inline diff renderer',
       },
       {
-        regex: /snapshotAPI\.getOperationDiff/,
-        message: 'missing snapshot operation diff path',
+        regex: /previewVariant === 'completed-diff'/,
+        message: 'missing completed file-operation diff state',
       },
       {
-        regex: /Snapshot diff unavailable/,
-        message: 'missing snapshot-unavailable fallback diagnostic',
+        regex: /originalContent=\{oldStringContent\}/,
+        message: 'missing Edit original-content projection',
       },
       {
-        regex: /\blocalDiffContent\b/,
-        message: 'missing local diff content fallback state',
+        regex: /modifiedContent=\{newStringContent\}/,
+        message: 'missing Edit modified-content projection',
+      },
+      {
+        regex: /originalContent=""/,
+        message: 'missing Write empty-baseline projection',
+      },
+      {
+        regex: /modifiedContent=\{contentPreview\}/,
+        message: 'missing Write content projection',
       },
     ],
   },

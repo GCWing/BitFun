@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from "node:fs/promises"
+import { readFile, readdir, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { createHash } from "node:crypto"
@@ -298,7 +298,7 @@ async function prepareCandidate(
     }
   }
 
-  const contentHash = await pluginContentHash(entry, pkg)
+  const contentHash = await pluginContentHash(target, pkg)
 
   return {
     prepared: {
@@ -312,12 +312,13 @@ async function prepareCandidate(
   }
 }
 
-async function pluginContentHash(entry: string, pkg?: PluginPackage): Promise<string | undefined> {
+async function pluginContentHash(target: string, pkg?: PluginPackage): Promise<string | undefined> {
   try {
     const hash = createHash("sha256")
-    hash.update(await readFile(fileURLToPath(entry)))
+    const targetStat = await stat(target)
+    const sourceRoot = pkg?.directory ?? (targetStat.isDirectory() ? target : path.dirname(target))
+    await updateLocalSourceTreeHash(hash, sourceRoot)
     if (pkg) {
-      hash.update(await readFile(pkg.manifestPath))
       // npm packages live below an installation root's node_modules. Bind the
       // approval to both package-local and resolver-owned lockfiles so a
       // dependency graph change cannot reuse a grant for different code.
@@ -335,6 +336,35 @@ async function pluginContentHash(entry: string, pkg?: PluginPackage): Promise<st
   } catch {
     return undefined
   }
+}
+
+async function updateLocalSourceTreeHash(hash: ReturnType<typeof createHash>, root: string) {
+  const walk = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory() && [".git", "node_modules"].includes(entry.name)) continue
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        await walk(absolute)
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (!localExecutableSourceFile(entry.name)) continue
+      hash.update(path.relative(root, absolute).replaceAll(path.sep, "/"))
+      hash.update("\0")
+      hash.update(await readFile(absolute))
+      hash.update("\0")
+    }
+  }
+  await walk(root)
+}
+
+function localExecutableSourceFile(name: string) {
+  return [".cjs", ".js", ".json", ".jsx", ".mjs", ".node", ".ts", ".tsx", ".wasm"].includes(
+    path.extname(name).toLowerCase(),
+  )
 }
 
 function pluginDigestDirectories(packageDirectory: string) {
