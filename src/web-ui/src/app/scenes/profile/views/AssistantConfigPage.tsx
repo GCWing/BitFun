@@ -1,5 +1,5 @@
 import React, {
-  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+  useCallback, useEffect, useMemo, useRef, useState,
   lazy,
   Suspense,
 } from 'react';
@@ -27,7 +27,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { Icon, IconButton, Input, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Icon, IconButton, Input, ScrollArea, Textarea, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -69,21 +69,13 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
   onChange,
   className = '',
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [value]);
-
   return (
-    <textarea
-      ref={textareaRef}
-      className={`m-editor-textarea ${className}`.trim()}
+    <Textarea
+      autoResize
+      className="acp-persona-editor__frontmatter-control"
+      textareaClassName={`m-editor-textarea ${className}`.trim()}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onValueChange={onChange}
       spellCheck={false}
       rows={1}
     />

@@ -3650,6 +3650,11 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     min-height: 0;
   }
 
+  &__frontmatter-control {
+    display: flex;
+    width: 100%;
+  }
+
   &__frontmatter-textarea {
     width: 100%;
     min-height: 0;
