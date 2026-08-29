@@ -27,7 +27,7 @@ import {
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { MessageSquareText, MessagesSquare, Monitor, MonitorSmartphone, Radar, Send, Smartphone } from 'lucide-react';
+import { Monitor, MonitorSmartphone, Radar, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Select } from '@/component-library';
@@ -59,6 +59,7 @@ import {
   stopAfterPendingStart,
   updateIfOperationCurrent,
 } from './remoteConnectOperationCleanup';
+import { ChatAppBrandIcon } from './ChatAppBrandIcon';
 import './RemoteConnectDialog.scss';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -889,16 +890,10 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       : botTab === 'feishu'
         ? t('remoteConnect.feishu')
         : t('remoteConnect.weixin');
-    const icon = botTab === 'telegram'
-      ? <Send size={28} />
-      : botTab === 'feishu'
-        ? <MessageSquareText size={28} />
-        : <MessagesSquare size={28} />;
-
     return (
       <div className="bitfun-remote-connect__bot-identity">
         <span className="bitfun-remote-connect__bot-identity-icon" aria-hidden="true">
-          {icon}
+          <ChatAppBrandIcon app={botTab} size={28} />
         </span>
         <h3 className="bitfun-remote-connect__bot-identity-title">{label}</h3>
         <p className="bitfun-remote-connect__bot-identity-description">

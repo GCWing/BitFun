@@ -9,6 +9,10 @@ const dialogStyleSource = readFileSync(
   new URL('./RemoteConnectDialog.scss', import.meta.url),
   'utf8',
 );
+const chatAppBrandIconSource = readFileSync(
+  new URL('./ChatAppBrandIcon.tsx', import.meta.url),
+  'utf8',
+);
 const accountPanelSource = readFileSync(
   new URL('./AccountPanel.tsx', import.meta.url),
   'utf8',
@@ -90,6 +94,17 @@ describe('Remote Connect safety contracts', () => {
     expect(methods).toContain("id: 'telegram'");
     expect(methods).toContain("id: 'feishu'");
     expect(methods).toContain("id: 'weixin'");
+  });
+
+  it('uses the real monochrome app marks for every chat provider', () => {
+    expect(dialogSource).toContain('<ChatAppBrandIcon app={botTab} size={28} />');
+    expect(chatAppBrandIconSource).toContain("app === 'telegram'");
+    expect(chatAppBrandIconSource).toContain("app === 'feishu'");
+    expect(chatAppBrandIconSource.match(/viewBox="0 0 24 24"/g)).toHaveLength(3);
+    expect(chatAppBrandIconSource.match(/fill="currentColor"/g)).toHaveLength(5);
+    expect(dialogSource).not.toContain('<Send size={28} />');
+    expect(dialogSource).not.toContain('<MessageSquareText size={28} />');
+    expect(dialogSource).not.toContain('<MessagesSquare size={28} />');
   });
 
   it('keeps BitFun Page out of the account and device lifecycle', () => {
