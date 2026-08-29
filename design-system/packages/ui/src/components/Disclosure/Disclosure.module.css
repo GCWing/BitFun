@@ -1,0 +1,154 @@
+@layer bf.components {
+  .root {
+    min-inline-size: 0;
+    color: var(--bf-color-action-neutral-content);
+    font-family: var(--bf-font-family-control);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--bf-layout-disclosure-trigger-min-block-size);
+    border-radius: var(--bf-layout-disclosure-trigger-radius);
+    background: transparent;
+    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root:not([data-disabled="true"]) .header:hover,
+  .root:not([data-disabled="true"])[data-bf-preview-state="hover"] .header {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  .root[data-open="true"]:not([data-disabled="true"]) .header {
+    background: var(--bf-color-action-neutral-surface-pressed);
+  }
+
+  .header:has(.trigger:focus-visible),
+  .root[data-bf-preview-state="focus-visible"] .header {
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  }
+
+  .trigger {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: inherit;
+    gap: var(--bf-layout-disclosure-trigger-gap);
+    margin: 0;
+    padding-block: var(--bf-layout-disclosure-trigger-padding-block);
+    padding-inline: var(--bf-layout-disclosure-trigger-padding-inline);
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .trigger:disabled {
+    color: var(--bf-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .indicator,
+  .leading {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-layout-disclosure-indicator-size);
+    block-size: var(--bf-layout-disclosure-indicator-size);
+  }
+
+  .indicator {
+    color: var(--bf-color-content-muted);
+    transform: rotate(0deg);
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root[data-open="true"] .indicator {
+    transform: rotate(90deg);
+  }
+
+  .heading {
+    display: grid;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    gap: var(--bf-space-1);
+  }
+
+  .summary {
+    overflow: hidden;
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .description {
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-caption);
+    line-height: var(--bf-line-height-body);
+  }
+
+  .actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--bf-layout-disclosure-actions-gap);
+    padding-inline-end: var(--bf-layout-disclosure-trigger-padding-inline);
+  }
+
+  .content {
+    display: grid;
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      grid-template-rows var(--bf-motion-duration-normal) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      visibility 0s linear var(--bf-motion-duration-normal);
+  }
+
+  .root[data-open="true"] .content {
+    grid-template-rows: 1fr;
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0s;
+  }
+
+  .contentInner {
+    min-block-size: 0;
+    overflow: hidden;
+    padding-block: 0;
+    padding-inline: var(--bf-layout-disclosure-content-padding-inline);
+    transition: padding-block var(--bf-motion-duration-normal) var(--bf-motion-easing-standard);
+  }
+
+  .root[data-open="true"] .contentInner {
+    padding-block: var(--bf-layout-disclosure-content-padding-block);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .header,
+    .indicator,
+    .content,
+    .contentInner {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .header:has(.trigger:focus-visible) {
+      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+    }
+
+    .root[data-open="true"]:not([data-disabled="true"]) .header {
+      background: Highlight;
+      color: HighlightText;
+    }
+  }
+}

@@ -38,6 +38,7 @@ import {
   ComposerDivider,
   ComposerToolbar,
   ConfirmDialog,
+  Disclosure,
   Field,
   FieldGroup,
   FieldRow,
@@ -271,6 +272,8 @@ export function ComponentDetailPage({
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
       ? "raised"
+      : component.name === "Disclosure"
+        ? "open"
       : component.name === "Composer"
       ? "with-context"
       : component.name === "Switch"
@@ -335,6 +338,8 @@ export function ComponentDetailPage({
         return ["default"] as const;
       case "FieldGroup":
         return ["subtle", "plain", "divided"] as const;
+      case "Disclosure":
+        return ["closed", "open", "hover", "focus-visible", "disabled"] as const;
       case "Menu":
         return ["default", "scrolling", "focus-within", "disabled-item", "checked-item"] as const;
       case "NavigationPanel":
@@ -471,6 +476,10 @@ export function ComponentDetailPage({
     }
     if (component.name === "StatusPill") {
       return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="circle" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+    }
+    if (component.name === "Disclosure") {
+      const stateProps = previewState === "open" ? " defaultOpen" : previewState === "disabled" ? " disabled" : "";
+      return `import { Disclosure } from "@bitfun/ui";\n\n<Disclosure summary="${t("components.preview.appearance")}"${stateProps}>\n  ${t("components.preview.appearanceDescription")}\n</Disclosure>`;
     }
     if (component.name === "NavigationPanel") {
       return `import { IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\nimport { Monitor, Search, Settings } from "lucide-react";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Monitor />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Settings />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Search />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
@@ -716,6 +725,20 @@ export function ComponentDetailPage({
 
     if (component.name === "Icon") {
       return <Icon name={iconName} size={iconSize} tone={iconTone} />;
+    }
+
+    if (component.name === "Disclosure") {
+      return (
+        <Disclosure
+          data-bf-preview-state={state === "hover" || state === "focus-visible" ? state : undefined}
+          defaultOpen={state === "open"}
+          disabled={state === "disabled"}
+          key={state}
+          summary={t("components.preview.appearance")}
+        >
+          {t("components.preview.appearanceDescription")}
+        </Disclosure>
+      );
     }
 
     if (component.name === "ActionCard") {

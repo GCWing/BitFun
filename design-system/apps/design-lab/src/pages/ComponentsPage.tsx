@@ -3,6 +3,7 @@ import {
   ArrowUp,
   ArrowRight,
   Check,
+  ChevronRight,
   Command,
   Eye,
   Heading,
@@ -29,6 +30,7 @@ import {
   ChangeCount,
   Composer,
   ComposerToolbar,
+  Disclosure,
   Field,
   FieldGroup,
   FieldRow,
@@ -108,6 +110,7 @@ const componentIcons = {
   Select: List,
   StatusPill: Check,
   Switch: ToggleLeft,
+  Disclosure: ChevronRight,
   TabGroup: PanelTop,
   Toolbar: PanelTop,
   Tooltip: MessageCircle,
@@ -261,6 +264,12 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Button leadingIcon={<AppWindow aria-hidden="true" />} size="sm" variant="fill">
           {t("components.preview.confirmDelete")}
         </Button>
+      );
+    case "Disclosure":
+      return (
+        <Disclosure defaultOpen summary={t("components.preview.appearance")}>
+          <span>{t("components.preview.appearanceDescription")}</span>
+        </Disclosure>
       );
     case "Composer":
       return (

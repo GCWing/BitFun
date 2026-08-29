@@ -154,6 +154,7 @@ export {
   type StatusPillTone,
 } from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
+export { Disclosure, type DisclosureProps } from "./components/Disclosure";
 export {
   TabGroup,
   type TabGroupItem,

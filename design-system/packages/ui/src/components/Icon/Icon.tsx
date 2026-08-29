@@ -15,6 +15,7 @@ import checkFillUrl from "./assets/check-fill.svg";
 import checkLineUrl from "./assets/check-line.svg";
 import chevronDownUrl from "./assets/chevron-down.svg";
 import chevronRightUrl from "./assets/chevron-right.svg";
+import chevronUpUrl from "./assets/chevron-up.svg";
 import circleUrl from "./assets/circle.svg";
 import clockUrl from "./assets/clock.svg";
 import commandMacUrl from "./assets/command-mac.svg";
@@ -42,6 +43,7 @@ import paletteUrl from "./assets/palette.svg";
 import pinUrl from "./assets/pin.svg";
 import plusUrl from "./assets/plus.svg";
 import progress25Url from "./assets/progress-25.svg";
+import refreshUrl from "./assets/refresh.svg";
 import searchUrl from "./assets/search.svg";
 import sessionUrl from "./assets/session.svg";
 import settingsUrl from "./assets/settings.svg";
@@ -72,6 +74,7 @@ export const iconNames = [
   "check-line",
   "chevron-down",
   "chevron-right",
+  "chevron-up",
   "circle",
   "clock",
   "command-mac",
@@ -99,6 +102,7 @@ export const iconNames = [
   "pin",
   "plus",
   "progress-25",
+  "refresh",
   "search",
   "session",
   "settings",
@@ -142,6 +146,7 @@ const iconSources = {
   "check-line": checkLineUrl,
   "chevron-down": chevronDownUrl,
   "chevron-right": chevronRightUrl,
+  "chevron-up": chevronUpUrl,
   circle: circleUrl,
   clock: clockUrl,
   "command-mac": commandMacUrl,
@@ -169,6 +174,7 @@ const iconSources = {
   pin: pinUrl,
   plus: plusUrl,
   "progress-25": progress25Url,
+  refresh: refreshUrl,
   search: searchUrl,
   session: sessionUrl,
   settings: settingsUrl,
