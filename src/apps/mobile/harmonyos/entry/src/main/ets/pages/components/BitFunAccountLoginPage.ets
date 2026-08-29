@@ -7,14 +7,17 @@ import {
   LINE,
   MUTED,
   PAGE_BG_FADE,
-  PRIMARY_ACTION,
-  PRIMARY_ACTION_TEXT,
   RED,
   SUBTLE
 } from './Theme';
-import { SheetCloseButton } from './SheetCloseButton';
+import { SheetActionFooter } from './SheetActionFooter';
+import { SheetCloseHeader } from './SheetCloseHeader';
+import {
+  SHEET_CONTENT_BOTTOM_PADDING,
+  SHEET_CONTENT_MAX_WIDTH,
+  SHEET_HORIZONTAL_PADDING
+} from './SheetLayout';
 
-const LOGIN_CONTENT_MAX_WIDTH: number = 520;
 const CREDENTIAL_ROW_HEIGHT: number = 60;
 
 @ComponentV2
@@ -32,62 +35,37 @@ export struct BitFunAccountLoginPage {
 
   build() {
     Column({ space: 0 }) {
-      this.SheetHeader()
+      SheetCloseHeader({ onClose: this.onClose })
 
       Scroll() {
         Column() {
           this.LoginForm()
         }
         .width('100%')
-        .padding({ left: 24, right: 24, top: 0, bottom: 18 })
+        .padding({
+          left: SHEET_HORIZONTAL_PADDING,
+          right: SHEET_HORIZONTAL_PADDING,
+          top: 0,
+          bottom: SHEET_CONTENT_BOTTOM_PADDING
+        })
         .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
 
-      Column() {
-        Row() {
-          Button(this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
-            RemoteI18n.t('remote.settings.accountSignIn'))
-            .height(54)
-            .layoutWeight(1)
-            .fontSize(MobileDesignTypography.labelLarge.size)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(PRIMARY_ACTION_TEXT)
-            .backgroundColor(PRIMARY_ACTION)
-            .borderRadius(27)
-            .opacity(this.canSubmit() ? 1 : 0.32)
-            .enabled(this.canSubmit())
-            .onClick(async () => {
-              await this.submit();
-            })
-        }
-        .width('100%')
-        .constraintSize({ maxWidth: LOGIN_CONTENT_MAX_WIDTH })
-      }
-      .width('100%')
-      .padding({ left: 24, right: 24, top: 10, bottom: 24 })
-      .alignItems(HorizontalAlign.Center)
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  @Builder
-  private SheetHeader() {
-    Row() {
-      Blank()
-      SheetCloseButton({
-        onClose: (): void => {
-          this.onClose();
+      SheetActionFooter({
+        label: this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
+          RemoteI18n.t('remote.settings.accountSignIn'),
+        primary: true,
+        isEnabled: this.canSubmit(),
+        onAction: (): void => {
+          void this.submit();
         }
       })
     }
     .width('100%')
-    .height(58)
-    .padding({ left: 16, right: 8 })
-    .alignItems(VerticalAlign.Center)
+    .height('100%')
   }
 
   @Builder
@@ -122,7 +100,7 @@ export struct BitFunAccountLoginPage {
       }
     }
     .width('100%')
-    .constraintSize({ maxWidth: LOGIN_CONTENT_MAX_WIDTH })
+    .constraintSize({ maxWidth: SHEET_CONTENT_MAX_WIDTH })
     .alignItems(HorizontalAlign.Center)
   }
 
