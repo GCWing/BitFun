@@ -26,6 +26,7 @@ vi.mock('@/component-library', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props}>{children}</button>
   ),
@@ -38,6 +39,31 @@ vi.mock('@bitfun/ui', () => ({
     size?: string;
   }) => (
     <button type="button" data-component="icon-button" {...props}>{icon}</button>
+  ),
+  SegmentedControl: ({
+    options,
+    value,
+    onValueChange,
+    'aria-label': ariaLabel,
+  }: {
+    options: Array<{ value: string; label: React.ReactNode }>;
+    value: string;
+    onValueChange?: (value: string) => void;
+    'aria-label'?: string;
+  }) => (
+    <div role="radiogroup" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={option.value === value}
+          onClick={() => onValueChange?.(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -110,7 +136,7 @@ describe('MarkdownEditor', () => {
     );
 
     expect(html).toContain('aria-label="Copy Markdown"');
-    expect(html).toContain('data-icon="copy"');
+    expect(html).toContain('data-icon="duplicate"');
     expect(html).toContain('data-component="icon-button"');
   });
 

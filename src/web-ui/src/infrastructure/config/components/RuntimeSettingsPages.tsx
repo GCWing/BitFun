@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Modal, Select } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
-import { NumberInput, ConfigPageLoading, Select as LegacySelect, type SelectOption, Tooltip } from '@/component-library';
+import { RefreshCw, Trash2 } from 'lucide-react';
+import { NumberInput, ConfigPageLoading, Select as LegacySelect, type SelectOption } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -941,7 +941,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     onClick={() => void handleImportCompanionPet()}
                     disabled={!IS_TAURI_DESKTOP || companionPetImporting}
                     title={t('features.pet.importHint')}
-                    leadingIcon={<Plus size={14} />}
+                    leadingIcon={<Icon name="plus" size="sm" />}
                   >
 
                     {companionPetImporting ? t('features.pet.importing') : t('features.pet.import')}
@@ -980,13 +980,10 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                       {selectedCompanionPetOption?.label ?? t('features.pet.petPlaceholder')}
                     </span>
                   </span>
-                  <ChevronDown
-                    size={14}
-                    className={companionPetListExpanded ? 'bitfun-runtime-settings__pet-expand-chevron--open' : undefined}
-                  />
+                  <Icon name="chevron-down" size="sm" className={companionPetListExpanded ? 'bitfun-runtime-settings__pet-expand-chevron--open' : undefined} />
                 </button>
                 {companionPetListExpanded && (
-                  <div
+                  <ScrollArea
                     id="bitfun-companion-pet-list"
                     className="bitfun-runtime-settings__pet-list"
                     data-bf-component="runtime-settings"
@@ -1044,7 +1041,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                             </div>
                             <div className={`bitfun-runtime-settings__pet-select-actions${isUserPet && IS_TAURI_DESKTOP && pet ? ' bitfun-runtime-settings__pet-select-actions--deletable' : ''}`} data-bf-component="runtime-settings" data-bf-part="petActions">
                               {isSelected && (
-                                <Check className="bitfun-runtime-settings__pet-select-check" size={14} aria-hidden />
+                                <Icon name="check-line" size="sm" className="bitfun-runtime-settings__pet-select-check" aria-hidden />
                               )}
                               {isUserPet && IS_TAURI_DESKTOP && pet && (
                                 <Tooltip content={t('features.pet.delete')}>
@@ -1065,7 +1062,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                         </React.Fragment>
                       );
                     })}
-                  </div>
+                  </ScrollArea>
                 )}
               </div>
             </div>
@@ -1394,7 +1391,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
                     padding: '8px 0 4px',
                   }}
                 >
-                  <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
+                  <Icon name="info" size="sm" style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
                   <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
                     <strong>{t('computerUse.platformNote')}: </strong>
                     {computerUsePlatformMessage}

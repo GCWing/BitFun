@@ -5,7 +5,10 @@
   min-width: 520px;
   max-width: 600px;
   max-height: 90vh;
-  overflow-y: auto;
+
+  &__scroll {
+    max-height: inherit;
+  }
 
   &__header {
     display: flex;

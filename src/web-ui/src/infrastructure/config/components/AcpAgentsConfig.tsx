@@ -1,23 +1,17 @@
-import { Button, IconButton, Input, Select } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Select, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bot,
   CircleAlert,
-  Download,
-  Eye,
   EyeOff,
-  ExternalLink,
   FileJson,
   LoaderCircle,
-  Plus,
   RefreshCw,
   Save,
-  Search,
   Server,
-  Terminal,
 } from 'lucide-react';
-import { Textarea, Tooltip } from '@/component-library';
+import { Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -1067,7 +1061,7 @@ const AcpAgentsConfig: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            trailingIcon={<ExternalLink />}
+            trailingIcon={<Icon name="arrow-up-right" size="lg" />}
             onClick={openLearnMore}
           >
             {t('actions.learnMore')}
@@ -1091,7 +1085,7 @@ const AcpAgentsConfig: React.FC = () => {
               value={registrySearch}
               onChange={(event) => setRegistrySearch(event.target.value)}
               placeholder={t('registry.searchPlaceholder')}
-              leading={<Search size={15} />}
+              leading={<Icon name="search" size="sm" />}
               size="md"
             />
             <div className="bitfun-acp-agents__toolbar-actions">
@@ -1277,7 +1271,7 @@ const AcpAgentsConfig: React.FC = () => {
                       data-bf-part="capabilities"
                     >
                       <CapabilityBadge
-                        icon={<Terminal size={12} />}
+                        icon={<Icon name="terminal" size="xs" />}
                         item={requirementProbe?.tool}
                         label={t('requirements.tool')}
                         installedText={t('requirements.installed')}
@@ -1312,7 +1306,7 @@ const AcpAgentsConfig: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<Download />}
+                          leadingIcon={<Icon name="download" size="lg" />}
                           onClick={() => { void installPresetClient(preset); }}
                           loading={installing}
                         >
@@ -1355,7 +1349,7 @@ const AcpAgentsConfig: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<Plus />}
+                          leadingIcon={<Icon name="plus" size="lg" />}
                           onClick={() => addPresetClient(preset, {
                             manualCliRequired: selfManagedCliMissing,
                           })}
@@ -1434,7 +1428,7 @@ const AcpAgentsConfig: React.FC = () => {
                       data-bf-part="capabilities"
                     >
                       <CapabilityBadge
-                        icon={<Terminal size={12} />}
+                        icon={<Icon name="terminal" size="xs" />}
                         item={requirementProbe?.tool}
                         label={t('requirements.tool')}
                         installedText={t('requirements.installed')}
@@ -1498,7 +1492,7 @@ const AcpAgentsConfig: React.FC = () => {
                 onClick={() => setShowHiddenRemoteConnections(visible => !visible)}
                 aria-expanded={showHiddenRemoteConnections}
               >
-                {showHiddenRemoteConnections ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showHiddenRemoteConnections ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
                 {t(
                   showHiddenRemoteConnections
                     ? 'remote.hideHiddenConnections'
@@ -1708,7 +1702,7 @@ const AcpAgentsConfig: React.FC = () => {
                                 data-bf-part="capabilities"
                               >
                                 <CapabilityBadge
-                                  icon={<Terminal size={12} />}
+                                  icon={<Icon name="terminal" size="xs" />}
                                   item={row.requirementProbe?.tool}
                                   label={t('requirements.tool')}
                                   installedText={t('requirements.installed')}
@@ -1744,7 +1738,7 @@ const AcpAgentsConfig: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    leadingIcon={<Download />}
+                                    leadingIcon={<Icon name="download" size="lg" />}
                                     onClick={() => {
                                       void installPresetClient(row.preset!, {
                                         remoteConnectionId: connection.id,
@@ -1778,7 +1772,7 @@ const AcpAgentsConfig: React.FC = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    leadingIcon={<Plus />}
+                                    leadingIcon={<Icon name="plus" size="lg" />}
                                     onClick={() => addPresetClient(row.preset!)}
                                   >
                                     {t('actions.add')}
@@ -1850,7 +1844,7 @@ const AcpAgentsConfig: React.FC = () => {
                             name: connection.name || connection.id,
                           })}
                           onClick={() => restoreRemoteConnection(connection)}
-                          icon={<Eye size={14} />}
+                          icon={<Icon name="eye" size="sm" />}
                         />
                       </Tooltip>
                     </div>

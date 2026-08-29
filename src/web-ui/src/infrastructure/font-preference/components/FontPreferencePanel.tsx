@@ -1,4 +1,11 @@
-import { Button, Select, Switch, type SelectOption } from '@bitfun/ui';
+import {
+  Button,
+  SegmentedControl,
+  Select,
+  Switch,
+  type SegmentedControlOption,
+  type SelectOption,
+} from '@bitfun/ui';
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
@@ -89,6 +96,34 @@ export function FontPreferencePanel() {
     return !isNaN(n) && n >= 12 && n <= 20 ? n : 14;
   })();
 
+  const levelOptions = useMemo<SegmentedControlOption[]>(
+    () => [
+      ...UI_LEVELS.map((l) => ({
+        value: l,
+        label: (
+          <span
+            className="font-pref-panel__level-label"
+            style={{ fontSize: UI_FONT_SIZE_PRESETS[l].base }}
+          >
+            {t(`appearance.fontSize.levels.${l}`)}
+          </span>
+        ),
+      })),
+      {
+        value: 'custom',
+        label: (
+          <span
+            className="font-pref-panel__level-label"
+            style={{ fontSize: `${customLevelLabelPx}px` }}
+          >
+            {t('appearance.fontSize.levels.custom')}
+          </span>
+        ),
+      },
+    ],
+    [t, customLevelLabelPx]
+  );
+
   const fcIndependent = preference.flowChat.mode === 'independent';
   const flowChatPxValue = (() => {
     const n = parseInt(fcBaseInput, 10);
@@ -152,111 +187,62 @@ export function FontPreferencePanel() {
           <div className="font-pref-panel__ui-segment-block">
             <div
               className="font-pref-panel__level-buttons"
-              role="group"
-              aria-label={t('appearance.fontSize.uiSizeLabel')}
               data-testid="appearance-ui-font-level-group"
-              data-bf-component="font-preference"
-              data-bf-part="levelGroup"
             >
-              {UI_LEVELS.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  className={[
-                    'font-pref-panel__level-btn',
-                    level === l ? 'font-pref-panel__level-btn--active' : '',
-                  ].join(' ').trim()}
-                  onClick={() => void handleLevelClick(l)}
-                  aria-pressed={level === l}
-                  data-testid="appearance-ui-font-level-btn"
-                  data-font-level={l}
-                  data-selected={level === l ? 'true' : 'false'}
+              <SegmentedControl
+                aria-label={t('appearance.fontSize.uiSizeLabel')}
+                options={levelOptions}
+                value={level}
+                onValueChange={(value) => void handleLevelClick(value as FontSizeLevel)}
+              />
+              {level === 'custom' && (
+                <div
+                  className="font-pref-panel__custom-controls"
+                  role="group"
+                  aria-label={t('appearance.fontSize.customPxLabel')}
+                  data-testid="appearance-ui-font-custom-controls"
                   data-bf-component="font-preference"
-                  data-bf-part="levelButton"
-                  data-bf-level={l}
-                  data-bf-state={level === l ? 'selected' : undefined}
+                  data-bf-part="customControls"
                 >
-                  <span
-                    className="font-pref-panel__level-label"
-                    style={{ fontSize: UI_FONT_SIZE_PRESETS[l].base }}
-                  >
-                    {t(`appearance.fontSize.levels.${l}`)}
-                  </span>
-                </button>
-              ))}
-              <div className="font-pref-panel__custom-segment-inline">
-                <button
-                  type="button"
-                  className={[
-                    'font-pref-panel__level-btn',
-                    level === 'custom' ? 'font-pref-panel__level-btn--active' : '',
-                  ].join(' ').trim()}
-                  onClick={() => void handleLevelClick('custom')}
-                  aria-pressed={level === 'custom'}
-                  data-testid="appearance-ui-font-level-btn"
-                  data-font-level="custom"
-                  data-selected={level === 'custom' ? 'true' : 'false'}
-                  data-bf-component="font-preference"
-                  data-bf-part="levelButton"
-                  data-bf-level="custom"
-                  data-bf-state={level === 'custom' ? 'selected' : undefined}
-                >
-                  <span
-                    className="font-pref-panel__level-label"
-                    style={{ fontSize: `${customLevelLabelPx}px` }}
-                  >
-                    {t('appearance.fontSize.levels.custom')}
-                  </span>
-                </button>
-                {level === 'custom' && (
-                  <div
-                    className="font-pref-panel__custom-controls"
-                    role="group"
-                    aria-label={t('appearance.fontSize.customPxLabel')}
-                    data-testid="appearance-ui-font-custom-controls"
-                    data-bf-component="font-preference"
-                    data-bf-part="customControls"
-                  >
-                    <div className="font-pref-panel__stepper">
-                      <button
-                        type="button"
-                        className="font-pref-panel__step-btn"
-                        onClick={() => handleCustomStep(-1)}
-                        aria-label="-1"
-                        data-testid="appearance-ui-font-custom-step-minus"
-                      >−</button>
-                      <input
-                        type="number"
-                        className={[
-                          'font-pref-panel__number-input',
-                          customError ? 'font-pref-panel__number-input--error' : '',
-                        ].join(' ').trim()}
-                        value={customInput}
-                        min={12}
-                        max={20}
-                        step={1}
-                        placeholder={t('appearance.fontSize.customPxPlaceholder')}
-                        onChange={handleCustomInputChange}
-                        onFocus={() => void handleLevelClick('custom')}
-                        aria-invalid={!!customError}
-                        data-testid="appearance-ui-font-custom-input"
-                        data-font-level="custom"
-                        data-bf-component="font-preference"
-                        data-bf-part="numberInput"
-                        data-bf-state={customError ? 'error' : undefined}
-                      />
-                      <button
-                        type="button"
-                        className="font-pref-panel__step-btn"
-                        onClick={() => handleCustomStep(1)}
-                        aria-label="+1"
-                        data-testid="appearance-ui-font-custom-step-plus"
-                      >+</button>
-                    </div>
-                    <span className="font-pref-panel__custom-unit">px</span>
+                  <div className="font-pref-panel__stepper">
+                    <button
+                      type="button"
+                      className="font-pref-panel__step-btn"
+                      onClick={() => handleCustomStep(-1)}
+                      aria-label="-1"
+                      data-testid="appearance-ui-font-custom-step-minus"
+                    >−</button>
+                    <input
+                      type="number"
+                      className={[
+                        'font-pref-panel__number-input',
+                        customError ? 'font-pref-panel__number-input--error' : '',
+                      ].join(' ').trim()}
+                      value={customInput}
+                      min={12}
+                      max={20}
+                      step={1}
+                      placeholder={t('appearance.fontSize.customPxPlaceholder')}
+                      onChange={handleCustomInputChange}
+                      onFocus={() => void handleLevelClick('custom')}
+                      aria-invalid={!!customError}
+                      data-testid="appearance-ui-font-custom-input"
+                      data-font-level="custom"
+                      data-bf-component="font-preference"
+                      data-bf-part="numberInput"
+                      data-bf-state={customError ? 'error' : undefined}
+                    />
+                    <button
+                      type="button"
+                      className="font-pref-panel__step-btn"
+                      onClick={() => handleCustomStep(1)}
+                      aria-label="+1"
+                      data-testid="appearance-ui-font-custom-step-plus"
+                    >+</button>
                   </div>
-                )}
-              </div>
+                  <span className="font-pref-panel__custom-unit">px</span>
+                </div>
+              )}
             </div>
           </div>
           {customError && (

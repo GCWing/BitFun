@@ -1,5 +1,4 @@
 @use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 .font-pref-panel {
   /* 界面字体：多行区块，标题与说明之间略松一点 */
@@ -37,15 +36,6 @@
     align-items: center;
     gap: $size-gap-2;
     width: 100%;
-    min-width: 0;
-  }
-
-  /* 第六档「自定义」与右侧步进器保持同一行，整组可随前置按钮换行 */
-  &__custom-segment-inline {
-    display: inline-flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: $size-gap-2;
     min-width: 0;
   }
 
@@ -95,46 +85,6 @@
       width: 100%;
       max-width: 11rem;
       min-width: 5.5rem;
-    }
-  }
-
-  &__level-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 30px;
-    min-width: 0;
-    padding: $size-gap-1 $size-gap-3;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    background: transparent;
-    border: 1px solid var(--bf-appearance-token-border-base);
-    border-radius: $size-radius-sm;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    transition: background $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard;
-    white-space: nowrap;
-
-    &:hover:not(:disabled):not(&--active) {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      border-color: var(--bf-appearance-token-border-strong);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &--active {
-      @include btn-primary.btn-primary-surface-default;
-      border-color: var(--bf-appearance-token-btn-primary-border);
-      font-weight: $font-weight-semibold;
-      box-shadow: var(--bf-appearance-token-btn-primary-shadow);
-
-      &:hover:not(:disabled) {
-        @include btn-primary.btn-primary-surface-hover;
-        border-color: var(--bf-appearance-token-btn-primary-hover-border);
-        box-shadow: var(--bf-appearance-token-btn-primary-hover-shadow);
-      }
     }
   }
 

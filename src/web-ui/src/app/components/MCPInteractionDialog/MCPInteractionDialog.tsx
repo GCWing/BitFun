@@ -1,4 +1,4 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -153,7 +153,9 @@ export const MCPInteractionDialog: React.FC = () => {
 
           <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
             <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Request Params</div>
-            <pre className="mcp-interaction-dialog__params" data-bf-component="mcp-interaction-dialog" data-bf-part="params">{paramsPreview}</pre>
+            <ScrollArea className="mcp-interaction-dialog__params" data-bf-component="mcp-interaction-dialog" data-bf-part="params">
+              <pre>{paramsPreview}</pre>
+            </ScrollArea>
           </div>
 
           <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">

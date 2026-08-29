@@ -35,6 +35,9 @@ interface SelectSpyProps {
 const selectProps: Record<string, SelectSpyProps> = {};
 
 vi.mock('@bitfun/ui', () => ({
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Button: ({
     children,
     ...props
@@ -100,7 +103,6 @@ vi.mock('@/component-library', () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   NumberInput: () => <input type="number" />,
   Textarea: () => <textarea />,
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 const modelsDevReasoningCatalog: ModelsDevReasoningCatalog = {

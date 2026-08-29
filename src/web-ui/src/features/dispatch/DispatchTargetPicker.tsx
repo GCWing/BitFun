@@ -8,16 +8,14 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Check,
-  ChevronDown,
   Laptop,
   Loader2,
   MonitorSmartphone,
-  Plus,
   RefreshCw,
   Server,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
+import { Icon, ScrollArea } from '@bitfun/ui';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -31,6 +29,7 @@ import type {
 } from './types';
 import { useDispatchTargets } from './useDispatchTargets';
 import './DispatchTargetPicker.scss';
+import { Tooltip } from '@bitfun/ui';
 
 interface DispatchTargetPickerProps {
   target: DispatchTarget;
@@ -118,7 +117,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   );
 
   const menu = open ? (
-    <div
+    <ScrollArea
       ref={menuRef}
       className="dispatch-target-picker__menu"
       data-bf-component="dispatch-target-picker"
@@ -158,7 +157,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             <strong>{t('chatInput.dispatch.local')}</strong>
             <small>{t('chatInput.dispatch.localDescription')}</small>
           </span>
-          {target.kind === 'local' ? <Check size={14} aria-hidden /> : null}
+          {target.kind === 'local' ? <Icon name="check-line" size="sm" aria-hidden /> : null}
         </button>
       </div>
 
@@ -212,7 +211,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
                     : t('chatInput.dispatch.deviceOffline')}
                 </small>
               </span>
-              {selected ? <Check size={14} aria-hidden /> : null}
+              {selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
             </button>
           );
         })}
@@ -264,7 +263,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
                 <strong>{option.displayName}</strong>
                 <small>{option.description || t('chatInput.dispatch.sshDescription')}</small>
               </span>
-              {selected ? <Check size={14} aria-hidden /> : null}
+              {selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
             </button>
           );
         })}
@@ -280,10 +279,10 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           setSshDialogOpen(true);
         }}
       >
-        <Plus size={14} aria-hidden />
+        <Icon name="plus" size="sm" aria-hidden />
         <span>{t('chatInput.dispatch.addSsh')}</span>
       </button>
-    </div>
+    </ScrollArea>
   ) : null;
 
   return (
@@ -319,11 +318,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
                 : <Server size={12} />}
             <span>{displayLabel}</span>
             {!locked ? (
-              <ChevronDown
-                className="dispatch-target-picker__chevron"
-                size={11}
-                aria-hidden
-              />
+              <Icon name="chevron-down" size="2xs" className="dispatch-target-picker__chevron" aria-hidden />
             ) : null}
           </button>
         </Tooltip>

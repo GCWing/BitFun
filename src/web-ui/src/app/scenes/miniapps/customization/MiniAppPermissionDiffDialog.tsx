@@ -1,4 +1,4 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Modal, ScrollArea } from '@bitfun/ui';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { MiniAppPermissionDiff } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -20,11 +20,13 @@ function PermissionList({ title, items }: { title: string; items: string[] }) {
   return (
     <section className="miniapp-permission-dialog__section">
       <h4>{title}</h4>
-      <ul>
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
+      <ScrollArea className="miniapp-permission-dialog__list">
+        <ul>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </ScrollArea>
     </section>
   );
 }

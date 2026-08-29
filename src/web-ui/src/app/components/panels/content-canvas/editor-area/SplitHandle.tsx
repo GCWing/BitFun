@@ -5,9 +5,10 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { LAYOUT_CONFIG, clampSplitRatio } from '../types';
 import './SplitHandle.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface SplitHandleProps {
   /** Split direction */

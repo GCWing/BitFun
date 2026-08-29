@@ -2,22 +2,15 @@
  * BranchesView — Left: branch list (switch/create/delete). Right: commit history for selected branch.
  */
 
-import { Button, IconButton, SearchField } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  GitBranch,
-  Plus,
   Trash2,
-  GitCommit,
-  Copy,
   RotateCcw,
   FileText,
-  ChevronDown,
-  ChevronRight,
-  Search as SearchIcon,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitService } from '@/tools/git/services';
 import { useGitOperations } from '@/tools/git/hooks';
@@ -208,7 +201,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
     return (
       <div data-bf-component="branches-view" data-bf-part="root" className="bitfun-git-scene-branches">
         <div data-bf-component="branches-view" data-bf-part="placeholder" className="bitfun-git-scene-branches__placeholder">
-          <GitBranch size={48} />
+          <Icon name="git" size="lg" />
           <p>{t('tabs.branches')}</p>
           <p className="bitfun-git-scene-branches__hint">Open a workspace to see branches.</p>
         </div>
@@ -223,7 +216,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
           <div data-bf-component="branches-view" data-bf-part="search" className="bitfun-git-scene-branches__toolbar-search">
             <SearchField
               size="sm"
-              leadingIcon={<SearchIcon size={14} aria-hidden />}
+              leadingIcon={<Icon name="search" size="sm" aria-hidden />}
               placeholder={t('search.branches')}
               aria-label={t('search.branches')}
               value={branchSearchQuery}
@@ -236,7 +229,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
             <Button
               size="sm"
               variant="fill"
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Icon name="plus" size="sm" />}
               onClick={() => handleCreateFrom(branches.find(b => b.current)?.name ?? selectedBranchName ?? '')}
               title={t('dialog.createNewBranch.title')}
             >
@@ -244,7 +237,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
             </Button>
           </div>
         </div>
-        <div data-bf-component="branches-view" data-bf-part="list" className="bitfun-git-scene-branches__list">
+        <ScrollArea data-bf-component="branches-view" data-bf-part="list" className="bitfun-git-scene-branches__list">
           {branchLoading ? (
             <div data-bf-component="branches-view" data-bf-part="empty" className="bitfun-git-scene-branches__empty">{t('common.loading')}</div>
           ) : filteredBranches.length === 0 ? (
@@ -265,7 +258,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                 onClick={() => handleSelectBranch(branch.name)}
               >
                 <div data-bf-component="branches-view" data-bf-part="branchInfo" className="bitfun-git-scene-branches__info">
-                  <GitBranch size={14} />
+                  <Icon name="git" size="sm" />
                   <span className="bitfun-git-scene-branches__name">{branch.name}</span>
                   {branch.current && <span className="bitfun-git-scene-branches__current-badge">{t('branch.current')}</span>}
                 </div>
@@ -277,7 +270,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                         size="sm"
                         onClick={() => handleSwitchBranch(branch.name)}
                         disabled={isOperating}
-                        icon={<GitCommit size={14} />}
+                        icon={<Icon name="commit" size="sm" />}
                       />
                     </Tooltip>
                   )}
@@ -287,7 +280,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                       size="sm"
                       onClick={() => handleCreateFrom(branch.name)}
                       disabled={isOperating}
-                      icon={<Plus size={14} />}
+                      icon={<Icon name="plus" size="sm" />}
                     />
                   </Tooltip>
                   {!branch.current && (
@@ -305,7 +298,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
               </div>
             ))
           )}
-        </div>
+        </ScrollArea>
       </div>
 
       <div data-bf-component="branches-view" data-bf-part="right" className="bitfun-git-scene-branches__right">
@@ -315,7 +308,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
           </span>
           <SearchField
             size="sm"
-            leadingIcon={<SearchIcon size={14} aria-hidden />}
+            leadingIcon={<Icon name="search" size="sm" aria-hidden />}
             placeholder={t('search.commits')}
             aria-label={t('search.commits')}
             value={commitSearchQuery}
@@ -324,7 +317,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
             onClear={commitSearchQuery ? () => setCommitSearchQuery('') : undefined}
           />
         </div>
-        <div data-bf-component="branches-view" data-bf-part="historyList" className="bitfun-git-scene-branches__history-list">
+        <ScrollArea data-bf-component="branches-view" data-bf-part="historyList" className="bitfun-git-scene-branches__history-list">
           {!selectedBranchName ? (
             <div data-bf-component="branches-view" data-bf-part="empty" className="bitfun-git-scene-branches__empty">{t('empty.noCommits')}</div>
           ) : commitLoading ? (
@@ -348,7 +341,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                 >
                   <div data-bf-component="branches-view" data-bf-part="commitHeader" className="bitfun-git-scene-branches__commit-header" onClick={() => toggleCommitExpand(commit.hash)}>
                     <button type="button" className="bitfun-git-scene-branches__expand">
-                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      {isExpanded ? <Icon name="chevron-down" size="xs" /> : <Icon name="chevron-right" size="xs" />}
                     </button>
                     <div data-bf-component="branches-view" data-bf-part="commitInfo" className="bitfun-git-scene-branches__commit-info">
                       <div className="bitfun-git-scene-branches__commit-message">{summary}</div>
@@ -362,7 +355,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                           aria-label={t('actions.copyCommitHash')}
                           size="sm"
                           onClick={() => handleCopyHash(commit.hash)}
-                          icon={<Copy size={14} />}
+                          icon={<Icon name="duplicate" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('actions.resetToCommit')}>
@@ -397,7 +390,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
               );
             })
           )}
-        </div>
+        </ScrollArea>
       </div>
 
       <CreateBranchDialog

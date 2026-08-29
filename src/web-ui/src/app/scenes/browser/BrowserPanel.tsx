@@ -7,8 +7,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { IconButton } from '@bitfun/ui';
-import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw, MousePointer2 } from 'lucide-react';
+import { Icon, IconButton } from '@bitfun/ui';
+import { AlertTriangle, ChevronLeft, RefreshCw, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -176,7 +176,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           size="sm"
           onClick={goForward}
           aria-label={t('nav.forward')}
-          icon={<ChevronRight />}
+          icon={<Icon name="chevron-right" size="lg" />}
           data-testid="browser-forward-button"
         />
         <IconButton
@@ -194,7 +194,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           data-testid="browser-refresh-button"
         />
         <div data-bf-component="browser-panel" data-bf-part="address" className="browser-panel__address">
-          <Globe size={16} />
+          <Icon name="browser" size="md" />
           <input
             type="text"
             value={inputValue}
@@ -243,7 +243,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
             data-webview-label={webviewLabel}
           >
             <div data-bf-component="browser-panel" data-bf-part="placeholder" className="browser-panel__webview-placeholder">
-              <Globe size={20} />
+              <Icon name="browser" size="lg" />
               <span data-testid="browser-current-url">{currentUrl}</span>
             </div>
           </div>

@@ -1,26 +1,6 @@
-import { Button, Input, Select, type SelectOption } from '@bitfun/ui';
+import { Button, Icon, Input, Select, type SelectOption } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  CircleStop,
-  Clock3,
-  Copy,
-  ExternalLink,
-  FileClock,
-  Files,
-  Globe,
-  HardDrive,
-  Lock,
-  PanelsTopLeft,
-  RefreshCw,
-  Rocket,
-  Save,
-  Settings2,
-  Trash2,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronUp, CircleStop, FileClock, Globe, HardDrive, Lock, PanelsTopLeft, RefreshCw, Rocket, Save, Trash2, Users, type LucideIcon } from 'lucide-react';
 import { PresenceBoundary } from '@/component-library';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
@@ -824,7 +804,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
 
                 <div className="pages-scene__meta">
                   <span className="pages-scene__meta-item">
-                    <Clock3 size={12} aria-hidden="true" />
+                    <Icon name="clock" size="xs" aria-hidden="true" />
                     {t('meta.updated', { date: formatTimestamp(page.updated_at) })}
                   </span>
                   <span className="pages-scene__meta-item">
@@ -832,7 +812,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     {t('meta.size', { size: formatBytes(page.total_bytes) })}
                   </span>
                   <span className="pages-scene__meta-item">
-                    <Files size={12} aria-hidden="true" />
+                    <Icon name="files" size="xs" aria-hidden="true" />
                     {t('meta.files', { count: page.file_count })}
                   </span>
                   <span
@@ -852,7 +832,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       onClick={() => void openPage(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       loading={pendingAction === `open:${page.slug}:production`}
-                      leadingIcon={<ExternalLink size={13} />}
+                      leadingIcon={<Icon name="arrow-up-right" size="xs" />}
                     >
                        {t('actions.openProduction')}
                     </Button>
@@ -864,7 +844,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                       onClick={() => void copyPageLink(page, pageOwnerEpoch)}
                       disabled={pageBusy}
                       loading={pendingAction === `copy:${page.slug}:production`}
-                      leadingIcon={<Copy size={13} />}
+                      leadingIcon={<Icon name="duplicate" size="xs" />}
                     >
                        {t('actions.copyLink')}
                     </Button>
@@ -883,7 +863,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     {versions.length > 0 && (
                       <span className="pages-scene__count-badge">{formatNumber(versions.length)}</span>
                     )}
-                    {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {expanded ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
                   </Button>
                   <span className="pages-scene__actions-spacer" />
                   <Button
@@ -893,10 +873,10 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     disabled={pageBusy}
                     aria-expanded={managing}
                     aria-controls={managementId}
-                    leadingIcon={<Settings2 size={13} />}
+                    leadingIcon={<Icon name="settings" size="xs" />}
                   >
                      {t('actions.manage')}
-                    {managing ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {managing ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
                   </Button>
                 </footer>
 
@@ -1055,7 +1035,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                                 loading={pendingAction === `open:${page.slug}:${version.version_id}`}
                                 aria-label={t('actions.openVersionAria', { version: version.version_id })}
                               >
-                                <ExternalLink size={13} />
+                                <Icon name="arrow-up-right" size="xs" />
                               </Button>
                               <Button
                                 variant="outline"
@@ -1065,7 +1045,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                                 loading={pendingAction === `copy:${page.slug}:${version.version_id}`}
                                 aria-label={t('actions.copyVersionAria', { version: version.version_id })}
                               >
-                                <Copy size={13} />
+                                <Icon name="duplicate" size="xs" />
                               </Button>
                               {!version.deployed && (
                                 <Button

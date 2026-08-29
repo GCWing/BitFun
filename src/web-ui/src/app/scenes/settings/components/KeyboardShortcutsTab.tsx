@@ -10,10 +10,10 @@
  * - Reset button restores all defaults
  */
 
-import { Button, SearchField } from '@bitfun/ui';
+import { Button, Icon, SearchField, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search as SearchIcon } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+;
+
 import { useI18n } from '@/infrastructure/i18n';
 import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent, ConfigPageSection } from '@/infrastructure/config/components/common';
 import {
@@ -566,7 +566,7 @@ const KeyboardShortcutsTab: React.FC = () => {
             size="sm"
             value={searchQuery}
             onValueChange={setSearchQuery}
-            leadingIcon={<SearchIcon size={14} aria-hidden />}
+            leadingIcon={<Icon name="search" size="sm" aria-hidden />}
             placeholder={t('keyboard.search')}
             aria-label={t('keyboard.search')}
             clearLabel={searchQuery ? tComponents('search.clear') : undefined}

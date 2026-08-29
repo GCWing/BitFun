@@ -10,8 +10,8 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { IconButton } from '@bitfun/ui';
-import { ArrowUp } from 'lucide-react';
+import { Icon, IconButton } from '@bitfun/ui';
+;
 import { useTranslation } from 'react-i18next';
 import { Textarea } from '@/component-library';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
@@ -124,7 +124,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
             onClick={() => { void handleSend(); }}
             aria-label={t('actions.send')}
             className="aqi__send"
-            icon={<ArrowUp />}
+            icon={<Icon name="arrow-up" size="lg" />}
           />
         </div>
       </div>

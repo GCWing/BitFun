@@ -363,8 +363,8 @@ describe('L0 Navigation Panel', () => {
       const alignment = await browser.execute(() => {
         const parent = document.querySelector<HTMLElement>('[data-testid="agent-skill-entry"]');
         const parentLabel = parent?.querySelector<HTMLElement>(':scope > span:last-child');
-        const childIcons = Array.from(document.querySelectorAll<SVGGraphicsElement>(
-          '[data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > svg',
+        const childIcons = Array.from(document.querySelectorAll<HTMLElement>(
+          '[data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > svg, [data-testid="agent-skill-tabs"] .bitfun-nav-panel__top-action-icon-slot > [data-bf-component="icon"]',
         ));
         if (!parentLabel || childIcons.length === 0) {
           return null;

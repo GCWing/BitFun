@@ -6,8 +6,9 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Bell, BellDot, BellRing } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { BellDot, BellRing } from 'lucide-react';
+import { Icon, MenuItem, Tooltip } from '@bitfun/ui';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import {
   useUnreadCount,
@@ -64,17 +65,9 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
         : null;
 
     return (
-      <button
-        type="button"
-        role="menuitem"
-        className={['bitfun-nav-panel__footer-menu-item', className].filter(Boolean).join(' ')}
-        onClick={handleActivate}
-        aria-label={t('nav.notifications')}
-        data-testid="notification-button"
-        data-bf-component="notification-button"
-        data-bf-part="menuItem"
-      >
-        {activeNotification?.variant === 'loading' ? (
+      <MenuItem
+        className={className || undefined}
+        leading={activeNotification?.variant === 'loading' ? (
           <svg
             width="14"
             height="14"
@@ -90,17 +83,19 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
         ) : unreadCount > 0 ? (
           <BellDot size={14} className="bitfun-notification-btn__icon--has-message" aria-hidden="true" />
         ) : (
-          <Bell size={14} aria-hidden="true" />
+          <Icon name="bell" size="sm" aria-hidden="true" />
         )}
-        <span className="bitfun-nav-panel__footer-menu-item-label">
-          {t('nav.notifications')}
-        </span>
-        {progressLabel ? (
+        metadata={progressLabel ? (
           <span className="bitfun-notification-btn__menu-status">{progressLabel}</span>
         ) : unreadCount > 0 ? (
           <span className="bitfun-notification-btn__menu-count">{unreadCount}</span>
-        ) : null}
-      </button>
+        ) : undefined}
+        onClick={handleActivate}
+        aria-label={t('nav.notifications')}
+        data-testid="notification-button"
+      >
+        {t('nav.notifications')}
+      </MenuItem>
     );
   }
 
@@ -188,14 +183,14 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
           </span>
         ) : (
           <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-            <Bell size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+            <Icon name="bell" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-default" />
             <BellRing size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
           </span>
         )
       ) : (
         unreadCount > 0
           ? <BellDot size={14} className="bitfun-notification-btn__icon--has-message" />
-          : <Bell size={14} />
+          : <Icon name="bell" size="sm" />
       )}
     </button>
     </Tooltip>

@@ -1,7 +1,7 @@
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Pencil, X } from 'lucide-react';
+;
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -126,12 +126,12 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
           size={58}
         />
         <span className="acp-avatar-picker__edit-cue" aria-hidden="true">
-          <Pencil size={11} strokeWidth={1.9} />
+          <Icon name="edit" size="2xs" />
         </span>
       </button>
 
       {isOpen ? createPortal(
-        <div
+        <ScrollArea
           ref={popoverRef}
           id={pickerId}
           className="acp-avatar-picker__popover"
@@ -153,7 +153,7 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
               type="button"
               size="sm"
               aria-label={t('identity.avatarPickerClose')}
-              icon={<X />}
+              icon={<Icon name="xmark" size="lg" />}
               onClick={() => {
                 setIsOpen(false);
                 triggerRef.current?.focus();
@@ -226,11 +226,11 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
               title={saveStatus === 'error' && saveError ? saveError : undefined}
               aria-live="polite"
             >
-              {saveStatus === 'saved' ? <Check size={12} strokeWidth={2} aria-hidden="true" /> : null}
+              {saveStatus === 'saved' ? <Icon name="check-line" size="xs" aria-hidden="true" /> : null}
               {statusContent}
             </span>
           </div>
-        </div>,
+        </ScrollArea>,
         getAppearanceOverlayHost(),
       ) : null}
     </div>

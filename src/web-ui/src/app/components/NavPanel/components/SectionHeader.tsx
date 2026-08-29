@@ -3,7 +3,8 @@
  */
 
 import React, { useCallback } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+;
 
 interface SectionHeaderProps {
   label: string;
@@ -62,7 +63,7 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
       <span className="bitfun-nav-panel__section-label">{label}</span>
       {onSceneOpen ? (
         <span className="bitfun-nav-panel__section-indicator" aria-hidden="true">
-          <ChevronRight size={14} />
+          <Icon name="chevron-right" size="sm" />
         </span>
       ) : null}
       {actions ? (

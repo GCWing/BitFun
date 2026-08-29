@@ -38,6 +38,20 @@
     cursor: not-allowed;
   }
 
+  .root[data-bf-tone="danger"]:not([data-disabled="true"]) {
+    color: var(--bf-color-status-danger-content);
+  }
+
+  .root[data-bf-tone="danger"]:not([data-disabled="true"]):hover,
+  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="hover"]) {
+    background: var(--bf-color-status-danger-surface);
+  }
+
+  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger:active),
+  .root[data-bf-tone="danger"]:not([data-disabled="true"]):has(.trigger[data-bf-preview-state="active"]) {
+    background: var(--bf-color-status-danger-surface);
+  }
+
   .trigger {
     display: inline-flex;
     flex: 1 1 auto;

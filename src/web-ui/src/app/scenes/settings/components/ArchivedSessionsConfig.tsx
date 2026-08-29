@@ -7,9 +7,9 @@
  * confirmation dialog.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2, RotateCcw, Inbox, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
+import { Trash2, RotateCcw, Inbox, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   ConfigPageLayout,
@@ -360,9 +360,9 @@ const ArchivedSessionsConfig: React.FC = () => {
                   onClick={() => toggleWorkspace(workspacePath)}
                 >
                   {isCollapsed ? (
-                    <ChevronRight size={14} className="archived-sessions-config__group-chevron" />
+                    <Icon name="chevron-right" size="sm" className="archived-sessions-config__group-chevron" />
                   ) : (
-                    <ChevronDown size={14} className="archived-sessions-config__group-chevron" />
+                    <Icon name="chevron-down" size="sm" className="archived-sessions-config__group-chevron" />
                   )}
                   <span className="archived-sessions-config__group-name">{workspacePath}</span>
                   <span className="archived-sessions-config__group-count">

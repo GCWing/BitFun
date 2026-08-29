@@ -382,7 +382,6 @@ $ins-label:   12px;
 .insights-scene__history {
   padding: $ins-xs $ins-lg $ins-lg;
   flex: 1;
-  overflow-y: auto;
   min-height: 0;
 }
 
@@ -716,7 +715,6 @@ $ins-label:   12px;
   display: flex;
   flex-direction: row;
   min-height: 0;
-  overflow-y: auto;
   overflow-x: hidden;
 
   &::-webkit-scrollbar { width: 6px; }

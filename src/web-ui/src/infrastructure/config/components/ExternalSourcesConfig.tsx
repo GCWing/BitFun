@@ -1,20 +1,9 @@
-import { Button, Switch, ConfirmDialog, Select } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  CircleDashed,
-  FolderKanban,
-  Globe2,
-  MinusCircle,
-  RefreshCw,
-  Settings2,
-  ShieldCheck,
-} from 'lucide-react';
-import { ConfigPageLoading, Select as LegacySelect, Tooltip } from '@/component-library';
+import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ConfigPageLoading, Select as LegacySelect } from '@/component-library';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
@@ -1697,11 +1686,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     aria-expanded={advancedOpen}
                   >
                     <span>{t('applications.advanced.title')}</span>
-                    <ChevronRight
-                      className="bitfun-external-sources-config__disclosure-icon"
-                      size={16}
-                      aria-hidden="true"
-                    />
+                    <Icon name="chevron-right" size="md" className="bitfun-external-sources-config__disclosure-icon" aria-hidden="true" />
                   </summary>
                 ) : null}
             {safeModeEnabled === false ? safeModeSection : null}
@@ -1785,7 +1770,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     aria-pressed={policyScope === 'user'}
                     onClick={() => setPolicyScope('user')}
                   >
-                    <Globe2 size={14} aria-hidden="true" />
+                    <Icon name="browser" size="sm" aria-hidden="true" />
                     {t('policy.scope.user')}
                   </button>
                   <Tooltip
@@ -1902,7 +1887,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                     return next;
                                   })}
                                 >
-                                  <Settings2 size={16} aria-hidden="true" />
+                                  <Icon name="settings" size="md" aria-hidden="true" />
                                 </button>
                               </Tooltip>
                             </div>
@@ -2068,7 +2053,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         <span className={`bitfun-external-sources-config__ecosystem-state is-${ecosystem.state}`} data-bf-component="external-sources-config" data-bf-part="ecosystemState">
                           {ecosystem.state === 'checking' ? <CircleDashed size={13} aria-hidden="true" /> : null}
                           {ecosystem.state === 'attention' ? <AlertTriangle size={13} aria-hidden="true" /> : null}
-                          {ecosystem.state === 'ready' ? <CheckCircle2 size={13} aria-hidden="true" /> : null}
+                          {ecosystem.state === 'ready' ? <Icon name="check-circle" size="xs" aria-hidden="true" /> : null}
                           {ecosystem.state === 'noConfig' ? <MinusCircle size={13} aria-hidden="true" /> : null}
                           {t(`policy.state.${ecosystem.state}`)}
                         </span>
@@ -2121,7 +2106,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           return next;
                         })}
                       >
-                        <Settings2 size={16} aria-hidden="true" />
+                        <Icon name="settings" size="md" aria-hidden="true" />
                       </button>
                     </Tooltip>
                   </div>

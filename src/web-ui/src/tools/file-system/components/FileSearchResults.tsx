@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback, startTransition, memo, useEffect, useRef } from 'react';
-import { File, FileText, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import { Icon, ScrollArea } from '@bitfun/ui';
+import { FileText } from 'lucide-react';
 import type {
   FileSearchResult,
   FileSearchResultGroup,
@@ -243,9 +244,9 @@ const FileGroup = memo<FileGroupProps>(({
             }`}
           >
             {group.isDirectory ? (
-              <Folder size={16} />
+              <Icon name="folder" size="md" />
             ) : (
-              <File size={16} />
+              <Icon name="files" size="md" />
             )}
           </span>
           <span className="bitfun-search-results__file-info">
@@ -269,9 +270,9 @@ const FileGroup = memo<FileGroupProps>(({
             title={isExpanded ? t('search.collapse') : t('search.expand')}
           >
             {isExpanded ? (
-              <ChevronDown size={12} />
+              <Icon name="chevron-down" size="xs" />
             ) : (
-              <ChevronRight size={12} />
+              <Icon name="chevron-right" size="xs" />
             )}
             <span className="bitfun-search-results__file-toggle-count">
               {group.contentMatches.length}
@@ -516,7 +517,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
         </span>
       </div>
 
-      <div
+      <ScrollArea
         ref={listRef}
         className="bitfun-search-results__list"
         onScroll={maybeAutoLoadMore}
@@ -535,7 +536,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
             onLineClick={handleLineClick}
           />
         ))}
-      </div>
+      </ScrollArea>
     </div>
   );
 };

@@ -23,6 +23,7 @@ import { statusPillMeta } from "./components/StatusPill/StatusPill.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import { toolbarMeta } from "./components/Toolbar/Toolbar.meta";
+import { tooltipMeta } from "./components/Tooltip/Tooltip.meta";
 import { askUserMeta } from "./flow-chat/ask-user/AskUser.meta";
 import { chatComposerMeta } from "./flow-chat/composer/ChatComposer.meta";
 import { ambientToolCardMeta } from "./flow-chat/tool-cards/AmbientToolCard.meta";
@@ -116,6 +117,7 @@ export const componentRegistry = [
   terminalControlToolCardMeta,
   todoToolCardMeta,
   toolbarMeta,
+  tooltipMeta,
   viewImageToolCardMeta,
   webFetchToolCardMeta,
   webSearchToolCardMeta,

@@ -4,9 +4,9 @@
  */
 
 import React, { useCallback } from 'react';
-import { X, Pin, Split } from 'lucide-react';
+import { Split } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { commandExecutor } from '@/shared/context-menu-system/commands/CommandExecutor';
 import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType, type TabContext } from '@/shared/context-menu-system/types/context.types';
@@ -17,6 +17,7 @@ import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
 import type { CanvasTab, EditorGroupId, TabState } from '../types';
 import './Tab.scss';
+import { Icon, Tooltip } from '@bitfun/ui';
 export interface TabProps {
   /** Tab data */
   tab: CanvasTab;
@@ -347,7 +348,7 @@ export const Tab: React.FC<TabProps> = ({
             onClick={isPinned ? handlePinClick : handleCloseClick}
             tabIndex={-1}
           >
-            {isPinned ? <Pin size={12} /> : <X size={12} />}
+            {isPinned ? <Icon name="pin" size="xs" /> : <Icon name="xmark" size="xs" />}
           </button>
         </Tooltip>
 

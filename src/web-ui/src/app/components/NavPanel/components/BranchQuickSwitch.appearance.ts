@@ -2,7 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const branchQuickSwitchAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'branch-quick-switch',
   parts: [
-    { id: 'root' }, { id: 'search' }, { id: 'input' }, { id: 'list' },
+    { id: 'root' }, { id: 'search' }, { id: 'input' },
     { id: 'loading' }, { id: 'empty' }, { id: 'item' }, { id: 'itemName' },
   ],
   states: [

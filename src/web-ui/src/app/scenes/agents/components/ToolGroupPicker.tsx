@@ -1,16 +1,12 @@
-import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Modal, ScrollArea, Switch, Tooltip } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
   ArrowDown,
-  ArrowUp,
-  Pencil,
-  Plus,
-  Settings2,
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import type { UserToolGroup } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
@@ -287,7 +283,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
             </div>
             <div className="tool-group-manager__field">
               <span>{t('agentsOverview.toolGroups.groupTools')}</span>
-              <div className="tool-group-manager__token-grid" data-bf-component="tool-group-picker" data-bf-part="tokenGrid">
+              <ScrollArea className="tool-group-manager__token-grid" data-bf-component="tool-group-picker" data-bf-part="tokenGrid">
                 {selectableTools.map((tool) => {
                   const selected = toolNames.has(tool.name);
                   const tooltipFields = toolTooltipFields(tool, t);
@@ -316,7 +312,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                     </AgentCapabilityTooltip>
                   );
                 })}
-              </div>
+              </ScrollArea>
             </div>
             <div className="tool-group-manager__footer">
               <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
@@ -333,7 +329,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
           <>
             <div className="tool-group-manager__head">
               <span>{t('agentsOverview.toolGroups.manageSubtitle')}</span>
-              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Plus size={14} />}>
+              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Icon name="plus" size="sm" />}>
 
                 {t('agentsOverview.toolGroups.createGroup')}
               </Button>
@@ -341,7 +337,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
             {groups.length === 0 ? (
               <p className="tool-group-manager__empty">{t('agentsOverview.toolGroups.noUserGroups')}</p>
             ) : (
-              <div className="tool-group-manager__list" data-bf-component="tool-group-picker" data-bf-part="managerList">
+              <ScrollArea className="tool-group-manager__list" data-bf-component="tool-group-picker" data-bf-part="managerList">
                 {groups.map((group, index) => {
                   const unavailable = unavailableUserToolNames(group, tools);
                   return (
@@ -363,7 +359,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.toolGroups.moveUp')}
                             onClick={() => void moveGroup(index, -1)}
                             disabled={saving || index === 0}
-                            icon={<ArrowUp size={13} />}
+                            icon={<Icon name="arrow-up" size="xs" />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.toolGroups.moveDown')}>
@@ -383,7 +379,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.toolGroups.editGroup')}
                             onClick={() => startEdit(group)}
                             disabled={saving}
-                            icon={<Pencil size={13} />}
+                            icon={<Icon name="edit" size="xs" />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.toolGroups.deleteGroup')}>
@@ -400,7 +396,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                     </div>
                   );
                 })}
-              </div>
+              </ScrollArea>
             )}
           </>
         )}
@@ -445,7 +441,7 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
           size="sm"
           onClick={() => setIsManagerOpen(true)}
           disabled={disabled}
-          leadingIcon={<Settings2 size={14} />}
+          leadingIcon={<Icon name="settings" size="sm" />}
         >
 
           {t('agentsOverview.toolGroups.manageGroups')}

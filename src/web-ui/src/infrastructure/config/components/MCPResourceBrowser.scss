@@ -63,7 +63,6 @@
 
     .resources-list {
       border-right: 1px solid var(--bf-appearance-token-border-base);
-      overflow-y: auto;
       background: var(--bf-appearance-token-color-bg-secondary);
 
       .loading-state,
@@ -198,7 +197,6 @@
 
       .viewer-content {
         flex: 1;
-        overflow: auto;
         padding: 1.5rem;
 
         .loading-content {

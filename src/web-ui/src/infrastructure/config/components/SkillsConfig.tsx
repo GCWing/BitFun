@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, Card, CardBody, IconButton, ConfirmDialog, Field, Input, SearchField, Select } from '@bitfun/ui';
+import { Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp, Search as SearchIcon } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Trash2, RefreshCw, FolderOpen, TrendingUp } from 'lucide-react';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
@@ -229,7 +229,7 @@ const SkillsConfig: React.FC = () => {
               aria-label={t('form.closeTooltip')}
               size="sm"
               onClick={resetForm}
-              icon={<X size={14} />}
+              icon={<Icon name="xmark" size="sm" />}
             />
           </Tooltip>
         </div>
@@ -453,7 +453,7 @@ const SkillsConfig: React.FC = () => {
                       <div className="bitfun-skills-config__market-item-name">{skill.name}</div>
                       {isInstalled ? (
                         <span className="bitfun-skills-config__market-item-badge bitfun-skills-config__market-item-badge--installed">
-                          <CheckCircle2 size={12} />
+                          <Icon name="check-circle" size="xs" />
                           {t('market.item.installed')}
                         </span>
                       ) : null}
@@ -487,7 +487,7 @@ const SkillsConfig: React.FC = () => {
                   {isInstalled ? (
                     <Tooltip content={installedTooltipText}>
                       <span>
-                        <Button variant="fill" size="sm" disabled leadingIcon={<CheckCircle2 size={14} />}>
+                        <Button variant="fill" size="sm" disabled leadingIcon={<Icon name="check-circle" size="sm" />}>
 
                           {t('market.item.installed')}
                         </Button>
@@ -503,7 +503,7 @@ const SkillsConfig: React.FC = () => {
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
                               disabled={isDownloading || !hasWorkspace}
-                              leadingIcon={<Download size={14} />}
+                              leadingIcon={<Icon name="download" size="sm" />}
                             >
 
                               {isDownloading ? t('market.item.downloading') : t('market.item.downloadProject')}
@@ -518,7 +518,7 @@ const SkillsConfig: React.FC = () => {
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
                             disabled={isDownloading}
-                            leadingIcon={<Download size={14} />}
+                            leadingIcon={<Icon name="download" size="sm" />}
                           >
 
                             {isDownloading ? t('market.item.downloading') : t('market.item.downloadUser')}
@@ -557,7 +557,7 @@ const SkillsConfig: React.FC = () => {
           size="sm"
           onClick={() => { setFormLevel(level); setShowAddForm(true); }}
           disabled={level === 'project' && !hasWorkspace}
-          icon={<Plus size={16} />}
+          icon={<Icon name="plus" size="md" />}
         />
       </Tooltip>
     </>
@@ -663,7 +663,7 @@ const SkillsConfig: React.FC = () => {
             <SearchField
               placeholder={t('market.searchPlaceholder')}
               aria-label={t('market.searchPlaceholder')}
-              leadingIcon={<SearchIcon size={14} aria-hidden />}
+              leadingIcon={<Icon name="search" size="sm" aria-hidden />}
               value={marketKeyword}
               onValueChange={(value) => setMarketKeyword(value)}
               onSearch={handleMarketSearch}
@@ -686,7 +686,7 @@ const SkillsConfig: React.FC = () => {
           {renderAddForm('user')}
           {userSkills.length === 0 && !(showAddForm && formLevel === 'user') ? (
             <div className="bitfun-collection-empty" data-bf-component="skills-config" data-bf-part="empty">
-              <Button variant="outline" size="sm" onClick={() => { setFormLevel('user'); setShowAddForm(true); }} leadingIcon={<Plus size={14} />}>
+              <Button variant="outline" size="sm" onClick={() => { setFormLevel('user'); setShowAddForm(true); }} leadingIcon={<Icon name="plus" size="sm" />}>
 
                 {t('toolbar.addTooltip')}
               </Button>
@@ -704,7 +704,7 @@ const SkillsConfig: React.FC = () => {
             <div className="bitfun-collection-empty" data-bf-component="skills-config" data-bf-part="empty">
               {!hasWorkspace && <p>{t('messages.noWorkspace')}</p>}
               {hasWorkspace && (
-                <Button variant="outline" size="sm" onClick={() => { setFormLevel('project'); setShowAddForm(true); }} leadingIcon={<Plus size={14} />}>
+                <Button variant="outline" size="sm" onClick={() => { setFormLevel('project'); setShowAddForm(true); }} leadingIcon={<Icon name="plus" size="sm" />}>
 
                   {t('toolbar.addTooltip')}
                 </Button>

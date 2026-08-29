@@ -2,11 +2,11 @@
  * Unified SSH authentication prompt.
  */
 
-import { Button, Field, IconButton, Input, Modal, Select } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input, Modal, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Tooltip } from '@/component-library';
-import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
+
+import { FolderOpen, Key, Loader2, Lock, Server } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import {
   pickSshCertificatePath,
@@ -172,7 +172,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="root"
-                leading={<User size={16} />}
+                leading={<Icon name="user" size="md" />}
                 disabled={isConnecting}
               />
             </Field>

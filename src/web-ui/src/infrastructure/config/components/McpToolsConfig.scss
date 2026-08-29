@@ -204,10 +204,13 @@
     margin: 0;
   }
 
+  .bitfun-mcp-tools__import-list {
+    max-height: 120px;
+  }
+
   ul {
     max-height: 120px;
     margin: 0;
-    overflow: auto;
   }
 
 }

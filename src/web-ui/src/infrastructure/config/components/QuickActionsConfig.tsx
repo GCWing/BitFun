@@ -1,8 +1,8 @@
-import { Button, Switch, IconButton, Input, Modal } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Modal, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap, GitCommitHorizontal, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
-import { ConfigPageLoading, Textarea, Tooltip } from '@/component-library';
+import { Zap, GitCommitHorizontal, GitPullRequest, Trash2 } from 'lucide-react';
+import { ConfigPageLoading, Textarea } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -127,7 +127,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
             size="sm"
             onClick={() => onSubmit(label.trim(), prompt.trim())}
             disabled={!canSubmit}
-            leadingIcon={<Check size={14} />}
+            leadingIcon={<Icon name="check-line" size="sm" />}
           >
 
             {isEdit ? t('modal.saveEdit') : t('modal.confirmAdd')}
@@ -174,7 +174,7 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
             size="sm"
             aria-label={t('edit.button')}
             onClick={() => onEdit(action)}
-            icon={<Pencil size={13} />}
+            icon={<Icon name="edit" size="xs" />}
           />
         </Tooltip>
         {canDelete && (
@@ -305,7 +305,7 @@ const QuickActionsConfig: React.FC = () => {
               size="sm"
               variant="outline"
               onClick={() => setModalTarget(null)}
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Icon name="plus" size="sm" />}
             >
 
               {t('add.button')}
@@ -321,7 +321,7 @@ const QuickActionsConfig: React.FC = () => {
                   size="sm"
                   variant="outline"
                   onClick={() => setModalTarget(null)}
-                  leadingIcon={<Plus size={14} />}
+                  leadingIcon={<Icon name="plus" size="sm" />}
                 >
 
                   {t('add.button')}

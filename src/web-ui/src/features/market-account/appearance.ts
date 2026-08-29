@@ -5,9 +5,7 @@ export const marketAccountControlsAppearanceDescriptor: AppearanceSurfaceDescrip
   parts: [
     { id: 'root' },
     { id: 'identityTrigger' },
-    { id: 'menu' },
     { id: 'profile' },
-    { id: 'menuItem' },
     { id: 'login' },
     { id: 'waiting' },
     { id: 'error' },

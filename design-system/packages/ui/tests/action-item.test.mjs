@@ -72,6 +72,18 @@ test("ActionItem can reserve an empty leading gutter for aligned lists", () => {
   assert.match(markup, /data-bf-part="leading"><\/span>/);
 });
 
+test("ActionItem exposes a danger tone for destructive rows", () => {
+  const neutralMarkup = renderToStaticMarkup(
+    createElement(ActionItem, null, "Rename"),
+  );
+  const dangerMarkup = renderToStaticMarkup(
+    createElement(ActionItem, { tone: "danger" }, "Delete"),
+  );
+
+  assert.match(neutralMarkup, /data-bf-tone="neutral"/);
+  assert.match(dangerMarkup, /data-bf-tone="danger"/);
+});
+
 test("ActionItem styles share action state and focus tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 

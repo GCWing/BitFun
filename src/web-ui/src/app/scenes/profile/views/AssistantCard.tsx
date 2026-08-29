@@ -1,15 +1,11 @@
 import React from 'react';
-import { Button, IconButton, StatusPill } from '@bitfun/ui';
+import { Button, Icon, IconButton, StatusPill, Tooltip } from '@bitfun/ui';
 import {
-  ChevronRight,
   MessageSquarePlus,
-  MoreHorizontal,
-  Pin,
-  Settings2,
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import type { WorkspaceInfo } from '@/shared/types';
 
@@ -98,14 +94,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
               </span>
             ) : null}
           </span>
-          <MoreHorizontal
-            data-bf-component="assistant-card"
-            data-bf-part="chevron"
-            className="assistant-card__chevron"
-            size={16}
-            strokeWidth={1.7}
-            aria-hidden="true"
-          />
+          <Icon name="more" size="md" data-bf-component="assistant-card" data-bf-part="chevron" className="assistant-card__chevron" aria-hidden="true" />
         </span>
       </button>
 
@@ -113,8 +102,8 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
         <Button
           variant="outline"
           size="sm"
-          leadingIcon={<Settings2 />}
-          trailingIcon={<ChevronRight />}
+          leadingIcon={<Icon name="settings" size="lg" />}
+          trailingIcon={<Icon name="chevron-right" size="lg" />}
           className="assistant-card__configure"
           onClick={onClick}
           disabled={isDeleting || isSettingPrimary}
@@ -148,7 +137,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
                   aria-label={t('nursery.card.setPrimary')}
                   loading={isSettingPrimary}
                   disabled={isDeleting || isStartingSession || isSettingPrimary}
-                  icon={<Pin size={14} strokeWidth={1.8} aria-hidden="true" />}
+                  icon={<Icon name="pin" size="sm" aria-hidden="true" />}
                 />
               </Tooltip>
             ) : null}

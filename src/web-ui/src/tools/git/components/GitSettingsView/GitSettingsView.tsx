@@ -1,18 +1,8 @@
 /** Git settings view. */
 
-import { Button, Field, IconButton, Input, Select, TabGroup } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input, Select, TabGroup, ScrollArea } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
-import { 
-  Settings, 
-  User, 
-  Mail,
-  Key,
-  Globe,
-  Save,
-  RefreshCw,
-  Check,
-  X
-} from 'lucide-react';
+import { Mail, Key, Save, RefreshCw } from 'lucide-react';
 import { Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
@@ -66,14 +56,14 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   const { t } = useI18n('panels/git');
   const tabItems = [
     {
-      icon: <User size={16} />,
+      icon: <Icon name="user" size="md" />,
       id: 'git-settings-user-tab',
       label: t('settingsView.tabs.user'),
       panelId: 'git-settings-user-panel',
       value: 'user',
     },
     {
-      icon: <Globe size={16} />,
+      icon: <Icon name="browser" size="md" />,
       id: 'git-settings-repository-tab',
       label: t('settingsView.tabs.repository'),
       panelId: 'git-settings-repository-panel',
@@ -181,7 +171,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
   }, []);
 
   const renderUserTab = useCallback(() => (
-    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+    <ScrollArea data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
       <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.user.title')}</h4>
         <p className="bitfun-git-settings-view__section-description">
@@ -190,7 +180,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
         
         <div data-bf-component="git-settings-view" data-bf-part="formGroup" className="bitfun-git-settings-view__form-group">
           <label className="bitfun-git-settings-view__form-label">
-            <User size={16} />
+            <Icon name="user" size="md" />
             {t('settingsView.sections.user.nameLabel')}
           </label>
           <Input
@@ -216,11 +206,11 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           />
         </div>
       </div>
-    </div>
+    </ScrollArea>
   ), [config.user, updateUserConfig, t]);
 
   const renderRepositoryTab = useCallback(() => (
-    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+    <ScrollArea data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
       <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.editor.title')}</h4>
         
@@ -280,11 +270,11 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           </div>
         ))}
       </div>
-    </div>
+    </ScrollArea>
   ), [config.core, config.remote, updateCoreConfig, updateRemoteConfig, t]);
 
   const renderAdvancedTab = useCallback(() => (
-    <div data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
+    <ScrollArea data-bf-component="git-settings-view" data-bf-part="content" className="bitfun-git-settings-view__content">
       <div data-bf-component="git-settings-view" data-bf-part="section" className="bitfun-git-settings-view__section">
         <h4 className="bitfun-git-settings-view__section-title">{t('settingsView.sections.core.title')}</h4>
         
@@ -329,7 +319,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           </div>
         ))}
       </div>
-    </div>
+    </ScrollArea>
   ), [config.core.ignorecase, config.branch, updateCoreConfig, t]);
 
 
@@ -354,7 +344,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
     return (
       <div className={`bitfun-git-settings-view bitfun-git-settings-view--error ${className}`} data-bf-component="git-settings-view" data-bf-part="root" data-bf-state="error">
         <div data-bf-component="git-settings-view" data-bf-part="error" className="bitfun-git-settings-view__empty-state">
-          <Settings size={48} />
+          <Icon name="settings" size="lg" />
           <h3>{t('settingsView.loadFailedTitle')}</h3>
           <p className="bitfun-git-settings-view__error-message">{error}</p>
           <Button onClick={loadConfig} variant="fill">
@@ -369,7 +359,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
     <div className={`bitfun-git-settings-view ${className}`} data-bf-component="git-settings-view" data-bf-part="root">
       <div className="bitfun-git-settings-view__header" data-bf-component="git-settings-view" data-bf-part="header">
         <div data-bf-component="git-settings-view" data-bf-part="headerLeft" className="bitfun-git-settings-view__header-left">
-          <Settings size={20} />
+          <Icon name="settings" size="lg" />
           <h3>{t('settingsView.title')}</h3>
         </div>
         
@@ -397,28 +387,28 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
 
       {error && (
         <div data-bf-component="git-settings-view" data-bf-part="status" data-bf-state="error" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--error">
-          <X size={14} />
+          <Icon name="xmark" size="sm" />
           <span>{error}</span>
           <IconButton
             aria-label={t('settingsView.dismissError')}
             onClick={() => setError(null)}
             className="bitfun-git-settings-view__close-btn"
             size="sm"
-            icon={<X size={12} />}
+            icon={<Icon name="xmark" size="xs" />}
           />
         </div>
       )}
       
       {success && (
         <div data-bf-component="git-settings-view" data-bf-part="status" className="bitfun-git-settings-view__status-banner bitfun-git-settings-view__status-banner--success">
-          <Check size={14} />
+          <Icon name="check-line" size="sm" />
           <span>{success}</span>
           <IconButton
             aria-label={t('settingsView.dismissSuccess')}
             onClick={() => setSuccess(null)}
             className="bitfun-git-settings-view__close-btn"
             size="sm"
-            icon={<X size={12} />}
+            icon={<Icon name="xmark" size="xs" />}
           />
         </div>
       )}

@@ -17,6 +17,8 @@ export interface ActionItemAction {
   tone?: IconButtonProps["tone"];
 }
 
+export type ActionItemTone = "neutral" | "danger";
+
 export interface ActionItemProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className"> {
   actions?: readonly ActionItemAction[];
@@ -26,6 +28,7 @@ export interface ActionItemProps
   metadata?: ReactNode;
   reserveLeadingSpace?: boolean;
   shortcut?: ReactNode;
+  tone?: ActionItemTone;
   triggerClassName?: string;
 }
 
@@ -38,6 +41,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
   metadata,
   reserveLeadingSpace = false,
   shortcut,
+  tone = "neutral",
   triggerClassName,
   type = "button",
   ...props
@@ -48,6 +52,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
     <span
       className={classNames(styles.root, className)}
       data-bf-component="action-item"
+      data-bf-tone={tone}
       data-disabled={disabled ? "true" : "false"}
     >
       <button

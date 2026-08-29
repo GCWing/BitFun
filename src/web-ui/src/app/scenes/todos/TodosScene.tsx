@@ -11,7 +11,7 @@
  * broadcast on the shared change event so those views stay in step.
  */
 
-import { Button, IconButton, Modal } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, ScrollArea, Tooltip } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -24,10 +24,8 @@ import {
   CalendarClock,
   CalendarDays,
   ChevronLeft,
-  ChevronRight,
-  Plus,
 } from 'lucide-react';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+import { PresenceBoundary } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
@@ -406,7 +404,7 @@ const TodosScene: React.FC = () => {
   }, [clearSelectedDay, nowMs]);
 
   return (
-    <div
+    <ScrollArea
       className="bf-todos"
       data-bf-scene="todos"
       data-bf-part="root"
@@ -445,7 +443,7 @@ const TodosScene: React.FC = () => {
                 type="button"
                 size="sm"
                 aria-label={t('calendar.nextMonth')}
-                icon={<ChevronRight />}
+                icon={<Icon name="chevron-right" size="lg" />}
                 onClick={() => shiftMonth(1)}
                 data-testid="todos-calendar-next"
               />
@@ -463,7 +461,7 @@ const TodosScene: React.FC = () => {
             size="sm"
             variant="fill"
             className="bf-todos__new-button"
-            leadingIcon={<Plus />}
+            leadingIcon={<Icon name="plus" size="lg" />}
             onClick={handleCreateNew}
             disabled={workspaceOptions.length === 0}
             data-testid="todos-new"
@@ -508,12 +506,13 @@ const TodosScene: React.FC = () => {
 
       <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
         {/* ── Tier 1: due within 24 hours ───────────────────── */}
-        <section
+        <ScrollArea
           className="bf-todos__pane bf-todos__pane--list"
           aria-label={t('list.title')}
           data-bf-scene="todos"
           data-bf-part="listPane"
           data-testid="todos-list-pane"
+          role="region"
         >
           <section
             className="bf-todos__overview"
@@ -598,7 +597,7 @@ const TodosScene: React.FC = () => {
               </div>
             </div>
           ) : null}
-        </section>
+        </ScrollArea>
 
         {/* ── Tier 2: more than 24 hours out ────────────────── */}
         <div
@@ -621,7 +620,7 @@ const TodosScene: React.FC = () => {
             exitDurationMs={160}
             minimumExitDurationMs={160}
           >
-            <div
+            <ScrollArea
               className="bf-todos__day-detail-presence"
               data-open={selectedDayKey ? 'true' : 'false'}
               aria-hidden={!selectedDayKey}
@@ -673,11 +672,11 @@ const TodosScene: React.FC = () => {
                   </div>
                 )}
               </section>
-            </div>
+            </ScrollArea>
           </PresenceBoundary>
         </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 };
 

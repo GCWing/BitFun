@@ -1,7 +1,7 @@
-import { Button, Switch, Modal, ConfirmDialog } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, Modal, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { ConfigPageLoading } from '@/component-library';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -495,7 +495,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             label={t('compatibility.reference.label')}
             align="center"
           >
-            <Button variant="outline" size="sm" onClick={openCodexHooksDoc} leadingIcon={<ExternalLink size={14} />}>
+            <Button variant="outline" size="sm" onClick={openCodexHooksDoc} leadingIcon={<Icon name="arrow-up-right" size="sm" />}>
 
               {t('compatibility.reference.open')}
             </Button>

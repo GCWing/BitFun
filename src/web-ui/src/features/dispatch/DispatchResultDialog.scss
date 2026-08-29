@@ -36,7 +36,6 @@
     flex-direction: column;
     gap: $size-gap-3;
     padding: 0 $size-gap-4 $size-gap-4;
-    overflow-y: auto;
 
     // Height-constrained column flex: children must keep their content size and
     // let the container scroll instead of shrinking.
@@ -131,11 +130,13 @@
     }
   }
 
-  ul {
+  &__change-list {
     max-height: 180px;
+  }
+
+  ul {
     margin: 0;
     padding: $size-gap-2 $size-gap-3;
-    overflow-y: auto;
     list-style: none;
 
     li {

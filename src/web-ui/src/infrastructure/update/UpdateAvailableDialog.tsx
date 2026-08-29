@@ -2,9 +2,9 @@
  * Dialog when a remote update is available (daily prompt or manual check).
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useRef } from 'react';
-import { Download } from 'lucide-react';
+;
 import { useI18n } from '@/infrastructure/i18n';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
 import './UpdateAvailableDialog.scss';
@@ -67,7 +67,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
             data-bf-component="update"
             data-bf-part="leadIcon"
           >
-            <Download size={18} strokeWidth={2} />
+            <Icon name="download" size="lg" />
           </div>
           <p
             className="bitfun-update-available__subtitle"
@@ -103,7 +103,9 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
         {notes ? (
           <div className="bitfun-update-available__notes" data-bf-component="update" data-bf-part="notes">
             <div className="bitfun-update-available__notes-label" data-bf-component="update" data-bf-part="notesLabel">{t('update.releaseNotes')}</div>
-            <pre className="bitfun-update-available__notes-body" data-bf-component="update" data-bf-part="notesBody">{notes}</pre>
+            <ScrollArea className="bitfun-update-available__notes-body" data-bf-component="update" data-bf-part="notesBody">
+              <pre>{notes}</pre>
+            </ScrollArea>
           </div>
         ) : null}
 

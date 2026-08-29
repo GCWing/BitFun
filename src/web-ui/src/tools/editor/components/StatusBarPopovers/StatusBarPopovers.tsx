@@ -18,7 +18,7 @@ import {
 
 import { useI18n } from '@/infrastructure/i18n';
 import './StatusBarPopovers.scss';
-import { Input } from '@bitfun/ui';
+import { Input, ScrollArea } from '@bitfun/ui';
 
 export type StatusBarPopoverType = 'position' | 'indent' | 'encoding' | 'language';
 
@@ -166,7 +166,7 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
       aria-label={t('editor.statusBar.indentSettings')}
     >
       <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectIndent')}</div>
-      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
+      <ScrollArea data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {INDENT_OPTIONS.map((opt) => {
           const label = opt.insertSpaces
             ? t('editor.statusBar.indentOptionSpaces', { n: opt.tabSize })
@@ -203,7 +203,7 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
             </button>
           );
         })}
-      </div>
+      </ScrollArea>
     </div>,
     getAppearanceOverlayHost()
   );
@@ -239,7 +239,7 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
       aria-label={t('editor.statusBar.fileEncoding')}
     >
       <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectEncoding')}</div>
-      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
+      <ScrollArea data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {ENCODING_OPTIONS.map((enc) => (
           <button
             data-bf-component="status-bar-popover"
@@ -264,7 +264,7 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
             {enc}
           </button>
         ))}
-      </div>
+      </ScrollArea>
     </div>,
     getAppearanceOverlayHost()
   );
@@ -354,7 +354,7 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
       aria-label={t('editor.statusBar.selectLanguageMode')}
     >
       <div data-bf-component="status-bar-popover" data-bf-part="hint" className="status-bar-popover__hint">{t('editor.statusBar.selectLanguageModeHint')}</div>
-      <div data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
+      <ScrollArea data-bf-component="status-bar-popover" data-bf-part="list" className="status-bar-popover__list">
         {languages.map((lang) => {
           const Icon = getLanguageIcon(lang.id);
           return (
@@ -385,7 +385,7 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
             </button>
           );
         })}
-      </div>
+      </ScrollArea>
     </div>,
     getAppearanceOverlayHost()
   );

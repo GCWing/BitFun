@@ -1,15 +1,13 @@
-import { Button, IconButton, Modal, StatusPill, type StatusPillTone } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, StatusPill, type StatusPillTone, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Download,
   FolderOpen,
-  MoreHorizontal,
   RefreshCw,
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   speechAPI,
@@ -400,7 +398,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                     size="sm"
                     onClick={() => handleDownload(model)}
                     disabled={busyAction !== null || anyDownloading}
-                    leadingIcon={<Download size={14} />}
+                    leadingIcon={<Icon name="download" size="sm" />}
                   >
 
                     {needsRepair ? t('model.repair') : t('model.download')}
@@ -415,7 +413,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                       data-bf-component="voice-input-config"
                       data-bf-part="modelMore"
                       onClick={event => openMaintenanceMenu(event, model)}
-                      icon={<MoreHorizontal size={15} />}
+                      icon={<Icon name="more" size="sm" />}
                     />
                   </Tooltip>
                 ) : null}

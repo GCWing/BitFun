@@ -69,6 +69,7 @@ import {
   ToolbarBadge,
   ToolbarGroup,
   ToolbarSeparator,
+  Tooltip,
   type ColorScheme,
   type ConfirmDialogType,
   type ContrastMode,
@@ -282,6 +283,8 @@ export function ComponentDetailPage({
         ? "selected"
         : component.name === "ScrollArea"
           ? "auto"
+        : component.name === "Tooltip"
+          ? "top"
         : "default",
   );
   const [inspectorDisabled, setInspectorDisabled] = useState(false);
@@ -345,6 +348,8 @@ export function ComponentDetailPage({
         return ["selected", "unselected", "hover", "disabled"] as const;
       case "Toolbar":
         return ["default", "with-center", "overflow"] as const;
+      case "Tooltip":
+        return ["top", "bottom", "left", "right"] as const;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
@@ -435,6 +440,9 @@ export function ComponentDetailPage({
     }
     if (component.name === "FieldGroup") {
       return `import { Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\nimport { Settings } from "lucide-react";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  leading={<Settings />}\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
+    }
+    if (component.name === "Tooltip") {
+      return `import { Tooltip } from "@bitfun/ui";\n\n<Tooltip\n  content="${t("components.preview.tooltipContent")}"\n  placement="${previewState}"\n>\n  <Button>${t("components.preview.tooltipTrigger")}</Button>\n</Tooltip>`;
     }
     if (component.name === "Menu") {
       return `import { Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
@@ -1040,6 +1048,20 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "Tooltip") {
+      return (
+        <Tooltip
+          content={t("components.preview.tooltipContent")}
+          delay={0}
+          placement={state as "top" | "bottom" | "left" | "right"}
+        >
+          <Button size="sm" variant="fill">
+            {t("components.preview.tooltipTrigger")}
+          </Button>
+        </Tooltip>
+      );
+    }
+
     if (component.name === "Menu") {
       const itemCount = state === "scrolling" ? 12 : 3;
       return (
@@ -1619,7 +1641,7 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" || component.name === "Tooltip" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionCard"
@@ -1648,6 +1670,8 @@ export function ComponentDetailPage({
                         ? "navigation-panel"
                       : component.name === "ScrollArea"
                         ? "scroll-area"
+                      : component.name === "Tooltip"
+                        ? "tooltip"
                       : "search-field"}
                   data-state-count={states.length}
                 >

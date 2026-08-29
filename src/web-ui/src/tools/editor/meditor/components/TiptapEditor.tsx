@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Tooltip } from '@bitfun/ui';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
@@ -14,12 +14,12 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Link from '@tiptap/extension-link';
-import { ArrowUp, FileText, ListTodo, PenLine } from 'lucide-react';
+import { FileText, ListTodo } from 'lucide-react';
 import type { Editor as TiptapEditorInstance, JSONContent } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Selection } from '@tiptap/pm/state';
 import { useI18n } from '@/infrastructure/i18n';
-import { Tooltip } from '@/component-library';
+
 import { editorAiAPI } from '@/infrastructure/api/service-api/EditorAiAPI';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -1241,7 +1241,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                   ref={inlineAiInputRef}
                   className="m-editor-inline-ai__composer-input"
                   data-testid="md-inline-ai-input"
-                  leading={<PenLine size={14} strokeWidth={1.75} />}
+                  leading={<Icon name="edit" size="sm" />}
                   value={inlineAiState.query}
                   onChange={(event) => {
                     const nextValue = event.target.value;
@@ -1298,7 +1298,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                           }}
                           disabled={!canSubmitInlinePrompt}
                           aria-label={t('editor.meditor.inlineAi.askSubmit')}
-                          icon={<ArrowUp strokeWidth={2.1} />}
+                          icon={<Icon name="arrow-up" size="lg" />}
                         />
                       </Tooltip>
                     </div>
@@ -1321,7 +1321,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                   variant="fill"
                   size="sm"
                   className="m-editor-inline-ai__quick-action"
-                  leadingIcon={<PenLine size={14} strokeWidth={1.75} />}
+                  leadingIcon={<Icon name="edit" size="sm" />}
                   data-testid="md-inline-ai-continue"
                   onClick={() => {
                     handleInlineAiQuickAction('continue', '');

@@ -554,19 +554,9 @@ $_section-header-height: 22px;
     flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.
     // Top padding here stacked with that and read as “extra” gap above the first section header.
     padding: 0 0 $size-gap-3 0;
-
-    &::-webkit-scrollbar { width: 3px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-subtle);
-      border-radius: 2px;
-    }
 
     // Synced with button ripple: fade list out, swap group, fade in
     &.is-mode-switching {
@@ -1035,50 +1025,15 @@ $_section-header-height: 22px;
     border-left: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-subtle) 72%, transparent);
   }
 
+  /* Positioning-only overrides; the design-system Menu owns the surface look. */
   &__assistant-session-menu {
     @include nav-font.nav-panel-font-token-scope;
-    @include surfaces.floating-surface;
 
     position: fixed;
-    min-width: 200px;
-    max-width: min(280px, calc(100vw - 24px));
-    max-height: calc(100vh - 16px);
-    overflow-y: auto;
-    padding: 6px;
+    min-inline-size: 200px;
+    max-inline-size: min(280px, calc(100vw - 24px));
+    max-block-size: calc(100vh - 16px);
     z-index: $z-popover;
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &__assistant-session-menu-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    height: 30px;
-    padding: 0 8px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    text-align: left;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
-
-    > svg {
-      flex-shrink: 0;
-    }
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &:focus-visible {
-      outline: 1px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: -1px;
-    }
   }
 
   &__assistant-session-menu-name {
@@ -1145,21 +1100,15 @@ $_section-header-height: 22px;
     position: relative;
   }
 
+  /* Positioning-only overrides; the design-system Menu owns the surface look. */
   &__workspace-menu {
     @include nav-font.nav-panel-font-token-scope;
-    @include surfaces.floating-surface;
 
     position: fixed;
     /* Shrink-wrap to widest row; cap width for long paths + viewport on small screens */
-    display: inline-block;
     width: fit-content;
     max-width: min(440px, calc(100vw - 32px));
     max-height: min(560px, calc(100vh - 16px));
-    overflow-x: hidden;
-    overflow-y: auto;
-    vertical-align: top;
-    box-sizing: border-box;
-    padding: $size-gap-1 0;
     z-index: 9999;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -1169,59 +1118,13 @@ $_section-header-height: 22px;
     }
   }
 
-  &__workspace-menu-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    padding: $size-gap-2 $size-gap-3;
-    border: none;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    text-align: left;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
-
-    &:hover:not(:disabled):not(.is-disabled) {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &.is-disabled,
-    &:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      color: var(--bf-appearance-token-color-text-muted);
-    }
-
-    svg {
-      flex-shrink: 0;
-    }
-
-    /* Only the label row grows; nested spans inside --main must NOT get flex:1 or text splits across columns */
-    > span {
-      flex: 1;
-      min-width: 0;
-    }
-
-    &--workspace {
-      padding-right: $size-gap-2;
-    }
-  }
-
   &__workspace-menu-item-main {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__workspace-menu-item--workspace &__workspace-menu-item-main {
     display: flex;
     align-items: baseline;
     gap: 0.3em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1249,23 +1152,6 @@ $_section-header-height: 22px;
     text-overflow: ellipsis;
   }
 
-  &__workspace-menu-divider {
-    height: 1px;
-    margin: $size-gap-1 0;
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__workspace-menu-section-title {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-1;
-    padding: $size-gap-1 $size-gap-3;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   &__workspace-menu-empty {
     padding: $size-gap-2 $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
@@ -1274,7 +1160,6 @@ $_section-header-height: 22px;
 
   &__workspace-menu-workspaces {
     max-height: 240px;
-    overflow-y: auto;
     overscroll-behavior: contain;
   }
 
@@ -2046,19 +1931,13 @@ $_section-header-height: 22px;
   z-index: 9998;
 }
 
+/* Positioning-only overrides; the design-system Menu owns the surface look. */
 .bitfun-nav-panel__footer-menu {
-  @include surfaces.floating-surface;
-
   position: fixed;
   min-width: 148px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  overflow-y: auto;
-  padding: $size-gap-1;
   z-index: 9999;
-  color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-font-size-sm);
   transform-origin: bottom right;
   animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
 
@@ -2076,9 +1955,15 @@ $_section-header-height: 22px;
   z-index: 9999;
   width: min(320px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.bitfun-device-overview__scroll {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .bitfun-device-overview__title {
@@ -2397,88 +2282,6 @@ $_section-header-height: 22px;
 
 .bitfun-device-overview__actions {
   padding: 0 4px;
-}
-
-.bitfun-nav-panel__footer-menu-divider {
-  height: 1px;
-  margin: $size-gap-1 $size-gap-2;
-  background: var(--bf-appearance-token-border-subtle);
-}
-
-.bitfun-nav-panel__footer-menu-item {
-  display: flex;
-  align-items: center;
-  gap: $size-gap-2;
-  width: 100%;
-  padding: 0 $size-gap-2;
-  height: 30px;
-  border: none;
-  border-radius: $size-radius-sm;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  cursor: pointer;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: 400;
-  text-align: left;
-  white-space: nowrap;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
-
-  svg {
-    flex-shrink: 0;
-    opacity: 0.7;
-    transition: opacity $motion-fast $easing-standard;
-  }
-
-  &:hover {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-
-    svg {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    background: var(--bf-appearance-token-element-bg-medium);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: -1px;
-  }
-
-  &.is-disabled,
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    pointer-events: auto;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-secondary);
-      background: transparent;
-
-      svg {
-        opacity: 0.7;
-      }
-    }
-  }
-}
-
-.bitfun-nav-panel__footer-menu-item-label {
-  flex: 1;
-  min-width: 0;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bitfun-nav-panel__footer-menu-item-dot {
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--bf-appearance-token-color-success);
 }
 
 .bitfun-nav-panel__remote-disclaimer {
@@ -3385,9 +3188,7 @@ $_section-header-height: 22px;
   animation: bitfun-nav-centered-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
-.bitfun-nav-panel__workspace-menu-item,
 .bitfun-nav-panel__mode-dropdown-item,
-.bitfun-nav-panel__footer-menu-item,
 .bitfun-nav-panel__footer-multimodal-item {
   border-radius: $size-radius-sm;
   transition:
@@ -3578,4 +3379,26 @@ $_section-header-height: 22px;
   &__remote-disclaimer-text {
     @include nav-font.nav-panel-text-meta;
   }
+}
+
+.bitfun-nav-panel__main-nav {
+  inline-size: 100%;
+  max-inline-size: none;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  height: 100%;
+  background: transparent;
+
+  > [data-bf-part="header"] {
+    padding: 0;
+  }
+}
+
+.bitfun-nav-panel__main-nav-content {
+  padding: 0;
+  gap: 0;
+}
+
+.bitfun-nav-panel__sections-slot {
+  display: contents;
 }

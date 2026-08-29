@@ -1,9 +1,10 @@
 @use '../../../../component-library/styles/tokens' as tokens;
 
 .agent-capability-tooltip {
-  .bitfun-tooltip__content {
+  [data-bf-part='content'] {
     width: min(360px, calc(100vw - 16px));
     max-width: min(360px, calc(100vw - 16px));
+    max-inline-size: none;
     padding: tokens.$size-gap-2 tokens.$size-gap-3;
   }
 

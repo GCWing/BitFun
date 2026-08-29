@@ -3,14 +3,14 @@
  * Supports selecting existing branches or creating new branches
  */
 
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, ScrollArea, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { GitBranch, Plus, X } from 'lucide-react';
+;
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Checkbox, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS, Tooltip } from '@/component-library';
+import { Checkbox, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -205,7 +205,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
             className="branch-select-dialog__close"
             data-bf-component="branch-select-modal"
             data-bf-part="close"
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
             onClick={onClose}
             size="md"
             aria-label={tCommon('actions.close')}
@@ -236,7 +236,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
             </div>
           )}
 
-          <div data-bf-component="branch-select-modal" data-bf-part="list" className="branch-select-dialog__list">
+          <ScrollArea data-bf-component="branch-select-modal" data-bf-part="list" className="branch-select-dialog__list">
             {isLoading ? (
               <div data-bf-component="branch-select-modal" data-bf-part="loading" className="branch-select-dialog__loading">
                 <div className="branch-select-dialog__loading-dots">
@@ -259,7 +259,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                     onClick={() => handleSelectBranch(searchTerm.trim(), true)}
                     onDoubleClick={() => handleDoubleClick(searchTerm.trim(), true)}
                   >
-                    <Plus size={14} className="branch-select-dialog__item-icon branch-select-dialog__item-icon--new" />
+                    <Icon name="plus" size="sm" className="branch-select-dialog__item-icon branch-select-dialog__item-icon--new" />
                     <span data-bf-component="branch-select-modal" data-bf-part="itemName" className="branch-select-dialog__item-name">
                       {t('branchSelect.createNewLabel')} <strong>{searchTerm.trim()}</strong>
                     </span>
@@ -283,7 +283,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                       onClick={() => !isDisabled && handleSelectBranch(branch.name, false)}
                       onDoubleClick={() => !isDisabled && handleDoubleClick(branch.name, false)}
                     >
-                      <GitBranch size={14} className="branch-select-dialog__item-icon" />
+                      <Icon name="git" size="sm" className="branch-select-dialog__item-icon" />
                       <span data-bf-component="branch-select-modal" data-bf-part="itemName" className="branch-select-dialog__item-name">
                         {branch.name}
                       </span>
@@ -306,7 +306,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                 )}
               </>
             )}
-          </div>
+          </ScrollArea>
         </div>
 
         <div data-bf-component="branch-select-modal" data-bf-part="footer" className="branch-select-dialog__footer">

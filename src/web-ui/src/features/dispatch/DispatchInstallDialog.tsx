@@ -1,11 +1,11 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { Download, Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { dispatchApi } from './dispatchApi';
 import type {
   DispatchSelection,
@@ -422,7 +422,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           </span>
         </div>
 
-        <div
+        <ScrollArea
           className="dispatch-install-dialog__body"
           data-bf-component="dispatch-install-dialog"
           data-bf-part="body"
@@ -517,7 +517,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     {preparationPhase ? (
                       <Loader2 size={14} className="dispatch-install-dialog__spin" />
                     ) : (
-                      <Download size={14} aria-hidden />
+                      <Icon name="download" size="sm" aria-hidden />
                     )}
                     {preparationPhase === 'installing'
                       ? t('dispatch.installingCli')
@@ -628,7 +628,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               </span>
             </label>
           </section>
-        </div>
+        </ScrollArea>
 
         <div
           className="dispatch-install-dialog__actions"

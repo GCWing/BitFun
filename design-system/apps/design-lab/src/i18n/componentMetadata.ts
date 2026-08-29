@@ -58,6 +58,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   TerminalControlToolCard: "component.TerminalControlToolCard.description",
   TodoToolCard: "component.TodoToolCard.description",
   Toolbar: "component.Toolbar.description",
+  Tooltip: "component.Tooltip.description",
   ViewImageToolCard: "component.ViewImageToolCard.description",
   WebFetchToolCard: "component.WebFetchToolCard.description",
   WebSearchToolCard: "component.WebSearchToolCard.description",

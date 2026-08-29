@@ -1,8 +1,8 @@
  
 
 import React from 'react';
-import { IconButton } from '@bitfun/ui';
-import { X, Loader2 } from 'lucide-react';
+import { Icon, IconButton } from '@bitfun/ui';
+import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -102,7 +102,7 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
           className="progress-notification__cancel"
           onClick={handleCancel}
           aria-label={t('actions.cancel')}
-          icon={<X />}
+          icon={<Icon name="xmark" size="lg" />}
         />
       )}
     </div>

@@ -1,3 +1,4 @@
+import { ScrollArea } from '@bitfun/ui';
 import React, { lazy, Suspense, useEffect, useRef } from 'react';
 import type { SettingsPageProps } from '../settingsTypes';
 import './DevelopmentSettingsPage.scss';
@@ -27,7 +28,7 @@ const DevelopmentSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigati
   }, [navigationRequestId, viewId]);
 
   return (
-    <div
+    <ScrollArea
       className="bitfun-development-settings-page"
       data-bf-component="development-settings-page"
       data-bf-part="root"
@@ -52,7 +53,7 @@ const DevelopmentSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigati
           <EditorConfig />
         </Suspense>
       </section>
-    </div>
+    </ScrollArea>
   );
 };
 

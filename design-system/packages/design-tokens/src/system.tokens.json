@@ -352,6 +352,20 @@
       "itemIconSize": { "$value": "14px" },
       "scrollbarGap": { "$value": "2px" }
     },
+    "tooltip": {
+      "$type": "dimension",
+      "maxInlineSize": { "$value": "280px" },
+      "maxBlockSize": { "$value": "320px" },
+      "paddingBlock": { "$value": "6px" },
+      "paddingInline": { "$value": "10px" },
+      "surfaceRadius": { "$value": "{radius.sm}" },
+      "arrowSize": { "$value": "8px" },
+      "gap": {
+        "$description": "Distance between the trigger (or cursor) and the tooltip surface.",
+        "$value": "{space.2}"
+      },
+      "fontSize": { "$value": "{font.size.xs}" }
+    },
     "modal": {
       "$type": "dimension",
       "viewportGutter": {

@@ -114,7 +114,6 @@
     display: flex;
     flex-direction: column;
     max-height: var(--usage-statistics-table-max-height);
-    overflow-y: auto;
   }
 
   &__hit-rate-row {
@@ -215,7 +214,6 @@
   &__table-scroll {
     min-width: 0;
     max-height: var(--usage-statistics-table-max-height);
-    overflow: auto;
   }
 
   &__table {

@@ -193,7 +193,6 @@
   }
 
   &__list {
-    overflow-y: auto;
     border: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
@@ -255,7 +254,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: $size-gap-1;
-    overflow-y: auto;
     border: 1px solid var(--bf-appearance-token-border-subtle);
     padding: $size-gap-2;
   }

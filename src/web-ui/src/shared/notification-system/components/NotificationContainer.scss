@@ -34,14 +34,11 @@
   }
 
   
-  max-height: calc(100vh - 120px); 
-  overflow-y: auto;
-  
-  
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  max-height: calc(100vh - 120px);
+}
+
+.notification-container__viewport {
+  max-height: inherit;
 }
 
 

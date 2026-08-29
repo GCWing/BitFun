@@ -1,16 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, CardBody, CardFooter, CardHeader } from '@bitfun/ui';
+import { Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import {
-  Cloud,
-  Link2,
-  MessageCircle,
-  Monitor,
-  RefreshCw,
-  Server,
-  Smartphone,
-  Undo2,
-} from 'lucide-react';
+import { Cloud, Monitor, RefreshCw, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -33,13 +24,14 @@ interface DeviceStatusControlProps {
 }
 
 function DeviceIcon({ kind, size = 17 }: { kind: DeviceOverviewDeviceKind; size?: number }) {
+  const catalogSize = size <= 11 ? '2xs' : size <= 13 ? 'xs' : size <= 15 ? 'sm' : size <= 17 ? 'md' : 'lg';
   switch (kind) {
     case 'mobile':
       return <Smartphone size={size} aria-hidden="true" />;
     case 'execution-host':
       return <Server size={size} aria-hidden="true" />;
     case 'message-app':
-      return <MessageCircle size={size} aria-hidden="true" />;
+      return <Icon name="side-chat" size={catalogSize} aria-hidden="true" />;
     default:
       return <Monitor size={size} aria-hidden="true" />;
   }
@@ -251,6 +243,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
               contentAlign="center"
               title={<h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
             />
+            <ScrollArea className="bitfun-device-overview__scroll">
             <CardBody className="bitfun-device-overview__body">
               {overview.mode === 'local' ? (
                 <div
@@ -324,12 +317,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 </Button>
               )}
             </CardBody>
+            </ScrollArea>
 
             <CardFooter align="center" className="bitfun-device-overview__actions">
               <Button
                 variant="fill"
                 size="sm"
-                leadingIcon={<Link2 />}
+                leadingIcon={<Icon name="link" size="lg" />}
                 onClick={handleManageDevices}
                 data-testid="nav-device-status-manage"
               >

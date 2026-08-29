@@ -1,14 +1,7 @@
 import React from 'react';
-import {
-  Bot,
-  Wrench,
-  Puzzle,
-  Cpu,
-  Sparkles,
-  UsersRound,
-} from 'lucide-react';
+import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { StatusPill } from '@bitfun/ui';
+import { Icon, StatusPill } from '@bitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
@@ -33,7 +26,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
 }) => {
   const { t } = useTranslation('scenes/agents');
   const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource);
-  const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
+  const AgentGlyph = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const capabilityCount = agent.capabilities.length;
   const openDetails = () => onOpenDetails(agent);
@@ -63,7 +56,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
       <div className="agent-card__icon-area" data-bf-component="agent-card" data-bf-part="iconArea">
         <div className="agent-card__icon-tile">
           <div className="agent-card__icon" data-bf-component="agent-card" data-bf-part="icon">
-            <Icon size={21} strokeWidth={1.6} />
+            <AgentGlyph size={21} strokeWidth={1.6} />
           </div>
         </div>
         <span className="agent-card__dot-field" aria-hidden="true" />
@@ -109,7 +102,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
             {agent.agentKind === 'mode' ? (
               <>
                 <span className="agent-card__meta-item">
-                  <span className="agent-card__meta-icon"><Puzzle size={11} /></span>
+                  <span className="agent-card__meta-icon"><Icon name="extension" size="2xs" /></span>
                   <span className="agent-card__meta-label">{t('agentCard.metrics.skills')}</span>
                   <strong>{skillCount}</strong>
                 </span>
@@ -121,7 +114,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
               </>
             ) : (
               <span className="agent-card__meta-item">
-                <span className="agent-card__meta-icon"><Sparkles size={11} /></span>
+                <span className="agent-card__meta-icon"><Icon name="spark" size="2xs" /></span>
                 <span className="agent-card__meta-label">{t('agentCard.metrics.capabilities')}</span>
                 <strong>{capabilityCount}</strong>
               </span>

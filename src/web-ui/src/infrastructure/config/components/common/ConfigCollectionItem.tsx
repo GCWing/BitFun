@@ -1,5 +1,6 @@
 import React, { useId, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+;
 import { PresenceBoundary } from '@/component-library';
 import './ConfigCollectionItem.scss';
 
@@ -84,7 +85,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
                 aria-expanded={isExpanded}
                 aria-controls={detailsId}
               >
-                <ChevronDown size={14} aria-hidden="true" />
+                <Icon name="chevron-down" size="sm" aria-hidden="true" />
               </button>
             ) : null}
           </div>

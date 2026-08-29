@@ -62,10 +62,12 @@
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
-  .bitfun-remote-disclaimer__list {
+  .bitfun-remote-disclaimer__list-scroll {
     max-height: 240px;
+  }
+
+  .bitfun-remote-disclaimer__list {
     padding: 10px 14px 12px 32px;
-    overflow-y: auto;
   }
 }
 

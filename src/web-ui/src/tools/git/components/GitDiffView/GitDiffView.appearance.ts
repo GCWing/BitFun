@@ -4,7 +4,7 @@ export const gitDiffViewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'git-diff-view',
   parts: [
     { id: 'root' }, { id: 'header' }, { id: 'headerLeft' }, { id: 'headerRight' },
-    { id: 'typeSwitcher' }, { id: 'typeOption' }, { id: 'content' }, { id: 'loading' }, { id: 'error' },
+    { id: 'content' }, { id: 'loading' }, { id: 'error' },
     { id: 'fileList' }, { id: 'file' }, { id: 'fileHeader' }, { id: 'fileInfo' },
     { id: 'fileStats' }, { id: 'diffContent' }, { id: 'diffLine' },
     { id: 'lineNumber' }, { id: 'lineContent' }, { id: 'empty' },
@@ -13,6 +13,5 @@ export const gitDiffViewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
     { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
     { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
   ],
 };

@@ -1,9 +1,9 @@
  
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Icon, ScrollArea } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { FileText, FileImage, FileJson, FileCode, File, Search as SearchIcon, ArrowLeft } from 'lucide-react';
+import { FileText, FileImage, FileJson, FileCode } from 'lucide-react';
 import MCPAPI, { MCPResource } from '../../api/service-api/MCPAPI';
 import { createLogger } from '@/shared/utils/logger';
 import './MCPResourceBrowser.scss';
@@ -115,13 +115,13 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
   };
 
   const getMimeTypeIcon = (mimeType?: string): React.ReactNode => {
-    if (!mimeType) return <File size={16} />;
+    if (!mimeType) return <Icon name="files" size="md" />;
     if (mimeType.startsWith('text/')) return <FileText size={16} />;
     if (mimeType.startsWith('image/')) return <FileImage size={16} />;
     if (mimeType.includes('json')) return <FileJson size={16} />;
     if (mimeType.includes('html')) return <FileCode size={16} />;
     if (mimeType.includes('pdf')) return <FileText size={16} />;
-    return <File size={16} />;
+    return <Icon name="files" size="md" />;
   };
 
   return (
@@ -159,13 +159,13 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
       </div>
 
       <div data-bf-component="mcp-resource-browser" data-bf-part="content" className="browser-content">
-        <div data-bf-component="mcp-resource-browser" data-bf-part="list" className="resources-list">
+        <ScrollArea data-bf-component="mcp-resource-browser" data-bf-part="list" className="resources-list">
           {loading ? (
             <div data-bf-component="mcp-resource-browser" data-bf-part="loading" className="loading-state">{t('resourceBrowser.loading.resources')}</div>
           ) : filteredResources.length === 0 ? (
             <div data-bf-component="mcp-resource-browser" data-bf-part="empty" className="empty-state">
               <div className="empty-icon">
-                <SearchIcon size={28} />
+                <Icon name="search" size="lg" />
               </div>
               <p>{searchQuery ? t('resourceBrowser.empty.noMatch') : t('resourceBrowser.empty.noResources')}</p>
             </div>
@@ -190,7 +190,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
               </div>
             ))
           )}
-        </div>
+        </ScrollArea>
 
         <div data-bf-component="mcp-resource-browser" data-bf-part="viewer" className="resource-viewer">
           {selectedResource ? (
@@ -204,18 +204,18 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
                   <div className="viewer-mime-type">{selectedResource.mimeType}</div>
                 )}
               </div>
-              <div data-bf-component="mcp-resource-browser" data-bf-part="viewerContent" className="viewer-content">
+              <ScrollArea data-bf-component="mcp-resource-browser" data-bf-part="viewerContent" className="viewer-content">
                 {loadingContent ? (
                   <div className="loading-content">{t('resourceBrowser.loading.content')}</div>
                 ) : resourceContent ? (
                   <pre className="content-pre">{resourceContent}</pre>
                 ) : null}
-              </div>
+              </ScrollArea>
             </>
           ) : (
             <div className="viewer-empty">
               <div className="empty-icon">
-                <ArrowLeft size={28} />
+                <Icon name="arrow-left" size="lg" />
               </div>
               <p>{t('resourceBrowser.empty.selectToView')}</p>
             </div>

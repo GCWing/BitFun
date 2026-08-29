@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, Puzzle } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+import { Package } from 'lucide-react';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import './SkillCard.scss';
 
@@ -41,7 +42,9 @@ const SkillCard: React.FC<SkillCardProps> = ({
   style,
   ...rootProps
 }) => {
-  const Icon = iconKind === 'market' ? Package : Puzzle;
+  const glyph = iconKind === 'market'
+    ? <Package size={20} strokeWidth={1.6} />
+    : <Icon name="extension" size="lg" />;
   const openDetails = () => onOpenDetails?.();
 
   return (
@@ -68,7 +71,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
       <div className="skill-card__header" data-bf-component="skill-card" data-bf-part="header">
         <div className="skill-card__icon-area" data-bf-component="skill-card" data-bf-part="iconArea">
           <div className="skill-card__icon" data-bf-component="skill-card" data-bf-part="icon">
-            <Icon size={20} strokeWidth={1.6} />
+            {glyph}
           </div>
         </div>
         {badges && <div className="skill-card__badges" data-bf-component="skill-card" data-bf-part="badges">{badges}</div>}

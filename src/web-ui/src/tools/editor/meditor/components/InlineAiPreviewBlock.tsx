@@ -1,6 +1,6 @@
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React from 'react';
-import { Check, RotateCcw, X } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { InlineMarkdownPreview } from './InlineMarkdownPreview';
 
 type InlineAiPreviewStatus = 'submitting' | 'streaming' | 'ready' | 'error';
@@ -86,7 +86,7 @@ export const InlineAiPreviewBlock: React.FC<InlineAiPreviewBlockProps> = ({
             disabled={!canAccept}
             data-testid="md-inline-ai-accept"
             onClick={onAccept}
-            leadingIcon={<Check size={14} strokeWidth={2} />}
+            leadingIcon={<Icon name="check-line" size="sm" />}
           >
 
             <span>{labels.accept}</span>
@@ -98,7 +98,7 @@ export const InlineAiPreviewBlock: React.FC<InlineAiPreviewBlockProps> = ({
           size="sm"
           data-testid="md-inline-ai-reject"
           onClick={onReject}
-          leadingIcon={<X size={14} strokeWidth={2} />}
+          leadingIcon={<Icon name="xmark" size="sm" />}
         >
 
           <span>{labels.reject}</span>

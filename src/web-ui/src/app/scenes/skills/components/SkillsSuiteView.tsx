@@ -1,6 +1,6 @@
-import { Button, IconButton, StatusPill } from '@bitfun/ui';
+import { Button, Icon, IconButton, ScrollArea, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, RefreshCw, RotateCcw, Settings2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Package, RefreshCw, RotateCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { configAPI } from '@/infrastructure/api';
@@ -415,7 +415,7 @@ const SkillsSuiteView: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<Settings2 size={13} />}
+            leadingIcon={<Icon name="settings" size="xs" />}
             onClick={() => setIsGroupManagerOpen(true)}
             disabled={isSaving}
           >
@@ -492,14 +492,11 @@ const SkillsSuiteView: React.FC = () => {
       )}
 
       {!loading && !error && suiteGroups.length > 0 && (
-        <div
+        <ScrollArea
           id={`skills-suite-panel-${suiteModeId}`}
           role="tabpanel"
           aria-labelledby={`skills-suite-tab-${suiteModeId}`}
           className="skills-suite__sections"
-          data-bf-scene="skills"
-          data-bf-part="suiteSections"
-          data-bf-mode={suiteModeId}
         >
           {suiteSections.map(([sectionLabel, sectionGroups]) => (
             <section key={sectionLabel} className="skills-suite__section" data-bf-scene="skills" data-bf-part="suiteSection">
@@ -644,7 +641,7 @@ const SkillsSuiteView: React.FC = () => {
               </div>
             </section>
           ))}
-        </div>
+        </ScrollArea>
       )}
       <SkillGroupManagerModal
         isOpen={isGroupManagerOpen}

@@ -75,7 +75,6 @@ $compatibility-sidebar-width: 236px;
   &__product-groups {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     padding: $size-gap-3 $size-gap-2;
   }
 
@@ -376,7 +375,6 @@ $compatibility-sidebar-width: 236px;
   &__content {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     padding: $size-gap-5 $size-gap-6 $size-gap-8;
   }
 

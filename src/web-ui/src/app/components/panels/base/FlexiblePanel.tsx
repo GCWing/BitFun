@@ -1,7 +1,7 @@
 import React, { useCallback, memo } from 'react';
-import { IconButton } from '@bitfun/ui';
-import { Download, Copy, X, AlertCircle } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { AlertCircle } from 'lucide-react';
+
 import { Markdown as MarkdownRenderer } from '@/component-library/components/Markdown/Markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -997,7 +997,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                   <IconButton
                     size="sm"
                     aria-label={t('flexiblePanel.actions.copyContent')}
-                    icon={<Copy />}
+                    icon={<Icon name="duplicate" size="lg" />}
                     onClick={handleCopy}
                   />
                 </Tooltip>
@@ -1006,7 +1006,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                   <IconButton
                     size="sm"
                     aria-label={t('flexiblePanel.actions.downloadContent')}
-                    icon={<Download />}
+                    icon={<Icon name="download" size="lg" />}
                     onClick={handleDownload}
                   />
                 </Tooltip>
@@ -1018,7 +1018,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 size="sm"
                 tone="danger"
                 aria-label={t('flexiblePanel.actions.close')}
-                icon={<X />}
+                icon={<Icon name="xmark" size="lg" />}
                 onClick={handleClose}
               />
             </Tooltip>

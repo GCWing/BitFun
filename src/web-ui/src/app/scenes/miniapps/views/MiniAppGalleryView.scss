@@ -1,5 +1,4 @@
 @use '../../../../component-library/styles/tokens' as *;
-@use '../../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .miniapp-gallery {
   background: var(--bf-appearance-token-color-bg-scene);
@@ -97,46 +96,11 @@
 
 }
 
+/* Positioning-only overrides; the design-system Menu owns the surface look. */
 .miniapp-gallery__import-menu {
-  @include surfaces.floating-surface;
-
   position: fixed;
   z-index: 10020;
-  display: grid;
-  gap: 2px;
-  min-width: 196px;
-  padding: $size-gap-1;
-}
-
-.miniapp-gallery__import-menu-item {
-  display: flex;
-  align-items: center;
-  gap: $size-gap-2;
-  width: 100%;
-  min-height: 34px;
-  padding: 0 $size-gap-3;
-  border: 0;
-  border-radius: $size-radius-base;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font: inherit;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background-color $motion-fast $easing-standard,
-    color $motion-fast $easing-standard;
-
-  &:hover,
-  &:focus-visible {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: -2px;
-  }
+  min-inline-size: 196px;
 }
 
 @media (max-width: 720px) {

@@ -322,7 +322,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(agentCardSource).not.toContain('--agent-card-gradient');
     expect(coreCardSource).not.toContain('getAlphaColor');
     expect(coreCardSource).not.toContain('--core-card-gradient');
-    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-appearance-token-color-text-primary\);[\s\S]*?> svg \{[\s\S]*?color: var\(--bf-appearance-token-color-success\);/);
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-appearance-token-color-text-primary\);[\s\S]*?\[data-bf-component="icon"\] \{[\s\S]*?color: var\(--bf-appearance-token-color-success\);/);
     expect(coreCardSurfaceStyles).not.toContain('$gradient');
     expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
     expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');

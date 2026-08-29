@@ -1,11 +1,9 @@
-import { Button, Field, Input, Select, StatusPill } from '@bitfun/ui';
+import { Button, Field, Icon, Input, Select, StatusPill } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   AlertTriangle,
   Camera,
-  ChevronDown,
-  ChevronRight,
   FileImage,
   Github,
   History,
@@ -13,7 +11,6 @@ import {
   PackageOpen,
   RefreshCw,
   Send,
-  X,
 } from 'lucide-react';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
@@ -382,7 +379,7 @@ const MiniAppSubmissionsView: React.FC = () => {
                       setScreenshotPaths((current) => current.filter((item) => item !== path))
                     }
                   >
-                    <X size={13} />
+                    <Icon name="xmark" size="xs" />
                   </button>
                 </div>
               ))}
@@ -394,7 +391,7 @@ const MiniAppSubmissionsView: React.FC = () => {
             className="miniapp-submissions__advanced-toggle"
             onClick={() => setShowAdvanced((current) => !current)}
           >
-            {showAdvanced ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {showAdvanced ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
             <span>{t('market.submissions.advanced')}</span>
             {!showAdvanced ? (
               <small>

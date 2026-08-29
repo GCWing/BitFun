@@ -7,33 +7,32 @@
  *  - Scene ids are unique, while Mini Apps use one id per app instance.
  */
 
-import { SessionIcon } from '@bitfun/ui';
+import React from 'react';
+import { Icon, SessionIcon, type IconName } from '@bitfun/ui';
 import {
-  MessageSquare,
-  Terminal,
-  GitBranch,
-  Settings,
   FileCode2,
   CircleUserRound,
   Users,
-  Puzzle,
   Boxes,
   PanelsTopLeft,
-  Globe,
-  User,
   BarChart3,
   CalendarClock,
-  ExternalLink,
   Network,
 } from 'lucide-react';
-import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
+import type { SceneTabDef, SceneTabIcon, SceneTabId } from '../components/SceneBar/types';
+
+function catalogSceneIcon(name: IconName): SceneTabIcon {
+  return function CatalogSceneIcon() {
+    return React.createElement(Icon, { name, size: 'lg', 'aria-hidden': true });
+  };
+}
 
 export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'welcome' as SceneTabId,
     label: 'Welcome',
     labelKey: 'welcomeScene.tabLabel',
-    Icon: MessageSquare,
+    Icon: catalogSceneIcon('side-chat'),
     pinned: false,
     singleton: true,
     defaultOpen: true,
@@ -51,7 +50,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'terminal' as SceneTabId,
     label: 'Terminal',
-    Icon: Terminal,
+    Icon: catalogSceneIcon('terminal'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -59,7 +58,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'git' as SceneTabId,
     label: 'Git',
-    Icon: GitBranch,
+    Icon: catalogSceneIcon('git'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -68,7 +67,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'settings' as SceneTabId,
     label: 'Settings',
     labelKey: 'shared:features.settings',
-    Icon: Settings,
+    Icon: catalogSceneIcon('settings'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -102,7 +101,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'skills' as SceneTabId,
     label: 'Skills',
     labelKey: 'scenes.skills',
-    Icon: Puzzle,
+    Icon: catalogSceneIcon('extension'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -137,7 +136,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'browser' as SceneTabId,
     label: 'Browser',
     labelKey: 'scenes.browser',
-    Icon: Globe,
+    Icon: catalogSceneIcon('browser'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -146,7 +145,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'assistant' as SceneTabId,
     label: 'Assistant',
     labelKey: 'scenes.assistant',
-    Icon: User,
+    Icon: catalogSceneIcon('user'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -173,7 +172,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'shell' as SceneTabId,
     label: 'Shell',
     labelKey: 'scenes.shell',
-    Icon: Terminal,
+    Icon: catalogSceneIcon('terminal'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -182,7 +181,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'panel-view' as SceneTabId,
     label: 'Panel View',
     labelKey: 'scenes.panelView',
-    Icon: ExternalLink,
+    Icon: catalogSceneIcon('arrow-up-right'),
     pinned: false,
     closable: true,
     singleton: true,
@@ -203,7 +202,7 @@ export function getMiniAppSceneDef(appId: string, appName?: string): SceneTabDef
   return {
     id,
     label: appName ?? appId,
-    Icon: Puzzle,
+    Icon: catalogSceneIcon('mini-app'),
     pinned: false,
     closable: true,
     singleton: false,

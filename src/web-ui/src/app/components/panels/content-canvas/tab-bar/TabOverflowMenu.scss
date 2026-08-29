@@ -139,20 +139,6 @@
   &__list {
     padding: 4px 0;
     max-height: 280px;
-    overflow-y: auto;
-
-    &::-webkit-scrollbar {
-      width: 5px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-scrollbar-thumb);
-      border-radius: 3px;
-    }
   }
 
   // Tab item

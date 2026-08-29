@@ -1,6 +1,6 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useState } from 'react';
-import { FolderOpen, Clock, FileText, Code, Folder } from 'lucide-react';
+import { FolderOpen, FileText, Code } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
 import { WorkspaceInfo, WorkspaceKind, WorkspaceType } from '../../../shared/types';
 import { AssistantAvatar } from '@/app/components/AssistantAvatar';
@@ -156,7 +156,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
       case WorkspaceType.Documentation:
         return <FileText size={16} />;
       case WorkspaceType.MultiProject:
-        return <Folder size={16} />;
+        return <Icon name="folder" size="md" />;
       default:
         return <FolderOpen size={16} />;
     }
@@ -187,7 +187,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
       title="Workspace Status"
       size="medium"
     >
-      <div className="workspace-manager" data-bf-component="workspace-tool" data-bf-part="root">
+      <ScrollArea className="workspace-manager" data-bf-component="workspace-tool" data-bf-part="root">
         {error && (
           <div className="error-message" data-bf-component="workspace-tool" data-bf-part="error">
             <span>Error: {error}</span>
@@ -209,7 +209,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                     <span className="workspace-type">{currentWorkspace.workspaceType}</span>
                     {currentWorkspace.lastAccessed && (
                       <span className="workspace-time">
-                        <Clock size={12} />
+                        <Icon name="clock" size="xs" />
                         {formatDate(currentWorkspace.lastAccessed)}
                       </span>
                     )}
@@ -304,7 +304,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                         <span className="workspace-type">{workspace.workspaceType}</span>
                         {workspace.lastAccessed && (
                           <span className="workspace-time">
-                            <Clock size={12} />
+                            <Icon name="clock" size="xs" />
                             {formatDate(workspace.lastAccessed)}
                           </span>
                         )}
@@ -348,7 +348,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                         <span className="workspace-type">assistant</span>
                         {workspace.lastAccessed && (
                           <span className="workspace-time">
-                            <Clock size={12} />
+                            <Icon name="clock" size="xs" />
                             {formatDate(workspace.lastAccessed)}
                           </span>
                         )}
@@ -366,7 +366,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
             </div>
           )}
         </div>
-      </div>
+      </ScrollArea>
     </Modal>
   );
 };

@@ -2,16 +2,14 @@
  * New Project Dialog Component
  */
 
-import { Button, Input, Modal } from '@bitfun/ui';
+import { Button, Icon, Input, Modal } from '@bitfun/ui';
 import React, { useState, useCallback, useMemo } from 'react';
-import { 
-  FolderPlus, 
-  FolderOpen, 
+import {
+  FolderPlus,
+  FolderOpen,
   FileText,
   FolderTree,
   AlertCircle,
-  Check,
-  X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
@@ -203,7 +201,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
             size="sm"
             onClick={handleCancel}
             disabled={isCreating}
-            leadingIcon={<X size={14} />}
+            leadingIcon={<Icon name="xmark" size="sm" />}
           >
 
             {t('newProject.cancel')}
@@ -220,7 +218,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               t('newProject.creating')
             ) : (
               <>
-                <Check size={14} />
+                <Icon name="check-line" size="sm" />
                 {t('newProject.create')}
               </>
             )}

@@ -39,6 +39,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, isLoading: _isLoading, iconOnly: _iconOnly, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
@@ -62,6 +64,10 @@ vi.mock('@bitfun/ui', () => ({
     </select>
   ),
   Field: ({ label, children }: any) => <label>{label}{children}</label>,
+  Input: ({ leading, trailing, ...props }: any) => (
+    <span>{leading}<input {...props} />{trailing}</span>
+  ),
+  Tooltip: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock('@/component-library', () => ({

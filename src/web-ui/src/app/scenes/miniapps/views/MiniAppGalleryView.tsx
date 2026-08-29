@@ -4,8 +4,6 @@ import {
   FolderPlus,
   LayoutGrid,
   PackagePlus,
-  Search as SearchIcon,
-  Sparkles,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
@@ -23,7 +21,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { ConfirmDialog, SearchField, IconButton } from '@bitfun/ui';
+import { ConfirmDialog, Icon, IconButton, Menu, MenuItem, SearchField } from '@bitfun/ui';
 
 import {
   GalleryEmpty,
@@ -380,7 +378,7 @@ const MiniAppGalleryView: React.FC = () => {
         <GalleryEmpty
           icon={
             apps.length === 0
-              ? <Sparkles size={36} strokeWidth={1.2} />
+              ? <Icon name="spark" size="lg" />
               : <LayoutGrid size={36} strokeWidth={1.2} />
           }
           message={apps.length === 0
@@ -418,7 +416,7 @@ const MiniAppGalleryView: React.FC = () => {
         actions={(
           <>
             <SearchField
-              leadingIcon={<SearchIcon aria-hidden />}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
               onValueChange={setSearch}
               placeholder={t('searchPlaceholder')}
               size="sm"
@@ -438,46 +436,38 @@ const MiniAppGalleryView: React.FC = () => {
                 icon={<FolderPlus size={15} />}
               />
               {importMenuOpen ? createPortal(
-                <div
+                <Menu
                   ref={importMenuRef}
                   className="miniapp-gallery__import-menu"
-                  role="menu"
                   aria-label={t('importMenuLabel')}
                   data-testid="miniapp-import-menu"
-                  data-bf-placement={importMenuLayout?.placement ?? 'bottom'}
                   style={{
                     top: `${importMenuLayout?.top ?? 0}px`,
                     left: `${importMenuLayout?.left ?? 0}px`,
                     visibility: importMenuLayout ? 'visible' : 'hidden',
                   }}
                 >
-                  <button
-                    type="button"
-                    className="miniapp-gallery__import-menu-item"
-                    role="menuitem"
+                  <MenuItem
+                    leading={<FolderPlus size={15} aria-hidden="true" />}
                     onClick={() => {
                       closeImportMenu();
                       void handleAddFromFolder();
                     }}
                     data-testid="miniapp-import-folder-action"
                   >
-                    <FolderPlus size={15} aria-hidden="true" />
-                    <span>{t('importFromFolder')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="miniapp-gallery__import-menu-item"
-                    role="menuitem"
+                    {t('importFromFolder')}
+                  </MenuItem>
+                  <MenuItem
+                    leading={<PackagePlus size={15} aria-hidden="true" />}
                     onClick={() => {
                       closeImportMenu();
                       void handleAddPackage();
                     }}
                     data-testid="miniapp-import-package-action"
                   >
-                    <PackagePlus size={15} aria-hidden="true" />
-                    <span>{t('market.import.action')}</span>
-                  </button>
-                </div>,
+                    {t('market.import.action')}
+                  </MenuItem>
+                </Menu>,
                 getAppearanceOverlayHost(),
               ) : null}
             </span>

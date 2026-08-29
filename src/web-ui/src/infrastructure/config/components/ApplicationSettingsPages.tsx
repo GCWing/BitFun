@@ -1,11 +1,10 @@
-import { Button, Select, Switch } from '@bitfun/ui';
+import { Button, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
   Select as LegacySelect,
-  Tooltip,
   type SelectOption,
   ConfigPageLoading,
   ConfigPageMessage,

@@ -1,14 +1,7 @@
 import React from 'react';
-import {
-  Bot,
-  Wrench,
-  Puzzle,
-  Cpu,
-  Circle,
-  UsersRound,
-} from 'lucide-react';
+import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { StatusPill } from '@bitfun/ui';
+import { Icon, StatusPill } from '@bitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentDescription } from '../utils';
@@ -43,7 +36,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   disabledReason,
 }) => {
   const { t } = useTranslation('scenes/agents');
-  const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
+  const AgentGlyph = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);
   const statusLabel = disabledReason ?? t('agentCard.status.connected');
@@ -71,7 +64,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
     >
       <div className="core-agent-card__icon-rail">
         <div className="core-agent-card__icon-wrap" data-bf-component="core-agent-card" data-bf-part="icon">
-          <Icon size={21} strokeWidth={1.6} />
+          <AgentGlyph size={21} strokeWidth={1.6} />
         </div>
         <span className="core-agent-card__dot-field" aria-hidden="true" />
       </div>
@@ -93,7 +86,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             data-bf-state={disabledReason ? 'disabled' : 'connected'}
             title={statusLabel}
           >
-            <Circle size={7} strokeWidth={0} fill="currentColor" />
+            <Icon name="circle" size="2xs" />
             <span>{statusLabel}</span>
           </span>
         </div>
@@ -114,7 +107,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             {agent.agentKind === 'mode' ? (
               <>
                 <span className="core-agent-card__meta-item">
-                  <span className="core-agent-card__meta-icon"><Puzzle size={11} /></span>
+                  <span className="core-agent-card__meta-icon"><Icon name="extension" size="2xs" /></span>
                   <span className="core-agent-card__meta-label">{t('agentCard.metrics.skills')}</span>
                   <strong>{skillCount}</strong>
                 </span>

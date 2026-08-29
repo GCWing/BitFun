@@ -1,8 +1,8 @@
  
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
-import { AlertCircle, X } from 'lucide-react';
+import { Button, Icon, ScrollArea } from '@bitfun/ui';
+import { AlertCircle } from 'lucide-react';
 import { useContextStore, selectContexts } from '../../../stores/contextStore';
 import { ContextCard } from '../ContextCard/ContextCard';
 import { useI18n } from '@/infrastructure/i18n';
@@ -126,7 +126,7 @@ export const ContextList: React.FC<ContextListProps> = ({
           type="button"
           variant="outline"
           size="sm"
-          leadingIcon={<X size={14} />}
+          leadingIcon={<Icon name="xmark" size="sm" />}
           onClick={handleClearAll}
           disabled={leavingContextIds.size > 0}
           title={t('contextSystem.contextList.clearAllTitle')}
@@ -136,7 +136,7 @@ export const ContextList: React.FC<ContextListProps> = ({
       </div>
       
       
-      <div 
+      <ScrollArea 
         className="bitfun-context-list__items"
         style={{ maxHeight }}
         data-bf-component="context-list"
@@ -164,7 +164,7 @@ export const ContextList: React.FC<ContextListProps> = ({
             </div>
           </div>
         ))}
-      </div>
+      </ScrollArea>
     </div>
   );
 };

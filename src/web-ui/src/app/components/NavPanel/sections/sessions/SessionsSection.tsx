@@ -6,10 +6,10 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, IconButton, Input } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, ScrollArea, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, MoreHorizontal, Loader2, Archive, Clock3, Copy, FileDown, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+import { Trash2, Bot, Loader2, Archive, FileDown, ChevronLeft, ChevronUp } from 'lucide-react';
+import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
@@ -1761,7 +1761,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       size="sm"
                       className="bitfun-nav-panel__inline-item-edit-btn confirm"
                       onClick={e => { e.stopPropagation(); handleConfirmEdit(); }}
-                      icon={<Check size={11} />}
+                      icon={<Icon name="check-line" size="2xs" />}
                     />
                   </Tooltip>
                   <Tooltip content={t('nav.sessions.cancelEdit')} placement="top">
@@ -1770,7 +1770,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       size="sm"
                       className="bitfun-nav-panel__inline-item-edit-btn cancel"
                       onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleCancelEdit(); }}
-                      icon={<X size={11} />}
+                      icon={<Icon name="xmark" size="2xs" />}
                     />
                   </Tooltip>
                 </div>
@@ -1849,11 +1849,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       data-testid="nav-session-menu-btn"
                       data-session-id={session.sessionId}
                     >
-                      <MoreHorizontal size={13} />
+                      <Icon name="more" size="xs" />
                     </button>
                   </div>
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(
-                    <div
+                    <ScrollArea
                       ref={sessionMenuPopoverRef}
                       className="bitfun-nav-panel__inline-item-menu-popover"
                       data-bf-component="sessions-section"
@@ -1909,7 +1909,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-rename"
                             data-session-id={session.sessionId}
                           >
-                            <Pencil size={13} />
+                            <Icon name="edit" size="xs" />
                             <span>{t('nav.sessions.rename')}</span>
                           </button>
                           <button
@@ -1919,7 +1919,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-copy-id"
                             data-session-id={session.sessionId}
                           >
-                            <Copy size={13} />
+                            <Icon name="duplicate" size="xs" />
                             <span>{t('nav.sessions.copySessionId')}</span>
                           </button>
                           <button
@@ -1950,7 +1950,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-scheduled-jobs"
                             data-session-id={session.sessionId}
                           >
-                            <Clock3 size={13} />
+                            <Icon name="clock" size="xs" />
                             <span>{t('nav.scheduledJobs.open')}</span>
                           </button>
                           <button
@@ -1975,7 +1975,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           </button>
                         </>
                       )}
-                    </div>,
+                    </ScrollArea>,
                     getAppearanceOverlayHost()
                   )}
                 </>
@@ -2015,7 +2015,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           <span className="bitfun-nav-panel__inline-toggle-count" aria-hidden>
             +{topLevelSessions.length - sessionDisplayLimit}
           </span>
-          <ChevronDown size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          <Icon name="chevron-down" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
         </button>
       )}
 
@@ -2045,7 +2045,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           ) : expandToggleLabels.remainingCount === null ? (
             <ChevronUp size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           ) : (
-            <ChevronDown size={12} className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            <Icon name="chevron-down" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           )}
         </button>
       )}

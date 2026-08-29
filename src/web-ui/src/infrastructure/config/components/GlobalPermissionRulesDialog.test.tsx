@@ -33,11 +33,18 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  FormSection: ({
+    children,
+    title,
+    actions,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { title?: React.ReactNode; actions?: React.ReactNode }) => (
+    <section {...props}>{title}{actions}{children}</section>
+  ),
+  FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) => (
     isOpen ? <div role="dialog">{children}</div> : null
   ),

@@ -1,9 +1,9 @@
  
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal } from '@bitfun/ui';
 import React from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { Image as ImageIcon, Eye } from 'lucide-react';
+;
 import type { ImageContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type { 
   ContextTransformer, 
@@ -153,7 +153,7 @@ export class ImageCardRenderer implements ContextCardRenderer<'image'> {
       <div className="context-card image-context-card" data-compact={compact}>
         <div className="context-card__header">
           <div className="context-card__icon">
-            <ImageIcon size={16} />
+            <Icon name="image" size="md" />
           </div>
           <div className="context-card__info">
             <div className="context-card__title">{context.imageName}</div>
@@ -196,7 +196,7 @@ export class ImageCardRenderer implements ContextCardRenderer<'image'> {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowFullImage(true)}
-                  leadingIcon={<Eye size={14} />}
+                  leadingIcon={<Icon name="eye" size="sm" />}
                 >
 
                   <span>{i18nService.t('components:contextSystem.contextCard.viewLargeImage')}</span>

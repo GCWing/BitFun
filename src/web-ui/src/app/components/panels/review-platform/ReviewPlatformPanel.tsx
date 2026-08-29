@@ -1,32 +1,7 @@
-import { Button, Field, IconButton, Input as DesignInput, Modal, TabGroup } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  CircleDot,
-  Clock3,
-  Code2,
-  Copy,
-  ExternalLink,
-  GitCommitHorizontal,
-  GitPullRequest,
-  GitPullRequestClosed,
-  KeyRound,
-  Link2,
-  Loader2,
-  MessageSquareText,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-  Terminal,
-  UserRound,
-  XCircle,
-} from 'lucide-react';
-import { MarkdownRenderer, Select, Tooltip, type SelectOption } from '@/component-library';
+import { ChevronLeft, CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { MarkdownRenderer, Select, type SelectOption } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1311,7 +1286,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             size="sm"
             disabled={!page.hasNext && page.pageIndex >= page.totalPages - 1}
             onClick={() => onPageChange(page.pageIndex + 1)}
-            icon={<ChevronRight size={14} />}
+            icon={<Icon name="chevron-right" size="sm" />}
           />
         </Tooltip>
       </div>
@@ -1933,8 +1908,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         <div className="review-platform__status-line" data-bf-component="review-platform" data-bf-part="statusLine">
           <span><CircleDot size={12} /> {summary.open} open on page</span>
           {!isGithubUserList && <span><GitPullRequestClosed size={12} /> {summary.merged} merged on page</span>}
-          <span><Sparkles size={12} /> {summary.reviewRequired} review on page</span>
-          <span><Link2 size={12} /> {remoteStatus}</span>
+          <span><Icon name="spark" size="xs" /> {summary.reviewRequired} review on page</span>
+          <span><Icon name="link" size="xs" /> {remoteStatus}</span>
           {loadingLabel && (
             <span className={loading ? 'review-platform__loading-status' : 'review-platform__cache-label'}>
               {loading && <Loader2 size={12} className="review-platform__loading-inline review-platform__loading-inline--icon" />}
@@ -1955,13 +1930,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               value={query}
               onChange={event => setQuery(event.target.value)}
               placeholder="Search pull requests"
-              leading={<Search size={14} />}
+              leading={<Icon name="search" size="sm" />}
               trailing={query ? <IconButton
                 aria-label="Clear search"
                 className="review-platform__icon-button"
                 size="sm"
                 onClick={() => setQuery('')}
-                icon={<XCircle size={14} />}
+                icon={<Icon name="xmark" size="sm" />}
               /> : undefined}
               size="sm"
             />
@@ -1981,13 +1956,13 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
           </div>
 
-          <div className="review-platform__list-scroll" data-bf-component="review-platform" data-bf-part="listScroll">
+          <ScrollArea className="review-platform__list-scroll" data-bf-component="review-platform" data-bf-part="listScroll">
             {loading && (
               <div className="review-platform__empty-state" data-bf-component="review-platform" data-bf-part="emptyState">Loading pull requests...</div>
             )}
             {error && (
               <div className="review-platform__error-state" data-bf-component="review-platform" data-bf-part="errorState">
-                <XCircle size={16} />
+                <Icon name="xmark" size="md" />
                 <span>{error}</span>
                 <Button size="sm" variant="outline" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
                   Retry
@@ -2043,7 +2018,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 );
               })()
             ))}
-          </div>
+          </ScrollArea>
           {!loading && !error && (totalPages > 1 || pagination.hasNext) && (
             <div className="review-platform__pagination" data-bf-component="review-platform" data-bf-part="pagination">
               <Tooltip content="Previous page">
@@ -2066,7 +2041,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   size="sm"
                   disabled={!pagination.hasNext && currentPageIndex >= totalPages - 1}
                   onClick={() => handlePageChange(currentPageIndex + 1)}
-                  icon={<ChevronRight size={14} />}
+                  icon={<Icon name="chevron-right" size="sm" />}
                 />
               </Tooltip>
             </div>
@@ -2090,7 +2065,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           {!selectedPr && detailOnly && !loading && !detailLoading && !authChallenge && (detailError || error) && (
             <div className="review-platform__detail-empty">
-              <XCircle size={24} />
+              <Icon name="xmark" size="lg" />
               <span>{detailError || error}</span>
               <div className="review-platform__detail-empty-actions">
                 <Button size="sm" variant="outline" onClick={handleRetryDetail}>
@@ -2126,7 +2101,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     size="sm"
                     variant="outline"
                     onClick={handleOpenExternal}
-                    leadingIcon={<ExternalLink size={13} />}
+                    leadingIcon={<Icon name="arrow-up-right" size="xs" />}
                   >
 
                     Open in browser
@@ -2156,7 +2131,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   </div>
                   <div className="review-platform__detail-meta" data-bf-component="review-platform" data-bf-part="detailMeta">
                     <span>#{selectedPr.number}</span>
-                    <span><Clock3 size={12} /> {formatAbsoluteTime(selectedPr.updatedAt) || formatRelativeTime(selectedPr.updatedAt)}</span>
+                    <span><Icon name="clock" size="xs" /> {formatAbsoluteTime(selectedPr.updatedAt) || formatRelativeTime(selectedPr.updatedAt)}</span>
                   </div>
                 </div>
                 <div className="review-platform__detail-actions" data-bf-component="review-platform" data-bf-part="detailActions">
@@ -2175,14 +2150,14 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                           latestCurrentReview?.lifecycle === 'running'
                         }
                         loading={reviewLaunching}
-                        leadingIcon={<Sparkles size={13} />}
+                        leadingIcon={<Icon name="spark" size="xs" />}
                       >
 
                         {latestCurrentReview?.lifecycle === 'running' ? 'Review running' : 'Review'}
                       </Button>
                     </span>
                   </Tooltip>
-                  <Button size="sm" variant="outline" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl} leadingIcon={<Link2 size={13} />}>
+                  <Button size="sm" variant="outline" onClick={handleOpenExternal} disabled={!selectedPr.webUrl && !initialPullRequestUrl} leadingIcon={<Icon name="link" size="xs" />}>
 
                     Open
                   </Button>
@@ -2217,7 +2192,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <span className="review-platform__fact-label"><Code2 size={14} /> Branches</span>
                   <div className="review-platform__fact-value review-platform__fact-value--branch">
                     <strong>{displayPr?.sourceBranch ?? selectedPr.sourceBranch}</strong>
-                    <ChevronRight size={13} />
+                    <Icon name="chevron-right" size="xs" />
                     <strong>{displayPr?.targetBranch ?? selectedPr.targetBranch}</strong>
                     <span>{resolvedChangedFileCount(displayPr, selectedPr) ?? '—'} files</span>
                     <span className="review-platform__additions">+{displayPr?.additions ?? selectedPr.additions}</span>
@@ -2225,7 +2200,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   </div>
                 </div>
                 <div className="review-platform__fact-row">
-                  <span className="review-platform__fact-label"><UserRound size={14} /> Author</span>
+                  <span className="review-platform__fact-label"><Icon name="user" size="sm" /> Author</span>
                   <div className="review-platform__fact-value">
                     <strong>{displayPr?.author ?? selectedPr.author}</strong>
                   </div>
@@ -2235,14 +2210,14 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <div className="review-platform__fact-value">{commentsText}</div>
                 </div>
                 <div className="review-platform__fact-row">
-                  <span className="review-platform__fact-label"><CheckCircle2 size={14} /> Checks</span>
+                  <span className="review-platform__fact-label"><Icon name="check-circle" size="sm" /> Checks</span>
                   <div className="review-platform__fact-value">
                     <strong>{checksStatusText}</strong>
                     {displayPr && displayPr.checks.total > 0 && <span>{checksText}</span>}
                   </div>
                 </div>
                 <div className="review-platform__fact-row">
-                  <span className="review-platform__fact-label"><Sparkles size={14} /> BitFun Review</span>
+                  <span className="review-platform__fact-label"><Icon name="spark" size="sm" /> BitFun Review</span>
                   <div className="review-platform__fact-value review-platform__fact-value--review">
                     <span>{reviewStatusText}</span>
                     {(latestCurrentReview || latestStaleReview || latestUnknownReview) && (
@@ -2267,7 +2242,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   />
                 </div>
                 {activeTab === 'overview' && (
-                  <div className="review-platform__tab-content review-platform__overview-scroll" data-bf-component="review-platform" data-bf-part="tabContent">
+                  <ScrollArea className="review-platform__tab-content review-platform__overview-scroll" data-bf-component="review-platform" data-bf-part="tabContent">
                     <section className="review-platform__detail-section" data-bf-component="review-platform" data-bf-part="section">
                       <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
                         <span>Description</span>
@@ -2278,7 +2253,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       </div>
                       {detailError ? (
                         <div className="review-platform__detail-error">
-                          <XCircle size={14} />
+                          <Icon name="xmark" size="sm" />
                           <span>{detailError}</span>
                           <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                             Retry
@@ -2337,7 +2312,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                       onClick={() => toggleCiExpanded(item)}
                                       disabled={ciLogLoading}
                                       aria-busy={ciLogLoading}
-                                      icon={isCiExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                                      icon={isCiExpanded ? <Icon name="chevron-down" size="xs" /> : <Icon name="chevron-right" size="xs" />}
                                     />
                                   </Tooltip>
                                 )}
@@ -2358,7 +2333,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                       className="review-platform__icon-button review-platform__ci-action"
                                       size="sm"
                                       onClick={() => void handleOpenCiUrl(item.webUrl)}
-                                      icon={<Link2 size={12} />}
+                                      icon={<Icon name="link" size="xs" />}
                                     />
                                   </Tooltip>
                                 )}
@@ -2374,7 +2349,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 {ciLogLoading && renderDetailLoading('Loading check details...')}
                                 {!ciLogLoading && ciLogError && logAvailable && (
                                   <div className="review-platform__detail-error">
-                                    <XCircle size={14} />
+                                    <Icon name="xmark" size="sm" />
                                     <span>{ciLogError}</span>
                                     <Button size="sm" variant="outline" onClick={() => void loadCiLog(item)}>Retry</Button>
                                   </div>
@@ -2445,14 +2420,14 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       {!detailLoading && detail && reviewThreads.length === 0 && <div className="review-platform__empty-state">No comments yet.</div>}
                       {renderDetailPagination('Comments', reviewPage, reviewThreads.length, setReviewPageIndex)}
                     </section>
-                  </div>
+                  </ScrollArea>
                 )}
 
                 {activeTab === 'changes' && (
-                  <section className="review-platform__tab-content review-platform__file-list" data-bf-component="review-platform" data-bf-part="fileList">
+                  <ScrollArea className="review-platform__tab-content review-platform__file-list" data-bf-component="review-platform" data-bf-part="fileList">
                     {detailError && (
                       <div className="review-platform__detail-error">
-                        <XCircle size={14} />
+                        <Icon name="xmark" size="sm" />
                         <span>{detailError}</span>
                         <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                           Retry
@@ -2475,7 +2450,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                               onClick={() => toggleFileExpanded(key)}
                             >
                               <span className="review-platform__file-toggle">
-                                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                {isExpanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
                               </span>
                               <span className={`review-platform__file-status review-platform__file-status--${file.status}`} data-bf-component="review-platform" data-bf-part="fileStatus">
                                 {file.status}
@@ -2515,11 +2490,11 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       </div>
                     )}
                     {renderDetailPagination('Files', changePage, changedFiles.length, setChangePageIndex)}
-                  </section>
+                  </ScrollArea>
                 )}
 
                 {activeTab === 'commits' && (
-                  <section className="review-platform__tab-content review-platform__timeline">
+                  <ScrollArea className="review-platform__tab-content review-platform__timeline">
                     <div className="review-platform__section-heading">
                       <span>Commits</span>
                       <Button size="sm" variant="outline" onClick={handleAddCommitsContext} disabled={!selectedPr || !detail} leadingIcon={<MessageSquareText size={13} />}>
@@ -2529,7 +2504,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     </div>
                     {detailError && (
                       <div className="review-platform__detail-error">
-                        <XCircle size={14} />
+                        <Icon name="xmark" size="sm" />
                         <span>{detailError}</span>
                         <Button size="sm" variant="outline" onClick={handleRetryDetail}>
                           Retry
@@ -2551,7 +2526,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       <div className="review-platform__empty-state">No commits were returned by this provider.</div>
                     )}
                     {renderDetailPagination('Commits', commitPage, commits.length, setCommitPageIndex)}
-                  </section>
+                  </ScrollArea>
                 )}
               </div>
             </>
@@ -2623,7 +2598,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   variant="outline"
                   disabled={authSaving}
                   onClick={() => void handleCopyGithubAuthCommand()}
-                  leadingIcon={<Copy size={13} />}
+                  leadingIcon={<Icon name="duplicate" size="xs" />}
                 >
 
                   Copy
@@ -2634,7 +2609,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   variant="fill"
                   loading={authSaving}
                   onClick={() => void handleOpenGithubAuthTerminal()}
-                  leadingIcon={<Terminal size={13} />}
+                  leadingIcon={<Icon name="terminal" size="xs" />}
                 >
 
                   Open terminal

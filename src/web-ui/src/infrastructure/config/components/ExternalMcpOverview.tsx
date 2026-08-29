@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
-import { Puzzle, RefreshCw } from 'lucide-react';
+import { Icon, Button, IconButton, ScrollArea, Tooltip } from '@bitfun/ui';
+import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
@@ -470,7 +470,7 @@ const ExternalMcpOverview: React.FC = () => {
               size="sm"
               onClick={() => openEcosystemCompatibility({ ownerSurface: 'external-sources' })}
               aria-label={t('external.manage')}
-              icon={<Puzzle />}
+              icon={<Icon name="extension" size="lg" />}
             />
           </Tooltip>
         </>
@@ -481,7 +481,8 @@ const ExternalMcpOverview: React.FC = () => {
           {importPlan ? (
             <div className="bitfun-mcp-tools__import-plan" data-bf-component="external-mcp-overview" data-bf-part="importPlan">
               <p>{t('external.import.confirm', { count: selectedImportItems.length })}</p>
-              <ul className="bitfun-mcp-tools__import-list" data-bf-component="external-mcp-overview" data-bf-part="importList">
+              <ScrollArea className="bitfun-mcp-tools__import-list" data-bf-component="external-mcp-overview" data-bf-part="importList">
+              <ul>
                 {eligibleImportItems.map((item) => {
                   const catalogEntry = mcpEntryByCandidateId.get(item.candidateId);
                   const source = catalogEntry ? sourceByKey.get(sourceKey(
@@ -520,6 +521,7 @@ const ExternalMcpOverview: React.FC = () => {
                   );
                 })}
               </ul>
+              </ScrollArea>
               <div className="bitfun-mcp-tools__import-actions" data-bf-component="external-mcp-overview" data-bf-part="importActions">
                 <Button variant="fill" size="sm" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
                   {t('external.import.apply')}

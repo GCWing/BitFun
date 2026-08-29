@@ -6,18 +6,9 @@
  * scheduled without knowing which workspace it runs in.
  */
 
-import { Button, Switch, Input, Select } from '@bitfun/ui';
+import { Button, Icon, Input, Select, Switch, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Bot,
-  CalendarClock,
-  ChevronDown,
-  ClipboardList,
-  Clock3,
-  Folder,
-  RefreshCw,
-  Sparkles,
-} from 'lucide-react';
+import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
 import { Select as LegacySelect, Textarea } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -203,7 +194,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
         </div>
       </header>
 
-      <div
+      <ScrollArea
         className="bf-todos__editor-body"
         data-bf-scene="todos"
         data-bf-part="editorBody"
@@ -242,7 +233,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 
             <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
               <span className="bf-todos__field-label">
-                <Folder size={16} aria-hidden="true" />
+                <Icon name="folder" size="md" aria-hidden="true" />
                 {t('shared:features.workspace')}
               </span>
               <LegacySelect
@@ -320,7 +311,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
 
             <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
               <span className="bf-todos__field-label">
-                <Clock3 size={16} aria-hidden="true" />
+                <Icon name="clock" size="md" aria-hidden="true" />
                 {draft.scheduleKind === 'at'
                   ? t('editor.fields.at')
                   : draft.scheduleKind === 'every'
@@ -416,7 +407,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
             <span className="bf-todos__editor-runtime-divider" aria-hidden="true" />
             <div className="bf-todos__editor-smart">
               <span className="bf-todos__editor-smart-icon" aria-hidden="true">
-                <Sparkles size={16} strokeWidth={1.7} />
+                <Icon name="spark" size="md" />
               </span>
               <span className="bf-todos__editor-smart-copy">
                 <strong>{t('editor.smartExecution.title')}</strong>
@@ -467,7 +458,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
             data-testid="todos-editor-advanced-toggle"
           >
             <span>{t('editor.advanced.title')}</span>
-            <ChevronDown size={16} aria-hidden="true" />
+            <Icon name="chevron-down" size="md" aria-hidden="true" />
           </button>
 
           {advancedOpen ? (
@@ -475,7 +466,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
               {draft.scheduleKind === 'every' ? (
                 <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
                   <span className="bf-todos__field-label">
-                    <Clock3 size={16} aria-hidden="true" />
+                    <Icon name="clock" size="md" aria-hidden="true" />
                     {t('editor.fields.anchor')}
                   </span>
                   <LocalizedDateTimeField
@@ -491,7 +482,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
               {draft.scheduleKind === 'cron' ? (
                 <div className="bf-todos__field-card" data-bf-scene="todos" data-bf-part="field">
                   <span className="bf-todos__field-label">
-                    <Clock3 size={16} aria-hidden="true" />
+                    <Icon name="clock" size="md" aria-hidden="true" />
                     {t('editor.fields.timezone')}
                   </span>
                   <Input
@@ -526,7 +517,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
             {t('editor.noWorkspace')}
           </p>
         ) : null}
-      </div>
+      </ScrollArea>
 
       <footer
         className="bf-todos__editor-actions"

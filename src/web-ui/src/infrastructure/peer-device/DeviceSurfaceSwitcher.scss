@@ -93,7 +93,6 @@
     min-width: 216px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
-    overflow-y: auto;
     padding: $size-gap-1;
     z-index: 9999;
     color: var(--bf-appearance-token-color-text-primary);

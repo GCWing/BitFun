@@ -1,7 +1,7 @@
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Check, Eye, EyeOff, Loader2, RefreshCw, Send, Trash2, X } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { AlertTriangle, EyeOff, Loader2, RefreshCw, Send, Trash2 } from 'lucide-react';
+
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { MiniApp, MiniAppCustomizationMetadata, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -415,7 +415,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
             onClick={handleClose}
             disabled={busy}
             aria-label={t('customize.close')}
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
           />
         </Tooltip>
       </div>
@@ -442,7 +442,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
                   onClick={() => void handleDismissBuiltinUpdate()}
                   disabled={dismissingBuiltinUpdate}
                   loading={dismissingBuiltinUpdate}
-                  leadingIcon={<X size={14} />}
+                  leadingIcon={<Icon name="xmark" size="sm" />}
                 >
 
                   {t('customize.dismissBuiltinUpdate')}
@@ -503,7 +503,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
             onClick={handleTogglePreview}
             disabled={busy}
           >
-            {previewOpen ? <EyeOff size={14} /> : <Eye size={14} />}
+            {previewOpen ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
             {previewOpen ? t('customize.hidePreview') : t('customize.openPreview')}
           </Button>
         )}
@@ -517,7 +517,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
 
       {editorStatus && (
         <div className="miniapp-customize-panel__status" data-bf-component="miniapp-customize-panel" data-bf-part="status">
-          <Check size={14} />
+          <Icon name="check-line" size="sm" />
           <span>{editorStatus}</span>
         </div>
       )}

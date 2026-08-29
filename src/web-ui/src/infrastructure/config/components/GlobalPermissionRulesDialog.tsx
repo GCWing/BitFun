@@ -1,4 +1,4 @@
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
+import { Button, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -7,9 +7,9 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { PermissionEffect, PermissionRule } from '../types';
 import './GlobalPermissionRulesDialog.scss';
 
@@ -354,27 +354,40 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
           <p>{t('permissionPolicy.globalRulesDialogDescription')}</p>
         </div>
 
-        <section data-bf-component="global-permission-rules-dialog" data-bf-part="section" className="global-permission-rules-dialog__section">
-          <div data-bf-component="global-permission-rules-dialog" data-bf-part="sectionHeader" className="global-permission-rules-dialog__section-header">
-            <span>{t('permissionPolicy.globalRulesTitle')}</span>
+        <FormSection
+          data-bf-component="global-permission-rules-dialog"
+          data-bf-part="section"
+          className="global-permission-rules-dialog__section"
+          title={(
+            <span data-bf-component="global-permission-rules-dialog" data-bf-part="sectionHeader">
+              {t('permissionPolicy.globalRulesTitle')}
+            </span>
+          )}
+          actions={(
             <Button
               size="sm"
               variant="outline"
               disabled={isSaving}
               onClick={handleAddRule}
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Icon name="plus" size="sm" />}
             >
-
               {t('permissionPolicy.addGlobalRule')}
             </Button>
-          </div>
+          )}
+        >
 
           {draftRules.length === 0 ? (
             <div data-bf-component="global-permission-rules-dialog" data-bf-part="empty" className="global-permission-rules-dialog__empty">
               {t('permissionPolicy.globalRulesEmpty')}
             </div>
           ) : (
-            <div data-bf-component="global-permission-rules-dialog" data-bf-part="rules" className="global-permission-rules-dialog__rules">
+            <FieldGroup
+              appearance="plain"
+              dividers={false}
+              data-bf-component="global-permission-rules-dialog"
+              data-bf-part="rules"
+              className="global-permission-rules-dialog__rules"
+            >
               <div className="global-permission-rules-dialog__rule-heading" aria-hidden="true">
                 <span>{t('permissionPolicy.globalRulesEffect')}</span>
                 <span>{t('permissionPolicy.globalRulesAction')}</span>
@@ -437,7 +450,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                           aria-label={t('permissionPolicy.moveGlobalRuleUp')}
                           disabled={isSaving || exiting || activeIndex === 0}
                           onClick={() => moveDraftRule(rule.localId, -1)}
-                          icon={<ArrowUp size={14} />}
+                          icon={<Icon name="arrow-up" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('permissionPolicy.moveGlobalRuleDown')}>
@@ -469,7 +482,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                   </div>
                 );
               })}
-            </div>
+            </FieldGroup>
           )}
 
           {rulesDirty ? (
@@ -495,7 +508,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
               </Button>
             </div>
           ) : null}
-        </section>
+        </FormSection>
       </div>
     </Modal>
   );

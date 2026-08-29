@@ -1,21 +1,13 @@
-import { Button, IconButton, Switch } from '@bitfun/ui';
+import { Button, Icon, IconButton, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   CircleAlert,
-  Info,
   Plug2,
   RefreshCw,
   RotateCcw,
-  Search,
-  Sparkles,
   Wrench,
-  X,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -590,7 +582,7 @@ const AssistantDefaultsPage: React.FC = () => {
       ? skillsLoading[row.detail.skill.key]
       : row.detail.type === 'tool' && toolsLoading[row.detail.tool.name];
     const icon = row.kind === 'skill'
-      ? <Sparkles size={15} />
+      ? <Icon name="spark" size="sm" />
       : row.kind === 'mcp'
         ? <Plug2 size={15} />
         : <Wrench size={15} />;
@@ -649,7 +641,7 @@ const AssistantDefaultsPage: React.FC = () => {
             onClick={() => openDetail(row.detail)}
             aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
           >
-            <ChevronRight size={17} />
+            <Icon name="chevron-right" size="md" />
           </button>
         </div>
       </>
@@ -698,7 +690,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
   const renderEmptyState = (message: string) => (
     <div className="assistant-defaults-empty" data-bf-component="assistant-defaults-page" data-bf-part="empty">
-      <Search size={22} />
+      <Icon name="search" size="lg" />
       <p>{message}</p>
       {(searchQuery || statusFilter !== 'all') ? (
         <Button
@@ -757,7 +749,7 @@ const AssistantDefaultsPage: React.FC = () => {
                   aria-expanded={!collapsed}
                   aria-label={t('nursery.template.toggleServerGroup', { name: serverName })}
                 >
-                  <ChevronDown size={16} />
+                  <Icon name="chevron-down" size="md" />
                 </button>
                 <span className="assistant-defaults-group__icon"><Plug2 size={14} /></span>
                 <div className="assistant-defaults-group__identity">
@@ -779,7 +771,7 @@ const AssistantDefaultsPage: React.FC = () => {
                   onClick={() => openDetail({ type: 'mcpServer', serverId: group.id })}
                   aria-label={t('nursery.template.openServerDetail')}
                 >
-                  <Info size={16} />
+                  <Icon name="info" size="md" />
                 </button>
                 {allNames.length > 0 ? (
                   <Switch
@@ -822,7 +814,7 @@ const AssistantDefaultsPage: React.FC = () => {
           aria-label={t('nursery.template.detailPanel')}
         >
           <div className="assistant-defaults-detail__empty">
-            <Info size={20} />
+            <Icon name="info" size="lg" />
             <strong>{t('nursery.template.detailEmptyTitle')}</strong>
             <span>{t('nursery.template.detailEmptyHint')}</span>
           </div>
@@ -847,9 +839,9 @@ const AssistantDefaultsPage: React.FC = () => {
               <span className="assistant-defaults-detail__eyebrow">MCP</span>
               <h3>{title}</h3>
             </div>
-            <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
+            <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
           </div>
-          <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+          <ScrollArea className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
             {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
             <section>
               <h4>{t('nursery.template.detailSections.basic')}</h4>
@@ -896,7 +888,7 @@ const AssistantDefaultsPage: React.FC = () => {
                 </div>
               ) : <p className="assistant-defaults-detail__note">{t('nursery.template.mcpServerNoTools')}</p>}
             </section>
-          </div>
+          </ScrollArea>
         </aside>
       );
     }
@@ -917,9 +909,9 @@ const AssistantDefaultsPage: React.FC = () => {
             <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
             <h3>{row.name}</h3>
           </div>
-          <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><X size={16} /></button>
+          <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
         </div>
-        <div className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
+        <ScrollArea className="assistant-defaults-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
           <p className="assistant-defaults-detail__description">{row.description}</p>
           <section>
             <h4>{t('nursery.template.detailSections.basic')}</h4>
@@ -981,7 +973,7 @@ const AssistantDefaultsPage: React.FC = () => {
               />
             </div>
           </section>
-        </div>
+        </ScrollArea>
       </aside>
     );
   };
@@ -1007,7 +999,7 @@ const AssistantDefaultsPage: React.FC = () => {
                 size="sm"
                 onClick={openGallery}
                 aria-label={t('nursery.backToGallery')}
-                icon={<ArrowLeft />}
+                icon={<Icon name="arrow-left" size="lg" />}
               />
             </Tooltip>
             <h2>{t('nursery.template.title')}</h2>
@@ -1018,7 +1010,7 @@ const AssistantDefaultsPage: React.FC = () => {
                   ? <RefreshCw size={15} className="nursery-spinning" />
                   : saveState === 'error'
                     ? <CircleAlert size={15} />
-                    : <CheckCircle2 size={15} />}
+                    : <Icon name="check-circle" size="sm" />}
                 {saveLabel}
               </span>
               <Button
@@ -1044,7 +1036,7 @@ const AssistantDefaultsPage: React.FC = () => {
           </div>
         ) : (
           <div className="assistant-defaults__workspace" data-bf-component="assistant-defaults-page" data-bf-part="shell">
-            <main className="assistant-defaults__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
+            <ScrollArea className="assistant-defaults__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
               {loadWarning ? (
                 <div className="assistant-defaults__warning" role="status">
                   <CircleAlert size={17} />
@@ -1083,7 +1075,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
               <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-bf-component="assistant-defaults-page" data-bf-part="filters">
                 <label className="assistant-defaults-search">
-                  <Search size={17} />
+                  <Icon name="search" size="md" />
                   <input
                     type="search"
                     value={searchQuery}
@@ -1091,7 +1083,7 @@ const AssistantDefaultsPage: React.FC = () => {
                     placeholder={t('nursery.template.searchPlaceholder')}
                   />
                   {searchQuery ? (
-                    <button type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><X size={15} /></button>
+                    <button type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><Icon name="xmark" size="sm" /></button>
                   ) : null}
                 </label>
                 <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>
@@ -1124,7 +1116,7 @@ const AssistantDefaultsPage: React.FC = () => {
                 ) : renderEmptyState(t('nursery.template.noFilterResults'))}
               </section>
               <footer className="assistant-defaults__footer">{t('nursery.template.resultCount', { count: visibleCount })}</footer>
-            </main>
+            </ScrollArea>
             {renderDetailPanel()}
           </div>
         )}

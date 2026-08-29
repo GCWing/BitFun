@@ -4,14 +4,14 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { GitBranch, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
+import { RefreshCw, ShieldAlert } from 'lucide-react';
 import { useGitSceneStore } from './gitSceneStore';
 import { WorkingCopyView, BranchesView, GraphView } from './views';
 import { useGitState } from '@/tools/git/hooks';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { CubeLoading, Tooltip } from '@/component-library';
+import { CubeLoading } from '@/component-library';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { requestGitRepositoryTrust } from '@/shared/services/gitTrustService';
 import './GitScene.scss';
@@ -152,7 +152,7 @@ const GitScene: React.FC<GitSceneProps> = ({
             </div>
             <div className="bitfun-git-scene__init-card">
               <div className="bitfun-git-scene__init-icon">
-                <GitBranch size={24} />
+                <Icon name="git" size="lg" />
               </div>
               <div className="bitfun-git-scene__init-text">
                 <h3>{t('init.title')}</h3>
@@ -161,7 +161,7 @@ const GitScene: React.FC<GitSceneProps> = ({
               <Button
                 variant="fill"
                 size="sm"
-                leadingIcon={<Plus />}
+                leadingIcon={<Icon name="plus" size="lg" />}
                 onClick={handleInitGitRepository}
               >
                 {t('init.initButton')}

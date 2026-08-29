@@ -15,7 +15,7 @@
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
-import { Button, Field, IconButton, Input } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -25,8 +25,14 @@ import {
   confirmWarning,
 } from '@/infrastructure/confirm-dialog';
 import {
-  User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
-  ChevronRight, RefreshCw, Eye, EyeOff, X, Rocket, Copy, Check,
+  Lock,
+  Server,
+  LogIn,
+  Monitor,
+  CloudDownload,
+  RefreshCw,
+  EyeOff,
+  Rocket,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
@@ -1073,7 +1079,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         )}
 
         {view === 'login' && (
-          <div className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
             <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
             <div className="account-panel__form" data-bf-component="remote-account-panel" data-bf-part="form">
               <Field
@@ -1084,7 +1090,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 <Input
                   className="account-panel__input"
                   disabled={loading}
-                  leading={<User />}
+                  leading={<Icon name="user" size="lg" />}
                   onValueChange={setUsername}
                   size="md"
                   type="text"
@@ -1107,7 +1113,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       aria-label={showPassword
                         ? t('accountLogin.hidePassword')
                         : t('accountLogin.showPassword')}
-                      icon={showPassword ? <EyeOff /> : <Eye />}
+                      icon={showPassword ? <EyeOff /> : <Icon name="eye" size="lg" />}
                       onClick={() => setShowPassword(s => !s)}
                       size="sm"
                       variant="quiet"
@@ -1158,11 +1164,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 {loading ? t('accountLogin.processing') : t('accountLogin.login')}
               </Button>
             </div>
-          </div>
+          </ScrollArea>
         )}
 
         {view === 'overwrite' && (
-          <div className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
             <div className="account-panel__overwrite-notice">
               <CloudDownload size={32} />
               <p>{t('accountLogin.cloudOverwriteWarning')}</p>
@@ -1175,7 +1181,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 onClick={handleUseLocalOverwrite}
                 disabled={loading}
               >
-                <Upload size={20} />
+                <Icon name="upload" size="lg" />
                 <div className="account-panel__sync-option-text">
                   <span className="account-panel__sync-option-title">{t('accountLogin.useLocalTitle')}</span>
                   <span className="account-panel__sync-option-desc">{t('accountLogin.useLocalDesc')}</span>
@@ -1200,11 +1206,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 {t('accountLogin.disagree')}
               </Button>
             </div>
-          </div>
+          </ScrollArea>
         )}
 
         {view === 'devices' && (
-          <div className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
             {accountRelayUrl && (
               <div className="account-panel__server-line" data-bf-component="remote-account-panel" data-bf-part="server">
                 <Server size={13} />
@@ -1213,7 +1219,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 </span>
                 <IconButton
                   aria-label={t('accountLogin.copyServerUrl')}
-                  icon={copiedServerUrl ? <Check /> : <Copy />}
+                  icon={copiedServerUrl ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
                   onClick={handleCopyRelayUrl}
                   size="sm"
                   title={t('accountLogin.copyServerUrl')}
@@ -1343,12 +1349,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                         </span>
                       </span>
                     </span>
-                    {isSelectable && <ChevronRight size={14} />}
+                    {isSelectable && <Icon name="chevron-right" size="sm" />}
                   </button>
                   <IconButton
                     aria-label={`${removeLabel}: ${displayName}`}
                     disabled={loading}
-                    icon={<X />}
+                    icon={<Icon name="xmark" size="lg" />}
                     onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
                     size="sm"
                     tone="danger"
@@ -1386,7 +1392,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 {t('accountLogin.logout')}
               </Button>
             </div>
-          </div>
+          </ScrollArea>
         )}
       </div>
 

@@ -26,9 +26,7 @@
 }
 
 .bitfun-markdown-editor__mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  flex-shrink: 0;
 }
 
 .bitfun-markdown-editor__toolbar-actions {

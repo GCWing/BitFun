@@ -10,6 +10,7 @@ export {
   ActionItem,
   type ActionItemAction,
   type ActionItemProps,
+  type ActionItemTone,
 } from "./components/ActionItem";
 export {
   ActivityItem,
@@ -171,6 +172,16 @@ export {
   type ToolbarSeparatorProps,
   type ToolbarSize,
 } from "./components/Toolbar";
+export {
+  Tooltip,
+  TooltipProvider,
+  type TooltipPlacement,
+  type TooltipPortalContainer,
+  type TooltipPortalTarget,
+  type TooltipProps,
+  type TooltipProviderProps,
+  type TooltipTrigger,
+} from "./components/Tooltip";
 export { SessionIcon, type SessionIconProps } from "./icons";
 export { Stack, type StackProps } from "./primitives/Stack";
 export {

@@ -1,3 +1,4 @@
+import { ScrollArea } from '@bitfun/ui';
 import React, { lazy, Suspense, useEffect, useRef } from 'react';
 import type { SettingsPageProps } from '../settingsTypes';
 import './AutomationSettingsPage.scss';
@@ -25,7 +26,7 @@ const AutomationSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigatio
   }, [navigationRequestId, viewId]);
 
   return (
-    <div
+    <ScrollArea
       className="bitfun-automation-settings-page"
       data-bf-component="automation-settings-page"
       data-bf-part="root"
@@ -50,7 +51,7 @@ const AutomationSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigatio
           <HooksConfig />
         </Suspense>
       </section>
-    </div>
+    </ScrollArea>
   );
 };
 

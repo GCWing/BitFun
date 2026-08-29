@@ -1,8 +1,9 @@
  
 
 import React from 'react';
+import { Icon } from '@bitfun/ui';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { FileIcon, CheckCircle } from 'lucide-react';
+import { FileIcon } from 'lucide-react';
 import type { FileContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type {
   ContextTransformer,
@@ -144,7 +145,7 @@ export class FileCardRenderer implements ContextCardRenderer<'file'> {
     
     return (
       <div className="bitfun-context-card__status">
-        <CheckCircle size={16} className="bitfun-context-card__status-icon--success" />
+        <Icon name="check-circle" size="md" className="bitfun-context-card__status-icon--success" />
       </div>
     );
   }

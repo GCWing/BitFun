@@ -7,6 +7,7 @@
  * Jobs with nothing left to run are the only ones left out.
  */
 
+import { ScrollArea } from '@bitfun/ui';
 import React, { useMemo } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -52,7 +53,7 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
   );
 
   return (
-    <section
+    <ScrollArea
       className="bf-todos__calendar"
       aria-label={t('calendar.title')}
       data-bf-scene="todos"
@@ -132,7 +133,7 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
           );
         })}
       </div>
-    </section>
+    </ScrollArea>
   );
 };
 

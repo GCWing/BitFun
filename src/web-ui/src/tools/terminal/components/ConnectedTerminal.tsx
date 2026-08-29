@@ -4,8 +4,8 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
-import { Button } from '@bitfun/ui';
-import { AlertCircle, RefreshCw, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import { Button, Icon } from '@bitfun/ui';
+import { AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
@@ -490,7 +490,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       {showToolbar && (
         <div className="bitfun-terminal__toolbar" data-bf-component="terminal-tool" data-bf-part="toolbar">
           <div className="bitfun-terminal__toolbar-left">
-            <TerminalIcon size={14} />
+            <Icon name="terminal" size="sm" />
             <span className="bitfun-terminal__toolbar-title" data-testid="shell-panel-title">
               {title}
               {session && (

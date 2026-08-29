@@ -3,12 +3,13 @@
 import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { ChevronRight, File, Folder, Code, Loader2, ArrowLeft } from 'lucide-react';
+import { Code, Loader2 } from 'lucide-react';
 import { getFileIconType } from '@/tools/file-system/utils/fileIcons';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@/component-library';
+
 import './EditorBreadcrumb.scss';
+import { Icon, ScrollArea, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('EditorBreadcrumb');
 
@@ -53,7 +54,7 @@ const getFileIconComponent = (fileName: string, size: number = 12): React.ReactE
     case 'code':
       return <Code size={size} />;
     default:
-      return <File size={size} />;
+      return <Icon name="files" size={size <= 11 ? '2xs' : size <= 13 ? 'xs' : size <= 15 ? 'sm' : size <= 17 ? 'md' : 'lg'} />;
   }
 };
 
@@ -181,7 +182,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
                 onGoBack();
               }}
             >
-              <ArrowLeft size={12} />
+              <Icon name="arrow-left" size="xs" />
             </button>
           </Tooltip>
           <Tooltip content={currentDirPath} placement="top">
@@ -202,7 +203,8 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
           Empty directory
         </div>
       ) : (
-        <ul data-bf-component="editor-breadcrumb" data-bf-part="list" className="editor-breadcrumb-dropdown__list">
+        <ScrollArea data-bf-component="editor-breadcrumb" data-bf-part="list" className="editor-breadcrumb-dropdown__list">
+          <ul>
           {sortedItems.map((item) => {
             const isCurrentFile = item.path.replace(/\\/g, '/') === currentFilePath.replace(/\\/g, '/');
             return (
@@ -219,7 +221,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
               >
                 <span className="editor-breadcrumb-dropdown__item-icon">
                   {item.isDirectory ? (
-                    <Folder size={14} />
+                    <Icon name="folder" size="sm" />
                   ) : (
                     getFileIconComponent(item.name, 14)
                   )}
@@ -228,12 +230,13 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
                   {item.name}
                 </span>
                 {item.isDirectory && (
-                  <ChevronRight size={12} className="editor-breadcrumb-dropdown__item-arrow" />
+                  <Icon name="chevron-right" size="xs" className="editor-breadcrumb-dropdown__item-arrow" />
                 )}
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </ScrollArea>
       )}
     </div>
   );
@@ -413,12 +416,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
         return (
           <React.Fragment key={isEllipsis ? 'ellipsis' : pathSegment.fullPath}>
             {index > 0 && (
-              <ChevronRight 
-                data-bf-component="editor-breadcrumb"
-                data-bf-part="separator"
-                size={10} 
-                className="editor-breadcrumb__separator" 
-              />
+              <Icon name="chevron-right" size="2xs" data-bf-component="editor-breadcrumb" data-bf-part="separator" className="editor-breadcrumb__separator" />
             )}
             
             {isEllipsis ? (
@@ -443,7 +441,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
                     {pathSegment.isFile ? (
                       getFileIconComponent(pathSegment.name)
                     ) : (
-                      <Folder size={12} />
+                      <Icon name="folder" size="xs" />
                     )}
                   </span>
                   <span data-bf-component="editor-breadcrumb" data-bf-part="itemText" className="editor-breadcrumb__item-text">

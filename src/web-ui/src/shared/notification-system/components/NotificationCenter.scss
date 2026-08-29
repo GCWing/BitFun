@@ -129,7 +129,6 @@
   
   &__content {
     flex: 1;
-    overflow-y: auto;
     min-height: 0;
 
   }
@@ -356,7 +355,6 @@
   &__item-technical-body {
     margin: 0;
     max-height: 160px;
-    overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
     font-family: $font-family-mono;

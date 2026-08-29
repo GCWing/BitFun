@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronRight, FolderOpen, FileText, Loader2 } from 'lucide-react';
-import { Input } from '@bitfun/ui';
+import { FolderOpen, FileText, Loader2 } from 'lucide-react';
+import { Icon, Input } from '@bitfun/ui';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
@@ -202,7 +202,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
           {isLoading ? (
             <Loader2 size={16} className="bitfun-file-explorer__loading-icon" />
           ) : (
-            <ChevronRight size={16} />
+            <Icon name="chevron-right" size="md" />
           )}
         </span>
       ) : (

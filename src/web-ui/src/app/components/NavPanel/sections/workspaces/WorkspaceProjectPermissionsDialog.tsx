@@ -1,7 +1,7 @@
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   permissionAPI,
@@ -300,7 +300,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
               variant="outline"
               disabled={isBusy || rulesRevision === null}
               onClick={() => setDraftRules((rules) => [...rules, toDraftRule({ action: '', resource: '', effect: 'ask' })])}
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Icon name="plus" size="sm" />}
             >
 
               {t('projectPermissions.addRule')}
@@ -356,7 +356,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                         aria-label={t('projectPermissions.moveRuleUp')}
                         disabled={isBusy || index === 0}
                         onClick={() => moveDraftRule(index, -1)}
-                        icon={<ArrowUp size={14} />}
+                        icon={<Icon name="arrow-up" size="sm" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('projectPermissions.moveRuleDown')}>

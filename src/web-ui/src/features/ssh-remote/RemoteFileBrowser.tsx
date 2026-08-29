@@ -3,7 +3,7 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button, ConfirmDialog, IconButton } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -11,19 +11,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import {
-  RefreshCw,
-  Folder,
-  File,
-  Link,
-  ChevronRight,
-  Home,
-  ArrowLeft,
-  Loader2,
-  Upload,
-  Download,
-  X,
-} from 'lucide-react';
+import { RefreshCw, Home, Loader2 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
 
 interface RemoteFileBrowserProps {
@@ -375,9 +363,9 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   };
 
   const getEntryIcon = (entry: RemoteFileEntry) => {
-    if (entry.isDir) return <Folder size={18} className="remote-file-browser__entry-icon" />;
-    if (entry.isSymlink) return <Link size={18} className="remote-file-browser__entry-icon remote-file-browser__entry-icon--link" />;
-    return <File size={18} className="remote-file-browser__entry-icon remote-file-browser__entry-icon--file" />;
+    if (entry.isDir) return <Icon name="folder" size="lg" className="remote-file-browser__entry-icon" />;
+    if (entry.isSymlink) return <Icon name="link" size="lg" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--link" />;
+    return <Icon name="files" size="lg" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--file" />;
   };
 
   const pathParts = (() => {
@@ -407,7 +395,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           </h2>
           <IconButton
             className="remote-file-browser__close-btn"
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
             size="md"
             onClick={onCancel}
             aria-label={t('actions.close')}
@@ -451,7 +439,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               >
                 <Home size={14} />
               </button>
-              <ChevronRight size={12} className="remote-file-browser__breadcrumb-sep" />
+              <Icon name="chevron-right" size="xs" className="remote-file-browser__breadcrumb-sep" />
               {pathParts.length === 0 ? (
                 <span className="remote-file-browser__breadcrumb-current">/</span>
               ) : (
@@ -466,7 +454,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                       >
                         {part}
                       </button>
-                      {!isLast && <ChevronRight size={12} className="remote-file-browser__breadcrumb-sep" />}
+                      {!isLast && <Icon name="chevron-right" size="xs" className="remote-file-browser__breadcrumb-sep" />}
                     </React.Fragment>
                   );
                 })
@@ -494,7 +482,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             title="Go up"
             disabled={getRemoteParentPath(currentPath) === null || transferBusy}
           >
-            <ArrowLeft size={16} />
+            <Icon name="arrow-left" size="md" />
           </button>
           <button
             type="button"
@@ -503,7 +491,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             title={t('ssh.remote.upload')}
             disabled={transferBusy}
           >
-            <Upload size={16} />
+            <Icon name="upload" size="md" />
           </button>
         </div>
 
@@ -515,7 +503,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         )}
 
         {/* File List */}
-        <div className="remote-file-browser__content" data-bf-component="ssh-remote" data-bf-part="content">
+        <ScrollArea className="remote-file-browser__content" data-bf-component="ssh-remote" data-bf-part="content">
           {error && (
             <div className="remote-file-browser__error">
               <span>{error}</span>
@@ -562,7 +550,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                     className="remote-file-browser__row remote-file-browser__row--parent"
                   >
                     <td colSpan={3}>
-                      <Folder size={16} className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
+                      <Icon name="folder" size="md" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
                       <span>..</span>
                     </td>
                   </tr>
@@ -599,7 +587,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               </tbody>
             </table>
           )}
-        </div>
+        </ScrollArea>
 
         {/* Context Menu */}
         {contextMenu.show && contextMenu.entry && (
@@ -612,7 +600,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
               className="remote-file-browser__context-menu-item"
               onClick={() => handleContextMenuAction('open')}
             >
-              <Folder size={14} />
+              <Icon name="folder" size="sm" />
               <span>{t('actions.open') || 'Open'}</span>
             </button>
             {!contextMenu.entry.isDir && (
@@ -621,7 +609,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 className="remote-file-browser__context-menu-item"
                 onClick={() => handleContextMenuAction('download')}
               >
-                <Download size={14} />
+                <Icon name="download" size="sm" />
                 <span>{t('ssh.remote.download')}</span>
               </button>
             )}

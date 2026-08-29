@@ -1,8 +1,8 @@
-import { Switch } from '@bitfun/ui';
+import { Switch, Tooltip } from '@bitfun/ui';
 import React from 'react';
 import { CircleAlert } from 'lucide-react';
 import type { TFunction } from 'i18next';
-import { Tooltip } from '@/component-library';
+
 import { ConfigPageSection } from '../common';
 import type { ExternalApplicationView } from './applicationModel';
 

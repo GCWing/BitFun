@@ -1,4 +1,4 @@
-import { Button, Switch, IconButton, Input, ConfirmDialog } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, Switch, Tooltip } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import {
   FolderGit2,
-  GitBranch,
   LoaderCircle,
   MessageSquareText,
   RotateCcw,
@@ -16,7 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
-import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, NumberInput, Tooltip } from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, NumberInput } from '@/component-library';
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -730,7 +729,7 @@ const WorktreeSettingsPage: React.FC = () => {
       data-bf-part="root"
     >
       <ConfigPageHeader
-        icon={<GitBranch size={20} aria-hidden />}
+        icon={<Icon name="git" size="lg" aria-hidden />}
         title={t('settings.title')}
         subtitle={t('settings.description')}
       />

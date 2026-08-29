@@ -1,9 +1,10 @@
 /** Status bar for cursor position, language, and encoding. */
 
 import React from 'react';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n';
 import './EditorStatusBar.scss';
+import { Tooltip } from '@bitfun/ui';
 
 export interface EditorStatusBarProps {
   /** Current line number */

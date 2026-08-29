@@ -1,7 +1,7 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Menu, MenuItem, Modal } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
+import { Github, Loader2, LogOut } from 'lucide-react';
 import { Avatar} from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
@@ -178,15 +178,13 @@ export function MarketAccountControls({
           >
             <Avatar size={22} src={account.me.user.avatarUrl} alt={account.me.user.login} />
             <span>@{account.me.user.login}</span>
-            <ChevronDown size={13} aria-hidden="true" />
+            <Icon name="chevron-down" size="xs" aria-hidden="true" />
           </button>
           {menuOpen && createPortal(
-            <div
+            <Menu
               ref={menuPanelRef}
               className="market-account-controls__menu"
-              role="menu"
-              data-bf-component="market-account-controls"
-              data-bf-part="menu"
+              aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
               style={{
                 top: `${menuPosition?.top ?? 0}px`,
                 left: `${menuPosition?.left ?? 0}px`,
@@ -204,18 +202,13 @@ export function MarketAccountControls({
                   <span>{t('market.account.githubAccount')}</span>
                 </div>
               </div>
-              <button
-                type="button"
-                role="menuitem"
-                className="market-account-controls__menu-item"
-                data-bf-component="market-account-controls"
-                data-bf-part="menuItem"
+              <MenuItem
+                leading={<LogOut size={14} aria-hidden="true" />}
                 onClick={() => void signOut()}
               >
-                <LogOut size={14} aria-hidden="true" />
                 {t('market.signOut')}
-              </button>
-            </div>,
+              </MenuItem>
+            </Menu>,
             getAppearanceOverlayHost(),
           )}
         </div>

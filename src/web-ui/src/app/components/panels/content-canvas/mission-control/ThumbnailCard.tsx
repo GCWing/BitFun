@@ -4,12 +4,13 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { X, Pin, FileCode, FileText, Image, Terminal, GitBranch } from 'lucide-react';
+import { FileCode, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import type { CanvasTab, EditorGroupId } from '../types';
 import { isFileViewerType } from '../types';
 import './ThumbnailCard.scss';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 export interface ThumbnailCardProps {
   /** Tab data */
@@ -41,13 +42,13 @@ const getContentIcon = (type: string) => {
     return <FileText size={16} />;
   }
   if (type.includes('image')) {
-    return <Image size={16} />;
+    return <Icon name="image" size="md" />;
   }
   if (type === 'terminal') {
-    return <Terminal size={16} />;
+    return <Icon name="terminal" size="md" />;
   }
   if (type.includes('git')) {
-    return <GitBranch size={16} />;
+    return <Icon name="git" size="md" />;
   }
   return <FileCode size={16} />;
 };
@@ -160,7 +161,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
           {getContentIcon(tab.content.type)}
         </div>
         <div data-bf-component="canvas-thumbnail" data-bf-part="title" className="canvas-thumbnail-card__title">
-          {tab.state === 'pinned' && <Pin size={10} className="canvas-thumbnail-card__pin-icon" />}
+          {tab.state === 'pinned' && <Icon name="pin" size="2xs" className="canvas-thumbnail-card__pin-icon" />}
           <span className={tab.state === 'preview' ? 'is-preview' : ''}>
             {titleWithDeleted}
           </span>
@@ -174,7 +175,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
               className={`canvas-thumbnail-card__action-btn ${tab.state === 'pinned' ? 'is-active' : ''}`}
               onClick={handlePin}
             >
-              <Pin size={12} />
+              <Icon name="pin" size="xs" />
             </button>
           </Tooltip>
           <Tooltip content={t('tabs.close')}>
@@ -184,7 +185,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
               className="canvas-thumbnail-card__action-btn canvas-thumbnail-card__close-btn"
               onClick={handleClose}
             >
-              <X size={12} />
+              <Icon name="xmark" size="xs" />
             </button>
           </Tooltip>
         </div>

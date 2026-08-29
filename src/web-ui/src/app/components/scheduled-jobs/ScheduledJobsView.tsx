@@ -5,10 +5,10 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Button, Switch, IconButton, Input, Select } from '@bitfun/ui';
+import { Button, Switch, IconButton, Input, Select, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { Select as LegacySelect, Textarea, Tooltip } from '@/component-library';
+import { Select as LegacySelect, Textarea } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,

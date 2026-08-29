@@ -1,11 +1,9 @@
 import React from 'react';
-import { 
-  Folder, 
-  FolderOpen, 
-  File, 
-  FileText, 
-  Image, 
-  Code
+import { Icon } from '@bitfun/ui';
+import {
+  FolderOpen,
+  FileText,
+  Code,
 } from 'lucide-react';
 import { FileSystemNode, FileIconType } from '../types';
 import { getFileIconType as getIconTypeFromDetector } from '@/infrastructure/language-detection';
@@ -60,12 +58,12 @@ export function getFileIcon(node: FileSystemNode, isExpanded?: boolean): React.R
   const iconType = getFileIconType(node);
   
   if (node.isDirectory) {
-    return isExpanded ? React.createElement(FolderOpen, { size: 16 }) : React.createElement(Folder, { size: 16 });
+    return isExpanded ? React.createElement(FolderOpen, { size: 16 }) : React.createElement(Icon, { name: 'folder', size: 'md' });
   }
   
   switch (iconType) {
     case 'image':
-      return React.createElement(Image, { size: 16 });
+      return React.createElement(Icon, { name: 'image', size: 'md' });
     case 'code':
     case 'javascript':
     case 'typescript':
@@ -84,7 +82,7 @@ export function getFileIcon(node: FileSystemNode, isExpanded?: boolean): React.R
     case 'text':
       return React.createElement(FileText, { size: 16 });
     default:
-      return React.createElement(File, { size: 16 });
+      return React.createElement(Icon, { name: 'files', size: 'md' });
   }
 }
 

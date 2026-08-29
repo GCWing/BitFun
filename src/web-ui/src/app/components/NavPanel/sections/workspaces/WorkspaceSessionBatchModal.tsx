@@ -1,6 +1,6 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Bot, FolderKanban, Loader2, MessageSquare, Trash2 } from 'lucide-react';
+import { Archive, Bot, FolderKanban, Loader2, Trash2 } from 'lucide-react';
 import { Checkbox} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
@@ -353,7 +353,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
           </div>
         </div>
 
-        <div data-bf-component="workspace-session-batch-modal" data-bf-part="list" className="workspace-session-batch-modal__list">
+        <ScrollArea data-bf-component="workspace-session-batch-modal" data-bf-part="list" className="workspace-session-batch-modal__list">
           {isLoading ? (
             <div data-bf-component="workspace-session-batch-modal" data-bf-part="state" data-bf-state="loading" className="workspace-session-batch-modal__state">
               <Loader2 size={16} className="workspace-session-batch-modal__spinner" />
@@ -374,7 +374,9 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
             sessions.map(({ metadata, displayAsChild }) => {
               const isSelected = selectedSessionIds.has(metadata.sessionId);
               const sessionPresentation = resolveSessionPresentation(metadata.agentType);
-              const SessionIcon = sessionPresentation === 'assistant' ? Bot : MessageSquare;
+              const sessionGlyph = sessionPresentation === 'assistant'
+                ? <Bot size={15} />
+                : <Icon name="session" size="sm" />;
               return (
                 <label data-bf-component="workspace-session-batch-modal" data-bf-part="row"
                   data-bf-state={[isSelected && 'selected', displayAsChild && 'child'].filter(Boolean).join(' ') || undefined}
@@ -389,7 +391,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                     />
                   </div>
                   <div className={`workspace-session-batch-modal__row-icon is-${sessionPresentation}`}>
-                    <SessionIcon size={15} />
+                    {sessionGlyph}
                   </div>
                   <div data-bf-component="workspace-session-batch-modal" data-bf-part="rowContent" className="workspace-session-batch-modal__row-content">
                     <div className="workspace-session-batch-modal__row-head">
@@ -421,7 +423,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
               );
             })
           )}
-        </div>
+        </ScrollArea>
 
         <div data-bf-component="workspace-session-batch-modal" data-bf-part="footer" className="workspace-session-batch-modal__footer">
           <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>

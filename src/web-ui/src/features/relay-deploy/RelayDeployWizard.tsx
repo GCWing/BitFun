@@ -10,14 +10,24 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, Field, IconButton, Input as DesignInput, Modal, Select } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, Select, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Alert, Tooltip } from '@/component-library';
+import { Alert } from '@/component-library';
 import {
-  Server, User, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine,
-  CheckCircle2, XCircle, AlertTriangle, RefreshCw, Eye, EyeOff, Search,
-  ChevronLeft, Rocket, PartyPopper,
+  Server,
+  Lock,
+  Key,
+  FolderOpen,
+  Loader2,
+  Play,
+  ArrowDownToLine,
+  AlertTriangle,
+  RefreshCw,
+  EyeOff,
+  ChevronLeft,
+  Rocket,
+  PartyPopper,
 } from 'lucide-react';
 import { sshApi } from '../ssh-remote/sshApi';
 import { pickSshPrivateKeyPath } from '../ssh-remote/pickSshPrivateKeyPath';
@@ -728,7 +738,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
   // ── step renderers ───────────────────────────────────────────────────────
   const renderConnect = () => (
-    <div className="relay-deploy-wizard__scroll">
+    <ScrollArea className="relay-deploy-wizard__scroll">
       <p className="relay-deploy-wizard__desc">{t('relayDeploy.selectServerDesc')}</p>
 
       {hasSavedConnections && (
@@ -740,7 +750,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               value={savedSearch}
               onChange={(e) => setSavedSearch(e.target.value)}
               placeholder={t('actions.search')}
-              leading={<Search size={14} />}
+              leading={<Icon name="search" size="sm" />}
               size="sm"
             />
           </div>
@@ -784,7 +794,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               value={configSearch}
               onChange={(e) => setConfigSearch(e.target.value)}
               placeholder={t('actions.search')}
-              leading={<Search size={14} />}
+              leading={<Icon name="search" size="sm" />}
               size="sm"
             />
           </div>
@@ -852,7 +862,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           <Field label={t('ssh.remote.username')} controlWidth="fill">
             <DesignInput value={formData.username}
               onChange={(e) => setFormData((p) => ({ ...p, username: e.target.value }))}
-              leading={<User size={16} />} disabled={connecting} />
+              leading={<Icon name="user" size="md" />} disabled={connecting} />
           </Field>
         </div>
         <div className="relay-deploy-wizard__field">
@@ -876,7 +886,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                     aria-label={showPassword ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
                     onClick={() => setShowPassword((s) => !s)}
                     tabIndex={-1}
-                    icon={showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    icon={showPassword ? <EyeOff size={16} /> : <Icon name="eye" size="md" />}
                   />
                 } />
             </Field>
@@ -918,7 +928,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                       aria-label={showPassphrase ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
                       onClick={() => setShowPassphrase((s) => !s)}
                       tabIndex={-1}
-                      icon={showPassphrase ? <EyeOff size={16} /> : <Eye size={16} />}
+                      icon={showPassphrase ? <EyeOff size={16} /> : <Icon name="eye" size="md" />}
                     />
                   } />
               </Field>
@@ -940,7 +950,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           )}
         </Button>
       </div>
-    </div>
+    </ScrollArea>
   );
 
   const renderCheckRow = (
@@ -949,9 +959,9 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     detail: string,
   ) => (
     <div className="relay-deploy-wizard__check-row">
-      {ok === true && <CheckCircle2 size={15} className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--ok" />}
+      {ok === true && <Icon name="check-circle" size="sm" className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--ok" />}
       {ok === 'warn' && <AlertTriangle size={15} className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--warn" />}
-      {ok === false && <XCircle size={15} className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--fail" />}
+      {ok === false && <Icon name="xmark" size="sm" className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--fail" />}
       <span className="relay-deploy-wizard__check-label">{label}</span>
       <span className="relay-deploy-wizard__check-detail">{detail}</span>
     </div>
@@ -965,7 +975,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     const dockerWarn = !!pf?.dockerInstalled && !dockerOk && pf.dockerAccessMode !== 'missing';
     const dockerWillInstall = !!pf && !pf.dockerInstalled && canInstallDocker;
     return (
-      <div className="relay-deploy-wizard__scroll">
+      <ScrollArea className="relay-deploy-wizard__scroll">
         <div className="relay-deploy-wizard__server-banner">
           <Server size={14} />
           <span>{serverLabel}</span>
@@ -980,7 +990,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           <>
             {alreadyDeployed && (
               <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--info">
-                <CheckCircle2 size={18} />
+                <Icon name="check-circle" size="lg" />
                 <div className="relay-deploy-wizard__notice-text">
                   <span className="relay-deploy-wizard__notice-title">{t('relayDeploy.alreadyDeployedTitle')}</span>
                   <span className="relay-deploy-wizard__notice-desc">
@@ -1102,7 +1112,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             )}
             {taskFailed && (
               <div className="relay-deploy-wizard__task-status relay-deploy-wizard__task-status--failed">
-                <XCircle size={14} />
+                <Icon name="xmark" size="sm" />
                 <span>{t('relayDeploy.dockerInstallFailed')}</span>
               </div>
             )}
@@ -1126,7 +1136,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                       setStep('register');
                     }}
                     disabled={taskRunning || !pf.relayHealthy}
-                    leadingIcon={<User size={14} />}
+                    leadingIcon={<Icon name="user" size="sm" />}
                   >
 
                     {t('relayDeploy.skipToRegister')}
@@ -1152,12 +1162,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             </div>
           </>
         )}
-      </div>
+      </ScrollArea>
     );
   };
 
   const renderDeploy = () => (
-    <div className="relay-deploy-wizard__scroll">
+    <ScrollArea className="relay-deploy-wizard__scroll">
       <div className="relay-deploy-wizard__server-banner">
         <Server size={14} />
         <span>{serverLabel}</span>
@@ -1174,7 +1184,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         )}
         {taskStatus === 'succeeded' && (
           <>
-            <CheckCircle2 size={16} className="relay-deploy-wizard__check-icon--ok" />
+            <Icon name="check-circle" size="md" className="relay-deploy-wizard__check-icon--ok" />
             <div className="relay-deploy-wizard__task-header-text">
               <span className="relay-deploy-wizard__task-title">{t('relayDeploy.deploySucceeded')}</span>
             </div>
@@ -1182,7 +1192,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         )}
         {taskStatus === 'failed' && (
           <>
-            <XCircle size={16} className="relay-deploy-wizard__check-icon--fail" />
+            <Icon name="xmark" size="md" className="relay-deploy-wizard__check-icon--fail" />
             <div className="relay-deploy-wizard__task-header-text">
               <span className="relay-deploy-wizard__task-title">{t('relayDeploy.deployFailed')}</span>
             </div>
@@ -1219,11 +1229,11 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           </Button>
         )}
       </div>
-    </div>
+    </ScrollArea>
   );
 
   const renderRegister = () => (
-    <div className="relay-deploy-wizard__scroll">
+    <ScrollArea className="relay-deploy-wizard__scroll">
       <div className="relay-deploy-wizard__server-banner">
         <Server size={14} />
         <span>{relayUrl}</span>
@@ -1247,7 +1257,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         </button>
       </div>
       <div className="relay-deploy-wizard__notice relay-deploy-wizard__notice--info">
-        <User size={18} />
+        <Icon name="user" size="lg" />
         <div className="relay-deploy-wizard__notice-text">
           <span className="relay-deploy-wizard__notice-title">
             {regMode === 'create' ? t('relayDeploy.registerTitle') : t('relayDeploy.registerExistingTitle')}
@@ -1262,7 +1272,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           <Field label={t('accountLogin.username')} controlWidth="fill">
             <DesignInput type="text" value={regUsername}
               onChange={(e) => setRegUsername(e.target.value)}
-              leading={<User size={16} />} disabled={regLoading} />
+              leading={<Icon name="user" size="md" />} disabled={regLoading} />
           </Field>
         </div>
         <div className="relay-deploy-wizard__field">
@@ -1278,7 +1288,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                   aria-label={showRegPassword ? t('ssh.remote.hidePassword') : t('ssh.remote.showPassword')}
                   onClick={() => setShowRegPassword((s) => !s)}
                   tabIndex={-1}
-                  icon={showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  icon={showRegPassword ? <EyeOff size={16} /> : <Icon name="eye" size="md" />}
                 />
               } />
           </Field>
@@ -1304,41 +1314,41 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
             {regLoading ? (
               <><Loader2 size={14} className="spinning" />{t('relayDeploy.creatingAccount')}</>
             ) : (
-              <><User size={14} />{t('relayDeploy.createAccount')}</>
+              <><Icon name="user" size="sm" />{t('relayDeploy.createAccount')}</>
             )}
           </Button>
         ) : (
           <Button variant="fill" size="sm" onClick={handleUseExisting}
             disabled={regLoading || !regUsername.trim() || !regPassword}
-            leadingIcon={<CheckCircle2 size={14} />}>
+            leadingIcon={<Icon name="check-circle" size="sm" />}>
 
             {t('relayDeploy.finishAndLogin')}
           </Button>
         )}
       </div>
-    </div>
+    </ScrollArea>
   );
 
   const renderDone = () => (
-    <div className="relay-deploy-wizard__scroll">
+    <ScrollArea className="relay-deploy-wizard__scroll">
       <div className="relay-deploy-wizard__done">
         <PartyPopper size={32} className="relay-deploy-wizard__done-icon" />
         <span className="relay-deploy-wizard__done-title">{t('relayDeploy.doneTitle')}</span>
         <code className="relay-deploy-wizard__done-url">{relayUrl}</code>
         {verify && (
           <div className={`relay-deploy-wizard__verify ${verify.reachable ? 'ok' : 'failed'}`}>
-            {verify.reachable ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            {verify.reachable ? <Icon name="check-circle" size="sm" /> : <AlertTriangle size={14} />}
             <span>{verify.reachable ? t('relayDeploy.verifyOk') : t('relayDeploy.verifyFailed')}</span>
           </div>
         )}
       </div>
       <div className="relay-deploy-wizard__actions">
-        <Button variant="fill" size="sm" onClick={handleFinish} leadingIcon={<CheckCircle2 size={14} />}>
+        <Button variant="fill" size="sm" onClick={handleFinish} leadingIcon={<Icon name="check-circle" size="sm" />}>
 
           {t('relayDeploy.finishAndLogin')}
         </Button>
       </div>
-    </div>
+    </ScrollArea>
   );
 
   return (
@@ -1363,7 +1373,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                   data-bf-state={[i === stepIndex && 'active', i < stepIndex && 'completed'].filter(Boolean).join(' ') || undefined}
                 >
                   <span className="relay-deploy-wizard__step-dot">
-                    {i < stepIndex ? <CheckCircle2 size={12} /> : i + 1}
+                    {i < stepIndex ? <Icon name="check-circle" size="xs" /> : i + 1}
                   </span>
                   <span className="relay-deploy-wizard__step-label">{s.label}</span>
                 </div>

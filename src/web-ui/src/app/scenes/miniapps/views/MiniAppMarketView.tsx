@@ -1,20 +1,13 @@
-import { Button, ConfirmDialog, SearchField, Select, StatusPill, type SelectOption } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, SearchField, Select, type SelectOption, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
   ChevronUp,
-  Download,
-  ExternalLink,
   Heart,
   Loader2,
   PackageCheck,
   RefreshCw,
-  Search as SearchIcon,
   ShieldCheck,
-  Star,
 } from 'lucide-react';
 
 import {
@@ -275,7 +268,7 @@ const MiniAppMarketView: React.FC = () => {
             data-bf-part="headerActions"
           >
             <SearchField
-              leadingIcon={<SearchIcon aria-hidden />}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
               value={query}
               onValueChange={setQuery}
               placeholder={t('market.search')}
@@ -388,8 +381,8 @@ const MiniAppMarketView: React.FC = () => {
                         <strong>{name}</strong>
                         <p>{description}</p>
                         <div className="miniapp-market-card__stats">
-                          <span><Star size={12} /> {item.ratingAverage.toFixed(1)}</span>
-                          <span><Download size={12} /> {formatNumber(item.downloadCount)}</span>
+                          <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
+                          <span><Icon name="download" size="xs" /> {formatNumber(item.downloadCount)}</span>
                           <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
                         </div>
                       </div>
@@ -445,7 +438,7 @@ const MiniAppMarketView: React.FC = () => {
             {/* Installed and up to date: nothing left to install, so say so and let "Open" lead. */}
             {installed && !canUpdate ? (
               <span className="miniapp-market-detail__installed-state">
-                <Check size={14} />
+                <Icon name="check-line" size="sm" />
                 {t('market.detail.installed')}
               </span>
             ) : null}
@@ -455,7 +448,7 @@ const MiniAppMarketView: React.FC = () => {
                 variant={canUpdate ? 'outline' : 'fill'}
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => openInstalledApp(installed.appId)}
-                leadingIcon={<ArrowUpRight size={14} />}
+                leadingIcon={<Icon name="arrow-up-right" size="sm" />}
               >
 
                 {t('market.detail.open')}
@@ -468,7 +461,7 @@ const MiniAppMarketView: React.FC = () => {
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >
-                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <RefreshCw size={14} /> : <Download size={14} />}
+                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <RefreshCw size={14} /> : <Icon name="download" size="sm" />}
                 {installLabel}
               </Button>
             ) : null}
@@ -526,10 +519,7 @@ const MiniAppMarketView: React.FC = () => {
               <div className="miniapp-market-detail__rating">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button key={value} type="button" onClick={() => void rate(value)} disabled={actionBusy}>
-                    <Star
-                      size={18}
-                      fill={(detail.myRating ?? 0) >= value ? 'currentColor' : 'none'}
-                    />
+                    <Icon name="star" size="lg" />
                   </button>
                 ))}
                 <span>{detail.ratingAverage.toFixed(1)} · {formatNumber(detail.ratingCount)}</span>
@@ -546,7 +536,7 @@ const MiniAppMarketView: React.FC = () => {
                   <div key={release.releaseId}>
                     <span>v{release.releaseNumber}</span>
                     <span>{release.minBitfunVersion}+</span>
-                    {release.yanked ? <StatusPill tone="warning">{t('market.detail.yanked')}</StatusPill> : <Check size={14} />}
+                    {release.yanked ? <StatusPill tone="warning">{t('market.detail.yanked')}</StatusPill> : <Icon name="check-line" size="sm" />}
                   </div>
                 ))}
               </div>
@@ -557,7 +547,7 @@ const MiniAppMarketView: React.FC = () => {
                   aria-expanded={releasesExpanded}
                   onClick={() => setReleasesExpanded((current) => !current)}
                 >
-                  {releasesExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  {releasesExpanded ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
                   {releasesExpanded
                     ? t('market.detail.releasesCollapse')
                     : t('market.detail.releasesExpand', { count: releaseHistory.hiddenCount })}
@@ -569,7 +559,7 @@ const MiniAppMarketView: React.FC = () => {
                 size="sm"
                 variant="outline"
                 onClick={() => void systemAPI.openExternal(detail.repositoryUrl!)}
-                leadingIcon={<ExternalLink size={14} />}
+                leadingIcon={<Icon name="arrow-up-right" size="sm" />}
               >
 
                 {t('market.detail.repository')}

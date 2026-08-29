@@ -67,7 +67,6 @@
   &__page {
     position: absolute;
     inset: 0;
-    overflow-y: auto;
     will-change: opacity, transform;
 
     &[data-state='active'][data-direction='forward'] {

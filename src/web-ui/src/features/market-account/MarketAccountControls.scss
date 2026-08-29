@@ -1,5 +1,4 @@
 @use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .market-account-controls {
   position: relative;
@@ -48,17 +47,14 @@
     }
   }
 
+  /* Positioning-only overrides; the design-system Menu owns the surface look. */
   &__menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
     z-index: $z-popover;
-    width: max-content;
-    min-width: min(190px, calc(100vw - 16px));
-    max-width: min(230px, calc(100vw - 16px));
-    max-height: calc(100vh - 16px);
-    overflow-y: auto;
-    padding: $size-gap-2;
+    inline-size: max-content;
+    min-inline-size: min(190px, calc(100vw - 16px));
+    max-inline-size: min(230px, calc(100vw - 16px));
+    max-block-size: calc(100vh - 16px);
   }
 
   &__profile {
@@ -91,28 +87,6 @@
     span {
       color: var(--bf-appearance-token-color-text-muted);
       font-size: var(--bf-appearance-token-font-size-xs);
-    }
-  }
-
-  &__menu-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    margin-top: $size-gap-1;
-    padding: $size-gap-2;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    text-align: left;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 

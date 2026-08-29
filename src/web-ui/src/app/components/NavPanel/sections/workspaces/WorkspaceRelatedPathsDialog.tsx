@@ -1,4 +1,4 @@
-import { Button, Input, Modal } from '@bitfun/ui';
+import { Button, Icon, Input, Modal } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -12,7 +12,7 @@ import { sshApi } from '@/features/ssh-remote/sshApi';
 import RemoteFileBrowser from '@/features/ssh-remote/RemoteFileBrowser';
 import { createLogger } from '@/shared/utils/logger';
 import { isRemoteWorkspace, type RelatedPath, type WorkspaceInfo } from '@/shared/types';
-import { FolderOpen, Link2, Plus, Trash2 } from 'lucide-react';
+import { FolderOpen, Trash2 } from 'lucide-react';
 import './WorkspaceRelatedPathsDialog.scss';
 
 const log = createLogger('WorkspaceRelatedPathsDialog');
@@ -244,7 +244,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
         >
           <div data-bf-component="workspace-related-paths-dialog" data-bf-part="intro" className="workspace-related-paths-dialog__intro">
             <div className="workspace-related-paths-dialog__intro-icon">
-              <Link2 size={18} />
+              <Icon name="link" size="lg" />
             </div>
             <div data-bf-component="workspace-related-paths-dialog" data-bf-part="introCopy" className="workspace-related-paths-dialog__intro-copy">
               <div className="workspace-related-paths-dialog__intro-title">
@@ -413,7 +413,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
               type="button"
               variant="outline"
               size="sm"
-              leadingIcon={<Plus />}
+              leadingIcon={<Icon name="plus" size="lg" />}
               onClick={handleAddDraft}
               disabled={saving}
             >

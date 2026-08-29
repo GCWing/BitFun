@@ -24,15 +24,8 @@
     background: var(--bf-appearance-token-color-bg-primary);
   }
 
-  // Toolbar
+  // Toolbar layout comes from the design-system Toolbar; keep it pinned to the top.
   &__toolbar {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    background: var(--bf-appearance-token-color-bg-primary);
-    border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    min-height: 32px;
     flex-shrink: 0;
   }
 
@@ -60,57 +53,8 @@
     white-space: nowrap;
   }
 
-  &__controls {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    flex-shrink: 0;
-    margin-left: auto;
-  }
-
-  // Button Styles
-  &__btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    transition: color $motion-base $easing-standard;
-
-    &:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:disabled {
-      opacity: $opacity-disabled;
-      cursor: default;
-    }
-
-    svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-    }
-
-    &--zoom-display {
-      width: auto;
-      min-width: 40px;
-      padding: 0 $size-gap-1;
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
-    }
-  }
-
-  &__divider {
-    width: 1px;
-    height: 20px;
-    background: var(--bf-appearance-token-border-base);
-    margin: 0 $size-gap-1;
+  &__zoom-display {
+    min-width: 40px;
   }
 
   // Image Container

@@ -1,9 +1,9 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { X, CheckCircle, XCircle } from 'lucide-react';
-import { PresenceBoundary, Tooltip } from '@/component-library';
+;
+import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { DiffEditor } from '../../../tools/editor';
@@ -111,7 +111,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               <Button
                 variant="fill"
                 size="sm"
-                leadingIcon={<CheckCircle />}
+                leadingIcon={<Icon name="check-circle" size="lg" />}
                 onClick={onAcceptFile}
                 disabled={retainedContent.loading}
               >
@@ -123,7 +123,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               <Button
                 variant="outline"
                 size="sm"
-                leadingIcon={<XCircle />}
+                leadingIcon={<Icon name="xmark" size="lg" />}
                 onClick={onRejectFile}
                 disabled={retainedContent.loading}
               >
@@ -137,7 +137,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               <IconButton
                 size="sm"
                 aria-label={t('tooltip.close')}
-                icon={<X />}
+                icon={<Icon name="xmark" size="lg" />}
                 onClick={onClose}
               />
             </Tooltip>

@@ -1,7 +1,7 @@
-import { Button, Input, Select, StatusPill, Switch, type SelectOption, type StatusPillTone } from '@bitfun/ui';
+import { Button, Icon, Input, Select, type SelectOption, StatusPill, type StatusPillTone, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, CloudOff, Download, HardDrive, PhoneCall } from 'lucide-react';
+import { CloudOff, HardDrive, PhoneCall } from 'lucide-react';
 import {
   LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
   speechAPI,
@@ -304,11 +304,11 @@ const VoiceInputConfig: React.FC = () => {
 
   const progressPercent = Math.min(100, Math.max(0, selectedModel?.progress?.percent ?? 0));
   const statusIcon = status === 'ready'
-    ? <CheckCircle2 size={18} />
+    ? <Icon name="check-circle" size="lg" />
     : status === 'unavailable'
       ? <CloudOff size={18} />
       : status === 'setup'
-        ? <Download size={18} />
+        ? <Icon name="download" size="lg" />
         : <HardDrive size={18} />;
 
   return (
@@ -362,7 +362,7 @@ const VoiceInputConfig: React.FC = () => {
                       size="sm"
                       onClick={() => handleDownload(selectedModel)}
                       loading={busyAction === `download:${selectedModel.modelId}`}
-                      leadingIcon={<Download size={14} />}
+                      leadingIcon={<Icon name="download" size="sm" />}
                     >
 
                       {t('status.downloadAndEnable')}

@@ -5,8 +5,8 @@ export const workspaceItemAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   parts: [
     { id: 'root' }, { id: 'card' }, { id: 'collapse' }, { id: 'icon' },
     { id: 'name' }, { id: 'label' }, { id: 'badge' }, { id: 'action' },
-    { id: 'menu' }, { id: 'menuTrigger' }, { id: 'menuPopover' }, { id: 'menuItem' },
-    { id: 'menuDivider' }, { id: 'sessions' }, { id: 'remoteStatus' },
+    { id: 'menu' }, { id: 'menuTrigger' },
+    { id: 'sessions' }, { id: 'remoteStatus' },
     { id: 'indexIndicator' }, { id: 'indexPanel' },
   ],
   facets: [{ id: 'variant', attribute: 'data-bf-variant', values: ['workspace', 'assistant'] }],

@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, ScrollArea } from '@bitfun/ui';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -102,7 +102,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
       data-bf-component="reasoning-config-panel"
       data-bf-part="root"
     >
-      <div
+      <ScrollArea
         className="bitfun-reasoning-config-panel__body"
         data-bf-component="reasoning-config-panel"
         data-bf-part="body"
@@ -115,7 +115,7 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
           onChange={setDraft}
           onValidationChange={setEditorInvalid}
         />
-      </div>
+      </ScrollArea>
       <div
         className="bitfun-reasoning-config-panel__footer"
         data-bf-component="reasoning-config-panel"

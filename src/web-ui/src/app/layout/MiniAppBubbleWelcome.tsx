@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowUpRight, FolderOpen } from 'lucide-react';
+import { Icon, ScrollArea } from '@bitfun/ui';
+import { FolderOpen } from 'lucide-react';
 import type { MiniAppBubbleCustomization } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
 
@@ -32,7 +33,7 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
   const suggestions = welcome?.suggestions || [];
 
   return (
-    <section className="bitfun-fmc__miniapp-welcome" data-bf-component="miniapp-bubble-welcome" data-bf-part="root">
+    <ScrollArea className="bitfun-fmc__miniapp-welcome" data-bf-component="miniapp-bubble-welcome" data-bf-part="root">
       <div
         className="bitfun-fmc__miniapp-welcome-icon"
         data-bf-component="miniapp-bubble-welcome"
@@ -80,13 +81,13 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
                 onClick={() => onSuggestion(suggestion.prompt)}
               >
                 <span>{suggestion.label}</span>
-                <ArrowUpRight size={13} aria-hidden="true" />
+                <Icon name="arrow-up-right" size="xs" aria-hidden="true" />
               </button>
             ))}
           </div>
         </div>
       )}
-    </section>
+    </ScrollArea>
   );
 };
 

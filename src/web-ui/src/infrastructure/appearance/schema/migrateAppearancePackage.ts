@@ -27,13 +27,30 @@ const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'switch']);
 
 const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'assistant-card': new Set(['configure', 'newSession']),
+  'branch-quick-switch': new Set(['list']),
+  'canvas-tab-overflow': new Set(['list']),
   'computer-use-tool-card': new Set(['settingsButton']),
   'context-list': new Set(['clear']),
   'copy-output-button': new Set(['action', 'icon', 'text']),
   'create-agent-page': new Set(['back']),
-  'font-preference': new Set(['resetButton']),
+  'font-preference': new Set(['resetButton', 'levelGroup', 'levelButton']),
+  'git-diff-view': new Set(['typeSwitcher', 'typeOption']),
+  'git-nav': new Set(['sections']),
   'image-analysis-card': new Set(['expand']),
+  'image-viewer': new Set(['toolbar', 'controls', 'action']),
+  'markdown-editor': new Set(['modeToggle']),
+  'market-account-controls': new Set(['menu', 'menuItem']),
   'mini-app-tool-display': new Set(['open']),
+  'nav-panel': new Set([
+    'assistantSessionMenu',
+    'footerMenu', 'footerMenuItem', 'footerMenuDivider',
+    'workspaceMenu', 'workspaceMenuItem', 'workspaceMenuDivider', 'workspaceMenuTitle', 'workspaceMenuEmpty',
+    'sections',
+  ]),
+  'notification-button': new Set(['menuItem']),
+  'settings-nav': new Set(['sections']),
+  'shell-nav': new Set(['content']),
+  'workspace-item': new Set(['menuPopover', 'menuItem', 'menuDivider']),
   'peer-device': new Set(['switcherDisconnect']),
   'review-session-summary-card': new Set(['open']),
   'sessions-section': new Set(['retry', 'aggregateRetry']),
@@ -43,7 +60,7 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
 };
 
 const RETIRED_SCENE_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
-  skills: new Set(['addAction']),
+  skills: new Set(['addAction', 'discoverContent', 'suiteSections']),
 };
 
 function migrateRuntimePartRule(value: unknown): unknown {

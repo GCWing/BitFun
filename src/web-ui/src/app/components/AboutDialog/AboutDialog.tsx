@@ -4,22 +4,16 @@
  * persistent GitHub repository entry point.
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Alert, Tooltip } from '@/component-library';
+import { Alert } from '@/component-library';
 import {
-  ArrowRight,
   CalendarDays,
-  Check,
-  CheckCircle2,
   Code2,
-  Copy,
-  GitBranch,
   RefreshCw,
   ShieldCheck,
   Sparkle,
-  Star,
   Tag,
 } from 'lucide-react';
 import {
@@ -210,7 +204,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           data-bf-part="root"
         >
           <div className="bitfun-about-dialog__body">
-            <section
+            <ScrollArea
               className="bitfun-about-dialog__brand"
               data-bf-component="about-dialog"
               data-bf-part="hero"
@@ -256,7 +250,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<CheckCircle2 size={15} aria-hidden="true" />}
+                          leadingIcon={<Icon name="check-circle" size="sm" aria-hidden="true" />}
                           onClick={() => void handleCheckForUpdates()}
                           data-testid="about-check-updates"
                         >
@@ -329,7 +323,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                       {updateStatus === 'installed' ? (
                         <div className="bitfun-about-dialog__update-installed">
                           <div className="bitfun-about-dialog__update-status bitfun-about-dialog__update-status--success">
-                            <CheckCircle2 size={14} aria-hidden="true" />
+                            <Icon name="check-circle" size="sm" aria-hidden="true" />
                             <span>{t('update.installedMessage')}</span>
                           </div>
                           <Button variant="fill" size="sm" onClick={onRestart}>
@@ -359,9 +353,9 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   <span key={dot.id} style={{ opacity: dot.opacity }} />
                 ))}
               </div>
-            </section>
+            </ScrollArea>
 
-            <section
+            <ScrollArea
               className="bitfun-about-dialog__metadata"
               data-bf-component="about-dialog"
               data-bf-part="content"
@@ -415,7 +409,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         onClick={() => void copyToClipboard(version.gitCommit ?? '', 'commit')}
                         aria-label={t('about.copyCommit')}
                       >
-                        {copiedItem === 'commit' ? <Check size={15} /> : <Copy size={15} />}
+                        {copiedItem === 'commit' ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
                       </button>
                     </Tooltip>
                   ) : null}
@@ -424,7 +418,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
               <div className="bitfun-about-dialog__info-row" data-bf-component="about-dialog" data-bf-part="infoRow">
                 <div className="bitfun-about-dialog__info-label" data-bf-component="about-dialog" data-bf-part="infoLabel">
-                  <GitBranch size={21} strokeWidth={1.75} aria-hidden="true" />
+                  <Icon name="git" size="lg" aria-hidden="true" />
                   <span>{t('about.branch')}</span>
                 </div>
                 <span
@@ -452,7 +446,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                   {licenseName}
                 </span>
               </div>
-            </section>
+            </ScrollArea>
           </div>
 
           <section
@@ -465,12 +459,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               className="bitfun-about-dialog__star-rule bitfun-about-dialog__star-rule--leading"
               aria-hidden="true"
             />
-            <Star
-              className="bitfun-about-dialog__star-icon"
-              size={38}
-              strokeWidth={1.45}
-              aria-hidden="true"
-            />
+            <Icon name="star" size="lg" className="bitfun-about-dialog__star-icon" aria-hidden="true" />
             <div className="bitfun-about-dialog__star-copy">
               <h2 id="bitfun-about-star-title" className="bitfun-about-dialog__star-title">
                 <span>{t('about.githubStarTitle')}</span>
@@ -485,7 +474,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               variant="fill"
               size="md"
               className="bitfun-about-dialog__star-button"
-              trailingIcon={<ArrowRight size={18} aria-hidden="true" />}
+              trailingIcon={<Icon name="arrow-right" size="lg" aria-hidden="true" />}
               onClick={handleGithubStar}
               data-testid="about-github-star"
             >

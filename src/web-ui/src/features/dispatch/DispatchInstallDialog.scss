@@ -50,7 +50,6 @@
     flex: 1;
     flex-direction: column;
     padding: 0 $size-gap-4 $size-gap-4;
-    overflow-y: auto;
 
     // The body is a height-constrained column flex container, so its children
     // would otherwise shrink below their content instead of scrolling.

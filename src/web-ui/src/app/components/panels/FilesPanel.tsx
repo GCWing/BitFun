@@ -3,10 +3,10 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, IconButton, SearchField, StatusPill } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
+import { CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
 import {
   FileExplorer,
   getNewItemParentPath,
@@ -14,7 +14,7 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Tooltip } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
@@ -1056,7 +1056,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   aria-label={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
                   size="sm"
                   onClick={handleToggleViewMode}
-                  icon={viewMode === 'tree' ? <SearchIcon size={14} /> : <List size={14} />}
+                  icon={viewMode === 'tree' ? <Icon name="search" size="sm" /> : <List size={14} />}
                 />
               </Tooltip>
             )
@@ -1077,7 +1077,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               size="sm"
               leadingIcon={isSearching
                 ? <Loader2 className="bitfun-files-panel__search-spinner" size={14} aria-hidden />
-                : <SearchIcon size={14} aria-hidden />}
+                : <Icon name="search" size="sm" aria-hidden />}
             />
             <div className="bitfun-files-panel__search-toolbar" data-bf-component="files-panel" data-bf-part="searchToolbar">
               <div className="bitfun-files-panel__search-modes">
@@ -1218,7 +1218,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 !isSearching && !searchError && (
                   <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
                     <div className="bitfun-files-panel__placeholder-icon">
-                      <SearchIcon size={32} />
+                      <Icon name="search" size="lg" />
                     </div>
                     <p>{t('search.noResults')}</p>
                   </div>
@@ -1228,7 +1228,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           ) : (
             <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
               <div className="bitfun-files-panel__placeholder-icon">
-                <SearchIcon size={32} />
+                <Icon name="search" size="lg" />
               </div>
               <p>{t('search.enterKeyword')}</p>
             </div>
@@ -1276,7 +1276,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       </div>
 
       {transfers.size > 0 && (
-        <div className="bitfun-files-panel__transfers" data-bf-component="files-panel" data-bf-part="transfers">
+        <ScrollArea className="bitfun-files-panel__transfers" data-bf-component="files-panel" data-bf-part="transfers">
           {Array.from(transfers.entries()).map(([id, tp]) => (
             <div className="bitfun-files-panel__transfer" data-bf-component="files-panel" data-bf-part="transfer" role="status" key={id}>
               <div className="bitfun-files-panel__transfer-label">
@@ -1346,7 +1346,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               </div>
             </div>
           ))}
-        </div>
+        </ScrollArea>
       )}
 
       <InputDialog

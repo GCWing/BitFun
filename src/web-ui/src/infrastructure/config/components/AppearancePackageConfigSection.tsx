@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Check, Download, Image, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, IconButton } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   SYSTEM_APPEARANCE_ID,
@@ -87,7 +87,7 @@ export function AppearancePackageFailurePanel({
           title={t('package.diagnostics.dismiss')}
           aria-label={t('package.diagnostics.dismiss')}
           onClick={onDismiss}
-          icon={<X size={14} />}
+          icon={<Icon name="xmark" size="sm" />}
         />
       </div>
 
@@ -188,7 +188,7 @@ function AppearancePackagePreview({
           <div className="appearance-package-config__preview-popover-image">
             {previewUrl
               ? <img src={previewUrl} alt="" />
-              : <Image size={40} aria-hidden="true" />}
+              : <Icon name="image" size="lg" aria-hidden="true" />}
           </div>
           <span>{appearanceName}</span>
         </div>
@@ -205,10 +205,10 @@ function AppearancePackagePreview({
         <div className="appearance-package-config__card-preview">
           {previewUrl
             ? <img src={previewUrl} alt="" />
-            : <Image size={32} aria-hidden="true" />}
+            : <Icon name="image" size="lg" aria-hidden="true" />}
           {!fallbackSrc && (
             <span className="appearance-package-config__selected-mark" aria-hidden="true">
-              <Check size={13} strokeWidth={2.5} />
+              <Icon name="check-line" size="xs" />
             </span>
           )}
         </div>
@@ -342,7 +342,7 @@ export function AppearancePackageConfigSection() {
                 aria-label={t('package.export')}
                 disabled={busy}
                 onClick={() => void handleExport(selectedAppearance.id)}
-                icon={<Download size={14} />}
+                icon={<Icon name="download" size="sm" />}
               />
               <IconButton
                 size="sm"

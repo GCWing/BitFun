@@ -1,17 +1,7 @@
-import { Button } from '@bitfun/ui';
+import { Button, Icon } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Bot,
-  ChevronRight,
-  CircleAlert,
-  LoaderCircle,
-  Plus,
-  Puzzle,
-  Settings2,
-  Sparkles,
-  Wrench,
-} from 'lucide-react';
+import { Bot, CircleAlert, LoaderCircle, Wrench } from 'lucide-react';
 import {
   GalleryEmpty,
   GalleryLayout,
@@ -222,7 +212,7 @@ const NurseryGallery: React.FC = () => {
         title={(
           <span className="nursery-gallery__page-title">
             {t('nursery.gallery.title')}
-            <Sparkles size={18} strokeWidth={1.65} aria-hidden="true" />
+            <Icon name="spark" size="lg" aria-hidden="true" />
           </span>
         )}
         subtitle={t('nursery.gallery.subtitle')}
@@ -238,7 +228,7 @@ const NurseryGallery: React.FC = () => {
             {creating ? (
               <LoaderCircle className="nursery-spinning" size={15} aria-hidden="true" />
             ) : (
-              <Plus size={15} aria-hidden="true" />
+              <Icon name="plus" size="sm" aria-hidden="true" />
             )}
             <span>
               {t(creating ? 'nursery.gallery.creating' : 'nursery.gallery.newAssistant')}
@@ -284,7 +274,7 @@ const NurseryGallery: React.FC = () => {
                     {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
                   </span>
                   <span className="nursery-defaults__stat">
-                    <Puzzle size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Icon name="extension" size="xs" aria-hidden="true" />
                     {t('nursery.template.stats.skills', { count: templateStats.enabledSkillCount })}
                   </span>
                 </>
@@ -298,15 +288,10 @@ const NurseryGallery: React.FC = () => {
             onClick={openDefaults}
           >
             <span className="nursery-defaults__action-icon" aria-hidden="true">
-              <Settings2 size={16} strokeWidth={1.8} />
+              <Icon name="settings" size="md" />
             </span>
             <span className="nursery-defaults__action-label">{t('nursery.template.configure')}</span>
-            <ChevronRight
-              className="nursery-defaults__action-chevron"
-              size={15}
-              strokeWidth={1.8}
-              aria-hidden="true"
-            />
+            <Icon name="chevron-right" size="sm" className="nursery-defaults__action-chevron" aria-hidden="true" />
           </button>
         </section>
 
@@ -350,7 +335,7 @@ const NurseryGallery: React.FC = () => {
                   size="sm"
                   onClick={handleCreateAssistant}
                   disabled={creating}
-                  leadingIcon={<Plus size={15} aria-hidden="true" />}
+                  leadingIcon={<Icon name="plus" size="sm" aria-hidden="true" />}
                 >
 
                   {t('nursery.gallery.newAssistant')}

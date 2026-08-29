@@ -270,8 +270,7 @@
 | Appearance 语言选项 | `appearance-language-option` | 重复的语言下拉选项。包含 `data-locale-id`，并带有 Select 组件提供的 `data-selected`。 |
 | Appearance 主题选择器 | `appearance-theme-select` | Appearance 中 theme Select 的真实触发节点。 |
 | Appearance 外观选项 | `appearance-palette-option` | 重复的外观下拉选项。包含 `data-appearance-id`，并带有 Select 组件提供的 `data-selected`。 |
-| Appearance UI 字号分组 | `appearance-ui-font-level-group` | UI font size 预置级别按钮组根节点。 |
-| Appearance UI 字号按钮 | `appearance-ui-font-level-btn` | 重复的 UI font size 预置级别按钮。包含 `data-font-level` 和 `data-selected`。 |
+| Appearance UI 字号分组 | `appearance-ui-font-level-group` | UI font size 预置级别控件根节点。预置级别渲染为设计系统 SegmentedControl 分段，可通过 `[data-bf-part="segment"][data-bf-value="<level>"]` 定位，选中分段带 `aria-checked="true"`。 |
 | Appearance UI 自定义字号控制区 | `appearance-ui-font-custom-controls` | custom UI 字号控制区根节点，仅在 custom 激活时渲染。 |
 | Appearance UI 自定义字号输入框 | `appearance-ui-font-custom-input` | custom UI 字号 px 输入框。包含 `data-font-level="custom"`。 |
 | Appearance UI 自定义字号减一按钮 | `appearance-ui-font-custom-step-minus` | custom UI 字号减一按钮。 |

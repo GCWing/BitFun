@@ -1,16 +1,6 @@
-import { Button, Modal, SearchField, Select } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea, SearchField, Select } from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  Download,
-  Image,
-  PackageCheck,
-  RefreshCw,
-  Search as SearchIcon,
-  Store,
-} from 'lucide-react';
+import { AlertTriangle, PackageCheck, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { MarketAccountControls } from '@/features/market-account';
@@ -290,12 +280,12 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       || Boolean(linkedToOtherListing);
 
     return (
-      <div
+      <ScrollArea
         className="appearance-market__detail"
         data-bf-component="appearance-settings"
         data-bf-part="marketDetail"
       >
-        <Button variant="outline" size="sm" onClick={() => setDetail(null)} leadingIcon={<ArrowLeft size={14} />}>
+        <Button variant="outline" size="sm" onClick={() => setDetail(null)} leadingIcon={<Icon name="arrow-left" size="sm" />}>
 
           {t('package.market.back')}
         </Button>
@@ -315,7 +305,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 onError={(event) => retryOriginalMarketImage(event.currentTarget, detail.previewUrl)}
               />
             )
-            : <Image size={32} aria-hidden="true" />}
+            : <Icon name="image" size="lg" aria-hidden="true" />}
         </div>
         <div
           className="appearance-market__detail-body"
@@ -414,7 +404,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                   || appearanceStatus === 'applying'}
                 onClick={() => void handleApply()}
               >
-                {active ? <Check size={15} /> : <PackageCheck size={15} />}
+                {active ? <Icon name="check-line" size="sm" /> : <PackageCheck size={15} />}
                 {active ? t('package.market.applied') : t('package.market.apply')}
               </Button>
             ) : (
@@ -423,7 +413,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >
-                {updateAvailable ? <RefreshCw size={15} /> : <Download size={15} />}
+                {updateAvailable ? <RefreshCw size={15} /> : <Icon name="download" size="sm" />}
                 {installing
                   ? t('package.market.installing')
                   : updateAvailable
@@ -436,7 +426,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
             <span>{t('package.market.noAutoApply')}</span>
           </div>
         </div>
-      </div>
+      </ScrollArea>
     );
   };
 
@@ -510,7 +500,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               data-bf-part="marketToolbar"
             >
               <SearchField
-                leadingIcon={<SearchIcon aria-hidden />}
+                leadingIcon={<Icon name="search" size="lg" aria-hidden />}
                 value={query}
                 onValueChange={setQuery}
                 onSearch={value => setSubmittedQuery(value.trim())}
@@ -556,7 +546,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               </div>
             )}
 
-            <div
+            <ScrollArea
               className={`appearance-market__results${refreshing ? ' appearance-market__results--dimmed' : ''}`}
               data-bf-component="appearance-settings"
               data-bf-part="marketResults"
@@ -618,7 +608,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                                 onError={(event) => retryOriginalMarketImage(event.currentTarget, item.previewUrl)}
                               />
                             )
-                            : <Image size={25} aria-hidden="true" />}
+                            : <Icon name="image" size="lg" aria-hidden="true" />}
                           <span>{t(`package.market.mode.${item.mode}`)}</span>
                         </div>
                         <div
@@ -655,7 +645,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                   data-bf-component="appearance-settings"
                   data-bf-part="marketEmpty"
                 >
-                  <Store size={28} aria-hidden="true" />
+                  <Icon name="store" size="lg" aria-hidden="true" />
                   <p>{t('package.market.empty')}</p>
                 </div>
               )}
@@ -673,7 +663,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                   </Button>
                 </div>
               )}
-            </div>
+            </ScrollArea>
 
             {loading && <span className="sr-only" role="status">{t('package.market.loading')}</span>}
           </div>

@@ -1,7 +1,8 @@
  
 
 import React from 'react';
-import { Network, CheckCircle } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+import { Network } from 'lucide-react';
 import type { MermaidDiagramContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type { 
   ContextTransformer, 
@@ -159,7 +160,7 @@ export class MermaidDiagramCardRenderer implements ContextCardRenderer<'mermaid-
     
     return (
       <div className="bitfun-context-card__status">
-        <CheckCircle size={16} className="bitfun-context-card__status-icon--success" />
+        <Icon name="check-circle" size="md" className="bitfun-context-card__status-icon--success" />
       </div>
     );
   }

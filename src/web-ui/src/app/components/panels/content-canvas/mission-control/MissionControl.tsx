@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button, IconButton, KeyHint } from '@bitfun/ui';
-import { X, Merge } from 'lucide-react';
+import { Button, Icon, IconButton, KeyHint, ScrollArea } from '@bitfun/ui';
+import { Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { ThumbnailCard } from './ThumbnailCard';
@@ -212,7 +212,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             <IconButton
               size="sm"
               aria-label={t('tooltip.close')}
-              icon={<X />}
+              icon={<Icon name="xmark" size="lg" />}
               onClick={onClose}
               title={t('tooltip.close')}
             />
@@ -260,7 +260,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Thumbnail grid - unified display */}
-        <div data-bf-component="mission-control" data-bf-part="grid" className="canvas-mission-control__grid">
+        <ScrollArea data-bf-component="mission-control" data-bf-part="grid" className="canvas-mission-control__grid">
           {filteredTabs.length > 0 ? (
             filteredTabs.map(({ tab, groupId }) => (
               <ThumbnailCard
@@ -284,7 +284,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
               )}
             </div>
           )}
-        </div>
+        </ScrollArea>
 
         {/* Footer hint */}
         <div data-bf-component="mission-control" data-bf-part="footer" className="canvas-mission-control__footer">

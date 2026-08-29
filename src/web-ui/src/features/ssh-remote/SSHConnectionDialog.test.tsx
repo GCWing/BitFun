@@ -52,6 +52,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Modal: ({
     isOpen,
     children,
@@ -94,10 +95,43 @@ vi.mock('@bitfun/ui', () => ({
       ))}
     </select>
   ),
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  FormSection: ({
+    children,
+    title,
+    actions,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { title?: React.ReactNode; actions?: React.ReactNode; headingAs?: string }) => (
+    <section {...props}>
+      {title}
+      {actions}
+      {children}
+    </section>
+  ),
+  FieldGroup: React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    function FieldGroup({ children, ...props }, ref) {
+      return <div ref={ref} {...props}>{children}</div>;
+    },
+  ),
+  FieldRow: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  // The real Field associates its label with the child control; the mock
+  // mirrors that accessible name via aria-label so queries stay realistic.
+  Field: ({
+    label,
+    error,
+    children,
+  }: { label?: React.ReactNode; error?: React.ReactNode; children: React.ReactElement }) => (
+    <div>
+      {React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+        'aria-label': typeof label === 'string' ? label : undefined,
+      })}
+      {error}
+    </div>
+  ),
 }));
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Input: ({
     label,
     value,
