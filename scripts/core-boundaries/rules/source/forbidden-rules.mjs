@@ -4150,6 +4150,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/assembly/core/src/external_sources.rs',
           'src/crates/assembly/core/src/external_hooks.rs',
           'src/crates/assembly/core/src/instruction_sources.rs',
+          'src/crates/assembly/core/src/plugin_config_publication.rs',
         ],
         message:
           'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',

@@ -14,13 +14,14 @@ crate-type = ["rlib"]
 async-trait = { workspace = true }
 bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client" }
 bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources", "plugin-source"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["plugin-runtime"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime", "plugin-runtime"] }
 bitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
 bitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }
 globset = { workspace = true }
+log = { workspace = true }
 oxc-parse = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }

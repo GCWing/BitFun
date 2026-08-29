@@ -1250,7 +1250,7 @@ impl SkillRegistry {
         #[cfg(feature = "opencode-plugin-host")]
         {
             let plugin_roots =
-                crate::plugin_config_projection::skill_roots_for_agent(workspace_root, agent_type)
+                crate::plugin_config_publication::skill_roots_for_agent(workspace_root, agent_type)
                     .into_iter()
                     .map(|root| {
                         LocalConfiguredSkillRootContribution {

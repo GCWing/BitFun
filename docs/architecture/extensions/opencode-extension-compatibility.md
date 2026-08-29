@@ -110,8 +110,10 @@ Tool 执行与取消、dispose，以及插件反向调用的 metadata/ask。Open
 失败会停止当前有序 Hook 链；after 失败只把已执行结果标成错误并反馈给模型，不进入 Tool 重试。
 
 Config Hook 的输入复用 adapter 现有本地来源计划，按 user global、显式文件、project、配置目录和 inline 的顺序
-合并完整 JSON/JSONC 对象；`$schema` 不是必填项，未知字段原样保留。Config Hook、插件 Agent/权限/Skill 投影、Tool
-注册和模型可见 output 已接入现有归属模块。插件 Tool 的真实 `title`、`output`、`metadata` 会进入完整 after Hook 链，
+合并完整 JSON/JSONC 对象；`$schema` 不是必填项，未知字段原样保留。OpenCode adapter 负责 Config contributor 归属及
+Agent/权限/Plugin Tool/Skill 字段的类型化投影；Core 只负责现有产品 owner 对接、runtime key 绑定和 generation 原子提交。
+Config Hook、插件 Agent/权限/Skill 投影、Tool 注册和模型可见 output 已接入现有归属模块。插件 Tool 的真实
+`title`、`output`、`metadata` 会进入完整 after Hook 链，
 原始结构化结果继续保留这些字段；after Hook 对 title/metadata 的变换尚无稳定 UI/持久化消费方，当前只把变换后的
 output 作为模型展示结果，后续有真实消费方时再扩展小型展示契约。
 
@@ -386,7 +388,7 @@ Node 进程永久累积；这不是 package-plugin 的 workspace-scoped runtime 
 | 代际替换与长时 backend 写请求精确并发 | 后续可靠性 PR | 当前会停止新 Hook/Tool、取消 instance stream 并 dispose，但尚无 instance-scoped backend RPC admission/drain；极端并发下旧代已接收的写请求可能晚到完成 | 在 backend bridge 增加 instance-scoped 拒绝新请求和有界 drain；超时标记 OutcomeUnknown，且不得确认 replacement 完成。 |
 | 多 workspace 同名 Tool 激活与退役精确并发 | 后续可靠性 PR | 当前 mux 路由与全局注册表分别受锁保护；极端的最后一条旧路由退役和新路由激活交错时，可能短暂撤下仍有新路由的 mux | 统一两层状态的锁序或保留空 mux，并增加同名 Tool 激活/退役并发测试；常规顺序切换和 workspace 隔离已由本 PR 覆盖。 |
 | workspace 在扫描前已被删除或移动 | 后续清理 PR | workspace 路径无法规范化时不会猜测等价身份；已激活实例可能保留到显式停用或应用退出 | 保存已确认的 canonical identity，并在来源撤销通知中按该 identity 退役；补删除、移动和符号链接变化样例。 |
-| Core 内遗留的 OpenCode Config 投影细节 | 后续边界收敛 PR | 当前 Core 正确拥有 generation 原子提交及 Agent/权限/Skill owner 对接，但仍直接解释 `agent.mode/hidden/temperature/prompt/permission` 与 `skills.paths`，形成明确的临时模块边界债务 | 由 OpenCode adapter 输出最小的类型化 Agent、权限约束和 workspace Skill root 投影；Core 只做现有 owner 校验、runtime key 绑定与原子提交。不得新增通用 Config 平台或第二套 Runtime。 |
+| Core 内遗留的 OpenCode Client wire 投影 | 后续边界收敛 PR | 当前 loopback adapter 已拥有认证、framing、route/method 匹配和传输错误，但受限的 `client.*` bridge 仍在 Core 解析部分 query/body 并生成 wire JSON；普通插件链路已闭环，协议演进仍可能触及 Product Assembly | 按真实插件消费到的 route 分批把 wire DTO、解析和响应投影移入 `opencode-plugin-host`，向 Core 暴露最小 typed operation/result 并增加 boundary gate；不引入通用 HTTP transport、第二套产品协议或一次性重写。 |
 | existing-session 激活失败的诊断归属 | 后续诊断 PR | 当前 create-session 失败按 workspace 记录；已有 Session 的 ensure 失败缺少已解析 execution root，可能显示为全局诊断，但不会改变原生 Session/Turn 结果 | 让 ensure 返回 workspace 与错误的组合，并补 workspace A 失败不污染 workspace B 的状态测试；不改变插件激活或执行语义。 |
 | existing-session 每次 ensure 的 prepare 成本 | 后续性能 PR | 当前每个恢复触发点都会重新 prepare，再按稳定摘要复用实例；结果正确，但大本地源码树会增加文件扫描和一次 Host RPC | 在来源 watcher/config revision 已有事实之上增加健康 generation 快路径；失去健康或版本事实时仍执行完整 prepare，不使用固定 TTL 猜测。 |
 

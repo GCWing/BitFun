@@ -99,7 +99,7 @@ pub(crate) async fn dispatch_plugin_tool_before(
                 runtime_agent_key,
             )
             .await;
-            if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
+            if crate::plugin_config_publication::is_plugin_agent_runtime_key(runtime_agent_key)
                 && generation.is_none()
             {
                 return Ok(None);
@@ -152,7 +152,7 @@ pub(crate) async fn dispatch_plugin_tool_after(
                 runtime_agent_key,
             )
             .await;
-            if crate::plugin_config_projection::is_plugin_agent_runtime_key(runtime_agent_key)
+            if crate::plugin_config_publication::is_plugin_agent_runtime_key(runtime_agent_key)
                 && generation.is_none()
             {
                 return Ok(None);

@@ -243,6 +243,23 @@ function opencodeHookAdapterEntry(symbol, consumer) {
   };
 }
 
+function opencodePluginConfigProjectionEntry(symbol) {
+  return {
+    symbol,
+    owner: 'opencode-adapter managed Plugin Host Config projection owner',
+    consumer: 'bitfun-core plugin Config publication composition root',
+    verification:
+      'OpenCode plugin Config projection tests, bitfun-core publication tests, and core-boundary public API budget checks',
+    p0: 'typed OpenCode Config Hook projection for the managed Plugin Host runtime slice',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'the live Plugin Host path needs OpenCode field interpretation and contributor attribution outside Product Assembly while Core retains product publication',
+    exit:
+      'remove only if the managed Plugin Host Config projection moves behind another reviewed OpenCode adapter boundary with equivalent attribution and fail-closed tests',
+  };
+}
+
 function opencodeReferenceAdapterEntry(symbol, consumer) {
   return {
     symbol,
@@ -277,6 +294,15 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeConfigSnapshotError',
     'bitfun-core live Plugin Host config validation and OpenCode config snapshot contract tests',
   ),
+  ...[
+    'project_plugin_config',
+    'OpenCodePluginAgentProjection',
+    'OpenCodePluginConfigProjection',
+    'OpenCodePluginConfigProjectionError',
+    'OpenCodePluginContributor',
+    'OpenCodePluginSkillRootProjection',
+    'OpenCodePluginToolRef',
+  ].map(opencodePluginConfigProjectionEntry),
   opencodeAdapterEntry(
     'OpenCodeCommandProvider',
     'bitfun-core external source composition root and OpenCode command adapter tests',
@@ -1339,7 +1365,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter public API must stay limited to reviewed runtime-free sources and the PluginRuntimeClient adapter boundary',
+      'OpenCode adapter public API must stay limited to reviewed sources, managed Plugin Host Config projection, and the PluginRuntimeClient adapter boundary',
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
