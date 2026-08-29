@@ -1773,6 +1773,8 @@ mod file_lock_tests {
     const LOCK_CHILD_METADATA_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_METADATA";
     const LOCK_CHILD_STARTED_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_STARTED";
     const LOCK_CHILD_OBSERVED_ENV: &str = "BITFUN_SUBAUTH_LOCK_CHILD_OBSERVED";
+    const CROSS_PROCESS_TEST_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+    const CROSS_PROCESS_TEST_PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
 
     fn temporary_metadata_path(label: &str) -> PathBuf {
         std::env::temp_dir()
@@ -1781,6 +1783,19 @@ mod file_lock_tests {
                 uuid::Uuid::new_v4()
             ))
             .join("subscription_auth.json")
+    }
+
+    fn assert_store_file_lock_is_contended(metadata_path: &Path) {
+        let lock_path = store_lock_path(metadata_path);
+        let file = open_store_lock_file(&lock_path).expect("open contended transaction lock");
+        match fs2::FileExt::try_lock_exclusive(&file) {
+            Ok(()) => {
+                let _ = fs2::FileExt::unlock(&file);
+                panic!("child transaction unexpectedly acquired the parent lock");
+            }
+            Err(error) if error.raw_os_error() == fs2::lock_contended_error().raw_os_error() => {}
+            Err(error) => panic!("child transaction lock attempt failed unexpectedly: {error}"),
+        }
     }
 
     #[tokio::test]
@@ -1874,11 +1889,13 @@ mod file_lock_tests {
         let observed_path = PathBuf::from(
             std::env::var_os(LOCK_CHILD_OBSERVED_ENV).expect("child observed marker path"),
         );
-        std::fs::write(&started_path, b"started").expect("write child started marker");
+        assert_store_file_lock_is_contended(&metadata_path);
+        std::fs::write(&started_path, b"contended").expect("write child contention marker");
 
-        let _lock = acquire_store_file_lock_with_timeout(&metadata_path, Duration::from_secs(5))
-            .await
-            .expect("child transaction lock");
+        let _lock =
+            acquire_store_file_lock_with_timeout(&metadata_path, CROSS_PROCESS_TEST_LOCK_TIMEOUT)
+                .await
+                .expect("child transaction lock");
         // Keep a lock-regression failure inside the process-local test vault;
         // it must never touch the developer's native credential store.
         set_store_path_for_test(metadata_path.clone());
@@ -1931,14 +1948,13 @@ mod file_lock_tests {
         .spawn()
         .expect("spawn lock-contending child process");
 
-        tokio::time::timeout(Duration::from_secs(2), async {
+        tokio::time::timeout(CROSS_PROCESS_TEST_PROCESS_TIMEOUT, async {
             while !started_path.exists() {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
         .await
-        .expect("child should begin its transaction attempt");
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        .expect("child should observe the contended parent transaction lock");
         assert!(
             !observed_path.exists(),
             "child process must not reconcile while the parent transaction is uncommitted"
@@ -1956,7 +1972,7 @@ mod file_lock_tests {
         .expect("parent metadata commit");
         drop(first);
 
-        let status = tokio::time::timeout(Duration::from_secs(5), async {
+        let status = tokio::time::timeout(CROSS_PROCESS_TEST_PROCESS_TIMEOUT, async {
             loop {
                 if let Some(status) = child.try_wait().expect("poll child process") {
                     break status;
