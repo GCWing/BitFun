@@ -350,6 +350,7 @@ export struct FilePreviewSurface {
       .scrollBar(BarState.Auto)
       .layoutWeight(1)
       .width('100%')
+      .align(Alignment.TopStart)
       .onAppear(() => {
         this.restoreTextScroll();
       })
@@ -379,6 +380,7 @@ export struct FilePreviewSurface {
     .scrollBar(BarState.Auto)
     .layoutWeight(1)
     .width('100%')
+    .align(Alignment.TopStart)
     .onAppear(() => {
       this.restoreMarkdownScroll();
     })
