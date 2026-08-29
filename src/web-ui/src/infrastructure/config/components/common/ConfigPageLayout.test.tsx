@@ -120,7 +120,7 @@ describe('ConfigPageLayout', () => {
     expect(row?.querySelector('.bitfun-config-page-row__control')).toBeNull();
   });
 
-  it('forwards a feature-owned Appearance contract to the real layout nodes', () => {
+  it('preserves design-system component ownership while forwarding feature-owned parts', () => {
     act(() => {
       root.render(
         <ConfigPageLayout
@@ -146,8 +146,15 @@ describe('ConfigPageLayout', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="feature-root"]')?.getAttribute('data-bf-component')).toBe('model-settings');
-    expect(container.querySelector('[data-testid="feature-content"]')?.getAttribute('data-bf-part')).toBe('providerSelection');
-    expect(container.querySelector('[data-testid="feature-section"]')?.getAttribute('data-bf-part')).toBe('providerGroup');
+    const rootElement = container.querySelector('[data-testid="feature-root"]');
+    const contentElement = container.querySelector('[data-testid="feature-content"]');
+    const sectionElement = container.querySelector('[data-testid="feature-section"]');
+
+    expect(rootElement?.getAttribute('data-bf-component')).toBe('scroll-area');
+    expect(rootElement?.getAttribute('data-bf-part')).toBe('viewport');
+    expect(contentElement?.getAttribute('data-bf-component')).toBe('model-settings');
+    expect(contentElement?.getAttribute('data-bf-part')).toBe('providerSelection');
+    expect(sectionElement?.getAttribute('data-bf-component')).toBe('form-section');
+    expect(sectionElement?.getAttribute('data-bf-part')).toBe('providerGroup');
   });
 });

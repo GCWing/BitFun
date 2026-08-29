@@ -43,6 +43,7 @@ vi.mock('@bitfun/ui', () => ({
       <button type="button" onClick={onConfirm}>{confirmText}</button>
     </div>
   ) : null),
+  Icon: ({ name }: { name: string }) => <span data-bf-icon={name} />,
   Switch: ({ checked, disabled, onChange }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
   ),
