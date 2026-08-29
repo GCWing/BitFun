@@ -1482,6 +1482,9 @@ export default function conversationStateUnitTest() {
           onBusy: (_busy: boolean): void => {},
           onStatus: (_status: string): void => {},
           onWorkspaceSelected: (_workspace: WorkspaceInfo): void => {},
+          onCatalogLoading: (_targetId: string): void => {},
+          onCatalogLoaded: (_targetId: string, _workspaces: RecentWorkspaceEntry[]): void => {},
+          onCatalogFailed: (_targetId: string): void => {},
           onRefreshSessions: async (): Promise<void> => {},
           onConnectionFailure: (_error: Object): void => {}
         }

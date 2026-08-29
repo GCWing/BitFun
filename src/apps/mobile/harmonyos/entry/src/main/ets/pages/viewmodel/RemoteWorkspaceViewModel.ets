@@ -12,6 +12,9 @@ export interface RemoteWorkspaceViewModelHooks {
   readonly onBusy: (isBusy: boolean) => void;
   readonly onStatus: (statusText: string) => void;
   readonly onWorkspaceSelected: (workspace: WorkspaceInfo) => void;
+  readonly onCatalogLoading: (targetId: string) => void;
+  readonly onCatalogLoaded: (targetId: string, workspaces: RecentWorkspaceEntry[]) => void;
+  readonly onCatalogFailed: (targetId: string) => void;
   readonly onRefreshSessions: () => Promise<void>;
   readonly onConnectionFailure: (error: Object) => void;
 }
@@ -64,6 +67,10 @@ export class RemoteWorkspaceViewModel {
   async loadRecentWorkspacesInBackground(): Promise<void> {
     const loadVersion = ++this.catalogLoadVersion;
     const targetId = this.hooks.remoteTargetId();
+    if (targetId.length === 0) {
+      return;
+    }
+    this.hooks.onCatalogLoading(targetId);
     try {
       const recent = await this.coordinator.recentWorkspaces();
       if (!this.isCurrentCatalogLoad(loadVersion, targetId)) {
@@ -89,10 +96,14 @@ export class RemoteWorkspaceViewModel {
         }
       });
       this.pageState.setRecentWorkspaces(allWorkspaces);
+      this.hooks.onCatalogLoaded(targetId, allWorkspaces);
       RemoteLogger.info(
         `workspace catalog loaded target=${targetId} count=${allWorkspaces.length} first=${allWorkspaces.length > 0 ? allWorkspaces[0].path : ''}`
       );
     } catch (err) {
+      if (this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        this.hooks.onCatalogFailed(targetId);
+      }
       RemoteLogger.warn(`background recent workspace load failed: ${String(err)}`);
     }
   }

@@ -447,6 +447,7 @@ class AccountDeviceSwitchHarness {
   cachedRemoteClears: number = 0;
   settingsClosings: number = 0;
   readonly accountDeviceSnapshots: CloudAccountDevice[][] = [];
+  readonly loadingCatalogTargets: string[] = [];
   readonly changedWorkspaceSnapshots: string[][] = [];
   readonly controller: SettingsController;
 
@@ -475,6 +476,9 @@ class AccountDeviceSwitchHarness {
         this.accountDeviceSnapshots.push(devices.slice());
       },
       onBeforeControlTargetChange: (): void => {},
+      onControlTargetLoading: (deviceId: string): void => {
+        this.loadingCatalogTargets.push(deviceId);
+      },
       onControlTargetChanged: (): void => {
         this.changedWorkspaceSnapshots.push(
           this.remoteState.recentWorkspaces.map((item: RecentWorkspaceEntry): string => item.path)
@@ -1353,6 +1357,7 @@ export default function transportAndGeneralChatUnitTest() {
       await harness.controller.selectCloudAccountDevice(harness.device('desk-b'), false);
 
       expect(harness.remoteState.recentWorkspaces.length).assertEqual(0);
+      expect(harness.loadingCatalogTargets.join(',')).assertEqual('desk-a,desk-b');
       expect(harness.changedWorkspaceSnapshots.length).assertEqual(2);
       expect(harness.changedWorkspaceSnapshots[1].length).assertEqual(0);
     });

@@ -51,6 +51,8 @@ export interface CloudAccountSettingsHooks {
   readonly onAccountDevices: (devices: CloudAccountDevice[]) => void;
   /** Snapshot the outgoing live device before teardown clears its lists. */
   readonly onBeforeControlTargetChange: () => void;
+  /** The incoming device owns a catalog request from the start of its switch. */
+  readonly onControlTargetLoading: (deviceId: string) => void;
   readonly onControlTargetChanged: () => void;
 }
 
@@ -562,7 +564,7 @@ export class SettingsController {
     // Taken before the teardown, which is the last moment the outgoing device
     // is still readable off the page state.
     const previousTarget = this.restorableControlTarget();
-    this.prepareAccountDeviceConnection();
+    this.prepareAccountDeviceConnection(deviceId);
     try {
       const initialSync = await cloud.sessionManager.connectAccountDevice(
         cloud.client,
@@ -829,7 +831,7 @@ export class SettingsController {
     cloud.remoteState.setAccountUsername('');
   }
 
-  private prepareAccountDeviceConnection(): void {
+  private prepareAccountDeviceConnection(deviceId: string): void {
     const cloud = this.requireCloud();
     cloud.hooks.onBeforeControlTargetChange();
     cloud.hooks.invalidatePreview();
@@ -846,6 +848,7 @@ export class SettingsController {
     // boundary makes the outgoing desktop's catalog look like the incoming
     // desktop's while the latter is still connecting.
     cloud.remoteState.clearWorkspaceActions();
+    cloud.hooks.onControlTargetLoading(deviceId);
     cloud.remoteState.setBusy(true);
     cloud.remoteState.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
     cloud.remoteState.clearActiveSession();

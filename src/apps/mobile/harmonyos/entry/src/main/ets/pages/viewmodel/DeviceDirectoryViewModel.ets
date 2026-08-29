@@ -31,6 +31,8 @@ export class DeviceDirectoryViewModel {
   private readonly directory?: AccountDeviceDirectorySource;
   private readonly inFlight: Set<string> = new Set<string>();
   private readonly workspaceInFlight: Set<string> = new Set<string>();
+  /** Device whose control-target catalog request currently owns `loading`. */
+  private liveCatalogDeviceId: string = '';
 
   constructor(
     state: DeviceDirectoryState,
@@ -94,9 +96,33 @@ export class DeviceDirectoryViewModel {
         entry.sessions
       );
     }
-    if (entry.status === 'idle' || entry.status === 'cached') {
+    if (entry.status === 'loading') {
+      // A live-catalog request belongs to the control-target lifecycle. Once
+      // that target is being torn down, the request can no longer complete
+      // this row. Leave any captured snapshot as cache, otherwise make the row
+      // fetchable again instead of stranding it in a false loading state.
+      entry.status = entry.workspaces.length > 0 || entry.sessions.length > 0 ? 'cached' : 'idle';
+    } else if (entry.status === 'idle' || entry.status === 'cached') {
       entry.status = 'ready';
     }
+  }
+
+  /** Marks the incoming target's catalog request before its handshake starts. */
+  beginLiveCatalog(deviceId: string): void {
+    const target = deviceId.trim();
+    if (target.length === 0) {
+      return;
+    }
+    if (this.liveCatalogDeviceId.length > 0 && this.liveCatalogDeviceId !== target) {
+      this.releaseAbandonedLiveCatalog(this.liveCatalogDeviceId);
+    }
+    const entry = this.state.find(target);
+    if (!entry) {
+      return;
+    }
+    this.liveCatalogDeviceId = target;
+    entry.status = 'loading';
+    entry.errorText = '';
   }
 
   /**
@@ -125,10 +151,49 @@ export class DeviceDirectoryViewModel {
     // Merging the row's old cache here makes any historical cross-device
     // misattribution immortal, because those stale sessions never disappear.
     entry.sessions = stampRemoteSessionsDevice(sessions, target);
-    // An empty activation snapshot means the target-scoped catalog has been
-    // cleared and is about to load, not that an empty catalog was confirmed.
-    entry.status = workspaces.length > 0 ? 'ready' : 'idle';
+    // The handshake only carries the current workspace and sessions. The full
+    // recent-workspace request starts immediately afterwards, so even an empty
+    // target-scoped projection is still loading rather than a confirmed empty
+    // catalog.
+    entry.status = 'loading';
     entry.errorText = '';
+  }
+
+  /** Publishes the authoritative full catalog returned by the live target. */
+  completeLiveCatalog(deviceId: string, workspaces: RecentWorkspaceEntry[]): void {
+    const target = deviceId.trim();
+    const entry = this.state.find(target);
+    if (!entry) {
+      return;
+    }
+    entry.workspaces = workspaces.slice();
+    entry.status = 'ready';
+    entry.errorText = '';
+    if (this.liveCatalogDeviceId === target) {
+      this.liveCatalogDeviceId = '';
+    }
+  }
+
+  /** Ends a live catalog request as failed so retry reflects real transport state. */
+  failLiveCatalog(deviceId: string): void {
+    const target = deviceId.trim();
+    const entry = this.state.find(target);
+    if (!entry) {
+      return;
+    }
+    entry.status = 'failed';
+    entry.errorText = '';
+    if (this.liveCatalogDeviceId === target) {
+      this.liveCatalogDeviceId = '';
+    }
+  }
+
+  private releaseAbandonedLiveCatalog(deviceId: string): void {
+    const entry = this.state.find(deviceId);
+    if (entry && entry.status === 'loading') {
+      entry.status = entry.workspaces.length > 0 || entry.sessions.length > 0 ? 'cached' : 'idle';
+    }
+    this.liveCatalogDeviceId = '';
   }
 
   syncDevices(devices: CloudAccountDevice[]): void {
