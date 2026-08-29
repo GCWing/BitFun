@@ -53,6 +53,14 @@ pub enum RemoteWorkspacePolicy {
 
 /// Declared remote-workspace policy for every registered Tauri command.
 pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = &[
+    (
+        "frontend_update_candidate_ready",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "get_frontend_update_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
     ("confirm_frontend_update", RemoteWorkspacePolicy::LocalOnly),
     ("rollback_frontend_update", RemoteWorkspacePolicy::LocalOnly),
     ("accept_file", RemoteWorkspacePolicy::LegacyUnaudited),
@@ -2066,7 +2074,12 @@ mod tests {
 
     #[test]
     fn frontend_update_decisions_are_local_desktop_only() {
-        for command in ["confirm_frontend_update", "rollback_frontend_update"] {
+        for command in [
+            "frontend_update_candidate_ready",
+            "get_frontend_update_status",
+            "confirm_frontend_update",
+            "rollback_frontend_update",
+        ] {
             assert_eq!(
                 remote_workspace_policy(command),
                 Some(RemoteWorkspacePolicy::LocalOnly),

@@ -109,6 +109,7 @@ function App() {
   const userCloseRequestedRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
   const interactiveShellReadyFrameRef = useRef<number | null>(null);
+  const reportedFrontendTransactionRef = useRef<string | null>(null);
   const bitFunControlStartupRef = useRef(false);
   const workspaceLoadingRef = useRef(workspaceLoading);
   const appLayoutReadyRef = useRef(false);
@@ -179,6 +180,51 @@ function App() {
       }
     };
   }, []);
+
+  // A Creative frontend candidate is not confirmable merely because its HTML
+  // finished loading. Report readiness only after the real app layout and
+  // workspace shell have rendered through the infrastructure adapter. The
+  // immutable host confirmation window keeps its primary action disabled
+  // until this handshake succeeds.
+  useEffect(() => {
+    if (!interactiveShellReady || !isTauriRuntime()) {
+      return;
+    }
+    const transactionId = new URLSearchParams(window.location.search)
+      .get('bitfunFrontendTransaction');
+    if (!transactionId || reportedFrontendTransactionRef.current === transactionId) {
+      return;
+    }
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const retryUntil = Date.now() + 12_000;
+    const reportReady = async (): Promise<void> => {
+      try {
+        await api.invoke('frontend_update_candidate_ready', {
+          request: { transactionId },
+        });
+        if (!cancelled) {
+          reportedFrontendTransactionRef.current = transactionId;
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        if (Date.now() < retryUntil) {
+          retryTimer = window.setTimeout(() => void reportReady(), 250);
+          return;
+        }
+        log.error('Failed to report Creative frontend readiness', error);
+      }
+    };
+    void reportReady();
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, [interactiveShellReady]);
 
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.

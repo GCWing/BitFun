@@ -50,6 +50,8 @@ describe('isPeerLocalOnlyCommand', () => {
   });
 
   it('keeps frontend confirmation and rollback on the controller window', () => {
+    expect(isPeerLocalOnlyCommand('frontend_update_candidate_ready')).toBe(true);
+    expect(isPeerLocalOnlyCommand('get_frontend_update_status')).toBe(true);
     expect(isPeerLocalOnlyCommand('confirm_frontend_update')).toBe(true);
     expect(isPeerLocalOnlyCommand('rollback_frontend_update')).toBe(true);
   });

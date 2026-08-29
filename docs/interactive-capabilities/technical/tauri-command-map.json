@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "6094ecf9b8e3d14c0783f7f0595e3d5e007362c9d89f5655c05e7307e9caa489",
-  "commandCount": 651,
+  "catalogDigest": "0aaa3d178d4cfea701cce3169071ee1414c3b1b816f5912590aad64ac9fb9502",
+  "commandCount": 653,
   "coverage": {
-    "commandCount": 651,
-    "documentedCommandCount": 624,
+    "commandCount": 653,
+    "documentedCommandCount": 626,
     "implementationCommandCount": 27,
     "implementationDigest": "4d3b2e8145a6a97b622fdb78cf1c25275881328eb7ccbc3c92ae95bf798cb190"
   },
@@ -2485,6 +2485,22 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
+      "id": "frontend_update_candidate_ready",
+      "moduleId": "frontend_workbench",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:creative-frontend-authoring"
+      ],
+      "visibility": "documented",
+      "rustPath": "frontend_workbench::frontend_update_candidate_ready",
+      "sourceFile": "src/apps/desktop/src/frontend_workbench.rs",
+      "signature": "fn frontend_update_candidate_ready( state: tauri::State<'_, Arc<FrontendWorkbenchManager>>, webview: tauri::WebviewWindow, request: FrontendUpdateDecisionRequest, ) -> Result<Value, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
       "id": "generate_commit_message",
       "moduleId": "git_agent",
       "capabilityId": null,
@@ -3045,6 +3061,22 @@
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn get_file_tree( state: State<'_, AppState>, request: GetFileTreeRequest, ) -> Result<serde_json::Value, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "get_frontend_update_status",
+      "moduleId": "frontend_workbench",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:creative-frontend-authoring"
+      ],
+      "visibility": "documented",
+      "rustPath": "frontend_workbench::get_frontend_update_status",
+      "sourceFile": "src/apps/desktop/src/frontend_workbench.rs",
+      "signature": "fn get_frontend_update_status( state: tauri::State<'_, Arc<FrontendWorkbenchManager>>, webview: tauri::WebviewWindow, request: FrontendUpdateDecisionRequest, ) -> Result<Value, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "get_global_config_health",

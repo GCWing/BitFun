@@ -3,65 +3,152 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Confirm frontend update</title>
+    <title>Review frontend update</title>
     <style>
-      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
       body { margin: 0; background: #17171a; color: #f3f3f5; }
-      main { padding: 28px; }
-      h1 { margin: 0 0 9px; font-size: 20px; }
-      p { margin: 0 0 22px; color: #aaaab3; line-height: 1.5; }
+      main { padding: 26px 28px 24px; }
+      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #a9a9b2; font-size: 12px; }
+      .indicator { width: 8px; height: 8px; border-radius: 50%; background: #8b75ff; box-shadow: 0 0 0 4px rgb(139 117 255 / 14%); }
+      .indicator.loading { animation: pulse 1.1s ease-in-out infinite; }
+      h1 { margin: 0 0 9px; font-size: 20px; letter-spacing: -.01em; }
+      p { min-height: 48px; margin: 0 0 19px; color: #b2b2bb; line-height: 1.5; }
       strong { color: #fff; font-variant-numeric: tabular-nums; }
       .actions { display: flex; gap: 10px; justify-content: flex-end; }
-      button { border: 1px solid #3c3c43; border-radius: 9px; padding: 9px 15px; background: #26262b; color: inherit; cursor: pointer; font: inherit; }
+      button { min-width: 94px; border: 1px solid #3c3c43; border-radius: 9px; padding: 9px 15px; background: #26262b; color: inherit; cursor: pointer; font: inherit; }
       button.primary { border-color: #7657ff; background: #6547e8; }
-      button:disabled { opacity: .55; cursor: wait; }
-      #error { min-height: 20px; margin-top: 14px; color: #ff8585; font-size: 12px; }
+      button:disabled { opacity: .48; cursor: wait; }
+      #error { min-height: 18px; margin-top: 11px; color: #ff9292; font-size: 12px; }
+      @keyframes pulse { 0%, 100% { opacity: .4; transform: scale(.86); } 50% { opacity: 1; transform: scale(1); } }
+      @media (prefers-reduced-motion: reduce) { .indicator.loading { animation: none; } }
     </style>
   </head>
   <body>
     <main>
-      <h1 id="title">Keep this frontend?</h1>
-      <p id="message">Confirm within <strong id="countdown">15</strong> seconds or BitFun will restore the previous version automatically.</p>
+      <div class="eyebrow"><span id="indicator" class="indicator loading"></span><span id="phase">Safety check</span></div>
+      <h1 id="title">Loading the new frontend…</h1>
+      <p id="message">BitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.</p>
       <div class="actions">
         <button id="rollback" type="button">Roll back</button>
-        <button id="confirm" class="primary" type="button">Keep changes</button>
+        <button id="confirm" class="primary" type="button" disabled>Keep changes</button>
       </div>
-      <div id="error" role="alert"></div>
+      <div id="error" role="alert" aria-live="polite"></div>
     </main>
     <script>
       (function () {
         var zh = /^zh/i.test(navigator.language || '');
-        if (zh) {
-          document.documentElement.lang = 'zh-CN';
-          document.getElementById('title').textContent = '保留这次前端修改吗？';
-          document.getElementById('message').innerHTML = '请在 <strong id="countdown">15</strong> 秒内确认，否则 BitFun 会自动恢复上一版本。';
-          document.getElementById('rollback').textContent = '回滚';
-          document.getElementById('confirm').textContent = '保留修改';
-        }
+        var copy = zh ? {
+          phaseLoading: '安全检查',
+          phaseReady: '预览已就绪',
+          phaseDone: '已完成',
+          titleLoading: '正在加载新界面…',
+          titleReady: '保留这次前端修改吗？',
+          messageLoading: 'BitFun 正在等待真实应用界面完成渲染。如果预览不对，可以立即回滚。',
+          messageReady: function (seconds) { return '请在 <strong>' + seconds + '</strong> 秒内确认，否则 BitFun 会自动恢复上一版本。'; },
+          rolledBack: '已恢复上一版本。',
+          rollback: '回滚',
+          confirm: '保留修改',
+          bridgeError: 'BitFun 宿主桥接不可用',
+        } : {
+          phaseLoading: 'Safety check',
+          phaseReady: 'Preview ready',
+          phaseDone: 'Complete',
+          titleLoading: 'Loading the new frontend…',
+          titleReady: 'Keep this frontend?',
+          messageLoading: 'BitFun is waiting for the real app shell to render. You can roll back immediately if the preview looks wrong.',
+          messageReady: function (seconds) { return 'Confirm within <strong>' + seconds + '</strong> seconds or BitFun will restore the previous version automatically.'; },
+          rolledBack: 'The previous version has been restored.',
+          rollback: 'Roll back',
+          confirm: 'Keep changes',
+          bridgeError: 'BitFun host bridge is unavailable',
+        };
+        if (zh) document.documentElement.lang = 'zh-CN';
+
         var params = new URLSearchParams(location.search);
         var transactionId = params.get('transactionId');
-        var remaining = 15;
-        var countdown = document.getElementById('countdown');
-        var buttons = Array.from(document.querySelectorAll('button'));
+        var phase = document.getElementById('phase');
+        var indicator = document.getElementById('indicator');
+        var title = document.getElementById('title');
+        var message = document.getElementById('message');
+        var rollback = document.getElementById('rollback');
+        var confirm = document.getElementById('confirm');
         var error = document.getElementById('error');
-        function invoke(command) {
+        var polling = true;
+        var expiresAt = null;
+
+        rollback.textContent = copy.rollback;
+        confirm.textContent = copy.confirm;
+        phase.textContent = copy.phaseLoading;
+        title.textContent = copy.titleLoading;
+        message.textContent = copy.messageLoading;
+
+        function bridge() {
           if (!transactionId || !window.__TAURI__ || !window.__TAURI__.core) {
-            return Promise.reject(new Error('BitFun host bridge is unavailable'));
+            throw new Error(copy.bridgeError);
           }
-          buttons.forEach(function (button) { button.disabled = true; });
-          return window.__TAURI__.core.invoke(command, { request: { transactionId: transactionId } })
-            .catch(function (reason) {
-              error.textContent = String(reason);
-              buttons.forEach(function (button) { button.disabled = false; });
-            });
+          return window.__TAURI__.core;
         }
-        document.getElementById('confirm').addEventListener('click', function () { invoke('confirm_frontend_update'); });
-        document.getElementById('rollback').addEventListener('click', function () { invoke('rollback_frontend_update'); });
+
+        function renderReady() {
+          var remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+          phase.textContent = copy.phaseReady;
+          indicator.classList.remove('loading');
+          title.textContent = copy.titleReady;
+          message.innerHTML = copy.messageReady(remaining);
+          confirm.disabled = remaining <= 0;
+        }
+
+        function renderOutcome(status) {
+          polling = false;
+          phase.textContent = copy.phaseDone;
+          indicator.classList.remove('loading');
+          confirm.disabled = true;
+          rollback.disabled = true;
+          if (status === 'rolled_back') {
+            title.textContent = copy.rolledBack;
+            message.textContent = '';
+          }
+        }
+
+        async function refreshStatus() {
+          if (!polling) return;
+          try {
+            var status = await bridge().invoke('get_frontend_update_status', {
+              request: { transactionId: transactionId }
+            });
+            error.textContent = '';
+            if (status.status === 'awaiting_confirmation') {
+              expiresAt = Number(status.expiresAtUnixMs || 0);
+              renderReady();
+            } else if (status.status === 'confirmed' || status.status === 'rolled_back') {
+              renderOutcome(status.status);
+            }
+          } catch (reason) {
+            error.textContent = String(reason);
+          }
+        }
+
+        async function decide(command) {
+          confirm.disabled = true;
+          rollback.disabled = true;
+          error.textContent = '';
+          try {
+            await bridge().invoke(command, { request: { transactionId: transactionId } });
+          } catch (reason) {
+            error.textContent = String(reason);
+            rollback.disabled = false;
+            if (expiresAt) renderReady();
+          }
+        }
+
+        confirm.addEventListener('click', function () { void decide('confirm_frontend_update'); });
+        rollback.addEventListener('click', function () { void decide('rollback_frontend_update'); });
         window.setInterval(function () {
-          remaining = Math.max(0, remaining - 1);
-          countdown.textContent = String(remaining);
-          if (remaining === 0) buttons.forEach(function (button) { button.disabled = true; });
-        }, 1000);
+          if (expiresAt) renderReady();
+          void refreshStatus();
+        }, 250);
+        void refreshStatus();
       })();
     </script>
   </body>
