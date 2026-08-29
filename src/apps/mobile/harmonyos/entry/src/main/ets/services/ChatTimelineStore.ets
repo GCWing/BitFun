@@ -344,7 +344,9 @@ export class ChatTimelineStore {
 
   applySnapshot(snapshot: ChatSessionSnapshot): void {
     this.setCursor(snapshot.cursor);
-    if (snapshot.newMessages.length > 0) {
+    if (snapshot.messageSnapshot) {
+      this.setPersistedMessages(snapshot.messageSnapshot);
+    } else if (snapshot.newMessages.length > 0) {
       this.mergePersistedMessages(snapshot.newMessages);
     }
     this.setActiveTurn(snapshot.activeTurn);

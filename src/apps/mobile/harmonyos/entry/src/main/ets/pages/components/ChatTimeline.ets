@@ -6,7 +6,6 @@ import {
   ObservableConversationUiMessage,
   toConversationUiMessage
 } from '../state/ConversationUiModels';
-import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   ChatTimelineItem,
@@ -190,7 +189,7 @@ export struct ChatTimeline {
               .onAppear(() => {
                 this.logRenderedItem(repeatItem.item);
               })
-            } else if (repeatItem.item.message && this.shouldRenderTimelineMessage(repeatItem.item)) {
+            } else if (repeatItem.item.message) {
               ListItem() {
                 if (repeatItem.item.message!.role === 'user') {
                   ChatUserMessageRow({
@@ -250,7 +249,7 @@ export struct ChatTimeline {
         // temporary object through an @Builder freezes the first empty active
         // snapshot on current ArkUI builds.
         ForEach(this.activeTimelineItems(), (item: ObservableChatTimelineItem) => {
-          if (item.message && this.shouldRenderTimelineMessage(item)) {
+          if (item.message) {
             ListItem() {
               ChatAssistantTimelineRow({
                 row: item,
@@ -457,27 +456,6 @@ export struct ChatTimeline {
       return summary.substring(0, 80);
     }
     return summary;
-  }
-
-  private shouldRenderTimelineMessage(item: ChatTimelineItem): boolean {
-    if (!item.message) {
-      return false;
-    }
-    try {
-      const uiMessage = toConversationUiMessage(item.message);
-      const render = ConversationMessageRenderPolicy.shouldRender(uiMessage);
-      RemoteLogger.info(
-        `chat timeline decide type=${item.type} id=${item.id} role=${uiMessage.role} ` +
-        `render=${render ? 1 : 0} text=${uiMessage.text ? uiMessage.text.length : -1} ` +
-        `thinking=${uiMessage.thinking ? uiMessage.thinking.length : 0} ` +
-        `tools=${uiMessage.tools ? uiMessage.tools.length : 0} ` +
-        `items=${uiMessage.items ? uiMessage.items.length : 0}`
-      );
-      return render;
-    } catch (err) {
-      RemoteLogger.error(`chat timeline decide failed type=${item.type} id=${item.id} err=${err}`);
-      return false;
-    }
   }
 
   private logTimelineProjection(reason: string): void {

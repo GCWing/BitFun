@@ -1,5 +1,7 @@
 import { ChatTimelineItem } from '../../model/ChatTimelineModels';
+import { ConversationMessageRenderPolicy } from '../policy/ConversationMessageRenderPolicy';
 import { ChatSurface } from '../state/ChatSurface';
+import { toConversationUiMessage } from '../state/ConversationUiModels';
 import { ComposerPresentation } from './ComposerBar';
 
 /** Layout and host chrome that vary independently from conversation data. */
@@ -28,7 +30,18 @@ export class ConversationViewContract {
   }
 
   static visibleTimelineItems<T extends ChatTimelineItem>(timelineItems: T[]): T[] {
-    return timelineItems.filter((item: T) => item.type !== 'empty_state');
+    // Repeat.virtualScroll requires every input entry to create one child. A
+    // hollow assistant is deliberately invisible, so passing it through and
+    // conditionally omitting its ListItem corrupts the virtual index/height
+    // map and can move adjacent user bubbles outside the viewport. Keep the
+    // renderability fence at the view contract instead: everything handed to
+    // the virtual list is guaranteed to own a visible row.
+    return timelineItems.filter((item: T) => {
+      if (item.type === 'empty_state' || !item.message) {
+        return false;
+      }
+      return ConversationMessageRenderPolicy.shouldRender(toConversationUiMessage(item.message));
+    });
   }
 
   static hasRealTimelineItem(timelineItems: ChatTimelineItem[]): boolean {

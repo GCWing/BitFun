@@ -21,6 +21,9 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['common.running', '运行中'],
   ['common.waiting', '等待中'],
 
+  ['notification.taskCompletedTitle', '任务已完成'],
+  ['notification.taskCompletedBody', 'BitFun 任务已经完成，点击打开 BitFun 查看结果。'],
+
   ['chatHome.prompt', '今天想做什么？'],
   ['chatHome.placeholder', '问问 BitFun'],
   ['chatHome.localHint', '这是手机上的对话。要读写电脑上的项目，请切换到远程。'],

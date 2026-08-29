@@ -74,6 +74,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   onPageShow(): void {
     RemoteLogger.info(`page show state=${(this.remotePageState.connectionState as ConnectionState)} route=${this.appShellViewModel.currentRoute()}`);
+    this.taskCompletionNotificationController.onForeground();
     this.remoteActivityViewModel.resume();
     // Idempotent: covers the pairing that happened after the last cold start.
     void this.startWatchProvisioning();
@@ -84,7 +85,17 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   onPageHide(): void {
     RemoteLogger.info(`page hide state=${(this.remotePageState.connectionState as ConnectionState)} route=${this.appShellViewModel.currentRoute()}`);
     this.settingsController.stopPresencePolling();
-    this.remoteActivityViewModel.invalidate();
+    const activeRemoteTurn = this.remotePageState.activeTurnMessage;
+    if (this.isRemoteConversationContext(this.remotePageState.activeSession.sessionId)) {
+      this.trackRemoteTaskCompletion(this.remotePageState.activeSession.sessionId, activeRemoteTurn);
+    }
+    const keepRemotePolling = this.taskCompletionNotificationController.isTracking('remote');
+    const watchingCompletion = this.taskCompletionNotificationController.onBackground();
+    if (keepRemotePolling && watchingCompletion) {
+      this.remoteActivityViewModel.suspendKeepingActiveTurnPoll();
+    } else {
+      this.remoteActivityViewModel.invalidate();
+    }
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);
     this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
@@ -93,6 +104,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   aboutToDisappear(): void {
     this.settingsController.stopPresencePolling();
     this.watchProvisionController.stop();
+    this.taskCompletionNotificationController.stop();
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);

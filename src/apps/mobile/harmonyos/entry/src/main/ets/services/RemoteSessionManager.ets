@@ -338,6 +338,9 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     const response = await this.send<PollSessionResponse>(command);
     const rawMessages = response.new_messages || [];
     const newMessages = rawMessages.map((item: ChatMessageResponse) => RemoteResponseMapper.chatMessage(item));
+    const rawSnapshot = response.message_snapshot;
+    const messageSnapshot = rawSnapshot ?
+      rawSnapshot.map((item: ChatMessageResponse) => RemoteResponseMapper.chatMessage(item)) : undefined;
     const result: PollSessionResult = {
       version: response.version || sinceVersion,
       changed: response.changed,
@@ -345,13 +348,14 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       title: response.title || '',
       newMessages,
       totalMessageCount: response.total_msg_count || knownMessageCount,
+      messageSnapshot,
       activeTurn: response.active_turn
         ? RemoteResponseMapper.activeTurnToMessage(response.active_turn, response.version || sinceVersion)
         : undefined,
       modelCatalog: response.model_catalog
     };
     const rawActive = response.active_turn;
-    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} ${newMessages.length > 0 ? TranscriptIntegrityPolicy.describeMessages(newMessages) + ' ' : ''}ms=${Date.now() - startedAt}`);
+    RemoteLogger.info(`poll_session done session=${RemoteSessionManager.shortId(sessionId)} changed=${result.changed ? '1' : '0'} state=${result.sessionState} active=${rawActive ? rawActive.turn_id : ''} activeStatus=${rawActive ? rawActive.status : ''} rawText=${rawActive && rawActive.text ? rawActive.text.length : 0} rawThinking=${rawActive && rawActive.thinking ? rawActive.thinking.length : 0} rawItems=${rawActive && rawActive.items ? rawActive.items.length : 0} rawItemText=${RemoteSessionManager.itemsContentLength(rawActive ? rawActive.items : undefined)} projectedText=${result.activeTurn ? result.activeTurn.text.length : 0} new=${newMessages.length} snapshot=${messageSnapshot ? messageSnapshot.length : 0} ${newMessages.length > 0 ? TranscriptIntegrityPolicy.describeMessages(newMessages) + ' ' : ''}ms=${Date.now() - startedAt}`);
     return result;
   }
 

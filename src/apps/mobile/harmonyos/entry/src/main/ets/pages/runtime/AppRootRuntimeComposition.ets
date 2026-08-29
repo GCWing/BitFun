@@ -95,6 +95,11 @@ import { RemoteWorkspaceViewModel } from '../viewmodel/RemoteWorkspaceViewModel'
 import { RemoteSessionViewModel } from '../viewmodel/RemoteSessionViewModel';
 import { GeneralChatConversationViewModel } from '../viewmodel/GeneralChatConversationViewModel';
 import { ModelProviderGeneralChatAdapter } from '../../services/general-chat/ModelProviderGeneralChatAdapter';
+import { HarmonyTaskCompletionNotificationPort } from '../../services/HarmonyTaskCompletionNotificationPort';
+import {
+  TaskCompletionNotificationController,
+  TaskCompletionObservation
+} from '../../services/TaskCompletionNotificationController';
 
 export enum ConnectionState {
   Idle = 'idle',
@@ -148,6 +153,15 @@ export abstract class AppRootRuntimeComposition {
   abstract toggleVoiceInput(): Promise<void>;
 
   readonly sessionManager: RemoteSessionManager = new RemoteSessionManager();
+  readonly taskCompletionNotificationController: TaskCompletionNotificationController =
+    new TaskCompletionNotificationController(
+      new HarmonyTaskCompletionNotificationPort((): Context => this.host.context()),
+      (observation: TaskCompletionObservation): void => {
+        if (observation.source === 'remote') {
+          this.remoteChatPollingLifecycleController.stop();
+        }
+      }
+    );
   readonly workspaceRepository: RemoteWorkspaceRepository =
     new RemoteWorkspaceRepository(this.sessionManager);
   readonly workspaceCoordinator: RemoteWorkspaceCoordinator =
@@ -491,6 +505,11 @@ export abstract class AppRootRuntimeComposition {
             this.chatTimelineStore.clearPendingActiveTurn(pendingActiveId);
             this.conversationController.syncRemoteTimeline();
           }
+          this.taskCompletionNotificationController.track({
+            source: 'remote',
+            sessionId: this.remotePageState.activeSession.sessionId || '',
+            turnId
+          });
           this.remoteChatPollingLifecycleController.nudge();
         },
         onSendFailed: (
@@ -582,6 +601,25 @@ export abstract class AppRootRuntimeComposition {
         },
         onSnapshot: (snapshot: RemoteChatPollingSnapshot) => {
           this.conversationController.applyRemoteSnapshot(snapshot);
+          if (snapshot.activeTurn && snapshot.activeTurn.id.length > 0) {
+            const status = (snapshot.activeTurn.status || '').toLowerCase();
+            if (status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled') {
+              if (this.taskCompletionNotificationController.cancel('remote', snapshot.sessionId)) {
+                this.remoteChatPollingLifecycleController.stop();
+              }
+            } else {
+              this.trackRemoteTaskCompletion(snapshot.sessionId, snapshot.activeTurn);
+            }
+          } else if (snapshot.sessionState.toLowerCase() === 'idle' && snapshot.completedTurnId.length === 0 &&
+            this.taskCompletionNotificationController.cancel('remote', snapshot.sessionId)) {
+            this.remoteChatPollingLifecycleController.stop();
+          }
+          if (snapshot.completedTurnId.length > 0 &&
+            this.taskCompletionNotificationController.complete(
+              'remote', snapshot.sessionId, snapshot.completedTurnId
+            )) {
+            this.remoteChatPollingLifecycleController.stop();
+          }
         },
         onError: (error: Object) => {
           this.remotePageState.setStatusText(ConnectionErrorPolicy.errorText(error));
@@ -660,9 +698,29 @@ export abstract class AppRootRuntimeComposition {
         currentActiveTurnId: (): string => this.currentActiveTurnId(),
         latestUserMessageText: (): string => this.conversationController.latestUserMessageText(),
         syncTimeline: (): void => this.conversationController.syncGeneralTimeline(),
-        refreshSessions: (): void => this.generalChatCommandController.refreshSessions()
+        refreshSessions: (): void => this.generalChatCommandController.refreshSessions(),
+        onTaskStarted: (sessionId: string, turnId: string): void => {
+          this.taskCompletionNotificationController.track({ source: 'general', sessionId, turnId });
+        },
+        onTaskCompleted: (sessionId: string, turnId: string): void => {
+          this.taskCompletionNotificationController.complete('general', sessionId, turnId);
+        },
+        onTaskStopped: (sessionId: string, turnId: string): void => {
+          this.taskCompletionNotificationController.cancel('general', sessionId, turnId);
+        }
       }
     );
+
+  protected trackRemoteTaskCompletion(sessionId: string, activeTurn: ChatMessage): void {
+    const status = (activeTurn.status || '').toLowerCase();
+    if (status !== 'active' && status !== 'completed' && status !== 'done' && status !== 'success') {
+      return;
+    }
+    const explicitTurnId = (activeTurn.turnId || '').trim();
+    const turnId = explicitTurnId.length > 0 ? explicitTurnId :
+      (activeTurn.id.indexOf('active-') === 0 ? activeTurn.id.slice('active-'.length) : '');
+    this.taskCompletionNotificationController.track({ source: 'remote', sessionId, turnId });
+  }
   readonly remoteConnectionController: RemoteConnectionController =
     new RemoteConnectionController(
       this.remotePageState,

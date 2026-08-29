@@ -18,9 +18,9 @@ import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionAction
 /**
  * How many conversations show before the rest go behind an overflow row.
  *
- * The conversations and the workspaces share one scroll now, so the list can no
- * longer take every pixel it wants: six rows leave the workspace section
- * visible on a phone without scrolling to find it.
+ * The conversations and the workspaces share one scroll. Recent history comes
+ * after the device/workspace navigation, so cap each expansion to keep the
+ * bottom section browseable without turning the sidebar into an unbounded list.
  */
 const RECENT_BATCH: number = 6;
 
@@ -60,7 +60,7 @@ export struct AppSidebar {
   @Local archivedSessionsExpanded: boolean = false;
   @Local visibleRecentCount: number = RECENT_BATCH;
   /**
-   * The workspace section, appended below the conversations.
+   * The device/workspace section, rendered before recent conversations.
    *
    * It is a slot rather than a component this file constructs because the
    * sidebar has no business knowing about remote state; the host wires it.
@@ -81,17 +81,16 @@ export struct AppSidebar {
       }
 
       Stack({ alignContent: Alignment.Bottom }) {
-        // Conversations and workspaces scroll together. They are different
-        // kinds of thing — a timeline and a set of places — so they stack
-        // rather than compete for the same pane, and neither needs a label
-        // saying whether it runs here or on a desktop.
+        // Places are the primary navigation, so devices and workspaces come
+        // first. Recent conversations are history and stay at the bottom of
+        // the same scroll instead of pushing the current working context down.
         Scroll() {
           Column() {
-            if (this.showConversationSection) {
-              this.ConversationSection()
-            }
             if (this.showWorkspaceSection) {
               this.contentSlot()
+            }
+            if (this.showConversationSection) {
+              this.ConversationSection()
             }
           }
           .width('100%')
