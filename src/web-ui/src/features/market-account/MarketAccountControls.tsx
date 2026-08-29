@@ -1,7 +1,7 @@
-import { Button, Menu, MenuItem, Modal } from '@bitfun/ui';
+import { Button, Icon, Menu, MenuItem, Modal } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
+import { Github, Loader2, LogOut } from 'lucide-react';
 import { Avatar} from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
@@ -178,7 +178,7 @@ export function MarketAccountControls({
           >
             <Avatar size={22} src={account.me.user.avatarUrl} alt={account.me.user.login} />
             <span>@{account.me.user.login}</span>
-            <ChevronDown size={13} aria-hidden="true" />
+            <Icon name="chevron-down" size="xs" aria-hidden="true" />
           </button>
           {menuOpen && createPortal(
             <Menu

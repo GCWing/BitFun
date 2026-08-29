@@ -1,20 +1,7 @@
-import { Button, IconButton, SearchField, Select, StatusPill, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import {
-  Bot,
-  Circle,
-  Cpu,
-  FileText,
-  MessageSquareText,
-  RotateCcw,
-  Pencil,
-  Plus,
-  Puzzle,
-  Search as SearchIcon,
-  Trash2,
-  Wrench,
-} from 'lucide-react';
+import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Trash2, Wrench, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Select as LegacySelect } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -493,7 +480,7 @@ const AgentsHomeView: React.FC = () => {
   const selectedAgentCapabilityTabs = useMemo(() => {
     const tabs: Array<{
       key: CapabilityTab;
-      icon: typeof Wrench;
+      icon: LucideIcon;
       label: string;
       count?: string;
     }> = [];
@@ -534,7 +521,11 @@ const AgentsHomeView: React.FC = () => {
           : selectedAgentSkills.length;
       tabs.push({
         key: 'skills',
-        icon: Puzzle,
+        icon: (({ size = 14 }: { size?: number | string }) => {
+          const n = typeof size === 'number' ? size : 14;
+          const mapped = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
+          return <Icon name="extension" size={mapped} />;
+        }) as LucideIcon,
         label: t('agentsOverview.skills'),
         count: `${currentSkillCount}/${selectedAgentSkillConfigs.length}`,
       });
@@ -683,7 +674,7 @@ const AgentsHomeView: React.FC = () => {
               className="bitfun-agents-scene__search"
               value={searchQuery}
               onValueChange={setSearchQuery}
-              leadingIcon={<SearchIcon size={14} aria-hidden />}
+              leadingIcon={<Icon name="search" size="sm" aria-hidden />}
               placeholder={t('page.searchPlaceholder')}
               aria-label={t('page.searchPlaceholder')}
               size="sm"
@@ -694,7 +685,7 @@ const AgentsHomeView: React.FC = () => {
             <Button
               variant="fill"
               size="sm"
-              leadingIcon={<Plus size={15} />}
+              leadingIcon={<Icon name="plus" size="sm" />}
               onClick={openCreateAgent}
               data-testid="agents-create-agent-btn"
             >
@@ -723,20 +714,10 @@ const AgentsHomeView: React.FC = () => {
               <div className="bitfun-agents-scene__harness-rail" aria-hidden>
                 <span className="bitfun-agents-scene__harness-rail-line" />
                 {HARNESS_GEAR_PROFILES.map(({ id }) => (
-                  <Circle
-                    key={id}
-                    className={[
+                  <Icon name="circle" size="2xs" key={id} className={[
                       'bitfun-agents-scene__harness-rail-node',
                       id === HARNESS_DEFAULT_PROFILE_ID && 'is-default',
-                    ].filter(Boolean).join(' ')}
-                    size={9}
-                    strokeWidth={1.5}
-                    fill={
-                      id === HARNESS_DEFAULT_PROFILE_ID
-                        ? 'currentColor'
-                        : 'var(--bf-appearance-token-color-bg-scene)'
-                    }
-                  />
+                    ].filter(Boolean).join(' ')} />
                 ))}
               </div>
               <div className="bitfun-agents-scene__harness-profile-grid">
@@ -926,7 +907,7 @@ const AgentsHomeView: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              leadingIcon={<Pencil />}
+              leadingIcon={<Icon name="edit" size="lg" />}
               onClick={() => {
                 const id = selectedAgent.id;
                 closeAgentDetails();
@@ -949,7 +930,7 @@ const AgentsHomeView: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<Puzzle />}
+            leadingIcon={<Icon name="extension" size="lg" />}
             onClick={() => {
               closeAgentDetails();
               openEcosystemCompatibility({ ownerSurface: 'external-sources' });
@@ -1002,7 +983,7 @@ const AgentsHomeView: React.FC = () => {
                   })}
                 </nav>
 
-                <div className="agent-card__config-main">
+                <ScrollArea className="agent-card__config-main">
                   {activeDetailSection === 'basic' ? (
                     <section className="agent-card__config-panel" data-testid="agent-detail-basic-section">
                       <div className="agent-card__config-panel-head">
@@ -1442,7 +1423,7 @@ const AgentsHomeView: React.FC = () => {
                 ) : null}
               </div>
             ) : null}
-              </div>
+              </ScrollArea>
             </div>
         ) : null}
       </GalleryDetailModal>

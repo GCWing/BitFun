@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BarChart3, Search, X } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import {
   ConfigPageLoading,
   ConfigPageMessage,
@@ -23,7 +23,7 @@ import {
   ConfigPageSectionStack,
 } from './common';
 import './UsageStatisticsConfig.scss';
-import { IconButton, Input, Select, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@bitfun/ui';
 
 // ---------------------------------------------------------------------------
 // Chart palette — appearance tokens only (literal vars so the theme color
@@ -272,7 +272,7 @@ const DistributionPanel: React.FC<{
       <h4 id={titleId} className="bitfun-usage-stats__distribution-title">{title}</h4>
       <div className="bitfun-usage-stats__panel-body">
         <DonutChart kind={kind} entries={entries} />
-        <div className="bitfun-usage-stats__table-scroll">
+        <ScrollArea className="bitfun-usage-stats__table-scroll">
           <table className="bitfun-usage-stats__table">
             <caption className="bitfun-sr-only">
               {t('table.caption', { dimension: title })}
@@ -315,7 +315,7 @@ const DistributionPanel: React.FC<{
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
       </div>
     </section>
   );
@@ -329,7 +329,7 @@ const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ 
   const { t, formatNumber } = useI18n('settings/usage');
 
   return (
-    <div
+    <ScrollArea
       className="bitfun-usage-stats__hit-rate-list"
       role="list"
     >
@@ -376,7 +376,7 @@ const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ 
           </div>
         );
       })}
-    </div>
+    </ScrollArea>
   );
 };
 
@@ -928,7 +928,7 @@ const UsageStatisticsConfig: React.FC = () => {
                     data-testid="usage-filter-input"
                     maxLength={100}
                     disabled={loading}
-                    leading={<Search size={14} aria-hidden />}
+                    leading={<Icon name="search" size="sm" aria-hidden />}
                     trailing={filterInput ? (
                       <Tooltip content={t('filter.clear')}>
                         <IconButton
@@ -937,7 +937,7 @@ const UsageStatisticsConfig: React.FC = () => {
                           aria-label={t('filter.clear')}
                           onClick={clearFilter}
                           disabled={loading}
-                          icon={<X size={12} aria-hidden />}
+                          icon={<Icon name="xmark" size="xs" aria-hidden />}
                         />
                       </Tooltip>
                     ) : undefined}

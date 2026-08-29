@@ -4,13 +4,13 @@
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, X, Terminal, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { AnchorPosition } from '../types';
 import { LAYOUT_CONFIG, clampAnchorSize } from '../types';
 import './AnchorZone.scss';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 export interface AnchorZoneProps {
   /** Position */
@@ -123,7 +123,7 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
       {/* Header */}
       <div className="canvas-anchor-zone__header" data-bf-component="content-canvas" data-bf-part="anchorHeader">
         <div className="canvas-anchor-zone__title" data-bf-component="content-canvas" data-bf-part="anchorTitle">
-          <Terminal size={14} />
+          <Icon name="terminal" size="sm" />
           <span>{t('canvas.terminal')}</span>
         </div>
 
@@ -137,7 +137,7 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
               {isCollapsed ? (
                 isBottom ? <ChevronUp size={14} /> : <ChevronUp size={14} />
               ) : (
-                isBottom ? <ChevronDown size={14} /> : <ChevronDown size={14} />
+                isBottom ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-down" size="sm" />
               )}
             </button>
           </Tooltip>
@@ -160,7 +160,7 @@ export const AnchorZone: React.FC<AnchorZoneProps> = ({
               className="canvas-anchor-zone__action-btn canvas-anchor-zone__close-btn"
               onClick={onClose}
             >
-              <X size={14} />
+              <Icon name="xmark" size="sm" />
             </button>
           </Tooltip>
         </div>

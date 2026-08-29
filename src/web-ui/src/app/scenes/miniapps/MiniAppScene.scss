@@ -489,14 +489,16 @@
       letter-spacing: 0;
     }
 
+    &__list {
+      max-height: 140px;
+    }
+
     ul {
       display: flex;
       flex-direction: column;
       gap: $size-gap-1;
-      max-height: 140px;
       margin: 0;
       padding: $size-gap-2 $size-gap-3;
-      overflow: auto;
       border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: $size-radius-base;
       background: var(--bf-appearance-token-element-bg-subtle);

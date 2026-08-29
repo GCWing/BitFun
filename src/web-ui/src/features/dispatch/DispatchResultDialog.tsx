@@ -1,4 +1,4 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -99,7 +99,7 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
           </span>
         </div>
 
-        <div
+        <ScrollArea
           className="dispatch-result-dialog__body"
           data-bf-component="dispatch-result-dialog"
           data-bf-part="body"
@@ -164,14 +164,16 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
                     <span>{result.changes.length}</span>
                   </div>
                   {result.changes.length > 0 ? (
-                    <ul>
-                      {result.changes.map(change => (
-                        <li key={`${change.status}:${change.path}`}>
-                          <strong>{change.status}</strong>
-                          <span>{change.path}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <ScrollArea className="dispatch-result-dialog__change-list">
+                      <ul>
+                        {result.changes.map(change => (
+                          <li key={`${change.status}:${change.path}`}>
+                            <strong>{change.status}</strong>
+                            <span>{change.path}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
                   ) : (
                     <div className="dispatch-result-dialog__empty">
                       {t('dispatch.syncNoFileList')}
@@ -186,7 +188,7 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
               <Alert type="info" message={t('dispatch.syncNoChanges')} />
             )
           ) : null}
-        </div>
+        </ScrollArea>
 
         <div
           className="dispatch-result-dialog__actions"

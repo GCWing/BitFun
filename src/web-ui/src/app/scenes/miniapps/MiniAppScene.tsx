@@ -2,9 +2,9 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import { Button, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { MiniApp, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -223,7 +223,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                       size="sm"
                       onClick={() => setCustomizePreview(null)}
                       aria-label={t('customize.hidePreview')}
-                      icon={<X />}
+                      icon={<Icon name="xmark" size="lg" />}
                     />
                   </Tooltip>
                 </div>
@@ -240,7 +240,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
         )}
         {customizeNotice && (
           <div className="miniapp-scene__customize-notice" role="status" data-bf-scene="miniapp" data-bf-part="notice">
-            <CheckCircle2 size={16} />
+            <Icon name="check-circle" size="md" />
             <span>{customizeNotice}</span>
           </div>
         )}

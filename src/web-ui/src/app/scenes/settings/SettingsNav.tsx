@@ -8,8 +8,7 @@ import React, {
 } from 'react';
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon } from 'lucide-react';
-import { SearchField } from '@bitfun/ui';
+import { Icon, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
 import {
@@ -205,121 +204,137 @@ const SettingsNav: React.FC = () => {
   }, [activate, clearSearch, highlightedIndex, results]);
 
   return (
-    <div className="bitfun-settings-nav" data-testid="settings-nav" data-bf-component="settings-nav" data-bf-part="root">
-      <div className="bitfun-settings-nav__header" data-bf-component="settings-nav" data-bf-part="header">
-        <span className="bitfun-settings-nav__title">{t('shared:features.settings')}</span>
-      </div>
-
-      <div className="bitfun-settings-nav__search" data-bf-component="settings-nav" data-bf-part="search">
-        <SearchField
-          ref={searchInputRef}
-          className="bitfun-settings-nav__search-field"
-          size="sm"
-          value={draftQuery}
-          onValueChange={setDraftQuery}
-          onClear={draftQuery ? () => {
-            clearSearch();
-            searchInputRef.current?.focus();
-          } : undefined}
-          clearLabel={draftQuery ? tComponents('search.clear') : undefined}
-          onKeyDown={handleSearchKeyDown}
-          leadingIcon={<SearchIcon size={14} aria-hidden />}
-          placeholder={t('navigation.search.placeholder')}
-          aria-label={t('navigation.search.placeholder')}
-          aria-controls="settings-nav-results"
-          aria-expanded={isSearchMode}
-        />
-      </div>
-
-      <div
-        ref={resultsRef}
-        id="settings-nav-results"
-        className="bitfun-settings-nav__sections"
-        data-bf-component="settings-nav"
-        data-bf-part="sections"
-        role={isSearchMode ? 'listbox' : undefined}
-        tabIndex={isSearchMode && results.length ? 0 : undefined}
-        onKeyDown={handleResultsKeyDown}
-        aria-activedescendant={isSearchMode && highlightedIndex >= 0
-          ? `settings-nav-result-${highlightedIndex}`
-          : undefined}
-      >
-        {isSearchMode ? (
-          results.length ? (
-            <div className="bitfun-settings-nav__search-results" data-bf-component="settings-nav" data-bf-part="searchResults">
-              {results.map((row, index) => {
-                const active = activePageId === row.destination.pageId
-                  && (!row.destination.viewId || row.destination.viewId === activeViewId);
-                const selected = index === highlightedIndex;
-                const path = [row.categoryLabel, row.pageLabel, row.viewLabel].filter(Boolean).join(' › ');
-                return (
-                  <button
-                    key={`${row.destination.pageId}:${row.destination.viewId ?? ''}`}
-                    id={`settings-nav-result-${index}`}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    data-bf-component="settings-nav"
-                    data-bf-part="searchResult"
-                    data-bf-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
-                    className={[
-                      'bitfun-settings-nav__search-result-item',
-                      active && 'is-active',
-                      selected && 'is-highlighted',
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => activate(row.destination, true)}
-                    onMouseEnter={() => {
-                      setHighlightedIndex(index);
-                      preload(row.destination.pageId);
-                    }}
-                    onFocus={() => preload(row.destination.pageId)}
-                  >
-                    <span className="bitfun-settings-nav__search-result-line">
-                      {highlightFirstMatch(path, searchQuery)}
-                    </span>
-                    <span className="bitfun-settings-nav__search-result-desc">
-                      {highlightFirstMatch(row.description, searchQuery)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bitfun-settings-nav__search-empty" role="status" data-bf-component="settings-nav" data-bf-part="searchEmpty">
-              {t('navigation.search.empty')}
-            </div>
-          )
-        ) : SETTINGS_CATEGORIES.map((category) => (
-          <div key={category.id} className="bitfun-settings-nav__category" data-bf-component="settings-nav" data-bf-part="category">
-            <div className="bitfun-settings-nav__category-header" data-bf-component="settings-nav" data-bf-part="categoryHeader">
-              <span className="bitfun-settings-nav__category-label">{t(category.labelKey)}</span>
-            </div>
-            <div className="bitfun-settings-nav__items" data-bf-component="settings-nav" data-bf-part="items">
-              {category.pages.map((page) => (
-                <button
-                  key={page.id}
-                  type="button"
-                  data-testid="settings-nav-page"
-                  data-settings-page={page.id}
-                  data-bf-component="settings-nav"
-                  data-bf-part="item"
-                  data-bf-state={activePageId === page.id ? 'active' : undefined}
-                  className={[
-                    'bitfun-settings-nav__item',
-                    activePageId === page.id && 'is-active',
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => activate({ pageId: page.id })}
-                  onPointerEnter={() => preload(page.id)}
-                  onFocus={() => preload(page.id)}
-                >
-                  <span className="bitfun-settings-nav__item-label">{t(page.labelKey)}</span>
-                </button>
-              ))}
-            </div>
+    <NavigationPanel
+      className="bitfun-settings-nav"
+      data-testid="settings-nav"
+      data-bf-component="settings-nav"
+      data-bf-part="root"
+      header={(
+        <>
+          <div className="bitfun-settings-nav__header" data-bf-component="settings-nav" data-bf-part="header">
+            <span className="bitfun-settings-nav__title">{t('shared:features.settings')}</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div className="bitfun-settings-nav__search" data-bf-component="settings-nav" data-bf-part="search">
+            <SearchField
+              ref={searchInputRef}
+              className="bitfun-settings-nav__search-field"
+              size="sm"
+              value={draftQuery}
+              onValueChange={setDraftQuery}
+              onClear={draftQuery ? () => {
+                clearSearch();
+                searchInputRef.current?.focus();
+              } : undefined}
+              clearLabel={draftQuery ? tComponents('search.clear') : undefined}
+              onKeyDown={handleSearchKeyDown}
+              leadingIcon={<Icon name="search" size="sm" />}
+              placeholder={t('navigation.search.placeholder')}
+              aria-label={t('navigation.search.placeholder')}
+              aria-controls="settings-nav-results"
+              aria-expanded={isSearchMode}
+            />
+          </div>
+        </>
+      )}
+    >
+      {isSearchMode ? (
+        results.length ? (
+          <div
+            ref={resultsRef}
+            id="settings-nav-results"
+            className="bitfun-settings-nav__search-results"
+            data-bf-component="settings-nav"
+            data-bf-part="searchResults"
+            role="listbox"
+            tabIndex={results.length ? 0 : undefined}
+            onKeyDown={handleResultsKeyDown}
+            aria-activedescendant={highlightedIndex >= 0
+              ? `settings-nav-result-${highlightedIndex}`
+              : undefined}
+          >
+            {results.map((row, index) => {
+              const active = activePageId === row.destination.pageId
+                && (!row.destination.viewId || row.destination.viewId === activeViewId);
+              const selected = index === highlightedIndex;
+              const path = [row.categoryLabel, row.pageLabel, row.viewLabel].filter(Boolean).join(' › ');
+              return (
+                <NavigationPanelItem
+                  key={`${row.destination.pageId}:${row.destination.viewId ?? ''}`}
+                  id={`settings-nav-result-${index}`}
+                  role="option"
+                  aria-selected={active}
+                  selected={active}
+                  data-bf-component="settings-nav"
+                  data-bf-part="searchResult"
+                  data-bf-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
+                  className={[
+                    'bitfun-settings-nav__search-result-item',
+                    active && 'is-active',
+                    selected && 'is-highlighted',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => activate(row.destination, true)}
+                  onMouseEnter={() => {
+                    setHighlightedIndex(index);
+                    preload(row.destination.pageId);
+                  }}
+                  onFocus={() => preload(row.destination.pageId)}
+                >
+                  <span className="bitfun-settings-nav__search-result-line">
+                    {highlightFirstMatch(path, searchQuery)}
+                  </span>
+                  <span className="bitfun-settings-nav__search-result-desc">
+                    {highlightFirstMatch(row.description, searchQuery)}
+                  </span>
+                </NavigationPanelItem>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bitfun-settings-nav__search-empty" role="status" data-bf-component="settings-nav" data-bf-part="searchEmpty">
+            {t('navigation.search.empty')}
+          </div>
+        )
+      ) : SETTINGS_CATEGORIES.map((category) => (
+        <NavigationPanelSection
+          key={category.id}
+          className="bitfun-settings-nav__category"
+          data-bf-component="settings-nav"
+          data-bf-part="category"
+          title={(
+            <span
+              className="bitfun-settings-nav__category-label"
+              data-bf-component="settings-nav"
+              data-bf-part="categoryHeader"
+            >
+              {t(category.labelKey)}
+            </span>
+          )}
+        >
+          <div className="bitfun-settings-nav__items" data-bf-component="settings-nav" data-bf-part="items">
+          {category.pages.map((page) => (
+            <NavigationPanelItem
+              key={page.id}
+              data-testid="settings-nav-page"
+              data-settings-page={page.id}
+              data-bf-component="settings-nav"
+              data-bf-part="item"
+              data-bf-state={activePageId === page.id ? 'active' : undefined}
+              className={[
+                'bitfun-settings-nav__item',
+                activePageId === page.id && 'is-active',
+              ].filter(Boolean).join(' ')}
+              selected={activePageId === page.id}
+              onClick={() => activate({ pageId: page.id })}
+              onPointerEnter={() => preload(page.id)}
+              onFocus={() => preload(page.id)}
+            >
+              <span className="bitfun-settings-nav__item-label">{t(page.labelKey)}</span>
+            </NavigationPanelItem>
+          ))}
+          </div>
+        </NavigationPanelSection>
+      ))}
+    </NavigationPanel>
   );
 };
 

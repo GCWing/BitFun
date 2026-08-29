@@ -11,10 +11,10 @@
  * and the text field already accepts it.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
@@ -156,7 +156,7 @@ const DateTimePickerPopover: React.FC<DateTimePickerPopoverProps> = ({
           type="button"
           size="sm"
           aria-label={t('dateTimeField.nextMonth')}
-          icon={<ChevronRight />}
+          icon={<Icon name="chevron-right" size="lg" />}
           onClick={() => shiftMonth(1)}
         />
       </header>

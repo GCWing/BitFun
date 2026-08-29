@@ -116,7 +116,6 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   flex-direction: column;
   border-right: 1px solid var(--bf-appearance-token-border-subtle);
   background: var(--bf-appearance-token-color-bg-primary);
-  overflow-y: auto;
 }
 
 .skills-sidebar__header {
@@ -459,14 +458,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-suite__sections {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding-right: 4px;
-
-  &::-webkit-scrollbar { width: 5px; }
-  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 .skills-suite__section {
@@ -699,13 +694,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-main__loading {
   flex: 0 1 auto;
   min-height: 0;
-  overflow-y: auto;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
   background: var(--bf-appearance-token-color-bg-secondary);
-
-  &::-webkit-scrollbar { width: 5px; }
-  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 .skills-main__grid {
@@ -1026,11 +1017,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__content {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   padding: 14px 16px;
-
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 .skills-discover__results-info {

@@ -6,8 +6,8 @@
  */
 
 import React, { useCallback } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { TabGroup, type TabGroupItem } from '@bitfun/ui';
+import { ChevronLeft } from 'lucide-react';
+import { Icon, TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
@@ -114,7 +114,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
           }}
           tabIndex={-1}
         >
-          <X size={12} aria-hidden="true" />
+          <Icon name="xmark" size="xs" aria-hidden="true" />
         </button>
       ),
     });
@@ -172,7 +172,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
             data-bf-component="scene-bar"
             data-bf-part="scrollNext"
           >
-            <ChevronRight size={14} aria-hidden="true" />
+            <Icon name="chevron-right" size="sm" aria-hidden="true" />
           </button>
         )}
       </div>

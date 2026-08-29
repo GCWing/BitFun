@@ -64,7 +64,7 @@ describe('Remote Connect safety contracts', () => {
     expect(desktopGeometry).toContain('min-height: min(620px, calc(100vh - 40px))');
     expect(desktopGeometry).toContain('max-height: min(620px, calc(100vh - 40px))');
     expect(dialogStyleSource).toContain(".bitfun-remote-connect [data-bf-part='panel']");
-    expect(dialogStyleSource).toContain('overflow-y: auto');
+    expect(dialogSource).toContain('<ScrollArea');
   });
 
   it('delegates accessible method and provider tabs to the design system', () => {

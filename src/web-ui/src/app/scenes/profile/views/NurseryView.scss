@@ -710,7 +710,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__body {
     flex: 1;
-    overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
 
@@ -728,7 +727,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
   &__content {
     flex: 1;
-    overflow-y: auto;
     overflow-x: hidden;
     padding: $size-gap-6 $nursery-scene-gutter;
     display: flex;
@@ -1258,10 +1256,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     grid-template-columns: 1fr;
   }
 
-  .nursery-page__content:has(.tc-template-shell--has-detail) {
-    overflow-y: auto;
-  }
-
   .tc-template-shell--has-detail {
     display: flex;
     flex-direction: column;
@@ -1410,7 +1404,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
 
     .tc-template-shell__main {
       min-height: 0;
-      overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -1702,7 +1695,6 @@ $nursery-gallery-gutter: clamp(20px, 2.5vw, 36px);
     flex: 1;
     min-height: 0;
     overflow-x: hidden;
-    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
@@ -3035,7 +3027,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     width: 328px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
-    overflow-y: auto;
     padding: $size-gap-3;
     color: var(--bf-appearance-token-color-text-primary);
     font-family: var(--bf-appearance-token-font-family-sans);
@@ -3162,7 +3153,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
 .acp-sessions-area {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   overflow-x: hidden;
   padding: $size-gap-3 $size-gap-6 $size-gap-5;
 
@@ -3462,7 +3452,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   &__schedule-body {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     padding: $size-gap-3 $size-gap-4;
 
     &::-webkit-scrollbar {

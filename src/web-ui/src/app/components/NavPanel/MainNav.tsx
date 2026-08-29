@@ -12,10 +12,10 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyHint, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
+import { Icon, KeyHint, Menu, MenuItem, MenuSection, MenuSeparator, NavigationPanel, ScrollArea, Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
+import { FolderOpen, FolderPlus, History, Users, Network, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import {
   BITFUN_ICON_SIZE,
@@ -293,7 +293,7 @@ const MainNav: React.FC<MainNavProps> = ({
         {t('header.newProject')}
       </MenuItem>
       <MenuItem
-        leading={<User size={13} />}
+        leading={<Icon name="user" size="xs" />}
         onClick={handleOpenAssistantManager}
         data-testid="nav-session-group-add-assistant"
       >
@@ -317,8 +317,8 @@ const MainNav: React.FC<MainNavProps> = ({
             <span>{t('header.recentWorkspaces')}</span>
           </>
         )}
-        itemsClassName="bitfun-nav-panel__workspace-menu-workspaces"
       >
+        <ScrollArea className="bitfun-nav-panel__workspace-menu-workspaces">
         {recentWorkspaces.length === 0 ? (
           <div className="bitfun-nav-panel__workspace-menu-empty">
             <span>{t('header.noRecentWorkspaces')}</span>
@@ -333,7 +333,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 leading={<FolderOpen size={13} aria-hidden="true" />}
                 role="menuitemradio"
                 checked={isCurrent}
-                metadata={isCurrent ? <Check size={12} aria-hidden="true" /> : undefined}
+                metadata={isCurrent ? <Icon name="check-line" size="xs" /> : undefined}
                 title={tooltip}
                 onClick={() => { void handleSwitchWorkspace(workspace.id); }}
                 data-testid="nav-workspace-menu-recent-workspace"
@@ -354,6 +354,7 @@ const MainNav: React.FC<MainNavProps> = ({
             );
           })
         )}
+        </ScrollArea>
       </MenuSection>
     </Menu>,
     getAppearanceOverlayHost()
@@ -372,7 +373,12 @@ const MainNav: React.FC<MainNavProps> = ({
   const isTaskBoardActive = activeTabId === 'todos';
   return (
     <>
-      {/* ── Search and client voice assistant ─────── */}
+    <NavigationPanel
+      className="bitfun-nav-panel__main-nav"
+      bodyRef={sectionsScrollRef}
+      bodyClassName="bitfun-nav-panel__sections"
+      contentClassName="bitfun-nav-panel__main-nav-content"
+      header={(
       <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
         <div className="bitfun-nav-panel__utility-row" data-bf-component="nav-panel" data-bf-part="utilityRow">
           <div className="bitfun-nav-panel__brand-search" data-bf-component="nav-panel" data-bf-part="search">
@@ -388,7 +394,7 @@ const MainNav: React.FC<MainNavProps> = ({
               >
                 <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
                   <span className="bitfun-nav-panel__search-trigger__icon-inner">
-                    <Search size={13} />
+                    <Icon name="search" size="xs" />
                   </span>
                 </span>
                 <span className="bitfun-nav-panel__search-trigger__label">
@@ -407,9 +413,9 @@ const MainNav: React.FC<MainNavProps> = ({
           <RealtimeVoiceCallButton />
         </div>
       </div>
-
-      {/* ── Long-lived navigation ──────────────────── */}
-      <div ref={sectionsScrollRef} data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
+      )}
+    >
+        <div data-testid="nav-sections" className="bitfun-nav-panel__sections-slot">
         <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
             <button
@@ -427,7 +433,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="nav-assistant-manager"
             >
               <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                <User size={15} />
+                <Icon name="user" size="sm" />
               </span>
               <span>{assistantManagerLabel}</span>
             </button>
@@ -488,8 +494,9 @@ const MainNav: React.FC<MainNavProps> = ({
                     size={BITFUN_ICON_SIZE.navigation}
                     className="bitfun-nav-panel__top-action-expand-icon-default"
                   />
-                  <ChevronDown
-                    size={15}
+                  <Icon
+                    name="chevron-down"
+                    size="sm"
                     className={[
                       'bitfun-nav-panel__top-action-expand-icon-chevron',
                       isExtensionsOpen ? 'is-open' : '',
@@ -544,7 +551,7 @@ const MainNav: React.FC<MainNavProps> = ({
                   data-testid="skill-tab"
                 >
                   <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                    <Puzzle size={15} />
+                    <Icon name="extension" size="sm" />
                   </span>
                   <span>{t('nav.items.skills')}</span>
                 </button>
@@ -624,8 +631,8 @@ const MainNav: React.FC<MainNavProps> = ({
             </div>
           </div>
         </div>
-
-      </div>
+        </div>
+    </NavigationPanel>
 
       {workspaceMenuPortal}
 

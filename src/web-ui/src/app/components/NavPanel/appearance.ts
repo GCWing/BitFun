@@ -17,7 +17,6 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'topAction', propertyProfile: 'control', visualRole: 'control' },
     { id: 'topActionUnseen', propertyProfile: 'paint', visualRole: 'decoration' },
     { id: 'extensionGroup', visualRole: 'content' },
-    { id: 'sections', visualRole: 'content', continuityGroup: 'nav-panel' },
     { id: 'section', visualRole: 'content' },
     { id: 'stickySectionHeader', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'sectionContent', visualRole: 'content' },

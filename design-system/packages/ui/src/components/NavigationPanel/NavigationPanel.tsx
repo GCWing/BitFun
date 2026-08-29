@@ -4,6 +4,7 @@ import {
   type HTMLAttributes,
   type MouseEventHandler,
   type ReactNode,
+  type Ref,
 } from "react";
 import { ActionItem, type ActionItemProps } from "../ActionItem";
 import { IconButton, type IconButtonProps } from "../IconButton";
@@ -14,6 +15,8 @@ import styles from "./NavigationPanel.module.css";
 export interface NavigationPanelProps
   extends Omit<HTMLAttributes<HTMLElement>, "children"> {
   bodyClassName?: string;
+  /** Ref to the scroll viewport so product sticky headers can track the same root. */
+  bodyRef?: Ref<HTMLDivElement>;
   children: ReactNode;
   contentClassName?: string;
   footer?: ReactNode;
@@ -47,6 +50,7 @@ export type NavigationPanelSeparatorProps = HTMLAttributes<HTMLDivElement>;
 export const NavigationPanel = forwardRef<HTMLElement, NavigationPanelProps>(
   function NavigationPanel({
     bodyClassName,
+    bodyRef,
     children,
     className,
     contentClassName,
@@ -68,6 +72,7 @@ export const NavigationPanel = forwardRef<HTMLElement, NavigationPanelProps>(
         <ScrollArea
           className={classNames(styles.body, bodyClassName)}
           orientation="vertical"
+          ref={bodyRef}
           scrollbarVisibility={scrollbarVisibility}
         >
           <div

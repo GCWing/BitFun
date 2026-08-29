@@ -3,8 +3,8 @@
  * Opening an app opens a separate scene tab (miniapp:id).
  */
 import React, { Suspense, lazy, useState } from 'react';
-import { Download, Store, UploadCloud } from 'lucide-react';
-import { TabGroup, type TabGroupItem } from '@bitfun/ui';
+
+import { Icon, TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -21,17 +21,17 @@ const MiniAppGalleryScene: React.FC = () => {
   const tabItems: TabGroupItem[] = [
     {
       value: 'installed',
-      icon: <Download size={14} />,
+      icon: <Icon name="download" size="sm" />,
       label: t('market.tabs.installed'),
     },
     {
       value: 'market',
-      icon: <Store size={14} />,
+      icon: <Icon name="store" size="sm" />,
       label: t('market.tabs.market'),
     },
     {
       value: 'submissions',
-      icon: <UploadCloud size={14} />,
+      icon: <Icon name="upload" size="sm" />,
       label: t('market.tabs.submissions'),
     },
   ];

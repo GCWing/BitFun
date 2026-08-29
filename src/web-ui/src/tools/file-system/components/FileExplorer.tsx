@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { IconButton, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Tooltip } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { Folder, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
+import { FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { VirtualFileTree } from './VirtualFileTree';
 import { FileExplorerProps, FileSystemNode, FlatFileNode } from '../types';
 import { flattenFileTree } from '../utils/treeFlattening';
@@ -287,7 +287,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         tabIndex={0}
       >
         <div className="bitfun-file-explorer__empty">
-          <Folder size={48} className="bitfun-file-explorer__empty-icon" />
+          <Icon name="folder" size="lg" className="bitfun-file-explorer__empty-icon" />
           <p>{searchQuery ? t('fileTree.emptyFiltered') : t('fileTree.empty')}</p>
         </div>
       </div>

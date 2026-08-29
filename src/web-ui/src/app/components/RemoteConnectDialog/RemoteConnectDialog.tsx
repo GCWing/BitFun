@@ -14,32 +14,20 @@
 import {
   Button,
   Field,
+  Icon,
   IconButton,
   Input,
+  Modal,
   PageHeader,
+  ScrollArea,
   StatusPill,
   Switch,
   TabGroup,
   type TabGroupItem,
-  Modal,
 } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  Copy,
-  Globe2,
-  MessageCircle,
-  MessageSquareText,
-  MessagesSquare,
-  Monitor,
-  MonitorSmartphone,
-  Radar,
-  Send,
-  Smartphone,
-} from 'lucide-react';
+import { MessageSquareText, MessagesSquare, Monitor, MonitorSmartphone, Radar, Send, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Select } from '@/component-library';
@@ -1035,7 +1023,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                   <IconButton
                     aria-label={t('remoteConnect.copyUrl')}
                     title={t('remoteConnect.copyUrl')}
-                    icon={qrCopied ? <Check /> : <Copy />}
+                    icon={qrCopied ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
                     onClick={() => void handleCopyPairingUrl()}
                     size="md"
                     variant="quiet"
@@ -1046,7 +1034,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                   <p>{t('remoteConnect.scanHint')}</p>
                 </div>
                 <div className="bitfun-remote-connect__pairing-instruction">
-                  <Globe2 size={19} aria-hidden="true" />
+                  <Icon name="browser" size="lg" aria-hidden="true" />
                   <p>{t('remoteConnect.mobileBrowserDescription')}</p>
                 </div>
               </>
@@ -1558,12 +1546,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         )}
         <StatusPill tone={statusPositive ? 'success' : 'neutral'}>{statusLabel}</StatusPill>
       </span>
-      <ChevronRight className="bitfun-remote-connect__overview-action-chevron" size={16} aria-hidden="true" />
+      <Icon name="chevron-right" size="md" className="bitfun-remote-connect__overview-action-chevron" aria-hidden="true" />
     </button>
   );
 
   const renderOverview = () => (
-    <div
+    <ScrollArea
       className="bitfun-remote-connect__overview"
       data-bf-component="remote-connect-dialog"
       data-bf-part="overview"
@@ -1639,7 +1627,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
           {renderOverviewAction({
             view: 'bot',
-            icon: <MessageCircle size={18} />,
+            icon: <Icon name="side-chat" size="lg" />,
             title: t('remoteConnect.chatAppsTitle'),
             description: t('remoteConnect.chatAppsDescription'),
             statusLabel: !hasWorkspace
@@ -1656,7 +1644,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
         </div>
       </section>
-    </div>
+    </ScrollArea>
   );
 
   const renderViewHeader = () => {
@@ -1680,7 +1668,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       >
         <Button
           className="bitfun-remote-connect__back"
-          leadingIcon={<ArrowLeft />}
+          leadingIcon={<Icon name="arrow-left" size="lg" />}
           onClick={() => handleViewChange('overview')}
           size="sm"
           variant="text"
@@ -1864,7 +1852,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     <AccountPanel onCloseDialog={handleDialogClose} />
                   </div>
                 ) : activeView === 'network' ? (
-                  <div
+                  <ScrollArea
                     id="remote-connect-panel-network"
                     data-bf-component="remote-connect-dialog"
                     data-bf-part="panel"
@@ -1877,9 +1865,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     >
                       {renderNetworkContent()}
                     </div>
-                  </div>
+                  </ScrollArea>
                 ) : (
-                  <div
+                  <ScrollArea
                     id="remote-connect-panel-bot"
                     data-bf-component="remote-connect-dialog"
                     data-bf-part="panel"
@@ -1892,7 +1880,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     >
                       {renderBotContent()}
                     </div>
-                  </div>
+                  </ScrollArea>
                 )}
               </>
             )}

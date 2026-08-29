@@ -8,9 +8,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyHint, Tooltip } from '@bitfun/ui';
+import { Icon, KeyHint, ScrollArea, Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { LayoutGrid, ChevronDown, X } from 'lucide-react';
+import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { CanvasTab } from '../types';
@@ -176,7 +176,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
           {hasMissionControl ? (
             <LayoutGrid size={14} />
           ) : (
-            <ChevronDown size={14} />
+            <Icon name="chevron-down" size="sm" />
           )}
           {hasOverflow && (
             <span data-bf-component="canvas-tab-overflow" data-bf-part="badge" className="canvas-tab-panorama-btn__badge">
@@ -218,7 +218,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
           )}
 
           {/* Overflow tab list */}
-          <div data-bf-component="canvas-tab-overflow" data-bf-part="list" className="canvas-tab-overflow-menu__list">
+          <ScrollArea className="canvas-tab-overflow-menu__list">
             {overflowTabs.map((tab) => {
               const deletedSuffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
               const titleWithDeleted = `${tab.title}${deletedSuffix}`;
@@ -252,12 +252,12 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                   className="canvas-tab-overflow-menu__item-close"
                   onClick={(e) => handleCloseClick(e, tab.id)}
                 >
-                  <X size={12} />
+                  <Icon name="xmark" size="xs" />
                 </button>
               </div>
             );
             })}
-          </div>
+          </ScrollArea>
         </div>,
         getAppearanceOverlayHost()
       )}

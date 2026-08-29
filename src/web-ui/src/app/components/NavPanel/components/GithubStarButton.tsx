@@ -1,10 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { Star } from 'lucide-react';
+;
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 import {
   GITHUB_STAR_URL,
   isGithubStarCtaDismissed,
@@ -47,8 +47,8 @@ const GithubStarButton: React.FC = () => {
           data-bf-part="footerButton"
         >
           <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-            <Star size={14} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-            <Star size={14} fill="currentColor" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+            <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+            <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
           </span>
           <span className="bitfun-nav-panel__footer-star-label">{t('nav.githubStar.label')}</span>
         </button>

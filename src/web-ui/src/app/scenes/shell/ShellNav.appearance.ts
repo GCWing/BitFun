@@ -4,7 +4,7 @@ export const shellNavAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   parts: [
     { id: 'root' }, { id: 'header' }, { id: 'title' }, { id: 'headerActions' },
     { id: 'splitButton' }, { id: 'menu' }, { id: 'menuItem' },
-    { id: 'content' }, { id: 'empty' }, { id: 'list' },
+    { id: 'empty' }, { id: 'list' },
   ],
   states: [
     { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },

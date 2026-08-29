@@ -1,3 +1,4 @@
+import { ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { emit, listen } from '@tauri-apps/api/event';
@@ -913,7 +914,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           className="bitfun-agent-companion-window__dock"
          data-bf-component="agent-companion-desktop-pet" data-bf-part="dock">
           {visibleTasks.length > 0 && (
-            <div
+            <ScrollArea
               ref={bubblesRef}
               className={`bitfun-agent-companion-window__bubbles${isSingleTask ? ' bitfun-agent-companion-window__bubbles--single' : ''}`}
               aria-live="polite"
@@ -1059,7 +1060,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
+            </ScrollArea>
           )}
           <div
             className={`bitfun-agent-companion-window__pet-hitbox${hasAttentionTask ? ' bitfun-agent-companion-window__pet-hitbox--needs-attention' : ''}`}

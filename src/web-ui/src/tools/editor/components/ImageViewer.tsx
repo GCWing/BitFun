@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ZoomIn, ZoomOut, RotateCw, Download, Maximize2 } from 'lucide-react';
-import { Button, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@bitfun/ui';
+import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
+import { Button, Icon, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 
 import { useI18n } from '@/infrastructure/i18n';
@@ -221,7 +221,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                   aria-label={t('editor.imageViewer.download')}
                   size="sm"
                   variant="quiet"
-                  icon={<Download size={14} />}
+                  icon={<Icon name="download" size="sm" />}
                   onClick={handleDownload}
                 />
               </Tooltip>

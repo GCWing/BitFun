@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+;
 
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
@@ -18,7 +18,7 @@ import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('NavBar');
 
@@ -128,7 +128,7 @@ const NavBar: React.FC<NavBarProps> = ({
           aria-disabled={!canGoBack}
           aria-label={t('nav.back')}
         >
-          <ArrowLeft size={15} />
+          <Icon name="arrow-left" size="sm" />
         </button>
       </Tooltip>
 
@@ -142,7 +142,7 @@ const NavBar: React.FC<NavBarProps> = ({
           aria-disabled={!canGoForward}
           aria-label={t('nav.forward')}
         >
-          <ArrowRight size={15} />
+          <Icon name="arrow-right" size="sm" />
         </button>
       </Tooltip>
 

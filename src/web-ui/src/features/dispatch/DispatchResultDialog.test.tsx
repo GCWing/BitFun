@@ -22,6 +22,7 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Button: ({
     children,
     disabled,

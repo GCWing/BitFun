@@ -554,19 +554,9 @@ $_section-header-height: 22px;
     flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.
     // Top padding here stacked with that and read as “extra” gap above the first section header.
     padding: 0 0 $size-gap-3 0;
-
-    &::-webkit-scrollbar { width: 3px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-subtle);
-      border-radius: 2px;
-    }
 
     // Synced with button ripple: fade list out, swap group, fade in
     &.is-mode-switching {
@@ -1170,7 +1160,6 @@ $_section-header-height: 22px;
 
   &__workspace-menu-workspaces {
     max-height: 240px;
-    overflow-y: auto;
     overscroll-behavior: contain;
   }
 
@@ -1966,9 +1955,15 @@ $_section-header-height: 22px;
   z-index: 9999;
   width: min(320px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.bitfun-device-overview__scroll {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .bitfun-device-overview__title {
@@ -3384,4 +3379,26 @@ $_section-header-height: 22px;
   &__remote-disclaimer-text {
     @include nav-font.nav-panel-text-meta;
   }
+}
+
+.bitfun-nav-panel__main-nav {
+  inline-size: 100%;
+  max-inline-size: none;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  height: 100%;
+  background: transparent;
+
+  > [data-bf-part="header"] {
+    padding: 0;
+  }
+}
+
+.bitfun-nav-panel__main-nav-content {
+  padding: 0;
+  gap: 0;
+}
+
+.bitfun-nav-panel__sections-slot {
+  display: contents;
 }

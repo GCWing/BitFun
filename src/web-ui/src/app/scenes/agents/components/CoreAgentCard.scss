@@ -111,7 +111,7 @@
     line-height: $line-height-base;
     white-space: nowrap;
 
-    > svg {
+    [data-bf-component="icon"] {
       flex: none;
       color: var(--bf-appearance-token-color-success);
     }
@@ -124,7 +124,7 @@
     &.is-disabled {
       color: var(--bf-appearance-token-color-text-secondary);
 
-      > svg {
+      [data-bf-component="icon"] {
         color: var(--bf-appearance-token-color-warning);
       }
     }

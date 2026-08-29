@@ -100,7 +100,6 @@
     box-sizing: border-box;
     max-width: calc(100vw - 16px);
     max-height: min(280px, calc(100vh - 16px));
-    overflow-y: auto;
     padding: $size-gap-1 0;
   }
 

@@ -11,7 +11,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, X } from 'lucide-react';
+
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
 import ChatPane from '@/app/scenes/session/ChatPane';
@@ -19,7 +19,7 @@ import type {
   ChatInputRegistration,
   ChatInputSubmission,
 } from '@/flow_chat/components/chatInputRegistration';
-import { IconButton, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Tooltip } from '@bitfun/ui';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
@@ -540,7 +540,7 @@ export const FloatingMiniChat: React.FC = () => {
             {renderMiniAppIcon(activeMiniAppIcon, 20)}
           </span>
         ) : (
-          <MessageSquare size={20} />
+          <Icon name="side-chat" size="lg" />
         )}
       </button>
 
@@ -584,7 +584,7 @@ export const FloatingMiniChat: React.FC = () => {
               data-bf-component="floating-mini-chat"
               data-bf-part="headerAction"
               className="bitfun-fmc__close"
-              icon={<X />}
+              icon={<Icon name="xmark" size="lg" />}
               onClick={handleClose}
               size="md"
               aria-label={t('session.close')}

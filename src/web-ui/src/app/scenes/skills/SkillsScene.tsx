@@ -1,25 +1,6 @@
-import { Button, Switch, IconButton, Input, Modal, ConfirmDialog, Field, SearchField, Select, StatusPill } from '@bitfun/ui';
+import { Button, ConfirmDialog, Field, Icon, IconButton, Input, Modal, ScrollArea, SearchField, Select, StatusPill, Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ArrowRight,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Filter,
-  FolderOpen,
-  Layers,
-  Package,
-  Plus,
-  Puzzle,
-  Search as SearchIcon,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  TrendingUp,
-  User,
-  Zap,
-} from 'lucide-react';
+import { ChevronLeft, FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, Trash2, TrendingUp, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
@@ -76,7 +57,7 @@ const CATEGORIES: CategoryInfo[] = [
   },
   {
     id: 'user',
-    icon: <User size={15} strokeWidth={1.6} />,
+    icon: <Icon name="user" size="sm" />,
     labelKey: 'filters.user',
     titleKey: 'installed.titleUser',
     descKey: 'categories.user',
@@ -276,7 +257,7 @@ const SkillsScene: React.FC = () => {
 
         {activeTab === 'installed' && (
           <div className="skills-installed" data-bf-scene="skills" data-bf-part="installed">
-            {desktopConfigAvailable && <aside className="skills-sidebar" data-bf-scene="skills" data-bf-part="sidebar">
+            {desktopConfigAvailable && <ScrollArea className="skills-sidebar" data-bf-scene="skills" data-bf-part="sidebar">
               <div className="skills-sidebar__header" data-bf-scene="skills" data-bf-part="sidebarHeader">
                 <h2 className="skills-sidebar__title" data-bf-scene="skills" data-bf-part="sidebarTitle">{t('installed.titleAll')}</h2>
               </div>
@@ -310,7 +291,7 @@ const SkillsScene: React.FC = () => {
                   {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
                 </p>
               </div>
-            </aside>}
+            </ScrollArea>}
 
             <div className="skills-main" data-bf-scene="skills" data-bf-part="main">
               {!desktopConfigAvailable ? (
@@ -327,7 +308,7 @@ const SkillsScene: React.FC = () => {
                       className="skills-main__toolbar-search"
                       value={installedSearch}
                       onValueChange={setInstalledSearch}
-                      leadingIcon={<SearchIcon size={14} aria-hidden />}
+                      leadingIcon={<Icon name="search" size="sm" aria-hidden />}
                       placeholder={t('toolbar.searchPlaceholder')}
                       aria-label={t('toolbar.searchPlaceholder')}
                       size="sm"
@@ -342,13 +323,13 @@ const SkillsScene: React.FC = () => {
                       data-bf-part="filterAction"
                       data-bf-state={hideDuplicates ? 'active' : undefined}
                     >
-                      <Filter size={13} />
+                      <Icon name="filter" size="xs" />
                       <span>{t('toolbar.hideDuplicates')}</span>
                     </button>
                     <Button
                       variant="fill"
                       size="sm"
-                      leadingIcon={<Plus size={13} />}
+                      leadingIcon={<Icon name="plus" size="xs" />}
                       onClick={toggleAddForm}
                       data-testid="skills-add-skill-btn"
                     >
@@ -389,7 +370,7 @@ const SkillsScene: React.FC = () => {
                     </div>
 
                     {installed.loading && (
-                      <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
+                      <ScrollArea className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')}>
                         {Array.from({ length: 8 }).map((_, i) => (
                           <div
                             key={`ins-sk-${i}`}
@@ -399,7 +380,7 @@ const SkillsScene: React.FC = () => {
                             data-bf-part="skeleton"
                           />
                         ))}
-                      </div>
+                      </ScrollArea>
                     )}
 
                     {!installed.loading && installed.error && (
@@ -471,7 +452,7 @@ const SkillsScene: React.FC = () => {
                           >
                             <div className="skills-card__top" data-bf-scene="skills" data-bf-part="installedCardTop">
                               <div className="skills-card__icon" data-bf-scene="skills" data-bf-part="installedCardIcon">
-                                <Puzzle size={17} strokeWidth={1.6} />
+                                <Icon name="extension" size="md" />
                               </div>
                               <div className="skills-card__info" data-bf-scene="skills" data-bf-part="installedCardInfo">
                                 <span className="skills-card__name" data-testid="skill-list-item-title" data-bf-scene="skills" data-bf-part="installedCardName">{skill.name}</span>
@@ -526,7 +507,7 @@ const SkillsScene: React.FC = () => {
                               data-bf-part="installedCardLevel"
                             >
                               {skill.level === 'user'
-                                ? <User size={12} strokeWidth={1.6} />
+                                ? <Icon name="user" size="xs" />
                                 : <FolderOpen size={12} strokeWidth={1.6} />}
                               <span>
                                 {market.isRemoteWorkspace
@@ -575,7 +556,7 @@ const SkillsScene: React.FC = () => {
                                 title={t('list.item.detail')}
                                 data-bf-scene="skills"
                                 data-bf-part="installedCardDetails"
-                                icon={<ArrowRight size={14} strokeWidth={1.7} />}
+                                icon={<Icon name="arrow-right" size="sm" />}
                               />
                               {canDeleteSkill(skill) && (
                                 <IconButton
@@ -616,7 +597,7 @@ const SkillsScene: React.FC = () => {
                     value={searchDraft}
                     onValueChange={setSearchDraft}
                     onSearch={submitMarketQuery}
-                    leadingIcon={<SearchIcon size={15} aria-hidden />}
+                    leadingIcon={<Icon name="search" size="sm" aria-hidden />}
                     placeholder={t('market.searchPlaceholder')}
                     aria-label={t('market.searchPlaceholder')}
                     size="md"
@@ -630,7 +611,7 @@ const SkillsScene: React.FC = () => {
               </div>
             </div>
 
-            <div className="skills-discover__content" data-bf-scene="skills" data-bf-part="discoverContent">
+            <ScrollArea className="skills-discover__content">
               {market.marketLoading && (
                 <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -701,7 +682,7 @@ const SkillsScene: React.FC = () => {
                           accentSeed={skill.installId}
                           iconKind="market"
                           badges={isInstalled ? (
-                            <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
+                            <StatusPill tone="success" leading={<Icon name="check-circle" size="2xs" />}>
                               {t('market.item.installed')}
                             </StatusPill>
                           ) : null}
@@ -714,7 +695,7 @@ const SkillsScene: React.FC = () => {
                           actions={[
                             {
                               id: 'download',
-                              icon: isInstalled ? <CheckCircle2 size={13} /> : <Download size={13} />,
+                              icon: isInstalled ? <Icon name="check-circle" size="xs" /> : <Icon name="download" size="xs" />,
                               ariaLabel: isInstalled ? t('market.item.installed') : t('market.item.downloadProject'),
                               title: isDownloading
                                 ? t('market.item.downloading')
@@ -761,13 +742,13 @@ const SkillsScene: React.FC = () => {
                         data-bf-scene="skills"
                         data-bf-part="pageButton"
                       >
-                        <ChevronRight size={14} />
+                        <Icon name="chevron-right" size="sm" />
                       </button>
                     </div>
                   )}
                 </>
               )}
-            </div>
+            </ScrollArea>
           </div>
         )}
       </div>
@@ -775,7 +756,7 @@ const SkillsScene: React.FC = () => {
       <GalleryDetailModal
         isOpen={desktopConfigAvailable && Boolean(selectedDetail)}
         onClose={() => setSelectedDetail(null)}
-        icon={selectedMarketSkill ? <Package size={24} strokeWidth={1.6} /> : <Puzzle size={24} strokeWidth={1.6} />}
+        icon={selectedMarketSkill ? <Package size={24} strokeWidth={1.6} /> : <Icon name="extension" size="lg" />}
         iconGradient={getCardGradient(
           selectedInstalledSkill?.name
           ?? selectedMarketSkill?.installId
@@ -812,7 +793,7 @@ const SkillsScene: React.FC = () => {
             </StatusPill>
           </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
-          <StatusPill tone="success" leading={<CheckCircle2 size={11} />}>
+          <StatusPill tone="success" leading={<Icon name="check-circle" size="2xs" />}>
             {t('market.item.installed')}
           </StatusPill>
         ) : null}

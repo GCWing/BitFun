@@ -7,8 +7,8 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { IconButton, Tooltip } from '@bitfun/ui';
-import { Folder, Search as SearchIcon, List, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
+import { Icon, IconButton, NavigationPanel, Tooltip } from '@bitfun/ui';
+import { List, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
@@ -30,10 +30,16 @@ const FileViewerNav: React.FC = () => {
   }, []);
 
   return (
-    <div data-bf-component="file-viewer-nav" data-bf-part="root" className="bitfun-file-viewer-nav">
+    <NavigationPanel
+      data-bf-component="file-viewer-nav"
+      data-bf-part="root"
+      className="bitfun-file-viewer-nav"
+      bodyClassName="bitfun-file-viewer-nav__body"
+      contentClassName="bitfun-file-viewer-nav__content"
+      header={(
       <div className="bitfun-file-viewer-nav__header" data-bf-component="file-viewer-nav" data-bf-part="header">
         <span className="bitfun-file-viewer-nav__icon" data-bf-component="file-viewer-nav" data-bf-part="icon" aria-hidden="true">
-          <Folder size={15} />
+          <Icon name="folder" size="sm" />
         </span>
         <span className="bitfun-file-viewer-nav__label" data-bf-component="file-viewer-nav" data-bf-part="label">
           {t('nav.items.project')}
@@ -75,13 +81,15 @@ const FileViewerNav: React.FC = () => {
               <IconButton
                 size="sm"
                 aria-label={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
-                icon={viewMode === 'tree' ? <SearchIcon /> : <List />}
+                icon={viewMode === 'tree' ? <Icon name="search" size="sm" /> : <List />}
                 onClick={handleToggleViewMode}
               />
             </Tooltip>
           </span>
         )}
       </div>
+      )}
+    >
       <FilesPanel
         workspacePath={currentWorkspace?.rootPath}
         hideHeader
@@ -90,7 +98,7 @@ const FileViewerNav: React.FC = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
-    </div>
+    </NavigationPanel>
   );
 };
 

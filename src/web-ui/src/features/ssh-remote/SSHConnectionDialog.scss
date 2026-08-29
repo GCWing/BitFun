@@ -27,7 +27,6 @@
   &__scroll {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     overflow-x: hidden;
     padding: 10px 0 6px;
   }
@@ -66,12 +65,6 @@
     flex-direction: column;
     gap: 4px;
     max-height: 132px;
-    overflow-y: auto;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
   }
 
   &__saved-item {

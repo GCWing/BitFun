@@ -1,7 +1,7 @@
-import { Button, Modal, ConfirmDialog, Menu, MenuItem, MenuSeparator, Tooltip } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Network } from 'lucide-react';
+import { FolderOpen, FolderSearch, Trash2, RotateCcw, FileText, Bot, ListChecks, Loader2, ShieldCheck, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { InputDialog, PresenceBoundary, BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/component-library';
 
@@ -856,7 +856,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 )}
               </span>
               <span className={`bitfun-nav-panel__assistant-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-                <ChevronDown size={14} />
+                <Icon name="chevron-down" size="sm" />
               </span>
             </span>
           </button>
@@ -885,7 +885,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-files-btn"
                 data-workspace-id={workspace.id}
               >
-                <Folder size={13} />
+                <Icon name="folder" size="xs" />
               </button>
             </Tooltip>
             <div ref={menuAnchorRef}>
@@ -898,7 +898,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-menu-btn"
                 data-workspace-id={workspace.id}
               >
-                <MoreHorizontal size={13} />
+                <Icon name="more" size="xs" />
               </button>
             </div>
 
@@ -911,13 +911,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-workspace-id={workspace.id}
               >
                 <MenuItem
-                  leading={<Plus size={13} />}
+                  leading={<Icon name="plus" size="xs" />}
                   onClick={() => { void handleCreateSession(); }}
                   data-testid="nav-workspace-menu-create-session"
                 >
                   {t('nav.workspaces.actions.newSession')}
                 </MenuItem>
-                <MenuItem leading={<Clock3 size={13} />} onClick={handleOpenScheduledJobs}>
+                <MenuItem leading={<Icon name="clock" size="xs" />} onClick={handleOpenScheduledJobs}>
                   {t('nav.scheduledJobs.open')}
                 </MenuItem>
                 <MenuItem
@@ -938,7 +938,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 ) : null}
                 <MenuSeparator />
                 <MenuItem
-                  leading={<Copy size={13} />}
+                  leading={<Icon name="duplicate" size="xs" />}
                   onClick={() => { void handleCopyWorkspacePath(); }}
                   disabled={!workspace.rootPath}
                   data-testid="nav-workspace-menu-copy-path"
@@ -1131,7 +1131,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               )}
             </span>
             <span className={`bitfun-nav-panel__workspace-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-              <ChevronDown size={14} />
+              <Icon name="chevron-down" size="sm" />
             </span>
           </span>
         </button>
@@ -1326,7 +1326,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-files-btn"
                 data-workspace-id={workspace.id}
               >
-                <Folder size={13} />
+                <Icon name="folder" size="xs" />
               </button>
             </Tooltip>
             <div ref={menuAnchorRef}>
@@ -1340,7 +1340,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-menu-btn"
                 data-workspace-id={workspace.id}
               >
-                <MoreHorizontal size={13} />
+                <Icon name="more" size="xs" />
               </button>
             </div>
 
@@ -1353,7 +1353,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-workspace-id={workspace.id}
               >
                 <MenuItem
-                  leading={<Plus size={13} />}
+                  leading={<Icon name="plus" size="xs" />}
                   onClick={handleCreateProjectSession}
                   data-testid="nav-workspace-menu-create-session"
                 >
@@ -1386,7 +1386,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   {t('nav.workspaces.actions.initAgents')}
                 </MenuItem>
                 <MenuItem
-                  leading={<Link2 size={13} />}
+                  leading={<Icon name="link" size="xs" />}
                   onClick={() => {
                     setMenuOpen(false);
                     setRelatedPathsDialogOpen(true);
@@ -1402,7 +1402,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 >
                   {t('nav.workspaces.actions.manageProjectPermissions')}
                 </MenuItem>
-                <MenuItem leading={<Clock3 size={13} />} onClick={handleOpenScheduledJobs}>
+                <MenuItem leading={<Icon name="clock" size="xs" />} onClick={handleOpenScheduledJobs}>
                   {t('nav.scheduledJobs.open')}
                 </MenuItem>
                 {portForwardConnectionId ? (
@@ -1416,14 +1416,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 ) : null}
                 <MenuSeparator />
                 <MenuItem
-                  leading={<Pencil size={13} />}
+                  leading={<Icon name="edit" size="xs" />}
                   onClick={handleRequestRename}
                   data-testid="nav-workspace-menu-rename"
                 >
                   {t('nav.workspaces.actions.rename')}
                 </MenuItem>
                 <MenuItem
-                  leading={<Copy size={13} />}
+                  leading={<Icon name="duplicate" size="xs" />}
                   onClick={() => { void handleCopyWorkspacePath(); }}
                   disabled={!workspace.rootPath}
                   data-testid="nav-workspace-menu-copy-path"

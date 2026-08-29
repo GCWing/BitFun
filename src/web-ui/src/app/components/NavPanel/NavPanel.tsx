@@ -116,7 +116,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   ].filter(Boolean).join(' ');
 
   return (
-    <nav
+    <div
       data-bf-component="nav-panel"
       data-bf-part="root"
       data-bf-state={appearanceState}
@@ -152,7 +152,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
 
       </div>
       <PersistentFooterActions />
-    </nav>
+    </div>
   );
 };
 

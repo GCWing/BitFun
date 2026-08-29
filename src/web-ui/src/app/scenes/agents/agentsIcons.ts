@@ -1,26 +1,38 @@
 /**
  * Icon and color mapping for the agents scene
- * All visuals use lucide-react icons + CSS custom properties.
+ * Catalog-mapped glyphs render through @bitfun/ui Icon; the rest stay lucide.
  */
+import { Icon, type IconName, type IconSize } from '@bitfun/ui';
 import {
   Code2,
   FlaskConical,
   Bug,
   FileText,
-  Globe,
   BarChart2,
-  PenLine,
   Server,
-  Eye,
   Layers,
   Bot,
   Cpu,
-  Terminal,
   Microscope,
   type LucideProps,
 } from 'lucide-react';
-import type React from 'react';
+import React from 'react';
 export { CAPABILITY_ACCENT } from './agentAppearance';
+
+function catalogSize(size?: number | string): IconSize {
+  const n = typeof size === 'number' ? size : 21;
+  if (n <= 11) return '2xs';
+  if (n <= 13) return 'xs';
+  if (n <= 15) return 'sm';
+  if (n <= 17) return 'md';
+  return 'lg';
+}
+
+function catalogIcon(name: IconName): React.FC<LucideProps> {
+  return function CatalogIcon({ size }) {
+    return React.createElement(Icon, { name, size: catalogSize(size) });
+  };
+}
 
 export type AgentIconKey =
   | 'code2' | 'eye' | 'flask' | 'bug' | 'filetext'
@@ -29,17 +41,17 @@ export type AgentIconKey =
 
 export const AGENT_ICON_MAP: Record<AgentIconKey, React.FC<LucideProps>> = {
   code2: Code2,
-  eye: Eye,
+  eye: catalogIcon('eye'),
   flask: FlaskConical,
   bug: Bug,
   filetext: FileText,
-  globe: Globe,
+  globe: catalogIcon('browser'),
   barchart: BarChart2,
   layers: Layers,
-  penline: PenLine,
+  penline: catalogIcon('edit'),
   server: Server,
   bot: Bot,
-  terminal: Terminal,
+  terminal: catalogIcon('terminal'),
   microscope: Microscope,
   cpu: Cpu,
 };

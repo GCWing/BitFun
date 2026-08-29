@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { DiffEditor } from '@/tools/editor/components/DiffEditor';
-import { X } from 'lucide-react';
+;
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import './GitDiffEditor.scss';
@@ -153,7 +154,7 @@ export const GitDiffEditor: React.FC<GitDiffEditorProps> = ({
     >
       {error && (
         <div className="git-diff-editor__error">
-          <X size={16} />
+          <Icon name="xmark" size="md" />
           <span>{error}</span>
         </div>
       )}

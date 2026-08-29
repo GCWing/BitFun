@@ -26,6 +26,7 @@ vi.mock('@/component-library', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props}>{children}</button>
   ),
@@ -135,7 +136,7 @@ describe('MarkdownEditor', () => {
     );
 
     expect(html).toContain('aria-label="Copy Markdown"');
-    expect(html).toContain('data-icon="copy"');
+    expect(html).toContain('data-icon="duplicate"');
     expect(html).toContain('data-component="icon-button"');
   });
 

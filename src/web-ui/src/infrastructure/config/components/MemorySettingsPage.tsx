@@ -1,7 +1,7 @@
-import { Switch, IconButton, ConfirmDialog, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import { ConfirmDialog, Icon, IconButton, Select, type SelectOption, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronUp, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
 import { ConfigPageLoading, NumberInput } from '@/component-library';
 
 import { useNotification } from '@/shared/notification-system';
@@ -381,7 +381,7 @@ const MemorySettingsPage: React.FC = () => {
                 onClick={() => setAdvancedOpen((open) => !open)}
                 aria-label={t(advancedOpen ? 'actions.collapseAdvanced' : 'actions.expandAdvanced')}
                 aria-expanded={advancedOpen}
-                icon={advancedOpen ? <ChevronUp /> : <ChevronDown />}
+                icon={advancedOpen ? <ChevronUp /> : <Icon name="chevron-down" size="lg" />}
               />
             </Tooltip>
           )}

@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronRight, ListFilter } from 'lucide-react';
+import { ListFilter } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
@@ -138,7 +138,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
       <span className="bitfun-nav-panel__session-filter-menu-value">
         {active ? <span className="bitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
         {value ? t(`nav.sessions.viewMenu.${submenu}.${value}`) : null}
-        <ChevronRight size={16} aria-hidden="true" />
+        <Icon name="chevron-right" size="md" aria-hidden="true" />
       </span>
     </button>
   );
@@ -188,7 +188,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           onClick={view.toggleArchived}
         >
           <span>{t('nav.sessions.viewMenu.archived')}</span>
-          {!view.filters.hideArchived ? <Check size={15} aria-hidden="true" /> : null}
+          {!view.filters.hideArchived ? <Icon name="check-line" size="sm" aria-hidden="true" /> : null}
         </button>
         <div className="bitfun-nav-panel__session-filter-menu-divider" role="separator" />
         {view.grouping === 'grouped' ? (
@@ -249,7 +249,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
                   }
                 }}
               >
-                <span className="bitfun-nav-panel__session-filter-check" aria-hidden="true">{selected ? <Check size={15} /> : null}</span>
+                <span className="bitfun-nav-panel__session-filter-check" aria-hidden="true">{selected ? <Icon name="check-line" size="sm" /> : null}</span>
                 <span>{t(`nav.sessions.viewMenu.${activeSubmenu}.${option}`)}</span>
               </button>
             );

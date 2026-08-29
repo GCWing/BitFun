@@ -2,9 +2,9 @@
 /** Git commit graph view (branch graph). */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, SearchField } from '@bitfun/ui';
+import { Button, Icon, SearchField, ScrollArea } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { GitBranch, ChevronUp, ChevronDown, Loader2, Search as SearchIcon } from 'lucide-react';
+import { ChevronUp, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -291,7 +291,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
           <h3>{t('graph.title')}</h3>
           {graphData.currentBranch && (
             <span className="git-graph-view__current-branch">
-              <GitBranch size={14} />
+              <Icon name="git" size="sm" />
               {graphData.currentBranch}
             </span>
           )}
@@ -320,7 +320,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
             onClear={searchQuery ? () => handleSearch('') : undefined}
             leadingIcon={searchQuery !== debouncedSearchQuery
               ? <Loader2 className="git-graph-view__search-loading" size={14} aria-hidden />
-              : <SearchIcon size={14} aria-hidden />}
+              : <Icon name="search" size="sm" aria-hidden />}
             trailing={
               searchFilter && debouncedSearchQuery && searchFilter.totalMatches > 0 ? (
                 <div className="git-graph-view__search-navigation">
@@ -341,7 +341,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
                     title={t('graph.searchNext')}
                     disabled={searchFilter.totalMatches === 0}
                   >
-                    <ChevronDown size={14} />
+                    <Icon name="chevron-down" size="sm" />
                   </button>
                 </div>
               ) : searchFilter && debouncedSearchQuery && searchFilter.totalMatches === 0 ? (
@@ -354,7 +354,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
         </div>
       </div>
 
-      <div 
+      <ScrollArea 
         className="git-graph-view__content" 
         ref={containerRef}
         data-bf-component="git-tool"
@@ -400,7 +400,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
             );
           })}
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 };

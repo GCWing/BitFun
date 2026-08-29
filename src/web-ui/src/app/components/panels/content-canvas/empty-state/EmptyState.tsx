@@ -5,10 +5,10 @@
 
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+;
 
 import './EmptyState.scss';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 export interface EmptyStateProps {
   onClose?: () => void;
@@ -33,7 +33,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose, children }) => 
               className="canvas-empty-state__close-btn"
               onClick={handleClose}
             >
-              <X size={14} />
+              <Icon name="xmark" size="sm" />
             </button>
           </Tooltip>
         </div>

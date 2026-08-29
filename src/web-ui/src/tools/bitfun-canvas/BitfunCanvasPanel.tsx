@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Code2, Download, Loader2, MousePointer2 } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+import { AlertTriangle, Code2, Loader2, MousePointer2 } from 'lucide-react';
 import path from 'path-browserify';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { canvasAPI, type CanvasSnapshotValue } from '@/infrastructure/api/service-api/CanvasAPI';
@@ -1017,7 +1018,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           disabled={exportingHtml}
           onClick={handleExportHtml}
         >
-          {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Download size={15} />}
+          {exportingHtml ? <Loader2 size={15} className="bitfun-canvas-panel__toolbar-icon--spin" /> : <Icon name="download" size="sm" />}
         </button>
       </div>
       {isFrameReady && (

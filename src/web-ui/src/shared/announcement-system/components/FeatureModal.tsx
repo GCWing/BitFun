@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
-import { X } from 'lucide-react';
+import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
+;
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -41,7 +41,7 @@ const FeatureModalPages: React.FC<FeatureModalPagesProps> = ({ pages, currentPag
     const page = pages[pageIndex];
     if (!page) return null;
     return (
-      <div
+      <ScrollArea
         key={`${state}-${pageIndex}`}
         className="feature-modal__page"
         data-state={state}
@@ -50,7 +50,7 @@ const FeatureModalPages: React.FC<FeatureModalPagesProps> = ({ pages, currentPag
         {...(state !== 'active' ? { inert: '' } : {})}
       >
         <FeatureModalPage page={page} active={state === 'active'} />
-      </div>
+      </ScrollArea>
     );
   };
 
@@ -136,7 +136,7 @@ const FeatureModal: React.FC = () => {
         {modal.closable && (
           <IconButton
             className="feature-modal__close"
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
             size="md"
             data-bf-component="announcement"
             data-bf-part="modalClose"

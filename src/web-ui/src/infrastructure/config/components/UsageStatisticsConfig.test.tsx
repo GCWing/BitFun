@@ -34,6 +34,16 @@ vi.mock('@/infrastructure/i18n', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  FormSection: ({
+    children,
+    title,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { title?: React.ReactNode }) => (
+    <section {...props}>{title}{children}</section>
+  ),
+  FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   IconButton: ({
     children,

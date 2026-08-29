@@ -1,7 +1,8 @@
  
 
 import React, { useMemo } from 'react';
-import { X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Icon } from '@bitfun/ui';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { ContextItem } from '../../../types/context';
 import { contextRegistry } from '../../../services/ContextRegistry';
 import { useContextStore, selectValidationState, selectIsValidating } from '../../../stores/contextStore';
@@ -109,7 +110,7 @@ export const ContextCard: React.FC<ContextCardProps> = ({
               <Loader2 size={14} className="bitfun-context-card__spinner" />
             ) : validationState ? (
               validationState.valid ? (
-                <CheckCircle size={14} className="bitfun-context-card__icon--success" />
+                <Icon name="check-circle" size="sm" className="bitfun-context-card__icon--success" />
               ) : (
                 <span title={validationState.error}>
                   <AlertCircle 
@@ -128,7 +129,7 @@ export const ContextCard: React.FC<ContextCardProps> = ({
               onClick={handleRemove}
               title={t('contextSystem.contextCard.removeContext')}
             >
-              <X size={14} />
+              <Icon name="xmark" size="sm" />
             </button>
           )}
         </div>

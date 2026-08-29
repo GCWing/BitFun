@@ -3,7 +3,7 @@ export const canvasTabOverflowAppearanceDescriptor: AppearanceSurfaceDescriptor 
   id: 'canvas-tab-overflow',
   parts: [
     { id: 'root' }, { id: 'trigger' }, { id: 'badge' }, { id: 'menu' },
-    { id: 'missionControl' }, { id: 'divider' }, { id: 'list' },
+    { id: 'missionControl' }, { id: 'divider' },
     { id: 'item' }, { id: 'itemTitle' }, { id: 'itemClose' },
   ],
   states: [

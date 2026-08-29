@@ -15,13 +15,13 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import { Button, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
+import { Button, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { AlertTriangle, Check, Copy, ExternalLink, Network, Plus, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Network, RefreshCw } from 'lucide-react';
 import { sshApi } from './sshApi';
 import type { PortForward, RemoteListeningPort } from './types';
 import './PortForwardDialog.scss';
@@ -261,9 +261,10 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
         )}
 
         {/* Discovery first: it answers "which port?" without making anyone look it up. */}
-        <section className="port-forward-dialog__section">
-          <div className="port-forward-dialog__section-header">
-            <span>{t('ssh.portForward.detectedTitle')}</span>
+        <FormSection
+          className="port-forward-dialog__section"
+          title={t('ssh.portForward.detectedTitle')}
+          actions={(
             <Tooltip content={t('ssh.portForward.detect')}>
               <IconButton
                 type="button"
@@ -279,8 +280,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                 />}
               />
             </Tooltip>
-          </div>
-
+          )}
+        >
           <div className="port-forward-dialog__section-body">
             {isDetecting && detectedPorts === null ? (
               <p className="port-forward-dialog__empty">{t('ssh.portForward.detecting')}</p>
@@ -305,9 +306,9 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                       data-port={port.port}
                     >
                       {alreadyForwarded ? (
-                        <Check size={12} aria-hidden="true" />
+                        <Icon name="check-line" size="xs" aria-hidden="true" />
                       ) : (
-                        <Plus size={12} aria-hidden="true" />
+                        <Icon name="plus" size="xs" aria-hidden="true" />
                       )}
                       <span className="port-forward-dialog__chip-port">{port.port}</span>
                       {port.process && (
@@ -321,16 +322,14 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               <p className="port-forward-dialog__empty">{t('ssh.portForward.detectedEmpty')}</p>
             )}
           </div>
-        </section>
+        </FormSection>
 
-        <section
+        <FormSection
           className="port-forward-dialog__section"
           data-bf-component="ssh-remote"
           data-bf-part="portForwardTable"
+          title={t('ssh.portForward.activeTitle')}
         >
-          <div className="port-forward-dialog__section-header">
-            <span>{t('ssh.portForward.activeTitle')}</span>
-          </div>
 
           {forwards.length === 0 ? (
             <div className="port-forward-dialog__section-body">
@@ -397,7 +396,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                         size="sm"
                         aria-label={t('ssh.portForward.openInBrowser')}
                         onClick={() => handleOpen(forward)}
-                        icon={<ExternalLink size={14} aria-hidden="true" />}
+                        icon={<Icon name="arrow-up-right" size="sm" aria-hidden="true" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('ssh.portForward.copyAddress')}>
@@ -406,7 +405,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                         size="sm"
                         aria-label={t('ssh.portForward.copyAddress')}
                         onClick={() => handleCopy(forward)}
-                        icon={<Copy size={14} aria-hidden="true" />}
+                        icon={<Icon name="duplicate" size="sm" aria-hidden="true" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('ssh.portForward.stop')}>
@@ -416,7 +415,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                         aria-label={t('ssh.portForward.stop')}
                         onClick={() => void handleStop(forward.id)}
                         data-testid="ssh-port-forward-stop"
-                        icon={<X size={14} aria-hidden="true" />}
+                        icon={<Icon name="xmark" size="sm" aria-hidden="true" />}
                       />
                     </Tooltip>
                   </div>
@@ -424,16 +423,14 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               ))}
             </div>
           )}
-        </section>
+        </FormSection>
 
         {/* The escape hatch: a specific local port, or a host detection cannot see. */}
-        <section className="port-forward-dialog__section">
-          <div className="port-forward-dialog__section-header">
-            <span>{t('ssh.portForward.manualTitle')}</span>
-          </div>
-
+        <FormSection className="port-forward-dialog__section" title={t('ssh.portForward.manualTitle')}>
           <div className="port-forward-dialog__section-body">
-            <div
+            <FieldGroup
+              appearance="plain"
+              dividers={false}
               className="port-forward-dialog__form"
               data-bf-component="ssh-remote"
               data-bf-part="portForwardForm"
@@ -491,7 +488,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               >
                 {t('ssh.portForward.add')}
               </Button>
-            </div>
+            </FieldGroup>
 
             <Checkbox
               size="small"
@@ -501,7 +498,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               description={t('ssh.portForward.exposeOnLanHint')}
             />
           </div>
-        </section>
+        </FormSection>
       </div>
     </Modal>
   );

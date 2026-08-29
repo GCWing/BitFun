@@ -64,6 +64,8 @@ vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Button: ({
     children,
     disabled,

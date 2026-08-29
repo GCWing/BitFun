@@ -5,10 +5,8 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft,
   FileText,
   RefreshCw,
-  X,
 } from 'lucide-react';
 
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
@@ -29,7 +27,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { IconButton, Input, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Input, Tooltip, ScrollArea } from '@bitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -375,7 +373,7 @@ const AssistantConfigPage: React.FC = () => {
 
         {/* Scheduled tasks — title/toolbar live inside ScheduledJobsView */}
         <div className="acp-section acp-section--nested acp-section--schedule">
-          <div className="acp-section__schedule-body">
+          <ScrollArea className="acp-section__schedule-body">
             {!workspacePath ? (
               <p className="acp-empty">{t('nursery.assistant.scheduledSessionsNoWorkspace')}</p>
             ) : (
@@ -395,7 +393,7 @@ const AssistantConfigPage: React.FC = () => {
                 />
               </Suspense>
             )}
-          </div>
+          </ScrollArea>
         </div>
       </div>
     </div>
@@ -423,7 +421,7 @@ const AssistantConfigPage: React.FC = () => {
                   className="acp-persona-editor__back"
                   onClick={closePersonaDoc}
                   aria-label={t('nursery.template.closeDetail')}
-                  icon={<ArrowLeft size={13} />}
+                  icon={<Icon name="arrow-left" size="xs" />}
                 />
               </Tooltip>
               <span className="acp-persona-editor__title">{t(`nursery.assistant.personaDocs.${docLabelKey}`)}</span>
@@ -435,7 +433,7 @@ const AssistantConfigPage: React.FC = () => {
                   className="acp-persona-editor__close"
                   onClick={closePersonaDoc}
                   aria-label={t('nursery.template.closeDetail')}
-                  icon={<X size={13} />}
+                  icon={<Icon name="xmark" size="xs" />}
                 />
               </Tooltip>
             </div>
@@ -515,7 +513,7 @@ const AssistantConfigPage: React.FC = () => {
             data-bf-part="back"
             onClick={openGallery}
             aria-label={t('nursery.backToGallery')}
-            icon={<ArrowLeft size={13} />}
+            icon={<Icon name="arrow-left" size="xs" />}
           />
         </Tooltip>
       </div>
@@ -613,7 +611,7 @@ const AssistantConfigPage: React.FC = () => {
             workspaceId={workspace?.id}
             assistantName={identityName}
           />
-          <div className="acp-sessions-area" data-bf-component="assistant-config-page" data-bf-part="sessions">
+          <ScrollArea className="acp-sessions-area" data-bf-component="assistant-config-page" data-bf-part="sessions">
             <h2 className="acp-sessions-area__title">{t('nursery.assistant.sessionsSectionTitle')}</h2>
             <SessionsSection
               workspaceId={workspace?.id}
@@ -629,7 +627,7 @@ const AssistantConfigPage: React.FC = () => {
               }}
               isActiveWorkspace
             />
-          </div>
+          </ScrollArea>
         </div>
 
         {/* Right: persona docs + schedule */}

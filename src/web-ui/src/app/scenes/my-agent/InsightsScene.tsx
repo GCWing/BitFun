@@ -1,12 +1,7 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, IconButton } from '@bitfun/ui';
-import {
-  ExternalLink, Copy, Check, ArrowLeft, Loader2, AlertTriangle,
-  BarChart3, MessageSquare, Calendar, Clock, X, Target, Zap, Trophy,
-  AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3,
-  FileCheck2, Gauge, Sparkles, Brain,
-} from 'lucide-react';
+import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
+import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge, Brain } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
 import { Select, type SelectOption } from '@/component-library';
@@ -63,7 +58,10 @@ const GENERATION_STEPS = [
     id: 'summary',
     titleKey: 'insights.generationStageSummary',
     detailKey: 'insights.generationStageSummaryDetail',
-    icon: Sparkles,
+    icon: function SparkIcon({ size }: { size?: number }) {
+      const n = typeof size === 'number' ? size : 13;
+      return <Icon name="spark" size={n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg'} />;
+    },
     stages: ['synthesis'],
   },
   {
@@ -130,7 +128,7 @@ const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress 
           <div className="insights-generation__detail">{detail}</div>
         </div>
         <div className="insights-generation__elapsed">
-          <Clock size={13} />
+          <Icon name="clock" size="xs" />
           <span>{t('insights.generationElapsed')}</span>
           <strong>{elapsed}</strong>
         </div>
@@ -147,7 +145,7 @@ const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress 
           return (
             <div key={step.id} className={`insights-generation__step insights-generation__step--${state}`}>
               <span className="insights-generation__step-icon">
-                {state === 'complete' ? <Check size={13} /> : <StepIcon size={13} />}
+                {state === 'complete' ? <Icon name="check-line" size="xs" /> : <StepIcon size={13} />}
               </span>
               <span className="insights-generation__step-label">{t(step.titleKey)}</span>
             </div>
@@ -288,7 +286,7 @@ const InsightsScene: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              leadingIcon={<X />}
+              leadingIcon={<Icon name="xmark" size="lg" />}
               onClick={cancelGeneration}
             >
               {t('insights.cancelBtn')}
@@ -314,14 +312,14 @@ const InsightsScene: React.FC = () => {
             size="sm"
             onClick={clearError}
             aria-label={t('insights.dismissError')}
-            icon={<X size={14} />}
+            icon={<Icon name="xmark" size="sm" />}
           />
         </div>
       )}
 
       {generating && <GenerationPanel progress={progress} />}
 
-      <div className="insights-scene__history" data-bf-scene="insights" data-bf-part="content">
+      <ScrollArea className="insights-scene__history" data-bf-scene="insights" data-bf-part="content">
         <div className="insights-scene__history-header">
           <div className="insights-scene__history-label">
             {t('insights.history')}
@@ -344,7 +342,7 @@ const InsightsScene: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 };
@@ -415,13 +413,13 @@ const ReportMetaCard: React.FC<{
           </span>
         </span>
         <span className="insights-meta-card__metric">
-          <MessageSquare size={14} />
+          <Icon name="side-chat" size="sm" />
           <span><strong>{formatNumber(meta.total_messages)}</strong>{t('insights.messages')}</span>
         </span>
       </div>
       <div className="insights-meta-card__details">
         <span>
-          <Clock size={11} /> {meta.total_hours.toFixed(1)} {t('insights.hours')}
+          <Icon name="clock" size="2xs" /> {meta.total_hours.toFixed(1)} {t('insights.hours')}
         </span>
         <span>
           <Calendar size={11} /> {formatNumber(meta.days_covered)} {t('insights.days')}
@@ -449,7 +447,7 @@ const ReportMetaCard: React.FC<{
               title={generationTokenTitle}
               className={generationUsageComplete ? '' : 'insights-meta-card__generation-meta--partial'}
             >
-              <Sparkles size={10} />
+              <Icon name="spark" size="2xs" />
               {t('insights.insightsGenerationTokens')}:
               {' '}{hasGenerationUsage
                 ? formatNumber(generationUsage.total_tokens, { notation: 'compact', maximumFractionDigits: 1 })
@@ -541,7 +539,7 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
   return (
     <nav className="insights-report-nav">
       {visibleSections.map((section) => {
-        const Icon = SECTIONS.find(s => s.id === section.id)?.icon || Target;
+        const SectionIcon = SECTIONS.find(s => s.id === section.id)?.icon || Target;
         return (
           <button
             key={section.id}
@@ -549,7 +547,7 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
             onClick={() => scrollToSection(section.id)}
             title={section.label}
           >
-            <Icon size={14} />
+            <SectionIcon size={14} />
             <span className="insights-report-nav__label">{section.label}</span>
           </button>
         );
@@ -585,13 +583,13 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
         <Button
           variant="outline"
           size="sm"
-          leadingIcon={<ArrowLeft />}
+          leadingIcon={<Icon name="arrow-left" size="lg" />}
           onClick={onBack}
         >
           {t('insights.backToList')}
         </Button>
         <div className="insights-report-header__meta">
-          <span><MessageSquare size={11} /> {report.total_messages} {t('insights.messages')}</span>
+          <span><Icon name="side-chat" size="2xs" /> {report.total_messages} {t('insights.messages')}</span>
           <span><BarChart3 size={11} /> {report.total_sessions} {t('insights.sessions')}</span>
           <span><Calendar size={11} /> {dateStart} ~ {dateEnd}</span>
         </div>
@@ -599,7 +597,7 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<ExternalLink />}
+            leadingIcon={<Icon name="arrow-up-right" size="lg" />}
             onClick={handleOpenHtml}
             disabled={!report.html_report_path}
           >
@@ -608,7 +606,7 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
         </div>
       </div>
 
-      <div className="insights-report-content" ref={bodyRef} data-bf-scene="insights" data-bf-part="content">
+      <ScrollArea className="insights-report-content" ref={bodyRef} data-bf-scene="insights" data-bf-part="content">
         <div className="insights-report-body">
           <div className="insights-report-body-inner">
             <header className="insights-report-hero">
@@ -733,7 +731,7 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
         </div>
 
         <ReportNav report={report} scrollContainerRef={bodyRef as React.RefObject<HTMLDivElement>} />
-      </div>
+      </ScrollArea>
     </div>
   );
 };
@@ -1185,7 +1183,7 @@ const CopyableCode: React.FC<{ text: string; label?: string }> = ({ text, label 
       <div className="insights-copyable__row">
         <code className="insights-copyable__code">{text}</code>
         <button className="insights-copyable__btn" onClick={handleCopy} aria-label={copied ? 'Copied' : 'Copy to clipboard'}>
-          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? <Icon name="check-line" size="xs" /> : <Icon name="duplicate" size="xs" />}
         </button>
       </div>
     </div>

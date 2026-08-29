@@ -8,33 +8,21 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { ActionCard, Button, KeyHint, Modal, SearchField } from '@bitfun/ui';
+import { ActionCard, Button, Icon, KeyHint, Modal, SearchField, type IconName, type IconSize, ScrollArea } from '@bitfun/ui';
 import {
   BarChart3,
   Blocks,
   Bot,
   CheckSquare2,
   ChevronLeft,
-  ChevronRight,
   FileText,
-  Folder,
-  Globe,
   Keyboard,
-  MessageCircle,
   MessageSquareText,
   MessagesSquare,
-  MoreHorizontal,
   Network,
-  Pin,
-  Plus,
-  Puzzle,
-  Search,
-  Settings,
   SlidersHorizontal,
   SquareTerminal,
-  UserRound,
   Users,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -72,6 +60,14 @@ import {
 } from './types';
 import './GlobalSearchRoot.scss';
 
+function catalogLucide(name: IconName): LucideIcon {
+  return function CatalogLucide({ size }: { size?: number | string }) {
+    const n = typeof size === 'number' ? size : 20;
+    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
+    return <Icon name={name} size={mapped} />;
+  } as LucideIcon;
+}
+
 const log = createLogger('GlobalSearch');
 const SEARCH_DEBOUNCE_MS = 90;
 const SEARCH_LIMIT_PER_GROUP = 20;
@@ -86,18 +82,18 @@ const EMPTY_SNAPSHOT: GlobalSearchSnapshot = {
 };
 
 const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
-  'message-circle': MessageCircle,
-  folder: Folder,
-  plus: Plus,
-  globe: Globe,
+  'message-circle': catalogLucide('side-chat'),
+  folder: catalogLucide('folder'),
+  plus: catalogLucide('plus'),
+  globe: catalogLucide('browser'),
   terminal: SquareTerminal,
   files: FileText,
   users: Users,
-  puzzle: Puzzle,
+  puzzle: catalogLucide('extension'),
   blocks: Blocks,
   'check-square': CheckSquare2,
   chart: BarChart3,
-  settings: Settings,
+  settings: catalogLucide('settings'),
   keyboard: Keyboard,
   network: Network,
 };
@@ -121,7 +117,7 @@ const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> =
   messages: MessageSquareText,
   sessions: MessagesSquare,
   files: FileText,
-  workspaces: Folder,
+  workspaces: catalogLucide('folder'),
   assistants: Bot,
   capabilities: Blocks,
   settings: SlidersHorizontal,
@@ -131,10 +127,10 @@ function iconForItem(item: GlobalSearchItem): LucideIcon {
   if (item.target.kind === 'action') {
     const actionId = item.target.actionId;
     const action = PRODUCT_ACTION_CATALOG.find((candidate) => candidate.id === actionId);
-    return action ? ACTION_ICONS[action.icon] : Search;
+    return action ? ACTION_ICONS[action.icon] : catalogLucide('search');
   }
-  if (item.target.kind === 'assistant') return UserRound;
-  return GROUP_ICONS[item.group as Exclude<GlobalSearchGroupId, 'actions'>] ?? Search;
+  if (item.target.kind === 'assistant') return catalogLucide('user');
+  return GROUP_ICONS[item.group as Exclude<GlobalSearchGroupId, 'actions'>] ?? catalogLucide('search');
 }
 
 function resultVariant(group: GlobalSearchGroupId): 'action' | 'entity' | 'standard' {
@@ -396,7 +392,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                   inputRef.current?.focus();
                 } : undefined}
                 clearLabel={query ? tCommon('nav.search.clear') : undefined}
-                leadingIcon={<Search size={18} strokeWidth={1.8} />}
+                leadingIcon={<Icon name="search" size="lg" />}
                 shortcut={query ? undefined : (
                   <KeyHint icon={searchShortcutHint.modifier}>
                     {searchShortcutHint.key}
@@ -416,7 +412,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
             </div>
           ) : (
             <div className="global-search__query" data-bf-component="global-search" data-bf-part="query">
-              <Search size={18} strokeWidth={1.8} aria-hidden="true" className="global-search__query-icon" />
+              <Icon name="search" size="lg" aria-hidden="true" className="global-search__query-icon" />
               <input
                 ref={inputRef}
                 type="text"
@@ -453,7 +449,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                   }}
                   aria-label={tCommon('nav.search.clear')}
                 >
-                  <X size={14} aria-hidden="true" />
+                  <Icon name="xmark" size="sm" aria-hidden="true" />
                 </button>
               ) : null}
             </div>
@@ -502,7 +498,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           </div>
         </header>
 
-        <div
+        <ScrollArea
           ref={listRef}
           id={resultsId}
           className="global-search__results"
@@ -574,7 +570,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           data-testid={`${testIdPrefix}-group-drilldown-${groupId}`}
                         >
                           <span>{tCommon('nav.search.resultCount', { count: groupView.totalCount })}</span>
-                          <ChevronRight size={14} strokeWidth={1.7} aria-hidden="true" />
+                          <Icon name="chevron-right" size="sm" aria-hidden="true" />
                         </button>
                       ) : (
                         <span aria-hidden="true">
@@ -687,8 +683,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         ) : null}
                         {entity ? (
                           <span className="global-search__result-tools" aria-hidden="true">
-                            <Pin size={14} strokeWidth={1.55} />
-                            <MoreHorizontal size={16} strokeWidth={1.8} />
+                            <Icon name="pin" size="sm" />
+                            <Icon name="more" size="md" />
                           </span>
                         ) : null}
                       </button>
@@ -698,7 +694,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               </section>
             );
           })}
-        </div>
+        </ScrollArea>
 
         {(variant === 'embedded'
           || Boolean(parsedQuery.query)

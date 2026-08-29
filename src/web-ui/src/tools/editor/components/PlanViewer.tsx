@@ -1,8 +1,8 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
-import { Button, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, FileText, Pencil, X, ChevronDown, Trash2, Plus } from 'lucide-react';
+import { Loader2, AlertCircle, FileText, Trash2 } from 'lucide-react';
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -567,7 +567,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                 size="sm"
                 onClick={closeYamlEditor}
                 aria-label={t('editor.planViewer.toggleYamlEditOff')}
-                icon={<X />}
+                icon={<Icon name="xmark" size="lg" />}
               />
             </Tooltip>
           ) : isPanelEditing ? (
@@ -578,7 +578,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                   size="sm"
                   onClick={addTodo}
                   aria-label={t('editor.common.add')}
-                  icon={<Plus />}
+                  icon={<Icon name="plus" size="lg" />}
                 />
               </Tooltip>
               <Tooltip content={t('editor.common.save')}>
@@ -588,7 +588,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                   variant="primary"
                   onClick={saveEdit}
                   aria-label={t('editor.common.save')}
-                  icon={<Check />}
+                  icon={<Icon name="check-line" size="lg" />}
                 />
               </Tooltip>
               <Tooltip content={t('editor.common.cancel')}>
@@ -597,7 +597,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                   size="sm"
                   onClick={cancelEdit}
                   aria-label={t('editor.common.cancel')}
-                  icon={<X />}
+                  icon={<Icon name="xmark" size="lg" />}
                 />
               </Tooltip>
             </>
@@ -618,7 +618,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                   size="sm"
                   onClick={startEdit}
                   aria-label={t('editor.common.edit')}
-                  icon={<Pencil />}
+                  icon={<Icon name="edit" size="lg" />}
                 />
               </Tooltip>
             </>
@@ -759,14 +759,14 @@ ${JSON.stringify(simpleTodos, null, 2)}
   function getTodoIcon(status?: string) {
     switch (status) {
       case 'completed':
-        return <Check size={14} className="todo-icon todo-icon--completed" />;
+        return <Icon name="check-line" size="sm" className="todo-icon todo-icon--completed" />;
       case 'in_progress':
-        return <ArrowRight size={14} className="todo-icon todo-icon--in-progress" />;
+        return <Icon name="arrow-right" size="sm" className="todo-icon todo-icon--in-progress" />;
       case 'cancelled':
-        return <XCircle size={14} className="todo-icon todo-icon--cancelled" />;
+        return <Icon name="xmark" size="sm" className="todo-icon todo-icon--cancelled" />;
       case 'pending':
       default:
-        return <Circle size={14} className="todo-icon todo-icon--pending" />;
+        return <Icon name="circle" size="sm" className="todo-icon todo-icon--pending" />;
     }
   }
 
@@ -816,7 +816,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             <span
               className={`header-expand-indicator ${isTodosExpanded ? 'header-expand-indicator--expanded' : ''} ${isEditingYaml ? 'header-expand-indicator--disabled' : ''}`}
             >
-              <ChevronDown size={14} />
+              <Icon name="chevron-down" size="sm" />
             </span>
           )}
           <FileText size={16} className="file-icon" />
@@ -836,7 +836,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
                   buildStatus === 'building'
                     ? <Loader2 size={14} className="animate-spin" />
                     : buildStatus === 'built'
-                      ? <CheckCircle size={14} />
+                      ? <Icon name="check-circle" size="sm" />
                       : undefined
                 }
                 onClick={handleBuild}

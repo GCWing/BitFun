@@ -1,4 +1,4 @@
-import { Button, StatusPill } from '@bitfun/ui';
+import { Button, ScrollArea, StatusPill } from '@bitfun/ui';
 import React from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import './RemoteConnectDisclaimer.scss';
@@ -39,20 +39,22 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
 
       <details className="bitfun-remote-disclaimer__details" data-bf-component="remote-connect-disclaimer" data-bf-part="details">
         <summary>{t('remoteConnect.disclaimerFullDetails')}</summary>
-        <ol className="bitfun-remote-disclaimer__list" start={5}>
-          <li>{t('remoteConnect.disclaimerItemOpenSource')}</li>
-          <li>{t('remoteConnect.disclaimerItemDataUsage')}</li>
-          <li>{t('remoteConnect.disclaimerItemCredentials')}</li>
-          <li>{t('remoteConnect.disclaimerItemQrCode')}</li>
-          <li>{t('remoteConnect.disclaimerItemNgrok')}</li>
-          <li>{t('remoteConnect.disclaimerItemSelfHosted')}</li>
-          <li>{t('remoteConnect.disclaimerItemNetwork')}</li>
-          <li>{t('remoteConnect.disclaimerItemBot')}</li>
-          <li>{t('remoteConnect.disclaimerItemBotPersistence')}</li>
-          <li>{t('remoteConnect.disclaimerItemMobileBrowser')}</li>
-          <li>{t('remoteConnect.disclaimerItemCompliance')}</li>
-          <li>{t('remoteConnect.disclaimerItemLiability')}</li>
-        </ol>
+        <ScrollArea className="bitfun-remote-disclaimer__list-scroll">
+          <ol className="bitfun-remote-disclaimer__list" start={5}>
+            <li>{t('remoteConnect.disclaimerItemOpenSource')}</li>
+            <li>{t('remoteConnect.disclaimerItemDataUsage')}</li>
+            <li>{t('remoteConnect.disclaimerItemCredentials')}</li>
+            <li>{t('remoteConnect.disclaimerItemQrCode')}</li>
+            <li>{t('remoteConnect.disclaimerItemNgrok')}</li>
+            <li>{t('remoteConnect.disclaimerItemSelfHosted')}</li>
+            <li>{t('remoteConnect.disclaimerItemNetwork')}</li>
+            <li>{t('remoteConnect.disclaimerItemBot')}</li>
+            <li>{t('remoteConnect.disclaimerItemBotPersistence')}</li>
+            <li>{t('remoteConnect.disclaimerItemMobileBrowser')}</li>
+            <li>{t('remoteConnect.disclaimerItemCompliance')}</li>
+            <li>{t('remoteConnect.disclaimerItemLiability')}</li>
+          </ol>
+        </ScrollArea>
       </details>
 
       <div className="bitfun-remote-disclaimer__actions" data-bf-component="remote-connect-disclaimer" data-bf-part="actions">

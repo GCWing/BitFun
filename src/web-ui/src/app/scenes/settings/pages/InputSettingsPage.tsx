@@ -1,3 +1,4 @@
+import { ScrollArea } from '@bitfun/ui';
 import React, { lazy, Suspense, useEffect, useRef } from 'react';
 import type { SettingsPageProps } from '../settingsTypes';
 import './InputSettingsPage.scss';
@@ -25,7 +26,7 @@ const InputSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigationRequ
   }, [navigationRequestId, viewId]);
 
   return (
-    <div
+    <ScrollArea
       className="bitfun-input-settings-page"
       data-bf-component="input-settings-page"
       data-bf-part="root"
@@ -50,7 +51,7 @@ const InputSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigationRequ
           <KeyboardShortcutsTab />
         </Suspense>
       </section>
-    </div>
+    </ScrollArea>
   );
 };
 

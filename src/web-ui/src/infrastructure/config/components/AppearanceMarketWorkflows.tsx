@@ -1,6 +1,6 @@
-import { Button, Field, Input, Select } from '@bitfun/ui';
+import { Button, Field, Icon, Input, Select, ScrollArea } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
+import { AlertTriangle, Inbox, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Textarea } from '@/component-library';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
@@ -335,7 +335,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           variant="fill"
           loading={submitting}
           disabled={!manualDraft.packagePath || !manualDraft.licenseValue.trim()}
-          leadingIcon={<Upload size={14} aria-hidden="true" />}
+          leadingIcon={<Icon name="upload" size="sm" aria-hidden="true" />}
         >
 
           {t('package.market.submissions.manual.submit')}
@@ -396,7 +396,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 size="sm"
                 onClick={() => setManualSubmitOpen(open => !open)}
                 disabled={submitting}
-                leadingIcon={<Upload size={14} aria-hidden="true" />}
+                leadingIcon={<Icon name="upload" size="sm" aria-hidden="true" />}
               >
 
                 {t('package.market.submissions.manual.open')}
@@ -409,7 +409,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           </div>
         </header>
         {renderError()}
-        <div className="appearance-market__workflow-body">
+        <ScrollArea className="appearance-market__workflow-body">
           {renderManualSubmit()}
           {loading ? <p className="appearance-market__loading">{t('package.market.submissions.loading')}</p>
             : submissions.length === 0 ? (
@@ -441,7 +441,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                             onError={(event) => retryOriginalMarketImage(event.currentTarget, submission.previewUrl!)}
                           />
                         )
-                        : <Image size={22} aria-hidden="true" />}
+                        : <Icon name="image" size="lg" aria-hidden="true" />}
                     </div>
                     <div className="appearance-market__submission-body">
                       <div className="appearance-market__submission-title">
@@ -475,7 +475,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 ))}
               </div>
             )}
-        </div>
+        </ScrollArea>
       </section>
     );
   }
@@ -511,7 +511,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           data-bf-component="appearance-settings"
           data-bf-part="marketReviewLayout"
         >
-          <div
+          <ScrollArea
             className="appearance-market__review-queue"
             data-bf-component="appearance-settings"
             data-bf-part="marketReviewQueue"
@@ -529,8 +529,8 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 <small>{formattedDate(submission.updatedAt)}</small>
               </button>
             ))}
-          </div>
-          <div
+          </ScrollArea>
+          <ScrollArea
             className="appearance-market__review-detail"
             data-bf-component="appearance-settings"
             data-bf-part="marketReviewDetail"
@@ -578,7 +578,9 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 {reviewDetail.manifest !== undefined && (
                   <details className="appearance-market__review-manifest">
                     <summary>{t('package.market.review.manifest')}</summary>
-                    <pre>{JSON.stringify(reviewDetail.manifest, null, 2)}</pre>
+                    <ScrollArea className="appearance-market__review-manifest-pre">
+                      <pre>{JSON.stringify(reviewDetail.manifest, null, 2)}</pre>
+                    </ScrollArea>
                   </details>
                 )}
                 <div
@@ -617,7 +619,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 </div>
               </>
             )}
-          </div>
+          </ScrollArea>
         </div>
       )}
     </section>

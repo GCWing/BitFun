@@ -4,8 +4,6 @@ import {
   FolderPlus,
   LayoutGrid,
   PackagePlus,
-  Search as SearchIcon,
-  Sparkles,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
@@ -23,7 +21,7 @@ import {
   type MarketPackageInspection,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { ConfirmDialog, SearchField, IconButton, Menu, MenuItem } from '@bitfun/ui';
+import { ConfirmDialog, Icon, IconButton, Menu, MenuItem, SearchField } from '@bitfun/ui';
 
 import {
   GalleryEmpty,
@@ -380,7 +378,7 @@ const MiniAppGalleryView: React.FC = () => {
         <GalleryEmpty
           icon={
             apps.length === 0
-              ? <Sparkles size={36} strokeWidth={1.2} />
+              ? <Icon name="spark" size="lg" />
               : <LayoutGrid size={36} strokeWidth={1.2} />
           }
           message={apps.length === 0
@@ -418,7 +416,7 @@ const MiniAppGalleryView: React.FC = () => {
         actions={(
           <>
             <SearchField
-              leadingIcon={<SearchIcon aria-hidden />}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
               onValueChange={setSearch}
               placeholder={t('searchPlaceholder')}
               size="sm"

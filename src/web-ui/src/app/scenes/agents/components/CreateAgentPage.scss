@@ -6,16 +6,7 @@
 
 .th__list-body {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding: $size-gap-5 clamp(16px, 2.2vw, 28px);
-
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb {
-    background: var(--bf-appearance-token-border-subtle);
-    border-radius: 2px;
-  }
 }
 
 .th__list-inner {
@@ -231,16 +222,7 @@
   box-sizing: border-box;
   min-height: 96px;
   max-height: 360px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding-right: 2px;
-
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb {
-    background: var(--bf-appearance-token-border-subtle);
-    border-radius: 2px;
-  }
 
   .tool-group-summary {
     display: grid;

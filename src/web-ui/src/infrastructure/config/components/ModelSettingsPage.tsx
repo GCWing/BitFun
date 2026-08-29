@@ -1,7 +1,7 @@
-import { Button, Card, Switch, IconButton, Input, Modal, SearchField, Select, Tooltip } from '@bitfun/ui';
+import { Button, Card, Icon, IconButton, Input, Modal, SearchField, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, ChevronUp, Info, Brain, FolderOpen, Search as SearchIcon } from 'lucide-react';
+import { Trash2, Wifi, Loader, RefreshCw, AlertTriangle, EyeOff, ChevronUp, Brain, FolderOpen } from 'lucide-react';
 import { Select as LegacySelect, NumberInput, Textarea, type SelectOption } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
@@ -233,7 +233,7 @@ function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): Sel
 
 /**
  * Compute the stored request URL from a base URL and provider format.
- * For gemini, stores the bare base (no /v1beta/models/... suffix) â€”
+ * For gemini, stores the bare base (no /v1beta/models/... suffix) —
  * the backend dynamically appends /v1beta/models/{model}:streamGenerateContent?alt=sse.
  */
 function resolveRequestUrl(baseUrl: string, provider: string, _modelName = ''): string {
@@ -1944,7 +1944,7 @@ const ModelSettingsPage: React.FC = () => {
               onClick={handleSelectCustom}
             >
               <div className="bitfun-model-settings__custom-option-content" data-bf-component="model-settings" data-bf-part="customOption">
-                <Settings size={18} />
+                <Icon name="settings" size="lg" />
                 <div>
                   <div className="bitfun-model-settings__custom-option-title" data-bf-component="model-settings" data-bf-part="customOptionTitle">{t('providerSelection.customTitle')}</div>
                   <div className="bitfun-model-settings__custom-option-description" data-bf-component="model-settings" data-bf-part="customOptionDescription">{t('providerSelection.customDescription')}</div>
@@ -1959,7 +1959,7 @@ const ModelSettingsPage: React.FC = () => {
 
 
             <SearchField
-              leadingIcon={<SearchIcon aria-hidden />}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
               size="sm"
               className="bitfun-model-settings__provider-search"
               data-testid="settings-model-provider-search"
@@ -2014,11 +2014,11 @@ const ModelSettingsPage: React.FC = () => {
                         }
                       }}
                     >
-                      <ExternalLink size={12} />
+                      <Icon name="arrow-up-right" size="xs" />
                       {t('providerSelection.getApiKey')}
                     </a>
                   )}
-                  <ChevronRight size={14} className="bitfun-model-settings__provider-chevron" aria-hidden="true" />
+                  <Icon name="chevron-right" size="sm" className="bitfun-model-settings__provider-chevron" aria-hidden="true" />
                 </div>
               ))}
 
@@ -2040,7 +2040,7 @@ const ModelSettingsPage: React.FC = () => {
                   {isProviderListCollapsed
                     ? t('providerSelection.showAllProviders', { count: matchedProviders.length })
                     : t('providerSelection.collapseProviders')}
-                  {isProviderListCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  {isProviderListCollapsed ? <Icon name="chevron-down" size="sm" /> : <ChevronUp size={14} />}
                 </button>
               )}
             </div>
@@ -2173,7 +2173,7 @@ const ModelSettingsPage: React.FC = () => {
         aria-label={apiKeyVisibilityLabel}
         title={apiKeyVisibilityLabel}
       >
-        {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+        {showApiKey ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
       </button>
     );
 
@@ -2270,7 +2270,7 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="bitfun-model-settings__selected-model-head-title">
                     <div className="bitfun-model-settings__selected-model-head-top">
                       <div className="bitfun-model-settings__selected-model-toggle">
-                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {isExpanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
                       </div>
                       <div className="bitfun-model-settings__selected-model-name">{modelDisplayName}</div>
                       {hasUnsavedChanges && (
@@ -2297,7 +2297,7 @@ const ModelSettingsPage: React.FC = () => {
                             e.stopPropagation();
                             removeSelectedModelDraft(draft.modelName);
                           }}
-                          icon={<X size={14} />}
+                          icon={<Icon name="xmark" size="sm" />}
                         />
                       </Tooltip>
                     )}
@@ -2306,9 +2306,9 @@ const ModelSettingsPage: React.FC = () => {
                     <div className="bitfun-model-settings__selected-model-head-bottom">
                       <span className="bitfun-model-settings__selected-model-summary">
                         {categoryLabel}
-                        {' Â· '}
+                        {' · '}
                         {formatTokenCountShort(draft.contextWindow)} ctx
-                        {' Â· '}
+                        {' · '}
                         {formatReasoningSummary(draft, reasoningProjection)}
                       </span>
                     </div>
@@ -2351,7 +2351,7 @@ const ModelSettingsPage: React.FC = () => {
                             tabIndex={0}
                             aria-label={t('form.contextWindowHint')}
                           >
-                            <Info size={14} aria-hidden="true" />
+                            <Icon name="info" size="sm" aria-hidden="true" />
                           </span>
                         </Tooltip>
                       </span>
@@ -2504,7 +2504,7 @@ const ModelSettingsPage: React.FC = () => {
     return (
       <>
         <div className="bitfun-model-settings__form bitfun-model-settings__form--modal" data-bf-component="model-settings" data-bf-part="form">
-          <div className="bitfun-model-settings__form-scrollable" data-bf-component="model-settings" data-bf-part="formBody">
+          <ScrollArea className="bitfun-model-settings__form-scrollable" data-bf-component="model-settings" data-bf-part="formBody">
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="bitfun-model-settings__edit-section"
@@ -2539,7 +2539,7 @@ const ModelSettingsPage: React.FC = () => {
                           }));
                         }}
                         placeholder={t('form.baseUrl')}
-                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} Â· ${opt.note}` }))}
+                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
                         size="small"
                       />
                     )}
@@ -2828,7 +2828,7 @@ const ModelSettingsPage: React.FC = () => {
                             tabIndex={0}
                             aria-label={t('advancedSettings.customHeaders.hint')}
                           >
-                            <Info size={14} />
+                            <Icon name="info" size="sm" />
                           </span>
                         </Tooltip>
                       </span>
@@ -2884,12 +2884,12 @@ const ModelSettingsPage: React.FC = () => {
                               aria-label={t('actions.delete')}
                               size="sm"
                               onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }}
-                              icon={<X size={14} />}
+                              icon={<Icon name="xmark" size="sm" />}
                             />
                           </Tooltip>
                         </div>
                       ))}
-                      <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn" leadingIcon={<Plus size={14} />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-model-settings__add-header-btn" leadingIcon={<Icon name="plus" size="sm" />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
                     </div>
                   </div>
                 </ConfigPageRow>
@@ -2913,7 +2913,7 @@ const ModelSettingsPage: React.FC = () => {
                             tabIndex={0}
                             aria-label={t('advancedSettings.customRequestBody.hint')}
                           >
-                            <Info size={14} />
+                            <Icon name="info" size="sm" />
                           </span>
                         </Tooltip>
                       </span>
@@ -2957,7 +2957,7 @@ const ModelSettingsPage: React.FC = () => {
               </>
             )}
           </ConfigPageSection>
-          </div>
+          </ScrollArea>
 
         </div>
       </>
@@ -3075,7 +3075,7 @@ const ModelSettingsPage: React.FC = () => {
             aria-label={t('actions.edit')}
             size="sm"
             onClick={() => handleEdit(config)}
-            icon={<SquarePen size={14} />}
+            icon={<Icon name="edit" size="sm" />}
           />
         </Tooltip>
         <Tooltip content={t('actions.delete')}>
@@ -3121,7 +3121,7 @@ const ModelSettingsPage: React.FC = () => {
           tabIndex={0}
           aria-label={t('streamTtftTimeout.hint')}
         >
-          <Info size={14} />
+          <Icon name="info" size="sm" />
         </span>
       </Tooltip>
     </span>
@@ -3137,7 +3137,7 @@ const ModelSettingsPage: React.FC = () => {
           tabIndex={0}
           aria-label={t('streamIdleTimeout.hint')}
         >
-          <Info size={14} />
+          <Icon name="info" size="sm" />
         </span>
       </Tooltip>
     </span>
@@ -3201,7 +3201,7 @@ const ModelSettingsPage: React.FC = () => {
           <div className="bitfun-model-settings__cli-discovery" data-bf-component="model-settings" data-bf-part="subscriptionArea">
             {showSubscriptionMigrationNotice && (
               <div className="bitfun-model-settings__subscription-migration-notice" data-bf-component="model-settings" data-bf-part="subscriptionNotice" role="status">
-                <Info size={16} aria-hidden="true" />
+                <Icon name="info" size="md" aria-hidden="true" />
                 <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
                 <Button
                   size="sm"
@@ -3426,7 +3426,7 @@ const ModelSettingsPage: React.FC = () => {
                               size="sm"
                               variant="outline"
                               onClick={() => void handleOpenSubscriptionAuthorization(loginPanel.authorizationUrl)}
-                              leadingIcon={<ExternalLink size={14} aria-hidden="true" />}
+                              leadingIcon={<Icon name="arrow-up-right" size="sm" aria-hidden="true" />}
                             >
                               {t('subscriptionAuth.openAuthorization')}
                             </Button>
@@ -3452,7 +3452,7 @@ const ModelSettingsPage: React.FC = () => {
                 aria-label={t('actions.addProvider')}
                 size="sm"
                 onClick={handleCreateNew}
-                icon={<Plus size={16} />}
+                icon={<Icon name="plus" size="md" />}
               />
             </Tooltip>
           )}
@@ -3461,7 +3461,7 @@ const ModelSettingsPage: React.FC = () => {
             <div className="bitfun-model-settings__empty" data-bf-component="model-settings" data-bf-part="empty">
               <Wifi size={36} />
               <p>{t('empty.noModels')}</p>
-              <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Plus size={14} />}>
+              <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
 
                 {t('actions.createFirst')}
               </Button>
@@ -3484,7 +3484,7 @@ const ModelSettingsPage: React.FC = () => {
                           aria-label={t('actions.edit')}
                           size="sm"
                           onClick={() => handleEditProvider(group.models[0])}
-                          icon={<SquarePen size={14} />}
+                          icon={<Icon name="edit" size="sm" />}
                         />
                       </Tooltip>
                     </div>
@@ -3509,7 +3509,7 @@ const ModelSettingsPage: React.FC = () => {
                   aria-label={t('modelsDevCatalog.viewDetails')}
                   size="sm"
                   onClick={() => setShowModelsDevDetails(true)}
-                  icon={<Eye size={14} aria-hidden="true" />}
+                  icon={<Icon name="eye" size="sm" aria-hidden="true" />}
                 />
               </Tooltip>
               <Tooltip content={t(isRefreshingModelsDev
@@ -3652,7 +3652,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="bitfun-model-settings__catalog-path">
-              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || 'â€”'}</code>
+              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
               <Tooltip content={t('modelsDevCatalog.reveal')}>
                 <IconButton
                   aria-label={t('modelsDevCatalog.reveal')}
@@ -3670,11 +3670,11 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">
             <code className="bitfun-model-settings__catalog-revision" title={modelsDevStatus?.revision}>
-              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}â€¦` : 'â€”'}
+              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}…` : '—'}
             </code>
           </ConfigPageRow>
           <div className="bitfun-model-settings__catalog-offline-help" role="note">
-            <Info size={15} aria-hidden="true" />
+            <Icon name="info" size="sm" aria-hidden="true" />
             <div>
               <strong>{t('modelsDevCatalog.offlineTitle')}</strong>
               <p>{t('modelsDevCatalog.offlineDescription')}</p>
@@ -3683,7 +3683,7 @@ const ModelSettingsPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => void systemAPI.openExternal(MODELS_DEV_DOWNLOAD_URL)}
-                  leadingIcon={<ExternalLink size={14} aria-hidden="true" />}
+                  leadingIcon={<Icon name="arrow-up-right" size="sm" aria-hidden="true" />}
                 >
 
                   {t('modelsDevCatalog.downloadOriginal')}
@@ -3743,11 +3743,13 @@ const ModelSettingsPage: React.FC = () => {
               : t('subscriptionAuth.logoutNoAffectedModels')}
           </p>
           {!!subscriptionLogoutRequest?.affectedModels.length && (
-            <ul>
-              {subscriptionLogoutRequest.affectedModels.map((model) => (
-                <li key={model.id}>{model.name} Â· {model.model_name}</li>
-              ))}
-            </ul>
+            <ScrollArea className="bitfun-model-settings__subscription-logout-list">
+              <ul>
+                {subscriptionLogoutRequest.affectedModels.map((model) => (
+                  <li key={model.id}>{model.name} · {model.model_name}</li>
+                ))}
+              </ul>
+            </ScrollArea>
           )}
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
         </div>

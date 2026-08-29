@@ -1,18 +1,14 @@
 /** Git diff view. */
 
-import { Button, IconButton, SegmentedControl } from '@bitfun/ui';
+import { Button, Icon, IconButton, SegmentedControl } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { 
-  FileText, 
+import {
+  FileText,
   RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Plus,
   Minus,
-  Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 
 import { gitService } from '../../services';
@@ -185,7 +181,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
 
   const getFileStatusIcon = useCallback((status: DiffFile['status']) => {
     switch (status) {
-      case 'added': return <Plus size={14} />;
+      case 'added': return <Icon name="plus" size="sm" />;
       case 'deleted': return <Minus size={14} />;
       default: return <FileText size={14} />;
     }
@@ -302,7 +298,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
               onClick={toggleAllExpansion}
               size="sm"
               title={allExpanded ? t('diffView.collapseAll') : t('diffView.expandAll')}
-              icon={allExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
+              icon={allExpanded ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
             />
             <IconButton
               aria-label={t('common.refresh')}
@@ -346,7 +342,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                 >
                   <div data-bf-component="git-diff-view" data-bf-part="fileInfo" className="bitfun-git-diff-view__file-info">
                     <span className={`bitfun-git-diff-view__expand-icon ${file.expanded ? 'bitfun-git-diff-view__expand-icon--expanded' : ''}`}>
-                      {file.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      {file.expanded ? <Icon name="chevron-down" size="md" /> : <Icon name="chevron-right" size="md" />}
                     </span>
                     
                     <span className="bitfun-git-diff-view__file-status-icon">
@@ -365,7 +361,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                   <div data-bf-component="git-diff-view" data-bf-part="fileStats" className="bitfun-git-diff-view__file-stats">
                     {file.additions > 0 && (
                       <span className="bitfun-git-diff-view__additions">
-                        <Plus size={12} />
+                        <Icon name="plus" size="xs" />
                         {file.additions}
                       </span>
                     )}

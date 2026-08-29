@@ -3,17 +3,14 @@
  * Lists directories on the peer via HostInvoke FS APIs.
  */
 
-import { Button, IconButton } from '@bitfun/ui';
+import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import {
-  ArrowLeft,
-  Folder,
   Home,
   Loader2,
   RefreshCw,
-  X,
 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
@@ -214,7 +211,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
           >{title}</h2>
           <IconButton
             className="peer-directory-browser__close-btn"
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
             size="md"
             aria-label={t('peerDirectoryPicker.cancel')}
             onClick={onCancel}
@@ -237,7 +234,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-component="peer-device"
             data-bf-part="toolButton"
           >
-            <ArrowLeft size={14} />
+            <Icon name="arrow-left" size="sm" />
           </button>
           <button
             type="button"
@@ -314,7 +311,7 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
           </div>
         </div>
 
-        <div
+        <ScrollArea
           className="peer-directory-browser__body"
           data-bf-component="peer-device"
           data-bf-part="body"
@@ -366,14 +363,14 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                     data-bf-part="item"
                     data-bf-state={selectedPath === entry.path ? 'selected' : undefined}
                   >
-                    <Folder size={14} />
+                    <Icon name="folder" size="sm" />
                     <span>{entry.name}</span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </ScrollArea>
 
         <div
           className="peer-directory-browser__footer"

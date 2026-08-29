@@ -1,6 +1,6 @@
 import React from 'react';
-import { IconButton } from '@bitfun/ui';
-import { X } from 'lucide-react';
+import { Icon, IconButton } from '@bitfun/ui';
+;
 import { useI18n } from '@/infrastructure/i18n';
 
 export interface ConfigStatusProps {
@@ -63,7 +63,7 @@ export const ConfigStatus: React.FC<ConfigStatusProps> = ({
           onClick={onClose}
           style={{ marginLeft: '8px' }}
           aria-label={t('actions.close')}
-          icon={<X />}
+          icon={<Icon name="xmark" size="lg" />}
         />
       )}
     </div>

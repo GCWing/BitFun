@@ -15,11 +15,23 @@
   flex-direction: column;
   gap: $size-gap-4;
   width: 100%;
+  inline-size: 100%;
+  max-inline-size: none;
   height: 100%;
   padding: $size-gap-2;
   box-sizing: border-box;
   overflow: hidden;
   line-height: 1.35;
+  background: transparent;
+
+  > [data-bf-part="header"] {
+    padding: 0;
+  }
+
+  [data-bf-part="content"] {
+    padding: 0;
+    gap: 0;
+  }
 
   // ── Header: title (back/forward lives in NavBar) ──────
 
@@ -146,16 +158,7 @@
     display: flex;
     flex-direction: column;
     gap: $size-gap-4;
-    overflow-y: auto;
-    overflow-x: hidden;
     padding: 0;
-
-    &::-webkit-scrollbar { width: 6px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
-      border-radius: $size-radius-full;
-    }
   }
 
   // ── Category group ─────────────────────────────────────

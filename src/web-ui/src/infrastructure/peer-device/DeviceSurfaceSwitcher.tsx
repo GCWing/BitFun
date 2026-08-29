@@ -8,9 +8,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Icon, ScrollArea } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Check, ChevronUp, Monitor, MonitorSmartphone, Loader2 } from 'lucide-react';
+import { ChevronUp, Monitor, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useNotification } from '@/shared/notification-system';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -200,7 +200,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
             className="bitfun-device-switcher__backdrop"
             onClick={() => setOpen(false)}
           />
-          <div
+          <ScrollArea
             ref={popoverRef}
             className="bitfun-device-switcher__menu"
             role="menu"
@@ -270,7 +270,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                         {t('accountLogin.offline')}
                       </span>
                     )}
-                    {isCurrent && <Check size={13} aria-hidden="true" />}
+                    {isCurrent && <Icon name="check-line" size="xs" aria-hidden="true" />}
                   </button>
                   {attached && (
                     <Button
@@ -298,7 +298,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
             <div className="bitfun-device-switcher__hint">
               {t('accountLogin.deviceSwitcher.hint')}
             </div>
-          </div>
+          </ScrollArea>
         </>,
         getAppearanceOverlayHost(),
       )}

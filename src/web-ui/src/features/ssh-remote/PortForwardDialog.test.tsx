@@ -39,6 +39,7 @@ vi.mock('@/shared/utils/logger', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Modal: ({ isOpen, children }: React.PropsWithChildren<{ isOpen: boolean }>) => (
     isOpen ? <div>{children}</div> : null
   ),
@@ -96,6 +97,15 @@ vi.mock('@bitfun/ui', () => ({
     />
   )),
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  FormSection: ({
+    children,
+    title,
+    actions,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { title?: React.ReactNode; actions?: React.ReactNode }) => (
+    <section {...props}>{title}{actions}{children}</section>
+  ),
+  FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
 }));
 
 vi.mock('@/component-library', () => ({

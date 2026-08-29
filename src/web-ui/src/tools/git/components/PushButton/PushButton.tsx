@@ -1,8 +1,8 @@
 /** Push button with optional force-push dropdown. */
 
-import { Button, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ArrowUp, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n';
 import './PushButton.scss';
@@ -109,7 +109,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
               disabled={disabled || loading}
               loading={loading}
               aria-label={t('actions.push')}
-              icon={<ArrowUp size={14} />}
+              icon={<Icon name="arrow-up" size="sm" />}
             />
           </Tooltip>
         ) : (
@@ -119,7 +119,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
             onClick={() => handlePush(false)}
             disabled={disabled || loading}
             loading={loading}
-            leadingIcon={<ArrowUp />}
+            leadingIcon={<Icon name="arrow-up" size="lg" />}
           >
             {t('actions.push')}
           </Button>
@@ -132,10 +132,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
             onClick={handleToggleDropdown}
             disabled={disabled || loading}
             aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
-            icon={<ChevronDown
-              size={14}
-              className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`}
-            />}
+            icon={<Icon name="chevron-down" size="sm" className={`bitfun-push-button__arrow ${showDropdown ? 'bitfun-push-button__arrow--open' : ''}`} />}
           />
         </Tooltip>
       </div>
@@ -152,7 +149,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
             className="bitfun-push-button__menu-item"
             onClick={() => handlePush(false)}
           >
-            <ArrowUp size={14} />
+            <Icon name="arrow-up" size="sm" />
             <span className="bitfun-push-button__menu-item-title">{t('actions.push')}</span>
           </button>
 

@@ -46,6 +46,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Menu: ({ children, ...props }: any) => <div role="menu" {...props}>{children}</div>,
   MenuItem: ({ children, leading, ...props }: any) => (

@@ -1,24 +1,16 @@
-import { Button, SearchField, Switch } from '@bitfun/ui';
+import { Button, Icon, ScrollArea, SearchField, Switch, type IconName, type IconSize } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Bot,
   Brain,
-  ChevronDown,
-  ChevronRight,
   CircleUserRound,
-  Command,
-  Info,
   MessageSquarePlus,
   Network,
   Package,
   PawPrint,
-  Puzzle,
   RefreshCw,
-  Search as SearchIcon,
   Server,
-  Settings,
-  Terminal,
   Webhook,
   Wrench,
 } from 'lucide-react';
@@ -48,6 +40,14 @@ import {
 } from './ecosystemCompatibilityModel';
 import { useEcosystemCompatibilityStore } from './ecosystemCompatibilityStore';
 import './EcosystemCompatibilityScene.scss';
+
+function catalogLucide(name: IconName): LucideIcon {
+  return function CatalogLucide({ size }: { size?: number | string }) {
+    const n = typeof size === 'number' ? size : 15;
+    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
+    return <Icon name={name} size={mapped} />;
+  } as LucideIcon;
+}
 
 const AcpAgentsConfig = lazy(
   () => import('@/infrastructure/config/components/AcpAgentsConfig'),
@@ -83,15 +83,15 @@ function EcosystemProductIcon({ productId, size }: {
 
 const IMPORT_ITEM_ICONS: Record<EcosystemImportItemKind, LucideIcon> = {
   account: CircleUserRound,
-  settings: Settings,
-  command: Command,
+  settings: catalogLucide('settings'),
+  command: catalogLucide('command-mac'),
   tool: Wrench,
   subagent: Bot,
   skill: Package,
   mcp: Server,
   hook: Webhook,
   memory: Brain,
-  plugin: Puzzle,
+  plugin: catalogLucide('extension'),
   pet: PawPrint,
 };
 
@@ -457,7 +457,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
           </div>
           {importItems.map((item) => {
             const state = importItemState(item);
-            const Icon = IMPORT_ITEM_ICONS[item.kind];
+            const ItemIcon = IMPORT_ITEM_ICONS[item.kind];
             const ready = state === 'ready' || state === 'readyRename';
             const dimmed = [
               'notDetected',
@@ -494,7 +494,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
               >
                 <span className="ecosystem-compatibility__import-item" role="cell">
                   <span className="ecosystem-compatibility__import-item-icon" aria-hidden="true">
-                    <Icon size={15} />
+                    <ItemIcon size={15} />
                   </span>
                   <span className="ecosystem-compatibility__import-item-copy">
                     <strong title={itemName}>{itemName}</strong>
@@ -579,7 +579,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                 <article className="ecosystem-compatibility__runtime-agent" key={client.id}>
                   <div className="ecosystem-compatibility__runtime-row">
                     <span className="ecosystem-compatibility__runtime-icon" aria-hidden="true">
-                      <Terminal size={16} />
+                      <Icon name="terminal" size="md" />
                     </span>
                     <div className="ecosystem-compatibility__runtime-copy">
                       <strong>{displayName}</strong>
@@ -692,7 +692,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
 
                       <div className="ecosystem-compatibility__subagent-editor-footer">
                         <span>
-                          <Info size={14} aria-hidden="true" />
+                          <Icon name="info" size="sm" aria-hidden="true" />
                           {t('run.subagent.profileNote')}
                         </span>
                         <div>
@@ -735,7 +735,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       {ownerSurface === 'acp' ? (
         <section className="ecosystem-compatibility__owner-surface" aria-label={t('run.managerLabel')}>
           <div className="ecosystem-compatibility__owner-note">
-            <Info size={15} aria-hidden="true" />
+            <Icon name="info" size="sm" aria-hidden="true" />
             <span>{t('run.managerScope')}</span>
           </div>
           <Suspense fallback={<OwnerSurfaceLoading label={t('run.loadingManager')} />}>
@@ -761,7 +761,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       >
         <div className="ecosystem-compatibility__sidebar-header">
           <SearchField
-            leadingIcon={<SearchIcon aria-hidden />}
+            leadingIcon={<Icon name="search" size="lg" aria-hidden />}
             size="sm"
             value={searchQuery}
             onValueChange={setSearchQuery}
@@ -776,11 +776,11 @@ const EcosystemCompatibilityScene: React.FC = () => {
           >
             <span>{t('host.label')}</span>
             <strong title={currentHost}>{currentHost}</strong>
-            <ChevronDown size={14} aria-hidden="true" />
+            <Icon name="chevron-down" size="sm" aria-hidden="true" />
           </button>
         </div>
 
-        <div
+        <ScrollArea
           className="ecosystem-compatibility__product-groups"
           data-bf-scene="ecosystem-compatibility"
           data-bf-part="productList"
@@ -814,7 +814,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
                           <span className="ecosystem-compatibility__status-dot" aria-hidden="true" />
                           {t(`status.${runtime.status}`)}
                         </span>
-                        <ChevronRight size={14} aria-hidden="true" />
+                        <Icon name="chevron-right" size="sm" aria-hidden="true" />
                       </button>
                     );
                   })}
@@ -827,10 +827,10 @@ const EcosystemCompatibilityScene: React.FC = () => {
               {t('search.empty')}
             </div>
           ) : null}
-        </div>
+        </ScrollArea>
 
         <div className="ecosystem-compatibility__sidebar-footer">
-          <Info size={14} aria-hidden="true" />
+          <Icon name="info" size="sm" aria-hidden="true" />
           <span>{t('sidebar.hint')}</span>
         </div>
       </aside>
@@ -892,7 +892,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
           </div>
         </header>
 
-        <div
+        <ScrollArea
           className="ecosystem-compatibility__content"
           data-bf-scene="ecosystem-compatibility"
           data-bf-part="content"
@@ -905,7 +905,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
           ) : null}
           {loadIssues.length > 0 ? (
             <div className="ecosystem-compatibility__load-notice" role="status">
-              <Info size={15} aria-hidden="true" />
+              <Icon name="info" size="sm" aria-hidden="true" />
               <span>{t('partialLoad', {
                 sources: loadIssues.includes('externalSources') ? t('loadAreas.externalSources') : '',
                 acp: loadIssues.includes('acpClients') ? t('loadAreas.acpClients') : '',
@@ -921,7 +921,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
               aria-label={t('governance.managerLabel')}
             >
               <div className="ecosystem-compatibility__owner-note">
-                <Info size={15} aria-hidden="true" />
+                <Icon name="info" size="sm" aria-hidden="true" />
                 <span>{t('governance.managerScope')}</span>
               </div>
               <Suspense fallback={<OwnerSurfaceLoading label={t('governance.loadingManager')} />}>
@@ -946,7 +946,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
               {renderImport()}
             </div>
           )}
-        </div>
+        </ScrollArea>
       </main>
     </div>
   );

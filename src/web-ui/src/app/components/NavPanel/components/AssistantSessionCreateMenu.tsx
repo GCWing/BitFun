@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Plus } from 'lucide-react';
-import { Menu, MenuItem, Tooltip } from '@bitfun/ui';
+;
+import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -102,7 +102,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             }}
             data-testid="nav-primary-assistant-session-add-btn"
           >
-            <Plus size={13} />
+            <Icon name="plus" size="xs" />
           </button>
         </Tooltip>
         <Tooltip content={chooseAssistantLabel} placement="right" followCursor disabled={menuOpen}>
@@ -116,7 +116,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             onClick={() => setMenuOpen(open => !open)}
             data-testid="nav-assistant-session-menu-toggle"
           >
-            <ChevronDown size={11} />
+            <Icon name="chevron-down" size="2xs" />
           </button>
         </Tooltip>
       </div>
@@ -138,7 +138,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             return (
               <MenuItem
                 key={workspace.id}
-                leading={<Plus size={13} aria-hidden="true" />}
+                leading={<Icon name="plus" size="xs" aria-hidden="true" />}
                 aria-label={t('nav.sessions.newAssistantSessionFor', { assistantName })}
                 onClick={() => {
                   closeMenu();

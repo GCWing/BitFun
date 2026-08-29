@@ -49,16 +49,6 @@
 .branch-quick-switch__list {
   max-height: 280px;
   padding: $size-gap-1;
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb {
-    background: var(--bf-appearance-token-color-text-muted);
-    border-radius: 2px;
-    opacity: 0.3;
-  }
 }
 
 .branch-quick-switch__loading,

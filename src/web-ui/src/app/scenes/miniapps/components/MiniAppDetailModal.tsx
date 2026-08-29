@@ -1,21 +1,6 @@
-import { Button, Modal } from '@bitfun/ui';
+import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useMemo, useRef } from 'react';
-import {
-  AppWindow,
-  Bot,
-  CheckCircle2,
-  Cpu,
-  Database,
-  Download,
-  FolderKanban,
-  Globe2,
-  Play,
-  ShieldCheck,
-  Sparkles,
-  Square,
-  Terminal,
-  Trash2,
-} from 'lucide-react';
+import { Bot, Cpu, Database, FolderKanban, Play, ShieldCheck, Square, Trash2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -50,11 +35,11 @@ type Translate = (key: string, params?: Record<string, unknown>) => string;
 
 function capabilityIcon(capability: MiniAppDetailCapability): React.ReactNode {
   switch (capability.kind) {
-    case 'ai': return <Sparkles size={28} strokeWidth={1.6} />;
+    case 'ai': return <Icon name="spark" size="lg" />;
     case 'workspace': return <FolderKanban size={28} strokeWidth={1.6} />;
-    case 'export': return <Download size={28} strokeWidth={1.6} />;
-    case 'shell': return <Terminal size={28} strokeWidth={1.6} />;
-    case 'network': return <Globe2 size={28} strokeWidth={1.6} />;
+    case 'export': return <Icon name="download" size="lg" />;
+    case 'shell': return <Icon name="terminal" size="lg" />;
+    case 'network': return <Icon name="browser" size="lg" />;
     case 'worker': return <Cpu size={28} strokeWidth={1.6} />;
     case 'storage': return <Database size={28} strokeWidth={1.6} />;
     case 'desktop': return <Bot size={28} strokeWidth={1.6} />;
@@ -62,7 +47,7 @@ function capabilityIcon(capability: MiniAppDetailCapability): React.ReactNode {
     case 'instant': return <Play size={28} strokeWidth={1.6} />;
     case 'surface':
     default:
-      return <AppWindow size={28} strokeWidth={1.6} />;
+      return <Icon name="floating-window" size="lg" />;
   }
 }
 
@@ -202,7 +187,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
       titleTestId="miniapp-detail-title"
       closeButtonTestId="miniapp-detail-close"
     >
-      <article
+      <ScrollArea
         className="miniapp-detail-modal"
         data-bf-component="mini-app-detail-modal"
         data-bf-part="root"
@@ -276,7 +261,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
 
         <footer className="miniapp-detail-modal__footer" data-bf-component="mini-app-detail-modal" data-bf-part="footer">
           <div className="miniapp-detail-modal__status" data-bf-component="mini-app-detail-modal" data-bf-part="status">
-            <CheckCircle2 size={18} strokeWidth={1.8} aria-hidden="true" />
+            <Icon name="check-circle" size="lg" aria-hidden="true" />
             <span data-testid="miniapp-detail-status">{statusCopy}</span>
           </div>
           <div className="miniapp-detail-modal__actions" data-bf-component="mini-app-detail-modal" data-bf-part="actions">
@@ -317,7 +302,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
             </Button>
           </div>
         </footer>
-      </article>
+      </ScrollArea>
     </Modal>
   );
 };

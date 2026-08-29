@@ -1,12 +1,8 @@
-import { Button, Switch, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Modal, ScrollArea, Switch, Tooltip } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import {
   ArrowDown,
-  ArrowUp,
-  Pencil,
-  Plus,
-  Settings2,
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -304,7 +300,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
             </div>
             <div className="skill-group-manager__field">
               <span>{t('agentsOverview.skillGroupPicker.groupSkills')}</span>
-              <div className="skill-group-manager__token-grid" data-bf-component="skill-group-picker" data-bf-part="tokenGrid">
+              <ScrollArea className="skill-group-manager__token-grid" data-bf-component="skill-group-picker" data-bf-part="tokenGrid">
                 {selectableSkills.map((skill) => {
                   const selected = skillKeys.has(skill.key);
                   const tooltipFields = skillTooltipFields(skill, t);
@@ -336,7 +332,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                     </AgentCapabilityTooltip>
                   );
                 })}
-              </div>
+              </ScrollArea>
             </div>
             <div className="skill-group-manager__footer">
               <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
@@ -353,7 +349,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
           <>
             <div className="skill-group-manager__head">
               <span>{t('agentsOverview.skillGroupPicker.manageSubtitle')}</span>
-              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Plus size={14} />}>
+              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Icon name="plus" size="sm" />}>
 
                 {t('agentsOverview.skillGroupPicker.createGroup')}
               </Button>
@@ -361,7 +357,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
             {groups.length === 0 ? (
               <p className="skill-group-manager__empty">{t('agentsOverview.skillGroupPicker.noUserGroups')}</p>
             ) : (
-              <div className="skill-group-manager__list" data-bf-component="skill-group-picker" data-bf-part="managerList">
+              <ScrollArea className="skill-group-manager__list" data-bf-component="skill-group-picker" data-bf-part="managerList">
                 {groups.map((group, index) => {
                   const unavailable = unavailableUserSkillKeys(group, skills);
                   return (
@@ -383,7 +379,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.moveUp')}
                             onClick={() => void moveGroup(index, -1)}
                             disabled={saving || index === 0}
-                            icon={<ArrowUp size={13} />}
+                            icon={<Icon name="arrow-up" size="xs" />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.skillGroupPicker.moveDown')}>
@@ -403,7 +399,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.editGroup')}
                             onClick={() => startEdit(group)}
                             disabled={saving}
-                            icon={<Pencil size={13} />}
+                            icon={<Icon name="edit" size="xs" />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.skillGroupPicker.deleteGroup')}>
@@ -420,7 +416,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                     </div>
                   );
                 })}
-              </div>
+              </ScrollArea>
             )}
           </>
         )}
@@ -469,7 +465,7 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
           size="sm"
           onClick={() => setIsManagerOpen(true)}
           disabled={disabled}
-          leadingIcon={<Settings2 size={14} />}
+          leadingIcon={<Icon name="settings" size="sm" />}
         >
 
           {t('agentsOverview.skillGroupPicker.manageGroups')}

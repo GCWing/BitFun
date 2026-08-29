@@ -7,7 +7,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
   overflow-x: hidden;
   color: var(--bf-appearance-token-color-text-primary);
   font-family: $font-family-sans;
@@ -134,7 +133,6 @@
 
     
     &--form {
-      overflow-y: auto;
       overflow-x: hidden;
       padding: 0;
     }
@@ -444,7 +442,6 @@
   
   &__tab-content {
     flex: 1;
-    overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
     padding: $size-gap-4 0;
@@ -1636,7 +1633,6 @@
   &__form-scrollable {
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
     overflow-x: hidden;
     padding-left: $size-gap-6;
     padding-right: calc(#{$size-gap-6} + 4px);
@@ -2051,7 +2047,6 @@
 
   
   &__content--selection {
-    overflow-y: auto;
     overflow-x: hidden;
     padding: 0;
   }
@@ -2410,11 +2405,13 @@
       line-height: 1.6;
     }
 
-    ul {
+    .bitfun-model-settings__subscription-logout-list {
       max-height: 160px;
+    }
+
+    ul {
       margin: 0;
       padding-left: var(--bf-appearance-token-size-gap-5);
-      overflow: auto;
       color: var(--bf-appearance-token-color-text-primary);
       font-size: var(--bf-appearance-token-font-size-sm);
       line-height: 1.7;

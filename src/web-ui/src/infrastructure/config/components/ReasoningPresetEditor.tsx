@@ -1,14 +1,9 @@
-import { Button, Switch, IconButton, Input, Select, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  ChevronRight,
-  Info,
-  Plus,
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -373,11 +368,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 <Tooltip content={catalogOptionTooltips[String(option.value)]} placement="right">
                   <div className="bitfun-reasoning-preset-editor__catalog-option">
                     <span>{option.label}</span>
-                    <Info
-                      className="bitfun-reasoning-preset-editor__catalog-option-info"
-                      size={13}
-                      aria-hidden="true"
-                    />
+                    <Icon name="info" size="xs" className="bitfun-reasoning-preset-editor__catalog-option-info" aria-hidden="true" />
                   </div>
                 </Tooltip>
               )}
@@ -626,11 +617,11 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 tabIndex={0}
                 aria-label={t('reasoningPresets.customTooltip')}
               >
-                <Info size={14} aria-hidden="true" />
+                <Icon name="info" size="sm" aria-hidden="true" />
               </span>
             </Tooltip>
           </div>
-          <Button variant="outline" size="sm" disabled={disabled} onClick={addPreset} leadingIcon={<Plus size={14} aria-hidden="true" />}>
+          <Button variant="outline" size="sm" disabled={disabled} onClick={addPreset} leadingIcon={<Icon name="plus" size="sm" aria-hidden="true" />}>
 
             {t('reasoningPresets.add')}
           </Button>
@@ -673,7 +664,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       aria-expanded={expanded}
                       aria-label={preset.label?.trim() || preset.id}
                     >
-                      {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      {expanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
                     </button>
                     <div className="bitfun-reasoning-preset-editor__row-content">
                       {expanded ? (
@@ -725,7 +716,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           size="sm"
                           disabled={disabled || presetIndex === 0}
                           onClick={() => movePreset(presetIndex, -1)}
-                          icon={<ArrowUp size={14} />}
+                          icon={<Icon name="arrow-up" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('reasoningPresets.moveDown')}>
@@ -872,7 +863,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                               size="sm"
                               disabled={disabled || actionIndex === 0}
                               onClick={() => moveAction(presetIndex, actionIndex, -1)}
-                              icon={<ArrowUp size={14} />}
+                              icon={<Icon name="arrow-up" size="sm" />}
                             />
                           </Tooltip>
                           <Tooltip content={t('reasoningPresets.moveDown')}>
@@ -913,7 +904,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         ),
                       ],
                     })}
-                    leadingIcon={<Plus size={14} aria-hidden="true" />}
+                    leadingIcon={<Icon name="plus" size="sm" aria-hidden="true" />}
                   >
 
                     {t('reasoningPresets.addAction')}

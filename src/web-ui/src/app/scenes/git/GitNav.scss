@@ -10,8 +10,20 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  inline-size: 100%;
+  max-inline-size: none;
   height: 100%;
   overflow: hidden;
+  background: transparent;
+
+  > [data-bf-part="header"] {
+    padding: 0;
+  }
+
+  [data-bf-part="content"] {
+    padding: 0;
+    gap: 0;
+  }
 
   &__header {
     display: flex;
@@ -32,16 +44,7 @@
 
   &__sections {
     flex: 1 1 auto;
-    overflow-y: auto;
-    overflow-x: hidden;
     padding: $size-gap-2 0;
-
-    &::-webkit-scrollbar { width: 3px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-subtle);
-      border-radius: 2px;
-    }
   }
 
   &__status {

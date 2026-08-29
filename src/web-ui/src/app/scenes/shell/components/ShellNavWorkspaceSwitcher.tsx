@@ -1,8 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Check, ChevronDown } from 'lucide-react';
-import { Menu, MenuItem, Tooltip } from '@bitfun/ui';
+;
+import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 interface ShellNavWorkspaceSwitcherProps {
@@ -59,7 +59,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
           <span className="bitfun-shell-nav__workspace-separator">/</span>
           <span className="bitfun-shell-nav__workspace-name">{workspaceName}</span>
           {hasMultipleWorkspaces ? (
-            <ChevronDown size={12} className="bitfun-shell-nav__workspace-trigger-icon" />
+            <Icon name="chevron-down" size="xs" className="bitfun-shell-nav__workspace-trigger-icon" />
           ) : null}
         </button>
       </Tooltip>
@@ -92,7 +92,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
                       reserveLeadingSpace
                       leading={isActive ? (
                         <span className="bitfun-shell-nav__workspace-menu-check" aria-hidden="true">
-                          <Check size={12} />
+                          <Icon name="check-line" size="xs" />
                         </span>
                       ) : undefined}
                       onClick={() => { void onSelectWorkspace(workspace.id); }}

@@ -1,8 +1,8 @@
  
 
 import React from 'react';
-import { Button, IconButton } from '@bitfun/ui';
-import { X, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { Button, Icon, IconButton } from '@bitfun/ui';
+import { AlertTriangle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
 import { notificationService } from '../services/NotificationService';
@@ -22,14 +22,14 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
   const getIcon = () => {
     switch (type) {
       case 'success':
-        return <CheckCircle size={14} />;
+        return <Icon name="check-circle" size="sm" />;
       case 'error':
-        return <XCircle size={14} />;
+        return <Icon name="xmark" size="sm" />;
       case 'warning':
         return <AlertTriangle size={14} />;
       case 'info':
       default:
-        return <Info size={14} />;
+        return <Icon name="info" size="sm" />;
     }
   };
 
@@ -94,7 +94,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
             size="sm"
             onClick={handleClose}
             aria-label={t('actions.close')}
-            icon={<X />}
+            icon={<Icon name="xmark" size="lg" />}
           />
         </span>
       )}

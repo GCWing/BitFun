@@ -131,7 +131,7 @@ describe('unified project session creation', () => {
     expect(sectionsIndex).toBeGreaterThan(brandHeaderIndex);
     expect(contentIndex).toBeGreaterThan(-1);
     expect(persistentFooterIndex).toBeGreaterThan(contentIndex);
-    expect(mainNav).toContain('ref={sectionsScrollRef}');
+    expect(mainNav).toContain('bodyRef={sectionsScrollRef}');
     expect(mainNav).toContain('<StickySectionHeader scrollRootRef={sectionsScrollRef}>');
     expect(stickyHeader).toContain('new IntersectionObserver');
     expect(stickyHeader).toContain('root: scrollRoot');

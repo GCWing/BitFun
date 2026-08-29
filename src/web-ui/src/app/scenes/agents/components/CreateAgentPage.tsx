@@ -1,12 +1,9 @@
-import { Button, Switch, Input, Tooltip } from '@bitfun/ui';
+import { Button, Icon, Input, ScrollArea, Switch, Tooltip, type IconName, type IconSize } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   FileText,
   FolderTree,
   Minus,
-  Settings2,
-  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +28,14 @@ import { ToolGroupPicker, ToolGroupSummary } from './ToolGroupPicker';
 import { useUserToolGroups } from './useUserToolGroups';
 import '../AgentsView.scss';
 import './CreateAgentPage.scss';
+
+function catalogLucide(name: IconName): LucideIcon {
+  return function CatalogLucide({ size }: { size?: number | string }) {
+    const n = typeof size === 'number' ? size : 14;
+    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
+    return <Icon name={name} size={mapped} />;
+  } as LucideIcon;
+}
 
 const ID_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 const DEFAULT_MODE_POLICY: UserContextSection[] = [
@@ -68,7 +73,7 @@ const VISIBLE_CONTEXT_SECTIONS: UserContextSection[] = [
   'project_layout',
 ];
 const CONTEXT_SECTION_ICONS: Record<UserContextSection, LucideIcon> = {
-  workspace_context: Terminal,
+  workspace_context: catalogLucide('terminal'),
   workspace_instructions: FileText,
   project_layout: FolderTree,
 };
@@ -488,17 +493,17 @@ const CreateAgentPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<ArrowLeft />}
+            leadingIcon={<Icon name="arrow-left" size="lg" />}
             onClick={openHome}
           >
             {t('agentsOverview.backToOverview')}
           </Button>
         </div>
-        <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
-          <div className="th__list-inner">
+        <ScrollArea className="th__list-body">
+          <div className="th__list-inner" data-bf-component="create-agent-page" data-bf-part="body">
             <p className="th__title-sub">{t('agentsOverview.form.loadingDetail')}</p>
           </div>
-        </div>
+        </ScrollArea>
       </div>
     );
   }
@@ -510,28 +515,28 @@ const CreateAgentPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<ArrowLeft />}
+            leadingIcon={<Icon name="arrow-left" size="lg" />}
             onClick={openHome}
           >
             {t('agentsOverview.backToOverview')}
           </Button>
         </div>
-        <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
+        <ScrollArea className="th__list-body">
           <div className="th__list-inner">
             <p className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error" role="alert">{detailError}</p>
             <Button variant="outline" size="sm" onClick={openHome}>
               {t('agentsOverview.form.cancel')}
             </Button>
           </div>
-        </div>
+        </ScrollArea>
       </div>
     );
   }
 
   return (
     <div className="tv th-create-page" data-bf-component="create-agent-page" data-bf-part="root">
-      <div className="th__list-body th-create-page__body" data-bf-component="create-agent-page" data-bf-part="body">
-        <div className="th__list-inner th-create-page__inner">
+      <ScrollArea className="th__list-body th-create-page__body">
+        <div className="th__list-inner th-create-page__inner" data-bf-component="create-agent-page" data-bf-part="body">
           <header className="th-create-page__head" data-bf-component="create-agent-page" data-bf-part="heading">
             <div className="th-create-page__heading">
               <h2 className="th__title">{formTitle}</h2>
@@ -800,7 +805,7 @@ const CreateAgentPage: React.FC = () => {
                               setToolsEditing(true);
                             }}
                             disabled={submitting}
-                            leadingIcon={<Settings2 size={14} aria-hidden="true" />}
+                            leadingIcon={<Icon name="settings" size="sm" aria-hidden="true" />}
                           >
 
                             {t('agentsOverview.toolsEdit')}
@@ -819,7 +824,7 @@ const CreateAgentPage: React.FC = () => {
                           testId="custom-agent-tool-groups"
                         />
                       ) : (
-                        <div
+                        <ScrollArea
                           ref={toolSummaryRef}
                           className="th-create-panel__tool-summary"
                           style={toolSummaryHeight === null ? undefined : { height: toolSummaryHeight }}
@@ -829,7 +834,7 @@ const CreateAgentPage: React.FC = () => {
                             selectedToolNames={Array.from(selectedTools)}
                             userGroups={userToolGroups}
                           />
-                        </div>
+                        </ScrollArea>
                       )}
                     </div>
                   </>
@@ -943,7 +948,7 @@ const CreateAgentPage: React.FC = () => {
             </div>
           </form>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 };

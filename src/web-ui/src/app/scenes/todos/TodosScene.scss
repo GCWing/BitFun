@@ -13,7 +13,6 @@ $todos-compact-breakpoint: 720px;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
-  overflow: hidden;
 
   // ── Header ────────────────────────────────────────────────────────────────
 
@@ -121,7 +120,6 @@ $todos-compact-breakpoint: 720px;
       gap: $size-gap-4;
       padding: $size-gap-4;
       height: 100%;
-      overflow-y: auto;
       border-right: 1px solid var(--bf-appearance-token-border-subtle);
     }
 
@@ -431,7 +429,6 @@ $todos-compact-breakpoint: 720px;
     gap: $size-gap-3;
     min-width: 0;
     min-height: 0;
-    overflow-y: auto;
     overscroll-behavior-y: contain;
     scroll-padding-block: $size-gap-3;
   }
@@ -570,7 +567,6 @@ $todos-compact-breakpoint: 720px;
     flex: 0 0 auto;
     min-height: max-content;
     max-height: 42%;
-    overflow-y: auto;
     overscroll-behavior-y: contain;
     transform-origin: top center;
     transition:
@@ -679,7 +675,6 @@ $todos-compact-breakpoint: 720px;
     gap: $size-gap-4;
     min-height: 0;
     padding: $size-gap-4 $size-gap-6;
-    overflow-y: auto;
   }
 
   &__editor-section {
@@ -1027,9 +1022,14 @@ $todos-compact-breakpoint: 720px;
   overflow: hidden;
 }
 
+@media (min-width: #{$todos-stack-breakpoint + 1px}) {
+  .bf-todos {
+    overflow: hidden;
+  }
+}
+
 @media (max-width: $todos-stack-breakpoint) {
   .bf-todos {
-    overflow-y: auto;
 
     &__head {
       align-items: flex-start;

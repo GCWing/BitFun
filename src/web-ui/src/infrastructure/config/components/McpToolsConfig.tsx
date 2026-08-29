@@ -4,16 +4,14 @@
  * Uses settings/mcp-tools for page title/subtitle, settings/mcp for the MCP section.
  */
 
-import { Button, IconButton, Modal, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FileJson,
   RefreshCw,
-  X,
   Play,
   Square,
-  CheckCircle,
   AlertTriangle,
   MinusCircle,
   KeyRound,
@@ -958,7 +956,7 @@ const McpToolsConfig: React.FC = () => {
 
   const getStatusIcon = (status: string): React.ReactNode => {
     const s = status.toLowerCase();
-    if (s.includes('healthy') || s.includes('connected')) return <CheckCircle size={10} />;
+    if (s.includes('healthy') || s.includes('connected')) return <Icon name="check-circle" size="2xs" />;
     if (s.includes('starting') || s.includes('reconnecting')) return <ToolProcessingDots size={10} />;
     if (s.includes('failed') || s.includes('stopped') || s.includes('auth'))
       return <AlertTriangle size={10} />;
@@ -1113,7 +1111,7 @@ const McpToolsConfig: React.FC = () => {
           size="sm"
           onClick={() => setShowJsonEditor(!showJsonEditor)}
           aria-label={showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}
-          icon={showJsonEditor ? <X size={16} /> : <FileJson size={16} />}
+          icon={showJsonEditor ? <Icon name="xmark" size="md" /> : <FileJson size={16} />}
         />
       </Tooltip>
     </>

@@ -4,24 +4,27 @@
  */
 
 import React from 'react';
+import { Icon, type IconName, type IconSize } from '@bitfun/ui';
 import { 
   Code, 
   FileText, 
-  GitBranch, 
-  Eye,
   Edit3,
   BookOpen,
-  Settings,
   ClipboardList,
-  Image,
   Network,
   MessageSquareQuote,
-  Globe,
   Activity,
   GitPullRequest,
-  Terminal,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
+
+function catalogPanelIcon(name: IconName): React.ComponentType<{ size?: string | number }> {
+  return function CatalogPanelIcon({ size }) {
+    const n = typeof size === 'number' ? size : 16;
+    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
+    return React.createElement(Icon, { name, size: mapped });
+  };
+}
 
 // Configuration mapping for each panel content type
 export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig> = {
@@ -76,7 +79,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'text-viewer': {
     type: 'text-viewer',
     displayName: 'Text Viewer',
-    icon: Eye,
+    icon: catalogPanelIcon('eye'),
     supportsCopy: true,
     supportsDownload: true,
     showHeader: true
@@ -92,7 +95,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'image-viewer': {
     type: 'image-viewer',
     displayName: 'Image Viewer',
-    icon: Image,
+    icon: catalogPanelIcon('image'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -108,7 +111,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-diff': {
     type: 'git-diff',
     displayName: 'Git Diff',
-    icon: GitBranch,
+    icon: catalogPanelIcon('git'),
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -116,7 +119,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-settings': {
     type: 'git-settings',
     displayName: 'Git Settings',
-    icon: GitBranch,
+    icon: catalogPanelIcon('git'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -124,7 +127,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-graph': {
     type: 'git-graph',
     displayName: 'Git Graph',
-    icon: GitBranch,
+    icon: catalogPanelIcon('git'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -132,7 +135,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-branch-history': {
     type: 'git-branch-history',
     displayName: 'Git Branch History',
-    icon: GitBranch,
+    icon: catalogPanelIcon('git'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -172,7 +175,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'design-tokens': {
     type: 'design-tokens',
     displayName: 'Design Tokens',
-    icon: Settings,
+    icon: catalogPanelIcon('settings'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -212,7 +215,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'background-command-output': {
     type: 'background-command-output',
     displayName: 'Command Output',
-    icon: Terminal,
+    icon: catalogPanelIcon('terminal'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -260,7 +263,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'browser': {
     type: 'browser',
     displayName: 'Browser',
-    icon: Globe,
+    icon: catalogPanelIcon('browser'),
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

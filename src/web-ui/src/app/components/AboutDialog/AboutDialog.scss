@@ -48,7 +48,6 @@
   justify-content: flex-start;
   min-width: 0;
   padding: 56px 42px 40px 56px;
-  overflow-y: auto;
 
   &::after {
     position: absolute;
@@ -240,7 +239,6 @@
   min-width: 0;
   min-height: 0;
   padding: 22px 40px 22px 38px;
-  overflow-y: auto;
   overscroll-behavior: contain;
 }
 

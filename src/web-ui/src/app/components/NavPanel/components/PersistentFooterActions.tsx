@@ -1,12 +1,9 @@
 import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Settings,
-  Info,
   PictureInPicture2,
-  Palette,
 } from 'lucide-react';
-import { Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
 import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
@@ -202,7 +199,7 @@ const PersistentFooterActions: React.FC = () => {
                 data-bf-part="settingsEntry"
                 data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
               >
-                <Settings size={15} aria-hidden="true" />
+                <Icon name="settings" size="sm" aria-hidden="true" />
               </button>
             </Tooltip>
 
@@ -232,7 +229,7 @@ const PersistentFooterActions: React.FC = () => {
                   </MenuItem>
                   <NotificationButton menuItem onActivate={closeMenu} />
                   <MenuItem
-                    leading={<Palette size={14} aria-hidden="true" />}
+                    leading={<Icon name="palette" size="sm" aria-hidden="true" />}
                     onClick={handleOpenThemeConfiguration}
                     data-testid="nav-settings-theme-item"
                   >
@@ -240,14 +237,14 @@ const PersistentFooterActions: React.FC = () => {
                   </MenuItem>
                   <MenuSeparator />
                   <MenuItem
-                    leading={<Settings size={14} aria-hidden="true" />}
+                    leading={<Icon name="settings" size="sm" aria-hidden="true" />}
                     onClick={handleOpenSettings}
                     data-testid="nav-settings-open-item"
                   >
                     {t('nav.settingsMenu.openSettings')}
                   </MenuItem>
                   <MenuItem
-                    leading={<Info size={14} aria-hidden="true" />}
+                    leading={<Icon name="info" size="sm" aria-hidden="true" />}
                     onClick={handleShowAbout}
                     data-testid="nav-settings-about-item"
                   >

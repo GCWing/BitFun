@@ -1,5 +1,4 @@
- 
-
+ import { FieldGroup, FormSection, ScrollArea } from '@bitfun/ui';
 import React from 'react';
 import './ConfigPageLayout.scss';
 
@@ -17,11 +16,11 @@ export const ConfigPageLayout: React.FC<ConfigPageLayoutProps> = ({
   ...props
 }) => {
   return (
-    <div className={`bitfun-config-page-layout ${className}`} data-bf-component="config" data-bf-part="root" {...props}>
+    <ScrollArea className={`bitfun-config-page-layout ${className}`} data-bf-component="config" data-bf-part="root" {...props}>
       {children}
       {/* Real DOM spacer: keeps a guaranteed blank tail at the end of the scroll range. */}
       <div className="bitfun-config-page-layout__scroll-end-spacer" aria-hidden="true" />
-    </div>
+    </ScrollArea>
   );
 };
 
@@ -104,27 +103,35 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   ].filter(Boolean).join(' ');
 
   return (
-    <section className={`bitfun-config-page-section ${className}`} data-bf-component="config" data-bf-part="section" {...props}>
-      <div className="bitfun-config-page-section__header" data-bf-component="config" data-bf-part="sectionHeader">
-        <div className="bitfun-config-page-section__heading">
-          <div className="bitfun-config-page-section__title-row">
-            <h3 className="bitfun-config-page-section__title" data-bf-component="config" data-bf-part="sectionTitle">{title}</h3>
-            {titleSuffix}
-          </div>
-          {description && (
-            <p className="bitfun-config-page-section__description" data-bf-component="config" data-bf-part="sectionDescription">{description}</p>
-          )}
-        </div>
-        {extra && (
-          <div className="bitfun-config-page-section__extra">
-            {extra}
-          </div>
-        )}
-      </div>
-      <div className={bodyClassName} data-bf-component="config" data-bf-part="sectionBody">
+    <FormSection
+      className={`bitfun-config-page-section ${className}`}
+      data-bf-component="config"
+      data-bf-part="section"
+      headingAs="h3"
+      title={(
+        <span className="bitfun-config-page-section__title-row" data-bf-component="config" data-bf-part="sectionHeader">
+          <span className="bitfun-config-page-section__title" data-bf-component="config" data-bf-part="sectionTitle">{title}</span>
+          {titleSuffix}
+        </span>
+      )}
+      description={description ? (
+        <span className="bitfun-config-page-section__description" data-bf-component="config" data-bf-part="sectionDescription">{description}</span>
+      ) : undefined}
+      actions={extra ? (
+        <div className="bitfun-config-page-section__extra">{extra}</div>
+      ) : undefined}
+      {...props}
+    >
+      <FieldGroup
+        appearance={mouseGlowSurface ? 'subtle' : 'plain'}
+        className={bodyClassName}
+        data-bf-component="config"
+        data-bf-part="sectionBody"
+        dividers={false}
+      >
         {children}
-      </div>
-    </section>
+      </FieldGroup>
+    </FormSection>
   );
 };
 

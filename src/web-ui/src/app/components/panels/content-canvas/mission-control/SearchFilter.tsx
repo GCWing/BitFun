@@ -5,8 +5,8 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon } from 'lucide-react';
-import { SearchField } from '@bitfun/ui';
+;
+import { Icon, SearchField } from '@bitfun/ui';
 import './SearchFilter.scss';
 
 export interface SearchFilterProps {
@@ -41,7 +41,7 @@ export const SearchFilter: React.FC<SearchFilterProps> = ({
         onValueChange={onChange}
         placeholder={t('canvas.searchPlaceholder')}
         aria-label={t('canvas.searchPlaceholder')}
-        leadingIcon={<SearchIcon size={15} aria-hidden />}
+        leadingIcon={<Icon name="search" size="sm" aria-hidden />}
         autoFocus={autoFocus}
         size="md"
         className="canvas-search-filter__search"

@@ -5,7 +5,8 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { GitBranch, Check, Loader2 } from 'lucide-react';
+import { Icon, ScrollArea } from '@bitfun/ui';
+import { Loader2 } from 'lucide-react';
 import { type GitBranch as GitBranchType } from '../../../../infrastructure/api/service-api/GitAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitService, gitEventService } from '../../../../tools/git/services';
@@ -258,7 +259,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           data-bf-part="input"
         />
       </div>
-      <div data-bf-component="branch-quick-switch" data-bf-part="list" ref={listRef} className="branch-quick-switch__list">
+      <ScrollArea ref={listRef} className="branch-quick-switch__list">
         {isLoading ? (
           <div data-bf-component="branch-quick-switch" data-bf-part="loading" className="branch-quick-switch__loading">
             <Loader2 size={16} className="branch-quick-switch__spinner" />
@@ -287,14 +288,14 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
               onClick={() => handleSwitchBranch(branch.name)}
               onMouseEnter={() => setSelectedIndex(index)}
             >
-              <GitBranch size={14} className="branch-quick-switch__item-icon" />
+              <Icon name="git" size="sm" className="branch-quick-switch__item-icon" />
               <span data-bf-component="branch-quick-switch" data-bf-part="itemName" className="branch-quick-switch__item-name">{branch.name}</span>
-              {branch.current && <Check size={14} className="branch-quick-switch__item-check" />}
+              {branch.current && <Icon name="check-line" size="sm" className="branch-quick-switch__item-check" />}
               {switchingBranch === branch.name && <Loader2 size={14} className="branch-quick-switch__spinner" />}
             </div>
           ))
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 };

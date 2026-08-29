@@ -5,12 +5,12 @@
  * @module components/MarkdownEditor
  */
 
-import { Button, IconButton, SegmentedControl } from '@bitfun/ui';
+import { Button, Icon, IconButton, SegmentedControl } from '@bitfun/ui';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { analyzeMarkdownEditability, type MarkdownEditabilityAnalysis } from '../meditor/utils/tiptapMarkdown';
-import { AlertCircle, Check, Copy } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
@@ -670,7 +670,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               aria-label={copied
                 ? t('editor.markdownEditor.copiedMarkdown')
                 : t('editor.markdownEditor.copyMarkdown')}
-              icon={copied ? <Check /> : <Copy />}
+              icon={copied ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
               title={copied
                 ? t('editor.markdownEditor.copiedMarkdown')
                 : t('editor.markdownEditor.copyMarkdown')}
@@ -751,7 +751,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             aria-label={copied
               ? t('editor.markdownEditor.copiedMarkdown')
               : t('editor.markdownEditor.copyMarkdown')}
-            icon={copied ? <Check /> : <Copy />}
+            icon={copied ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
             title={copied
               ? t('editor.markdownEditor.copiedMarkdown')
               : t('editor.markdownEditor.copyMarkdown')}
