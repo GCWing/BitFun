@@ -2674,6 +2674,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
     #[test]
     fn plugin_after_presentation_prefers_the_plugin_result_contract() {
         let result = ModelToolResult {

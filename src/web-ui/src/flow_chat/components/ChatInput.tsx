@@ -649,14 +649,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     inputState.value.trim()
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
-  // A blocked turn is answered from the composer, so the request the runtime is
-  // waiting on is composer state like any other part of the next turn.
+  // The primary composer owns only the active primary session's requests.
+  // Direct child-session requests are answered in BtwSessionPanel, even while
+  // this composer is targeting that child, so the same request never has two
+  // actionable surfaces. Delegated requests remain owned by the parent.
   const {
-    activeBatch: activePermissionBatch,
-    requests: pendingPermissionRequests,
+    ownedActiveBatch: activePermissionBatch,
+    ownedRequests: pendingPermissionRequests,
     respond: respondPermission,
     respondBatch: respondPermissionBatch,
-  } = usePermissionRequests(effectiveTargetSessionId || undefined);
+  } = usePermissionRequests(currentSessionId || undefined);
   const sessionMachine = useSessionStateMachine(effectiveTargetSessionId);
   const activePermissionTurnId =
     sessionMachine?.currentState === SessionExecutionState.PROCESSING

@@ -1,12 +1,14 @@
 /**
- * The runtime asking to proceed, answered from inside the composer.
+ * The compact surface for answering a runtime permission request.
  *
  * This used to be a card floating over the transcript, positioned by measuring
  * the composer's height. It covered the very output the reader needed in order
  * to decide, and it carried its own textarea for the rejection reason while a
  * perfectly good one sat directly underneath it. So the band lives in the
  * composer stack instead: the request reads directly above the text field that
- * answers it, and the reason is whatever the reader has typed there.
+ * answers it, and the reason is whatever the reader has typed there. Embedded
+ * child-session panels also reuse the band because they have no composer of
+ * their own; those surfaces intentionally omit the optional typed reason.
  */
 
 import React, { useState } from 'react';

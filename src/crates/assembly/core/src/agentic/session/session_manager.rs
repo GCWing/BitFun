@@ -128,8 +128,17 @@ pub(crate) struct TurnAdmissionSessionFacts {
     model_id: Option<String>,
     reasoning_preset: Option<String>,
     permission_mode: Option<PermissionMode>,
+    max_context_tokens: usize,
     agent_type: String,
+    agent_route_owner: SessionAgentRouteOwner,
+    agent_route_key: Option<String>,
     enable_tools: bool,
+    workspace_path: Option<String>,
+    project_workspace_path: Option<String>,
+    execution_target: Option<SessionExecutionTarget>,
+    workspace_id: Option<String>,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
 }
 
 impl TurnAdmissionSessionFacts {
@@ -138,8 +147,17 @@ impl TurnAdmissionSessionFacts {
             model_id: session.config.model_id.clone(),
             reasoning_preset: session.config.reasoning_preset.clone(),
             permission_mode: session.config.permission_mode,
+            max_context_tokens: session.config.max_context_tokens,
             agent_type: session.agent_type.clone(),
+            agent_route_owner: session.config.agent_route_owner,
+            agent_route_key: session.config.agent_route_key.clone(),
             enable_tools: session.config.enable_tools,
+            workspace_path: session.config.workspace_path.clone(),
+            project_workspace_path: session.config.project_workspace_path.clone(),
+            execution_target: session.config.execution_target.clone(),
+            workspace_id: session.config.workspace_id.clone(),
+            remote_connection_id: session.config.remote_connection_id.clone(),
+            remote_ssh_host: session.config.remote_ssh_host.clone(),
         }
     }
 
@@ -152,8 +170,17 @@ impl TurnAdmissionSessionFacts {
         self.model_id == session.config.model_id
             && self.reasoning_preset == session.config.reasoning_preset
             && self.permission_mode == session.config.permission_mode
+            && self.max_context_tokens == session.config.max_context_tokens
             && self.agent_type == session.agent_type
+            && self.agent_route_owner == session.config.agent_route_owner
+            && self.agent_route_key == session.config.agent_route_key
             && self.enable_tools == session.config.enable_tools
+            && self.workspace_path == session.config.workspace_path
+            && self.project_workspace_path == session.config.project_workspace_path
+            && self.execution_target == session.config.execution_target
+            && self.workspace_id == session.config.workspace_id
+            && self.remote_connection_id == session.config.remote_connection_id
+            && self.remote_ssh_host == session.config.remote_ssh_host
     }
 }
 
@@ -7240,9 +7267,10 @@ impl SessionManager {
     }
 
     /// Persist a Turn only if the execution-affecting Session settings still
-    /// match the snapshot used to resolve its model, permission, prompt, and
-    /// reasoning metadata. The validation and Turn append share one Session
-    /// mutation lock, so a concurrent settings write must retry admission.
+    /// match the snapshot used to resolve its model, permission, agent route,
+    /// workspace, prompt, and reasoning metadata. The validation and Turn
+    /// append share one Session mutation lock, so a concurrent settings write
+    /// must retry admission.
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn start_dialog_turn_with_prepended_messages_if_session_matches(
         &self,
@@ -10679,6 +10707,210 @@ mod tests {
             )
             .await
             .expect_err("a concurrent settings update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_context_window_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Turn admission context window CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    model_id: Some("model-original".to_string()),
+                    max_context_tokens: 128_128,
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                ServiceAIConfig {
+                    models: vec![test_model("model-original", 256_000)],
+                    ..Default::default()
+                },
+                manager.update_session_model_selection(&session.session_id, "model-original", None),
+            )
+            .await
+            .expect("same-model context window refresh should succeed");
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must reject stale context window".to_string(),
+                Some("turn-admission-context-window-race".to_string()),
+                None,
+                Vec::new(),
+                None,
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent context window update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_agent_route_owner_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Turn admission route CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        manager
+            .update_session_agent_binding(
+                &session.session_id,
+                "agentic",
+                SessionAgentRouteOwner::External,
+                None,
+            )
+            .await
+            .expect("same-name route owner update should succeed");
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must reject stale route owner".to_string(),
+                Some("turn-admission-route-race".to_string()),
+                None,
+                Vec::new(),
+                None,
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent route owner update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_agent_route_key_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Turn admission route key CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    agent_route_key: Some("local:agentic:v1".to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        manager
+            .update_session_agent_binding(
+                &session.session_id,
+                "agentic",
+                SessionAgentRouteOwner::Local,
+                Some("local:agentic:v2".to_string()),
+            )
+            .await
+            .expect("same-owner route key update should succeed");
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must reject stale route key".to_string(),
+                Some("turn-admission-route-key-race".to_string()),
+                None,
+                Vec::new(),
+                None,
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent route key update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_execution_binding_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let original_workspace = workspace.path().to_string_lossy().to_string();
+        let session = manager
+            .create_session(
+                "Turn admission workspace CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(original_workspace.clone()),
+                    project_workspace_path: Some(original_workspace.clone()),
+                    execution_target: Some(SessionExecutionTarget::local(
+                        original_workspace.clone(),
+                    )),
+                    workspace_id: Some("workspace-original".to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        let rebound_workspace = workspace.path().join("managed-worktree");
+        manager
+            .update_session_execution_binding(
+                &session.session_id,
+                SessionExecutionBindingUpdate {
+                    workspace_path: rebound_workspace.to_string_lossy().to_string(),
+                    project_workspace_path: original_workspace,
+                    workspace_id: Some("workspace-rebound".to_string()),
+                    execution_target: SessionExecutionTarget::local(
+                        rebound_workspace.to_string_lossy().to_string(),
+                    ),
+                },
+            )
+            .await
+            .expect("execution binding update should succeed before the first turn");
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must reject stale workspace binding".to_string(),
+                Some("turn-admission-workspace-race".to_string()),
+                None,
+                Vec::new(),
+                None,
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent execution binding update must invalidate admission");
 
         assert!(error.to_string().contains("changed during turn admission"));
         assert_eq!(manager.get_turn_count(&session.session_id), 0);

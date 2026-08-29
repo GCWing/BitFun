@@ -476,6 +476,20 @@ describe('composer context track layout', () => {
     expect(band).not.toContain('position: fixed');
   });
 
+  it('keeps direct child approvals in the child panel while delegated requests stay with the parent', () => {
+    const chatInput = readLocalFile('ChatInput.tsx');
+    const childPanel = readLocalFile('btw/BtwSessionPanel.tsx');
+
+    expect(chatInput).toContain('ownedActiveBatch: activePermissionBatch');
+    expect(chatInput).toContain('ownedRequests: pendingPermissionRequests');
+    expect(chatInput).toContain('usePermissionRequests(currentSessionId || undefined)');
+    expect(chatInput).not.toContain(
+      'usePermissionRequests(effectiveTargetSessionId || undefined)',
+    );
+    expect(childPanel).toContain('ownedActiveBatch: activePermissionBatch');
+    expect(childPanel).toContain('<ChatInputApprovalBand');
+  });
+
   it('reuses the composer as the rejection reason instead of carrying a second field', () => {
     const band = readLocalFile('ChatInputApprovalBand.tsx');
 

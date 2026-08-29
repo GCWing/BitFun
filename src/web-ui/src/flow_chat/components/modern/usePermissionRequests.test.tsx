@@ -163,6 +163,7 @@ describe('usePermissionRequests', () => {
     emit({ event: 'asked', request: unrelated });
 
     expect(controller?.requests.map((item) => item.requestId)).toEqual(['child-a', 'child-b']);
+    expect(controller?.ownedRequests.map((item) => item.requestId)).toEqual(['child-a', 'child-b']);
 
     emit({ event: 'asked', request: { ...childA, resources: ['src/lib.rs'] } });
     expect(controller?.requests).toHaveLength(2);
@@ -184,6 +185,27 @@ describe('usePermissionRequests', () => {
     });
     emit({ event: 'cancelled', requestId: childB.requestId, reason: 'parent cancelled' });
     expect(controller?.requests).toEqual([]);
+  });
+
+  it('keeps delegated requests actionable only from the parent surface', async () => {
+    const child = request('delegated-child', 'child-session', 'parent-session');
+
+    await renderHarness(root, 'child-session', (next) => {
+      controller = next;
+    });
+    emit({ event: 'asked', request: child });
+
+    expect(controller?.requests.map((item) => item.requestId)).toEqual(['delegated-child']);
+    expect(controller?.ownedRequests).toEqual([]);
+    expect(controller?.ownedActiveBatch).toBeUndefined();
+
+    await renderHarness(root, 'parent-session', (next) => {
+      controller = next;
+    });
+    expect(controller?.ownedRequests.map((item) => item.requestId)).toEqual(['delegated-child']);
+    expect(controller?.ownedActiveBatch?.requests.map((item) => item.requestId)).toEqual([
+      'delegated-child',
+    ]);
   });
 
   it('removes a request only after a successful explicit response', async () => {

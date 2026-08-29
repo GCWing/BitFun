@@ -6,7 +6,10 @@ import {CornerUpLeft, Link2, Loader2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {RuntimeStatusSlot} from '../modern/RuntimeStatusSlot';
+import {pendingPermissionToolCallIdsForSession} from '../modern/permissionRequestRouting';
+import {usePermissionRequests} from '../modern/usePermissionRequests';
 import {useExploreGroupState} from '../modern/useExploreGroupState';
+import {ChatInputApprovalBand} from '../ChatInputApprovalBand';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
 import type {DialogTurn, FlowChatConfig, FlowChatState, Session} from '../../types/flow-chat';
@@ -158,6 +161,21 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const actionBarRef = useRef<HTMLDivElement>(null);
   const [actionBarHeight, setActionBarHeight] = useState(0);
   const shouldAutoScrollRef = useRef(true);
+
+  // Embedded child sessions live outside the primary composer. Give direct
+  // child requests an actionable surface here, while delegated requests stay
+  // exclusively owned by the parent session.
+  const {
+    requests: permissionRequests,
+    ownedRequests: ownedPermissionRequests,
+    ownedActiveBatch: activePermissionBatch,
+    respond: respondPermission,
+    respondBatch: respondPermissionBatch,
+  } = usePermissionRequests(childSessionId);
+  const pendingPermissionToolCallIds = useMemo(
+    () => pendingPermissionToolCallIdsForSession(permissionRequests, childSessionId),
+    [permissionRequests, childSessionId],
+  );
 
   useEffect(() => {
     return flowChatStore.subscribe(setFlowChatState);
@@ -380,7 +398,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   const volatileContextValue = useMemo(() => ({
     exploreGroupStates,
-  }), [exploreGroupStates]);
+    pendingPermissionToolCallIds,
+  }), [exploreGroupStates, pendingPermissionToolCallIds]);
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
   const isTurnProcessing = isActiveReviewTurnStatus(lastDialogTurn?.status);
@@ -1073,6 +1092,18 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             )}
           </div>
         </div>
+
+        {activePermissionBatch ? (
+          <div className="btw-session-panel__permission-approval">
+            <ChatInputApprovalBand
+              key={`${activePermissionBatch.sessionId}:${activePermissionBatch.roundId}`}
+              requests={activePermissionBatch.requests}
+              totalPendingCount={ownedPermissionRequests.length}
+              onRespond={respondPermission}
+              onRespondBatch={respondPermissionBatch}
+            />
+          </div>
+        ) : null}
 
         <div
           ref={scrollContainerRef}

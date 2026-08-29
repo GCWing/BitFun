@@ -1,6 +1,6 @@
-// The approval band sits in the composer stack, directly above the capsule.
-// It borrows the capsule's width and radius so it reads as the composer having
-// grown a row, not as a dialog that happens to be nearby.
+// The approval band normally sits in the composer stack, directly above the
+// capsule. Embedded child-session panels reuse the same compact surface when
+// no child composer exists.
 .bitfun-chat-input-approval {
   display: flex;
   flex-direction: column;

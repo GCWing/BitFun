@@ -7,11 +7,21 @@ import { BtwSessionPanel } from './BtwSessionPanel';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { loadPersistedReviewState } from '../../services/ReviewActionBarPersistenceService';
 import type { FlowChatState, Session } from '../../types/flow-chat';
+import type { PermissionRequest } from '@/infrastructure/api/service-api/AgentAPI';
 
 const panelMocks = vi.hoisted(() => ({
   cancelSession: vi.fn(),
   hydrateSessionHistoryForDetail: vi.fn(),
   notificationError: vi.fn(),
+  permissionRequests: [] as PermissionRequest[],
+  ownedPermissionRequests: [] as PermissionRequest[],
+  ownedActivePermissionBatch: undefined as {
+    sessionId: string;
+    roundId: string;
+    requests: PermissionRequest[];
+  } | undefined,
+  respondPermission: vi.fn(() => Promise.resolve()),
+  respondPermissionBatch: vi.fn(() => Promise.resolve()),
   virtualItems: [] as unknown[],
 }));
 
@@ -52,6 +62,37 @@ vi.mock('../modern/useExploreGroupState', () => ({
     onExpandAllInTurn: vi.fn(),
     onCollapseGroup: vi.fn(),
   }),
+}));
+
+vi.mock('../modern/usePermissionRequests', () => ({
+  usePermissionRequests: () => ({
+    requests: panelMocks.permissionRequests,
+    activeBatch: undefined,
+    ownedRequests: panelMocks.ownedPermissionRequests,
+    ownedActiveBatch: panelMocks.ownedActivePermissionBatch,
+    respond: panelMocks.respondPermission,
+    respondBatch: panelMocks.respondPermissionBatch,
+  }),
+}));
+
+vi.mock('../ChatInputApprovalBand', () => ({
+  ChatInputApprovalBand: ({
+    requests,
+    totalPendingCount,
+    onRespond,
+  }: {
+    requests: PermissionRequest[];
+    totalPendingCount: number;
+    onRespond: (requestId: string, reply: 'once') => Promise<void>;
+  }) => (
+    <button
+      type="button"
+      data-testid="child-permission-approval"
+      data-request-ids={requests.map((request) => request.requestId).join(',')}
+      data-total-pending={totalPendingCount}
+      onClick={() => void onRespond(requests[0].requestId, 'once')}
+    />
+  ),
 }));
 
 vi.mock('@/flow_chat', () => ({
@@ -451,6 +492,13 @@ describe('BtwSessionPanel review action bar integration', () => {
     panelMocks.hydrateSessionHistoryForDetail.mockReset();
     panelMocks.hydrateSessionHistoryForDetail.mockResolvedValue(undefined);
     panelMocks.notificationError.mockReset();
+    panelMocks.permissionRequests = [];
+    panelMocks.ownedPermissionRequests = [];
+    panelMocks.ownedActivePermissionBatch = undefined;
+    panelMocks.respondPermission.mockReset();
+    panelMocks.respondPermission.mockResolvedValue(undefined);
+    panelMocks.respondPermissionBatch.mockReset();
+    panelMocks.respondPermissionBatch.mockResolvedValue(undefined);
     panelMocks.virtualItems = [];
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -486,6 +534,75 @@ describe('BtwSessionPanel review action bar integration', () => {
     container.remove();
     useReviewActionBarStore.getState().reset();
     vi.useRealTimers();
+  });
+
+  it('answers direct child permissions in the embedded panel without claiming delegated ones', async () => {
+    const directRequest = {
+      requestId: 'direct-child-request',
+      roundId: 'direct-child-round',
+      order: 0,
+      sessionId: 'deep-review-child',
+      toolCallId: 'direct-child-tool',
+      projectId: 'project-1',
+      agentId: 'agentic',
+      action: 'edit',
+      resources: ['src/main.rs'],
+      source: { kind: 'tool_call', identity: 'Write' },
+    } as PermissionRequest;
+    panelMocks.permissionRequests = [directRequest];
+    panelMocks.ownedPermissionRequests = [directRequest];
+    panelMocks.ownedActivePermissionBatch = {
+      sessionId: directRequest.sessionId,
+      roundId: directRequest.roundId,
+      requests: [directRequest],
+    };
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    const approval = container.querySelector<HTMLButtonElement>(
+      '[data-testid="child-permission-approval"]',
+    );
+    expect(approval?.dataset.requestIds).toBe('direct-child-request');
+    expect(approval?.dataset.totalPending).toBe('1');
+
+    await act(async () => {
+      approval?.click();
+      await Promise.resolve();
+    });
+    expect(panelMocks.respondPermission).toHaveBeenCalledWith('direct-child-request', 'once');
+
+    panelMocks.permissionRequests = [{
+      ...directRequest,
+      requestId: 'delegated-child-request',
+      delegation: {
+        parentSessionId: 'parent-session',
+        parentDialogTurnId: 'parent-turn',
+        parentToolCallId: 'parent-task',
+        subagentType: 'Explore',
+      },
+    }];
+    panelMocks.ownedPermissionRequests = [];
+    panelMocks.ownedActivePermissionBatch = undefined;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="child-permission-approval"]')).toBeNull();
   });
 
   it('shows the session-mapped subagent avatar in the side-thread header', async () => {
