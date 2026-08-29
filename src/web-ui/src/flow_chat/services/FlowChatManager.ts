@@ -69,8 +69,23 @@ import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefres
 import { installDispatchJobObserver } from '../session-drivers/dispatch/install';
 import { driverForSession } from '../session-drivers/registry';
 import { registerDriverSessionLookup } from '../session-drivers/resolve';
+import type { SendMessageOptions } from '../session-drivers/types';
 
 const log = createLogger('FlowChatManager');
+
+type FlowChatSendMessageOptions = Pick<
+  SendMessageOptions,
+  | 'imageContexts'
+  | 'imageDisplayData'
+  | 'pendingQueueDraft'
+  | 'userMessageMetadata'
+  | 'execution'
+  | 'turnId'
+  | 'preserveTurnOnStartError'
+  | 'onSessionConflictRetryStart'
+  | 'onSessionConflictRetrySuccess'
+  | 'sessionMutationLeaseId'
+>;
 
 /** Backstop cadence for re-establishing a subscription that failed to start. */
 const EVENT_LISTENER_RETRY_MS = 2000;
@@ -821,17 +836,7 @@ export class FlowChatManager {
     displayMessage?: string,
     agentType?: string,
     switchToMode?: string,
-    options?: {
-      imageContexts?: import('@/infrastructure/api/service-api/ImageContextTypes').ImageContextData[];
-      imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
-      userMessageMetadata?: Record<string, unknown>;
-      execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
-      turnId?: string;
-      preserveTurnOnStartError?: boolean;
-      onSessionConflictRetryStart?: () => void;
-      onSessionConflictRetrySuccess?: () => void;
-      sessionMutationLeaseId?: string;
-    }
+    options?: FlowChatSendMessageOptions,
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;
     

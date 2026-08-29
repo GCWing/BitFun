@@ -557,11 +557,6 @@
 
   gap: var(--bf-appearance-token-flowchat-control-gap);
 
-  /* Queue sits directly above the input card; keep this pair tighter than other stacked blocks. */
-  > .bitfun-pending-queue-panel + .bitfun-chat-input__container {
-    margin-top: -6px;
-  }
-
   &__recommendations {
     margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
   }

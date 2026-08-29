@@ -7,6 +7,14 @@ import {
   ChatComposer,
   ChatComposerContent,
   ChatComposerEndActions,
+  ChatComposerQueue,
+  ChatComposerQueueAttachmentBadge,
+  ChatComposerQueueHeader,
+  ChatComposerQueueItem,
+  ChatComposerQueueItemActions,
+  ChatComposerQueueItemContent,
+  ChatComposerQueueList,
+  ChatComposerQueueTitle,
   ChatComposerStartActions,
 } from "../dist/flow-chat.js";
 
@@ -51,6 +59,110 @@ test("ChatComposer exposes expanded, busy, and disabled state without owning edi
   assert.match(markup, /contenteditable="true"/);
 });
 
+test("ChatComposer exposes a neutral pending-message queue with per-message attachment counts", () => {
+  const queue = createElement(
+    ChatComposerQueue,
+    { "aria-label": "Wait for sending" },
+    createElement(
+      ChatComposerQueueHeader,
+      null,
+      createElement("svg", { "aria-hidden": true }),
+      createElement(ChatComposerQueueTitle, { count: 13 }, "Wait for sending"),
+    ),
+    createElement(
+      ChatComposerQueueList,
+      null,
+      createElement(
+        ChatComposerQueueItem,
+        { state: "default" },
+        createElement(
+          ChatComposerQueueItemContent,
+          null,
+          "Help me turn these photos into a painted scene.",
+        ),
+        createElement(ChatComposerQueueAttachmentBadge, {
+          count: 3,
+          label: "3 image attachments",
+        }),
+        createElement(
+          ChatComposerQueueItemActions,
+          null,
+          createElement("button", { "aria-label": "Send now", type: "button" }),
+        ),
+      ),
+    ),
+  );
+  const markup = renderToStaticMarkup(
+    createElement(ChatComposer, {
+      children: createElement("textarea", { "aria-label": "Message" }),
+      layout: "compact",
+      queue,
+    }),
+  );
+
+  assert.match(markup, /data-bf-part="body"/);
+  assert.match(markup, /data-bf-part="queue"/);
+  assert.match(markup, /data-bf-component="chat-composer-queue"/);
+  assert.match(markup, /data-bf-part="title"[^>]*>.*Wait for sending.*13/s);
+  const attachmentBadge = markup.match(
+    /<span[^>]*data-bf-part="attachmentCount"[^>]*>3<\/span>/,
+  )?.[0];
+  assert.ok(attachmentBadge);
+  assert.match(attachmentBadge, /aria-label="3 image attachments"/);
+  assert.match(markup, /aria-label="Send now"/);
+});
+
+test("ChatComposer queue keeps four message rows visible before scrolling", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/composer/ChatComposerQueue.module.css", import.meta.url),
+    "utf8",
+  );
+  const listRule = styles.match(/\.list\s*\{[^}]*\}/s)?.[0];
+
+  assert.ok(listRule);
+  const maxBlockSize = listRule.match(/max-block-size:\s*calc\((.*?)\);/s)?.[1];
+  assert.ok(maxBlockSize);
+  assert.equal(
+    (maxBlockSize.match(/--bf-control-chat-composer-control-height/g) ?? []).length,
+    4,
+  );
+  assert.equal((maxBlockSize.match(/--bf-space-1/g) ?? []).length, 3);
+  assert.match(listRule, /overflow-y:\s*auto/);
+  assert.match(listRule, /overscroll-behavior-y:\s*contain/);
+});
+
+test("ChatComposer queue reveals row actions on hover and keyboard focus", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/composer/ChatComposerQueue.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(styles, /@media \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(
+    styles,
+    /\.actions\s*\{[^}]*pointer-events:\s*none;[^}]*opacity:\s*0;/s,
+  );
+  assert.match(
+    styles,
+    /\.item:hover \.actions,\s*\.item:focus-within \.actions\s*\{[^}]*pointer-events:\s*auto;[^}]*opacity:\s*1;/s,
+  );
+});
+
+test("ChatComposer queue promotes message text from secondary to primary on interaction", async () => {
+  const styles = await readFile(
+    new URL("../src/flow-chat/composer/ChatComposerQueue.module.css", import.meta.url),
+    "utf8",
+  );
+  const contentRule = styles.match(/\.content\s*\{[^}]*\}/s)?.[0];
+
+  assert.ok(contentRule);
+  assert.match(contentRule, /color:\s*var\(--bf-color-content-secondary\)/);
+  assert.match(
+    styles,
+    /\.item:hover \.content,\s*\.item:focus-within \.content\s*\{[^}]*color:\s*var\(--bf-color-content-primary\)/s,
+  );
+});
+
 test("ChatComposer resolves compound slots into the same stable anatomy", () => {
   const markup = renderToStaticMarkup(
     createElement(
@@ -93,6 +205,8 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
   assert.match(styles, /--bf-space-8/);
   assert.match(styles, /--bf-radius-2xl/);
   assert.match(styles, /--bf-color-surface-panel/);
+  assert.match(styles, /--bf-color-surface-subtle/);
+  assert.match(styles, /--bf-color-surface-raised/);
   const contextBackgroundRule = styles.match(
     /\.\w+\[data-has-context=(?:"true"|true)\][^{]*\{[^}]*\}/,
   );

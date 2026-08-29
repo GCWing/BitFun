@@ -30,7 +30,7 @@ import { useAcpPlan } from '../hooks/useAcpPlan';
 import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
 import { AcpPlanPanel } from './AcpPlanPanel';
-import type { FlowChatState } from '../types/flow-chat';
+import type { FlowChatState, QueuedMessage } from '../types/flow-chat';
 import type {
   ContextItem,
   DirectoryContext,
@@ -75,6 +75,10 @@ import {
 } from './chatInputDraftRecovery';
 import { startBtwThread } from '../services/BtwThreadService';
 import { buildImagePayload } from '../utils/imagePayload';
+import {
+  canRestoreQueuedMessageToComposer,
+  getQueuedMessageComposerDraft,
+} from '../utils/pendingQueueDraft';
 import { isGoalSlashCommand, parseGoalCommand } from '../services/goalService';
 import {
   getHistorySessionOpenTransitionSnapshot,
@@ -1853,6 +1857,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const clearPendingLargePastes = useCallback(() => {
     replacePendingLargePastes({});
   }, [replacePendingLargePastes]);
+
+  const restoreQueuedMessageToComposer = useCallback((item: QueuedMessage): boolean => {
+    if (!effectiveTargetSessionId || item.sessionId !== effectiveTargetSessionId) {
+      return false;
+    }
+
+    if (!canRestoreQueuedMessageToComposer({
+      value: inputValueRef.current,
+      contexts: contextsRef.current,
+      pendingLargePastes: pendingLargePastesRef.current,
+      queuedInput: derivedState?.queuedInput,
+    })) {
+      notificationService.warning(t('pendingQueue.errors.composerNotEmpty'), { duration: 4000 });
+      richTextInputRef.current?.focus();
+      return false;
+    }
+
+    const draft = getQueuedMessageComposerDraft(item);
+    setQueuedInput(null);
+    setHistoryIndex(-1);
+    setSavedDraft('');
+    replacePendingLargePastes(draft.pendingLargePastes);
+    replaceContexts(draft.contexts);
+    dispatchInput({ type: 'ACTIVATE' });
+    dispatchInput({ type: 'SET_VALUE', payload: draft.value });
+    window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+    return true;
+  }, [
+    derivedState?.queuedInput,
+    dispatchInput,
+    effectiveTargetSessionId,
+    replaceContexts,
+    replacePendingLargePastes,
+    setQueuedInput,
+    t,
+  ]);
 
   const { sendMessage } = useMessageSender({
     currentSessionId: effectiveTargetSessionId || undefined,
@@ -3980,6 +4020,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       await sendMessage(renderedPrompt, {
         displayMessage: originalMessage,
+        composerDraft: {
+          value: originalMessage,
+          pendingLargePastes: originalPendingLargePastes,
+        },
       });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
@@ -4269,6 +4313,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       await sendMessage(expanded.content, {
         displayMessage: originalMessage,
+        composerDraft: {
+          value: originalMessage,
+          pendingLargePastes: originalPendingLargePastes,
+        },
         ...(executionTarget.kind === 'fresh_external_subagent'
           ? { execution: executionTarget }
           : {}),
@@ -4730,6 +4778,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         () => sendMessage(message, {
           displayMessage: originalMessage,
           composerPresentation: persistedComposerPresentation,
+          composerDraft: {
+            value: originalMessage,
+            pendingLargePastes: originalPendingLargePastes,
+          },
         }),
       );
       if (transport === 'registered') {
@@ -5617,8 +5669,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           />
         )}
 
-        <PendingQueuePanel sessionId={effectiveTargetSessionId || undefined} />
-
         <div className="bitfun-chat-input__container" data-bf-component="chat-input" data-bf-part="container">
           <AcpPlanPanel entries={acpPlanEntries} />
           {/* The request sits directly above the field that answers it, so the
@@ -5640,6 +5690,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               surfaceClassName="bitfun-chat-input__composer-surface"
               contextBar={workspaceStrip}
               layout={isMultiLine ? 'expanded' : 'compact'}
+              queue={(
+                <PendingQueuePanel
+                  sessionId={effectiveTargetSessionId || undefined}
+                  onRestoreToComposer={restoreQueuedMessageToComposer}
+                />
+              )}
               busy={Boolean(derivedState?.isProcessing || caps.transferInFlight)}
               disabled={caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
             >

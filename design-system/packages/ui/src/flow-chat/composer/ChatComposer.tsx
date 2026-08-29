@@ -18,6 +18,7 @@ export interface ChatComposerProps
   disabled?: boolean;
   endActions?: ReactNode;
   layout?: ChatComposerLayout;
+  queue?: ReactNode;
   startActions?: ReactNode;
   surfaceClassName?: string;
 }
@@ -93,6 +94,7 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
     disabled = false,
     endActions,
     layout = "compact",
+    queue,
     startActions,
     surfaceClassName,
     ...props
@@ -113,7 +115,6 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
       <div
         {...props}
         aria-busy={busy ? true : ariaBusy}
-        aria-disabled={disabled || undefined}
         className={classNames(styles.root, className)}
         data-bf-component="chat-composer"
         data-bf-state={state}
@@ -125,24 +126,32 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
             {contextBar}
           </div>
         )}
-        <div
-          className={classNames(styles.surface, surfaceClassName)}
-          data-bf-layout={layout}
-          data-bf-part="surface"
-        >
-          {hasSlot(resolvedStartActions) && (
-            <div className={styles.startActions} data-bf-part="startActions">
-              {resolvedStartActions}
+        <div className={styles.body} data-bf-part="body">
+          {hasSlot(queue) && (
+            <div className={styles.queue} data-bf-part="queue">
+              {queue}
             </div>
           )}
-          <div className={styles.content} data-bf-part="content">
-            {compoundSlots.content}
+          <div
+            aria-disabled={disabled || undefined}
+            className={classNames(styles.surface, surfaceClassName)}
+            data-bf-layout={layout}
+            data-bf-part="surface"
+          >
+            {hasSlot(resolvedStartActions) && (
+              <div className={styles.startActions} data-bf-part="startActions">
+                {resolvedStartActions}
+              </div>
+            )}
+            <div className={styles.content} data-bf-part="content">
+              {compoundSlots.content}
+            </div>
+            {hasSlot(resolvedEndActions) && (
+              <div className={styles.endActions} data-bf-part="endActions">
+                {resolvedEndActions}
+              </div>
+            )}
           </div>
-          {hasSlot(resolvedEndActions) && (
-            <div className={styles.endActions} data-bf-part="endActions">
-              {resolvedEndActions}
-            </div>
-          )}
         </div>
       </div>
     );

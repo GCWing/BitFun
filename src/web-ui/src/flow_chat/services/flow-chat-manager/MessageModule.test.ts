@@ -535,11 +535,25 @@ describe('MessageModule cancellation', () => {
       userCancelledSessionIds: new Set([session.sessionId]),
     };
 
-    await sendMessage(context, 'follow-up', session.sessionId);
+    const pendingQueueDraft = {
+      value: 'follow-up',
+      contexts: [],
+      pendingLargePastes: { 'paste-1': 'full content' },
+    };
+    await sendMessage(
+      context,
+      'follow-up',
+      session.sessionId,
+      undefined,
+      undefined,
+      undefined,
+      { pendingQueueDraft },
+    );
 
     expect(mockPendingEnqueue).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: session.sessionId,
       content: 'follow-up',
+      composerDraft: pendingQueueDraft,
     }));
     expect(mockStartDialogTurn).not.toHaveBeenCalled();
   });

@@ -13,7 +13,7 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
-import type { DialogTurn, QueuedMessage } from '../../types/flow-chat';
+import type { DialogTurn, QueuedComposerDraft, QueuedMessage } from '../../types/flow-chat';
 import {
   getActiveSurfaceId,
   onSurfaceActivated,
@@ -67,6 +67,7 @@ export interface EnqueueInput {
   agentType?: string;
   imageContexts?: unknown[];
   imageDisplayData?: unknown[];
+  composerDraft?: QueuedComposerDraft;
   userMessageMetadata?: Record<string, unknown>;
   /**
    * How many times this content has already been auto-restored from a failed
@@ -235,6 +236,13 @@ class PendingQueueManager {
       agentType: input.agentType,
       imageContexts: input.imageContexts,
       imageDisplayData: input.imageDisplayData,
+      composerDraft: input.composerDraft
+        ? {
+            value: input.composerDraft.value,
+            contexts: [...input.composerDraft.contexts],
+            pendingLargePastes: { ...input.composerDraft.pendingLargePastes },
+          }
+        : undefined,
       userMessageMetadata: input.userMessageMetadata,
     };
     items.push(item);
@@ -272,21 +280,6 @@ class PendingQueueManager {
     this.persist(sessionId, surfaceId);
     this.notifySurface(surfaceId, sessionId);
     return removed;
-  }
-
-  update(
-    sessionId: string,
-    id: string,
-    patch: Partial<Pick<QueuedMessage, 'content' | 'displayMessage'>>,
-  ): boolean {
-    const items = this.queues.get(this.queueKey(sessionId));
-    if (!items) return false;
-    const idx = items.findIndex(item => item.id === id);
-    if (idx === -1) return false;
-    items[idx] = { ...items[idx], ...patch, timestamp: Date.now() };
-    this.persist(sessionId);
-    this.notify(sessionId);
-    return true;
   }
 
   remove(sessionId: string, id: string): boolean {

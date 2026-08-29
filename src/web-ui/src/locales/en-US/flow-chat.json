@@ -2603,24 +2603,24 @@
     "showAll": "Show all"
   },
   "pendingQueue": {
-    "title": "Queued ({{count}})",
-    "hint": "Will auto-send in order when the current turn finishes",
-    "editorHint": "⌘/Ctrl+Enter to save · Esc to cancel",
+    "title": "Wait for sending",
+    "label": "Wait for sending {{count}}",
+    "attachmentCount": "{{count}} image attachment(s)",
+    "attachmentCount_one": "{{count}} image attachment",
+    "attachmentCount_other": "{{count}} image attachments",
     "emptyPlaceholder": "(empty message)",
     "statusSending": "Steering…",
     "statusFailed": "Send failed — edit / send now / delete to clear",
     "actions": {
       "edit": "Edit",
       "sendNow": "Send now (steer)",
-      "delete": "Delete",
-      "saveEdit": "Save (⌘/Ctrl+Enter)",
-      "cancelEdit": "Cancel (Esc)"
+      "delete": "Delete"
     },
     "tooltip": {
       "sendNow": "Inject this message into the running turn as a steering prompt"
     },
     "errors": {
-      "emptyContent": "Message content cannot be empty",
+      "composerNotEmpty": "Send or clear the current input and attachments before editing this queued message",
       "sendNowFailed": "Send now failed; please try again"
     }
   },

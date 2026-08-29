@@ -14,7 +14,7 @@
  */
 
 import type { FlowChatContext, SessionConfig } from '../services/flow-chat-manager/types';
-import type { Session } from '../types/flow-chat';
+import type { QueuedComposerDraft, Session } from '../types/flow-chat';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
@@ -32,6 +32,11 @@ export interface SendMessageOptions {
     imagePath?: string;
     mimeType?: string;
   }>;
+  /**
+   * Composer snapshot consumed only if shared orchestration queues this
+   * submission. Session drivers must not interpret it as transport input.
+   */
+  pendingQueueDraft?: QueuedComposerDraft;
   /**
    * When true, bypass the pending-queue check. Used by the queue drain path
    * to actually start a new dialog turn after the previous one finished.

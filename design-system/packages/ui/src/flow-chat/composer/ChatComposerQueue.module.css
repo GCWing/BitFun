@@ -1,0 +1,170 @@
+@layer bf.components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    min-inline-size: 0;
+    inline-size: 100%;
+    flex-direction: column;
+    gap: var(--bf-space-2);
+    padding-block: var(--bf-space-3);
+    padding-inline: var(--bf-space-4);
+    border-radius: var(--bf-radius-lg);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-surface-subtle);
+    font-family: var(--bf-font-family-control);
+  }
+
+  .header {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-base);
+  }
+
+  .header > :where(svg, img) {
+    inline-size: var(--bf-font-size-body);
+    block-size: var(--bf-font-size-body);
+    flex: 0 0 auto;
+    color: var(--bf-color-content-muted);
+  }
+
+  .title {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: baseline;
+    gap: var(--bf-space-1);
+  }
+
+  .titleLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .totalCount {
+    flex: 0 0 auto;
+    color: var(--bf-color-content-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .list {
+    display: flex;
+    min-inline-size: 0;
+    /* Four standard message rows plus the three gaps between them. */
+    max-block-size: calc(
+      var(--bf-control-chat-composer-control-height) +
+      var(--bf-control-chat-composer-control-height) +
+      var(--bf-control-chat-composer-control-height) +
+      var(--bf-control-chat-composer-control-height) +
+      var(--bf-space-1) +
+      var(--bf-space-1) +
+      var(--bf-space-1)
+    );
+    flex-direction: column;
+    gap: var(--bf-space-1);
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 0;
+    scrollbar-width: thin;
+    list-style: none;
+  }
+
+  .list::-webkit-scrollbar {
+    inline-size: var(--bf-space-1);
+  }
+
+  .list::-webkit-scrollbar-thumb {
+    border-radius: var(--bf-radius-pill);
+    background: var(--bf-color-action-neutral-border);
+  }
+
+  .item {
+    box-sizing: border-box;
+    display: grid;
+    min-inline-size: 0;
+    min-block-size: var(--bf-control-chat-composer-control-height);
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--bf-space-2);
+    color: var(--bf-color-content-primary);
+  }
+
+  .item[data-bf-state="sending"] {
+    opacity: var(--bf-opacity-disabled);
+  }
+
+  .content {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-body);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-base);
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .item:hover .content,
+  .item:focus-within .content {
+    color: var(--bf-color-content-primary);
+  }
+
+  .attachmentBadge {
+    box-sizing: border-box;
+    display: inline-flex;
+    min-inline-size: var(--bf-control-chat-composer-control-height);
+    block-size: var(--bf-control-chat-composer-control-height);
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--bf-space-2);
+    border-radius: var(--bf-radius-pill);
+    color: var(--bf-color-content-secondary);
+    background: var(--bf-color-surface-raised);
+    font-size: var(--bf-font-size-small);
+    font-weight: var(--bf-font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .actions {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--bf-space-1);
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .actions {
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .item:hover .actions,
+    .item:focus-within .actions {
+      pointer-events: auto;
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .content,
+    .actions {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root,
+    .attachmentBadge {
+      border: var(--bf-border-width-default) solid CanvasText;
+    }
+  }
+}
