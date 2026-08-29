@@ -79,6 +79,29 @@ describe('BitFunControl presentation bridge', () => {
     expect(reconcile).not.toHaveBeenCalled();
   });
 
+  it('acknowledges a runtime-applied pending appearance before its config mutation completes', async () => {
+    vi.spyOn(appearanceService, 'getSnapshot').mockReturnValue({
+      ...appearanceService.getSnapshot(),
+      status: 'applying',
+      selectedAppearanceId: 'system',
+      pendingSelectionId: 'bitfun-dark',
+    });
+    const pendingApplied = vi.spyOn(appearanceService, 'hasAppliedPendingSelection')
+      .mockReturnValue(true);
+    const reload = vi.spyOn(configManager, 'applyExternalReload').mockResolvedValue(undefined);
+    const reconcile = vi.spyOn(appearanceService, 'reconcilePersistedState').mockResolvedValue(undefined);
+
+    await expect(applyBitFunControlEffect({
+      capabilityId: 'setting.application.appearance',
+      optionId: 'theme',
+      changedPaths: ['appearance.selection'],
+      value: 'bitfun-dark',
+    })).resolves.toEqual({ status: 'alreadyApplied' });
+    expect(pendingApplied).toHaveBeenCalledWith('bitfun-dark');
+    expect(reload).not.toHaveBeenCalled();
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
   it('applies an Agent appearance mutation through persisted-state reconciliation', async () => {
     vi.spyOn(appearanceService, 'getSnapshot').mockReturnValue({
       ...appearanceService.getSnapshot(),
