@@ -3443,7 +3443,7 @@ const ModelSettingsPage: React.FC = () => {
 
         <ConfigPageSection
           className="bitfun-model-settings__models-section"
-          mouseGlowSurface={false}
+          bodySurface={false}
           title={tDefault('sections.providers')}
           description={t('subtitle')}
           extra={(
@@ -3501,7 +3501,7 @@ const ModelSettingsPage: React.FC = () => {
         {modelsDevStatusAvailable && <ConfigPageSection
           title={t('modelsDevCatalog.title')}
           description={t('modelsDevCatalog.description')}
-          mouseGlowSurface={false}
+          bodySurface={false}
           extra={(
             <div className="bitfun-model-settings__catalog-actions">
               <Tooltip content={t('modelsDevCatalog.viewDetails')}>

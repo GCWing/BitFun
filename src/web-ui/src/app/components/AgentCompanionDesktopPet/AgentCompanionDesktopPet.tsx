@@ -974,7 +974,6 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                           <input
                             ref={composerInputRef}
                             type="text"
-                            data-mouse-glow-ignore
                             className="bitfun-agent-companion-window__bubble-composer-input"
                             value={composerValue}
                             placeholder={t('agentCompanion.composer.placeholder')}

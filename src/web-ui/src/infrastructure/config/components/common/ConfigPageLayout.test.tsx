@@ -75,10 +75,10 @@ describe('ConfigPageLayout', () => {
     expect(header).toContain('font-size: 24px;');
   });
 
-  it('strips the body surface chrome when the section opts out of the mouse glow', () => {
+  it('strips the body surface chrome when the section opts out of the standard surface', () => {
     act(() => {
       root.render(
-        <ConfigPageSection title="Managed" mouseGlowSurface={false}>
+        <ConfigPageSection title="Managed" bodySurface={false}>
           <div>Body</div>
         </ConfigPageSection>,
       );
@@ -89,7 +89,7 @@ describe('ConfigPageLayout', () => {
 
     expect(body?.classList.contains('bitfun-config-page-section__body--flush')).toBe(true);
     // The prop drives styling only; it must never leak onto the DOM node.
-    expect(section?.hasAttribute('mouseglowsurface')).toBe(false);
+    expect(section?.hasAttribute('bodysurface')).toBe(false);
   });
 
   it('keeps the body surface chrome by default', () => {

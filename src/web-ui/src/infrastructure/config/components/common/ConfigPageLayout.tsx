@@ -82,7 +82,7 @@ export interface ConfigPageSectionProps extends Omit<React.HTMLAttributes<HTMLEl
   children: React.ReactNode;
   className?: string;
   /** Disable when children own the surface and the standard body background/radius should be removed. */
-  mouseGlowSurface?: boolean;
+  bodySurface?: boolean;
 }
 
 export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
@@ -92,14 +92,12 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   extra,
   children,
   className = '',
-  mouseGlowSurface = true,
+  bodySurface = true,
   ...props
 }) => {
-  // A chrome-less body must drop the inset highlight too: the mouse glow treats any
-  // inset shadow as a visual boundary and would trace a box around empty space.
   const bodyClassName = [
     'bitfun-config-page-section__body',
-    !mouseGlowSurface && 'bitfun-config-page-section__body--flush',
+    !bodySurface && 'bitfun-config-page-section__body--flush',
   ].filter(Boolean).join(' ');
 
   return (
@@ -123,7 +121,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
       {...props}
     >
       <FieldGroup
-        appearance={mouseGlowSurface ? 'subtle' : 'plain'}
+        appearance={bodySurface ? 'subtle' : 'plain'}
         className={bodyClassName}
         data-bf-component="config"
         data-bf-part="sectionBody"

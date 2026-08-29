@@ -22,17 +22,6 @@ vi.mock('@bitfun/ui', () => ({
       ))}
     </select>
   ),
-  Switch: ({
-    checked,
-    onChange,
-    'data-testid': testId,
-  }: {
-    checked?: boolean;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    'data-testid'?: string;
-  }) => (
-    <input type="checkbox" checked={checked} onChange={onChange} data-testid={testId} />
-  ),
 }));
 
 vi.mock('@/component-library', () => ({
@@ -40,17 +29,6 @@ vi.mock('@/component-library', () => ({
   ConfigPageMessage: () => null,
   Select: ({ triggerTestId }: { triggerTestId?: string }) => (
     <button type="button" data-testid={triggerTestId} />
-  ),
-  Switch: ({
-    checked,
-    onChange,
-    'data-testid': testId,
-  }: {
-    checked?: boolean;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    'data-testid'?: string;
-  }) => (
-    <input type="checkbox" checked={checked} onChange={onChange} data-testid={testId} />
   ),
 }));
 
@@ -76,10 +54,6 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@/infrastructure/mouse-glow', () => ({
-  useMouseGlowPreference: () => ({ enabled: true, setEnabled: vi.fn() }),
-}));
-
 vi.mock('@/shared/notification-system', () => ({
   notificationService: { error: vi.fn() },
 }));
@@ -100,12 +74,10 @@ describe('AppearanceSettingsPage', () => {
     const appearanceSection = document.querySelector(
       '[data-testid="appearance-settings-section"] .bitfun-config-page-section',
     );
-    const motionControl = document.querySelector('[data-testid="appearance-mouse-glow-switch"]');
     const packageSelect = document.querySelector('[data-testid="appearance-package-select"]');
     const packageManagement = document.querySelector('[data-testid="appearance-package-config"]');
 
     expect(appearanceSection).not.toBeNull();
-    expect(motionControl?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
     expect(packageSelect?.closest('.bitfun-config-page-section')).toBe(appearanceSection);
     expect(packageSelect?.closest('.appearance-settings__package-row')).not.toBeNull();
     expect(packageManagement?.closest('.bitfun-config-page-section')).toBeNull();

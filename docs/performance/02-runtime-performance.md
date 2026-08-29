@@ -8,6 +8,8 @@
 > 退役说明（2026-08）：本文是提交 `48a003b73` 的固定历史审阅证据。此后 BitFun LSP Runtime 已被完整删除，
 > 因此下文问题 #5 与任务 T3 已通过退役关闭，所述路径也不再存在。保留这些段落只为解释当时结论；不得据此恢复、
 > 优化或重新实现 LSP Runtime。
+>
+> 同期，鼠标跟随光效也已完整删除，因此问题 #20 已通过退役关闭；不得据此恢复或重新实现该功能。
 
 ---
 
@@ -36,7 +38,7 @@
 | 17 | R | grep 工具:每文件冗余 `is_file()` stat;输出 split→逐行 alloc→join 往返 | `crates/execution/tool-execution/src/search/grep_search.rs:743,776,835-840,875` | 中 | 低 |
 | 18 | F | 桌宠打字机:interval 依赖自身 setState 目标,每 28ms 销毁重建 effect + 全部气泡强制布局 | `web-ui/src/app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx:308-339` | 中 | 低 |
 | 19 | F | Tooltip 捕获阶段 scroll 监听未节流:2×getBoundingClientRect + 3×setState/滚动帧 | `web-ui/src/component-library/components/Tooltip/Tooltip.tsx:171-205,294-296` | 中 | 低 |
-| 20 | F | MouseGlow 每个 pointermove 在 rAF 之前执行 `composedPath()` + filter 建 2 个数组 | `web-ui/src/infrastructure/mouse-glow/core/MouseGlowService.ts:126-134` | 中 | 低 |
+| 20 | F | （已关闭）历史鼠标跟随光效的 pointermove 分配问题；功能已退役 | 已删除 | 不再适用 | 已关闭 |
 | 21 | F/I | SnapshotAPI 逐 turn 串行 `get_turn_files`,长会话 N 次串行 IPC 往返 | `web-ui/src/infrastructure/api/service-api/SnapshotAPI.ts:514-531` | 中 | 低 |
 | 22 | R | PTY chunk `from_utf8_lossy(..).to_string()` 强制整串拷贝(最大 64KB);tap 分发逐个 clone | `crates/services/terminal/src/session/manager.rs:285,429` | 中低 | 低 |
 | 23 | R | `HeadTailText` 逐 char 推入 `VecDeque<char>`,10MB 构建日志 = 千万次操作 | `crates/services/terminal/src/exec.rs:934-959` | 中低 | 低 |
@@ -194,7 +196,7 @@ async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Re
 
 - **桌宠打字机**(`AgentCompanionDesktopPet.tsx:308-339`):effect 依赖数组含 `typedOutputBySessionId` 而 interval 回调本身在改它 → 每 28ms 卸载重建 interval;`:335` 的 `useLayoutEffect` 同 deps,每 28ms 对所有输出元素写 `scrollTop`(强制布局)。目标文本改 `useRef`,deps 改 `[hasTypingOutput]`。
 - **Tooltip**(`Tooltip.tsx:294-296`):`visible` 期间捕获阶段监听全应用 scroll,`calculatePosition`(`:171-205`)每滚动帧 2 次 `getBoundingClientRect`(强制同步布局)+ 3 次 setState。rAF 合并 + `passive: true` + 三 state 合一。
-- **MouseGlow**(`MouseGlowService.ts:126-134`):`composedPath()` + `filter` 建数组发生在 rAF **之前**,120Hz 鼠标下每秒 240 次数组分配。把求值推迟到 rAF 内(缓存 `event.target`,`closest()` 定位即可)。
+- **鼠标跟随光效（已关闭）**：功能及全局指针监听已删除，无后续优化任务。
 - **SnapshotAPI**(`SnapshotAPI.ts:514-531`):`get_session_turns` 后 for-await **串行**逐 turn `get_turn_files`,百轮会话 = 百次串行 IPC。后端加批量命令 `get_turns_files(session_id, turn_indices[])`;短期先改 `Promise.all`。
 
 #### 22-24. 中低收益

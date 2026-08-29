@@ -273,7 +273,6 @@ describe('AgentCompanionDesktopPet', () => {
     expect(container.querySelectorAll('.bitfun-agent-companion-window__bubble')).toHaveLength(1);
     const input = query<HTMLInputElement>('.bitfun-agent-companion-window__bubble .bitfun-agent-companion-window__bubble-composer-input');
     expect(input).not.toBeNull();
-    expect(input!.hasAttribute('data-mouse-glow-ignore')).toBe(true);
     expect(query('.bitfun-agent-companion-window__bubble--composing')).not.toBeNull();
     expect(query('.bitfun-agent-companion-window__bubble-compose')).toBeNull();
 

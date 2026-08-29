@@ -91,11 +91,10 @@ describe('settings information architecture', () => {
     });
   });
 
-  it('keeps visual effects and appearance packages discoverable inside Appearance', () => {
+  it('keeps appearance packages discoverable inside Appearance', () => {
     const appearance = SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'application.appearance');
 
     expect(appearance?.searchPhrases).toEqual(expect.arrayContaining([
-      { namespace: 'settings/appearance', key: 'effects.mouseGlow.label' },
       { namespace: 'settings/appearance', key: 'package.title' },
     ]));
     expect(SETTINGS_PAGE_MANIFESTS.some((page) => /motion|package/.test(page.id))).toBe(false);
