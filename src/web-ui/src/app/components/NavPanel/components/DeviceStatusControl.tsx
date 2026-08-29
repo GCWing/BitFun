@@ -9,7 +9,7 @@ import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDevi
 import { useNotification } from '@/shared/notification-system';
 import {
   ChatAppBrandIcon,
-  chatAppBrandFromIdentity,
+  type ChatAppBrand,
 } from '../../RemoteConnectDialog/ChatAppBrandIcon';
 import {
   selectActivityFacts,
@@ -25,6 +25,16 @@ interface DeviceStatusControlProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onManageDevices: () => void;
+}
+
+/** Resolve the provider from backend ids, aliases, or display names. */
+function chatAppBrandFromIdentity(identity: string | null | undefined): ChatAppBrand | null {
+  const normalized = identity?.trim().toLocaleLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes('telegram')) return 'telegram';
+  if (normalized.includes('feishu') || normalized.includes('lark')) return 'feishu';
+  if (normalized.includes('weixin') || normalized.includes('wechat')) return 'weixin';
+  return null;
 }
 
 function DeviceIcon({

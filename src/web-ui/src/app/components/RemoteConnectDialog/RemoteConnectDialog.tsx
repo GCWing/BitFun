@@ -884,6 +884,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     </p>
   );
 
+  const botLabel = (tabId: BotTab | null): string | null => {
+    if (tabId === 'telegram') return 'Telegram';
+    if (tabId === 'feishu') return t('remoteConnect.feishu');
+    if (tabId === 'weixin') return t('remoteConnect.weixin');
+    return null;
+  };
+
   const renderBotIdentity = () => {
     const label = botTab === 'telegram'
       ? 'Telegram'
@@ -1488,13 +1495,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const networkLabel = (tabId: NetworkTab | null): string | null => {
     const tab = NETWORK_TABS.find(item => item.id === tabId);
     return tab ? t(tab.labelKey) : null;
-  };
-
-  const botLabel = (tabId: BotTab | null): string | null => {
-    if (tabId === 'telegram') return 'Telegram';
-    if (tabId === 'feishu') return t('remoteConnect.feishu');
-    if (tabId === 'weixin') return t('remoteConnect.weixin');
-    return null;
   };
 
   const handleAgreeDisclaimer = useCallback(() => {

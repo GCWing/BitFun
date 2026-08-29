@@ -5,23 +5,6 @@ interface ChatAppBrandIconProps {
   size?: number;
 }
 
-/** Resolve the provider from backend ids, aliases, or display names. */
-export function chatAppBrandFromIdentity(identity: string | null | undefined): ChatAppBrand | null {
-  const normalized = identity?.trim().toLocaleLowerCase();
-  if (!normalized) return null;
-  if (normalized.includes('telegram')) return 'telegram';
-  if (normalized.includes('feishu') || normalized.includes('lark')) {
-    return 'feishu';
-  }
-  if (
-    normalized.includes('weixin')
-    || normalized.includes('wechat')
-  ) {
-    return 'weixin';
-  }
-  return null;
-}
-
 /**
  * Monochrome contours of the actual chat-app marks. The SVGs intentionally
  * inherit color from the surrounding identity badge so they work in every
