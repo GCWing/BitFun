@@ -4,10 +4,9 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Input } from '@bitfun/ui';
+import { Input, Textarea } from '@bitfun/ui';
 
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Textarea } from './Textarea';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 

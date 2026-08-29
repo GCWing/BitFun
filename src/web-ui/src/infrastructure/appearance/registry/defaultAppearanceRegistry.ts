@@ -2,9 +2,6 @@ import { cardAppearanceDescriptor } from '@/component-library/components/Card/ap
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
-import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
-import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
-import { numberInputAppearanceDescriptor } from '@/component-library/components/NumberInput/appearance';
 import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
 import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
@@ -270,9 +267,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
-    .registerComponent(checkboxAppearanceDescriptor)
-    .registerComponent(textareaAppearanceDescriptor)
-    .registerComponent(numberInputAppearanceDescriptor)
     .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
     .registerComponent(alertAppearanceDescriptor)

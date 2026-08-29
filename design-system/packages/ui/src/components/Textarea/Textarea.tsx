@@ -79,12 +79,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       data-invalid={resolvedInvalid ? "true" : "false"}
       data-variant={variant}
     >
-      {label && <label className={styles.label} htmlFor={resolvedId}>{label}{required && <span className={styles.required}>*</span>}</label>}
+      {label && <label className={styles.label} data-bf-part="label" htmlFor={resolvedId}>{label}{required && <span className={styles.required}>*</span>}</label>}
       <textarea
         {...props}
         aria-describedby={hasSupport ? supportId : ariaDescribedBy}
         aria-invalid={resolvedInvalid || undefined}
         className={classNames(styles.textarea, textareaClassName)}
+        data-bf-part="input"
         id={resolvedId}
         maxLength={maxLength}
         onChange={handleChange}
@@ -102,9 +103,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         value={value}
       />
       {hasSupport && (
-        <span className={styles.support} id={supportId}>
-          <span className={resolvedInvalid ? styles.error : styles.hint}>{resolvedInvalid ? errorMessage : hint}</span>
-          {showCount && <span className={styles.count}>{count}{maxLength ? ` / ${maxLength}` : ""}</span>}
+        <span className={styles.support} data-bf-part="support" id={supportId}>
+          <span className={resolvedInvalid ? styles.error : styles.hint} data-bf-part="message">{resolvedInvalid ? errorMessage : hint}</span>
+          {showCount && <span className={styles.count} data-bf-part="count">{count}{maxLength ? ` / ${maxLength}` : ""}</span>}
         </span>
       )}
     </span>

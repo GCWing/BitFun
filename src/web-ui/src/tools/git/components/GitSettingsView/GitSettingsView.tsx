@@ -1,9 +1,8 @@
 /** Git settings view. */
 
-import { Button, Field, Icon, IconButton, Input, Select, TabGroup, ScrollArea } from '@bitfun/ui';
+import { Button, Checkbox, Field, Icon, IconButton, Input, Select, TabGroup, ScrollArea } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { Mail, Key, Save, RefreshCw } from 'lucide-react';
-import { Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 

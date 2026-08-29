@@ -1,7 +1,6 @@
-import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import { Button, Checkbox, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Archive, Bot, FolderKanban, Loader2, Trash2 } from 'lucide-react';
-import { Checkbox} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';

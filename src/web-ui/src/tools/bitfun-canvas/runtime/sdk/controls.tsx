@@ -1,12 +1,12 @@
-import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
 import {
+  Checkbox as BitFunCheckbox,
   Field as DesignField,
   IconButton as BitFunIconButton,
   Input as DesignInput,
   Switch as BitFunSwitch,
+  Textarea as BitFunTextarea,
   Tooltip as BitFunTooltip,
 } from '@bitfun/ui';
-import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {
   CanvasCheckboxProps,
   CanvasIconButtonProps,

@@ -1,4 +1,4 @@
-import { Button, Icon, ScrollArea, SearchField, Switch, type IconName, type IconSize } from '@bitfun/ui';
+import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -14,7 +14,6 @@ import {
   Webhook,
   Wrench,
 } from 'lucide-react';
-import { Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {

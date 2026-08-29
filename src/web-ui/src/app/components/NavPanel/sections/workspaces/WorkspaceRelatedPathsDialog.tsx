@@ -1,6 +1,5 @@
-import { Button, Icon, Input, Modal } from '@bitfun/ui';
+import { Button, Icon, Input, Modal, Textarea } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import {

@@ -311,13 +311,7 @@
   min-height: 0;
   flex: 1;
 
-  .bitfun-textarea__wrapper {
-    display: flex;
-    min-height: 0;
-    flex: 1;
-  }
-
-  .bitfun-textarea__field {
+  > [data-bf-part='input'] {
     min-height: clamp(320px, 47vh, 560px);
     flex: 1;
     padding: $size-gap-4;
@@ -487,7 +481,7 @@
     background: var(--bf-appearance-token-color-bg-scene);
   }
 
-  .th-create-panel__prompt-textarea .bitfun-textarea__field:hover:not(:disabled) {
+  .th-create-panel__prompt-textarea > [data-bf-part='input']:hover:not(:disabled) {
     background: var(--bf-appearance-token-color-bg-scene);
     border-color: transparent;
   }
@@ -514,7 +508,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .th-create-panel__prompt-textarea .bitfun-textarea__field {
+  .th-create-panel__prompt-textarea > [data-bf-part='input'] {
     min-height: 340px;
   }
 }

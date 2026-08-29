@@ -6,10 +6,10 @@
  * scheduled without knowing which workspace it runs in.
  */
 
-import { Button, Icon, Input, Select, Switch, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
-import { Select as LegacySelect, Textarea } from '@/component-library';
+import { Select as LegacySelect } from '@/component-library';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';

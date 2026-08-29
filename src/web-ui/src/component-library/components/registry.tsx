@@ -1,12 +1,10 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Button } from '@bitfun/ui';
+import { Button, Checkbox, Textarea } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
 import { Select } from '@components/Select';
-import { Checkbox } from '@components/Checkbox';
-import { Textarea } from '@components/Textarea';
 import { CubeLoading } from '@components/CubeLoading';
 import { Alert } from '@components/Alert';
 import { Tooltip } from '@components/Tooltip';

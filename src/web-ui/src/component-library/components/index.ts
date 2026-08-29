@@ -13,10 +13,10 @@ export * from './InputDialog';
 
 export * from './Alert';
 
-export * from './NumberInput';
+export { NumberInput, type NumberInputProps } from '@bitfun/ui';
 export * from './Select';
-export * from './Checkbox';
-export * from './Textarea';
+export { Checkbox, type CheckboxProps, type CheckboxSize } from '@bitfun/ui';
+export { Textarea, type TextareaProps } from '@bitfun/ui';
 
 export * from './Tooltip';
 

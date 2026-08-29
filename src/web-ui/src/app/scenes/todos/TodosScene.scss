@@ -886,7 +886,7 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__editor-prompt {
-    .bitfun-textarea__field {
+    [data-bf-component='textarea'] > [data-bf-part='input'] {
       min-height: 112px;
       resize: vertical;
     }
