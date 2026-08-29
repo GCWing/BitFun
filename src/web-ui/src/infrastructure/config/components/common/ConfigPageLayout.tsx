@@ -16,7 +16,12 @@ export const ConfigPageLayout: React.FC<ConfigPageLayoutProps> = ({
   ...props
 }) => {
   return (
-    <ScrollArea className={`bitfun-config-page-layout ${className}`} data-bf-component="config" data-bf-part="root" {...props}>
+    <ScrollArea
+      className={`bitfun-config-page-layout ${className}`}
+      {...props}
+      data-bf-component="scroll-area"
+      data-bf-part="viewport"
+    >
       {children}
       {/* Real DOM spacer: keeps a guaranteed blank tail at the end of the scroll range. */}
       <div className="bitfun-config-page-layout__scroll-end-spacer" aria-hidden="true" />
