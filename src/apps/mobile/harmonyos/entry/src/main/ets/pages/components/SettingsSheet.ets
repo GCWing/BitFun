@@ -7,6 +7,7 @@ import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
 import { AccountProfilePanel } from './AccountProfilePanel';
 import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
+import { SheetCloseButton } from './SheetCloseButton';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 
 @ComponentV2
@@ -91,24 +92,16 @@ export struct SettingsSheet {
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
         Blank()
-        Button() {
-          SymbolGlyph($r('sys.symbol.xmark'))
-            .fontSize(18)
-            .fontColor([INK])
-        }
-        .width(40)
-        .height(40)
-        .padding(0)
-        .type(ButtonType.Circle)
-        .backgroundColor(CARD)
-        .accessibilityText(RemoteI18n.t('common.close'))
-        .onClick(() => {
-          this.onClose();
+        SheetCloseButton({
+          controlSize: 48,
+          onClose: (): void => {
+            this.onClose();
+          }
         })
       }
       .width('100%')
       .height(84)
-      .padding({ left: 28, right: 18, top: 10 })
+      .padding({ left: 28, right: 16, top: 10 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor(PAGE_BG)
 

@@ -12,7 +12,7 @@ import {
   RED,
   SUBTLE
 } from './Theme';
-import { NavigationBackButton } from './NavigationBackButton';
+import { SheetCloseButton } from './SheetCloseButton';
 
 const LOGIN_CONTENT_MAX_WIDTH: number = 520;
 const CREDENTIAL_ROW_HEIGHT: number = 60;
@@ -21,7 +21,7 @@ const CREDENTIAL_ROW_HEIGHT: number = 60;
 export struct BitFunAccountLoginPage {
   @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> =
     async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
-  @Event onBack: () => void = () => {};
+  @Event onClose: () => void = () => {};
   @Event onLoginSuccess: () => void = () => {};
   @Local relayUrl: string = DEFAULT_CLOUD_RELAY_URL;
   @Local username: string = '';
@@ -32,7 +32,7 @@ export struct BitFunAccountLoginPage {
 
   build() {
     Column({ space: 0 }) {
-      this.NavigationHeader()
+      this.SheetHeader()
 
       Scroll() {
         Column() {
@@ -75,12 +75,13 @@ export struct BitFunAccountLoginPage {
   }
 
   @Builder
-  private NavigationHeader() {
+  private SheetHeader() {
     Row() {
-      NavigationBackButton({
+      Blank()
+      SheetCloseButton({
         controlSize: 48,
-        onBack: (): void => {
-          this.onBack();
+        onClose: (): void => {
+          this.onClose();
         }
       })
     }
