@@ -1118,12 +1118,7 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
         .await;
     registry
-        .update_and_save_custom_agent_config(
-            "PlannerPlus",
-            Some("primary".to_string()),
-            false,
-            None,
-        )
+        .update_and_save_custom_agent_config("PlannerPlus", Some("fast".to_string()), false, None)
         .expect("mode model update should save");
 
     let mode = registry
@@ -1134,7 +1129,7 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         .expect("updated mode should still be present");
     let saved = std::fs::read_to_string(&mode_path).expect("updated mode file should be readable");
 
-    assert_eq!(mode.model, Some("primary".to_string()));
+    assert_eq!(mode.model, Some("fast".to_string()));
     assert_eq!(mode.source, AgentSource::User);
     assert!(registry.get_mode_agent("PlannerPlus").is_some());
     assert!(!registry
@@ -1143,7 +1138,7 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         .iter()
         .any(|agent| agent.id == "PlannerPlus"));
     assert!(saved.contains("kind: mode"));
-    assert!(saved.contains("model: primary"));
+    assert!(saved.contains("model: fast"));
 }
 
 #[tokio::test]
@@ -1175,7 +1170,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
             Some(true),
             None,
             Some(UserContextPolicy::empty().with_workspace_context()),
-            Some("primary".to_string()),
+            Some("fast".to_string()),
         )
         .await
         .expect("mode definition update should save");
@@ -1190,7 +1185,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
     assert_eq!(detail.name, "Planner Pro");
     assert_eq!(detail.description, "Updated planning mode");
     assert_eq!(detail.prompt, "Always explain your plan first.");
-    assert_eq!(detail.model, "primary");
+    assert_eq!(detail.model, "fast");
     assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
     assert_eq!(
         detail.user_context_policy,
@@ -1198,7 +1193,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
     );
     assert!(saved.contains("kind: mode"));
     assert!(saved.contains("name: Planner Pro"));
-    assert!(saved.contains("model: primary"));
+    assert!(saved.contains("model: fast"));
     assert!(saved.contains("- workspace_context"));
 }
 

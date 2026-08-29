@@ -336,16 +336,18 @@
             ],
             "workflowZh": [
               "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
-              "用原草稿 ID 调用 apply 后，告知用户必须在 15 秒内通过不可变确认窗口保留修改；再次查询 status，只有不再 pending 才算完成"
+              "用原草稿 ID 调用 apply；宿主在真实应用界面就绪后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果"
             ],
             "workflowEn": [
               "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
-              "Apply with the original draft ID, tell the user to keep the change through the immutable confirmation window within 15 seconds, and treat it as complete only after status is no longer pending"
+              "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real app shell is ready, and apply waits for a final confirmed or rolled_back outcome"
             ]
           },
           "evidence": [
             "source:src/crates/assembly/core/src/agentic/tools/implementations/frontend_workbench_tool.rs#FrontendWorkbench",
             "source:src/apps/desktop/src/frontend_workbench.rs#FrontendWorkbenchManager",
+            "command:frontend_update_candidate_ready",
+            "command:get_frontend_update_status",
             "command:confirm_frontend_update",
             "command:rollback_frontend_update"
           ]

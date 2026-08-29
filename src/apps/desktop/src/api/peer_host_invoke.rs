@@ -32,6 +32,8 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // Window / tray / process chrome
     "show_main_window",
     "hide_main_window_after_close_request",
+    "frontend_update_candidate_ready",
+    "get_frontend_update_status",
     "confirm_frontend_update",
     "rollback_frontend_update",
     "quit_app",
@@ -697,6 +699,8 @@ mod tests {
 
     #[test]
     fn frontend_update_decisions_stay_with_the_controller_window() {
+        assert!(is_local_only_command("frontend_update_candidate_ready"));
+        assert!(is_local_only_command("get_frontend_update_status"));
         assert!(is_local_only_command("confirm_frontend_update"));
         assert!(is_local_only_command("rollback_frontend_update"));
     }

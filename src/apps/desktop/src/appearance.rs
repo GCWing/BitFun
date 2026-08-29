@@ -1,6 +1,6 @@
 //! Desktop appearance bootstrap and window creation.
 
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
@@ -8,7 +8,7 @@ use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
 use log::{debug, error, warn};
 use tauri::webview::PageLoadEvent;
-use tauri::{Manager, Url, WebviewUrl};
+use tauri::{Manager, WebviewUrl};
 
 use crate::startup_trace::DesktopStartupTrace;
 
@@ -26,44 +26,6 @@ static STARTUP_APPEARANCE_BOOTSTRAP_MANIFEST: OnceLock<StartupAppearanceBootstra
 
 const STARTUP_APPEARANCE_BOOTSTRAP_JSON: &str =
     include_str!("generated/startup_appearance_bootstrap.json");
-
-struct MainWebviewNavigationPolicy {
-    allow_main_page_reload: bool,
-    initial_page_url: RwLock<Option<Url>>,
-}
-
-impl MainWebviewNavigationPolicy {
-    fn new(allow_main_page_reload: bool) -> Self {
-        Self {
-            allow_main_page_reload,
-            initial_page_url: RwLock::new(None),
-        }
-    }
-
-    fn should_allow(&self, url: &Url) -> bool {
-        // Wry invokes the same callback for top-level and iframe navigations on
-        // macOS, but it does not expose the target frame here. MiniApps use
-        // parent-created Blob documents, while srcdoc/empty iframe documents
-        // use the two local about: targets below. Allowing only these local
-        // document URLs keeps them outside the main-page navigation policy.
-        let is_embedded_document = url.scheme() == "blob"
-            || (url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
-        if is_embedded_document {
-            return true;
-        }
-
-        let Ok(mut initial_page_url) = self.initial_page_url.write() else {
-            return false;
-        };
-        match initial_page_url.as_ref() {
-            Some(initial_page_url) => self.allow_main_page_reload && initial_page_url == url,
-            None => {
-                *initial_page_url = Some(url.clone());
-                true
-            }
-        }
-    }
-}
 
 fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
     AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -551,6 +513,7 @@ pub fn create_main_window(
     startup_trace_id: &str,
     startup_trace: &DesktopStartupTrace,
     workspace_startup_state: Option<serde_json::Value>,
+    frontend_workbench: Arc<crate::frontend_workbench::FrontendWorkbenchManager>,
 ) {
     let total_started_at = Instant::now();
     let bootstrap_config = AppearanceConfig::load_startup_bootstrap_config();
@@ -581,7 +544,7 @@ pub fn create_main_window(
             }
         }
     } else {
-        crate::frontend_workbench::custom_frontend_url("index.html")
+        frontend_workbench.active_frontend_url()
     };
     let main_url_kind = match &main_url {
         WebviewUrl::External(_) => "external",
@@ -623,10 +586,12 @@ pub fn create_main_window(
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
 
-    // Exact top-level reloads are required for provisional Creative frontend
-    // activation and rollback. Different main-page URLs remain blocked.
-    let navigation_policy = MainWebviewNavigationPolicy::new(true);
-    builder = builder.on_navigation(move |url| navigation_policy.should_allow(url));
+    // The Desktop host arms each exact Creative preview/rollback transition.
+    // Page-driven navigations remain blocked, including in development where
+    // the initial Vite origin differs from the packaged-frontend protocol.
+    let navigation_workbench = Arc::clone(&frontend_workbench);
+    builder =
+        builder.on_navigation(move |url| navigation_workbench.should_allow_main_navigation(url));
 
     #[cfg(target_os = "macos")]
     {
@@ -1064,59 +1029,4 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MainWebviewNavigationPolicy;
-    use tauri::Url;
-
-    fn url(value: &str) -> Url {
-        value.parse().expect("test URL should be valid")
-    }
-
-    #[test]
-    fn main_webview_navigation_allows_only_the_first_page_navigation() {
-        let policy = MainWebviewNavigationPolicy::new(false);
-
-        assert!(policy.should_allow(&url("http://localhost:1422/")));
-        assert!(!policy.should_allow(&url("http://localhost:1422/")));
-        assert!(!policy.should_allow(&url("https://example.com/")));
-        assert!(!policy.should_allow(&url("data:text/html,blocked")));
-    }
-
-    #[test]
-    fn main_webview_navigation_allows_local_iframe_documents_without_consuming_initial_page() {
-        let policy = MainWebviewNavigationPolicy::new(false);
-
-        assert!(policy.should_allow(&url(
-            "blob:http://localhost:1422/65b60dd8-a501-47c2-b7fd-aa99af720dc6"
-        )));
-        assert!(policy.should_allow(&url("about:blank")));
-        assert!(policy.should_allow(&url("about:srcdoc")));
-        assert!(policy.should_allow(&url("tauri://localhost/index.html")));
-        assert!(!policy.should_allow(&url("tauri://localhost/index.html")));
-    }
-
-    #[test]
-    fn main_webview_navigation_keeps_iframe_documents_available_after_initial_page() {
-        let policy = MainWebviewNavigationPolicy::new(false);
-
-        assert!(policy.should_allow(&url("tauri://localhost/index.html")));
-        assert!(policy.should_allow(&url(
-            "blob:tauri://localhost/f5445ef0-5b0b-42b0-9540-276a0012ae56"
-        )));
-        assert!(policy.should_allow(&url("about:blank")));
-        assert!(!policy.should_allow(&url("tauri://localhost/index.html")));
-    }
-
-    #[test]
-    fn development_navigation_allows_only_reload_of_the_initial_page() {
-        let policy = MainWebviewNavigationPolicy::new(true);
-
-        assert!(policy.should_allow(&url("http://localhost:1422/")));
-        assert!(policy.should_allow(&url("http://localhost:1422/")));
-        assert!(!policy.should_allow(&url("http://localhost:1422/other")));
-        assert!(!policy.should_allow(&url("https://example.com/")));
-    }
 }

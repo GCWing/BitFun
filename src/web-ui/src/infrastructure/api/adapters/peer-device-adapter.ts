@@ -22,6 +22,8 @@ const log = createLogger('PeerDeviceTransport');
 const LOCAL_ONLY_COMMANDS = new Set([
   'show_main_window',
   'hide_main_window_after_close_request',
+  'frontend_update_candidate_ready',
+  'get_frontend_update_status',
   'confirm_frontend_update',
   'rollback_frontend_update',
   'quit_app',

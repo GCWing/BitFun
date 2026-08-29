@@ -11,12 +11,12 @@ Use this workflow only for the running BitFun desktop client's own frontend. It 
 
 1. Call `FrontendWorkbench` with `action: "prepare"`.
 2. Edit only the returned draft directory. Never edit the packaged resource directory, active revision, state file, or another draft.
-3. Preserve a valid `index.html`. Prefer small changes to the stable `bitfun-creation.css` and `bitfun-creation.js` override files when those are sufficient.
-4. Call `FrontendWorkbench` with `action: "apply"` and the exact returned `draft_id`.
-5. Tell the user that the change is provisional and must be confirmed in the native 15-second confirmation window.
-6. Call `FrontendWorkbench` with `action: "status"` before saying the revision was kept. A pending revision means it is not confirmed.
+3. Preserve a valid `index.html`. It already loads `bitfun-creation.css` and `bitfun-creation.js`; do not edit `index.html` merely to link them again. Prefer CSS-only overrides for visual changes and keep JavaScript changes small and reversible.
+4. Call `FrontendWorkbench` with `action: "apply"`, setting its `draft_id` input to the exact returned `draftId`.
+5. While `apply` is running, tell the user to inspect the live preview and use the immutable review window. Its Keep button remains disabled until the real app shell renders; the authoritative 15-second countdown starts only after readiness.
+6. Read the final `apply` result. Only `status: "confirmed"` means the revision was kept; `status: "rolled_back"` includes the reason. Use `FrontendWorkbench status` for later inspection, not direct reads of `state.json`.
 
-`apply` replaces the running frontend immediately, but the desktop host owns the safety timer. If the user does not confirm within 15 seconds, if BitFun exits, or if the candidate cannot load, the host restores the prior revision. Never bypass or emulate the confirmation timer in page JavaScript.
+`apply` is a two-phase transaction: the confirmed active revision remains authoritative while the candidate is previewed, then user confirmation commits it. If the app shell cannot report readiness, the user does not confirm within 15 seconds, or BitFun exits, the host restores the prior revision. Never bypass or emulate readiness or the confirmation timer in editable page JavaScript.
 
 Use `action: "rollback"` when the user explicitly asks to undo the currently active customization. Do not delete revision history manually.
 

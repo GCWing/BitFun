@@ -6,6 +6,7 @@ use crate::agentic::tools::frontend_workbench_host::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use serde_json::{json, Value};
 
 pub struct FrontendWorkbenchTool;
@@ -24,8 +25,18 @@ impl Default for FrontendWorkbenchTool {
 
 fn creative_local_context(context: Option<&ToolUseContext>) -> bool {
     context.is_some_and(|context| {
-        context.agent_type.as_deref() == Some("Creative") && !context.is_remote()
+        context.agent_type.as_deref() == Some("Creative")
+            && !context.is_remote()
+            && !is_remote_control_context(context)
     })
+}
+
+fn is_remote_control_context(context: &ToolUseContext) -> bool {
+    context
+        .custom_data
+        .get(TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 #[async_trait]
@@ -37,7 +48,7 @@ impl Tool for FrontendWorkbenchTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Safely customize the frontend of the running packaged BitFun desktop client. Creative mode only.
 
-Workflow: call prepare, edit only the returned draft_path using file tools, then call apply with draft_id. Apply hot-loads the candidate and starts an authoritative 15-second confirmation window in immutable native-host UI. If the user does not confirm, BitFun automatically restores the previous revision. Call status before claiming that a revision was kept. rollback explicitly restores the previous confirmed revision.
+Workflow: call prepare, edit only the returned draftPath using file tools, then call apply with draft_id set to the returned draftId. Apply opens immutable host recovery controls, hot-loads the candidate, waits for the real app shell to report readiness, and only then starts the authoritative 15-second confirmation countdown. The apply call resolves with the final confirmed or rolled-back outcome; it does not report success merely because navigation was requested. status exposes the confirmed active revision and any provisional preview separately. rollback explicitly restores the previous confirmed revision.
 
 Actions:
 - prepare: create an editable draft from the current active frontend.
@@ -45,7 +56,7 @@ Actions:
 - apply: validate and provisionally activate a prepared draft; requires fresh permission.
 - rollback: restore the previous confirmed revision; requires fresh permission.
 
-This tool is unavailable for remote workspaces and non-desktop surfaces."#.to_string())
+This tool is unavailable for remote workspaces, remote-control turns, and non-desktop surfaces because the user must be able to inspect the visible local BitFun window."#.to_string())
     }
 
     fn short_description(&self) -> String {
@@ -122,6 +133,12 @@ This tool is unavailable for remote workspaces and non-desktop surfaces."#.to_st
                     .to_string(),
             ));
         }
+        if is_remote_control_context(context) {
+            return Err(BitFunError::tool(
+                "FrontendWorkbench cannot run from a remote mobile or bot controller because the changed local desktop and its recovery controls are not visible there"
+                    .to_string(),
+            ));
+        }
 
         let action = input
             .get("action")
@@ -145,10 +162,11 @@ This tool is unavailable for remote workspaces and non-desktop surfaces."#.to_st
         })
         .await
         .map_err(BitFunError::tool)?;
-        let assistant = match action {
-            "prepare" => "Frontend draft prepared. Edit only draft_path, then apply the exact draft_id.",
-            "apply" => "Frontend candidate is live provisionally. The user must confirm it within 15 seconds or BitFun will roll it back automatically.",
-            "rollback" => "Frontend rollback requested.",
+        let assistant = match (action, result.get("status").and_then(Value::as_str)) {
+            ("apply", Some("confirmed")) => "The candidate rendered successfully and the user kept it; the returned activeRevision is confirmed.",
+            ("apply", Some("rolled_back")) => "The candidate was not kept. BitFun restored the previous confirmed frontend; inspect reason for whether this was user choice, readiness failure, or timeout.",
+            ("rollback", _) => "Frontend rollback completed.",
+            ("prepare", _) => "Frontend draft prepared. Edit only draftPath, then apply the exact draftId.",
             _ => "Frontend workbench status returned.",
         };
 
@@ -210,6 +228,21 @@ mod tests {
             .await
             .expect_err("remote Creative calls must fail");
         assert!(error.to_string().contains("remote workspace"));
+    }
+
+    #[tokio::test]
+    async fn execution_rejects_remote_control_turns_even_for_a_local_workspace() {
+        let mut remote_control = context("Creative");
+        remote_control.custom_data.insert(
+            TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY.to_string(),
+            Value::Bool(true),
+        );
+
+        let error = FrontendWorkbenchTool::new()
+            .call_impl(&json!({"action": "status"}), &remote_control)
+            .await
+            .expect_err("remote-control Creative calls must fail");
+        assert!(error.to_string().contains("remote mobile or bot"));
     }
 
     #[test]

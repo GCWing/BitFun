@@ -1176,6 +1176,7 @@ pub async fn run() {
                 &startup_trace_id,
                 &startup_trace,
                 workspace_startup_bootstrap_snapshot,
+                Arc::clone(&frontend_workbench),
             );
             let window_duration_ms = elapsed_ms(window_started);
             startup_trace.record_step(
@@ -1399,6 +1400,8 @@ pub async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             appearance::show_main_window,
+            frontend_workbench::frontend_update_candidate_ready,
+            frontend_workbench::get_frontend_update_status,
             frontend_workbench::confirm_frontend_update,
             frontend_workbench::rollback_frontend_update,
             hide_main_window_after_close_request,
