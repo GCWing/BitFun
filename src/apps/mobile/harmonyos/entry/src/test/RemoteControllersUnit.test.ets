@@ -2352,6 +2352,19 @@ export default function remoteControllersUnitTest() {
       expect(ConversationViewContract.shouldShowSuggestions(false, false, emptyItems)).assertFalse();
       expect(ConversationViewContract.visibleTimelineItems(emptyItems).length).assertEqual(0);
     });
+
+    it('keeps user rows when a legacy remote transcript ends in a hollow assistant', 0, () => {
+      const timelineItems = ChatTimelineProjector.project([
+        chatMessage('remote-user-1', 'user', 'Hello'),
+        chatMessage('remote-assistant-1', 'assistant', '')
+      ], [], RemoteUiState.emptyActiveTurn(), false);
+
+      const visibleItems = ConversationViewContract.visibleTimelineItems(timelineItems);
+
+      expect(visibleItems.length).assertEqual(1);
+      expect(visibleItems[0].type).assertEqual('user_message');
+      expect(visibleItems[0].message!.text).assertEqual('Hello');
+    });
   });
 
   describe('AppRouteContract', () => {
