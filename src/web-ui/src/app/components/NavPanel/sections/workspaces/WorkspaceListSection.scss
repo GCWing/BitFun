@@ -970,6 +970,20 @@
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
   }
 
+  &__workspace-acp-menu-trigger.is-open {
+    background: var(--bf-color-action-neutral-surface);
+  }
+
+  &__workspace-acp-submenu {
+    &[data-placement='right'] {
+      transform-origin: top left;
+    }
+
+    &[data-placement='left'] {
+      transform-origin: top right;
+    }
+  }
+
   &__workspace-item-sessions {
     position: relative;
     z-index: 0;
@@ -1504,7 +1518,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-panel__workspace-item-menu-popover {
+  .bitfun-nav-panel__workspace-item-menu-popover,
+  .bitfun-nav-panel__workspace-acp-submenu {
     animation: none;
   }
 }

@@ -222,6 +222,24 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(editor.textContent).toContain('pdf');
   });
 
+  it('renders Review with the same capsule anatomy as a Plan skill reference', async () => {
+    const harnessRef = createRef<HarnessHandle>();
+    const editor = await renderHarness(harnessRef);
+
+    await act(async () => {
+      harnessRef.current?.setValue('[[bitfun-additional-mode:review]]');
+    });
+
+    const reviewPill = editor.querySelector(
+      '[data-inline-token-type="additional-mode-ref"]',
+    ) as HTMLElement | null;
+    expect(reviewPill).toBeTruthy();
+    expect(reviewPill?.classList.contains('rich-text-tag-pill--skill-ref')).toBe(true);
+    expect(reviewPill?.getAttribute('data-bf-context-type')).toBe('additional-mode-reference');
+    expect(reviewPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(reviewPill?.textContent).toContain('Review');
+  });
+
   it('serializes and restores session reference capsules without parsing their labels', async () => {
     const sessionReference: ContextItem = {
       id: 'session-reference-1',
@@ -483,6 +501,34 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(skillPill).toBeTruthy();
     expect(skillPill?.previousSibling?.textContent).toBe(' ');
     expect(skillPill?.nextSibling?.textContent).toBe(' ');
+  });
+
+  it('can append the Review reference through the same inline-token interaction', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value="hello"
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as RichTextInputElement | null;
+    expect(editor).toBeTruthy();
+
+    await act(async () => {
+      editor?.appendInlineTokenAtEnd?.('[[bitfun-additional-mode:review]]');
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      'hello [[bitfun-additional-mode:review]]',
+      emptyContexts,
+    );
+    expect(editor?.querySelector('.rich-text-tag-pill--additional-mode-ref')).toBeTruthy();
   });
 
   it('clears placeholder br before appending the first inline skill token', async () => {

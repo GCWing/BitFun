@@ -7,20 +7,37 @@ function source(relativePath: string): string {
 }
 
 describe('unified project session creation', () => {
-  it('places the client voice action beside search instead of the new-session shortcut', () => {
+  it('keeps New Session beside search and moves realtime voice to the scene corner', () => {
     const mainNav = source('./MainNav.tsx');
+    const workspaceBody = source('../../layout/WorkspaceBody.tsx');
+    const voiceLauncher = source('../../../flow_chat/components/voice/RealtimeVoiceCallButton.tsx');
+    const voiceLauncherStyles = source('../../../flow_chat/components/voice/RealtimeVoiceCallButton.scss');
     const workspaceItem = source('./sections/workspaces/WorkspaceItem.tsx');
     const utilityRowIndex = mainNav.indexOf('data-bf-part="utilityRow"');
-    const voiceIndex = mainNav.indexOf('<RealtimeVoiceCallButton />');
+    const newSessionIndex = mainNav.indexOf('data-testid="nav-new-session-btn"');
     const sectionsIndex = mainNav.indexOf('data-testid="nav-sections"');
     const sessionsSectionIndex = mainNav.indexOf('data-bf-section="sessions"');
 
-    expect(voiceIndex).toBeGreaterThan(utilityRowIndex);
-    expect(sectionsIndex).toBeGreaterThan(voiceIndex);
-    expect(sessionsSectionIndex).toBeGreaterThan(voiceIndex);
-    expect(mainNav).not.toContain('data-testid="nav-new-session-btn"');
-    expect(mainNav).not.toContain('<Plus size={15} aria-hidden="true" />');
-    expect(mainNav).not.toContain("activateProductAction('session.new')");
+    expect(newSessionIndex).toBeGreaterThan(utilityRowIndex);
+    expect(sectionsIndex).toBeGreaterThan(newSessionIndex);
+    expect(sessionsSectionIndex).toBeGreaterThan(newSessionIndex);
+    expect(mainNav).toContain('<Plus size={15} aria-hidden="true" />');
+    expect(mainNav).toContain("activateProductAction('session.new')");
+    expect(mainNav).not.toContain('<RealtimeVoiceCallButton />');
+    expect(workspaceBody).toContain('<RealtimeVoiceCallButton />');
+    expect(voiceLauncher).toContain('data-testid="realtime-voice-launcher"');
+    expect(voiceLauncher).toContain("t('voiceCall.call.launcherLabel')");
+    expect(voiceLauncher).toContain('<Mic');
+    expect(voiceLauncherStyles).toContain('right: 0;');
+    expect(voiceLauncherStyles).toContain('bottom: 0;');
+    expect(voiceLauncherStyles).toContain('width: 84px;');
+    expect(voiceLauncherStyles).toContain('height: 40px;');
+    expect(voiceLauncherStyles).toContain('font-weight: 300;');
+    expect(voiceLauncherStyles).toContain('font-synthesis: none;');
+    expect(voiceLauncherStyles).toContain('opacity: 0.22;');
+    expect(voiceLauncherStyles).toMatch(/&\.is-active\s*\{\s*opacity: 1;/);
+    expect(voiceLauncherStyles).toContain('border-radius: $size-radius-lg 0 0 0;');
+    expect(voiceLauncherStyles).not.toContain('$size-radius-lg 0 $size-radius-lg 0');
     expect(mainNav).not.toContain('nav-new-code-session-btn');
     expect(mainNav).not.toContain('nav-new-cowork-session-btn');
     expect(workspaceItem).toContain('data-testid="nav-workspace-menu-create-session"');
@@ -71,9 +88,10 @@ describe('unified project session creation', () => {
 
   it('opens the footer utility list from Settings without Star, More, or Insights', () => {
     const footerActions = source('./components/PersistentFooterActions.tsx');
+    const appearanceQuickSwitch = source('./components/AppearanceQuickSwitchMenuItem.tsx');
     const floatingIndex = footerActions.indexOf('data-testid="nav-settings-floating-item"');
     const notificationIndex = footerActions.indexOf('<NotificationButton menuItem');
-    const themeIndex = footerActions.indexOf('data-testid="nav-settings-theme-item"');
+    const appearanceIndex = footerActions.indexOf('<AppearanceQuickSwitchMenuItem');
     const openSettingsIndex = footerActions.indexOf('data-testid="nav-settings-open-item"');
     const aboutIndex = footerActions.indexOf('data-testid="nav-settings-about-item"');
 
@@ -81,12 +99,18 @@ describe('unified project session creation', () => {
     expect(footerActions).toContain('data-testid="nav-settings-menu"');
     expect(floatingIndex).toBeGreaterThan(-1);
     expect(notificationIndex).toBeGreaterThan(floatingIndex);
-    expect(themeIndex).toBeGreaterThan(notificationIndex);
-    expect(openSettingsIndex).toBeGreaterThan(themeIndex);
+    expect(appearanceIndex).toBeGreaterThan(notificationIndex);
+    expect(openSettingsIndex).toBeGreaterThan(appearanceIndex);
     expect(aboutIndex).toBeGreaterThan(openSettingsIndex);
     expect(footerActions).toContain("useSettingsStore.getState().openPage('application.appearance')");
     expect(footerActions).not.toContain('GithubStarButton');
     expect(footerActions).not.toContain('nav-footer-github-star-btn');
+    expect(appearanceQuickSwitch).toContain('data-testid="nav-settings-appearance-item"');
+    expect(appearanceQuickSwitch).toContain('data-testid="nav-settings-appearance-menu"');
+    expect(appearanceQuickSwitch).toContain('role="menuitemradio"');
+    expect(appearanceQuickSwitch).toContain('selectedDisplayName');
+    expect(footerActions).not.toContain('onMouseMove=');
+    expect(footerActions).not.toContain('onFocusCapture=');
     expect(footerActions).not.toContain('data-testid="nav-footer-more-btn"');
     expect(footerActions).not.toContain("activateProductAction('surface.insights.open')");
   });

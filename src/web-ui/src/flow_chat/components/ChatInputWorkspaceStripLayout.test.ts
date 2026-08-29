@@ -242,21 +242,36 @@ describe('composer context track layout', () => {
     expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 
-  it('keeps enabled workflow Skills as shortcuts at the top of the add menu', () => {
+  it('groups additional modes in one second-level menu immediately after Harness', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
-    const quickSkillsIndex = chatInput.indexOf('{quickSkillShortcuts.length > 0 && (');
-    const reviewIndex = chatInput.indexOf('data-bf-agent-id="Review"');
+    const menuHarnessIndex = chatInput.indexOf('presentation="menu-item"');
+    const additionalModesIndex = chatInput.indexOf("label={t('chatInput.boostAdditionalModes')}");
+    const quickSkillsIndex = chatInput.indexOf('quickSkillShortcuts.map(shortcut => (');
+    const reviewDefinitionIndex = chatInput.indexOf("id: 'review',");
+    const additionalModeItemsIndex = chatInput.indexOf('additionalModeItems.map(item => (');
     const contextIndex = chatInput.indexOf('onClick={handleBoostOpenAtContext}');
 
+    expect(menuHarnessIndex).toBeGreaterThan(-1);
+    expect(additionalModesIndex).toBeGreaterThan(menuHarnessIndex);
     expect(quickSkillsIndex).toBeGreaterThan(-1);
-    expect(reviewIndex).toBeGreaterThan(quickSkillsIndex);
-    expect(contextIndex).toBeGreaterThan(reviewIndex);
+    expect(reviewDefinitionIndex).toBeGreaterThan(quickSkillsIndex);
+    expect(additionalModeItemsIndex).toBeGreaterThan(additionalModesIndex);
+    expect(contextIndex).toBeGreaterThan(additionalModeItemsIndex);
+    expect(chatInput).toContain('additionalModeItems.map(item => (');
+    expect(chatInput).toContain('data-bf-boost-item-kind="additional-mode"');
+    expect(chatInput).toContain('data-testid={`chat-input-additional-mode-${item.id}`}');
+    expect(chatInput).not.toContain('boost-submenu-item--unavailable');
+    expect(chatInput).not.toContain('boost-submenu-item-status');
+    expect(chatInput).not.toContain('data-bf-boost-item-kind="workflow"');
+    expect(chatInput).not.toContain('data-bf-agent-id="Review"');
     expect(chatInput).toContain(
       'resolveChatInputQuickSkillShortcuts(resolvedModeSkills)',
     );
     expect(chatInput).toContain('layoutRevision: boostMenuLayoutRevision');
-    expect(chatInput).toContain('insertSkillIntoInput(shortcut.skill.name)');
-    expect(chatInput).toContain('data-testid={`chat-input-quick-skill-${shortcut.id}`}');
+    expect(chatInput).toContain('skillName: shortcut.skill.name');
+    expect(chatInput).toContain('selectAdditionalMode(item.selection)');
+    expect(chatInput).toContain('insertAdditionalModeIntoInput(selection.modeId)');
+    expect(chatInput).not.toContain("selectSlashCommandAction('review')");
   });
 
   it('moves Harness beside add in expanded layout and keeps the model pair trailing', () => {

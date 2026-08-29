@@ -148,6 +148,15 @@ describe('HarnessProfileSelector', () => {
     );
     expect(selectorRoot?.dataset.bfPresentation).toBe('menu-item');
     expect(trigger?.querySelector('.bitfun-harness-selector__trigger-chevron')).not.toBeNull();
+    expect(
+      trigger?.querySelector('.bitfun-harness-selector__trigger-label')?.textContent,
+    ).toBe('chatInput.harness.menuLabel');
+    expect(
+      trigger?.querySelector('.bitfun-harness-selector__trigger-current')?.textContent,
+    ).toContain('chatInput.current');
+    expect(
+      trigger?.querySelector('.bitfun-harness-selector__trigger-current-value')?.textContent,
+    ).toBe('chatInput.harness.profiles.balanced.name');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

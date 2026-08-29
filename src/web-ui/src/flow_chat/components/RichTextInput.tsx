@@ -17,6 +17,10 @@ import {
   parseSkillPromptReferenceToken,
 } from '../utils/skillPromptReference';
 import {
+  getAdditionalModePromptReferenceMatches,
+  parseAdditionalModePromptReferenceToken,
+} from '../utils/additionalModePromptReference';
+import {
   appendComposerTextSegment,
   COMPOSER_PRESENTATION_VERSION,
   type ComposerPresentation,
@@ -344,21 +348,27 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return tag;
   }, [internalRef, removeInlineTokenElement]);
 
-  const createSkillReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
-    const payload = parseSkillPromptReferenceToken(token);
-    if (!payload) {
-      return null;
-    }
-
+  const createSkillStyledReferenceElement = useCallback((options: {
+    token: string;
+    contextType: 'skill-reference' | 'additional-mode-reference';
+    inlineTokenType: 'skill-ref' | 'additional-mode-ref';
+    title: string;
+    displayText: string;
+    modifierClass?: string;
+  }): HTMLSpanElement => {
     const tag = document.createElement('span');
-    tag.className = 'rich-text-tag-pill rich-text-tag-pill--skill-ref';
+    tag.className = [
+      'rich-text-tag-pill',
+      'rich-text-tag-pill--skill-ref',
+      options.modifierClass,
+    ].filter(Boolean).join(' ');
     tag.dataset.bfComponent = 'rich-text-input';
     tag.dataset.bfPart = 'contextTag';
-    tag.dataset.bfContextType = 'skill-reference';
+    tag.dataset.bfContextType = options.contextType;
     tag.contentEditable = 'false';
-    tag.dataset.tagFormat = token;
-    tag.dataset.inlineTokenType = 'skill-ref';
-    tag.title = `Skill: ${payload.skillName}`;
+    tag.dataset.tagFormat = options.token;
+    tag.dataset.inlineTokenType = options.inlineTokenType;
+    tag.title = options.title;
 
     const badge = document.createElement('span');
     badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
@@ -370,7 +380,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--skill-ref';
     text.dataset.bfComponent = 'rich-text-input';
     text.dataset.bfPart = 'tagText';
-    text.textContent = payload.skillName;
+    text.textContent = options.displayText;
 
     const remove = document.createElement('button');
     remove.className = 'rich-text-tag-pill__remove';
@@ -395,9 +405,38 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return tag;
   }, [internalRef, removeInlineTokenElement]);
 
+  const createSkillReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseSkillPromptReferenceToken(token);
+    return payload
+      ? createSkillStyledReferenceElement({
+          token,
+          contextType: 'skill-reference',
+          inlineTokenType: 'skill-ref',
+          title: `Skill: ${payload.skillName}`,
+          displayText: payload.skillName,
+        })
+      : null;
+  }, [createSkillStyledReferenceElement]);
+
+  const createAdditionalModeReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseAdditionalModePromptReferenceToken(token);
+    return payload
+      ? createSkillStyledReferenceElement({
+          token,
+          contextType: 'additional-mode-reference',
+          inlineTokenType: 'additional-mode-ref',
+          title: `Additional mode: ${payload.displayText}`,
+          displayText: payload.displayText,
+          modifierClass: 'rich-text-tag-pill--additional-mode-ref',
+        })
+      : null;
+  }, [createSkillStyledReferenceElement]);
+
   const createInlineTokenElement = useCallback((token: string): HTMLSpanElement | null => {
-    return createWidgetReferenceElement(token) ?? createSkillReferenceElement(token);
-  }, [createSkillReferenceElement, createWidgetReferenceElement]);
+    return createWidgetReferenceElement(token)
+      ?? createAdditionalModeReferenceElement(token)
+      ?? createSkillReferenceElement(token);
+  }, [createAdditionalModeReferenceElement, createSkillReferenceElement, createWidgetReferenceElement]);
 
   const buildComposerPresentation = useCallback((): ComposerPresentation | null => {
     const editor = internalRef.current;
@@ -444,6 +483,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       const inlineToken = element.dataset.inlineTokenType;
       const token = element.dataset.tagFormat;
       if (inlineToken && token) {
+        const additionalMode = parseAdditionalModePromptReferenceToken(token);
+        if (additionalMode) {
+          appendText(token);
+          return;
+        }
         const skill = parseSkillPromptReferenceToken(token);
         if (skill) {
           segments.push({
@@ -519,6 +563,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         ...match,
         kind: 'skill-ref' as const,
       })),
+      ...getAdditionalModePromptReferenceMatches(text).map(match => ({
+        ...match,
+        kind: 'additional-mode-ref' as const,
+      })),
     ].sort((a, b) => a.start - b.start);
 
     if (matches.length === 0) {
@@ -534,7 +582,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
       const tokenElement = match.kind === 'widget-ref'
         ? createWidgetReferenceElement(match.token)
-        : createSkillReferenceElement(match.token);
+        : match.kind === 'additional-mode-ref'
+          ? createAdditionalModeReferenceElement(match.token)
+          : createSkillReferenceElement(match.token);
       if (tokenElement) {
         fragment.appendChild(tokenElement);
       } else {
@@ -548,7 +598,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     editor.replaceChildren(fragment);
-  }, [createSkillReferenceElement, createWidgetReferenceElement]);
+  }, [createAdditionalModeReferenceElement, createSkillReferenceElement, createWidgetReferenceElement]);
 
   /** Map textContent offsets to a DOM Range to replace only the @ span. */
   const getRangeByTextOffsets = useCallback((root: Node, start: number, end: number): Range | null => {

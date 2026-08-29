@@ -1,5 +1,71 @@
 @use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '../../../component-library/styles/tokens' as *;
 @use './RealtimeVoiceCall';
+
+.bitfun-realtime-call__launcher {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: $z-floating;
+  display: inline-flex;
+  width: 84px;
+  height: 40px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: $size-gap-1;
+  padding: 0 11px;
+  border: 0;
+  border-radius: $size-radius-lg 0 0 0;
+  background: color-mix(
+    in srgb,
+    var(--bf-appearance-token-color-static-black) 79%,
+    var(--bf-appearance-token-color-static-white)
+  );
+  color: var(--bf-appearance-token-color-static-white);
+  font-family: $font-family-mono;
+  font-size: var(--bf-appearance-token-font-size-base);
+  font-weight: 300;
+  font-synthesis: none;
+  line-height: $line-height-tight;
+  opacity: 0.22;
+  cursor: pointer;
+  transition:
+    opacity $motion-fast $easing-standard,
+    background $motion-fast $easing-standard;
+
+  &:hover,
+  &:focus-visible,
+  &.is-active {
+    opacity: 1;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-static-black) 72%,
+      var(--bf-appearance-token-color-static-white)
+    );
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
+    outline-offset: -3px;
+  }
+
+  &.is-active {
+    cursor: default;
+  }
+
+  &.is-active .bitfun-realtime-call__launcher-icon {
+    color: var(--bf-appearance-token-color-success);
+  }
+}
+
+.bitfun-realtime-call__launcher-icon {
+  flex: 0 0 auto;
+  color: var(--bf-appearance-token-color-overlay-white-70);
+}
 
 .bitfun-realtime-call {
   @include surfaces.floating-surface;

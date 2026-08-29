@@ -17,6 +17,7 @@ import NavPanel from '../components/NavPanel/NavPanel';
 import { SceneChromeProvider, SceneTopBar } from '../components/SceneTopBar';
 import { SceneViewport } from '../scenes';
 import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
+import { RealtimeVoiceCallButton } from '../../flow_chat/components/voice/RealtimeVoiceCallButton';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import './WorkspaceBody.scss';
@@ -193,6 +194,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
               workspacePath={currentWorkspace?.rootPath}
               isEntering={isEntering}
             />
+            <RealtimeVoiceCallButton />
           </SceneChromeProvider>
         </div>
         {sceneOverlay}

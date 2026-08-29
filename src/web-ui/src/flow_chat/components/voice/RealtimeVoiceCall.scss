@@ -1,40 +1,5 @@
 @use '../../../component-library/styles/tokens' as *;
 
-.bitfun-nav-panel__voice-call {
-  position: relative;
-
-  &:not(.is-active):hover {
-    color: var(--bf-appearance-token-color-success);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
-
-    > svg {
-      color: inherit;
-      stroke: currentColor;
-    }
-  }
-
-  &.is-active {
-    color: var(--bf-appearance-token-color-success);
-    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
-
-    &:hover > svg {
-      color: inherit;
-      stroke: currentColor;
-    }
-  }
-}
-
-.bitfun-nav-panel__voice-call-dot {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 5px;
-  height: 5px;
-  border: 1px solid var(--bf-appearance-token-color-bg-primary);
-  border-radius: 50%;
-  background: var(--bf-appearance-token-color-success);
-}
-
 .bitfun-realtime-call {
   position: fixed;
   right: 24px;

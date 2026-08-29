@@ -52,7 +52,7 @@
     "title": "Realtime voice call",
     "enabled": {
       "label": "Enable the client voice assistant",
-      "description": "Talk to Volcengine's end-to-end realtime voice model from the bottom-left client control, let it understand workspace state, and start BitFun tasks."
+      "description": "Talk to Volcengine's end-to-end realtime voice model from the bottom-right client launcher, let it understand workspace state, and start BitFun tasks."
     },
     "apiKey": {
       "label": "Volcengine API key",
@@ -65,7 +65,7 @@
     },
     "status": {
       "label": "Connection setup",
-      "description": "After saving, the call button at the bottom-left of the client can start a full-duplex voice conversation."
+      "description": "After saving, the Hello launcher at the bottom-right of the client can start a full-duplex voice conversation."
     },
     "save": "Save realtime voice",
     "messages": {
@@ -76,6 +76,7 @@
     "call": {
       "title": "BitFun realtime call",
       "button": "Start a realtime voice call",
+      "launcherLabel": "Hello",
       "empty": "Just start talking. When you ask for work, I will start a new BitFun session.",
       "mute": "Mute microphone",
       "unmute": "Unmute microphone",

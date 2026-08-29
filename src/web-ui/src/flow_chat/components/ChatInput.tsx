@@ -7,7 +7,7 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, u
 import { createPortal } from 'react-dom';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Play } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, Files, MessageSquarePlus, Play } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import {
@@ -166,6 +166,7 @@ import {
   type SelectableHarnessProfileId,
 } from './HarnessProfileSelector';
 import { ChatInputApprovalBand } from './ChatInputApprovalBand';
+import { ChatInputBoostSubmenu } from './ChatInputBoostSubmenu';
 import { usePermissionRequests } from './modern/usePermissionRequests';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
@@ -181,6 +182,11 @@ import { useRealtimeVoiceCallActive } from './voice/RealtimeVoiceCallContext';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import {
+  createAdditionalModePromptReferenceToken,
+  expandAdditionalModePromptReferenceTokens,
+  type AdditionalModePromptReferenceId,
+} from '../utils/additionalModePromptReference';
+import {
   composerPresentationContexts,
   composerPresentationToEditorText,
   composerPresentationToModelText,
@@ -189,7 +195,6 @@ import {
   type ComposerPresentation,
 } from '../utils/composerPresentation';
 import {
-  appendSkillPromptReferenceToken,
   createSkillPromptReferenceToken,
   isSkillAvailableForUserInvocation,
   isSlashAddressableSkillName,
@@ -256,6 +261,17 @@ export interface ChatInputProps {
    * standard composer. The registration never replaces ChatInput's UI.
    */
   registration?: ChatInputRegistration;
+}
+
+type ChatInputAdditionalModeSelection =
+  | { kind: 'skill'; skillName: string }
+  | { kind: 'additional-mode'; modeId: AdditionalModePromptReferenceId };
+
+interface ChatInputAdditionalModeItem {
+  id: string;
+  label: string;
+  title: string;
+  selection: ChatInputAdditionalModeSelection;
 }
 
 type SlashActionItem = {
@@ -1153,38 +1169,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const { computerUseEnabled } = useComputerUseEnabled();
 
-  const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
-  const [skillsFlyoutLeft, setSkillsFlyoutLeft] = useState(false);
-  const [skillsFlyoutUp, setSkillsFlyoutUp] = useState(false);
-  const skillsHostRef = useRef<HTMLDivElement>(null);
-  const skillsTimerRef = useRef<number | null>(null);
-
-  const clearSkillsTimer = useCallback(() => {
-    if (skillsTimerRef.current !== null) {
-      window.clearTimeout(skillsTimerRef.current);
-      skillsTimerRef.current = null;
-    }
-  }, []);
-
-  const openSkillsFlyout = useCallback(() => {
-    clearSkillsTimer();
-    const host = skillsHostRef.current;
-    if (host) {
-      const r = host.getBoundingClientRect();
-      setSkillsFlyoutLeft(r.right + 260 > window.innerWidth - 8);
-      setSkillsFlyoutUp(r.top + 200 > window.innerHeight - 8);
-    }
-    setSkillsFlyoutOpen(true);
-  }, [clearSkillsTimer]);
-
-  const closeSkillsFlyout = useCallback(() => {
-    clearSkillsTimer();
-    skillsTimerRef.current = window.setTimeout(() => {
-      skillsTimerRef.current = null;
-      setSkillsFlyoutOpen(false);
-    }, 150);
-  }, [clearSkillsTimer]);
-
   const handleOpenCreateCustomMode = useCallback(
     (event: React.MouseEvent | React.KeyboardEvent) => {
       event.stopPropagation();
@@ -1468,9 +1452,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : [],
     [canUseSkillsForTarget, resolvedModeSkills],
   );
-  const boostMenuLayoutRevision = quickSkillShortcuts
-    .map(shortcut => shortcut.id)
-    .join('|');
+  const showReviewAdditionalMode = canLaunchReview && canSwitchModes && showStandardExecutionOptions;
+  const showAdditionalModes = quickSkillShortcuts.length > 0 || showReviewAdditionalMode;
+  const boostMenuLayoutRevision = [
+    ...quickSkillShortcuts.map(shortcut => shortcut.id),
+    showReviewAdditionalMode ? 'review' : '',
+  ].filter(Boolean).join('|');
   const boostMenuLayout = useAnchoredPopoverPosition({
     open: modeState.dropdownOpen,
     anchorRef: boostTriggerRef,
@@ -2036,7 +2023,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const expandComposerSpecialTokens = useCallback((text: string) => {
-    return expandWidgetPromptReferenceTokens(expandPendingLargePastes(text)).trim();
+    return expandAdditionalModePromptReferenceTokens(
+      expandWidgetPromptReferenceTokens(expandPendingLargePastes(text)),
+    ).trim();
   }, [expandPendingLargePastes]);
 
   React.useEffect(() => {
@@ -3027,27 +3016,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!modeState.dropdownOpen) {
-      clearSkillsTimer();
-      setSkillsFlyoutOpen(false);
-    }
-  }, [clearSkillsTimer, modeState.dropdownOpen]);
-
-  useEffect(() => {
-    if (!canUseSkillsForTarget) {
-      clearSkillsTimer();
-      setSkillsFlyoutOpen(false);
-    }
-  }, [canUseSkillsForTarget, clearSkillsTimer]);
-
-  useEffect(
-    () => () => {
-      clearSkillsTimer();
-    },
-    [clearSkillsTimer]
-  );
-
-  useEffect(() => {
     const handleImagePaste = async (event: Event) => {
       const customEvent = event as CustomEvent<{ file: File }>;
       const file = customEvent.detail?.file;
@@ -3832,7 +3800,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [dispatchInput, effectiveTargetSessionId, inputState.value, setQueuedInput, t]);
 
-  const submitReviewFromInput = useCallback(async () => {
+  const submitReviewFromInput = useCallback(async (
+    message: string,
+    originalComposerValue: string,
+  ) => {
     if (!canLaunchReview) {
       notificationService.warning(t('chatInput.reviewUnavailableSurface'));
       return;
@@ -3844,7 +3815,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const message = inputState.value.trim();
     if (!isReviewSlashCommand(message)) {
       notificationService.warning(
         t('chatInput.reviewUsage')
@@ -3922,7 +3892,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
       replacePendingLargePastes(originalPendingLargePastes);
       dispatchInput({ type: 'ACTIVATE' });
-      dispatchInput({ type: 'SET_VALUE', payload: message });
+      dispatchInput({ type: 'SET_VALUE', payload: originalComposerValue });
       notificationService.error(
         getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
@@ -3943,7 +3913,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession,
     effectiveTargetSessionId,
     flowChatState,
-    inputState.value,
     isBtwSession,
     replacePendingLargePastes,
     setQueuedInput,
@@ -4686,7 +4655,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (promptSlashCommandsEnabled && caps.ops.has('review') && isReviewSlashCommand(message)) {
-      await submitReviewFromInput();
+      await submitReviewFromInput(message, originalMessage);
       return;
     }
 
@@ -4887,15 +4856,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
-
-  const selectReviewAgent = useCallback(() => {
-    dispatchMode({ type: 'CLOSE_DROPDOWN' });
-    if (!canLaunchReview) {
-      notificationService.info(t('chatInput.agents.reviewUnavailable'), { duration: 3200 });
-      return;
-    }
-    selectSlashCommandAction('review');
-  }, [canLaunchReview, selectSlashCommandAction, t]);
 
   const selectSlashExternalPromptCommand = useCallback((item: SlashExternalPromptCommandItem) => {
     if (!item.available) {
@@ -5338,25 +5298,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, []);
 
-  const insertSkillIntoInput = useCallback(
-    (skillName: string) => {
+  const insertInlineReferenceIntoInput = useCallback(
+    (token: string) => {
       dispatchInput({ type: 'ACTIVATE' });
-      const token = createSkillPromptReferenceToken(skillName);
       const appendInlineTokenAtEnd = getRichTextInlineTriggerController()?.appendInlineTokenAtEnd;
       if (appendInlineTokenAtEnd) {
         appendInlineTokenAtEnd(token);
       } else {
-        const next = appendSkillPromptReferenceToken(inputState.value, skillName);
+        const trimmed = inputState.value.trimEnd();
+        const next = trimmed ? `${trimmed} ${token}` : token;
         dispatchInput({ type: 'SET_VALUE', payload: next });
         inputValueRef.current = next;
       }
-      clearSkillsTimer();
-      setSkillsFlyoutOpen(false);
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       focusRichTextInputSoon();
     },
-    [clearSkillsTimer, dispatchInput, focusRichTextInputSoon, getRichTextInlineTriggerController, inputState.value]
+    [dispatchInput, focusRichTextInputSoon, getRichTextInlineTriggerController, inputState.value]
   );
+
+  const insertSkillIntoInput = useCallback((skillName: string) => {
+    insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName));
+  }, [insertInlineReferenceIntoInput]);
+
+  const insertAdditionalModeIntoInput = useCallback((modeId: AdditionalModePromptReferenceId) => {
+    insertInlineReferenceIntoInput(createAdditionalModePromptReferenceToken(modeId));
+  }, [insertInlineReferenceIntoInput]);
+
+  const additionalModeItems = useMemo<ChatInputAdditionalModeItem[]>(() => [
+    ...quickSkillShortcuts.map(shortcut => ({
+      id: shortcut.id,
+      label: shortcut.label,
+      title: shortcut.skill.description || shortcut.label,
+      selection: {
+        kind: 'skill' as const,
+        skillName: shortcut.skill.name,
+      },
+    })),
+    ...(showReviewAdditionalMode
+      ? [{
+          id: 'review',
+          label: t('chatInput.agents.review.name'),
+          title: t('chatInput.agents.review.name'),
+          selection: { kind: 'additional-mode' as const, modeId: 'review' as const },
+        }]
+      : []),
+  ], [quickSkillShortcuts, showReviewAdditionalMode, t]);
+
+  const selectAdditionalMode = useCallback((selection: ChatInputAdditionalModeSelection) => {
+    if (selection.kind === 'skill') {
+      insertSkillIntoInput(selection.skillName);
+      return;
+    }
+
+    insertAdditionalModeIntoInput(selection.modeId);
+  }, [insertAdditionalModeIntoInput, insertSkillIntoInput]);
 
   const handleBoostPickImage = useCallback(
     (e: React.MouseEvent) => {
@@ -5384,12 +5379,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleOpenSkillsLibrary = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      clearSkillsTimer();
-      setSkillsFlyoutOpen(false);
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       openScene('skills' as SceneTabId);
     },
-    [clearSkillsTimer, openScene]
+    [openScene]
   );
   useEffect(() => {
     const dropZone = containerRef.current?.closest('.bitfun-chat-input-drop-zone') as HTMLElement | null;
@@ -6144,40 +6137,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         visibility: boostMenuLayout ? 'visible' : 'hidden',
                       }}
                     >
-                      {quickSkillShortcuts.length > 0 && (
-                        <>
-                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                            {quickSkillShortcuts.map(shortcut => (
-                              <div
-                                key={shortcut.id}
-                                role="menuitem"
-                                tabIndex={0}
-                                className="bitfun-chat-input__boost-context-row"
-                                data-bf-component="chat-input"
-                                data-bf-part="boostItem"
-                                data-bf-boost-item-kind="skill"
-                                data-testid={`chat-input-quick-skill-${shortcut.id}`}
-                                title={shortcut.skill.description || shortcut.label}
-                                onClick={event => {
-                                  event.stopPropagation();
-                                  insertSkillIntoInput(shortcut.skill.name);
-                                }}
-                                onKeyDown={event => {
-                                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  insertSkillIntoInput(shortcut.skill.name);
-                                }}
-                              >
-                                <Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                                <span>{shortcut.label}</span>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
-                        </>
-                      )}
                       {!isMultiLine && executionLevelPolicy.userConfigurable ? (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
@@ -6191,35 +6150,45 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         </>
                       ) : null}
 
-                      {canSwitchModes && showStandardExecutionOptions && (
+                      {showAdditionalModes && (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                            <div
-                              role="menuitem"
-                              tabIndex={0}
-                              className={`bitfun-chat-input__mode-option${canLaunchReview ? '' : ' bitfun-chat-input__mode-option--coming-soon'}`}
-                              data-bf-component="chat-input"
-                              data-bf-part="boostItem"
-                              data-bf-boost-item-kind="agent"
-                              data-bf-agent-id="Review"
-                              onClick={selectReviewAgent}
-                              onKeyDown={event => {
-                                if (event.key !== 'Enter' && event.key !== ' ') return;
-                                event.preventDefault();
-                                selectReviewAgent();
-                              }}
+                            <ChatInputBoostSubmenu
+                              label={t('chatInput.boostAdditionalModes')}
+                              icon={<Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />}
+                              estimatedPanelHeight={176}
+                              testId="chat-input-additional-modes"
                             >
-                              <span className="bitfun-chat-input__mode-option-name">
-                                {t('chatInput.agents.review.name')}
-                              </span>
-                              <span className="bitfun-chat-input__mode-option-actions">
-                                <span className="bitfun-chat-input__slash-command-current">
-                                  {canLaunchReview
-                                    ? t('chatInput.agents.available')
-                                    : t('chatInput.agents.needsChanges')}
-                                </span>
-                              </span>
-                            </div>
+                              <div className="bitfun-chat-input__boost-submenu-list">
+                                {additionalModeItems.map(item => (
+                                  <div
+                                    key={item.id}
+                                    role="menuitem"
+                                    tabIndex={0}
+                                    className="bitfun-chat-input__boost-submenu-item"
+                                    data-bf-component="chat-input"
+                                    data-bf-part="boostSubmenuItem"
+                                    data-bf-boost-item-kind="additional-mode"
+                                    data-bf-additional-mode-id={item.id}
+                                    data-testid={`chat-input-additional-mode-${item.id}`}
+                                    title={item.title}
+                                    onClick={event => {
+                                      event.stopPropagation();
+                                      selectAdditionalMode(item.selection);
+                                    }}
+                                    onKeyDown={event => {
+                                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      selectAdditionalMode(item.selection);
+                                    }}
+                                  >
+                                    <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
+                                    <span className="bitfun-chat-input__boost-submenu-item-name">{item.label}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ChatInputBoostSubmenu>
                           </div>
 
                           <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
@@ -6282,112 +6251,71 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         </div>
 
                         {canUseSkillsForTarget && (
-                          <div
-                            ref={skillsHostRef}
-                            className="bitfun-chat-input__boost-submenu-host"
-                            onMouseEnter={openSkillsFlyout}
-                            onMouseLeave={closeSkillsFlyout}
+                          <ChatInputBoostSubmenu
+                            label={t('chatInput.boostSkills')}
+                            icon={<Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />}
+                            testId="chat-input-skills"
                           >
+                            {resolvedModeSkillsLoading ? (
+                              <div className="bitfun-chat-input__boost-submenu-loading" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="loading">
+                                <Loader2 size={14} className="bitfun-chat-input__boost-submenu-spinner" aria-hidden />
+                                <span>{t('chatInput.boostSkillsLoading')}</span>
+                              </div>
+                            ) : resolvedModeSkillsLoadFailed ? (
+                              <button
+                                type="button"
+                                className="bitfun-chat-input__boost-submenu-empty bitfun-chat-input__boost-submenu-retry"
+                                data-bf-component="chat-input"
+                                data-bf-part="boostSubmenuState"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  retryResolvedModeSkills();
+                                }}
+                              >
+                                <RotateCcw size={13} aria-hidden />
+                                <span>{t('chatInput.boostSkillsLoadFailed')}</span>
+                              </button>
+                            ) : userInvocableSkills.length === 0 ? (
+                              <div className="bitfun-chat-input__boost-submenu-empty" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="empty">{t('chatInput.boostSkillsEmpty')}</div>
+                            ) : (
+                              <div className="bitfun-chat-input__boost-submenu-list">
+                                {userInvocableSkills.map(skill => (
+                                  <div
+                                    key={skill.key}
+                                    role="menuitem"
+                                    tabIndex={0}
+                                    className="bitfun-chat-input__boost-submenu-item"
+                                    data-bf-component="chat-input"
+                                    data-bf-part="boostSubmenuItem"
+                                    data-bf-boost-item-kind="skill"
+                                    title={skill.description || skill.name}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      insertSkillIntoInput(skill.name);
+                                    }}
+                                    onKeyDown={e => e.key === 'Enter' && insertSkillIntoInput(skill.name)}
+                                  >
+                                    <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
+                                    <span className="bitfun-chat-input__boost-submenu-item-name">
+                                      {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div
                               role="menuitem"
                               tabIndex={0}
-                              className="bitfun-chat-input__boost-submenu-trigger"
+                              className="bitfun-chat-input__boost-submenu-manage"
                               data-bf-component="chat-input"
-                              data-bf-part="boostSubmenuTrigger"
-                              data-bf-state={skillsFlyoutOpen ? 'open' : undefined}
-                              aria-haspopup="menu"
-                              aria-expanded={skillsFlyoutOpen}
-                              onKeyDown={e => {
-                                if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  clearSkillsTimer();
-                                  setSkillsFlyoutOpen(false);
-                                  return;
-                                }
-                                if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'ArrowRight') return;
-                                e.preventDefault();
-                                openSkillsFlyout();
-                              }}
+                              data-bf-part="boostSubmenuManage"
+                              data-bf-boost-item-kind="manage"
+                              onClick={handleOpenSkillsLibrary}
+                              onKeyDown={e => e.key === 'Enter' && handleOpenSkillsLibrary(e as any)}
                             >
-                              <span className="bitfun-chat-input__boost-submenu-trigger-main">
-                                <Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                                <span>{t('chatInput.boostSkills')}</span>
-                              </span>
-                              <ChevronRight size={14} className="bitfun-chat-input__boost-submenu-chevron" aria-hidden />
+                              {t('chatInput.openSkillsLibrary')}
                             </div>
-                            <div
-                              className={[
-                                'bitfun-chat-input__boost-submenu-shell',
-                                skillsFlyoutOpen ? 'bitfun-chat-input__boost-submenu-shell--open' : '',
-                                skillsFlyoutLeft ? 'bitfun-chat-input__boost-submenu-shell--left' : '',
-                                skillsFlyoutUp ? 'bitfun-chat-input__boost-submenu-shell--up' : '',
-                              ].filter(Boolean).join(' ')}
-                              onMouseEnter={openSkillsFlyout}
-                              onMouseLeave={closeSkillsFlyout}
-                            >
-                              <div className="bitfun-chat-input__boost-submenu-panel" data-bf-component="chat-input" data-bf-part="boostSubmenuPanel" data-bf-state={skillsFlyoutOpen ? 'open' : undefined}>
-                                {resolvedModeSkillsLoading ? (
-                                  <div className="bitfun-chat-input__boost-submenu-loading" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="loading">
-                                    <Loader2 size={14} className="bitfun-chat-input__boost-submenu-spinner" aria-hidden />
-                                    <span>{t('chatInput.boostSkillsLoading')}</span>
-                                  </div>
-                                ) : resolvedModeSkillsLoadFailed ? (
-                                  <button
-                                    type="button"
-                                    className="bitfun-chat-input__boost-submenu-empty bitfun-chat-input__boost-submenu-retry"
-                                    data-bf-component="chat-input"
-                                    data-bf-part="boostSubmenuState"
-                                    onClick={event => {
-                                      event.stopPropagation();
-                                      retryResolvedModeSkills();
-                                    }}
-                                  >
-                                    <RotateCcw size={13} aria-hidden />
-                                    <span>{t('chatInput.boostSkillsLoadFailed')}</span>
-                                  </button>
-                                ) : userInvocableSkills.length === 0 ? (
-                                  <div className="bitfun-chat-input__boost-submenu-empty" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="empty">{t('chatInput.boostSkillsEmpty')}</div>
-                                ) : (
-                                  <div className="bitfun-chat-input__boost-submenu-list">
-                                    {userInvocableSkills.map(skill => (
-                                      <div
-                                        key={skill.key}
-                                        role="button"
-                                        tabIndex={0}
-                                        className="bitfun-chat-input__boost-submenu-item"
-                                        data-bf-component="chat-input"
-                                        data-bf-part="boostSubmenuItem"
-                                        data-bf-boost-item-kind="skill"
-                                        title={skill.description || skill.name}
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          insertSkillIntoInput(skill.name);
-                                        }}
-                                        onKeyDown={e => e.key === 'Enter' && insertSkillIntoInput(skill.name)}
-                                      >
-                                        <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
-                                        <span className="bitfun-chat-input__boost-submenu-item-name">
-                                          {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  className="bitfun-chat-input__boost-submenu-manage"
-                                  data-bf-component="chat-input"
-                                  data-bf-part="boostSubmenuManage"
-                                  data-bf-boost-item-kind="manage"
-                                  onClick={handleOpenSkillsLibrary}
-                                  onKeyDown={e => e.key === 'Enter' && handleOpenSkillsLibrary(e as any)}
-                                >
-                                  {t('chatInput.openSkillsLibrary')}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          </ChatInputBoostSubmenu>
                         )}
 
                         {!!currentSessionId && !isBtwSession && (

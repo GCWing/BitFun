@@ -696,6 +696,7 @@
       }
     },
     "harness": {
+      "menuLabel": "Agent Harness",
       "selectorTooltip": "Current execution: {{name}}",
       "fixedTooltip": "This session uses {{name}} and is now fixed.",
       "activateBalanced": "Switch to Standard Harness",
@@ -799,6 +800,7 @@
     "boostNewSession": "New session",
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
+    "boostAdditionalModes": "Additional modes",
     "boostSkillsLoading": "Loading skills…",
     "boostSkillsLoadFailed": "Skills failed to load. Retry",
     "boostSkillsEmpty": "No enabled skills",
@@ -2489,28 +2491,6 @@
       "high": "High",
       "xhigh": "Extra high",
       "max": "Maximum"
-    },
-    "modes": {
-      "off": "Thinking off",
-      "on": "Thinking on",
-      "none": "Thinking off",
-      "minimal": "Fastest mode",
-      "low": "Fast mode",
-      "medium": "Balanced mode",
-      "high": "Deep mode",
-      "xhigh": "Intensive mode",
-      "max": "Maximum mode",
-      "custom": "Model preset"
-    },
-    "source": {
-      "models_dev": "models.dev",
-      "adapter_fallback": "Built in",
-      "model_config": "Custom"
-    },
-    "sourceTooltip": {
-      "models_dev": "Generated automatically from models.dev model metadata",
-      "adapter_fallback": "Built into BitFun for this model adapter",
-      "model_config": "Defined in this model's custom configuration"
     }
   },
   "coworkScope": {

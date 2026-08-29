@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Check,
   Circle,
   CircleOff,
 } from 'lucide-react';
@@ -33,34 +32,6 @@ function presetLabel(
   return t(`reasoningEffort.${preset.id}`, { defaultValue: preset.label || preset.id });
 }
 
-export function presetSourceLabel(
-  source: ReasoningPresetDescriptor['source'],
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
-  switch (source) {
-    case 'models_dev':
-      return t('reasoningSelector.source.models_dev');
-    case 'adapter_fallback':
-      return t('reasoningSelector.source.adapter_fallback');
-    case 'model_config':
-      return t('reasoningSelector.source.model_config');
-  }
-}
-
-function presetSourceTooltip(
-  source: ReasoningPresetDescriptor['source'],
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
-  switch (source) {
-    case 'models_dev':
-      return t('reasoningSelector.sourceTooltip.models_dev');
-    case 'adapter_fallback':
-      return t('reasoningSelector.sourceTooltip.adapter_fallback');
-    case 'model_config':
-      return t('reasoningSelector.sourceTooltip.model_config');
-  }
-}
-
 export function presetDisplayLabel(
   preset: ReasoningPresetDescriptor,
   orderedPresets: ReasoningPresetDescriptor[],
@@ -71,19 +42,6 @@ export function presetDisplayLabel(
   return semanticKey
     ? t(`reasoningSelector.levels.${semanticKey}`, { defaultValue: fallback })
     : fallback;
-}
-
-export function presetModeLabel(
-  preset: ReasoningPresetDescriptor,
-  orderedPresets: ReasoningPresetDescriptor[],
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
-  const semanticKey = presetVisualSemanticKey(preset, orderedPresets);
-  return semanticKey
-    ? t(`reasoningSelector.modes.${semanticKey}`, {
-        defaultValue: t('reasoningSelector.modes.custom'),
-      })
-    : t('reasoningSelector.modes.custom');
 }
 
 type ReasoningIntensityLevel = 0 | 1 | 2 | 3 | 4;
@@ -374,11 +332,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   const presetLabels = orderedPresets.map(preset => (
     presetDisplayLabel(preset, orderedPresets, t)
   ));
-  const labelCounts = new Map<string, number>();
-  presetLabels.forEach((label) => {
-    const normalizedLabel = label.trim().toLowerCase();
-    labelCounts.set(normalizedLabel, (labelCounts.get(normalizedLabel) ?? 0) + 1);
-  });
 
   const currentLabel = selected
     ? presetLabel(selected, t)
@@ -491,16 +444,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
               onClick={() => select(null)}
             >
               <span>{t('reasoningSelector.auto')}</span>
-              {defaultPreset && (
-                <small>{presetDisplayLabel(defaultPreset, orderedPresets, t)}</small>
-              )}
-              {!selected && (
-                <Check
-                  className="bitfun-reasoning-preset-selector__auto-check"
-                  size={12}
-                  aria-hidden="true"
-                />
-              )}
             </button>
           </div>
           <div
@@ -511,43 +454,23 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             {orderedPresets.map((preset, index) => {
               const isSelected = selected?.id === preset.id;
               const label = presetLabels[index] ?? presetLabel(preset, t);
-              const hasDuplicateLabel = (labelCounts.get(label.trim().toLowerCase()) ?? 0) > 1;
-              const optionIntensity = reasoningIntensityLevel(preset, orderedPresets);
               return (
-                <Tooltip
+                <button
                   key={preset.id}
-                  content={presetSourceTooltip(preset.source, t)}
-                  placement="right"
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isSelected}
+                  data-preset-id={preset.id}
+                  className="bitfun-reasoning-preset-selector__option"
+                  data-bf-component="reasoning-preset-selector"
+                  data-bf-part="option"
+                  data-bf-state={isSelected ? 'selected' : undefined}
+                  onClick={() => select(preset.id)}
                 >
-                  <button
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={isSelected}
-                    data-preset-id={preset.id}
-                    className="bitfun-reasoning-preset-selector__option"
-                    data-bf-component="reasoning-preset-selector"
-                    data-bf-part="option"
-                    data-bf-state={isSelected ? 'selected' : undefined}
-                    onClick={() => select(preset.id)}
-                  >
-                    <ReasoningIntensityMark level={optionIntensity} />
-                    <span className="bitfun-reasoning-preset-selector__option-copy">
-                      <strong>{label}</strong>
-                      <small>
-                        {hasDuplicateLabel
-                          ? presetSourceLabel(preset.source, t)
-                          : presetModeLabel(preset, orderedPresets, t)}
-                      </small>
-                    </span>
-                    {isSelected && (
-                      <Check
-                        className="bitfun-reasoning-preset-selector__option-check"
-                        size={12}
-                        aria-hidden="true"
-                      />
-                    )}
-                  </button>
-                </Tooltip>
+                  <span className="bitfun-reasoning-preset-selector__option-label">
+                    {label}
+                  </span>
+                </button>
               );
             })}
           </div>

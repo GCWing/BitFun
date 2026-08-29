@@ -332,15 +332,32 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           }}
           data-testid="harness-profile-selector"
         >
-          <span className="bitfun-harness-selector__trigger-value">{triggerLabel}</span>
           {presentation === 'menu-item' ? (
-            <ChevronRight
-              className="bitfun-harness-selector__trigger-chevron"
-              size={14}
-              strokeWidth={1.8}
-              aria-hidden
-            />
-          ) : null}
+            <>
+              <span className="bitfun-harness-selector__trigger-label">
+                {t('chatInput.harness.menuLabel')}
+              </span>
+              <span className="bitfun-harness-selector__trigger-meta">
+                <span className="bitfun-harness-selector__trigger-current">
+                  <span>{t('chatInput.current')}</span>
+                  <span className="bitfun-harness-selector__trigger-current-separator" aria-hidden>
+                    ·
+                  </span>
+                  <span className="bitfun-harness-selector__trigger-current-value">
+                    {triggerLabel}
+                  </span>
+                </span>
+                <ChevronRight
+                  className="bitfun-harness-selector__trigger-chevron"
+                  size={14}
+                  strokeWidth={1.8}
+                  aria-hidden
+                />
+              </span>
+            </>
+          ) : (
+            <span className="bitfun-harness-selector__trigger-value">{triggerLabel}</span>
+          )}
         </button>
       </Tooltip>
 

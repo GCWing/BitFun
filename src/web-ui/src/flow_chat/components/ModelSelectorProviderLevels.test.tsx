@@ -304,6 +304,10 @@ describe('ModelSelector provider levels', () => {
     ));
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['auto', 'medium', 'high']);
+    expect(options.every(option => (
+      option.querySelector('.bitfun-model-selector__option-desc') === null
+    ))).toBe(true);
+    expect(options.every(option => option.querySelector('svg') === null)).toBe(true);
     expect(options.find(option => option.dataset.presetId === 'high')?.getAttribute('aria-checked'))
       .toBe('true');
   });

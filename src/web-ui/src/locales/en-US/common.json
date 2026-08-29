@@ -242,6 +242,7 @@
     },
     "sessions": {
       "newSession": "New session",
+      "acpSessions": "ACP sessions",
       "dispatchRunningOn": "Runs on {{target}} ({{state}})",
       "dispatchUnreachable": "Connection lost",
       "dispatchUnreachableDetails": "BitFun cannot reach {{target}} right now. The task may still be running there.",
@@ -640,7 +641,9 @@
     "notifications": "Notifications",
     "settingsMenu": {
       "floatingWindow": "Floating window",
+      "theme": "Theme",
       "themeConfiguration": "Theme configuration",
+      "appearanceSwitchFailed": "Could not switch the theme. Try again.",
       "openSettings": "Open settings",
       "about": "About"
     }

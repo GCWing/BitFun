@@ -48,7 +48,7 @@ export const chatInputAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'command', attribute: 'data-bf-command', values: ['actions', 'all', 'skills', 'modes'] },
     { id: 'commandItemKind', attribute: 'data-bf-command-item-kind', values: ['action', 'mode', 'skill', 'mcp'] },
     { id: 'action', attribute: 'data-bf-action', values: ['cancel', 'continue-interrupted', 'retry', 'send', 'split'] },
-    { id: 'boostItemKind', attribute: 'data-bf-boost-item-kind', values: ['directive', 'agent', 'context', 'skill', 'manage'] },
+    { id: 'boostItemKind', attribute: 'data-bf-boost-item-kind', values: ['directive', 'agent', 'context', 'skill', 'additional-mode', 'manage'] },
   ],
   states: [
     { id: 'processing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="processing"]' } },
