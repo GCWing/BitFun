@@ -1,4 +1,4 @@
-import { Alert, Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Checkbox, Icon, Input, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -592,13 +592,13 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               <span className="dispatch-install-dialog__field-label">
                 {t('dispatch.baseRef')}
               </span>
-              <input
+              <Input
                 type="text"
                 value={baseRef}
                 disabled={targetMutationInProgress || validatingBaseRef}
                 spellCheck={false}
-                onChange={event => {
-                  setBaseRef(event.target.value);
+                onValueChange={value => {
+                  setBaseRef(value);
                   setBaseRefError(null);
                 }}
                 placeholder="HEAD"
@@ -607,23 +607,17 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                 {t('dispatch.baseRefHint')}
               </span>
             </label>
-            <label className="dispatch-install-dialog__toggle">
-              <input
-                type="checkbox"
-                checked={includeUncommitted}
-                disabled={targetMutationInProgress || validatingBaseRef}
-                onChange={event => {
-                  includeUncommittedTouchedRef.current = true;
-                  setIncludeUncommitted(event.target.checked);
-                }}
-              />
-              <span>
-                {t('dispatch.includeUncommitted')}
-                <small className="dispatch-install-dialog__hint">
-                  {t('dispatch.includeUncommittedHint')}
-                </small>
-              </span>
-            </label>
+            <Checkbox
+              className="dispatch-install-dialog__toggle"
+              checked={includeUncommitted}
+              disabled={targetMutationInProgress || validatingBaseRef}
+              onCheckedChange={checked => {
+                includeUncommittedTouchedRef.current = true;
+                setIncludeUncommitted(checked);
+              }}
+              label={t('dispatch.includeUncommitted')}
+              description={t('dispatch.includeUncommittedHint')}
+            />
           </section>
         </ScrollArea>
 

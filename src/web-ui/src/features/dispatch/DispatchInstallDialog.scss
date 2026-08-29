@@ -140,32 +140,8 @@
     }
   }
 
-  // Checkbox with its explanation attached, rather than a label and a loose
-  // hint that could belong to anything below it.
   &__toggle {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.4;
-    cursor: pointer;
-
-    input {
-      margin: 1px 0 0;
-    }
-
-    > span {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      gap: 2px;
-      font-weight: 500;
-    }
-
-    small {
-      font-weight: 400;
-    }
+    width: 100%;
   }
 
   &__checks {
