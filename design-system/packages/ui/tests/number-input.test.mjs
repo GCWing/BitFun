@@ -27,3 +27,13 @@ test("NumberInput normalizes legacy size names", () => {
   }));
   assert.match(markup, /data-size="lg"/);
 });
+
+test("NumberInput forwards native input attributes", () => {
+  const markup = renderToStaticMarkup(createElement(NumberInput, {
+    inputProps: { "aria-label": "Font size", "data-testid": "font-size" },
+    onChange: () => undefined,
+    value: 14,
+  }));
+  assert.match(markup, /aria-label="Font size"/);
+  assert.match(markup, /data-testid="font-size"/);
+});

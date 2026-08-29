@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+} from "react";
 import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./NumberInput.module.css";
@@ -10,6 +17,10 @@ export interface NumberInputProps {
   disableWheel?: boolean;
   draggable?: boolean;
   incrementLabel?: string;
+  inputProps?: Omit<
+    InputHTMLAttributes<HTMLInputElement>,
+    "className" | "defaultValue" | "disabled" | "onChange" | "type" | "value"
+  > & Record<`data-${string}`, string | number | boolean | undefined>;
   label?: string;
   max?: number;
   min?: number;
@@ -29,6 +40,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   disabled = false,
   disableWheel = false,
   incrementLabel = "Increase value",
+  inputProps,
   label,
   max = Number.POSITIVE_INFINITY,
   min = Number.NEGATIVE_INFINITY,
@@ -76,17 +88,32 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
         }}
       >
         <input
-          aria-label={label}
+          {...inputProps}
+          aria-label={inputProps?.["aria-label"] ?? label}
           className={styles.input}
           data-bf-part="input"
           disabled={disabled}
           inputMode="decimal"
-          onBlur={commit}
+          onBlur={(event) => {
+            inputProps?.onBlur?.(event);
+            if (!event.defaultPrevented) commit();
+          }}
           onChange={(event) => setDraft(event.currentTarget.value)}
-          onCompositionEnd={() => { compositionActiveRef.current = false; }}
-          onCompositionStart={() => { compositionActiveRef.current = true; }}
-          onFocus={() => setEditing(true)}
+          onCompositionEnd={(event) => {
+            compositionActiveRef.current = false;
+            inputProps?.onCompositionEnd?.(event);
+          }}
+          onCompositionStart={(event) => {
+            compositionActiveRef.current = true;
+            inputProps?.onCompositionStart?.(event);
+          }}
+          onFocus={(event) => {
+            setEditing(true);
+            inputProps?.onFocus?.(event);
+          }}
           onKeyDown={(event) => {
+            inputProps?.onKeyDown?.(event);
+            if (event.defaultPrevented) return;
             if ((event.key === "Enter" || event.key === "Escape") && isImeOwnedKeyboardEvent(event, compositionActiveRef.current)) { event.stopPropagation(); return; }
             if (event.key === "ArrowUp") { event.preventDefault(); changeBy(step); }
             if (event.key === "ArrowDown") { event.preventDefault(); changeBy(-step); }

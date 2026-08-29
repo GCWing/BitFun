@@ -7,6 +7,7 @@ export const numberInputMeta = {
   name: "NumberInput",
   props: [
     { name: "value", type: "number" }, { name: "onChange", type: "(value: number) => void" },
+    { name: "inputProps", type: "InputHTMLAttributes<HTMLInputElement>" },
     { name: "min", type: "number" }, { name: "max", type: "number" }, { name: "step", type: "number", defaultValue: "1" },
     { name: "unit", type: "string" }, { name: "variant", type: "default | compact | stepper", defaultValue: "default" },
   ],
