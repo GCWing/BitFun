@@ -94,47 +94,10 @@ impl ExecCommandTool {
         exec_command_noninteractive_env()
     }
 
-    fn resolve_workdir(input: &Value, context: &ToolUseContext) -> BitFunResult<PathBuf> {
-        let raw = input
+    fn requested_workdir(input: &Value, context: &ToolUseContext) -> BitFunResult<String> {
+        input
             .get("workdir")
-            .and_then(|value| value.as_str())
-            .map(str::trim)
-            .filter(|workdir| !workdir.is_empty())
-            .map(str::to_string)
-            .or_else(|| {
-                context.workspace.as_ref().map(|workspace| {
-                    workspace
-                        .session_identity
-                        .logical_workspace_path()
-                        .to_string()
-                })
-            })
-            .ok_or_else(|| {
-                BitFunError::tool("workspace root is required for ExecCommand".to_string())
-            })?;
-
-        let path = PathBuf::from(&raw);
-        if !path.is_absolute() {
-            return Err(BitFunError::tool(
-                "workdir must be an absolute path for ExecCommand".to_string(),
-            ));
-        }
-        if !path.is_dir() {
-            return Err(BitFunError::tool(format!(
-                "workdir does not exist or is not a directory: {}",
-                path.display()
-            )));
-        }
-        Ok(path)
-    }
-
-    async fn resolve_remote_workdir(
-        input: &Value,
-        context: &ToolUseContext,
-    ) -> BitFunResult<String> {
-        let raw = input
-            .get("workdir")
-            .and_then(|value| value.as_str())
+            .and_then(Value::as_str)
             .map(str::trim)
             .filter(|workdir| !workdir.is_empty())
             .map(str::to_string)
@@ -145,30 +108,33 @@ impl ExecCommandTool {
             })
             .ok_or_else(|| {
                 BitFunError::tool("workspace root is required for ExecCommand".to_string())
-            })?;
+            })
+    }
 
-        if !raw.starts_with('/') {
-            return Err(BitFunError::tool(
-                "workdir must be an absolute remote path for ExecCommand".to_string(),
-            ));
-        }
+    fn resolve_workdir(input: &Value, context: &ToolUseContext) -> BitFunResult<PathBuf> {
+        let raw = Self::requested_workdir(input, context)?;
+        let workspace_root = context
+            .workspace_root()
+            .map(|path| path.to_string_lossy().to_string());
+        let resolved = crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
+            &raw,
+            workspace_root.as_deref(),
+            false,
+        )?;
 
+        // The terminal runtime owns the authoritative cwd check immediately before spawn.
+        // Avoid a duplicate preflight here: it races with process creation and is especially
+        // unreliable for network-mounted local workspaces.
+        Ok(PathBuf::from(resolved))
+    }
+
+    fn resolve_remote_workdir(input: &Value, context: &ToolUseContext) -> BitFunResult<String> {
+        let raw = Self::requested_workdir(input, context)?;
         let resolved = context.resolve_workspace_tool_path(&raw)?;
-        let fs = context.ws_fs().ok_or_else(|| {
-            BitFunError::tool("remote workspace filesystem is required for ExecCommand".to_string())
-        })?;
-        let is_dir = fs.is_dir(&resolved).await.map_err(|error| {
-            BitFunError::tool(format!(
-                "failed to check remote workdir '{}': {}",
-                resolved, error
-            ))
-        })?;
-        if !is_dir {
-            return Err(BitFunError::tool(format!(
-                "remote workdir does not exist or is not a directory: {}",
-                resolved
-            )));
-        }
+
+        // `cd` and command launch happen on the same SSH exec channel, which is the only
+        // race-free place to validate this directory. Requiring a separate SFTP stat here made
+        // otherwise healthy terminal commands fail whenever the file channel was unavailable.
         Ok(resolved)
     }
 
@@ -411,7 +377,7 @@ impl ExecCommandTool {
         let cmd = parsed_input.cmd;
         let tty = parsed_input.tty;
 
-        let workdir = Self::resolve_remote_workdir(input, context).await?;
+        let workdir = Self::resolve_remote_workdir(input, context)?;
         let connection_id = context
             .workspace
             .as_ref()
@@ -593,7 +559,7 @@ Output:
                 },
                 "workdir": {
                     "type": "string",
-                    "description": "Optional absolute working directory path. Defaults to the workspace root."
+                    "description": "Optional working directory. Prefer a workspace-relative path so the command remains valid if the workspace moves or runs on a remote host. Absolute paths are also accepted; remote absolute paths must remain inside the current workspace. Defaults to the workspace root."
                 },
                 "tty": {
                     "type": "boolean",
@@ -867,6 +833,106 @@ mod tests {
         }
     }
 
+    fn local_tool_context(workspace: &Path) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, workspace.to_path_buf())),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    fn remote_tool_context(root: &str) -> ToolUseContext {
+        let session_identity =
+            workspace_session_identity(root, Some("conn-1"), Some("remote-host"))
+                .expect("remote session identity should build");
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                None,
+                PathBuf::from(root),
+                "conn-1".to_string(),
+                "Remote Host".to_string(),
+                session_identity,
+            )),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    #[test]
+    fn local_workdir_resolves_relative_input_without_a_preflight_stat() {
+        let workspace = tempfile::tempdir().expect("temporary workspace");
+        let context = local_tool_context(workspace.path());
+
+        let resolved =
+            ExecCommandTool::resolve_workdir(&json!({"workdir": "src/../tests"}), &context)
+                .expect("relative workdir should resolve from the workspace root");
+
+        assert_eq!(resolved, workspace.path().join("tests"));
+        assert!(
+            !resolved.exists(),
+            "resolution should not preflight the directory before terminal spawn"
+        );
+    }
+
+    #[test]
+    fn remote_workdir_resolves_relative_input_without_filesystem_service() {
+        let context = remote_tool_context("/home/me/project");
+
+        let resolved =
+            ExecCommandTool::resolve_remote_workdir(&json!({"workdir": r"crates\core"}), &context)
+                .expect("remote relative workdir should use POSIX workspace semantics");
+
+        assert_eq!(resolved, "/home/me/project/crates/core");
+        assert!(
+            context.ws_fs().is_none(),
+            "the regression context has no SFTP service"
+        );
+    }
+
+    #[test]
+    fn remote_workdir_preserves_absolute_paths_and_rejects_escapes() {
+        let context = remote_tool_context("/home/me/project");
+
+        assert_eq!(
+            ExecCommandTool::resolve_remote_workdir(&json!({}), &context)
+                .expect("omitted workdir should use the workspace root"),
+            "/home/me/project"
+        );
+        assert_eq!(
+            ExecCommandTool::resolve_remote_workdir(
+                &json!({"workdir": "/home/me/project/crates/core"}),
+                &context,
+            )
+            .expect("workspace-contained absolute workdir should remain supported"),
+            "/home/me/project/crates/core"
+        );
+
+        for escaping_workdir in ["/home/me/other-project", "../other-project"] {
+            let error = ExecCommandTool::resolve_remote_workdir(
+                &json!({"workdir": escaping_workdir}),
+                &context,
+            )
+            .expect_err("remote workdir must remain workspace-contained");
+            assert!(error.to_string().contains("outside current workspace"));
+        }
+    }
+
     #[test]
     fn powershell_commands_force_utf8_output() {
         let argv = ExecCommandTool::argv_for_shell(
@@ -1057,28 +1123,7 @@ mod tests {
     async fn description_with_context_adds_remote_note_for_remote_workspaces() {
         let tool = ExecCommandTool::new();
         let base = tool.description().await.expect("description should build");
-        let session_identity =
-            workspace_session_identity("/home/me/project", Some("conn-1"), Some("remote-host"))
-                .expect("remote session identity should build");
-        let remote_context = ToolUseContext {
-            tool_call_id: None,
-            agent_type: Some("agentic".to_string()),
-            session_id: None,
-            dialog_turn_id: None,
-            workspace: Some(WorkspaceBinding::new_remote(
-                None,
-                PathBuf::from("/home/me/project"),
-                "conn-1".to_string(),
-                "Remote Host".to_string(),
-                session_identity,
-            )),
-            loaded_deferred_tool_specs: Vec::new(),
-            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
-            custom_data: HashMap::new(),
-            computer_use_host: None,
-            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
-        };
+        let remote_context = remote_tool_context("/home/me/project");
 
         let remote_desc = tool
             .description_with_context(Some(&remote_context))
