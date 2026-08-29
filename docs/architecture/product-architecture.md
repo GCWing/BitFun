@@ -311,6 +311,7 @@ flowchart LR
     SharedRuntime["Shared Runtime"]
     WorkspaceData["Workspace Data"]
     ToolProcesses["Tool Processes"]
+    PluginHosts["Plugin Host(s)\noptional Bun child"]
   end
 
   subgraph UserDevice["Client Device"]
@@ -338,6 +339,7 @@ flowchart LR
   CLIApp -.->|Local IPC| SharedRuntime
   WebServer --> WorkspaceData
   WebServer -->|spawn| ToolProcesses
+  WebServer -->|optional spawn| PluginHosts
   WebServer -->|HTTPS| AIProviders
   RelayServer --> RelayDB
   RelayServer --> AssetStore
@@ -345,19 +347,21 @@ flowchart LR
   SharedRuntime --> WorkspaceData
   EmbeddedNodes -->|spawn| ToolProcesses
   SharedRuntime -->|spawn| ToolProcesses
+  EmbeddedNodes -->|optional spawn| PluginHosts
+  SharedRuntime -->|optional spawn| PluginHosts
   EmbeddedNodes -->|HTTPS| AIProviders
   SharedRuntime -->|HTTPS| AIProviders
   DesktopApp -->|SSH| RemoteHosts
 
   classDef unit fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
-  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedRuntime,WorkspaceData,ToolProcesses,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
+  class DesktopApp,CLIApp,ACPApp,SDKHost,SharedRuntime,WorkspaceData,ToolProcesses,PluginHosts,WebClient,MobileClient,WebServer,RelayServer,RelayDB,AssetStore,AIProviders,RemoteHosts unit;
   style LocalHost fill:#ffffff,stroke:#737373;
   style EmbeddedNodes fill:#ffffff,stroke:#a3a3a3;
   style UserDevice fill:#ffffff,stroke:#a3a3a3;
   style RelayHost fill:#ffffff,stroke:#737373;
 ```
 
-实线表示主要协议、存储访问或进程创建，虚线表示显式启用的 Shared TUI 本机连接。Relay DB 只在账户模式启用，Asset Store 的具体实现由部署配置选择。完整 package plugin 尚未形成生产闭环，因此不把规划中的 Plugin Host 画成当前部署实例。
+实线表示主要协议、存储访问或进程创建，虚线表示显式启用的 Shared TUI 本机连接。Relay DB 只在账户模式启用，Asset Store 的具体实现由部署配置选择。启用配置型 OpenCode package plugin 时，实际承载 Agent Runtime 的本地 Rust 进程会监督一个共享 Bun Plugin Host；Host 在进程内按 workspace execution root 建立代际隔离的逻辑实例，Remote execution domain 当前不回退到控制机执行。
 
 | Deployment unit | Main contents |
 |---|---|
@@ -368,6 +372,7 @@ flowchart LR
 | SDK Host | 私有跨进程 adapter；公开 SDK 产品尚未交付 |
 | Web Server | Embedded Agent Runtime、WebSocket App Server、Health/Info；当前只允许 loopback 单用户模式 |
 | Relay Server | WebSocket/HTTP bridge、账户与同步；不包含 Agent Runtime |
+| Plugin Host | 可选的受管 Bun 子进程；执行配置中显式声明的 OpenCode package plugin，由本地 Agent Runtime 进程监督，不按 Session 或插件各启一个进程 |
 
 ### 2.5 Scenarios (+1) · Level 0
 
@@ -616,10 +621,12 @@ composition，而是继续通过自己的 loopback WebSocket App Server 入口�
 
 ```mermaid
 flowchart LR
-  Owner["能力归属模块"] <--> Client["PluginRuntimeClient"]
-  Client <--> Adapter["生态 adapter"]
-  Adapter <--> Service["Process service"]
-  Service <--> Host["Plugin Host"]
+  Owner["能力归属模块"] <--> Lifecycle["Core package lifecycle"]
+  Lifecycle <--> Runtime["HookFunctionRuntime"]
+  Runtime <--> Adapter["OpenCode adapter"]
+  Adapter <--> Service["Process-tree service"]
+  Service <--> Host["Shared Bun Plugin Host"]
+  Legacy["legacy managed / standalone path"] <--> Client["PluginRuntimeClient / ScriptToolRuntime"]
 ```
 
 插件贡献走独立的提交链，不绕过能力归属模块：
@@ -645,10 +652,10 @@ flowchart LR
   Agent Runtime API 是一组小而明确的用例接口，不是必须实例化的总入口；adapter 可以调用对应归属模块的少量接口，
   但不能访问内部状态、绕过既有编排或复制业务规则。任何入口都不直接调用 Plugin Host。
 - 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
-- Rust 主应用内只有 `PluginRuntimeClient` 及 services 层现有脚本执行实现：前者当前负责类型化调用、期限、同一插件实例
-  串行化、重复请求结果、响应校验和故障诊断；取消结果失效、有界队列和旧连接结果拒绝只有在端口具备相应身份后
-  才能作为目标能力加入。后者沿 `ScriptToolRuntime` 边界负责 Plugin Host 的物理健康、资源预算与进程树回收。Host 仅指运行
-  Node/Bun 和第三方 JS/TS 的子进程；插件启停与贡献生命周期仍由既有来源和能力归属模块管理。
+- 当前 package-plugin 路径由 Core 持有 workspace 逻辑实例和贡献代际，沿类型化 `HookFunctionRuntime` 调用
+  OpenCode adapter；adapter 持有共享 Bun Plugin Host 的 wire、连接和物理生命周期，并复用 services 的进程树原语。
+  legacy managed-package 请求可靠性仍由 `PluginRuntimeClient` 承担，standalone `.js` Tool worker 仍由
+  `ScriptToolRuntime` 承担。三者不共享生命周期对象，也不能互相外推已交付能力。
 - 外部来源的 Command、Tool、Subagent、MCP 仍保留能力专属 DTO 和 owner，但它们的发现调度统一由
   `ExternalSourceControlPlane` 持有；当前 Desktop/TUI/Peer 的控制事实只通过版本化的 product-domain 只读视图共享，
   不复制生态 payload、界面状态机或远端专用 DTO。App Server 已注册 external-source schema、handler 和 client translation；Embedded Host
@@ -670,8 +677,9 @@ flowchart LR
 
 - `Host` 首次出现或跨文档引用时必须带限定词，并表示实际承载执行或协议的进程/产品，例如 Plugin Host、SDK Host、Peer Host；
   同一小节已明确指代后可简称 Host，Rust 插件调用可靠性实现不得称为 Host。
-- 插件侧只保留插件实例、能力贡献、`PluginRuntimeClient` 和 Plugin Host 四个跨文档名词；进程监督、脚本执行、
-  来源发现和能力提交直接使用已有归属模块的职责描述，不再增加平行的 Manager/Controller/Coordinator 名称。
+- 当前 package-plugin 路径只使用插件实例、能力贡献、Core package lifecycle、`HookFunctionRuntime` 和 Plugin Host；
+  legacy managed-package 才使用 `PluginRuntimeClient`。进程监督、脚本执行、来源发现和能力提交直接使用已有归属模块
+  的职责描述，不再增加平行的 Manager/Controller/Coordinator 名称。
 - 不建立额外的插件运行对象、注册表或状态机。插件实例由现有来源模块标识，贡献由对应能力模块管理；Plugin Host
   只是可以承载多个插件实例的物理进程组。
 - workspace 只在具体归属模块确有独立配置、状态、版本或并发单例时作为该状态的限定键；它不是通用
@@ -686,9 +694,11 @@ flowchart LR
 
 ## 5. OpenCode-compatible 当前基线与目标
 
-Plugin Runtime P0 只验证了 BitFun 专用插件目录中的来源校验、工作区审核、启停记录、CLI 诊断和 custom tool 名称预览。
-它不执行 JS/TS，不注册真实工具，也不运行 OpenCode 钩子、Client 或终端插件。现有能力只能称为“静态预览”，
-不能称为“OpenCode 插件运行时”。详细代码事实集中在
+当前生产路径可通过一个受管 Bun Plugin Host 执行配置中显式声明的 OpenCode package plugin，并把完整合并配置、
+Config Hook 的 Agent/权限/Skill 投影、真实 Tool 注册与执行、`tool.execute.before/after`、最小 Client 回环接口接入
+既有归属模块。插件激活失败会撤下对应代际贡献、发布统一诊断并保留原生 Session 能力；Remote execution domain
+当前明确不在控制机回退执行。自动插件目录发现、完整 Client/Hook/TUI 表面与安全收口仍未完成，不能表述为完整
+OpenCode Runtime 兼容。详细代码事实集中在
 [`plugin-runtime-design.md#7-当前实现`](extensions/plugin-runtime-design.md#7-当前实现)。
 
 与 Plugin Runtime 分离的四条纵向基线已经通过各自的能力专属 provider 契约接入：Prompt Command 可发现本地
@@ -722,9 +732,8 @@ flowchart LR
 稳定决策如下：
 
 - 不启动完整 OpenCode Runtime，也不依赖用户安装 OpenCode CLI；BitFun 实现自己的监督、适配和 Rust 转发层。
-  当前 standalone Tool 子集通过受监督的 Node.js worker 执行且不安装依赖；未来只有固定的 package plugin 样例证明
-  确有需要时，才单独裁决 Bun、依赖准备和版本兼容方案。OpenCode v2 当前同时维护 Bun 编译产物与 Node SEA 并行
-  产物，因此 BitFun 不把外部项目尚未稳定的运行时选择提升为插件内部 ABI 或核心架构约束。
+  当前 standalone Tool 子集继续通过受监督的 Node.js worker 执行；配置型 package plugin 使用受管 Bun Host，分发仍
+  依赖系统 Bun 或 `BITFUN_BUN_COMMAND`，Bun 只属于当前物理执行后端，不进入插件内部 ABI 或核心业务合同。
 - 用户全局和项目来源自动发现；低风险内容默认无感应用并显示可撤销摘要，可执行来源首次启用或能力扩大时等待
   非阻塞确认。确认前不得 import module、启动 worker、读取凭据或产生直接脚本副作用。
 - 激活后的本地插件默认按 OpenCode 语义运行，允许当前用户通常拥有的文件、网络、进程和环境能力；用户、

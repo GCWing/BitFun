@@ -19,17 +19,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Button: ({
-    children,
-    isLoading: _isLoading,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { isLoading?: boolean }) => (
-    <button type="button" {...props}>{children}</button>
-  ),
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/infrastructure/api/service-api/ToolAPI', () => ({
   toolAPI: {
     submitUserAnswers: vi.fn(),
@@ -126,8 +115,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.questions-container')).not.toBeNull();
-    expect(container.querySelector('.completed-summary')).toBeNull();
+    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -138,8 +127,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.questions-container')).not.toBeNull();
-    expect(container.querySelector('.completed-summary')).toBeNull();
+    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -150,7 +139,7 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.completed-summary')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).not.toBeNull();
   });
 
   it('restores an unsubmitted answer after the session card is remounted', () => {
@@ -218,7 +207,7 @@ describe('AskUserQuestionCard', () => {
     expect(otherRadio).not.toBeNull();
     act(() => otherRadio?.click());
 
-    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -231,7 +220,7 @@ describe('AskUserQuestionCard', () => {
     act(renderCard);
 
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
-    expect(container.querySelector<HTMLInputElement>('.other-input-inline')?.value).toBe('CockroachDB');
+    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('CockroachDB');
   });
 
   it('keeps the custom input mounted and focused during Chinese IME composition', () => {
@@ -249,7 +238,7 @@ describe('AskUserQuestionCard', () => {
     const otherRadio = container.querySelector<HTMLInputElement>('input[value="Other"]');
     act(() => otherRadio?.click());
 
-    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       customInput?.focus();
@@ -260,7 +249,7 @@ describe('AskUserQuestionCard', () => {
       }
     });
 
-    expect(container.querySelector('.other-input-inline')).toBe(customInput);
+    expect(container.querySelector('[data-bf-part="custom-input"] input')).toBe(customInput);
     expect(document.activeElement).toBe(customInput);
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
 
@@ -274,7 +263,7 @@ describe('AskUserQuestionCard', () => {
       }
     });
 
-    expect(container.querySelector<HTMLInputElement>('.other-input-inline')?.value).toBe('你');
+    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('你');
     expect(document.activeElement).toBe(customInput);
   });
 
@@ -297,7 +286,7 @@ describe('AskUserQuestionCard', () => {
       otherCheckbox?.click();
     });
 
-    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -309,7 +298,7 @@ describe('AskUserQuestionCard', () => {
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked).toBe(true);
 
-    const submitButton = container.querySelector<HTMLButtonElement>('.footer-actions button');
+    const submitButton = container.querySelector<HTMLButtonElement>('[data-bf-part="submit"] button');
     expect(submitButton?.disabled).toBe(false);
     await act(async () => submitButton?.click());
 

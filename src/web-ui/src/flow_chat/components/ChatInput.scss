@@ -10,7 +10,7 @@
 .bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
   flex: 0 0 auto;
-  bottom: 4px;
+  bottom: $size-gap-6;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
@@ -24,15 +24,8 @@
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
 
-  /* Reserve the status band below the input: 10px of air, the 20px track, and
-     a 6px offset that — with the zone's own 4px off the window edge — gives the
-     track the same air below as above. */
-  &:has(.bitfun-chat-input-workspace-strip) {
-    padding-bottom: 36px;
-  }
-
   &.bitfun-context-drop-zone--can-accept {
-    .bitfun-chat-input__box {
+    .bitfun-chat-input__composer-surface {
       border-color: var(--bf-appearance-token-border-medium);
       box-shadow:
         0 12px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45),
@@ -42,7 +35,7 @@
   }
 
   &.bitfun-context-drop-zone--cannot-accept {
-    .bitfun-chat-input__box {
+    .bitfun-chat-input__composer-surface {
       border-color: var(--bf-appearance-token-color-error-border);
       box-shadow:
         0 8px 24px var(--bf-appearance-token-color-overlay-black-40),
@@ -65,6 +58,13 @@
   &--setup {
     min-width: min(340px, 100%);
   }
+}
+
+.bitfun-chat-input__voice-control-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
 .bitfun-chat-input__voice-control.icon-btn,
@@ -398,8 +398,6 @@
 }
 
 .bitfun-chat-input {
-  --private-chat-input-capsule-bg-rgb: 18, 18, 28;
-  --private-chat-input-capsule-hover-rgb: 25, 25, 40;
   --private-chat-input-send-dark-icon-rgb: 17, 17, 22;
   --private-chat-input-send-dark-icon-strong-rgb: 5, 5, 8;
   --private-chat-input-send-surface-rgb: 239, 241, 248;
@@ -433,242 +431,6 @@
   transform: translateY(0);
   transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
-  // ─── Single-line capsule mode ─────────────────────────────────────────────
-  &--capsule {
-    .bitfun-chat-input__box--capsule {
-      flex-direction: row;
-      align-items: center;
-      min-height: 48px;
-      max-height: 48px;
-      // 48px capsule, 30px controls, 1px border: a control centered in the
-      // 46px content box clears its inner edge by 8px, so an 8px side inset
-      // puts the plus and the send button the same distance from every edge
-      // they touch. Change any one of the three and the other two follow.
-      padding: 0 8px;
-      border-radius: 24px;
-      overflow: visible;
-
-      // Dissolve the actions wrapper so its children become direct flex items
-      .bitfun-chat-input__actions {
-        display: contents;
-      }
-
-      .bitfun-chat-input__actions-left {
-        order: 1;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0;
-        // Keep the input text clear of the left-hand controls.
-        margin-right: 10px;
-
-        // Enlarge the Plus button to match the capsule height
-        .bitfun-chat-input__agent-boost-add {
-          width: 30px !important;
-          height: 30px !important;
-          min-width: 30px !important;
-          padding: 0 !important;
-          border: 1px solid transparent !important;
-          border-radius: 50% !important;
-          background: var(--bf-appearance-token-element-bg-subtle) !important;
-          color: var(--bf-appearance-token-color-text-primary);
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-
-          svg {
-            width: 16px;
-            height: 16px;
-          }
-
-          &:hover,
-          &:focus-visible,
-          .bitfun-chat-input__box:focus-within & {
-            background: var(--bf-appearance-token-element-bg-soft) !important;
-          }
-        }
-
-        // The Harness chip mirrors the model pill at the opposite end of the
-        // capsule — same height, radius, resting fill and text size — so the
-        // two configuration controls read as a pair and every label in the row
-        // speaks at the input's own size.
-        .bitfun-harness-selector__trigger {
-          height: 30px;
-          padding: 0 10px;
-          border-radius: 15px;
-          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
-          font-size: flow-type.$control-size;
-
-          &:hover,
-          &[data-bf-state='open'] {
-            background: var(--bf-appearance-token-element-bg-soft);
-          }
-        }
-      }
-
-      .bitfun-chat-input__input-area {
-        order: 2;
-        flex: 1;
-        min-width: 0;
-        min-height: 0;
-        padding-bottom: 0;
-        display: flex;
-        align-items: center;
-
-        .rich-text-input {
-          min-height: 20px !important;
-          max-height: 20px !important;
-          overflow: hidden;
-          // The track is fixed at 20px; match the line box to it so the
-          // half-leading is symmetric and the text centres exactly like the
-          // labels in the neighbouring pills. The 1.45 support line height
-          // (≈18.85px at 13px) parks the line box at the track's top edge and
-          // the text reads ~1px high.
-          line-height: 20px;
-          font-size: flow-type.$control-size;
-          padding: 0 !important;
-          width: 100%;
-          // Allow clicks to reach the contenteditable in capsule mode
-          pointer-events: auto;
-
-        }
-      }
-
-      .bitfun-chat-input__actions-right {
-        order: 3;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0;
-
-        // Enlarge send/stop button to match the capsule height
-        .bitfun-chat-input__send-button {
-          width: 30px !important;
-          height: 30px !important;
-          border-radius: 50% !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-
-          &--breathing {
-            width: auto !important;
-            height: auto !important;
-          }
-        }
-
-        .bitfun-chat-input__breathing-circle {
-          width: 30px !important;
-          height: 30px !important;
-        }
-
-        .bitfun-chat-input__model-usage-group {
-          display: flex;
-          align-items: center;
-        }
-
-        // The idle microphone has one semantic wrapper while the realtime-call
-        // button is a direct flex child. Give the wrapper the same 30px track
-        // so both controls share the capsule's exact vertical center.
-        .bitfun-chat-input__voice-cluster[data-bf-phase='idle'] {
-          height: 30px;
-          align-self: center;
-          line-height: 0;
-
-          > [data-bf-part='control'] {
-            display: inline-flex;
-            height: 30px;
-            align-items: center;
-          }
-        }
-
-        // Context usage is a situation fact and belongs to the status track's
-        // right rail. The capsule carries only what the next turn is configured
-        // with, so the percentage is not repeated here.
-        .bitfun-model-selector__ctx-usage {
-          display: none;
-        }
-
-        // Model and reasoning are one decision with two dials, so they share a
-        // single pill: what runs the turn, and how hard it thinks.
-        .bitfun-model-selector {
-          box-sizing: border-box;
-          display: flex;
-          align-items: center;
-          gap: 2px;
-          height: 30px;
-          padding: 0 5px 0 0;
-          border: 1px solid transparent;
-          border-radius: 15px;
-          background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 66%, transparent);
-
-          &:hover {
-            background: var(--bf-appearance-token-element-bg-soft);
-          }
-
-          &[data-bf-state='open'] {
-            background: var(--bf-appearance-token-element-bg-soft);
-          }
-        }
-
-        // The pill owns the interaction boundary and background; the trigger
-        // inside it is a plain segment so the pair does not read as two stacked
-        // controls. Its resting, hover, and open boundaries stay transparent.
-        // The label takes the input's control size so every line of text in the
-        // capsule speaks at one size.
-        .bitfun-model-selector__trigger {
-          height: 28px;
-          padding: 0 6px 0 11px;
-          border: 0;
-          border-radius: 14px;
-          background: transparent;
-          font-size: flow-type.$control-size;
-          opacity: 1;
-        }
-
-        // The meter is the whole control, so its segment of the pill is round.
-        .bitfun-reasoning-preset-selector__trigger {
-          width: 22px;
-          height: 22px;
-          border-radius: 11px;
-        }
-
-        .bitfun-model-selector__name {
-          max-width: 160px;
-        }
-
-        .bitfun-chat-input__voice-control.icon-btn,
-        .bitfun-chat-input__voice-control[data-bf-component='icon-button'] {
-          width: 30px;
-          height: 30px;
-          min-width: 30px;
-          min-height: 30px;
-          border: none;
-          background: transparent;
-
-          svg {
-            width: 16px;
-            height: 16px;
-          }
-        }
-
-        .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) svg {
-          width: 16px;
-          height: 16px;
-        }
-      }
-
-      // Hide things that belong to multi-line only
-      .bitfun-chat-input__cowork-examples,
-      .bitfun-chat-input__recommendations,
-      .bitfun-chat-input__target-switcher,
-      .bitfun-chat-input__image-strip {
-        display: none !important;
-      }
-    }
-  }
-
   &__placeholder {
     position: absolute;
     top: 0;
@@ -685,12 +447,12 @@
   }
 
   // In multi-line card mode: align to top of text area
-  &__box--multi-line &__placeholder {
+  &--multi-line &__placeholder {
     padding-top: 1px;
   }
 
-  // In capsule: vertically centre inside the 22px line height
-  &__box--capsule &__placeholder {
+  // In capsule: vertically centre inside the 25px line height
+  &--capsule &__placeholder {
     top: 50%;
     transform: translateY(-50%);
   }
@@ -750,7 +512,7 @@
 
   // Non-agent scenes: high transparency to avoid obscuring content
   &--non-agent {
-    .bitfun-chat-input__box {
+    .bitfun-chat-input__composer-surface {
       background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.03);
       border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.14);
       box-shadow: none;
@@ -775,7 +537,8 @@
     }
 
     .bitfun-chat-input__input-area,
-    .bitfun-chat-input__actions,
+    .bitfun-chat-input__actions-left,
+    .bitfun-chat-input__actions-right,
     .bitfun-chat-input__recommendations {
       opacity: 0.25;
       transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -784,7 +547,8 @@
     &:hover,
     &:focus-within {
       .bitfun-chat-input__input-area,
-      .bitfun-chat-input__actions,
+      .bitfun-chat-input__actions-left,
+      .bitfun-chat-input__actions-right,
       .bitfun-chat-input__recommendations {
         opacity: 1;
       }
@@ -832,105 +596,215 @@
     position: relative;
     width: 100%;
     height: auto;
-    min-height: 68px;
-    max-height: 500px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    min-height: 0;
+    display: block;
     pointer-events: auto;
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 4px);
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0;
-    background: var(--bf-appearance-token-color-bg-scene);
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    // The composer changes shape as the user types. Keep this high-frequency
-    // keyboard path immediate instead of tweening layout properties.
-    transition: none;
-    box-shadow:
-      0 8px 24px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
-      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08),
-      inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-04);
-    cursor: default;
+    border: 0;
+    padding: 0;
+    background: transparent;
 
     &::before {
       content: none;
     }
 
-    // Capsule (single-line) mode appearance
-    &--capsule {
-      border-radius: 24px;
-      min-height: 48px;
-      max-height: 48px;
-      padding: 0 8px;
-      background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
-      border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      box-shadow:
-        0 8px 24px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
-
-      &:hover {
-        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.38);
-        border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.16);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow:
-          0 12px 30px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.24),
-          inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-08);
-      }
-
-      &:focus-within {
-        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.42);
-        border-color: var(--bf-appearance-token-color-overlay-white-20);
-        box-shadow:
-          0 12px 30px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.28),
-          inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12);
-      }
-    }
-
-    :root[data-bf-appearance-mode="light"] &--capsule,
-    :root[data-bf-appearance-mode="light"] &--capsule,
-    .light &--capsule {
-      background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.28);
-      border: 1px solid var(--bf-appearance-token-color-overlay-black-08);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      box-shadow:
-        0 2px 8px var(--bf-appearance-token-color-overlay-black-08),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-80);
-
-      &:hover {
-        background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.45);
-        border-color: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.14);
-        box-shadow:
-          0 12px 24px var(--bf-appearance-token-color-overlay-black-12),
-          inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-90);
-      }
-    }
-
-    &--multi-line {
-      // Max ~5 lines: 5 × (13px × 1.5) ≈ 98px + padding + action bar ≈ 160px
-      .bitfun-chat-input__input-area {
-        min-height: 48px;
-
-        .rich-text-input {
-          max-height: 102px; // ~5 lines of text
-        }
-      }
-    }
-
-    &:focus-within {
-      border-color: var(--bf-appearance-token-border-base);
-      box-shadow:
-        0 12px 32px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45),
-        inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-12),
-        inset 0 -1px 0 var(--bf-appearance-token-color-overlay-white-04);
-    }
-
     & > * {
       pointer-events: auto;
+    }
+  }
+
+  &__composer {
+    width: 100%;
+    min-width: 0;
+  }
+
+  &__content {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
+    flex-direction: column;
+  }
+
+  // Product controls fill the stable public ChatComposer slots. The package
+  // owns the 45px compact / 120px expanded surface geometry; Web UI owns concrete menus and
+  // lifecycle states.
+  &__composer-surface {
+    .bitfun-chat-input__actions-left,
+    .bitfun-chat-input__actions-right {
+      display: flex;
+      min-width: 0;
+      height: var(--bf-control-chat-composer-control-height);
+      align-items: center;
+      align-self: center;
+      padding: 0;
+    }
+
+    .bitfun-chat-input__actions-left {
+      justify-content: flex-start;
+      gap: var(--bf-space-2);
+    }
+
+    .bitfun-chat-input__actions-right {
+      justify-content: flex-end;
+      gap: var(--bf-space-1);
+    }
+
+    .bitfun-chat-input__agent-boost-add {
+      width: var(--bf-control-chat-composer-control-height) !important;
+      height: var(--bf-control-chat-composer-control-height) !important;
+      min-width: var(--bf-control-chat-composer-control-height) !important;
+      min-height: var(--bf-control-chat-composer-control-height) !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: var(--bf-radius-pill) !important;
+      background: var(--bf-appearance-token-element-bg-subtle) !important;
+      color: var(--bf-appearance-token-color-text-primary);
+
+      &:hover,
+      &:focus-visible,
+      &[aria-expanded='true'] {
+        background: var(--bf-appearance-token-element-bg-soft) !important;
+      }
+
+      svg {
+        width: 14px;
+        height: 14px;
+      }
+    }
+
+    .bitfun-chat-input__model-usage-group,
+    .bitfun-model-selector {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+    }
+
+    .bitfun-model-selector__ctx-usage {
+      display: none;
+    }
+
+    .bitfun-model-selector {
+      box-sizing: border-box;
+      gap: 2px;
+      height: var(--bf-control-chat-composer-control-height);
+      padding: 0 var(--bf-space-1) 0 0;
+      border: 0;
+      border-radius: var(--bf-radius-pill);
+      background: transparent;
+
+      &:hover,
+      &[data-bf-state='open'] {
+        background: var(--bf-appearance-token-element-bg-soft);
+      }
+    }
+
+    .bitfun-model-selector__trigger {
+      height: var(--bf-control-chat-composer-control-height);
+      padding: 0 var(--bf-space-1) 0 var(--bf-space-2);
+      border: 0;
+      border-radius: var(--bf-radius-pill);
+      background: transparent;
+      font-size: flow-type.$control-size;
+      opacity: 1;
+    }
+
+    .bitfun-model-selector__name {
+      max-width: 160px;
+    }
+
+    .bitfun-reasoning-preset-selector[data-bf-presentation='label']
+      .bitfun-reasoning-preset-selector__trigger {
+      width: auto;
+      height: 20px;
+      padding-inline: 2px;
+      border-radius: var(--bf-appearance-token-size-radius-sm);
+    }
+
+    .bitfun-chat-input__voice-control.icon-btn,
+    .bitfun-chat-input__send-button {
+      width: var(--bf-control-chat-composer-control-height) !important;
+      height: var(--bf-control-chat-composer-control-height) !important;
+      min-width: var(--bf-control-chat-composer-control-height) !important;
+      min-height: var(--bf-control-chat-composer-control-height) !important;
+      border-radius: var(--bf-radius-pill) !important;
+    }
+
+    .bitfun-chat-input__voice-control.icon-btn {
+      border: 0;
+      background: transparent;
+    }
+
+    .bitfun-chat-input__voice-control.icon-btn svg,
+    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .bitfun-chat-input__breathing-circle {
+      width: var(--bf-control-chat-composer-control-height) !important;
+      height: var(--bf-control-chat-composer-control-height) !important;
+    }
+
+    &[data-bf-layout='compact'] {
+      .bitfun-chat-input__actions-left,
+      .bitfun-chat-input__actions-right {
+        height: 100%;
+        align-self: stretch;
+      }
+
+      .bitfun-chat-input__voice-cluster,
+      .bitfun-chat-input__voice-control-shell {
+        height: 100%;
+      }
+    }
+
+    &[data-bf-layout='expanded'] {
+      .bitfun-harness-selector__trigger {
+        height: var(--bf-control-chat-composer-control-height);
+        border-radius: var(--bf-radius-pill);
+      }
+    }
+  }
+
+  &--capsule {
+    .bitfun-chat-input__content {
+      height: 100%;
+      justify-content: center;
+    }
+
+    .bitfun-chat-input__input-area {
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+      justify-content: center;
+
+      .rich-text-input {
+        width: 100%;
+        min-height: var(--bf-control-chat-composer-compact-track-height) !important;
+        max-height: var(--bf-control-chat-composer-compact-track-height) !important;
+        overflow: hidden;
+        padding: 0 !important;
+        font-size: flow-type.$control-size;
+        line-height: var(--bf-control-chat-composer-compact-track-height);
+        pointer-events: auto;
+      }
+    }
+
+    .bitfun-chat-input__cowork-examples,
+    .bitfun-chat-input__recommendations,
+    .bitfun-chat-input__target-switcher,
+    .bitfun-chat-input__image-strip {
+      display: none !important;
+    }
+  }
+
+  &--multi-line {
+    .bitfun-chat-input__input-area {
+      min-height: 48px;
+
+      .rich-text-input {
+        max-height: 102px;
+      }
     }
   }
 
@@ -1138,9 +1012,17 @@
   &__agent-boost {
     position: relative;
     display: inline-flex;
+    height: 100%;
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  &__agent-boost-trigger {
+    display: inline-flex;
+    height: 100%;
+    align-items: center;
+    line-height: 0;
   }
 
   &__agent-boost-add {
@@ -1916,25 +1798,12 @@
     }
   }
 
-  &__actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    // Must fit the expanded voice-input pill without overlapping the input above.
-    min-height: 34px;
-    margin-top: 4px;
-    padding: 0 0 $size-gap-2;
-  }
-
-  // Keep the action groups free of entrance animations. The composer mounts in
-  // capsule mode, which used to null the animation out, so a reveal here never
-  // played on mount — it only restarted on every capsule → multi-line flip, and
-  // its `both` fill held the group at `opacity: 0` through the delay. That left
-  // the plus button and the model/mic/send cluster blank for ~0.2s and still
-  // sliding ~0.45s after the box had already resized, which reads as the card
-  // and its controls desyncing on a single keystroke at the wrap boundary.
+  // The public composer owns the action tracks. Product-owned groups only
+  // provide their internal alignment and never animate independently from the
+  // surface that is switching between compact and expanded layouts.
   &__actions-left {
     display: flex;
+    height: var(--bf-control-chat-composer-control-height);
     align-items: center;
     gap: $size-gap-1;
     min-width: 0;
@@ -1942,6 +1811,7 @@
 
   &__model-usage-group {
     display: inline-flex;
+    height: var(--bf-control-chat-composer-control-height);
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
@@ -1951,7 +1821,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-1;
-    height: 100%;
+    height: var(--bf-control-chat-composer-control-height);
   }
 
   &__split-actions {
@@ -1963,6 +1833,8 @@
 
   &__send-action {
     display: inline-flex;
+    height: 100%;
+    align-items: center;
     flex: 0 0 auto;
   }
 
@@ -2254,7 +2126,7 @@
 // disk and only dimming the glyph.
 :root[data-bf-appearance-mode='light'] .bitfun-chat-input--capsule,
 .light .bitfun-chat-input--capsule {
-  .bitfun-chat-input__box--capsule
+  .bitfun-chat-input__composer-surface
     .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing):disabled {
     border: 1px solid transparent;
     background: var(--bf-appearance-token-element-bg-medium);
@@ -2293,7 +2165,8 @@
 @media (prefers-reduced-motion: reduce) {
   .bitfun-chat-input,
   .bitfun-chat-input__input-area,
-  .bitfun-chat-input__actions,
+  .bitfun-chat-input__actions-left,
+  .bitfun-chat-input__actions-right,
   .bitfun-chat-input__recommendations,
   .bitfun-chat-input__action-button,
   .bitfun-chat-input__send-button,

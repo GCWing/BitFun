@@ -17,9 +17,16 @@ export class ChatTimelineProjector {
     hasMoreMessages: boolean,
     activeTurnAnchorId: string = ''
   ): ChatTimelineItem[] {
-    const timelineMessages = ChatTimelineProjector.realMessages(messages);
+    const persistedMessages = ChatTimelineProjector.realMessages(messages);
+    const shouldRenderActiveTurn = ChatTimelineProjector.shouldRenderActiveTurn(persistedMessages, activeTurn);
+    // A running turn can be delivered both as an active snapshot and as a
+    // persisted assistant stub containing only thinking/tools. They represent
+    // one visual row and share one stable turn key, so retaining both would
+    // violate the uniqueness contract required by Repeat.virtualScroll().
+    const timelineMessages = shouldRenderActiveTurn ? persistedMessages.filter((message: ChatMessage) => {
+      return !ChatTimelineProjector.isMatchingAssistantTurn(activeTurn, message);
+    }) : persistedMessages;
     const pendingItems = ChatTimelineProjector.pendingMessagesNotPersisted(pendingMessages, timelineMessages);
-    const shouldRenderActiveTurn = ChatTimelineProjector.shouldRenderActiveTurn(timelineMessages, activeTurn);
     const anchorIndex = ChatTimelineProjector.anchorIndex(pendingItems, activeTurnAnchorId);
     const items: ChatTimelineItem[] = timelineMessages.map((message: ChatMessage) => {
       const item: ChatTimelineItem = {
@@ -169,10 +176,14 @@ export class ChatTimelineProjector {
   }
 
   private static isPersistedAssistantDuplicate(activeTurn: ChatMessage, message: ChatMessage): boolean {
-    if (message.role !== 'assistant') {
+    if (!ChatTimelineProjector.hasDisplayableAssistantFinal(message)) {
       return false;
     }
-    if (!ChatTimelineProjector.hasDisplayableAssistantFinal(message)) {
+    return ChatTimelineProjector.isMatchingAssistantTurn(activeTurn, message);
+  }
+
+  private static isMatchingAssistantTurn(activeTurn: ChatMessage, message: ChatMessage): boolean {
+    if (message.role !== 'assistant') {
       return false;
     }
     if (message.id === activeTurn.id) {

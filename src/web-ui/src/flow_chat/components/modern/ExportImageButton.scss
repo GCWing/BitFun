@@ -21,11 +21,9 @@
   /* Prevent unwanted wrapping of short inline text */
   .thinking-label,
   .thinking-collapsed-header,
-  .compact-card-action,
-  .compact-card-content,
-  .compact-card-extra,
-  .tool-card-action,
-  .tool-card-content,
+  [data-bf-component='flow-chat-tool-card'][data-bf-part='action'],
+  [data-bf-component='flow-chat-tool-card'][data-bf-part='content'],
+  [data-bf-component='flow-chat-tool-card'][data-bf-part='extra'],
   .export-content__title,
   .export-content__subtitle,
   .export-content__timestamp,
@@ -175,11 +173,9 @@
     margin-bottom: 8px;
     
     // Hide tool card action buttons and expanded content.
-    .base-tool-card__confirm-actions,
     .tool-card__actions,
-    .compact-tool-card__actions,
-    .base-tool-card-expanded,
-    .compact-tool-card-expanded {
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='actionRegion'],
+    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'] {
       display: none !important;
     }
   }

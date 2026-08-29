@@ -1,0 +1,34 @@
+@layer bf.components {
+  .root {
+    min-inline-size: 0;
+  }
+
+  .summary,
+  .processing {
+    display: block;
+    overflow: hidden;
+    min-inline-size: 0;
+    color: var(--bf-color-content-secondary);
+    font-size: var(--bf-font-size-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .summary {
+    font-family: var(--bf-font-family-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .processing {
+    color: var(--bf-color-content-muted);
+    font-style: italic;
+  }
+
+  .error {
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--bf-color-status-danger-content);
+  }
+}

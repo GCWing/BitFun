@@ -13,6 +13,7 @@ export struct ConversationViewHost {
   @Param showBackButton: boolean = true;
   @Param showSidebarRestoreButton: boolean = false;
   @Param composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
+  @Param composerInputId: string = 'conversation-composer-input';
   @Param hoverOperateMode: boolean = false;
   @Param onRestoreSidebar: () => void = () => {};
   @Param onIntent: (intent: ConversationIntent) => void = (_intent: ConversationIntent) => {};
@@ -34,6 +35,7 @@ export struct ConversationViewHost {
     options.showBackButton = this.showBackButton;
     options.showSidebarRestoreButton = this.showSidebarRestoreButton;
     options.composerPresentation = this.composerPresentation;
+    options.composerInputId = this.composerInputId;
     options.hoverOperateMode = this.hoverOperateMode;
     return options;
   }

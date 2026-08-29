@@ -615,9 +615,7 @@ describe('startup performance contract', () => {
     expect(chatInputSource).toContain('getHistorySessionOpenTransitionSnapshot');
     expect(chatInputSource).toContain('deferChatStripPassiveGitRefresh');
     expect(chatInputSource).toContain('historySessionOpenTransition !== null');
-    expect(fileCardSource).toContain('getHistorySessionOpenTransitionSnapshot');
-    expect(fileCardSource).toContain('historySessionOpenTransition === null');
-    expect(fileCardSource).toContain("displayContext !== 'subagent-projection'");
+    expect(fileCardSource).not.toContain('useGitState');
     expect(workspaceItemSource).toContain('getHistorySessionOpenTransitionSnapshot');
     expect(workspaceItemSource).toContain('suppressWorkspaceGitRefreshOnMountDuringSessionTransition');
     expect(workspaceItemSource).toContain('subscribeHistorySessionOpenTransition');

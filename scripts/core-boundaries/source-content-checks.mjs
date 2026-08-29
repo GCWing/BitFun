@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export function listTrackedRustRepoPaths(root) {
@@ -11,7 +11,13 @@ export function listTrackedRustRepoPaths(root) {
   if (result.status !== 0) {
     throw new Error(result.stderr.trim() || 'git ls-files failed');
   }
-  return result.stdout.split('\0').filter(Boolean);
+  return result.stdout
+    .split('\0')
+    .filter(Boolean)
+    // `git ls-files` continues to report tracked files deleted only in the
+    // working tree. Boundary scans must evaluate the prospective checkout
+    // without requiring callers to stage deletions first.
+    .filter((repoPath) => existsSync(join(root, ...repoPath.split('/'))));
 }
 
 function stripRustComments(text) {

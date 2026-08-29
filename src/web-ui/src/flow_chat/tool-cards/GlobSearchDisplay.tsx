@@ -3,11 +3,9 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { FolderSearch, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { GlobSearchToolCard } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -110,86 +108,38 @@ export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
     return pattern;
   };
 
-  const renderExpandedContent = () => (
-    <>
-      <div className="compact-detail-info-inline">
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.globSearch.labelPattern')}:</span>
-          <span className="compact-detail-inline-value">{pattern}</span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.globSearch.labelPath')}:</span>
-          <span className="compact-detail-inline-value">{searchPath}</span>
-        </span>
-        <span className="compact-detail-inline-separator">|</span>
-        <span className="compact-detail-inline-item">
-          <span className="compact-detail-inline-label">{t('toolCards.globSearch.labelStats')}:</span>
-          <span className="compact-detail-inline-value">
-            {stats.directories > 0 
-              ? t('toolCards.globSearch.filesAndDirs', { files: stats.files, directories: stats.directories })
-              : t('toolCards.globSearch.filesCount', { count: stats.files })}
-          </span>
-        </span>
-      </div>
-      <div className="compact-detail-list" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {files.slice(0, 50).map((file: any, index: number) => {
-          const fileName = typeof file === 'string' ? file : (file.name || file.path || '');
-          const isDir = fileName.endsWith('/');
-          return (
-            <div key={index} className="compact-list-item" style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              padding: '4px 0', 
-              fontSize: '11px',
-              color: 'var(--bf-appearance-token-color-text-secondary)'
-            }}>
-              {isDir ? (
-                <Folder size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
-              ) : (
-                <File size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
-              )}
-              <span style={{ flex: 1, fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)', wordBreak: 'break-all' }}>
-                {fileName}
-              </span>
-            </div>
-          );
-        })}
-        {files.length > 50 && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '8px 0', 
-            color: 'var(--bf-appearance-token-color-text-muted)',
-            fontSize: '11px', 
-            fontStyle: 'italic' 
-          }}>
-            {t('toolCards.globSearch.moreFiles', { count: files.length - 50 })}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
   if (status === 'error') {
     return null;
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="glob-search" data-tool-card-id={toolId ?? ''}>
+      <GlobSearchToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
-        className="glob-search-card"
-        clickable={hasDetails}
-        header={
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<FolderSearch size={16} className="glob-search-card-icon" />} />}
-            content={renderContent()}
-          />
-        }
-        expandedContent={hasDetails ? renderExpandedContent() : undefined}
+        onToggle={hasDetails ? handleClick : undefined}
+        summary={renderContent()}
+        details={hasDetails ? [
+          { label: `${t('toolCards.globSearch.labelPattern')}:`, value: pattern, monospace: true },
+          { label: `${t('toolCards.globSearch.labelPath')}:`, value: searchPath, monospace: true },
+          {
+            label: `${t('toolCards.globSearch.labelStats')}:`,
+            value: stats.directories > 0
+              ? t('toolCards.globSearch.filesAndDirs', { files: stats.files, directories: stats.directories })
+              : t('toolCards.globSearch.filesCount', { count: stats.files }),
+          },
+        ] : undefined}
+        results={hasDetails ? files.slice(0, 50).map((file: any, index: number) => {
+          const fileName = typeof file === 'string' ? file : (file.name || file.path || '');
+          return {
+            icon: fileName.endsWith('/') ? 'directory' as const : 'file' as const,
+            key: `${fileName}-${index}`,
+            title: fileName,
+          };
+        }) : undefined}
+        moreResultsLabel={files.length > 50
+          ? t('toolCards.globSearch.moreFiles', { count: files.length - 50 })
+          : undefined}
       />
     </div>
   );

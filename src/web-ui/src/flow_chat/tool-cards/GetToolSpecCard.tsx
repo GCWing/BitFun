@@ -1,10 +1,8 @@
 import React, { useMemo } from 'react';
-import { Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { GetToolSpecToolCard } from '@bitfun/ui/flow-chat';
 
 interface ParsedGetToolSpecResult {
   toolName: string;
@@ -58,19 +56,11 @@ export const GetToolSpecCard: React.FC<ToolCardProps> = ({ toolItem }) => {
   };
 
   return (
-    <div data-bf-component="get-tool-spec-card" data-bf-part="root" data-bf-state={status === 'error' ? 'failed' : undefined} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
-        status={status}
-        className="get-tool-spec-card"
-        clickable={false}
-        header={(
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Info size={16} />} />}
-            action={t('toolCards.getToolSpec.title')}
-            content={renderContent()}
-          />
-        )}
-      />
-    </div>
+    <GetToolSpecToolCard
+      action={t('toolCards.getToolSpec.title')}
+      data-tool-card-id={toolId ?? ''}
+      status={status}
+      summary={renderContent()}
+    />
   );
 };

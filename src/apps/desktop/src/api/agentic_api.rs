@@ -1670,10 +1670,12 @@ pub async fn create_session(
         )
         .await
     {
-        warn!(
-            "Configured workspace plugin activation failed before session creation: {}",
-            error
-        );
+        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            "Desktop session creation",
+            Some(std::path::Path::new(&resolved_execution_target.root_path)),
+            error,
+        )
+        .await;
     }
 
     if is_idempotent_managed_create {
@@ -1927,6 +1929,7 @@ pub async fn update_session_mode(
         .update_session_mode(AgentSessionModeUpdateRequest {
             session_id,
             mode_id: request.mode_id,
+            agent_route_key: None,
         })
         .await
         .map_err(|error| format!("Failed to update session mode: {}", error.into_message()))
@@ -3855,6 +3858,7 @@ pub async fn generate_session_title(
 #[tauri::command]
 pub async fn get_available_modes(
     state: State<'_, AppState>,
+    runtime: State<'_, DesktopRuntimeContext>,
     startup_trace: State<'_, DesktopStartupTrace>,
     request: Option<GetAvailableModesRequest>,
 ) -> Result<Vec<ModeInfoDTO>, String> {
@@ -3865,9 +3869,21 @@ pub async fn get_available_modes(
         .as_deref()
         .filter(|path| !path.trim().is_empty())
         .map(PathBuf::from);
-    let external_sources_supported =
-        mode_catalog_supports_external_sources(&request, workspace_path.as_deref()).await;
-    if external_sources_supported {
+    let local_scope = local_mode_catalog_scope(&request, workspace_path.as_deref()).await;
+    let external_sources_supported = local_scope.is_some();
+    if let Some(scope) = local_scope {
+        if let Err(error) = runtime
+            .session_application()
+            .ensure_configured_plugin_instance(scope, None)
+            .await
+        {
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "Desktop mode catalog",
+                workspace_path.as_deref(),
+                error,
+            )
+            .await;
+        }
         if let Err(error) =
             bitfun_core::external_sources::ensure_external_source_workspace_snapshot(
                 workspace_path.as_deref(),
@@ -3917,6 +3933,22 @@ pub struct GetAvailableModesRequest {
     pub workspace_path: Option<String>,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
+}
+
+async fn local_mode_catalog_scope(
+    request: &GetAvailableModesRequest,
+    workspace_path: Option<&Path>,
+) -> Option<DesktopSessionScopeRequest> {
+    if !mode_catalog_supports_external_sources(request, workspace_path).await {
+        return None;
+    }
+    workspace_path.map(|path| {
+        desktop_session_scope(
+            path.to_string_lossy().into_owned(),
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
+        )
+    })
 }
 
 async fn mode_catalog_supports_external_sources(
@@ -4069,7 +4101,44 @@ mod tests {
             remote_ssh_host: Some("build-host".to_string()),
         };
 
-        assert!(!mode_catalog_supports_external_sources(&request, Some(&desktop_host_path)).await);
+        assert!(local_mode_catalog_scope(&request, Some(&desktop_host_path))
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn local_mode_catalog_builds_the_plugin_activation_scope() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let request = GetAvailableModesRequest {
+            workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        let scope = local_mode_catalog_scope(&request, Some(workspace.path()))
+            .await
+            .expect("local mode catalog scope");
+        assert_eq!(scope.workspace_path, request.workspace_path.unwrap());
+    }
+
+    #[test]
+    fn desktop_mode_catalog_activates_plugins_before_reading_the_registry() {
+        let source = include_str!("agentic_api.rs").replace("\r\n", "\n");
+        let command = source
+            .split_once("pub async fn get_available_modes(")
+            .expect("mode catalog command")
+            .1
+            .split_once("pub struct GetAvailableModesRequest")
+            .expect("mode catalog command boundary")
+            .0;
+
+        let activation = command
+            .find(".ensure_configured_plugin_instance(")
+            .expect("configured plugin activation");
+        let catalog_read = command
+            .find(".get_modes_info_for_workspace(")
+            .expect("registry mode catalog read");
+        assert!(activation < catalog_read);
     }
 
     #[test]

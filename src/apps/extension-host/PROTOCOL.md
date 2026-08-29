@@ -43,7 +43,8 @@ The host sends:
     "token": "value from OPENCODE_EXTENSION_HOST_RPC_TOKEN",
     "protocolVersion": 1,
     "opencodeVersion": "1.17.18",
-    "maxFrameBytes": 16777216
+    "maxFrameBytes": 16777216,
+    "capabilities": ["config-contributors-v1", "config-contributions-v2", "generation-fencing-v1"]
   }
 }
 ```
@@ -57,12 +58,15 @@ Rust returns:
   "result": {
     "protocolVersion": 1,
     "maxFrameBytes": 16777216,
-    "cacheDirectory": "/absolute/path/to/plugin-cache"
+    "cacheDirectory": "/absolute/path/to/plugin-cache",
+    "capabilities": ["config-contributors-v1", "config-contributions-v2", "generation-fencing-v1"]
   }
 }
 ```
 
-`cacheDirectory` must be absolute and writable by the host. It is the only location in which the host installs npm plugins. The accepted `maxFrameBytes` remains fixed until disconnect.
+`cacheDirectory` must be absolute and writable by the host. It is the only location in which the host installs npm plugins. The accepted `maxFrameBytes` remains fixed until disconnect. Capabilities are intersected by both peers. Rust must not execute function hooks or plugin tools unless `generation-fencing-v1` was negotiated. Config projection requires `config-contributors-v1`; multiple Config contributors additionally require `config-contributions-v2`.
+
+Rust exposes the connection as ready only after the successful handshake response has been written. The host rejects `host.*` requests observed before a valid response. Its operational handlers are installed before the request is sent, so a first business request delivered in the same TCP read as the successful response waits for host construction instead of racing method registration.
 
 ## Common wire types
 
@@ -145,11 +149,17 @@ One read returns no more than `maxBytes`, with a 64 KiB maximum. `eof: true` rel
 
 ### Process-local identity
 
-`instanceID`, `executionID`, `flowID`, `fetchID`, `requestID`, and `streamID` have no durable meaning. Rust must keep them with their creating instance and connection. Closing an instance invalidates its active capabilities; losing the process invalidates all of them.
+`instanceID`, `generationKey`, `revision`, `executionID`, `flowID`, `fetchID`, `requestID`, and `streamID` have no durable meaning. Rust must keep them with their creating instance and connection. `instanceID + generationKey + revision` is the lease for executable Hook and Tool calls. Closing an instance invalidates its active capabilities; losing the process invalidates all of them.
 
 ## Rust-to-host methods
 
 ### Instance lifecycle
+
+#### `host.plugins.prepare`
+
+Params: `{ plugins, configurationFingerprint?, defaultBaseDirectory?, allowInstall? }`. The result contains the normalized `reviewed` declarations, successfully `prepared` entries, `failed` entries, diagnostics, and a stable `reviewDigest`. Each prepared entry includes its canonical identity and, when available, `contentHash`.
+
+The Host coalesces only concurrent preparation of the same declarations, configuration fingerprint, install policy, and effective default base directory. A settled result is discarded. `host.instance.open` resolves the graph again and compares `expectedReviewDigest` and `expectedContentDigests` before import, so a changed local file or package graph cannot reuse an earlier preparation snapshot.
 
 #### `host.instance.open`
 
@@ -158,6 +168,8 @@ Params:
 ```ts
 {
   instanceID: string
+  generationKey: string
+  revision: string
   project: JsonValue
   config: Record<string, JsonValue>
   directory: string
@@ -167,6 +179,7 @@ Params:
     options?: Record<string, JsonValue>
     baseDirectory?: string
   }>
+  configurationFingerprint?: string
 }
 ```
 
@@ -175,7 +188,18 @@ Result:
 ```ts
 {
   instanceID: string
+  generationKey: string
+  revision: string
   config: Record<string, JsonValue>
+  configContributors: Array<{
+    plugin: Record<string, JsonValue>
+    outcome: "applied" | "failed"
+  }>
+  configContributions: Array<{
+    plugin: Record<string, JsonValue>
+    outcome: "applied" | "failed"
+    config: Record<string, JsonValue>
+  }>
   diagnostics: Diagnostic[]
   hooks: string[]
   tools: Array<{
@@ -204,7 +228,9 @@ Result:
 
 The gateway is listening before plugin entrypoints execute, so SDK calls during initialization work. Config hooks run sequentially before the result is sent. Failed plugins are omitted and represented in `diagnostics`; successful registrations remain available.
 
-Opening an active `instanceID` or a directory already owned by another instance is an error. Reopening after close creates a new instance and reruns entrypoints while preserving Bun's normal process-global module cache.
+The host binds the requested `instanceID + generationKey + revision` only after the instance opens successfully and echoes all three values unchanged. Opening an active `instanceID` or a directory already owned by another instance is an error. Reopening after close creates a new instance and reruns entrypoints while preserving Bun's normal process-global module cache.
+
+`configContributors` records every plugin that declared a Config hook, in plugin activation order, and whether its invocation applied or failed. `configContributions` contains the same ordered entries plus a bounded clone of the cumulative config immediately after each hook. Config hooks still retain mutations made before an exception and continue to later contributors. Rust uses the sequence to attribute Agent, permission, and Skill changes without re-executing plugin code. The snapshots are protocol data and must not be written to ordinary logs.
 
 `hooks` may contain:
 
@@ -230,7 +256,7 @@ Opening an active `instanceID` or a directory already owned by another instance 
 
 Params: `{ instanceID }`. Result: `{ closed: boolean }`.
 
-The host rejects new operations, aborts active tools and fetches, releases auth flows and streams, closes the gateway, and invokes every disposer once. Dispose failures are diagnostics and do not stop remaining cleanup. Repeated close is idempotent.
+The host rejects new operations, aborts active tools and fetches, releases auth flows and streams, closes the gateway, and invokes every disposer once. Ordinary disposer failures are diagnostics and do not stop remaining cleanup. If an active Tool does not drain before the hard deadline, or a disposer itself exceeds its hard deadline, cleanup continues but the close request fails and the Host enters `closing`; Rust must retire that physical Host generation before opening a replacement. Repeated close after a confirmed cleanup is idempotent.
 
 #### `host.shutdown`
 
@@ -242,9 +268,13 @@ The host closes all instances, responds, closes the RPC connection, and exits no
 
 #### `host.hook.call`
 
-Params: `{ instanceID, hook, input, output }`. Result: `{ input, output }`.
+Params: `{ instanceID, generationKey, revision, hook, input, output }`.
+
+Result: `{ instanceID, generationKey, revision, hook, input, output }`.
 
 `input` and `output` are JSON values. Matching hooks run sequentially in plugin order on the same live objects for this invocation. The first hook error stops the invocation; earlier mutations are not rolled back. Different hook requests may overlap.
+
+The Host rejects a call whose generation lease does not exactly match the open instance. Rust likewise rejects a response that does not echo the requested instance, generation, revision, and hook name.
 
 For `tool.definition`, `output.parameters` crosses the process boundary as JSON Schema rather than an Effect schema object.
 
@@ -263,6 +293,8 @@ Params:
 ```ts
 {
   instanceID: string
+  generationKey: string
+  revision: string
   executionID: string
   registrationID: string
   args: JsonValue
@@ -297,13 +329,13 @@ The host reconstructs a per-execution `AbortSignal` and fills the public tool co
 
 Tool registration parameters and later `tool.definition` parameters use their JSON Schema projection. Rust sends arguments; Bun validates them through the retained plugin schema before execution.
 
-Rust invokes the tool by the returned opaque `registrationID`. `id` is the plugin-facing tool name and is not an execution handle.
+Rust invokes the tool by the returned opaque `registrationID`. `id` is the plugin-facing tool name and is not an execution handle. The Host validates the complete generation lease before admitting execution and echoes `instanceID`, `generationKey`, `revision`, and `executionID` in the result wrapper together with the plugin `result`.
 
 #### `host.tool.cancel`
 
-Params: `{ instanceID, executionID }`. Result: `{ cancelled: boolean }`.
+Params: `{ instanceID, generationKey, revision, executionID, reason? }`. Result: `{ cancelled: boolean }`.
 
-The host aborts the retained signal. Cancellation is idempotent and does not hard-kill subprocesses created by a plugin.
+The host aborts the retained signal. Cancellation is idempotent and does not hard-kill subprocesses created by a plugin. `cancelled: true` means the invocation stopped after observing the abort; it does not prove that earlier filesystem, network, process, or other side effects were rolled back. Rust therefore reports a dispatched cancellation as outcome-unknown and must not automatically retry it.
 
 ### Auth
 
@@ -453,6 +485,8 @@ Params:
 ```ts
 {
   instanceID: string
+  generationKey: string
+  revision: string
   executionID: string
   permission: string
   patterns: string[]
@@ -465,7 +499,7 @@ Result: `{}` on approval, or a JSON-RPC error on denial/failure. The host awaits
 
 ### `backend.tool.metadata`
 
-Notification params: `{ instanceID, executionID, title?, metadata? }`. Because this is a notification, the plugin's `metadata(...)` call returns without waiting for Rust.
+Notification params: `{ instanceID, generationKey, revision, executionID, title?, metadata? }`. Because this is a notification, the plugin's `metadata(...)` call returns without waiting for Rust.
 
 ### `backend.diagnostic.publish`
 

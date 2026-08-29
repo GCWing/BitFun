@@ -3,7 +3,7 @@ import type { DialogTurn, Session, TokenUsage } from '../types/flow-chat';
 import {
   buildContextUsageTooltip,
   buildModelSelectorTooltipDetails,
-  buildModelRoundUsageMeta,
+  buildModelRoundCompletionMeta,
   deriveContextUsageFromTurns,
   formatCompactTokenCount,
   getCompressionTriggerTokens,
@@ -24,9 +24,6 @@ const t = (key: string, params?: Record<string, unknown>): string => {
     'modelRound.meta.completed': 'Completed',
     'modelRound.meta.stopped': 'Stopped',
     'modelRound.meta.duration': 'Duration',
-    'modelRound.meta.tokens': 'Tokens',
-    'modelRound.meta.tokensUnavailable': 'unavailable',
-    'modelRound.meta.tokenBreakdown': '{{total}} total, {{input}} in, {{output}} out',
   };
 
   const template = strings[key] ?? key;
@@ -166,35 +163,24 @@ describe('tokenUsageDisplay', () => {
     });
   });
 
-  it('formats model-round timing and token metadata with unavailable output when missing', () => {
-    const tokenUsage: TokenUsage = {
-      inputTokens: 1000,
-      totalTokens: 1300,
-      timestamp: 10,
-    };
-
-    expect(buildModelRoundUsageMeta({
+  it('builds only the compact completion time and duration metadata', () => {
+    expect(buildModelRoundCompletionMeta({
       completedAt: 1700000000000,
-      durationMs: 12345,
-      tokenUsage,
-      formatTime: () => '12:00:00',
-      formatNumber: (value) => String(value),
+      durationMs: 323000,
+      formatTime: () => '12:00:00 PM',
       t,
     })).toEqual([
-      { key: 'completed', label: 'Completed', value: '12:00:00' },
-      { key: 'duration', label: 'Duration', value: '12.3s' },
-      { key: 'tokens', label: 'Tokens', value: '1300 total, 1000 in, unavailable out' },
+      { key: 'completed', label: 'Completed', value: '12:00:00 PM' },
+      { key: 'duration', label: 'Duration', value: '5m23s' },
     ]);
   });
 
-  it('omits the token row for cancelled rounds when provider usage is unavailable', () => {
-    expect(buildModelRoundUsageMeta({
+  it('keeps a stopped round accessible without adding another visual field', () => {
+    expect(buildModelRoundCompletionMeta({
       completedAt: 1700000000000,
       durationMs: 12345,
-      tokenUsage: undefined,
       status: 'cancelled',
       formatTime: () => '12:00:00',
-      formatNumber: (value) => String(value),
       t,
     })).toEqual([
       { key: 'completed', label: 'Stopped', value: '12:00:00' },

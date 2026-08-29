@@ -143,7 +143,8 @@ export class GeneralChatEventMapper {
       id: toolId.length > 0 ? toolId : eventId,
       type: 'tool',
       content: '',
-      tool: incoming
+      tool: index < 0 || !items[index].tool ? incoming :
+        GeneralChatEventMapper.mergeTool(items[index].tool as RemoteToolStatusResponse, incoming)
     };
     if (index < 0) {
       return items.concat([mapped]);
@@ -163,8 +164,29 @@ export class GeneralChatEventMapper {
       return tools.concat([incoming]);
     }
     const next = tools.slice();
-    next[index] = incoming;
+    next[index] = GeneralChatEventMapper.mergeTool(tools[index], incoming);
     return next;
+  }
+
+  private static mergeTool(
+    previous: RemoteToolStatusResponse,
+    incoming: RemoteToolStatusResponse
+  ): RemoteToolStatusResponse {
+    return {
+      id: incoming.id || previous.id,
+      name: incoming.name || previous.name,
+      status: incoming.status || previous.status,
+      duration_ms: incoming.duration_ms !== undefined ? incoming.duration_ms : previous.duration_ms,
+      start_ms: incoming.start_ms !== undefined ? incoming.start_ms : previous.start_ms,
+      input_preview: (incoming.input_preview || '').length > 0 ? incoming.input_preview : previous.input_preview,
+      tool_input: incoming.tool_input !== undefined ? incoming.tool_input : previous.tool_input,
+      stdout: incoming.stdout !== undefined ? incoming.stdout : previous.stdout,
+      stderr: incoming.stderr !== undefined ? incoming.stderr : previous.stderr,
+      tool_output: incoming.tool_output !== undefined ? incoming.tool_output : previous.tool_output,
+      result_preview: incoming.result_preview !== undefined ? incoming.result_preview : previous.result_preview,
+      error_preview: incoming.error_preview !== undefined ? incoming.error_preview : previous.error_preview,
+      exit_code: incoming.exit_code !== undefined ? incoming.exit_code : previous.exit_code
+    };
   }
 
   private static mapTool(incoming: GeneralChatApiTool, eventType: string): RemoteToolStatusResponse {

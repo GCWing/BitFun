@@ -38,7 +38,7 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
-import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
+import { buildModelRoundCompletionMeta } from '../../utils/tokenUsageDisplay';
 import { buildDialogTurnCopyText } from '../../utils/dialogTurnCopy';
 import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
 import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
@@ -362,11 +362,10 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     turnStartedAt,
     turnEndedAt,
     turnDurationMs,
-    turnTokenUsage,
     expandedThinkingItemIds = [],
   }) => {
     const { t } = useTranslation('flow-chat');
-    const { formatDate, formatNumber } = useI18n('flow-chat');
+    const { formatDate } = useI18n('flow-chat');
     const { sessionId, allowTranscriptExport = true } = useFlowChatContext();
     const typewriterRevealGate = useCreateTypewriterRevealGate();
     const [copied, setCopied] = useState(false);
@@ -561,19 +560,17 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       (typeof turnStartedAt === 'number' && typeof completedAt === 'number'
         ? Math.max(0, completedAt - turnStartedAt)
         : round.durationMs);
-    const usageMetaItems = useMemo(() => buildModelRoundUsageMeta({
+    const completionMetaItems = useMemo(() => buildModelRoundCompletionMeta({
       completedAt,
       durationMs: effectiveDurationMs,
-      tokenUsage: turnTokenUsage,
       status: round.status,
       formatTime: timestamp => formatDate(new Date(timestamp), {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
       }),
-      formatNumber,
       t,
-    }), [completedAt, effectiveDurationMs, formatDate, formatNumber, round.status, t, turnTokenUsage]);
+    }), [completedAt, effectiveDurationMs, formatDate, round.status, t]);
     // Wait for typewriter catch-up before revealing footer controls. Reserve
     // footer layout as soon as the model round completes so the eventual
     // reveal does not resize the list (that resize flashed the chat pane).
@@ -581,7 +578,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const shouldReserveFooter = isTurnComplete &&
       isLastRound &&
       !round.isStreaming &&
-      (hasContent || usageMetaItems.length > 0);
+      (hasContent || completionMetaItems.length > 0);
     const shouldRevealFooter = shouldReserveFooter && !typewriterRevealGate.isAnyRevealing;
 
     return (
@@ -753,17 +750,22 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             data-bf-state={shouldRevealFooter ? undefined : 'pending'}
             aria-hidden={!shouldRevealFooter}
           >
-            {usageMetaItems.length > 0 && (
+            {completionMetaItems.length > 0 && (
               <div
                 className="model-round-item__meta"
                 data-bf-component="model-round-item"
                 data-bf-part="meta"
                 aria-label={t('modelRound.meta.label')}
               >
-                {usageMetaItems.map(item => (
-                  <span key={item.key} className="model-round-item__meta-item" data-bf-component="model-round-item" data-bf-part="metaItem">
-                    <span className="model-round-item__meta-label">{item.label}</span>
-                    <span className="model-round-item__meta-value">{item.value}</span>
+                {completionMetaItems.map(item => (
+                  <span
+                    key={item.key}
+                    className="model-round-item__meta-item"
+                    data-bf-component="model-round-item"
+                    data-bf-part="metaItem"
+                    aria-label={`${item.label}: ${item.value}`}
+                  >
+                    {item.value}
                   </span>
                 ))}
               </div>

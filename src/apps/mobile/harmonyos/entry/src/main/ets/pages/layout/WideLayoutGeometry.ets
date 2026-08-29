@@ -3,7 +3,8 @@ import { FilePreviewLayout, FilePreviewPlacement } from '../policy/FilePreviewPl
 /** Pure geometry helpers shared by wide conversation presentation paths. */
 export class WideLayoutGeometry {
   static masterPaneWidth(layout: FilePreviewLayout, fallback: number): number {
-    return layout.placement === FilePreviewPlacement.WideTriplePane ? layout.masterPaneWidth : fallback;
+    return layout.placement === FilePreviewPlacement.WideTriplePane ||
+      layout.placement === FilePreviewPlacement.WideMasterPreviewFocus ? layout.masterPaneWidth : fallback;
   }
 
   static detailOffset(collapsed: boolean, expandedOffset: number, collapsedOffset: number): number {
@@ -12,6 +13,14 @@ export class WideLayoutGeometry {
 
   static detailWidth(collapsed: boolean, expandedWidth: number, collapsedWidth: number): number {
     return collapsed ? collapsedWidth : expandedWidth;
+  }
+
+  static showsMasterRestoreButton(collapsed: boolean, layout: FilePreviewLayout): boolean {
+    return collapsed || layout.placement === FilePreviewPlacement.WideFocusSplit;
+  }
+
+  static restoreMasterClosesPreview(layout: FilePreviewLayout): boolean {
+    return layout.placement === FilePreviewPlacement.WideFocusSplit;
   }
 
   static areaLength(value: Object): number {

@@ -2156,11 +2156,6 @@ const ReasoningPresetPill: React.FC<{
   );
 };
 
-// ─── Agent Mode ─────────────────────────────────────────────────────────────
-
-type AgentMode = 'agentic' | 'Plan' | 'debug';
-const AGENT_MODE_ORDER: AgentMode[] = ['agentic', 'Plan', 'debug'];
-
 // ─── ChatPage ───────────────────────────────────────────────────────────────
 
 const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName, onBack, autoFocus }) => {
@@ -2178,21 +2173,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   } = useMobileStore();
 
   const { isDark, toggleTheme } = useTheme();
-  const modeOptions: { id: AgentMode; label: string }[] = useMemo(() => ([
-    { id: 'agentic', label: t('chat.modeAgentic') },
-    { id: 'Plan', label: t('chat.modePlan') },
-    { id: 'debug', label: t('chat.modeDebug') },
-  ]), [t]);
   const messages = getMessages(sessionId);
   const [input, setInput] = useState('');
-  const [agentMode, setAgentMode] = useState<AgentMode>('agentic');
-
-  const cycleAgentMode = useCallback(() => {
-    setAgentMode(prev => {
-      const idx = AGENT_MODE_ORDER.indexOf(prev);
-      return AGENT_MODE_ORDER[(idx + 1) % AGENT_MODE_ORDER.length];
-    });
-  }, []);
   const [liveTitle, setLiveTitle] = useState(sessionName);
   const [modelCatalog, setModelCatalog] = useState<RemoteModelCatalog | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string>('auto');
@@ -2618,13 +2600,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         })
       : undefined;
     try {
-      await sessionMgr.sendMessage(sessionId, text, agentMode, imageContexts);
+      await sessionMgr.sendMessage(sessionId, text, 'agentic', imageContexts);
       if (!isChatTargetCurrent(targetEpoch)) return;
       pollerRef.current?.nudge();
     } catch (e: any) {
       reportRemoteSessionError(e, setError);
     }
-  }, [agentMode, captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, menuMessage, sessionId, sessionMgr, setError]);
 
   const handleDeleteMessage = useCallback(async () => {
     if (!menuMessage) return;
@@ -2872,7 +2854,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       await sessionMgr.sendMessage(
         sessionId,
         text || t('chat.imageAttachmentFallback'),
-        agentMode,
+        'agentic',
         imageContexts,
       );
       if (!isChatTargetCurrent(targetEpoch)) return;
@@ -2888,7 +2870,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         setOptimisticMsg(null);
       }
     }
-  }, [agentMode, captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionId, sessionMgr, setError, t]);
+  }, [captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionId, sessionMgr, setError, t]);
 
   const handleImageSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -2974,10 +2956,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       e.preventDefault();
       handleSend();
     }
-    if (e.key === 'Tab' && e.shiftKey) {
-      e.preventDefault();
-      cycleAgentMode();
-    }
   };
 
   const handleCancel = async () => {
@@ -2988,23 +2966,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       // best effort
     }
   };
-
-  // Listen at document level so the shortcut works even when the input is collapsed.
-  const cycleAgentModeRef = useRef(cycleAgentMode);
-  cycleAgentModeRef.current = cycleAgentMode;
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Tab' && e.shiftKey) {
-        const target = e.target as HTMLElement;
-        const tag = target?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
-        e.preventDefault();
-        cycleAgentModeRef.current();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
 
   const workspaceName = currentWorkspace?.project_name || currentWorkspace?.path?.split('/').pop() || '';
   const gitBranch = currentWorkspace?.git_branch;
@@ -3438,27 +3399,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             </div>
             <div className="chat-page__input-actions-right">
               {inputExpanded && (
-                <>
-                  <button
-                    className={`chat-page__mode-pill${agentMode !== 'agentic' ? ` chat-page__mode-pill--${agentMode}` : ''}`}
-                    onClick={cycleAgentMode}
-                    disabled={imageAnalyzing}
-                  >
-                    {modeOptions.find(m => m.id === agentMode)?.label}
-                  </button>
-                  <button
-                    className="chat-page__action-btn"
-                    onClick={handleImageSelect}
-                    disabled={imageAnalyzing || pendingImages.length >= 5}
-                    aria-label={t('common.attachImage')}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-                      <circle cx="9" cy="9" r="2"/>
-                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-                    </svg>
-                  </button>
-                </>
+                <button
+                  className="chat-page__action-btn"
+                  onClick={handleImageSelect}
+                  disabled={imageAnalyzing || pendingImages.length >= 5}
+                  aria-label={t('common.attachImage')}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                    <circle cx="9" cy="9" r="2"/>
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                  </svg>
+                </button>
               )}
               {imageAnalyzing ? (
                 <button className="chat-page__send-btn is-stop" aria-label={t('common.stop')} disabled>

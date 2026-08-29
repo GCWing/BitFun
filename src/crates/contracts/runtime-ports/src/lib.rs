@@ -13,6 +13,8 @@ pub use bitfun_core_types::{
     WorktreeSummary,
 };
 
+#[cfg(feature = "hook-function-runtime")]
+mod hook_function;
 #[cfg(feature = "workspace-ports")]
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
@@ -40,6 +42,8 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
+#[cfg(feature = "hook-function-runtime")]
+pub use hook_function::*;
 #[cfg(feature = "workspace-ports")]
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,

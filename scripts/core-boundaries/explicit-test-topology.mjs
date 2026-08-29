@@ -153,6 +153,11 @@ export const runtimePortsIntegrationTestTargets = [
     requiredFeatures: ['git-port'],
   },
   {
+    name: 'hook_function_runtime_contracts',
+    path: 'tests/hook_function_runtime_contracts.rs',
+    requiredFeatures: ['hook-function-runtime'],
+  },
+  {
     name: 'script_tool_port_contracts',
     path: 'tests/script_tool_port_contracts.rs',
     requiredFeatures: ['script-tool-runtime'],

@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { SessionControlToolCard as SessionControlToolCardView } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 interface SessionSummary {
@@ -169,130 +167,52 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     }
   };
 
-  const expandedContent = hasDetails ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {workspace && (
-        <div className="detail-item">
-          <span className="detail-label">{t('shared:features.workspace')}:</span>
-          <span className="detail-value">{workspace}</span>
-        </div>
-      )}
-
-      {sessionId && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.sessionId')}:</span>
-          <span className="detail-value">{sessionId}</span>
-        </div>
-      )}
-
-      {sessionName && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.sessionName')}:</span>
-          <span className="detail-value">{sessionName}</span>
-        </div>
-      )}
-
-      {agentType && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.agentType')}:</span>
-          <span className="detail-value">{agentType}</span>
-        </div>
-      )}
-
-      {action === 'cancel' && cancelStatus && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.cancelStatus')}:</span>
-          <span className="detail-value">
-            {cancelStatus === 'no_active_turn'
-              ? t('toolCards.sessionControl.noActiveTurnStatus')
-              : t('toolCards.sessionControl.cancelRequestedStatus')}
-          </span>
-        </div>
-      )}
-
-      {action === 'cancel' && cancelledTurnId && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.cancelledTurnId')}:</span>
-          <span className="detail-value">{cancelledTurnId}</span>
-        </div>
-      )}
-
-      {action === 'cancel' && hadActiveTurn !== undefined && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.hadActiveTurn')}:</span>
-          <span className="detail-value">
-            {hadActiveTurn
-              ? t('toolCards.sessionControl.booleanYes')
-              : t('toolCards.sessionControl.booleanNo')}
-          </span>
-        </div>
-      )}
-
-      {action === 'list' && (
-        <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.sessionCount')}:</span>
-          <span className="detail-value">{sessionCount}</span>
-        </div>
-      )}
-
-      {action === 'list' && sessions.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {sessions.map((item, index) => (
-            <div
-              key={`${item.session_id ?? 'session'}-${index}`}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                padding: '8px 10px',
-                borderRadius: 8,
-                background: 'var(--bf-appearance-token-element-bg-subtle)'
-              }}
-            >
-              <span style={{ fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)', wordBreak: 'break-all' }}>
-                {item.session_id || t('toolCards.sessionControl.unknownSession')}
-              </span>
-              <span>{item.session_name || t('toolCards.sessionControl.defaultSessionName')}</span>
-              <span style={{ opacity: 0.7 }}>{item.agent_type || '-'}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {action === 'list' && sessions.length === 0 && status === 'completed' && (
-        <div style={{ opacity: 0.7 }}>
-          {t('toolCards.sessionControl.noSessions')}
-        </div>
-      )}
-
-      {toolResult?.error && (
-        <div style={{ color: 'var(--bf-appearance-token-color-error)', whiteSpace: 'pre-wrap' }}>
-          {toolResult.error}
-        </div>
-      )}
-    </div>
-  ) : null;
+  const fields = [
+    workspace ? { label: `${t('shared:features.workspace')}:`, value: workspace, monospace: true } : null,
+    sessionId ? { label: `${t('toolCards.sessionControl.sessionId')}:`, value: sessionId, monospace: true } : null,
+    sessionName ? { label: `${t('toolCards.sessionControl.sessionName')}:`, value: sessionName } : null,
+    agentType ? { label: `${t('toolCards.sessionControl.agentType')}:`, value: agentType } : null,
+    action === 'cancel' && cancelStatus ? {
+      label: `${t('toolCards.sessionControl.cancelStatus')}:`,
+      value: cancelStatus === 'no_active_turn'
+        ? t('toolCards.sessionControl.noActiveTurnStatus')
+        : t('toolCards.sessionControl.cancelRequestedStatus'),
+    } : null,
+    action === 'cancel' && cancelledTurnId
+      ? { label: `${t('toolCards.sessionControl.cancelledTurnId')}:`, value: cancelledTurnId, monospace: true }
+      : null,
+    action === 'cancel' && hadActiveTurn !== undefined ? {
+      label: `${t('toolCards.sessionControl.hadActiveTurn')}:`,
+      value: hadActiveTurn
+        ? t('toolCards.sessionControl.booleanYes')
+        : t('toolCards.sessionControl.booleanNo'),
+    } : null,
+    action === 'list'
+      ? { label: `${t('toolCards.sessionControl.sessionCount')}:`, value: sessionCount }
+      : null,
+  ].filter((field): field is NonNullable<typeof field> => Boolean(field));
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div ref={cardRootRef} data-bf-adapter="session-control" data-tool-card-id={toolId ?? ''}>
+      <SessionControlToolCardView
         status={status}
         isExpanded={isExpanded}
-        onClick={() => {
-          if (hasDetails) {
-            applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
-          }
-        }}
-        className="session-control-card"
-        clickable={hasDetails}
-        header={(
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Layers size={16} />} />}
-            action={`${t('toolCards.sessionControl.title')}:`}
-            content={renderContent()}
-          />
-        )}
-        expandedContent={expandedContent}
+        onToggle={hasDetails
+          ? () => applyExpandedState(isExpanded, !isExpanded, setIsExpanded)
+          : undefined}
+        action={`${t('toolCards.sessionControl.title')}:`}
+        summary={renderContent()}
+        fields={fields}
+        sessions={action === 'list' ? sessions.map((item, index) => ({
+          agentType: item.agent_type || '-',
+          id: item.session_id || t('toolCards.sessionControl.unknownSession'),
+          key: `${item.session_id ?? 'session'}-${index}`,
+          name: item.session_name || t('toolCards.sessionControl.defaultSessionName'),
+        })) : undefined}
+        emptyState={action === 'list' && sessions.length === 0 && status === 'completed'
+          ? t('toolCards.sessionControl.noSessions')
+          : undefined}
+        error={toolResult?.error}
       />
     </div>
   );

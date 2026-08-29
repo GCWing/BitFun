@@ -23,7 +23,7 @@ export class ConversationHeaderPresentation {
 }
 
 /**
- * One header contract for local chat, remote chat, create, and remote home.
+ * One header contract for local and remote chat.
  * View supplies i18n for fallbackKey; this policy only decides structure.
  */
 export class ConversationHeaderPolicy {
@@ -36,9 +36,6 @@ export class ConversationHeaderPolicy {
     workspaceBranch: string,
     hasTimeline: boolean
   ): ConversationHeaderPresentation {
-    if (surface === ChatSurface.Create) {
-      return new ConversationHeaderPresentation('', '', 'remote.create.title', false, false);
-    }
     if (surface === ChatSurface.Remote) {
       return new ConversationHeaderPresentation(
         sessionTitle,

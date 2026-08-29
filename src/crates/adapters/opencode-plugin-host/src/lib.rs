@@ -1,3 +1,4 @@
+mod backend;
 mod frame;
 mod host_log;
 mod http;
@@ -7,35 +8,87 @@ mod stream_registry;
 
 use bitfun_services_core::process_tree::{CleanupOutcome, ProcessTreeChild};
 use rand::{distributions::Alphanumeric, Rng};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 
-use frame::{read_frame, write_frame};
-pub use http::{
-    json_error_body, match_http_route, read_host_stream, BackendHttpRequest, BackendHttpResponse,
-    HostStreamReadError, HttpRouteError, HttpRouteMatch, OpenCodeClientRoute, StreamDescriptor,
-    MAX_HTTP_BODY_BYTES, MAX_STREAM_CHUNK_BYTES,
+pub use backend::{
+    register_backend_handlers, BackendDiagnostic, BackendDiagnosticError, BackendDiagnosticEvent,
+    BackendDiagnosticSeverity, BackendRouteFailure, BackendRouteRequest, OpenCodeBackendHandler,
+    PluginHostBackendBridge,
 };
-pub use peer::{JsonRpcPeer, PluginHostClient, RpcHandlerError};
-pub use stream_registry::{
-    PluginHostStreamRegistry, StreamCancelParams, StreamCancelResult, StreamReadParams,
-    StreamReadResult, StreamRegistryError,
+use frame::{read_frame, write_frame};
+pub use http::OpenCodeClientRoute;
+#[cfg(test)]
+pub(crate) use http::{read_host_stream, HostStreamReadError, StreamDescriptor};
+pub use peer::{
+    hook_function_runtime, JsonRpcPeer, OpenCodeHookFunctionRuntime, PluginHostClient,
+    RpcHandlerError,
 };
 
 const PROTOCOL_VERSION: u64 = 1;
-const MIN_NEGOTIATED_FRAME_BYTES: usize = 64 * 1024;
 const DEFAULT_MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
+const STARTUP_TERMINATE_GRACE: Duration = Duration::from_millis(500);
+const MIN_NEGOTIATED_FRAME_BYTES: usize = 1024;
+pub const CONFIG_CONTRIBUTORS_V1: &str = "config-contributors-v1";
+pub const CONFIG_CONTRIBUTIONS_V2: &str = "config-contributions-v2";
+pub const GENERATION_FENCING_V1: &str = "generation-fencing-v1";
 static NEXT_CONNECTION_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PluginHostCapabilities {
+    negotiated: BTreeSet<String>,
+}
+
+impl PluginHostCapabilities {
+    pub fn all_supported() -> Self {
+        Self {
+            negotiated: [
+                CONFIG_CONTRIBUTORS_V1,
+                CONFIG_CONTRIBUTIONS_V2,
+                GENERATION_FENCING_V1,
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        }
+    }
+
+    pub fn supports(&self, capability: &str) -> bool {
+        self.negotiated.contains(capability)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &str> {
+        self.negotiated.iter().map(String::as_str)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginGenerationLease {
+    #[serde(rename = "instanceID")]
+    pub instance_id: String,
+    pub generation_key: String,
+    pub revision: String,
+}
+
+#[derive(Debug)]
+struct HandshakeNegotiation {
+    max_frame_bytes: usize,
+    capabilities: PluginHostCapabilities,
+}
 
 #[derive(Debug, Clone)]
 pub struct PluginHostConfig {
@@ -65,6 +118,19 @@ pub struct PluginPrepareRequest {
     pub configuration_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_base_directory: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_install: Option<bool>,
+}
+
+/// Adapter-owned, protocol-independent facts needed by product assembly to
+/// fence a reviewed plugin graph before import.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginPreparationSummary {
+    pub review_digest: String,
+    pub reviewed_count: usize,
+    pub prepared_count: usize,
+    pub failed_count: usize,
+    pub content_digests: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -72,6 +138,8 @@ pub struct PluginPrepareRequest {
 pub struct PluginInstanceOpenRequest {
     #[serde(rename = "instanceID")]
     pub instance_id: String,
+    pub generation_key: String,
+    pub revision: String,
     pub project: Value,
     pub config: serde_json::Map<String, Value>,
     pub directory: String,
@@ -79,6 +147,10 @@ pub struct PluginInstanceOpenRequest {
     pub plugins: Vec<PluginDeclaration>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configuration_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_content_digests: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_review_digest: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -93,20 +165,12 @@ pub enum PluginHostError {
     PrepareCache(#[source] std::io::Error),
     #[error("failed to bind plugin host listener: {0}")]
     Bind(#[source] std::io::Error),
-    #[error("plugin host runtime executable was not found: {0}")]
-    RuntimeNotFound(PathBuf),
     #[error("failed to start plugin host runtime: {0}")]
     Spawn(#[source] std::io::Error),
     #[error("failed to prepare plugin host log: {0}")]
     PrepareLog(#[source] std::io::Error),
     #[error("plugin host did not connect within the startup timeout")]
     StartupTimeout,
-    #[error("plugin host startup failed ({startup}) and process-tree cleanup failed: {cleanup}")]
-    StartupCleanup {
-        startup: String,
-        #[source]
-        cleanup: std::io::Error,
-    },
     #[error("plugin host IPC failed: {0}")]
     Io(#[source] std::io::Error),
     #[error("plugin host handshake frame is invalid: {0}")]
@@ -119,6 +183,15 @@ pub enum PluginHostError {
     ShuttingDown,
     #[error("plugin host JSON-RPC request timed out: method={method}, request_id={request_id}")]
     RequestTimeout { method: String, request_id: String },
+    #[error("plugin tool execution stopped after its deadline: execution_id={execution_id}")]
+    ToolStoppedAfterTimeout { execution_id: String },
+    #[error(
+        "plugin tool execution outcome is unknown: execution_id={execution_id}, reason={reason}"
+    )]
+    ToolOutcomeUnknown {
+        execution_id: String,
+        reason: String,
+    },
     #[error("plugin host JSON-RPC returned an error: code={code}, message={message}")]
     Rpc {
         code: i64,
@@ -132,6 +205,7 @@ pub enum PluginHostError {
 pub struct PluginHost {
     child: ProcessTreeChild,
     client: PluginHostClient,
+    runtime: Arc<dyn bitfun_runtime_ports::HookFunctionRuntime>,
     host_log: Option<host_log::HostLogDrain>,
     max_frame_bytes: usize,
 }
@@ -169,7 +243,6 @@ pub enum PluginHostShutdownDisposition {
 pub struct PluginHostShutdownReport {
     pub generation: u64,
     pub disposition: PluginHostShutdownDisposition,
-    pub reaped: bool,
     pub rpc_completed: bool,
     pub exit_code: Option<i32>,
     pub duration_ms: u64,
@@ -180,7 +253,7 @@ impl PluginHost {
         Self::start_with_timeout(config, STARTUP_TIMEOUT).await
     }
 
-    async fn start_with_timeout(
+    pub async fn start_with_timeout(
         config: PluginHostConfig,
         startup_timeout: Duration,
     ) -> Result<Self, PluginHostError> {
@@ -210,45 +283,43 @@ impl PluginHost {
             .stderr(Stdio::piped());
         let mut child = ProcessTreeChild::spawn(&mut command)
             .await
-            .map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    PluginHostError::RuntimeNotFound(config.runtime_command.clone())
-                } else {
-                    PluginHostError::Spawn(error)
-                }
-            })?;
-        let host_log = match host_log::attach_host_log(&mut child, &config.log_file).await {
-            Ok(host_log) => host_log,
-            Err(error) => {
-                return Err(cleanup_failed_start(
-                    &mut child,
-                    None,
-                    PluginHostError::PrepareLog(error),
-                )
-                .await);
-            }
-        };
+            .map_err(PluginHostError::Spawn)?;
+        let host_log = host_log::attach_host_log(&mut child, &config.log_file)
+            .await
+            .map_err(PluginHostError::PrepareLog)?;
 
-        let (stream, max_frame_bytes) = match accept_authenticated_connection(
+        let connection = accept_authenticated_connection(
             &listener,
             &token,
             &config.cache_directory,
             startup_timeout,
         )
-        .await
-        {
+        .await;
+        let (stream, negotiation) = match connection {
             Ok(connection) => connection,
             Err(error) => {
-                return Err(cleanup_failed_start(&mut child, Some(host_log), error).await);
+                if let Err(cleanup_error) = child.terminate(STARTUP_TERMINATE_GRACE).await {
+                    log::error!("Plugin host startup cleanup failed: {cleanup_error}");
+                }
+                let _ = host_log.flush(Duration::from_secs(1)).await;
+                return Err(error);
             }
         };
         let generation = NEXT_CONNECTION_GENERATION.fetch_add(1, Ordering::Relaxed);
-        let peer = JsonRpcPeer::start(stream, generation, max_frame_bytes);
+        let peer = JsonRpcPeer::start_with_capabilities(
+            stream,
+            generation,
+            negotiation.max_frame_bytes,
+            negotiation.capabilities,
+        );
+        let client = peer.client();
+        let runtime = hook_function_runtime(client.clone());
         Ok(Self {
             child,
-            client: peer.client(),
+            client,
+            runtime,
             host_log: Some(host_log),
-            max_frame_bytes,
+            max_frame_bytes: negotiation.max_frame_bytes,
         })
     }
 
@@ -258,6 +329,10 @@ impl PluginHost {
 
     pub fn client(&self) -> PluginHostClient {
         self.client.clone()
+    }
+
+    pub fn runtime(&self) -> Arc<dyn bitfun_runtime_ports::HookFunctionRuntime> {
+        self.runtime.clone()
     }
 
     pub fn is_connected(&mut self) -> Result<bool, PluginHostError> {
@@ -310,10 +385,8 @@ impl PluginHost {
                 } else {
                     PluginHostShutdownDisposition::ExitedAfterShutdown
                 };
-                let mut report =
+                let report =
                     shutdown_report(generation, disposition, true, status.code(), started_at);
-                report.reaped =
-                    reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
                 if report.disposition == PluginHostShutdownDisposition::Graceful {
                     log::info!(
                         "Plugin host exited gracefully: generation={}, exit_code={:?}, duration_ms={}",
@@ -347,15 +420,13 @@ impl PluginHost {
             .close("plugin host graceful shutdown fallback")
             .await;
         if let Ok(Ok(status)) = tokio::time::timeout(policy.eof_timeout, self.child.wait()).await {
-            let mut report = shutdown_report(
+            let report = shutdown_report(
                 generation,
                 PluginHostShutdownDisposition::ExitedAfterConnectionClose,
                 rpc_completed,
                 status.code(),
                 started_at,
             );
-            report.reaped =
-                reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
             log::info!(
                 "Plugin host exited after RPC connection close: generation={}, exit_code={:?}, duration_ms={}",
                 generation,
@@ -366,21 +437,37 @@ impl PluginHost {
             return report;
         }
 
-        let reaped = reap_process_tree(&mut self.child, policy.terminate_grace, generation).await;
+        let cleanup = self.child.terminate(policy.terminate_grace).await;
         let exit_code = self
             .child
             .try_wait()
             .ok()
             .flatten()
             .and_then(|status| status.code());
-        let mut report = shutdown_report(
+        let report = shutdown_report(
             generation,
             PluginHostShutdownDisposition::Forced,
             rpc_completed,
             exit_code,
             started_at,
         );
-        report.reaped = reaped;
+        match cleanup {
+            Ok(CleanupOutcome::AlreadyExited) => log::warn!(
+                "Plugin host exited during forced cleanup: generation={}, duration_ms={}",
+                generation,
+                report.duration_ms
+            ),
+            Ok(_) => log::warn!(
+                "Plugin host process tree terminated: generation={}, duration_ms={}",
+                generation,
+                report.duration_ms
+            ),
+            Err(error) => log::error!(
+                "Plugin host process tree termination failed: generation={}, error={}",
+                generation,
+                error
+            ),
+        }
         self.flush_host_log(policy.eof_timeout).await;
         report
     }
@@ -398,57 +485,16 @@ impl PluginHost {
     }
 }
 
-async fn reap_process_tree(child: &mut ProcessTreeChild, grace: Duration, generation: u64) -> bool {
-    match child.terminate(grace).await {
-        Ok(CleanupOutcome::AlreadyExited) => {
-            log::info!("Plugin host process tree already exited: generation={generation}");
-            true
-        }
-        Ok(_) => {
-            log::info!("Plugin host process tree reaped: generation={generation}");
-            true
-        }
-        Err(error) => {
-            log::error!(
-                "Plugin host process tree termination failed: generation={}, error={}",
-                generation,
-                error
-            );
-            false
-        }
-    }
-}
-
-async fn cleanup_failed_start(
-    child: &mut ProcessTreeChild,
-    host_log: Option<host_log::HostLogDrain>,
-    startup: PluginHostError,
-) -> PluginHostError {
-    let policy = PluginHostShutdownPolicy::default();
-    let cleanup = child.terminate(policy.terminate_grace).await;
-    if let Some(host_log) = host_log {
-        let _ = host_log.flush(policy.eof_timeout).await;
-    }
-    match cleanup {
-        Ok(_) => startup,
-        Err(cleanup) => PluginHostError::StartupCleanup {
-            startup: startup.to_string(),
-            cleanup,
-        },
-    }
-}
-
 async fn accept_authenticated_connection(
     listener: &TcpListener,
-    expected_token: &str,
+    token: &str,
     cache_directory: &Path,
     startup_timeout: Duration,
-) -> Result<(TcpStream, usize), PluginHostError> {
+) -> Result<(TcpStream, HandshakeNegotiation), PluginHostError> {
     tokio::time::timeout(startup_timeout, async {
         let (mut stream, _) = listener.accept().await.map_err(PluginHostError::Io)?;
-        let max_frame_bytes =
-            complete_handshake(&mut stream, expected_token, cache_directory).await?;
-        Ok((stream, max_frame_bytes))
+        let negotiation = complete_handshake(&mut stream, token, cache_directory).await?;
+        Ok((stream, negotiation))
     })
     .await
     .map_err(|_| PluginHostError::StartupTimeout)?
@@ -464,7 +510,6 @@ fn shutdown_report(
     PluginHostShutdownReport {
         generation,
         disposition,
-        reaped: false,
         rpc_completed,
         exit_code,
         duration_ms: elapsed_ms(started_at),
@@ -494,7 +539,7 @@ async fn complete_handshake(
     stream: &mut TcpStream,
     expected_token: &str,
     cache_directory: &Path,
-) -> Result<usize, PluginHostError> {
+) -> Result<HandshakeNegotiation, PluginHostError> {
     let request = read_frame(stream, DEFAULT_MAX_FRAME_BYTES).await?;
     let jsonrpc = request.get("jsonrpc").and_then(Value::as_str);
     let method = request.get("method").and_then(Value::as_str);
@@ -513,6 +558,16 @@ async fn complete_handshake(
         .and_then(|params| params.get("maxFrameBytes"))
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok());
+    let requested_capabilities = params
+        .and_then(|params| params.get("capabilities"))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
     if jsonrpc != Some("2.0")
         || method != Some("backend.handshake")
         || request_id.is_none()
@@ -527,18 +582,32 @@ async fn complete_handshake(
     }
     let max_frame_bytes = requested_frame_bytes
         .unwrap_or(DEFAULT_MAX_FRAME_BYTES)
-        .clamp(MIN_NEGOTIATED_FRAME_BYTES, MAX_FRAME_BYTES);
+        .max(MIN_NEGOTIATED_FRAME_BYTES)
+        .min(MAX_FRAME_BYTES);
+    let negotiated = [
+        CONFIG_CONTRIBUTORS_V1,
+        CONFIG_CONTRIBUTIONS_V2,
+        GENERATION_FENCING_V1,
+    ]
+    .into_iter()
+    .filter(|capability| requested_capabilities.contains(capability))
+    .map(str::to_string)
+    .collect::<BTreeSet<_>>();
     let response = json!({
         "jsonrpc": "2.0",
         "id": request_id,
         "result": {
             "protocolVersion": PROTOCOL_VERSION,
             "maxFrameBytes": max_frame_bytes,
-            "cacheDirectory": cache_directory.to_string_lossy()
+            "cacheDirectory": cache_directory.to_string_lossy(),
+            "capabilities": negotiated
         }
     });
     write_frame(stream, &response, DEFAULT_MAX_FRAME_BYTES).await?;
-    Ok(max_frame_bytes)
+    Ok(HandshakeNegotiation {
+        max_frame_bytes,
+        capabilities: PluginHostCapabilities { negotiated },
+    })
 }
 
 #[cfg(test)]

@@ -52,6 +52,8 @@ export struct ToolStatusList {
   @Param tools: ConversationUiToolStatus[] = [];
   /** Reasoning that ran between these tools; folded away with them. */
   @Param thinkingParts: ActivityThinkingPart[] = [];
+  /** Explicit invalidation signal for replacement snapshots from the relay. */
+  @Param renderRevision: number = 0;
   @Param isBusy: boolean = false;
   @Event onApproveTool: (toolId: string, updatedInput?: Object) => void =
     (_toolId: string, _updatedInput?: Object) => {};
@@ -66,7 +68,7 @@ export struct ToolStatusList {
 
   build() {
     Column({ space: 4 }) {
-      ForEach(this.toolRenderEntries(), (entry: ToolRenderEntry, index: number) => {
+      ForEach(this.toolRenderEntries(this.renderRevision), (entry: ToolRenderEntry, index: number) => {
         if (entry.type === 'summary') {
           this.CollapsedToolSummary(entry)
         } else if (entry.thinking) {
@@ -346,7 +348,7 @@ export struct ToolStatusList {
     return this.isEmphasizedToolRow(tool, index) ? 10 : 0;
   }
 
-  private toolRenderEntries(): ToolRenderEntry[] {
+  private toolRenderEntries(_renderRevision: number): ToolRenderEntry[] {
     const groups = this.expanded ?
       ToolCollapsePolicy.expandedGroups(this.tools) :
       ToolCollapsePolicy.collapsedGroups(this.tools);
@@ -620,8 +622,7 @@ export struct ToolStatusList {
     }
 
     if (name === 'Task') {
-      return payload.description || payload.task || payload.prompt || payload.content ||
-        RemoteI18n.t('chat.toolTaskFallback');
+      return ToolStatusPresentationPolicy.taskTitle(tool) || RemoteI18n.t('chat.toolTaskFallback');
     }
 
     const path = payload.file_path || payload.filePath || payload.path || '';

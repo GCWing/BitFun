@@ -56,6 +56,7 @@ impl ExternalSubagentModelBinding {
 pub struct ExternalSubagentRegistration {
     pub runtime_key: String,
     pub logical_id: String,
+    pub route_key: String,
     pub ecosystem_id: EcosystemId,
     pub provider_label: String,
     pub model_binding: ExternalSubagentModelBinding,
@@ -96,6 +97,8 @@ struct ExternalSubagentGenerationEntry {
 pub(super) struct ExternalSubagentRegistryState {
     generations: RwLock<HashMap<String, ExternalSubagentGenerationEntry>>,
     workspace_routes: RwLock<HashMap<PathBuf, BTreeMap<String, ExternalSubagentRoute>>>,
+    workspace_route_overlays:
+        RwLock<HashMap<PathBuf, BTreeMap<String, BTreeMap<String, ExternalSubagentRoute>>>>,
 }
 
 impl ExternalSubagentRegistryState {
@@ -103,6 +106,7 @@ impl ExternalSubagentRegistryState {
         Self {
             generations: RwLock::new(HashMap::new()),
             workspace_routes: RwLock::new(HashMap::new()),
+            workspace_route_overlays: RwLock::new(HashMap::new()),
         }
     }
 
@@ -140,10 +144,73 @@ impl ExternalSubagentRegistryState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    fn read_route_overlays(
+        &self,
+    ) -> std::sync::RwLockReadGuard<
+        '_,
+        HashMap<PathBuf, BTreeMap<String, BTreeMap<String, ExternalSubagentRoute>>>,
+    > {
+        self.workspace_route_overlays
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn write_route_overlays(
+        &self,
+    ) -> std::sync::RwLockWriteGuard<
+        '_,
+        HashMap<PathBuf, BTreeMap<String, BTreeMap<String, ExternalSubagentRoute>>>,
+    > {
+        self.workspace_route_overlays
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn effective_routes_for_workspace(
+        &self,
+        workspace_root: &Path,
+    ) -> BTreeMap<String, ExternalSubagentRoute> {
+        let mut effective = self
+            .read_routes()
+            .get(workspace_root)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(overlays) = self.read_route_overlays().get(workspace_root) {
+            // Owner keys provide deterministic overlay precedence. The
+            // OpenCode Config owner is currently the only overlay publisher;
+            // unlike the base table, removing it reveals the latest route
+            // published by another external-source owner.
+            for routes in overlays.values() {
+                effective.extend(routes.clone());
+            }
+        }
+        effective
+    }
+
     pub(super) fn find_generation_entry(&self, runtime_key: &str) -> Option<AgentEntry> {
         self.read_generations()
             .get(runtime_key)
             .map(|entry| entry.agent_entry.clone())
+    }
+
+    /// Resolve a user-facing logical Agent id through the external route table
+    /// for one workspace. External generations are keyed by an opaque runtime
+    /// key, while sessions and product surfaces use the logical id.
+    pub(super) fn find_external_route_entry(
+        &self,
+        logical_id: &str,
+        workspace_root: &Path,
+    ) -> Option<AgentEntry> {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
+        let logical_key = normalize_external_logical_id(logical_id);
+        let runtime_key = match self
+            .effective_routes_for_workspace(&workspace_root)
+            .get(&logical_key)?
+        {
+            ExternalSubagentRoute::External(runtime_key) => runtime_key.clone(),
+            ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => return None,
+        };
+        self.find_generation_entry(&runtime_key)
     }
 
     pub(super) fn has_generation(&self, runtime_key: &str) -> bool {
@@ -151,7 +218,7 @@ impl ExternalSubagentRegistryState {
     }
 
     fn prune_unrouted_generations(&self) {
-        let routed = self
+        let mut routed = self
             .read_routes()
             .values()
             .flat_map(BTreeMap::values)
@@ -160,6 +227,16 @@ impl ExternalSubagentRegistryState {
                 ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => None,
             })
             .collect::<HashSet<_>>();
+        routed.extend(
+            self.read_route_overlays()
+                .values()
+                .flat_map(BTreeMap::values)
+                .flat_map(BTreeMap::values)
+                .filter_map(|route| match route {
+                    ExternalSubagentRoute::External(runtime_key) => Some(runtime_key.clone()),
+                    ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => None,
+                }),
+        );
         self.write_generations()
             .retain(|runtime_key, entry| entry.lease_count > 0 || routed.contains(runtime_key));
     }
@@ -212,6 +289,7 @@ impl ExternalSubagentRegistryState {
         let model_binding = entry.registration.model_binding.clone();
         Some(ExternalPrimaryAgentTurnBinding {
             runtime_agent_key: runtime_key.to_string(),
+            route_key: Some(entry.registration.route_key.clone()),
             model_binding: Some(model_binding.clone()),
             route_owner: SessionAgentRouteOwner::External,
             lease: Some(ExternalSubagentGenerationLease {
@@ -286,12 +364,22 @@ pub struct ExternalSubagentInvocationBinding {
 
 pub struct ExternalPrimaryAgentTurnBinding {
     pub runtime_agent_key: String,
+    pub route_key: Option<String>,
     pub model_binding: Option<ExternalSubagentModelBinding>,
     pub route_owner: SessionAgentRouteOwner,
     pub lease: Option<ExternalSubagentGenerationLease>,
 }
 
 impl AgentRegistry {
+    pub(super) fn find_external_route_entry(
+        &self,
+        logical_id: &str,
+        workspace_root: &Path,
+    ) -> Option<AgentEntry> {
+        self.external_subagents
+            .find_external_route_entry(logical_id, workspace_root)
+    }
+
     /// Returns whether the logical id is owned by an external route in the
     /// requested workspace. `Unavailable` remains externally owned so a
     /// withdrawn candidate cannot expose a same-name local mutation path.
@@ -300,7 +388,6 @@ impl AgentRegistry {
         logical_id: &str,
         workspace_root: Option<&Path>,
     ) -> bool {
-        let routes = self.external_subagents.read_routes();
         let logical_key = normalize_external_logical_id(logical_id);
         let is_external = |route: &ExternalSubagentRoute| {
             matches!(
@@ -310,9 +397,9 @@ impl AgentRegistry {
         };
         workspace_root.is_some_and(|workspace| {
             let workspace = canonical_local_workspace_path(workspace);
-            routes
-                .get(&workspace)
-                .and_then(|workspace_routes| workspace_routes.get(&logical_key))
+            self.external_subagents
+                .effective_routes_for_workspace(&workspace)
+                .get(&logical_key)
                 .is_some_and(is_external)
         })
     }
@@ -322,6 +409,38 @@ impl AgentRegistry {
         workspace_root: &Path,
         registrations: Vec<ExternalSubagentRegistration>,
         routes: BTreeMap<String, ExternalSubagentRoute>,
+    ) {
+        self.install_external_subagent_routes_with_policy(
+            workspace_root,
+            registrations,
+            routes,
+            true,
+        );
+    }
+
+    /// Atomically publish a complete, validated external route generation.
+    /// Routes omitted by the new generation are intentionally released so a
+    /// same-name local Agent becomes visible again.
+    pub fn replace_external_subagent_routes(
+        &self,
+        workspace_root: &Path,
+        registrations: Vec<ExternalSubagentRegistration>,
+        routes: BTreeMap<String, ExternalSubagentRoute>,
+    ) {
+        self.install_external_subagent_routes_with_policy(
+            workspace_root,
+            registrations,
+            routes,
+            false,
+        );
+    }
+
+    fn install_external_subagent_routes_with_policy(
+        &self,
+        workspace_root: &Path,
+        registrations: Vec<ExternalSubagentRegistration>,
+        routes: BTreeMap<String, ExternalSubagentRoute>,
+        preserve_missing_external_routes: bool,
     ) {
         let workspace_root = canonical_local_workspace_path(workspace_root);
         {
@@ -359,12 +478,12 @@ impl AgentRegistry {
             .get(&workspace_root)
             .cloned()
             .unwrap_or_default();
-        // An active external implementation disappearing must never expose a
-        // same-name local implementation implicitly. Keep a fail-closed route
-        // until the external candidate returns or product reconciliation
-        // records an explicit Local choice.
+        // Discovery and temporary-unavailable updates preserve missing
+        // external ownership. A validated plugin generation replacement does
+        // not, because removing a contributed Agent must restore local routing.
         for (logical_id, previous_route) in previous {
-            if !routes.contains_key(&logical_id)
+            if preserve_missing_external_routes
+                && !routes.contains_key(&logical_id)
                 && matches!(
                     previous_route,
                     ExternalSubagentRoute::External(_) | ExternalSubagentRoute::Unavailable
@@ -387,6 +506,70 @@ impl AgentRegistry {
         self.external_subagents.prune_unrouted_generations();
     }
 
+    /// Publish a complete route overlay owned by one extension source.
+    /// Replacing or removing this owner never mutates the base external-source
+    /// routes for the workspace.
+    pub fn replace_external_subagent_route_overlay(
+        &self,
+        workspace_root: &Path,
+        owner: &str,
+        registrations: Vec<ExternalSubagentRegistration>,
+        routes: BTreeMap<String, ExternalSubagentRoute>,
+    ) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
+        let routes = routes
+            .into_iter()
+            .map(|(logical_id, route)| (normalize_external_logical_id(&logical_id), route))
+            .collect();
+        // Hold the overlay publication lock before making its generations
+        // visible. A concurrent base-route refresh may prune generations, but
+        // it cannot observe the new entries without also observing this route
+        // overlay.
+        let mut overlays = self.external_subagents.write_route_overlays();
+        {
+            let mut generations = self.external_subagents.write_generations();
+            for registration in registrations {
+                let runtime_key = registration.runtime_key.clone();
+                let lease_count = generations
+                    .get(&runtime_key)
+                    .map_or(0, |entry| entry.lease_count);
+                let agent_entry = AgentEntry {
+                    category: AgentCategory::SubAgent,
+                    source: AgentSource::External,
+                    subagent_source: Some(SubAgentSource::External),
+                    agent: registration.agent.clone(),
+                    visibility_policy: SubagentVisibilityPolicy::public(),
+                    custom_config: None,
+                };
+                generations.insert(
+                    runtime_key,
+                    ExternalSubagentGenerationEntry {
+                        registration,
+                        agent_entry,
+                        lease_count,
+                    },
+                );
+            }
+        }
+        let workspace_overlays = overlays.entry(workspace_root).or_default();
+        workspace_overlays.insert(owner.to_string(), routes);
+        drop(overlays);
+        self.external_subagents.prune_unrouted_generations();
+    }
+
+    pub fn release_external_subagent_route_overlay(&self, workspace_root: &Path, owner: &str) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
+        let mut overlays = self.external_subagents.write_route_overlays();
+        if let Some(workspace_overlays) = overlays.get_mut(&workspace_root) {
+            workspace_overlays.remove(owner);
+            if workspace_overlays.is_empty() {
+                overlays.remove(&workspace_root);
+            }
+        }
+        drop(overlays);
+        self.external_subagents.prune_unrouted_generations();
+    }
+
     pub fn resolve_subagent_for_fresh_invocation(
         &self,
         logical_id: &str,
@@ -399,9 +582,8 @@ impl AgentRegistry {
                 let workspace_key = canonical_local_workspace_path(workspace_root);
                 if let Some(route) = self
                     .external_subagents
-                    .read_routes()
-                    .get(&workspace_key)
-                    .and_then(|routes| routes.get(&logical_key))
+                    .effective_routes_for_workspace(&workspace_key)
+                    .get(&logical_key)
                     .cloned()
                 {
                     return match route {
@@ -430,22 +612,38 @@ impl AgentRegistry {
         external_sources_supported: bool,
         expected_owner: Option<SessionAgentRouteOwner>,
     ) -> Option<ExternalPrimaryAgentTurnBinding> {
+        self.resolve_primary_agent_for_turn_with_route(
+            logical_id,
+            workspace_root,
+            external_sources_supported,
+            expected_owner,
+            None,
+        )
+    }
+
+    pub fn resolve_primary_agent_for_turn_with_route(
+        &self,
+        logical_id: &str,
+        workspace_root: Option<&Path>,
+        external_sources_supported: bool,
+        expected_owner: Option<SessionAgentRouteOwner>,
+        expected_route_key: Option<&str>,
+    ) -> Option<ExternalPrimaryAgentTurnBinding> {
         let logical_key = normalize_external_logical_id(logical_id);
         if external_sources_supported {
             if let Some(workspace_root) = workspace_root {
                 let workspace_key = canonical_local_workspace_path(workspace_root);
                 if let Some(route) = self
                     .external_subagents
-                    .read_routes()
-                    .get(&workspace_key)
-                    .and_then(|routes| routes.get(&logical_key))
+                    .effective_routes_for_workspace(&workspace_key)
+                    .get(&logical_key)
                     .cloned()
                 {
                     let binding = match route {
                         ExternalSubagentRoute::Local => {
                             match self.find_agent_entry(logical_id, Some(workspace_root)) {
                                 Some(entry) if is_local_session_primary_entry(&entry) => {
-                                    Some(local_primary_binding(entry.agent.id()))
+                                    Some(local_primary_binding(&entry))
                                 }
                                 Some(entry) => {
                                     warn!(
@@ -466,6 +664,9 @@ impl AgentRegistry {
                     };
                     return binding.filter(|binding| {
                         expected_owner.is_none_or(|owner| binding.route_owner == owner)
+                            && expected_route_key.is_none_or(|route_key| {
+                                binding.route_key.as_deref() == Some(route_key)
+                            })
                     });
                 }
             }
@@ -473,9 +674,9 @@ impl AgentRegistry {
         if expected_owner == Some(SessionAgentRouteOwner::External) {
             return None;
         }
-        match self.find_agent_entry(logical_id, workspace_root) {
+        let binding = match self.find_agent_entry(logical_id, workspace_root) {
             Some(entry) if is_local_session_primary_entry(&entry) => {
-                Some(local_primary_binding(entry.agent.id()))
+                Some(local_primary_binding(&entry))
             }
             Some(entry) => {
                 warn!(
@@ -494,7 +695,11 @@ impl AgentRegistry {
                 );
                 None
             }
-        }
+        };
+        binding.filter(|binding| {
+            expected_route_key
+                .is_none_or(|route_key| binding.route_key.as_deref() == Some(route_key))
+        })
     }
 
     /// Resolve only the currently approved external route for an exact
@@ -511,9 +716,8 @@ impl AgentRegistry {
         let logical_key = normalize_external_logical_id(logical_id);
         let route = self
             .external_subagents
-            .read_routes()
-            .get(&workspace_key)
-            .and_then(|routes| routes.get(&logical_key))
+            .effective_routes_for_workspace(&workspace_key)
+            .get(&logical_key)
             .cloned()?;
         match route {
             ExternalSubagentRoute::External(runtime_key) => {
@@ -535,10 +739,7 @@ impl AgentRegistry {
         let workspace_root = canonical_local_workspace_path(workspace_root);
         let routes = self
             .external_subagents
-            .read_routes()
-            .get(&workspace_root)
-            .cloned()
-            .unwrap_or_default();
+            .effective_routes_for_workspace(&workspace_root);
         let generations = self.external_subagents.read_generations();
         for (logical_id, route) in routes {
             match route {
@@ -572,10 +773,7 @@ impl AgentRegistry {
         let workspace_root = canonical_local_workspace_path(workspace_root);
         let routes = self
             .external_subagents
-            .read_routes()
-            .get(&workspace_root)
-            .cloned()
-            .unwrap_or_default();
+            .effective_routes_for_workspace(&workspace_root);
         let generations = self.external_subagents.read_generations();
         for (logical_id, route) in routes {
             match route {
@@ -642,9 +840,11 @@ fn is_local_session_primary_entry(entry: &AgentEntry) -> bool {
             && is_builtin_session_primary_agent(entry.agent.id()))
 }
 
-fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {
+fn local_primary_binding(entry: &AgentEntry) -> ExternalPrimaryAgentTurnBinding {
+    let route_key = AgentInfo::from_agent_entry(entry).key;
     ExternalPrimaryAgentTurnBinding {
-        runtime_agent_key: runtime_agent_key.to_string(),
+        runtime_agent_key: entry.agent.id().to_string(),
+        route_key: Some(route_key),
         model_binding: None,
         route_owner: SessionAgentRouteOwner::Local,
         lease: None,
@@ -658,11 +858,7 @@ fn external_agent_info(
     let agent = entry.registration.agent.as_ref();
     let default_tools = agent.default_tools();
     AgentInfo {
-        key: format!(
-            "external::{}::{}",
-            entry.registration.provider_label.to_ascii_lowercase(),
-            entry.registration.logical_id
-        ),
+        key: entry.registration.route_key.clone(),
         id: entry.registration.logical_id.clone(),
         name: agent.name().to_string(),
         description: agent.description().to_string(),

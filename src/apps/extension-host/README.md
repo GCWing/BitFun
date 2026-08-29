@@ -26,6 +26,8 @@ It deliberately does **not** support:
 
 Local plugins are imported in place and must already be able to resolve their runtime dependencies. npm plugins are installed into the cache directory supplied by Rust during the handshake, with lifecycle scripts disabled. The host never installs into or edits a local plugin project.
 
+Configured plugin declarations are therefore an explicit trusted-code opt-in, not a sandbox or a fine-grained activation grant. The current reliability controls (loopback authentication, generation fencing, deadlines, cancellation, and process-tree cleanup) remain enabled, while immutable import snapshots, provenance, activation/permission UX, credential isolation, per-plugin isolation, and resource quotas are tracked as follow-up security work in [`opencode-extension-compatibility.md`](../../docs/architecture/extensions/opencode-extension-compatibility.md#21-当前受管-package-plugin-运行切片).
+
 ## Architecture
 
 Rust first binds a loopback TCP listener and then launches the host. The host connects to the address in `OPENCODE_EXTENSION_HOST_RPC_ADDRESS` and authenticates its first request with `OPENCODE_EXTENSION_HOST_RPC_TOKEN`.
@@ -40,7 +42,7 @@ Rust backend <====== framed bidirectional JSON-RPC ==+
 
 Control traffic uses JSON-RPC 2.0 messages framed by a four-byte big-endian length. Requests can travel in either direction and may be reentrant; plugin stdout and stderr are never used as protocol channels. HTTP and fetch bodies use pull-based stream handles so the receiver controls backpressure instead of embedding unbounded bodies in JSON.
 
-Each `host.instance.open` call creates one logical plugin instance and one HTTP gateway. The host resolves and imports retained plugin declarations concurrently, executes successful entrypoints in declaration order, runs their config hooks, and returns the resulting registrations. Operational hook calls are ordered within one invocation, but unrelated invocations and unrelated instances may overlap.
+Each `host.instance.open` call creates one logical plugin instance and one HTTP gateway. The host resolves and imports retained plugin declarations concurrently, executes successful entrypoints in declaration order, runs their config hooks, and returns the resulting registrations. The open result includes ordered cumulative Config snapshots so Rust can attribute Agent, permission, and Skill changes across multiple Config hooks without re-executing plugin code. Operational hook calls are ordered within one invocation, but unrelated invocations and unrelated instances may overlap.
 
 Closing an instance rejects new work, cancels active tools and fetches, closes its gateway, and invokes every registered disposer once. Losing the RPC connection applies the same cleanup to all instances and terminates the host. Rust is responsible for restarting the process and deciding whether any application work should be retried.
 
@@ -49,6 +51,12 @@ See [PROTOCOL.md](./PROTOCOL.md) for the complete method, error, and wire contra
 ## Build and launch
 
 The directory has its own dependency lock and does not rely on workspace-internal OpenCode packages.
+Official Desktop, CLI, and app-server development/build entry points run
+`pnpm run plugin-host:prepare`; Desktop and CLI packages plus app-server release
+output stage the resulting `extension-host.js` under `resources/ext-host`. The current execution backend
+still requires a compatible `bun` command at runtime (or an explicit
+`BITFUN_BUN_COMMAND`). Bundling a signed Bun sidecar is separate distribution
+work and must be completed before claiming a self-contained installer.
 
 ```sh
 cd src/apps/extension-host

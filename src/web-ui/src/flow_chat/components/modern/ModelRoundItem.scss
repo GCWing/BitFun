@@ -50,9 +50,9 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: var(--bf-appearance-token-flowchat-inline-gap);
-  padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
-  margin-top: var(--bf-appearance-token-flowchat-inline-gap);
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-1) 0;
+  margin-top: var(--bf-space-1);
 
   // Reserve layout while typewriter catch-up finishes; reveal without resize.
   &--pending {
@@ -63,52 +63,22 @@
 
 .model-round-item__meta {
   display: flex;
-  flex: 1 1 18rem;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
   align-items: center;
-  gap: 0.35rem 0.6rem;
+  gap: var(--bf-space-2);
   min-width: 0;
   margin-right: auto;
-  color: color-mix(
-    in srgb,
-    var(--bf-appearance-token-color-text-secondary) 50%,
-    var(--bf-appearance-token-color-text-muted)
-  );
-  font-size: flow-type.$meta-size;
-  line-height: 16px;
+  color: var(--bf-color-content-muted);
+  font-family: var(--bf-font-family-control);
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--bf-line-height-body);
+  white-space: nowrap;
 }
 
 .model-round-item__meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  min-width: 0;
-  max-width: 100%;
-  white-space: nowrap;
-
-  &:last-child {
-    white-space: normal;
-  }
-}
-
-.model-round-item__meta-label {
-  color: color-mix(
-    in srgb,
-    var(--bf-appearance-token-color-text-secondary) 38%,
-    var(--bf-appearance-token-color-text-muted)
-  );
-}
-
-.model-round-item__meta-value {
-  min-width: 0;
-  color: color-mix(
-    in srgb,
-    var(--bf-appearance-token-color-text-secondary) 68%,
-    var(--bf-appearance-token-color-text-muted)
-  );
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
 
 .model-round-item__history-loader {

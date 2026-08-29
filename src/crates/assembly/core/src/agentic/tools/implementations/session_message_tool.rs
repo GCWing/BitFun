@@ -270,8 +270,6 @@ impl SessionMessageTool {
 enum SessionMessageAgentType {
     #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
     Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
     #[serde(
@@ -286,7 +284,6 @@ impl SessionMessageAgentType {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Agentic => "agentic",
-            Self::Plan => "Plan",
             Self::Cowork => "Cowork",
             Self::DeepResearch => "DeepResearch",
         }
@@ -318,7 +315,6 @@ Usage:
 
 Allowed agent types when creating a session:
 - "agentic": Coding-focused agent for implementation, debugging, and code changes.
-- "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
 - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 "#
@@ -356,7 +352,7 @@ Allowed agent types when creating a session:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork", "DeepResearch"],
+                    "enum": ["agentic", "Cowork", "DeepResearch"],
                     "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
                 }
             },
@@ -664,6 +660,7 @@ Allowed agent types when creating a session:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
+                        agent_route_key: None,
                         workspace_path: Some(workspace_target.workspace_path.clone()),
                         project_workspace_path: Some(
                             workspace_target.project_workspace_path.clone(),

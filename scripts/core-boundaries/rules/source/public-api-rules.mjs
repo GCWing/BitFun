@@ -266,6 +266,18 @@ export const opencodeAdapterPublicApiEntries = [
     'bitfun-core managed plugin composition root and DefaultPluginRuntimeClient integration tests',
   ),
   opencodeAdapterEntry(
+    'load_opencode_config_snapshot',
+    'bitfun-core live Plugin Host composition root and OpenCode config snapshot contract tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeConfigSnapshot',
+    'bitfun-core live Plugin Host config input and OpenCode config snapshot contract tests',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeConfigSnapshotError',
+    'bitfun-core live Plugin Host config validation and OpenCode config snapshot contract tests',
+  ),
+  opencodeAdapterEntry(
     'OpenCodeCommandProvider',
     'bitfun-core external source composition root and OpenCode command adapter tests',
   ),

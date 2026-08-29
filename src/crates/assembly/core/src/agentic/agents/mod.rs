@@ -28,8 +28,7 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, MultitaskMode,
-    PlanMode, UltraMode,
+    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -149,7 +148,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
-        "CreatePlan".to_string(),
         "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
@@ -278,6 +276,13 @@ pub trait Agent: Send + Sync + 'static {
         true
     }
 
+    /// Optional model sampling temperature supplied by an external Agent
+    /// definition. The execution owner applies this to a per-turn client
+    /// clone; built-in Agents inherit the configured model temperature.
+    fn model_temperature_override(&self) -> Option<f64> {
+        None
+    }
+
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {
         false
@@ -288,8 +293,7 @@ pub trait Agent: Send + Sync + 'static {
 mod tests {
     use super::{
         get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, MultitaskMode,
-        PlanMode, EMBEDDED_PROMPTS,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -309,43 +313,11 @@ mod tests {
     }
 
     #[test]
-    fn shared_template_modes_share_system_prompt_cache_identity() {
-        let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
-        let plan = PlanMode::new();
-
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            multitask.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            plan.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            plan.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            multitask.user_context_cache_identity()
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            plan.user_context_cache_identity()
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            plan.user_context_cache_identity()
-        );
-    }
-
-    #[test]
-    fn shared_coding_mode_tools_include_plan_and_goal_tools() {
+    fn shared_coding_mode_tools_exclude_create_plan_and_include_goal_tools() {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"ListModels".to_string()));
-        assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(!tools.contains(&"CreatePlan".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
     }
@@ -368,32 +340,24 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_modes_share_default_tools() {
+    fn agentic_mode_uses_shared_coding_tools() {
         let shared_tools = shared_coding_mode_tools();
 
         assert_eq!(AgenticMode::new().default_tools(), shared_tools);
-        assert_eq!(MultitaskMode::new().default_tools(), shared_tools);
-        assert_eq!(PlanMode::new().default_tools(), shared_tools);
     }
 
     #[test]
-    fn shared_coding_mode_user_context_policy_matches_all_shared_modes() {
+    fn agentic_mode_uses_shared_coding_user_context_policy() {
         let shared_policy = shared_coding_mode_user_context_policy();
 
         assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
-        assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
-        assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
     }
 
     #[test]
-    fn shared_coding_mode_tool_exposure_overrides_match_all_shared_modes() {
+    fn agentic_mode_uses_shared_coding_tool_exposure_overrides() {
         let shared_overrides = shared_coding_mode_tool_exposure_overrides();
         let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
-        let plan = PlanMode::new();
 
         assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
     }
 }

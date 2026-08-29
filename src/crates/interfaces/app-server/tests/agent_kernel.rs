@@ -301,6 +301,7 @@ struct Phase2Provider {
     steers: Mutex<Vec<ports::AgentDialogSteerRequest>>,
     shell_commands: Mutex<Vec<ports::AgentUserShellCommandRequest>>,
     answers: Mutex<Vec<ports::AgentUserAnswersRequest>>,
+    local_commands: Mutex<Vec<ports::AgentLocalCommandTurnRecordRequest>>,
     compactions: Mutex<Vec<ports::AgentSessionCompactionRequest>>,
     settlements: Mutex<Vec<ports::AgentTurnSettlementRequest>>,
     reloads: Mutex<Vec<ports::AgentContextReloadRequest>>,
@@ -467,6 +468,7 @@ impl ports::AgentLocalCommandTurnPort for Phase2Provider {
         &self,
         request: ports::AgentLocalCommandTurnRecordRequest,
     ) -> PortResult<ports::AgentLocalCommandTurnRecordResult> {
+        self.local_commands.lock().unwrap().push(request.clone());
         Ok(ports::AgentLocalCommandTurnRecordResult {
             turn_id: request
                 .turn_id
@@ -653,11 +655,6 @@ fn revert_result(session_id: String, text: &str) -> ports::AgentSessionRevertRes
         retired_turn_ids: vec!["turn-active".to_string()],
         changed: true,
         hidden_turn_count: 1,
-        boundary_storage_turn_index: None,
-        target_turn_id: None,
-        restored_files: Vec::new(),
-        reload_required: false,
-        reload_reason: None,
     }
 }
 
@@ -841,8 +838,6 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                         turn_id: "turn-active".to_string(),
                         content: "keep going".to_string(),
                         display_content: None,
-                        attachments: Vec::new(),
-                        metadata: serde_json::Map::new(),
                     },
                 ))
                 .await
@@ -868,6 +863,20 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 })
                 .await
                 .expect("submit user answers");
+            let local_turn = client
+                .record_local_command_turn(protocol_session::RecordLocalCommandTurnRequest(
+                    ports::AgentLocalCommandTurnRecordRequest {
+                        session_id: "session-1".to_string(),
+                        content: "usage: 12 tokens".to_string(),
+                        turn_id: Some("local-turn".to_string()),
+                        timestamp_ms: Some(100),
+                        metadata: serde_json::Map::new(),
+                    },
+                ))
+                .await
+                .expect("record local command turn");
+            assert_eq!(local_turn.0.turn_id, "local-turn");
+
             client
                 .compact_session(protocol_session::CompactSessionRequest(
                     ports::AgentSessionCompactionRequest {
@@ -916,6 +925,7 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 "cargo test"
             );
             assert_eq!(provider.answers.lock().unwrap().len(), 1);
+            assert_eq!(provider.local_commands.lock().unwrap().len(), 1);
             assert_eq!(provider.compactions.lock().unwrap().len(), 1);
             assert_eq!(provider.reloads.lock().unwrap().len(), 1);
             client.shutdown().await;
@@ -1197,6 +1207,7 @@ async fn session_control_methods_forward_exact_owner_dtos() {
                         UpdateSessionModeMessage(AgentSessionModeUpdateRequest {
                             session_id: "session-1".to_string(),
                             mode_id: "plan".to_string(),
+                            agent_route_key: None,
                         }),
                     ))
                     .await?;
@@ -1386,6 +1397,7 @@ async fn create_session_returns_provider_session_id() {
                         AgentSessionCreateRequest {
                             session_name: "direct create".to_string(),
                             agent_type: "agentic".to_string(),
+                            agent_route_key: None,
                             workspace_path: None,
                             project_workspace_path: None,
                             execution_target: None,

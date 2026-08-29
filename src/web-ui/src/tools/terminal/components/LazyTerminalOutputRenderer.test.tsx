@@ -37,6 +37,8 @@ describe('TerminalOutputFallback', () => {
     const fallback = container.querySelector<HTMLPreElement>('pre.terminal-output-pre');
     expect(fallback).not.toBeNull();
     expect(fallback?.textContent).toBe('three\nfour');
+    expect(fallback?.dataset.bfComponent).toBe('terminal-tool');
+    expect(fallback?.dataset.bfPart).toBe('output');
     expect(fallback?.style.height).toBe('34px');
     expect(fallback?.style.overflow).toBe('hidden');
   });

@@ -14,6 +14,7 @@ import { getToolInterruptionNote } from '../utils/toolInterruption';
 import { ToolApprovalBar } from './ToolApprovalBar';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
 import { useFlowChatVolatileContext } from './modern/FlowChatContext';
+import './FlowToolCard.scss';
 
 const log = createLogger('FlowToolCard');
 
@@ -59,6 +60,10 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   const permissionPending =
     effectiveToolItem.status === 'pending_confirmation' ||
     pendingPermissionToolCallIds?.has(toolItem.toolCall.id) === true;
+  const attention =
+    effectiveToolItem.toolName === 'Task' && effectiveToolItem.status === 'cancelled'
+      ? 'ambient'
+      : config.attention;
 
   const handleConfirm = React.useCallback((permissionOptionId?: string, approve?: boolean) => {
     log.debug('handleConfirm called', {
@@ -81,9 +86,14 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   return (
     <div
       className={`flow-tool-card-wrapper ${permissionPending ? 'flow-tool-card-wrapper--permission-pending' : ''} ${className}`.trim()}
+      data-bf-component="flow-tool-card"
+      data-bf-part="root"
+      data-bf-state={permissionPending ? 'permission-pending' : undefined}
       data-testid={toolCardTestId}
       data-tool-name={effectiveToolItem.toolName}
       data-tool-card-id={toolItem.id}
+      data-bf-attention={attention}
+      data-bf-presentation={config.presentation}
     >
       <FlowToolCardErrorBoundary
         toolItem={effectiveToolItem}
@@ -108,7 +118,12 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
         onReject={handleReject}
       />
       {interruptionNote && !cardHandlesInterruptionNote && (
-        <div className="flow-tool-card-note" role="note">
+        <div
+          className="flow-tool-card-note"
+          data-bf-component="flow-tool-card"
+          data-bf-part="note"
+          role="note"
+        >
           {interruptionNote}
         </div>
       )}

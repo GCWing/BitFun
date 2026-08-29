@@ -93,7 +93,7 @@ use api::tool_api::*;
 use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
 
 pub(crate) fn ensure_rustls_crypto_provider() {
     bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
@@ -640,6 +640,12 @@ pub async fn run() {
         Ok(status) => log::info!("Plugin host initialization completed: {:?}", status),
         Err(error) => {
             log::error!("Failed to initialize configured plugin host: {}", error);
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "Desktop startup",
+                None,
+                error,
+            )
+            .await;
         }
     }
     startup_timings.record_elapsed("initialize_plugin_host", step_started);

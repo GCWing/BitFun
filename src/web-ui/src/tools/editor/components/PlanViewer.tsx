@@ -15,6 +15,7 @@ import { fileSystemService } from '@/tools/file-system/services/FileSystemServic
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { basenamePath, dirnameAbsolutePath } from '@/shared/utils/pathUtils';
+import { useOptionalCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import './PlanViewer.scss';
 
 const log = createLogger('PlanViewer');
@@ -59,13 +60,21 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   jumpToColumn: _jumpToColumn,
 }) => {
   const { t } = useI18n('tools');
+  const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const effectiveWorkspacePath = workspacePath ?? currentWorkspace?.rootPath ?? '';
+  const effectiveRemoteConnectionId = currentWorkspace?.connectionId;
+  const planFileRef = useMemo(() => ({
+    planFilePath: filePath,
+    workspacePath: effectiveWorkspacePath,
+    remoteConnectionId: effectiveRemoteConnectionId,
+  }), [effectiveRemoteConnectionId, effectiveWorkspacePath, filePath]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [planData, setPlanData] = useState<PlanData | null>(null);
   const [planContent, setPlanContent] = useState<string>('');
   // Initialize build state from the shared service to survive unmounts.
   const [isBuildStarted, setIsBuildStarted] = useState(() => {
-    return filePath ? planBuildStateService.isBuildActive(filePath) : false;
+    return filePath ? planBuildStateService.isBuildActive(planFileRef) : false;
   });
   const [isContentDirty, setIsContentDirty] = useState(false);
   // Edit mode: display raw yaml frontmatter
@@ -123,7 +132,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       return;
     }
 
-    if (planBuildStateService.isFileWriting(filePath)) {
+    if (planBuildStateService.isFileWriting(planFileRef)) {
       return;
     }
 
@@ -131,7 +140,11 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     setError(null);
 
     try {
-      const content = await workspaceAPI.readFileContent(filePath);
+      const content = await workspaceAPI.readFileContent(
+        filePath,
+        undefined,
+        effectiveRemoteConnectionId,
+      );
 
       const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (frontmatterMatch) {
@@ -175,7 +188,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
         setLoading(false);
       }
     }
-  }, [filePath, t]);
+  }, [effectiveRemoteConnectionId, filePath, planFileRef, t]);
 
   useEffect(() => {
     loadFileContent();
@@ -219,9 +232,9 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     if (!filePath) return;
 
     // Sync initial state (in case filePath just became available).
-    setIsBuildStarted(planBuildStateService.isBuildActive(filePath));
+    setIsBuildStarted(planBuildStateService.isBuildActive(planFileRef));
 
-    const unsubscribe = planBuildStateService.subscribe(filePath, (event) => {
+    const unsubscribe = planBuildStateService.subscribe(planFileRef, (event) => {
       setIsBuildStarted(event.isBuilding);
 
       if (event.updatedTodos) {
@@ -237,7 +250,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     });
 
     return unsubscribe;
-  }, [filePath]);
+  }, [filePath, planFileRef]);
 
   const remainingTodos = useMemo(() => {
     if (!planData?.todos) return 0;
@@ -280,7 +293,12 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
         fullContent = planContent;
       }
 
-      await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
+      await workspaceAPI.writeFileContent(
+        effectiveWorkspacePath,
+        filePath,
+        fullContent,
+        effectiveRemoteConnectionId,
+      );
       editorRef.current?.markSaved?.();
       yamlEditorRef.current?.markSaved?.();
       setIsContentDirty(false);
@@ -303,7 +321,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     } catch (err) {
       log.error('Failed to save file', err);
     }
-  }, [planContent, yamlContent, filePath, workspacePath, hasUnsavedChanges]);
+  }, [effectiveRemoteConnectionId, effectiveWorkspacePath, planContent, yamlContent, filePath, hasUnsavedChanges]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setPlanContent(newContent);
@@ -416,7 +434,12 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       const fullContent = nextYamlContent
         ? `---\n${nextYamlContent}\n---\n\n${planContent}`
         : planContent;
-      await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
+      await workspaceAPI.writeFileContent(
+        effectiveWorkspacePath,
+        filePath,
+        fullContent,
+        effectiveRemoteConnectionId,
+      );
       setPlanData(prev => (prev ? { ...prev, todos: nextTodos } : prev));
       setYamlContent(nextYamlContent);
       setOriginalYamlContent(nextYamlContent);
@@ -425,7 +448,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     } catch (err) {
       log.error('Failed to save todo edit', err);
     }
-  }, [filePath, planContent, planData, workspacePath, yamlContent]);
+  }, [effectiveRemoteConnectionId, effectiveWorkspacePath, filePath, planContent, planData, yamlContent]);
 
   const saveInlineTodoEdit = useCallback(async () => {
     if (!planData?.todos?.length) return;
@@ -697,9 +720,14 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     if (!filePath || buildStatus !== 'build' || !planData) return;
 
     try {
-      // Register build in shared service (notifies all subscribers including CreatePlanDisplay).
+      // Register build in shared service (notifies all PlanDisplay and PlanViewer subscribers).
       const todoIds = planData.todos.map(t => t.id);
-      planBuildStateService.startBuild(filePath, todoIds);
+      planBuildStateService.startBuild({
+        planFilePath: filePath,
+        todoIds,
+        workspacePath: effectiveWorkspacePath,
+        remoteConnectionId: effectiveRemoteConnectionId,
+      });
 
       // Process todos, keep only id, content, and status
       const simpleTodos = planData.todos.map(t => ({
@@ -723,9 +751,9 @@ ${JSON.stringify(simpleTodos, null, 2)}
       await flowChatManager.sendMessage(message, undefined, displayMessage, 'agentic', 'agentic');
     } catch (err) {
       log.error('Build failed', err);
-      planBuildStateService.cancelBuild(filePath);
+      planBuildStateService.cancelBuild(planFileRef);
     }
-  }, [filePath, buildStatus, planData, planContent, t]);
+  }, [filePath, planFileRef, buildStatus, effectiveRemoteConnectionId, effectiveWorkspacePath, planData, planContent, t]);
 
   // Get todo status icon
   function getTodoIcon(status?: string) {

@@ -38,6 +38,8 @@ export type HarnessNewSessionSelection =
   | { kind: 'profile'; id: SelectableHarnessProfileId }
   | { kind: 'agent'; id: string };
 
+export type HarnessProfileSelectorPresentation = 'standalone' | 'menu-item';
+
 interface HarnessProfileSelectorProps {
   /** Session still runs a legacy fixed mode and cannot switch. */
   legacySession?: boolean;
@@ -45,14 +47,21 @@ interface HarnessProfileSelectorProps {
   sessionStarted?: boolean;
   selectedProfile: HarnessProfileId;
   selectedAgentId?: string;
-  directiveLabel?: string;
   otherAgents?: HarnessAgentOption[];
   disabled?: boolean;
+  /**
+   * `standalone` anchors the picker to its own floating trigger. `menu-item`
+   * turns that trigger into a row inside a parent action menu and keeps the
+   * secondary picker inside the same DOM boundary.
+   */
+  presentation?: HarnessProfileSelectorPresentation;
   onSelectProfile: (profileId: SelectableHarnessProfileId) => void | Promise<void>;
   onSelectAgent?: (agentId: string) => void | Promise<void>;
   onStartNewSession?: (
     selection: HarnessNewSessionSelection,
   ) => void | Promise<void>;
+  /** Lets a parent action menu close after a terminal selection. */
+  onSelectionComplete?: () => void;
 }
 
 const PROFILE_IDS: KnownHarnessProfileId[] = [
@@ -139,20 +148,22 @@ function HarnessProfileMark({
 /**
  * Before the first Turn this is the Session execution picker. Afterwards it
  * becomes a lightweight Session signature; alternative choices are disclosed only
- * through the explicit new-Session action. Per-task directives remain in the
- * adjacent add menu.
+ * through the explicit new-Session action. ChatInput presents the signature as
+ * a disclosure row inside its add menu; other consumers may keep the standalone
+ * trigger.
  */
 export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   legacySession = false,
   sessionStarted = false,
   selectedProfile,
   selectedAgentId,
-  directiveLabel,
   otherAgents = [],
   disabled = false,
+  presentation = 'standalone',
   onSelectProfile,
   onSelectAgent,
   onStartNewSession,
+  onSelectionComplete,
 }) => {
   const { t } = useTranslation('flow-chat');
   const fixedSession = legacySession || sessionStarted;
@@ -164,7 +175,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuLayout = useAnchoredPopoverPosition({
-    open,
+    open: open && presentation === 'standalone',
     anchorRef: triggerRef,
     popoverRef: menuRef,
     preferredPlacement: 'top',
@@ -177,6 +188,11 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     setOpen(false);
     setPage(fixedSession ? 'summary' : 'profiles');
   }, [fixedSession]);
+
+  const finishSelection = useCallback(() => {
+    close();
+    onSelectionComplete?.();
+  }, [close, onSelectionComplete]);
 
   useEffect(() => {
     const becameFixed = fixedSession && !previousFixedSessionRef.current;
@@ -217,18 +233,18 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       if (isSelectableProfile(profileId)) {
         void onStartNewSession?.({ kind: 'profile', id: profileId });
       }
-      close();
+      finishSelection();
       return;
     }
     if (profileId === selectedProfile) {
-      close();
+      finishSelection();
       return;
     }
     if (isSelectableProfile(profileId)) {
       void onSelectProfile(profileId);
     }
-    close();
-  }, [close, fixedSession, onSelectProfile, onStartNewSession, selectedProfile]);
+    finishSelection();
+  }, [finishSelection, fixedSession, onSelectProfile, onStartNewSession, selectedProfile]);
 
   const handleSelectAgent = useCallback((agent: HarnessAgentOption) => {
     if (agent.available === false) {
@@ -239,15 +255,15 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     }
     if (fixedSession) {
       void onStartNewSession?.({ kind: 'agent', id: agent.id });
-      close();
+      finishSelection();
       return;
     }
     const connected = selectedProfile === 'other' && sameAgent(agent.id, selectedAgentId);
     if (!connected) {
       void onSelectAgent?.(agent.id);
     }
-    close();
-  }, [close, fixedSession, onSelectAgent, onStartNewSession, selectedAgentId, selectedProfile, t]);
+    finishSelection();
+  }, [finishSelection, fixedSession, onSelectAgent, onStartNewSession, selectedAgentId, selectedProfile, t]);
 
   const knownSelectedProfile = PROFILE_IDS.find(id => id === selectedProfile);
   const selectedAgent = otherAgents.find(agent => sameAgent(agent.id, selectedAgentId));
@@ -269,33 +285,29 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       : knownSelectedProfile
         ? t(`chatInput.harness.profiles.${knownSelectedProfile}.name`)
         : t('chatInput.harness.unsupportedProfile', { id: selectedProfile });
-  const triggerLabel = directiveLabel
-    ? `${primaryLabel} · ${directiveLabel}`
-    : primaryLabel;
+  const triggerLabel = primaryLabel;
   const triggerTooltip = legacySession
     ? t('chatInput.harness.legacySessionNotice')
     : !selectedProfileAvailable
       ? t('chatInput.harness.unsupportedProfileNotice', { id: selectedProfile })
       : sessionStarted
-        ? directiveLabel
-          ? t('chatInput.harness.fixedTooltipWithDirective', {
-              name: primaryLabel,
-              directive: directiveLabel,
-            })
-          : t('chatInput.harness.fixedTooltip', { name: primaryLabel })
-        : directiveLabel
-          ? t('chatInput.harness.selectorTooltipWithDirective', {
-            name: primaryLabel,
-            directive: directiveLabel,
-          })
-          : t('chatInput.harness.selectorTooltip', { name: primaryLabel });
+        ? t('chatInput.harness.fixedTooltip', { name: primaryLabel })
+        : t('chatInput.harness.selectorTooltip', { name: primaryLabel });
   const triggerState = [open ? 'open' : '', fixedSession ? 'fixed' : '']
     .filter(Boolean)
     .join(' ') || undefined;
   const creatingNewSession = fixedSession && page !== 'summary';
+  const menuHost = presentation === 'menu-item'
+    ? triggerRef.current?.parentElement ?? getAppearanceOverlayHost()
+    : getAppearanceOverlayHost();
 
   return (
-    <div className="bitfun-harness-selector" data-bf-component="harness-selector" data-bf-part="root">
+    <div
+      className={`bitfun-harness-selector bitfun-harness-selector--${presentation}`}
+      data-bf-component="harness-selector"
+      data-bf-part="root"
+      data-bf-presentation={presentation}
+    >
       <Tooltip content={triggerTooltip}>
         <button
           ref={triggerRef}
@@ -321,6 +333,14 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-testid="harness-profile-selector"
         >
           <span className="bitfun-harness-selector__trigger-value">{triggerLabel}</span>
+          {presentation === 'menu-item' ? (
+            <ChevronRight
+              className="bitfun-harness-selector__trigger-chevron"
+              size={14}
+              strokeWidth={1.8}
+              aria-hidden
+            />
+          ) : null}
         </button>
       </Tooltip>
 
@@ -332,15 +352,17 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
           data-bf-part="menu"
           data-bf-state="open"
           data-bf-page={page}
-          data-bf-placement={menuLayout?.placement ?? 'top'}
+          data-bf-placement={presentation === 'menu-item' ? 'side' : menuLayout?.placement ?? 'top'}
           data-harness-locked={sessionStarted ? 'true' : undefined}
           data-harness-fixed={fixedSession ? 'true' : undefined}
           role="menu"
-          style={{
-            top: `${menuLayout?.top ?? 0}px`,
-            left: `${menuLayout?.left ?? 0}px`,
-            visibility: menuLayout ? 'visible' : 'hidden',
-          }}
+          style={presentation === 'menu-item'
+            ? undefined
+            : {
+                top: `${menuLayout?.top ?? 0}px`,
+                left: `${menuLayout?.left ?? 0}px`,
+                visibility: menuLayout ? 'visible' : 'hidden',
+              }}
           onMouseDown={event => event.stopPropagation()}
         >
           {page === 'summary' ? (
@@ -354,11 +376,6 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
               >
                 <span className="bitfun-harness-selector__session-value">{primaryLabel}</span>
                 <Check size={13} strokeWidth={2.4} aria-hidden />
-                {directiveLabel ? (
-                  <span className="bitfun-harness-selector__session-directive">
-                    {t('chatInput.harness.nextMessageDirective', { directive: directiveLabel })}
-                  </span>
-                ) : null}
               </div>
               {onStartNewSession ? (
                 <>
@@ -494,7 +511,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             </>
           )}
         </div>,
-        getAppearanceOverlayHost(),
+        menuHost,
       )}
     </div>
   );

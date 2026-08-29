@@ -18,7 +18,7 @@
 |---|---|
 | Plugin Host | 运行 Bun 与第三方 JS/TS 插件的受监督子进程；Host 不在 Rust 主应用进程内 |
 | `PluginRuntimeClient` | Rust 主应用内部现有调用端口；校验请求和响应，管理超时、同一插件的串行调用、重复请求结果缓存、诊断与故障隔离 |
-| `ScriptToolRuntime` / `NodeScriptToolRuntime` | 现有脚本执行端口及 services 实现；当前负责 standalone Tool worker，后续 Plugin Host 的物理进程职责也应沿此边界扩展 |
+| `ScriptToolRuntime` / `NodeScriptToolRuntime` | 现有脚本执行端口及 services 实现；只负责 standalone Tool worker，不拥有共享 Plugin Host |
 | 插件实例 | 由来源、插件身份和当前内容版本确定的已启用插件；启停事实仍由现有来源与能力模块管理 |
 | contribution | Tool、Hook、Command、Route 或界面项等对外行为；由对应能力归属模块注册和提交 |
 
@@ -26,32 +26,39 @@ workspace、project、session、turn、run 和 working directory 是不同事实
 决定 Plugin Host 进程数量。只有某项并发或权威状态确实要求单一实例时，负责该状态的归属模块才能把 workspace
 或其他身份加入自己的状态键，并说明清理与迁移语义。
 
-当前产品运行路径不执行第三方 package 插件。仓库中的 Bun Host、RPC 和 OpenCode 适配代码是协议与进程隔离基础，
-由 fixture/mock 验证；Desktop 与 CLI 的自动启动策略保持关闭。在 contribution 归属、执行许可和故障恢复接入既有
-Tool、Config、Permission、Session、Event、TUI 等模块之前，不得把这套基础设施视为已交付的插件执行能力。
+当前本地生产路径可执行配置中显式声明的第三方 OpenCode package plugin。Desktop、CLI、Server/App Server 的 Runtime
+入口按真实 execution root 确保 workspace 逻辑实例，复用所在 Rust Runtime 进程监督的共享 Bun Host；Remote
+execution domain 不回退到控制机执行。Tool、Config、Permission、Agent/Skill 和有序 Hook 只通过既有归属模块提交，
+其余兼容项仍按能力矩阵标记为未实现，不能由这条运行切片外推成完整 OpenCode Runtime。
 
 ## 2. 职责
 
 ```mermaid
 flowchart LR
   Owners["能力归属模块"]
-  Client["PluginRuntimeClient"]
+  Lifecycle["Core package lifecycle"]
+  Runtime["HookFunctionRuntime"]
   Adapter["生态适配器"]
   Service["Process service"]
   Host["Plugin Host\nBun"]
+  Legacy["legacy managed package"]
+  Client["PluginRuntimeClient"]
 
-  Owners <--> Client
-  Client <--> Adapter
+  Owners <--> Lifecycle
+  Lifecycle <--> Runtime
+  Runtime <--> Adapter
   Adapter <--> Service
   Service <--> Host
+  Legacy <--> Client
 ```
 
 | 部分 | 负责 | 不负责 |
 |---|---|---|
-| `PluginRuntimeClient` | 当前校验请求和响应；管理超时、同一插件的串行调用、重复请求结果缓存、诊断与故障隔离。目标再增加队列上限、取消后的结果失效，并拒绝旧 Host 的结果 | 运行 JS/TS、持有 OS 进程、决定来源顺序或提交业务状态 |
-| 生态适配器 | 保留对应生态的加载顺序、参数、结果、错误和 Hook 语义 | 创建跨生态最低公分母或成为第二个业务归属模块 |
-| `ScriptToolRuntime` 与 services 实现 | 当前启停 standalone worker；目标态沿同一 services 边界启停 Plugin Host，并持有完整进程树、资源预算、物理健康、IPC 和强制回收 | 解释 Hook、决定权限或保存插件业务状态；不得把 Rust 侧实现命名为 Host |
-| Plugin Host | 加载真实模块，保存进程内模块实例，按适配协议执行 Plugin/Hook/Tool/Client 调用 | 成为第二个 Agent Runtime、写入 Rust 归属模块的权威状态或决定产品策略 |
+| `PluginRuntimeClient` | legacy managed-package 路径的请求校验、超时、串行调用、重复结果与诊断 | 当前 package-plugin Host 生命周期、运行 JS/TS、决定来源顺序或提交业务状态 |
+| Core package lifecycle / `HookFunctionRuntime` | 当前 package-plugin workspace 逻辑实例、代际提交、owner 对接和类型化调用 | Plugin Host wire、进程句柄或 OpenCode 原始语义 |
+| OpenCode 生态适配器 | 保留加载顺序、Config/Hook/Tool 参数、结果和错误语义；持有共享 Plugin Host 的连接和物理生命周期 | 创建跨生态最低公分母或成为第二个业务归属模块 |
+| `ScriptToolRuntime` 与 services 实现 | 启停 standalone worker；通用进程树原语也供 Plugin Host adapter 使用 | 解释 Hook、决定权限、保存插件业务状态或拥有共享 Host 生命周期 |
+| Plugin Host | 监督 Bun 子进程、加载真实模块、保存进程内模块实例，按适配协议执行 Plugin/Hook/Tool/Client 调用，并通过 services 进程树原语回收受管后代 | 成为第二个 Agent Runtime、写入 Rust 归属模块的权威状态或决定产品策略 |
 | 能力归属模块 | 校验并提交 Tool、Hook 变换、配置、权限、会话、事件和界面贡献 | 直接加载第三方模块或管理 Plugin Host 进程 |
 
 来源发现、用户选择和当前启用版本继续由各自已有归属模块管理；`PluginRuntimeClient` 只使用已经允许执行的插件实例，
@@ -150,6 +157,11 @@ Rust 监督路径检查，不能依赖可能已被同步插件代码阻塞的业
 插件 import 可能立即启动后台任务或产生文件、网络和进程副作用。因此新旧 Plugin Host 不能同时加载同一组插件。
 旧 Host 服务期间只能做不执行插件代码的来源、完整性、依赖和策略检查；真正加载新代码需要一个短暂停机窗口。
 
+本节描述完整生命周期目标。当前 OC-R2 可用切片已实现内容摘要、逻辑 generation 撤下、崩溃后的进程树回收与
+下一次使用恢复；正常源码更新、配置停用时的共享 Host 物理 generation 替换仍按兼容矩阵第 6 节作为后续生命周期
+工作跟踪。在该项完成前，更新后的贡献不会与旧逻辑 generation 并行发布，但 import 期创建且未被插件 `dispose`
+清理的进程内副作用可能持续到 Host 崩溃或应用退出，因此当前状态不能表述为已完成安全热更新。
+
 ```mermaid
 flowchart LR
   Change["Source changed"] --> Check["Static checks"] --> Ready["Ready to restart"]
@@ -215,8 +227,8 @@ flowchart LR
 |---|---|---|
 | 来源、用户选择、执行许可和内容摘要 | 外部来源与安全归属模块 | 重新读取，不由 Host 猜测 |
 | 当前内容版本与贡献注册 | 对应来源/能力归属模块 | 重新读取内容版本；完整重载并校验后再发布 |
-| 重复请求结果和故障诊断 | `PluginRuntimeClient` 及只读诊断视图 | 按明确恢复条件清理，不由新进程静默抹除 |
-| 子进程句柄、IPC 连接、物理健康和重启预算 | `ScriptToolRuntime` 所在的 services 实现 | 同一进程故障只消费一次进程级重启预算 |
+| 重复请求结果和故障诊断 | 当前 package 路径由 Core lifecycle 与 OpenCode adapter 共同生成并投影到只读诊断；legacy managed 路径由 `PluginRuntimeClient` 持有 | 按明确恢复条件清理，不由新进程静默抹除 |
+| 子进程句柄、IPC 连接、物理健康和重启预算 | package Host 由 OpenCode adapter 持有并复用 services 进程树原语；standalone worker 由 `ScriptToolRuntime` 持有 | 同一进程故障只消费一次进程级重启预算 |
 | 模块实例、`globalThis`、闭包和内存缓存 | Plugin Host | 易失；不复制、不持久化，也不承诺恢复 |
 | Tool/Hook/Config/Permission/Session 最终状态 | 各能力归属模块 | 不从 Host 内存反向恢复 |
 
@@ -254,32 +266,23 @@ Windows 使用 Job Object，Unix 至少使用独立 process group 管理完整�
 
 ```mermaid
 flowchart LR
-  subgraph Current["current implementation"]
-    Manifest["Plugin manifest"] --> Static["Static preview"]
-    Script["Standalone .js tool"] --> Worker["Dedicated worker"]
-    Fixture["Protocol fixtures"] --> Foundation["Bun Host foundation"]
-  end
-
-  subgraph Planned["planned runtime"]
-    Package["Package plugins"] --> Client["PluginRuntimeClient"]
-    Client --> Adapter["生态适配器"]
-    Adapter --> Service["Process service"]
-    Service --> Shared["Shared Plugin Host"]
-  end
-
-  Static -. "not executable" .-> Package
-  Worker -. "narrow slice" .-> Service
+  Config["显式配置的 package plugin"] --> Assembly["Core lifecycle assembly"]
+  Assembly --> Host["Shared Bun Plugin Host"]
+  Host --> Runtime["typed HookFunctionRuntime"]
+  Runtime --> Owners["Tool / Hook / Config / Permission / Agent / Skill owners"]
+  Script["Standalone .js tool"] --> Worker["Dedicated Node worker"]
 ```
 
-当前受管 `bitfun.plugin.json` 链路仍只有来源校验、启停记录、CLI 诊断和 custom tool 静态预览，不执行 package
-plugin、Hook、完整 Client 或 TUI 插件入口。与其独立的 standalone `.js` Tool 端到端能力当前由
-`ScriptToolRuntime` 为每个脚本启动 Node worker；这是现有窄实现事实，不是目标 package-plugin 的进程模型。
-Bun Host 基础设施仅覆盖模块加载、RPC/HTTP 桥和进程树生命周期等隔离边界；配置插件时 CLI 会明确报告该执行链路
-尚未启用，不会静默导入或运行插件代码。
+当前 package-plugin 切片会准备并加载配置中显式声明的插件，发布 generation-fenced 注册快照，并把完整合并配置、
+Config Hook、Tool、`tool.execute.before/after`、反向 metadata/ask 和最小 Client gateway 接入现有 owner。一个 Rust
+Runtime 进程监督一个物理 Host，Host 可承载多个 workspace 逻辑实例；Session/Tool 调用只携带上下文，不成为进程键。
+已知 workspace 的创建/激活失败会发布对应范围可查询的 `plugin.activation_failed` 并继续原生 Session；
+existing-session ensure 暂缺 execution root 时的诊断可能进入全局范围，按兼容文档第 6 节跟踪。初次激活失败时没有
+插件贡献；刷新失败可保留已确认的上一代贡献，因此诊断表达“本次激活/刷新失败”，不能把原生路径成功写成插件激活成功。
 
-因此当前代码不得声称已经具备共享 Plugin Host、安全重启、通用进程级恢复或 Bun 兼容。目标实现应先用
-固定 OpenCode fixture 验证多个插件的顺序初始化、Hook 顺序、共享进程崩溃、安全重启和状态恢复，再替换现有
-窄执行路径。
+standalone `.js` Tool 继续由 `ScriptToolRuntime` 为每个脚本启动 Node worker，两条执行路径不共享生命周期对象。当前
+分发仍要求系统 Bun 或 `BITFUN_BUN_COMMAND`，自动目录发现、完整 OpenCode Client/Hook/TUI 表面、安全启用门禁、
+不可变旧版本恢复和资源沙箱仍未完成；共享 Host 进程隔离也不承诺插件间隔离。
 
 ## 8. 验证要求
 

@@ -1,6 +1,7 @@
-import { readFile, realpath, stat } from "node:fs/promises"
+import { readFile, readdir, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { createHash } from "node:crypto"
 import type { Plugin, PluginOptions } from "@opencode-ai/plugin"
 import npmPackageArg from "npm-package-arg"
 import semver from "semver"
@@ -24,6 +25,7 @@ export type NormalizedPluginDeclaration = {
   spec: string
   resolvedSpec: string
   identity: string
+  optionsDigest: string
   source: PluginSource
   packageName?: string
   options?: PluginOptions
@@ -54,6 +56,7 @@ export type PreparedPlugin = NormalizedPluginDeclaration & {
   target: string
   entry: string
   cache: PluginCacheStatus
+  contentHash?: string
   package?: PluginPackage
 }
 
@@ -79,6 +82,7 @@ export type NpmInstaller = (input: {
   spec: string
   packageName?: string
   cacheDirectory: string
+  allowInstall?: boolean
 }) => Promise<string | { target: string; cache: Exclude<PluginCacheStatus, "validated"> }>
 
 export type LoadPluginsInput = {
@@ -89,6 +93,7 @@ export type LoadPluginsInput = {
   install?: NpmInstaller
   readJson?: (file: string) => Promise<Record<string, unknown>>
   satisfies?: (version: string, range: string) => boolean
+  allowInstall?: boolean
 }
 
 export type LoadPluginsResult = {
@@ -97,6 +102,7 @@ export type LoadPluginsResult = {
 }
 
 export type PreparePluginsResult = {
+  reviewed: NormalizedPluginDeclaration[]
   prepared: PreparedPlugin[]
   diagnostics: LoaderDiagnostic[]
 }
@@ -127,11 +133,13 @@ export async function preparePlugins(input: LoadPluginsInput): Promise<PreparePl
         install,
         readJson,
         satisfies,
+        input.allowInstall ?? true,
       ),
     ),
   )
 
   return {
+    reviewed: normalized.declarations,
     prepared: results.flatMap((result) => ("prepared" in result ? [result.prepared] : [])),
     diagnostics: [
       ...normalized.diagnostics,
@@ -220,7 +228,7 @@ export function parseNpmPluginSpecifier(spec: string, baseDirectory = process.cw
   const canonical = parsed.saveSpec ?? parsed.fetchSpec ?? parsed.raw
   const installSpec =
     parsed.type === "directory" || parsed.type === "file"
-      ? `file:${parsed.fetchSpec}`
+      ? pathToFileURL(String(parsed.fetchSpec)).href
       : parsed.registry && parsed.raw === parsed.name
         ? `${parsed.name}@latest`
         : spec
@@ -239,6 +247,7 @@ async function prepareCandidate(
   install: NpmInstaller,
   readJson: (file: string) => Promise<Record<string, unknown>>,
   satisfies: (version: string, range: string) => boolean,
+  allowInstall: boolean,
 ): Promise<PrepareCandidateResult> {
   let target: string
   let cache: PluginCacheStatus
@@ -251,6 +260,7 @@ async function prepareCandidate(
         spec: parseNpmPluginSpecifier(declaration.spec, declaration.baseDirectory).installSpec,
         packageName: declaration.packageName,
         cacheDirectory,
+        allowInstall,
       })
       target = typeof installed === "string" ? installed : installed.target
       cache = typeof installed === "string" ? "installed" : installed.cache
@@ -288,21 +298,93 @@ async function prepareCandidate(
     }
   }
 
+  const contentHash = await pluginContentHash(target, pkg)
+
   return {
     prepared: {
       ...declaration,
       target,
       entry,
       cache,
+      contentHash,
       package: pkg,
     },
   }
 }
 
+async function pluginContentHash(target: string, pkg?: PluginPackage): Promise<string | undefined> {
+  try {
+    const hash = createHash("sha256")
+    const targetStat = await stat(target)
+    const sourceRoot = pkg?.directory ?? (targetStat.isDirectory() ? target : path.dirname(target))
+    await updateLocalSourceTreeHash(hash, sourceRoot)
+    if (pkg) {
+      // npm packages live below an installation root's node_modules. Bind the
+      // approval to both package-local and resolver-owned lockfiles so a
+      // dependency graph change cannot reuse a grant for different code.
+      for (const directory of pluginDigestDirectories(pkg.directory)) {
+        for (const lockName of ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock"]) {
+          const lockPath = path.join(directory, lockName)
+          if (await exists(lockPath)) {
+            hash.update(lockName)
+            hash.update(await readFile(lockPath))
+          }
+        }
+      }
+    }
+    return hash.digest("hex")
+  } catch {
+    return undefined
+  }
+}
+
+async function updateLocalSourceTreeHash(hash: ReturnType<typeof createHash>, root: string) {
+  const walk = async (directory: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory() && [".git", "node_modules"].includes(entry.name)) continue
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        await walk(absolute)
+        continue
+      }
+      if (!entry.isFile()) continue
+      if (!localExecutableSourceFile(entry.name)) continue
+      hash.update(path.relative(root, absolute).replaceAll(path.sep, "/"))
+      hash.update("\0")
+      hash.update(await readFile(absolute))
+      hash.update("\0")
+    }
+  }
+  await walk(root)
+}
+
+function localExecutableSourceFile(name: string) {
+  return [".cjs", ".js", ".json", ".jsx", ".mjs", ".node", ".ts", ".tsx", ".wasm"].includes(
+    path.extname(name).toLowerCase(),
+  )
+}
+
+function pluginDigestDirectories(packageDirectory: string) {
+  const directories = [packageDirectory]
+  let current = path.dirname(packageDirectory)
+  while (current !== path.dirname(current)) {
+    if (path.basename(current).toLowerCase() === "node_modules") {
+      directories.push(path.dirname(current))
+      break
+    }
+    current = path.dirname(current)
+  }
+  return directories
+}
+
 async function loadPreparedCandidate(plugin: PreparedPlugin): Promise<LoadCandidateResult> {
   let module: Record<string, unknown>
   try {
-    const imported = await import(plugin.entry)
+    const cacheKey = plugin.contentHash ?? `${plugin.spec}:${plugin.declarationIndex}`
+    const imported = await import(`${plugin.entry}?bitfunGeneration=${encodeURIComponent(cacheKey)}`)
     if (!isRecord(imported)) throw new Error(`Plugin ${plugin.spec} module is empty`)
     module = imported
   } catch (error) {
@@ -349,6 +431,7 @@ async function normalizeDeclaration(
 
   const spec = declaration.spec.trim()
   const baseDirectory = path.resolve(declaration.baseDirectory ?? defaultBaseDirectory)
+  const optionsDigest = stableJsonDigest(declaration.options ?? null)
   const source = pluginSource(spec)
   if (source === "npm") {
     const parsed = parseNpmPluginSpecifier(spec, baseDirectory)
@@ -357,6 +440,7 @@ async function normalizeDeclaration(
       spec,
       resolvedSpec: spec,
       identity: `npm:${parsed.identity}`,
+      optionsDigest,
       source,
       packageName: parsed.packageName,
       options: declaration.options,
@@ -376,10 +460,19 @@ async function normalizeDeclaration(
     spec,
     resolvedSpec,
     identity: `file:${resolvedSpec}`,
+    optionsDigest,
     source,
     options: declaration.options,
     baseDirectory,
   }
+}
+
+function stableJsonDigest(value: unknown) {
+  const canonical = JSON.stringify(value, (_key, nested: unknown) => {
+    if (!isRecord(nested)) return nested
+    return Object.fromEntries(Object.entries(nested).sort(([left], [right]) => left.localeCompare(right)))
+  })
+  return createHash("sha256").update(canonical).digest("hex")
 }
 
 function declarationObject(input: PluginDeclarationInput): PluginDeclaration {

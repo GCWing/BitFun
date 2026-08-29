@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Loader2, Sparkles } from 'lucide-react';
 import { CubeLoading, Tooltip } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useTranslation } from 'react-i18next';
 import GenerativeWidgetFrame, {
   type WidgetContextMenuMessage,
@@ -59,7 +59,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
   const [isExporting, setIsExporting] = useState(false);
   const [shouldRenderExportClone, setShouldRenderExportClone] = useState(false);
   const [exportWidth, setExportWidth] = useState<number | null>(null);
-  /** Failure body is toggled separately; BaseToolCard always renders error in `.base-tool-card-error`, so default collapsed on error. */
+  /** The failure body is toggled separately and starts collapsed on error. */
   const [failedBodyExpanded, setFailedBodyExpanded] = useState(false);
 
   const liveParams = isParamsStreaming ? partialParams : toolCall?.input;
@@ -246,7 +246,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       : t('toolCards.generativeUI.openSource');
 
   const header = (
-    <ToolCardHeader
+    <ProminentToolCardHeader
       icon={<Sparkles size={16} />}
       iconClassName="generative-widget-card__icon"
       action={t('toolCards.generativeUI.action')}
@@ -260,24 +260,26 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
           >
             {statusText}
           </span>
-          <Tooltip
-            content={isExporting ? t('exportImage.exporting') : t('exportImage.exportToImage')}
-            placement="top"
-          >
-            <button
-              data-bf-component="generative-widget-tool-card"
-              data-bf-part="exportAction"
-              data-bf-state={isExporting ? 'exporting' : undefined}
-              type="button"
-              className="generative-widget-card__export-image-btn"
-              onClick={handleExportImage}
-              disabled={isExporting}
-              aria-label={t('exportImage.exportToImage')}
-            >
-              {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
-            </button>
-          </Tooltip>
         </div>
+      )}
+      actions={(
+        <Tooltip
+          content={isExporting ? t('exportImage.exporting') : t('exportImage.exportToImage')}
+          placement="top"
+        >
+          <button
+            data-bf-component="generative-widget-tool-card"
+            data-bf-part="exportAction"
+            data-bf-state={isExporting ? 'exporting' : undefined}
+            type="button"
+            className="generative-widget-card__export-image-btn"
+            onClick={handleExportImage}
+            disabled={isExporting}
+            aria-label={t('exportImage.exportToImage')}
+          >
+            {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
+          </button>
+        </Tooltip>
       )}
       statusIcon={isLoading ? <CubeLoading size="small" /> : null}
     />
@@ -313,7 +315,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
   return (
     <>
       <div data-bf-component="generative-widget-tool-card" data-bf-part="root" data-bf-state={isFailed ? 'failed' : undefined}>
-        <BaseToolCard
+        <ProminentToolCard
         status={status}
         isExpanded={isCardExpanded}
         onClick={isFailed || isClickable ? handleCardClick : undefined}

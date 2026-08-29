@@ -2,12 +2,12 @@
   overflow: hidden;
 }
 
-.generative-widget-card.clickable {
+.generative-widget-card[data-bf-interactive='true'] {
   cursor: pointer;
 }
 
-.generative-widget-card .base-tool-card-expanded,
-.generative-widget-card .base-tool-card-error {
+.generative-widget-card [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'],
+.generative-widget-card [data-bf-component='flow-chat-tool-card'][data-bf-part='error'] {
   padding: 0;
 }
 

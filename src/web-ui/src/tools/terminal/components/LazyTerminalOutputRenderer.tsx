@@ -7,6 +7,7 @@ import {
   buildTerminalOutputFallbackModel,
   type TerminalOutputFallbackModel,
 } from './terminalOutputPresentation';
+import './TerminalOutputRenderer.scss';
 
 const DeferredTerminalOutputRenderer = React.lazy(() =>
   import('./TerminalOutputRenderer').then((module) => ({
@@ -25,6 +26,8 @@ export function TerminalOutputFallback({
   return (
     <pre
       className={['terminal-output-pre', className].filter(Boolean).join(' ')}
+      data-bf-component="terminal-tool"
+      data-bf-part="output"
       style={{
         height: `${fallback.height}px`,
         maxHeight: `${fallback.height}px`,

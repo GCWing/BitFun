@@ -37,6 +37,10 @@ pub mod native_hooks;
 #[cfg(all(test, feature = "agent-runtime"))]
 mod native_hooks_tests;
 #[cfg(feature = "opencode-plugin-host")]
+mod plugin_config_projection;
+#[cfg(feature = "opencode-plugin-host")]
+mod plugin_hook_bridge;
+#[cfg(feature = "opencode-plugin-host")]
 pub mod plugin_host;
 #[cfg(feature = "opencode-plugin-host")]
 mod plugin_host_http;

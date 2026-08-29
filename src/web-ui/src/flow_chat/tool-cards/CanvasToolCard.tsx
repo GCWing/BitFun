@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
-import { AlertTriangle, Paintbrush, PanelRightOpen } from 'lucide-react';
+import { AlertTriangle, Paintbrush } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { getToolCardConfig } from './toolCardMetadata';
 import { flowChatStore } from '../store/FlowChatStore';
 import { CodePreview } from '../components/CodePreview';
@@ -181,7 +181,7 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   ]);
 
   const header = (
-    <ToolCardHeader
+    <ProminentToolCardHeader
       icon={<Paintbrush size={16} />}
       iconClassName="canvas-tool-card__icon"
       action={toolDisplayName}
@@ -199,7 +199,6 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
               ? (isSourceVisuallyStreaming ? 'Writing source' : 'Rendering')
               : resultData?.compiled ? 'Preview ready' : canvasStatus || 'Saved'}
           </span>
-          {isOpenable && <PanelRightOpen size={14} className="canvas-tool-card__open-icon" />}
         </div>
       )}
       statusIcon={null}
@@ -241,7 +240,7 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       data-bf-part="root"
       data-bf-state={[isOpenable && 'clickable', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
     >
-      <BaseToolCard
+      <ProminentToolCard
         status={status}
         isExpanded={!isOpenable || diagnostics.length > 0 || isFailed}
         onClick={isOpenable ? handleOpenPanel : undefined}

@@ -23,6 +23,39 @@ import { statusPillMeta } from "./components/StatusPill/StatusPill.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import { toolbarMeta } from "./components/Toolbar/Toolbar.meta";
+import { askUserMeta } from "./flow-chat/ask-user/AskUser.meta";
+import { chatComposerMeta } from "./flow-chat/composer/ChatComposer.meta";
+import { ambientToolCardMeta } from "./flow-chat/tool-cards/AmbientToolCard.meta";
+import { commandToolCardMeta } from "./flow-chat/tool-cards/CommandToolCard.meta";
+import { contextCompressionToolCardMeta } from "./flow-chat/tool-cards/ContextCompressionToolCard.meta";
+import { fileOperationToolCardMeta } from "./flow-chat/tool-cards/FileOperationToolCard.meta";
+import { prominentToolCardMeta } from "./flow-chat/tool-cards/ProminentToolCard.meta";
+import {
+  agentControlToolCardMeta,
+  fileDiffToolCardMeta,
+  gitToolCardMeta,
+  pageDeployToolCardMeta,
+  pagePublishToolCardMeta,
+  reviewSummaryToolCardMeta,
+} from "./flow-chat/tool-cards/ProminentToolCards.meta";
+import { readFileToolCardMeta } from "./flow-chat/tool-cards/ReadFileToolCard.meta";
+import {
+  agentWaitToolCardMeta,
+  defaultToolCardMeta,
+  directoryListToolCardMeta,
+  getToolSpecToolCardMeta,
+  globSearchToolCardMeta,
+  grepSearchToolCardMeta,
+  runCodeToolCardMeta,
+  sessionControlToolCardMeta,
+  sessionMessageToolCardMeta,
+  skillToolCardMeta,
+  terminalControlToolCardMeta,
+  todoToolCardMeta,
+  viewImageToolCardMeta,
+  webFetchToolCardMeta,
+  webSearchToolCardMeta,
+} from "./flow-chat/tool-cards/StandardToolCards.meta";
 import type { ComponentMeta } from "./registry.types";
 
 export type {
@@ -35,12 +68,27 @@ export const componentRegistry = [
   actionCardMeta,
   actionItemMeta,
   activityItemMeta,
+  agentControlToolCardMeta,
+  agentWaitToolCardMeta,
+  ambientToolCardMeta,
+  askUserMeta,
   buttonMeta,
   cardMeta,
+  chatComposerMeta,
+  commandToolCardMeta,
   composerMeta,
   confirmDialogMeta,
+  contextCompressionToolCardMeta,
+  defaultToolCardMeta,
+  directoryListToolCardMeta,
   fieldMeta,
   fieldGroupMeta,
+  fileDiffToolCardMeta,
+  fileOperationToolCardMeta,
+  getToolSpecToolCardMeta,
+  gitToolCardMeta,
+  globSearchToolCardMeta,
+  grepSearchToolCardMeta,
   iconMeta,
   iconButtonMeta,
   inputMeta,
@@ -48,13 +96,27 @@ export const componentRegistry = [
   menuMeta,
   modalMeta,
   navigationPanelMeta,
+  pageDeployToolCardMeta,
   pageHeaderMeta,
+  pagePublishToolCardMeta,
+  prominentToolCardMeta,
+  readFileToolCardMeta,
+  reviewSummaryToolCardMeta,
+  runCodeToolCardMeta,
   scrollAreaMeta,
   searchFieldMeta,
   segmentedControlMeta,
   selectMeta,
+  sessionControlToolCardMeta,
+  sessionMessageToolCardMeta,
+  skillToolCardMeta,
   statusPillMeta,
   switchMeta,
   tabGroupMeta,
+  terminalControlToolCardMeta,
+  todoToolCardMeta,
   toolbarMeta,
+  viewImageToolCardMeta,
+  webFetchToolCardMeta,
+  webSearchToolCardMeta,
 ] as const satisfies readonly ComponentMeta[];

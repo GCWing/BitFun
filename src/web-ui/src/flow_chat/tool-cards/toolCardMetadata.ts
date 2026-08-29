@@ -10,8 +10,76 @@ import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { getEffectiveToolName } from '../utils/toolInvocationIdentity';
 
+type ToolCardDefinition = Omit<ToolCardConfig, 'attention' | 'presentation'>;
+
+const AMBIENT_TOOL_CARD_NAMES = new Set([
+  'Read',
+  'Delete',
+  'Grep',
+  'Glob',
+  'LS',
+  'WebSearch',
+  'WebFetch',
+  'AgentWait',
+  'TodoWrite',
+  'GetToolSpec',
+  'Skill',
+  'TerminalControl',
+  'SessionControl',
+  'SessionMessage',
+  'RunCode',
+  'ComputerUse',
+  'view_image',
+]);
+
+const PROMINENT_TOOL_CARD_NAMES = new Set([
+  'Write',
+  'Edit',
+  'Task',
+  'LaunchReviewAgent',
+  'AgentSpawn',
+  'AgentSendInput',
+  'submit_code_review',
+  'ContextCompression',
+  'ReviewSessionSummary',
+  'Git',
+  'GetFileDiff',
+  'Bash',
+  'ExecCommand',
+  'WriteStdin',
+  'ExecControl',
+  'InitMiniApp',
+  'PageDeploy',
+  'PagePublish',
+  'GenerativeUI',
+  'CreateCanvas',
+  'ReadCanvas',
+  'UpdateCanvas',
+  'PatchCanvas',
+]);
+
+export const DEDICATED_TOOL_CARD_PRESENTATION_NAMES = new Set([
+  'AskUserQuestion',
+  'CreatePlan',
+]);
+
+function getToolCardClassification(toolName: string): Pick<ToolCardConfig, 'attention' | 'presentation'> {
+  if (DEDICATED_TOOL_CARD_PRESENTATION_NAMES.has(toolName)) {
+    return { attention: 'prominent', presentation: 'dedicated' };
+  }
+
+  return {
+    attention: AMBIENT_TOOL_CARD_NAMES.has(toolName)
+      ? 'ambient'
+      : PROMINENT_TOOL_CARD_NAMES.has(toolName)
+        ? 'prominent'
+        : 'ambient',
+    presentation: 'standard',
+  };
+}
+
 // Tool card config map - uses backend tool names
-export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
+const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
   // File tools
   'Read': {
     toolName: 'Read',
@@ -249,7 +317,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.git
   },
 
-  // CreatePlan tool
+  // Legacy CreatePlan history remains displayable after runtime tool removal.
   'CreatePlan': {
     toolName: 'CreatePlan',
     displayName: 'Create Plan',
@@ -490,6 +558,13 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
   },
 };
 
+export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = Object.fromEntries(
+  Object.entries(TOOL_CARD_DEFINITIONS).map(([toolName, definition]) => [
+    toolName,
+    { ...definition, ...getToolCardClassification(toolName) },
+  ]),
+);
+
 /**
  * Get tool card config.
  */
@@ -500,6 +575,8 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     const actualToolName = parsed?.toolName ?? toolName;
 
     return {
+      attention: 'prominent',
+      presentation: 'standard',
       toolName,
       displayName: actualToolName || toolName,
       icon: 'MCP',
@@ -513,6 +590,8 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
 
   // Match by name or fall back to defaults.
   return TOOL_CARD_CONFIGS[toolName] || {
+    attention: 'ambient',
+    presentation: 'standard',
     toolName,
     displayName: `Tool: ${toolName}`,
     icon: 'TOOL',

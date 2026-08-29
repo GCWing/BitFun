@@ -33,6 +33,7 @@ struct ChatAssistantTimelineRow {
     isStreaming: false,
     isFinalizing: false
   });
+  @Param renderRevision: number = 0;
   @Param isBusy: boolean = false;
   @Param downloadingFilePath: string = '';
   @Param downloadedFilePath: string = '';
@@ -55,7 +56,7 @@ struct ChatAssistantTimelineRow {
     this.synchronizeMessage();
   }
 
-  @Monitor('row.message')
+  @Monitor('row.message', 'renderRevision')
   private onMessageChanged(): void {
     this.synchronizeMessage();
   }
@@ -64,6 +65,7 @@ struct ChatAssistantTimelineRow {
     if (this.row.message) {
       ChatMessageBubble({
         item: this.uiMessage,
+        renderRevision: this.renderRevision,
         isStreaming: this.row.isStreaming,
         isFinalizing: this.row.isFinalizing,
         showRetryAction: this.row.showRetryAction,
@@ -243,12 +245,43 @@ export struct ChatTimeline {
           })
           .key((item: ObservableChatTimelineItem, _index: number) => ChatTimelineRevisionTracker.itemKey(item))
 
-        // Keep the single volatile row outside Repeat.virtualScroll(). A stable
-        // key preserves its StreamingMarkdownContent timer and rendered prefix;
-        // replacement @Param values then update that live component in place.
+        // Keep the single volatile row outside Repeat.virtualScroll(). Feed it
+        // through the same observed adapter as history rows: passing a mapped
+        // temporary object through an @Builder freezes the first empty active
+        // snapshot on current ArkUI builds.
         ForEach(this.activeTimelineItems(), (item: ObservableChatTimelineItem) => {
-          this.ActiveTimelineItem(item)
+          if (item.message && this.shouldRenderTimelineMessage(item)) {
+            ListItem() {
+              ChatAssistantTimelineRow({
+                row: item,
+                renderRevision: this.timelineRevision,
+                isBusy: this.isBusy,
+                downloadingFilePath: this.downloadingFilePath,
+                downloadedFilePath: this.downloadedFilePath,
+                fileDownloadStatus: this.fileDownloadStatus,
+                activeFilePreviewPath: this.activeFilePreviewPath,
+                activeFilePreviewLoading: this.activeFilePreviewLoading,
+                onApproveTool: this.onApproveTool,
+                onRejectTool: this.onRejectTool,
+                onCancelTool: this.onCancelTool,
+                onAnswerQuestion: this.onAnswerQuestion,
+                onCopyMessage: this.onCopyMessage,
+                onRetryMessage: this.onRetryMessage,
+                onOpenFilePreview: this.onOpenFilePreview,
+                onDownloadFile: this.onDownloadFile
+              })
+            }
+            .onAppear(() => {
+              this.logRenderedItem(item);
+            })
+            .onAreaChange((oldArea: Area, newArea: Area) => {
+              if (Math.abs(this.areaLength(newArea.height) - this.areaLength(oldArea.height)) > 0.5) {
+                this.requestFollowToBottom('active-height');
+              }
+            })
+          }
         }, (item: ObservableChatTimelineItem) => ChatTimelineRevisionTracker.itemKey(item))
+
       }
       .width('100%')
       .height('100%')
@@ -332,43 +365,6 @@ export struct ChatTimeline {
     .backgroundColor(CARD)
     .borderRadius(18)
     .border({ width: 1, color: LINE })
-  }
-
-  @Builder
-  ActiveTimelineItem(item: ObservableChatTimelineItem) {
-    if (item.message && this.shouldRenderTimelineMessage(item)) {
-      ListItem() {
-        ChatMessageBubble({
-          item: toConversationUiMessage(item.message),
-          renderRevision: this.timelineRevision,
-          isStreaming: item.isStreaming,
-          isFinalizing: item.isFinalizing,
-          showRetryAction: item.showRetryAction === true,
-          isBusy: this.isBusy,
-          downloadingFilePath: this.downloadingFilePath,
-          downloadedFilePath: this.downloadedFilePath,
-          fileDownloadStatus: this.fileDownloadStatus,
-          activeFilePreviewPath: this.activeFilePreviewPath,
-          activeFilePreviewLoading: this.activeFilePreviewLoading,
-          onApproveTool: this.onApproveTool,
-          onRejectTool: this.onRejectTool,
-          onCancelTool: this.onCancelTool,
-          onAnswerQuestion: this.onAnswerQuestion,
-          onCopyMessage: this.onCopyMessage,
-          onRetryMessage: this.onRetryMessage,
-          onOpenFilePreview: this.onOpenFilePreview,
-          onDownloadFile: this.onDownloadFile
-        })
-      }
-      .onAppear(() => {
-        this.logRenderedItem(item);
-      })
-      .onAreaChange((oldArea: Area, newArea: Area) => {
-        if (Math.abs(this.areaLength(newArea.height) - this.areaLength(oldArea.height)) > 0.5) {
-          this.requestFollowToBottom('active-height');
-        }
-      })
-    }
   }
 
   private historyTimelineItems(): ObservableChatTimelineItem[] {

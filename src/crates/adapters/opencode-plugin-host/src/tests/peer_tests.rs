@@ -1,11 +1,291 @@
 use crate::{
-    read_frame, read_host_stream, write_frame, HostStreamReadError, JsonRpcPeer, PluginDeclaration,
-    PluginHostError, PluginInstanceOpenRequest, PluginPrepareRequest, StreamDescriptor,
-    DEFAULT_MAX_FRAME_BYTES,
+    hook_function_runtime, read_frame, read_host_stream, register_backend_handlers, write_frame,
+    BackendDiagnosticError, BackendDiagnosticEvent, BackendRouteFailure, BackendRouteRequest,
+    HostStreamReadError, JsonRpcPeer, OpenCodeBackendHandler, PluginDeclaration, PluginHostError,
+    PluginInstanceOpenRequest, PluginPrepareRequest, StreamDescriptor, DEFAULT_MAX_FRAME_BYTES,
+};
+use async_trait::async_trait;
+use bitfun_runtime_ports::{
+    HookFunctionGeneration, HookFunctionRegistrationBatch, HookFunctionRegistrationSink,
+    HookFunctionReverseAsk, HookFunctionReverseMetadata, HookFunctionReverseReply,
+    HookFunctionReverseSink, HookFunctionStartRequest, HookFunctionToolContext,
+    HookFunctionToolRequest, PortErrorKind, PortResult,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
+
+#[derive(Default)]
+struct CapturingRegistrationSink {
+    batches: Mutex<Vec<HookFunctionRegistrationBatch>>,
+}
+
+#[async_trait]
+impl HookFunctionRegistrationSink for CapturingRegistrationSink {
+    async fn publish_generation(&self, batch: HookFunctionRegistrationBatch) -> PortResult<()> {
+        self.batches.lock().expect("batch lock").push(batch);
+        Ok(())
+    }
+}
+
+struct UnusedReverseSink;
+
+struct BlockingBackend {
+    started: Arc<tokio::sync::Notify>,
+    dropped: Arc<AtomicBool>,
+}
+
+struct DropFlag(Arc<AtomicBool>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
+#[async_trait]
+impl OpenCodeBackendHandler for BlockingBackend {
+    async fn handle_route(
+        &self,
+        _request: BackendRouteRequest,
+    ) -> Result<serde_json::Value, BackendRouteFailure> {
+        let _drop_flag = DropFlag(self.dropped.clone());
+        self.started.notify_one();
+        std::future::pending().await
+    }
+
+    async fn publish_diagnostic(
+        &self,
+        _event: BackendDiagnosticEvent,
+    ) -> Result<(), BackendDiagnosticError> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl HookFunctionReverseSink for UnusedReverseSink {
+    async fn metadata(&self, _update: HookFunctionReverseMetadata) -> PortResult<()> {
+        Ok(())
+    }
+
+    async fn ask(&self, _request: HookFunctionReverseAsk) -> PortResult<HookFunctionReverseReply> {
+        Ok(HookFunctionReverseReply::Once)
+    }
+}
+
+#[tokio::test]
+async fn hook_runtime_start_publishes_a_typed_complete_generation() {
+    let (backend_stream, mut host_stream) = connected_streams().await;
+    let peer = JsonRpcPeer::start_with_capabilities(
+        backend_stream,
+        21,
+        DEFAULT_MAX_FRAME_BYTES,
+        crate::PluginHostCapabilities::all_supported(),
+    );
+    let runtime = hook_function_runtime(peer.client());
+    let host = tokio::spawn(async move {
+        let request = read_frame(&mut host_stream, DEFAULT_MAX_FRAME_BYTES)
+            .await
+            .expect("instance open request should be readable");
+        assert_eq!(request["method"], "host.instance.open");
+        write_frame(
+            &mut host_stream,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {
+                    "instanceID": "instance-a",
+                    "generationKey": "generation-a",
+                    "revision": "revision-a",
+                    "config": {"model": "fixture"},
+                    "configContributors": [],
+                    "configContributions": [],
+                    "diagnostics": [],
+                    "hooks": ["tool.execute.before", "tool.execute.after"],
+                    "tools": [{
+                        "registrationID": "registration-a",
+                        "id": "echo",
+                        "description": "Echo input",
+                        "parameters": {"type": "object"}
+                    }],
+                    "auth": [],
+                    "providers": [],
+                    "workspaces": [],
+                    "gatewayURL": "http://127.0.0.1:1234/"
+                }
+            }),
+            DEFAULT_MAX_FRAME_BYTES,
+        )
+        .await
+        .expect("instance open response should be written");
+    });
+    let generation = HookFunctionGeneration {
+        instance_id: "instance-a".to_string(),
+        generation_key: "generation-a".to_string(),
+        revision: "revision-a".to_string(),
+    };
+    let registrations = Arc::new(CapturingRegistrationSink::default());
+
+    let started = runtime
+        .start(
+            HookFunctionStartRequest {
+                generation: generation.clone(),
+                project_id: "project-a".to_string(),
+                project_worktree: "C:/workspace".to_string(),
+                project_created_at_ms: 42,
+                config: serde_json::Map::new(),
+                directory: "C:/workspace".to_string(),
+                worktree: "C:/workspace".to_string(),
+                plugins: Vec::new(),
+                configuration_fingerprint: None,
+                expected_content_digests: BTreeMap::new(),
+                expected_review_digest: None,
+            },
+            registrations.clone(),
+            Arc::new(UnusedReverseSink),
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("typed generation should start");
+
+    assert_eq!(started, generation);
+    let batches = registrations.batches.lock().expect("batch lock");
+    assert_eq!(batches[0].generation, generation);
+    assert_eq!(batches[0].tools[0].id, "echo");
+    assert_eq!(batches[0].hooks.len(), 2);
+    host.await.expect("fake host should finish");
+}
+
+#[tokio::test]
+async fn hook_runtime_tool_timeout_is_outcome_unknown_even_when_cancel_is_confirmed() {
+    let (backend_stream, mut host_stream) = connected_streams().await;
+    let peer = JsonRpcPeer::start_with_capabilities(
+        backend_stream,
+        22,
+        DEFAULT_MAX_FRAME_BYTES,
+        crate::PluginHostCapabilities::all_supported(),
+    );
+    let runtime = hook_function_runtime(peer.client());
+    let host = tokio::spawn(async move {
+        let execute = read_frame(&mut host_stream, DEFAULT_MAX_FRAME_BYTES)
+            .await
+            .expect("tool execute request should be readable");
+        assert_eq!(execute["method"], "host.tool.execute");
+
+        let cancel = read_frame(&mut host_stream, DEFAULT_MAX_FRAME_BYTES)
+            .await
+            .expect("tool cancel request should be readable");
+        assert_eq!(cancel["method"], "host.tool.cancel");
+        assert_eq!(cancel["params"]["executionID"], "execution-a");
+        write_frame(
+            &mut host_stream,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": cancel["id"],
+                "result": {"cancelled": true}
+            }),
+            DEFAULT_MAX_FRAME_BYTES,
+        )
+        .await
+        .expect("tool cancel response should be written");
+    });
+
+    let error = runtime
+        .execute_tool(
+            HookFunctionToolRequest {
+                generation: HookFunctionGeneration {
+                    instance_id: "instance-a".to_string(),
+                    generation_key: "generation-a".to_string(),
+                    revision: "revision-a".to_string(),
+                },
+                execution_id: "execution-a".to_string(),
+                registration_id: "registration-a".to_string(),
+                args: json!({"value": 1}),
+                context: HookFunctionToolContext {
+                    session_id: "session-a".to_string(),
+                    message_id: "message-a".to_string(),
+                    agent: "agentic".to_string(),
+                    call_id: Some("call-a".to_string()),
+                },
+            },
+            Duration::from_millis(20),
+        )
+        .await
+        .expect_err("a dispatched tool timeout must not claim a definite cancellation");
+
+    assert_eq!(error.kind, PortErrorKind::OutcomeUnknown);
+    host.await.expect("fake host should finish");
+}
+
+#[tokio::test]
+async fn backend_drain_cancels_and_joins_an_admitted_route() {
+    let (backend_stream, mut host_stream) = connected_streams().await;
+    let peer = JsonRpcPeer::start(backend_stream, 23, DEFAULT_MAX_FRAME_BYTES);
+    let started = Arc::new(tokio::sync::Notify::new());
+    let dropped = Arc::new(AtomicBool::new(false));
+    let bridge = register_backend_handlers(
+        peer.client(),
+        Arc::new(BlockingBackend {
+            started: started.clone(),
+            dropped: dropped.clone(),
+        }),
+    )
+    .await
+    .expect("backend handlers should register");
+    let host = tokio::spawn(async move {
+        write_frame(
+            &mut host_stream,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": "host:route:1",
+                "method": "backend.http.request",
+                "params": {
+                    "instanceID": "instance-a",
+                    "requestID": "request-a",
+                    "method": "GET",
+                    "path": "/project",
+                    "headers": [],
+                    "body": null
+                }
+            }),
+            DEFAULT_MAX_FRAME_BYTES,
+        )
+        .await
+        .expect("backend route request should be written");
+        read_frame(&mut host_stream, DEFAULT_MAX_FRAME_BYTES)
+            .await
+            .expect("drained route should receive an RPC response")
+    });
+
+    started.notified().await;
+    assert!(bridge.begin_draining().await);
+    assert!(dropped.load(Ordering::Acquire));
+    let response = host.await.expect("fake host should finish");
+    assert_eq!(response["error"]["code"], -32000);
+}
+
+#[tokio::test]
+async fn backend_handlers_do_not_retain_a_dropped_bridge() {
+    let (backend_stream, _host_stream) = connected_streams().await;
+    let peer = JsonRpcPeer::start(backend_stream, 24, DEFAULT_MAX_FRAME_BYTES);
+    let bridge = register_backend_handlers(
+        peer.client(),
+        Arc::new(BlockingBackend {
+            started: Arc::new(tokio::sync::Notify::new()),
+            dropped: Arc::new(AtomicBool::new(false)),
+        }),
+    )
+    .await
+    .expect("backend handlers should register");
+    let weak = Arc::downgrade(&bridge);
+
+    drop(bridge);
+
+    assert!(weak.upgrade().is_none());
+}
 
 #[tokio::test]
 async fn peer_correlates_out_of_order_responses_by_request_id() {
@@ -119,7 +399,11 @@ async fn client_opens_a_typed_plugin_instance() {
             &json!({
                 "jsonrpc": "2.0",
                 "id": request["id"],
-                "result": {"instanceID": "bitfun:test-instance"}
+                "result": {
+                    "instanceID": "bitfun:test-instance",
+                    "generationKey": "generation-fixture",
+                    "revision": "revision-fixture"
+                }
             }),
             DEFAULT_MAX_FRAME_BYTES,
         )
@@ -131,6 +415,8 @@ async fn client_opens_a_typed_plugin_instance() {
         .open_instance(
             PluginInstanceOpenRequest {
                 instance_id: "bitfun:test-instance".to_string(),
+                generation_key: "generation-fixture".to_string(),
+                revision: "revision-fixture".to_string(),
                 project: json!({"id": "project", "worktree": "C:/workspace"}),
                 config: serde_json::Map::new(),
                 directory: "C:/workspace".to_string(),
@@ -141,6 +427,8 @@ async fn client_opens_a_typed_plugin_instance() {
                     base_directory: None,
                 }],
                 configuration_fingerprint: Some("fixture-open".to_string()),
+                expected_content_digests: None,
+                expected_review_digest: None,
             },
             Duration::from_secs(1),
         )
@@ -171,7 +459,28 @@ async fn client_prepares_typed_plugins() {
             &json!({
                 "jsonrpc": "2.0",
                 "id": request["id"],
-                "result": {"prepared": [], "failed": [], "diagnostics": []}
+                "result": {
+                    "reviewDigest": "0".repeat(64),
+                    "reviewed": [{
+                        "spec": "bitfun-demo-echo",
+                        "source": "npm",
+                        "identity": "npm:bitfun-demo-echo",
+                        "canonicalSource": "bitfun-demo-echo",
+                        "baseDirectory": "C:/workspace",
+                        "optionsDigest": "1".repeat(64)
+                    }],
+                    "prepared": [{
+                        "spec": "bitfun-demo-echo",
+                        "identity": "npm:bitfun-demo-echo",
+                        "source": "npm",
+                        "target": "bitfun-demo-echo",
+                        "entry": "C:/cache/bitfun-demo-echo/index.js",
+                        "cache": "hit",
+                        "contentHash": "2".repeat(64)
+                    }],
+                    "failed": [],
+                    "diagnostics": []
+                }
             }),
             DEFAULT_MAX_FRAME_BYTES,
         )
@@ -189,13 +498,20 @@ async fn client_prepares_typed_plugins() {
                 }],
                 configuration_fingerprint: Some("fixture-prewarm".to_string()),
                 default_base_directory: None,
+                allow_install: Some(false),
             },
             Duration::from_secs(1),
         )
         .await
         .expect("plugin prepare should resolve");
 
-    assert_eq!(result["prepared"], json!([]));
+    assert_eq!(result.review_digest, "0".repeat(64));
+    assert_eq!(result.reviewed_count, 1);
+    assert_eq!(result.failed_count, 0);
+    assert_eq!(
+        result.content_digests.get("npm:bitfun-demo-echo"),
+        Some(&"2".repeat(64))
+    );
     host.await.expect("fake host should finish");
 }
 

@@ -515,21 +515,20 @@
             "kind": "delegate",
             "tools": [
               "TodoWrite",
-              "CreatePlan",
               "AskUserQuestion"
             ],
             "workflowZh": [
-              "复杂任务用 TodoWrite 维护当前进度，只有需要正式计划产物时才用 CreatePlan",
+              "复杂任务用 TodoWrite 维护当前进度；正式计划产物通过 Write 写入项目的 .bitfun/plans 目录",
               "缺少会改变结果的用户选择时用 AskUserQuestion；能从仓库或当前上下文查明的信息不重复询问"
             ],
             "workflowEn": [
-              "Use TodoWrite to maintain progress for complex work and CreatePlan only when a formal plan artifact is needed",
+              "Use TodoWrite to maintain progress for complex work; create formal plan artifacts with Write under the project's .bitfun/plans directory",
               "Use AskUserQuestion only for a missing choice that changes the outcome; do not ask again for facts available from the repository or current context"
             ]
           },
           "evidence": [
             "source:src/crates/assembly/core/src/agentic/tools/implementations/todo_write_tool.rs#TodoWrite",
-            "source:src/crates/assembly/core/src/agentic/tools/implementations/create_plan_tool.rs#CreatePlan"
+            "source:src/crates/assembly/core/src/agentic/tools/implementations/file_write_tool.rs#FileWriteTool"
           ]
         },
         {

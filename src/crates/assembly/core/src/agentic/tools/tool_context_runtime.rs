@@ -231,7 +231,7 @@ pub(crate) async fn call_with_tool_runtime_hooks(
     };
 
     if result.is_ok() {
-        post_call_hooks::record_successful_tool_call(tool_name, input, context);
+        post_call_hooks::record_successful_tool_call(tool_name, input, context).await;
     }
 
     result

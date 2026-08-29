@@ -13,6 +13,18 @@ const messages: Record<string, string> = {
   'toolCards.readFile.permissionRequest': 'Requesting read permission:',
 };
 
+const readConfig: ToolCardConfig = {
+  attention: 'ambient',
+  presentation: 'standard',
+  toolName: 'Read',
+  displayName: 'Read File',
+  icon: 'R',
+  requiresConfirmation: false,
+  resultDisplayType: 'summary',
+  description: 'Read file contents',
+  displayMode: 'compact',
+};
+
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next');
   return {
@@ -85,21 +97,11 @@ describe('ReadFileDisplay', () => {
       },
     };
 
-    const config: ToolCardConfig = {
-      toolName: 'Read',
-      displayName: 'Read File',
-      icon: 'R',
-      requiresConfirmation: false,
-      resultDisplayType: 'summary',
-      description: 'Read file contents',
-      displayMode: 'compact',
-    };
-
     act(() => {
       root.render(
         <ReadFileDisplay
           toolItem={toolItem}
-          config={config}
+          config={readConfig}
         />
       );
     });
@@ -131,26 +133,61 @@ describe('ReadFileDisplay', () => {
       },
     };
 
-    const config: ToolCardConfig = {
-      toolName: 'Read',
-      displayName: 'Read File',
-      icon: 'R',
-      requiresConfirmation: false,
-      resultDisplayType: 'summary',
-      description: 'Read file contents',
-      displayMode: 'compact',
-    };
-
     act(() => {
       root.render(
         <ReadFileDisplay
           toolItem={toolItem}
-          config={config}
+          config={readConfig}
         />
       );
     });
 
     expect(container.textContent).toContain('main.rs');
     expect(container.textContent).not.toMatch(/\(\d+B\)/);
+  });
+
+  it('opens a completed file from Enter or Space without a second clickable flag', () => {
+    const onOpenInEditor = vi.fn();
+    const toolItem: FlowToolItem = {
+      id: 'tool-read-keyboard',
+      type: 'tool',
+      toolName: 'Read',
+      status: 'completed',
+      timestamp: Date.now(),
+      toolCall: {
+        id: 'call-read-keyboard',
+        input: {
+          file_path: 'src/keyboard.ts',
+        },
+      },
+    };
+
+    act(() => {
+      root.render(
+        <ReadFileDisplay
+          toolItem={toolItem}
+          config={readConfig}
+          onOpenInEditor={onOpenInEditor}
+        />
+      );
+    });
+
+    const card = container.querySelector<HTMLElement>('[data-bf-tool-card="read-file"]');
+    expect(card?.getAttribute('role')).toBe('button');
+    expect(card?.tabIndex).toBe(0);
+
+    act(() => {
+      card?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+        bubbles: true,
+        key: 'Enter',
+      }));
+      card?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+        bubbles: true,
+        key: ' ',
+      }));
+    });
+
+    expect(onOpenInEditor).toHaveBeenCalledTimes(2);
+    expect(onOpenInEditor).toHaveBeenLastCalledWith('src/keyboard.ts');
   });
 });

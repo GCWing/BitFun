@@ -22,6 +22,7 @@ import {
   PanelTop,
   Search,
   Settings2,
+  SquareTerminal,
   Sun,
   ToggleLeft,
   X,
@@ -71,6 +72,7 @@ type LabRoute =
   | { page: "overview" }
   | { page: "getting-started" }
   | { page: "components" }
+  | { page: "flow-chat" }
   | { page: "colors" }
   | { page: "resources" }
   | { page: "tokens" }
@@ -85,11 +87,20 @@ interface SearchDestination {
 }
 
 const componentIcons: Record<string, LucideIcon> = {
+  AmbientToolCard: SquareTerminal,
   Button: MousePointerClick,
   Modal: AppWindow,
+  ProminentToolCard: SquareTerminal,
   Switch: ToggleLeft,
   TabGroup: PanelTop,
 };
+
+const flowChatComponents = componentRegistry.filter(
+  (component) => component.category === "flow-chat",
+);
+const standardComponents = componentRegistry.filter(
+  (component) => component.category !== "flow-chat",
+);
 
 function getThemeDataName(
   colorScheme: ColorScheme,
@@ -117,6 +128,9 @@ function parseRoute(hash: string): LabRoute {
   }
   if (route === "components") {
     return { page: "components" };
+  }
+  if (route === "flow-chat") {
+    return { page: "flow-chat" };
   }
   if (route === "resources") {
     return { page: "resources" };
@@ -200,6 +214,13 @@ export function App() {
       keywords: `component library catalog ${t("nav.components")}`,
       label: t("nav.components"),
       route: { page: "components" },
+    },
+    {
+      detail: t("search.flowChatDetail", { count: flowChatComponents.length }),
+      icon: SquareTerminal,
+      keywords: `FlowChat tool cards ambient prominent ${t("nav.flowChat")}`,
+      label: t("nav.flowChat"),
+      route: { page: "flow-chat" },
     },
     {
       detail: t("search.resourcesDetail"),
@@ -343,6 +364,10 @@ export function App() {
   const activeComponent = route.page === "component"
     ? componentRegistry.find((component) => component.name === route.componentName)
     : undefined;
+  const isFlowChatRoute = route.page === "flow-chat"
+    || activeComponent?.category === "flow-chat";
+  const isStandardComponentRoute = route.page === "components"
+    || Boolean(activeComponent && activeComponent.category !== "flow-chat");
 
   return (
     <div
@@ -420,8 +445,8 @@ export function App() {
 
           <span className="lab-nav-label">{t("nav.library")}</span>
           <a
-            aria-current={route.page === "components" ? "page" : undefined}
-            data-expanded={route.page === "component" || route.page === "components" || undefined}
+            aria-current={isStandardComponentRoute ? "page" : undefined}
+            data-expanded={isStandardComponentRoute || undefined}
             href="#components"
             onClick={(event) => {
               event.preventDefault();
@@ -432,8 +457,41 @@ export function App() {
             <span>{t("nav.components")}</span>
           </a>
           <div className="lab-component-links">
-            {componentRegistry.map((component) => {
+            {standardComponents.map((component) => {
               const Icon = componentIcons[component.name] ?? Blocks;
+              const active = route.page === "component" && route.componentName === component.name;
+              return (
+                <a
+                  aria-current={active ? "page" : undefined}
+                  href={`#component/${component.name.toLowerCase()}`}
+                  key={component.name}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigate({ componentName: component.name, page: "component" });
+                  }}
+                >
+                  <Icon aria-hidden="true" size={15} />
+                  <span>{component.name}</span>
+                </a>
+              );
+            })}
+          </div>
+          <a
+            aria-current={isFlowChatRoute ? "page" : undefined}
+            data-expanded={isFlowChatRoute || undefined}
+            href="#flow-chat"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate({ page: "flow-chat" });
+            }}
+          >
+            <SquareTerminal aria-hidden="true" size={17} />
+            <span>{t("nav.flowChat")}</span>
+            <small>{flowChatComponents.length}</small>
+          </a>
+          <div className="lab-component-links">
+            {flowChatComponents.map((component) => {
+              const Icon = componentIcons[component.name] ?? SquareTerminal;
               const active = route.page === "component" && route.componentName === component.name;
               return (
                 <a
@@ -643,6 +701,18 @@ export function App() {
             />
           )}
 
+          {route.page === "flow-chat" && (
+            <ComponentsPage
+              category="flow-chat"
+              colorScheme={colorScheme}
+              contrast={contrast}
+              density={density}
+              onInspectTokens={() => openTokenPage()}
+              onOpenComponent={(name) => navigate({ componentName: name, page: "component" })}
+              tokenOverrides={tokenOverrides}
+            />
+          )}
+
           {route.page === "component" && activeComponent && (
             <ComponentDetailPage
               colorScheme={colorScheme}
@@ -650,7 +720,11 @@ export function App() {
               contrast={contrast}
               density={density}
               key={activeComponent.name}
-              onBack={() => navigate({ page: "components" })}
+              onBack={() => navigate({
+                page: activeComponent.category === "flow-chat"
+                  ? "flow-chat"
+                  : "components",
+              })}
               onInspectTokens={openTokenPage}
               tokenOverrides={tokenOverrides}
             />

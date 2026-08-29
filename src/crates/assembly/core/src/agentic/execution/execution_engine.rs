@@ -114,6 +114,21 @@ fn runtime_context_needs_for_manifest(manifest: &ResolvedToolManifest) -> Runtim
     )
 }
 
+fn apply_agent_temperature_override(
+    agent: &dyn crate::agentic::agents::Agent,
+    client: Arc<crate::infrastructure::ai::AIClient>,
+) -> Arc<crate::infrastructure::ai::AIClient> {
+    let Some(temperature) = agent.model_temperature_override() else {
+        return client;
+    };
+    if client.config.temperature == Some(temperature) {
+        return client;
+    }
+    let mut derived = client.as_ref().clone();
+    derived.config.temperature = Some(temperature);
+    Arc::new(derived)
+}
+
 fn resolve_round_permission_mode(
     active_turn_mode: Option<PermissionMode>,
     fixed_context_mode: Option<PermissionMode>,
@@ -2613,6 +2628,7 @@ impl ExecutionEngine {
                 )));
             }
         };
+        let ai_client = apply_agent_temperature_override(current_agent.as_ref(), ai_client);
         Self::validate_frozen_model_contract(context).await?;
         Self::validate_frozen_reasoning_contract(context, ai_client.as_ref())?;
         let model_request_context = Self::model_request_context(
@@ -3537,6 +3553,7 @@ impl ExecutionEngine {
                 )));
             }
         };
+        let ai_client = apply_agent_temperature_override(current_agent.as_ref(), ai_client);
         Self::validate_frozen_model_contract(&context).await?;
         Self::validate_frozen_reasoning_contract(&context, ai_client.as_ref())?;
         let model_request_context = Self::model_request_context(

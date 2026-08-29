@@ -68,8 +68,15 @@ import {
   getComponentCategoryLabel,
   getComponentDescription,
 } from "../i18n/componentMetadata";
+import {
+  FlowChatComponentPreview,
+  flowChatPreviewRegistry,
+  getFlowChatPreviewDefinition,
+} from "../preview/FlowChatPreviewRegistry";
+import { FlowChatToolGallery } from "../preview/FlowChatToolGallery";
 
 interface ComponentsPageProps {
+  category?: ComponentMeta["category"];
   colorScheme: ColorScheme;
   contrast: ContrastMode;
   density: DensityMode;
@@ -106,6 +113,16 @@ const componentIcons = {
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
+  const flowChatPreview = getFlowChatPreviewDefinition(component.name);
+
+  if (flowChatPreview) {
+    return (
+      <FlowChatComponentPreview
+        componentName={component.name}
+        interactive={false}
+      />
+    );
+  }
 
   switch (component.name) {
     case "ActionCard":
@@ -441,6 +458,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
 }
 
 export function ComponentsPage({
+  category,
   colorScheme,
   contrast,
   density,
@@ -449,14 +467,31 @@ export function ComponentsPage({
   tokenOverrides,
 }: ComponentsPageProps) {
   const { t } = useI18n();
+  const isFlowChatCategory = category === "flow-chat";
+  const visibleComponents = componentRegistry.filter((component) =>
+    isFlowChatCategory
+      ? component.category === "flow-chat"
+      : component.category !== "flow-chat",
+  );
+  const catalogComponents = isFlowChatCategory
+    ? flowChatPreviewRegistry
+      .filter(({ definition }) => definition.section === "framework")
+      .map(({ component }) => component)
+    : visibleComponents;
 
   return (
-    <main className="lab-page" id="components">
+    <main className="lab-page" id={isFlowChatCategory ? "flow-chat" : "components"}>
       <header className="page-heading page-heading--split">
         <div>
-          <span className="page-kicker">{t("components.kicker")}</span>
-          <h1>{t("components.title")}</h1>
-          <p>{t("components.description")}</p>
+          <span className="page-kicker">{t(isFlowChatCategory
+            ? "components.flowChat.kicker"
+            : "components.kicker")}</span>
+          <h1>{t(isFlowChatCategory
+            ? "components.flowChat.title"
+            : "components.title")}</h1>
+          <p>{t(isFlowChatCategory
+            ? "components.flowChat.description"
+            : "components.description")}</p>
         </div>
         <button className="lab-button" onClick={onInspectTokens} type="button">
           {t("components.inspectAllTokens")}
@@ -464,10 +499,20 @@ export function ComponentsPage({
       </header>
 
       <div className="component-summary-strip" aria-label={t("components.summaryLabel")}>
-        <span><strong>{componentRegistry.length}</strong> {t("components.registeredCount")}</span>
-        <span><strong>{componentRegistry.reduce((total, item) => total + item.states.length, 0)}</strong> {t("components.statesCount")}</span>
+        <span><strong>{visibleComponents.length}</strong> {t("components.registeredCount")}</span>
+        <span><strong>{visibleComponents.reduce((total, item) => total + item.states.length, 0)}</strong> {t("components.statesCount")}</span>
         <span><Check aria-hidden="true" size={15} /> {t("components.accessibilityContracts")}</span>
       </div>
+
+      {isFlowChatCategory && (
+        <section className="component-library-section-heading">
+          <div>
+            <span className="page-kicker">{t("components.flowChat.templatesKicker")}</span>
+            <h2>{t("components.flowChat.templatesTitle")}</h2>
+          </div>
+          <p>{t("components.flowChat.templatesDescription")}</p>
+        </section>
+      )}
 
       <ThemeRoot
         className="component-catalog-grid"
@@ -476,8 +521,9 @@ export function ComponentsPage({
         density={density}
         tokenOverrides={tokenOverrides}
       >
-        {componentRegistry.map((component) => {
-          const Icon = componentIcons[component.name as keyof typeof componentIcons];
+        {catalogComponents.map((component) => {
+          const Icon = getFlowChatPreviewDefinition(component.name)?.icon
+            ?? componentIcons[component.name as keyof typeof componentIcons];
           return (
             <button
               className="component-card"
@@ -510,13 +556,25 @@ export function ComponentsPage({
         })}
       </ThemeRoot>
 
-      <section className="primitive-note">
-        <div>
-          <span className="page-kicker">{t("components.primitivesKicker")}</span>
-          <h2>{t("components.primitivesTitle")}</h2>
-        </div>
-        <p>{t("components.primitivesDescription")}</p>
-      </section>
+      {isFlowChatCategory ? (
+        <ThemeRoot
+          className="flow-chat-tool-gallery-theme"
+          colorScheme={colorScheme}
+          contrast={contrast}
+          density={density}
+          tokenOverrides={tokenOverrides}
+        >
+          <FlowChatToolGallery onOpenComponent={onOpenComponent} />
+        </ThemeRoot>
+      ) : (
+        <section className="primitive-note">
+          <div>
+            <span className="page-kicker">{t("components.primitivesKicker")}</span>
+            <h2>{t("components.primitivesTitle")}</h2>
+          </div>
+          <p>{t("components.primitivesDescription")}</p>
+        </section>
+      )}
     </main>
   );
 }

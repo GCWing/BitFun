@@ -1840,7 +1840,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         RemoteSessionMetadata {
             session_id: "session-3".to_string(),
             name: "third".to_string(),
-            agent_type: "Plan".to_string(),
+            agent_type: "Cowork".to_string(),
             created_at_ms: 1_700_000_004_000,
             last_active_at_ms: 1_700_000_005_000,
             turn_count: 8,
@@ -1983,8 +1983,8 @@ fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
     assert_eq!(resolve_remote_agent_type(Some("Ultra")), "Ultra");
     assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
-    assert_eq!(resolve_remote_agent_type(Some("plan")), "Plan");
-    assert_eq!(resolve_remote_agent_type(Some("Plan")), "Plan");
+    assert_eq!(resolve_remote_agent_type(Some("plan")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("Plan")), "agentic");
     assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
     assert_eq!(resolve_remote_agent_type(None), "agentic");
 }

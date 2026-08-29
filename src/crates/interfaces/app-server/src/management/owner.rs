@@ -1184,6 +1184,7 @@ impl AppManagementService {
             .into_iter()
             .map(|mode| AgentModeSummary {
                 id: mode.id,
+                route_key: mode.key,
                 description: mode.description,
                 model_id: mode.model,
                 is_external: mode.source == bitfun_core::agentic::agents::AgentSource::External,

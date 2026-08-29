@@ -8,6 +8,7 @@ import { prepareBunPlugins } from "./bun-loader"
 import {
   BackendMethodSchemas,
   DEFAULT_MAX_FRAME_BYTES,
+  HOST_CAPABILITIES,
   OPENCODE_VERSION,
   PROTOCOL_VERSION,
   type BackendMethod,
@@ -26,8 +27,13 @@ async function main() {
   const address = requiredEnvironment("OPENCODE_EXTENSION_HOST_RPC_ADDRESS")
   const token = requiredEnvironment("OPENCODE_EXTENSION_HOST_RPC_TOKEN")
   requireLoopbackAddress(address)
+  let handshakeAccepted = false
   const peer = await connectRpcPeer(address, {
     idPrefix: "host",
+    onRequest(method) {
+      if (handshakeAccepted) return
+      throw new ExtensionHostError(-32601, `Method not found: ${method}`)
+    },
     onError(error) {
       logError("rpc.failure", error, { runtime: "bun" })
     },
@@ -71,14 +77,33 @@ async function main() {
   }
 
   let host: ExtensionHost | undefined
+  registerStreamMethods(peer, registry, owners)
+  registerHostMethods({
+    peer,
+    host: deferred.promise,
+    shutdown() {
+      void peer.flushAndClose().catch((error) => logError("shutdown.rpc_close_failed", error, { runtime: "bun" }))
+    },
+  })
   try {
-    const handshake = BackendMethodSchemas["backend.handshake"].result.parse(
-      await backend.request("backend.handshake", {
-        token,
-        protocolVersion: PROTOCOL_VERSION,
-        opencodeVersion: OPENCODE_VERSION,
-        maxFrameBytes: DEFAULT_MAX_FRAME_BYTES,
-      }),
+    const handshakeMethod = BackendMethodSchemas["backend.handshake"]
+    const handshake = handshakeMethod.result.parse(
+      await peer.request(
+        "backend.handshake",
+        handshakeMethod.params.parse({
+          token,
+          protocolVersion: PROTOCOL_VERSION,
+          opencodeVersion: OPENCODE_VERSION,
+          maxFrameBytes: DEFAULT_MAX_FRAME_BYTES,
+          capabilities: [...HOST_CAPABILITIES],
+        }),
+        {
+          onResult(value) {
+            handshakeMethod.result.parse(value)
+            handshakeAccepted = true
+          },
+        },
+      ),
     )
     if (!path.isAbsolute(handshake.cacheDirectory)) {
       throw new ExtensionHostError(-32001, "backend.handshake returned a relative cacheDirectory", {
@@ -100,14 +125,6 @@ async function main() {
       shell: Bun.$,
     })
     deferred.resolve(host)
-    registerStreamMethods(peer, registry, owners)
-    registerHostMethods({
-      peer,
-      host: deferred.promise,
-      shutdown() {
-        void peer.flushAndClose().catch((error) => logError("shutdown.rpc_close_failed", error, { runtime: "bun" }))
-      },
-    })
     logEvent("startup.ready", { runtime: "bun" })
     await peer.closed
     logEvent("rpc.closed", { runtime: "bun", failed: peer.closeError !== undefined })

@@ -353,6 +353,7 @@ test('portable contract crates expose only capability-local feature slices', asy
       'default',
       'agent-api',
       'git-port',
+      'hook-function-runtime',
       'permission',
       'plugin-runtime',
       'product-search',
@@ -367,6 +368,7 @@ test('portable contract crates expose only capability-local feature slices', asy
     ]),
   );
   assert.deepEqual(runtimePortFeatures['agent-api'], ['dep:bitfun-core-types']);
+  assert.deepEqual(runtimePortFeatures['hook-function-runtime'], []);
   assert.deepEqual(runtimePortFeatures['plugin-runtime'], []);
   assert.deepEqual(runtimePortFeatures['product-search'], ['dep:bitfun-product-domains']);
   assert.deepEqual(runtimePortFeatures['script-tool-runtime'], []);
@@ -571,6 +573,7 @@ const RUNTIME_PORT_FEATURE_PROFILES = {
   default: [],
   'agent-api': ['dep:bitfun-core-types'],
   'git-port': [],
+  'hook-function-runtime': [],
   permission: ['dep:bitfun-product-domains'],
   'plugin-runtime': [],
   'product-search': ['dep:bitfun-product-domains'],
@@ -812,6 +815,11 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       name: 'git_port_contracts',
       path: 'tests/git_port_contracts.rs',
       requiredFeatures: ['git-port'],
+    },
+    {
+      name: 'hook_function_runtime_contracts',
+      path: 'tests/hook_function_runtime_contracts.rs',
+      requiredFeatures: ['hook-function-runtime'],
     },
     {
       name: 'script_tool_port_contracts',

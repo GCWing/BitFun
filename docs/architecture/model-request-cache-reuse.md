@@ -176,49 +176,24 @@ and DeepReview retry fields.
 That restriction is not just validation polish; it protects cache reuse by
 keeping the forked child aligned with the parent session shape.
 
-## 3. The Shared Coding Modes Intentionally Reuse The Same Cache Identity
+## 3. Coding Workflows Keep The Agentic Cache Identity Stable
 
-BitFun's four shared coding modes are:
-
-- `agentic`
-- `Plan`
-- `debug`
-- `Multitask`
-
-They are intentionally configured to share the same stable prompt base.
+`agentic` owns the stable coding prompt base. Planning and parallel task
+coordination are built-in `plan` and `multitask` Skills rather than separate
+Agent modes.
 
 Relevant code:
 
-- shared constants and tests:
+- the Agentic prompt identity and coding profile facts:
   `src/crates/execution/agent-runtime/src/agents.rs`
-- mode definitions:
-  `src/crates/assembly/core/src/agentic/agents/definitions/modes/{agentic,plan,debug,multitask}.rs`
+- the Agentic definition:
+  `src/crates/assembly/core/src/agentic/agents/definitions/modes/agentic.rs`
+- built-in Skill catalog and mode policy:
+  `src/crates/execution/agent-runtime/src/skills/`
 
-Why they reuse cache:
-
-- all four modes use the same prompt template:
-  `SHARED_CODING_MODE_PROMPT_TEMPLATE = "agentic_mode"`
-- all four modes use the same user-context policy:
-  `shared_coding_mode_user_context_policy()`
-- `Agent::system_prompt_cache_identity(...)` is derived from
-  `prompt_template_name(...)`
-- `Agent::user_context_cache_identity(...)` is derived from the user-context
-  policy scope key
-
-The test `shared_template_modes_share_system_prompt_cache_identity()` asserts
-that these shared modes intentionally produce the same system-prompt and
-user-context cache identities.
-
-Mode-specific behavior is added through `system_reminder` text, not by swapping
-the cached base template:
-
-- `Plan`, `Debug`, and `Multitask` provide first-entry and ongoing reminder
-  templates
-- reminders are injected immediately before the current user message in
-  `ExecutionEngine::build_ai_messages_for_send(...)`
-
-This is the key reason mode switches between these four coding modes do not
-force a base prompt cache reset.
+Skill availability and loading use the dynamic listing path described below.
+Invoking a coding workflow therefore does not create another base Agent prompt
+identity; only the dynamic Skill context changes.
 
 The frontend also knows about this compatibility:
 

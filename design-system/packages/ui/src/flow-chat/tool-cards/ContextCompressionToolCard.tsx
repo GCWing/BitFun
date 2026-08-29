@@ -1,0 +1,72 @@
+import type { HTMLAttributes, ReactNode } from "react";
+import { Archive } from "lucide-react";
+import { classNames } from "../../internal/classNames";
+import {
+  ProminentToolCard,
+  ProminentToolCardHeader,
+  type FlowChatToolStatus,
+} from "./FlowChatToolCard";
+import { ToolProcessingDots } from "./ToolProcessingDots";
+import styles from "./ContextCompressionToolCard.module.css";
+
+export interface ContextCompressionToolCardProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "title"> {
+  error?: ReactNode;
+  processingText?: ReactNode;
+  status: FlowChatToolStatus;
+  summary?: ReactNode;
+  title: ReactNode;
+}
+
+const ACTIVE_STATUSES = new Set<FlowChatToolStatus>([
+  "preparing",
+  "receiving",
+  "running",
+  "streaming",
+]);
+
+export function ContextCompressionToolCard({
+  className,
+  error,
+  processingText,
+  status,
+  summary,
+  title,
+  ...props
+}: ContextCompressionToolCardProps) {
+  const loading = ACTIVE_STATUSES.has(status);
+  const failed = status === "error";
+  const content = summary ?? processingText;
+
+  return (
+    <div
+      {...props}
+      className={classNames(styles.root, className)}
+      data-bf-component="context-compression-tool-card"
+      data-bf-part="root"
+      data-bf-status={status}
+    >
+      <ProminentToolCard
+        errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
+        header={(
+          <ProminentToolCardHeader
+            action={title}
+            content={content !== undefined && content !== null ? (
+              <span
+                className={summary !== undefined && summary !== null ? styles.summary : styles.processing}
+                data-bf-part={summary !== undefined && summary !== null ? "summary" : "processing"}
+                title={typeof summary === "string" ? summary : undefined}
+              >
+                {content}
+              </span>
+            ) : undefined}
+            icon={<Archive aria-hidden="true" />}
+            statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
+          />
+        )}
+        isFailed={failed}
+        status={status}
+      />
+    </div>
+  );
+}

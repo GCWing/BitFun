@@ -221,7 +221,7 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "enum": ["agentic", "Cowork"],
                     "description": "Optional mode for create_session. Defaults to agentic."
                 }
             },
@@ -515,6 +515,7 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                                 .session_name
                                 .unwrap_or_else(|| "New Worktree Session".to_string()),
                             agent_type: input.agent_type.unwrap_or_else(|| "agentic".to_string()),
+                            agent_route_key: None,
                             workspace_path: Some(created.execution_target.root_path.clone()),
                             project_workspace_path: Some(project_workspace_path.clone()),
                             execution_target: Some(created.execution_target.clone()),

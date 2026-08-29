@@ -2,6 +2,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use bitfun_agent_runtime::native_hooks::{
+    AgentHookMatcher, BuiltinHookExecutor, HookCall, HookHandler, HookHandlerResult,
+    RuntimeHookRegistration, RuntimeHookSource,
+};
 use bitfun_agent_runtime::sdk::{
     AgentEventStream, AgentModeCatalogEntry, AgentModeCatalogPort, AgentModeCatalogQuery,
     AgentRunRequest, AgentRuntimeBuilder, AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability,
@@ -25,6 +29,15 @@ struct FakeSdkAgentProvider {
 }
 
 struct FakeSdkTool;
+
+struct NoopHook;
+
+#[async_trait]
+impl BuiltinHookExecutor for NoopHook {
+    async fn execute(&self, _call: &HookCall) -> HookHandlerResult {
+        Default::default()
+    }
+}
 
 #[derive(Debug)]
 struct FakeSdkAgentRegistry {
@@ -63,6 +76,7 @@ impl AgentModeCatalogPort for FakeModeCatalog {
         self.queries.lock().unwrap().push(query);
         Ok(vec![AgentModeCatalogEntry {
             id: "Explore".to_string(),
+            route_key: "Explore".to_string(),
             description: "Inspect the workspace".to_string(),
             model_id: Some("model-a".to_string()),
             is_external: false,
@@ -374,11 +388,19 @@ async fn sdk_facade_accepts_fake_services_tools_and_hooks_without_core() {
     let mut tools = ToolRegistry::new();
     tools.register_tool(Arc::new(FakeSdkTool));
     let hooks = RuntimeHookRegistry::builder()
-        .register(
-            RuntimeHookPlan::new("sdk.post_call", RuntimeHookKind::SuccessfulToolPostCall)
-                .with_timeout_millis(250)
-                .with_error_policy(RuntimeHookErrorPolicy::RecordWarning),
-        )
+        .register(RuntimeHookRegistration::new(
+            RuntimeHookPlan::new(
+                "sdk.post_call",
+                RuntimeHookKind::SuccessfulToolPostCall,
+                RuntimeHookSource::Builtin { priority: 0 },
+            )
+            .with_timeout_millis(250)
+            .with_error_policy(RuntimeHookErrorPolicy::RecordWarning),
+            HookHandler::Builtin {
+                executor: Arc::new(NoopHook),
+            },
+            AgentHookMatcher::Any,
+        ))
         .build()
         .expect("hook registry should build");
 

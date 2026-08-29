@@ -19,8 +19,9 @@ import {
   KeyRound,
   Trash2,
 } from 'lucide-react';
-import { Textarea, ToolProcessingDots, Tooltip } from '@/component-library';
+import { Textarea, Tooltip } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
+import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import {
   ConfigPageHeader,
   ConfigPageLayout,

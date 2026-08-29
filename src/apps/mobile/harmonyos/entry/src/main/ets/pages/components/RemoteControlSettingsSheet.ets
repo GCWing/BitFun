@@ -450,10 +450,7 @@ export struct RemoteControlSettingsSheet {
         connectionState: this.connectionState,
         showNavigationHeader: true,
         onBack: () => this.leaveAccountPage(),
-        onLoggedOut: () => {
-          this.showProfile = false;
-          this.showLogin = true;
-        },
+        onLoggedOut: () => this.leaveAccountPage(),
         onReconnect: this.onReconnect,
         cloudLogout: this.cloudLogout,
         cloudListDevices: this.cloudListDevices,

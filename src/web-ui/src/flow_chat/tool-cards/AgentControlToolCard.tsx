@@ -4,7 +4,6 @@ import React, {
   useState,
   useSyncExternalStore,
 } from 'react';
-import { Bot, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
@@ -19,9 +18,8 @@ import {
   type SessionLineageLifecycle,
 } from '../utils/sessionLineage';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
-import { BaseToolCard } from './BaseToolCard';
+import { AgentControlToolCard as AgentControlToolCardView } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import './AgentControlToolCard.scss';
 
 const PARAMETER_STREAMING_STATUSES = new Set<FlowToolItem['status']>([
   'preparing',
@@ -186,123 +184,43 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
     toolItem.id,
   ]);
 
-  const agentPillContent = (
-    <>
-      <span
-        className="agent-control-tool-card__avatar"
-        data-bf-component="agent-control-tool-card"
-        data-bf-part="avatar"
-      >
-        {linkedSubagentSessionId ? (
+  const statusTone = lifecycle === 'running' || lifecycle === 'finishing'
+    ? 'success'
+    : lifecycle === 'waiting'
+      ? 'warning'
+      : lifecycle === 'error' || lifecycle === 'cancelled'
+        ? 'danger'
+        : 'neutral';
+
+  return (
+    <div
+      ref={cardRootRef}
+      data-bf-adapter="agent-control-tool-card"
+      data-tool-card-id={toolId ?? ''}
+    >
+      <AgentControlToolCardView
+        status={status}
+        isExpanded={isExpanded}
+        onToggle={canExpand ? handleToggle : undefined}
+        agentName={agentDisplayName}
+        avatar={linkedSubagentSessionId ? (
           <SubagentAvatar
             sessionId={linkedSubagentSessionId}
             name={agentName}
             size={22}
             status={lifecycle}
           />
-        ) : (
-          <span className="agent-control-tool-card__fallback-avatar" aria-hidden="true">
-            <Bot size={14} strokeWidth={2} />
-          </span>
-        )}
-      </span>
-      <span
-        className="agent-control-tool-card__name"
-        data-bf-component="agent-control-tool-card"
-        data-bf-part="name"
-      >
-        {agentDisplayName}
-      </span>
-    </>
-  );
-
-  const header = (
-    <div
-      className="agent-control-tool-card__header"
-      data-bf-component="agent-control-tool-card"
-      data-bf-part="header"
-    >
-      {canOpenSession ? (
-        <button
-          type="button"
-          className="agent-control-tool-card__agent-pill"
-          data-bf-component="agent-control-tool-card"
-          data-bf-part="agentPill"
-          onClick={handleOpenSession}
-          aria-label={t('toolCards.taskTool.openInPanel')}
-          title={t('toolCards.taskTool.openInPanel')}
-        >
-          {agentPillContent}
-        </button>
-      ) : (
-        <span
-          className="agent-control-tool-card__agent-pill agent-control-tool-card__agent-pill--static"
-          data-bf-component="agent-control-tool-card"
-          data-bf-part="agentPill"
-        >
-          {agentPillContent}
-        </span>
-      )}
-      <span
-        className={`agent-control-tool-card__status agent-control-tool-card__status--${lifecycle}`}
-        data-bf-component="agent-control-tool-card"
-        data-bf-part="status"
-        data-bf-status={lifecycle}
-      >
-        {t(`flowChatHeader.agentTreeStatus.${lifecycle}`)}
-      </span>
-      {prompt ? (
-        <span
-          className="agent-control-tool-card__expand-indicator"
-          data-bf-component="agent-control-tool-card"
-          data-bf-part="expandIndicator"
-          aria-hidden="true"
-        >
-          {isExpanded ? (
-            <ChevronDown size={15} strokeWidth={2} />
-          ) : (
-            <ChevronRight size={15} strokeWidth={2} />
-          )}
-        </span>
-      ) : null}
-    </div>
-  );
-
-  return (
-    <div
-      ref={cardRootRef}
-      className="agent-control-tool-card"
-      data-bf-component="agent-control-tool-card"
-      data-bf-part="root"
-      data-bf-status={lifecycle}
-      data-bf-state={[
-        isExpanded && 'expanded',
-        isParameterStreaming && 'streaming',
-        canOpenSession && 'openable',
-      ].filter(Boolean).join(' ') || undefined}
-      data-tool-card-id={toolId ?? ''}
-    >
-      <BaseToolCard
-        status={status}
-        isExpanded={isExpanded}
-        onClick={canExpand ? handleToggle : undefined}
-        toggleTestId="agent-control-tool-card-toggle"
-        className="agent-control-tool-card__base"
-        header={header}
-        expandedContent={prompt ? (
-          <div
-            className="agent-control-tool-card__prompt"
-            data-bf-component="agent-control-tool-card"
-            data-bf-part="prompt"
-          >
-            <Markdown
-              content={prompt}
-              isStreaming={false}
-              className="agent-control-tool-card__prompt-markdown"
-            />
-          </div>
-        ) : null}
-        headerExpandAffordance={false}
+        ) : undefined}
+        statusLabel={t(`flowChatHeader.agentTreeStatus.${lifecycle}`)}
+        statusTone={statusTone}
+        onOpenAgent={canOpenSession ? handleOpenSession : undefined}
+        openAgentLabel={t('toolCards.taskTool.openInPanel')}
+        prompt={prompt ? (
+          <Markdown
+            content={prompt}
+            isStreaming={false}
+          />
+        ) : undefined}
       />
     </div>
   );

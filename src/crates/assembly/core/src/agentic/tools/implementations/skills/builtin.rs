@@ -373,6 +373,7 @@ async fn desired_file_content(
 #[cfg(test)]
 mod tests {
     use super::{BUILTIN_SKILLS_DIR, LEGACY_BUILTIN_SKILL_DIR_NAMES};
+    use bitfun_agent_runtime::skills::{SkillData, SkillLocation};
 
     fn embedded_skill_text(path: &str) -> &'static str {
         BUILTIN_SKILLS_DIR
@@ -380,6 +381,41 @@ mod tests {
             .unwrap_or_else(|| panic!("Missing embedded built-in skill file: {path}"))
             .contents_utf8()
             .unwrap_or_else(|| panic!("Built-in skill file is not UTF-8: {path}"))
+    }
+
+    #[test]
+    fn plan_skill_embeds_a_valid_plan_artifact_workflow() {
+        let text = embedded_skill_text("plan/SKILL.md");
+        let skill = SkillData::from_markdown(
+            "/bitfun-system/plan".to_string(),
+            text,
+            SkillLocation::User,
+            true,
+        )
+        .expect("built-in plan skill should parse");
+
+        assert_eq!(skill.name, "plan");
+        assert!(skill
+            .content
+            .contains(".bitfun/plans/<short-kebab-name>.plan.md"));
+        assert!(skill.content.contains("status: pending"));
+    }
+
+    #[test]
+    fn debug_skill_embeds_the_canonical_name_and_log_receiver() {
+        let text = embedded_skill_text("debug/SKILL.md");
+        let skill = SkillData::from_markdown(
+            "/bitfun-system/debug".to_string(),
+            text,
+            SkillLocation::User,
+            true,
+        )
+        .expect("built-in debug skill should parse");
+
+        assert_eq!(skill.name, "debug");
+        assert!(BUILTIN_SKILLS_DIR
+            .get_file("debug/scripts/debug-log-server.mjs")
+            .is_some());
     }
 
     fn gstack_skill_texts() -> Vec<(String, &'static str)> {

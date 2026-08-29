@@ -26,7 +26,7 @@
       },
       "control": {
         "$type": "fontFamily",
-        "$value": "'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+        "$value": "'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
       },
       "mono": {
         "$type": "fontFamily",
@@ -36,6 +36,7 @@
     "size": {
       "$type": "dimension",
       "micro": { "$value": "10px" },
+      "meta": { "$value": "11px" },
       "xs": { "$value": "12px" },
       "sm": { "$value": "13px" },
       "base": { "$value": "14px" },
@@ -67,6 +68,34 @@
     "relaxed": { "$value": 1.6 }
   },
   "control": {
+    "askUser": {
+      "$type": "dimension",
+      "bodyGap": { "$value": "{space.3}" },
+      "bodyPadding": { "$value": "{space.4}" },
+      "descriptionLineHeight": { "$value": "20px" },
+      "descriptionMaxWidth": { "$value": "500px" },
+      "headerHeight": { "$value": "30px" },
+      "iconSize": { "$value": "14px" },
+      "optionContentGap": { "$value": "{space.2}" },
+      "optionGap": { "$value": "{space.1}" },
+      "optionPaddingBlock": { "$value": "7px" },
+      "optionPaddingInline": { "$value": "{space.2}" },
+      "questionOptionsGap": { "$value": "{space.3}" },
+      "questionPaddingInline": { "$value": "{space.1}" },
+      "summaryActionSize": { "$value": "22px" },
+      "summaryPaddingBlock": { "$value": "{space.1}" },
+      "summaryPaddingInlineEnd": { "$value": "{space.1}" },
+      "summaryPaddingInlineStart": { "$value": "{space.2}" }
+    },
+    "chatComposer": {
+      "$type": "dimension",
+      "compactGap": { "$value": "9px" },
+      "compactHeight": { "$value": "45px" },
+      "compactPaddingBlock": { "$value": "9px" },
+      "compactPaddingInline": { "$value": "9px" },
+      "compactTrackHeight": { "$value": "25px" },
+      "controlHeight": { "$value": "25px" }
+    },
     "icon": {
       "$type": "dimension",
       "size2xs": { "$value": "8px" },

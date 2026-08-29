@@ -18,6 +18,27 @@ Design Lab exposes an Overview, a searchable component catalog with interactive 
 
 `@bitfun/ui/registry` is the component source of truth. Design Lab derives its component navigation, counts, token scopes, and detail routes from that package export; adding Lab copy or a preview cannot publish a component or keep a removed component alive.
 
+The same entry publishes `ChatComposer`, the shared context-band and
+compact/expanded input anatomy used by product composers without importing
+their stores, localized menus, editor, model, voice, or host actions.
+
+FlowChat tool-card frameworks are published from `@bitfun/ui/flow-chat` as
+`AmbientToolCard` and `ProminentToolCard`. The names describe whether a tool
+result should stay in the conversational background or receive deliberate user
+attention. Concrete package views cover the reusable FlowChat families for file
+and command execution, search and web results, agent and session activity, Git
+and review summaries, page lifecycle, code execution, todos, images, and other
+routine tool traces. Product adapters continue to own parsing, stores,
+localization, host capabilities, and heavy renderers passed through semantic
+slots; the package owns each migrated card's anatomy, state presentation, and
+interaction structure.
+
+Design Lab exposes FlowChat as its own library category. Both framework and
+tool-view entries come from `@bitfun/ui/registry`; its typed preview registry is
+exhaustive over those package entries. The tool gallery renders only real
+public views used by migrated adapters and lists bespoke product cards
+separately instead of substituting generic previews for them.
+
 ## Commands
 
 ```bash

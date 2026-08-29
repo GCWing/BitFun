@@ -7,6 +7,10 @@
 use crate::hook_contributions::{
     map_hook_contributions, OpenCodeHookDescriptor, OPENCODE_PLUGIN_PROVIDER_ID,
 };
+use crate::local_source_paths::{
+    local_source_plan, LocalConfigDocument, LocalConfigDocumentKind, LocalSourcePlanItem,
+    OpenCodeLocalConfigOptions,
+};
 use async_trait::async_trait;
 use bitfun_plugin_runtime_client::PluginRuntimeAdapter;
 use bitfun_product_domains::external_hook_contributions::{
@@ -38,9 +42,14 @@ use oxc_parse::{
     parser::Parser,
     span::SourceType,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::{Arc, OnceLock},
+};
 
 const OPENCODE_ADAPTER_ID: &str = "opencode-compatible";
 const OPENCODE_CONFIG_SCHEMA: &str = "https://opencode.ai/config.json";
@@ -57,6 +66,7 @@ const MAX_CUSTOM_TOOL_ID_BYTES: usize = 64;
 const MAX_NPM_PLUGINS: usize = 128;
 const MAX_NPM_PLUGIN_NAME_BYTES: usize = 256;
 const MAX_NPM_PLUGIN_METADATA_BYTES: usize = 16 * 1024;
+const MAX_CONFIG_SNAPSHOT_FILE_BYTES: usize = 1024 * 1024;
 
 // Frozen from the @opencode-ai/plugin Hooks interface. `tool` is handled by
 // the existing custom-tool projection and event-bus event types belong under
@@ -1696,6 +1706,345 @@ impl OpenCodeSourceProjection {
     }
 }
 
+/// Complete merged OpenCode configuration passed to the extension host when a
+/// workspace plugin instance opens.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(transparent)]
+pub struct OpenCodeConfigSnapshot {
+    pub config: Map<String, Value>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OpenCodeConfigSnapshotError {
+    #[error("failed to read OpenCode config {path}: {source}")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("invalid OpenCode config {path}: {message}")]
+    Invalid { path: PathBuf, message: String },
+}
+
+/// Load the complete local OpenCode configuration for one workspace using the
+/// same source plan as the runtime-free compatibility providers. Missing
+/// sources produce an empty object; unreadable or invalid declared sources
+/// fail activation instead of silently sending a partial configuration.
+pub fn load_opencode_config_snapshot(
+    workspace: &Path,
+) -> Result<OpenCodeConfigSnapshot, OpenCodeConfigSnapshotError> {
+    load_opencode_config_snapshot_with_options(workspace, &OpenCodeLocalConfigOptions::default())
+}
+
+fn load_opencode_config_snapshot_with_options(
+    workspace: &Path,
+    options: &OpenCodeLocalConfigOptions,
+) -> Result<OpenCodeConfigSnapshot, OpenCodeConfigSnapshotError> {
+    let mut config = Map::new();
+    let mut user_config = Map::new();
+    for item in local_source_plan(options, Some(workspace), None) {
+        let LocalSourcePlanItem::Config(document) = item else {
+            continue;
+        };
+        let path = PathBuf::from(document.location());
+        let content = match document.read_bounded(MAX_CONFIG_SNAPSHOT_FILE_BYTES) {
+            Ok(bitfun_services_core::bounded_fs::BoundedTextRead::Content(content)) => content,
+            Ok(bitfun_services_core::bounded_fs::BoundedTextRead::TooLarge) => {
+                return Err(OpenCodeConfigSnapshotError::Invalid {
+                    path,
+                    message: format!(
+                        "configuration exceeds the {MAX_CONFIG_SNAPSHOT_FILE_BYTES}-byte limit"
+                    ),
+                });
+            }
+            Ok(bitfun_services_core::bounded_fs::BoundedTextRead::InvalidUtf8) => {
+                return Err(OpenCodeConfigSnapshotError::Invalid {
+                    path,
+                    message: "configuration must be valid UTF-8".to_string(),
+                });
+            }
+            Err(source) => return Err(OpenCodeConfigSnapshotError::Read { path, source }),
+        };
+        let content =
+            substitute_config_variables(&content, &document, workspace).map_err(|message| {
+                OpenCodeConfigSnapshotError::Invalid {
+                    path: path.clone(),
+                    message,
+                }
+            })?;
+        let value =
+            serde_json::from_str::<Value>(&bitfun_services_core::jsonc::strip_jsonc(&content))
+                .map_err(|error| OpenCodeConfigSnapshotError::Invalid {
+                    path: path.clone(),
+                    message: error.to_string(),
+                })?;
+        let Value::Object(mut layer) = value else {
+            return Err(OpenCodeConfigSnapshotError::Invalid {
+                path,
+                message: "configuration root must be an object".to_string(),
+            });
+        };
+        resolve_config_plugin_specs(&mut layer, &document, workspace).map_err(|message| {
+            OpenCodeConfigSnapshotError::Invalid {
+                path: path.clone(),
+                message,
+            }
+        })?;
+        if document.kind == LocalConfigDocumentKind::User {
+            // OpenCode first deep-merges its three global config filenames;
+            // arrays in a later global file replace an earlier one.
+            merge_config_objects(&mut user_config, layer, false);
+            continue;
+        }
+        if !user_config.is_empty() {
+            merge_config_objects(&mut config, std::mem::take(&mut user_config), true);
+        }
+        merge_config_objects(&mut config, layer, true);
+    }
+    if !user_config.is_empty() {
+        merge_config_objects(&mut config, user_config, true);
+    }
+    normalize_merged_config(&mut config);
+    Ok(OpenCodeConfigSnapshot { config })
+}
+
+fn merge_config_objects(
+    target: &mut Map<String, Value>,
+    source: Map<String, Value>,
+    merge_open_code_lists: bool,
+) {
+    for (key, source_value) in source {
+        if merge_open_code_lists && key == "instructions" {
+            if let Value::Array(source_items) = &source_value {
+                if let Some(Value::Array(target_items)) = target.get_mut(&key) {
+                    for item in source_items {
+                        if !target_items.contains(item) {
+                            target_items.push(item.clone());
+                        }
+                    }
+                } else {
+                    target.insert(key, Value::Array(source_items.clone()));
+                }
+                continue;
+            }
+        }
+        if merge_open_code_lists && key == "plugin" {
+            if let Value::Array(source_items) = &source_value {
+                if let Some(Value::Array(target_items)) = target.get_mut(&key) {
+                    merge_plugin_specs_keep_last(target_items, source_items);
+                } else {
+                    let mut merged = Vec::new();
+                    merge_plugin_specs_keep_last(&mut merged, source_items);
+                    target.insert(key, Value::Array(merged));
+                }
+                continue;
+            }
+        }
+        match (target.get_mut(&key), source_value) {
+            (Some(Value::Object(target_object)), Value::Object(source_object)) => {
+                merge_config_objects(target_object, source_object, false);
+            }
+            (_, source_value) => {
+                target.insert(key, source_value);
+            }
+        }
+    }
+}
+
+fn merge_plugin_specs_keep_last(target: &mut Vec<Value>, source: &[Value]) {
+    let mut merged = target
+        .iter()
+        .cloned()
+        .chain(source.iter().cloned())
+        .collect::<Vec<_>>();
+    let mut seen = HashSet::new();
+    merged.reverse();
+    merged.retain(|item| seen.insert(plugin_load_identity(item)));
+    merged.reverse();
+    *target = merged;
+}
+
+fn plugin_load_identity(plugin: &Value) -> String {
+    let spec = match plugin {
+        Value::String(spec) => Some(spec.as_str()),
+        Value::Array(parts) => parts.first().and_then(Value::as_str),
+        _ => None,
+    };
+    let Some(spec) = spec else {
+        return plugin.to_string();
+    };
+    if spec.starts_with("file://") {
+        return spec.to_string();
+    }
+    if let Some(scoped) = spec.strip_prefix('@') {
+        let package_end = scoped
+            .find('/')
+            .and_then(|slash| scoped[slash + 1..].find('@').map(|at| slash + 1 + at));
+        return package_end
+            .map(|end| format!("@{}", &scoped[..end]))
+            .unwrap_or_else(|| spec.to_string());
+    }
+    spec.split_once('@')
+        .map(|(package, _)| package.to_string())
+        .unwrap_or_else(|| spec.to_string())
+}
+
+fn substitute_config_variables(
+    content: &str,
+    document: &LocalConfigDocument,
+    workspace: &Path,
+) -> Result<String, String> {
+    static ENV_PATTERN: OnceLock<regex::Regex> = OnceLock::new();
+    static FILE_PATTERN: OnceLock<regex::Regex> = OnceLock::new();
+    let env_pattern = ENV_PATTERN.get_or_init(|| regex::Regex::new(r"\{env:([^}]+)\}").unwrap());
+    let file_pattern = FILE_PATTERN.get_or_init(|| regex::Regex::new(r"\{file:([^}]+)\}").unwrap());
+    let substituted = env_pattern
+        .replace_all(content, |captures: &regex::Captures<'_>| {
+            std::env::var(&captures[1]).unwrap_or_default()
+        })
+        .into_owned();
+    let base = document
+        .file_path()
+        .and_then(Path::parent)
+        .or(document.base_directory.as_deref())
+        .unwrap_or(workspace);
+    let mut output = String::with_capacity(substituted.len());
+    let mut cursor = 0;
+    for captures in file_pattern.captures_iter(&substituted) {
+        let matched = captures.get(0).expect("complete file token");
+        output.push_str(&substituted[cursor..matched.start()]);
+        let line_start = substituted[..matched.start()]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        if substituted[line_start..matched.start()]
+            .trim_start()
+            .starts_with("//")
+        {
+            output.push_str(matched.as_str());
+            cursor = matched.end();
+            continue;
+        }
+        let reference = captures.get(1).expect("file reference").as_str();
+        let referenced_path = resolve_config_reference_path(reference, base);
+        let file_content = std::fs::read_to_string(&referenced_path).map_err(|error| {
+            format!(
+                "bad file reference {reference:?} ({}): {error}",
+                referenced_path.display()
+            )
+        })?;
+        let escaped =
+            serde_json::to_string(file_content.trim()).map_err(|error| error.to_string())?;
+        output.push_str(&escaped[1..escaped.len() - 1]);
+        cursor = matched.end();
+    }
+    output.push_str(&substituted[cursor..]);
+    Ok(output)
+}
+
+fn resolve_config_reference_path(reference: &str, base: &Path) -> PathBuf {
+    if let Some(relative) = reference.strip_prefix("~/") {
+        return dirs::home_dir()
+            .unwrap_or_else(|| base.to_path_buf())
+            .join(relative);
+    }
+    let path = PathBuf::from(reference);
+    if path.is_absolute() {
+        path
+    } else {
+        base.join(path)
+    }
+}
+
+fn resolve_config_plugin_specs(
+    config: &mut Map<String, Value>,
+    document: &LocalConfigDocument,
+    workspace: &Path,
+) -> Result<(), String> {
+    let Some(Value::Array(plugins)) = config.get_mut("plugin") else {
+        return Ok(());
+    };
+    let base = document
+        .file_path()
+        .and_then(Path::parent)
+        .or(document.base_directory.as_deref())
+        .unwrap_or(workspace);
+    for plugin in plugins {
+        let spec = match plugin {
+            Value::String(spec) => spec,
+            Value::Array(parts) => match parts.first_mut() {
+                Some(Value::String(spec)) => spec,
+                _ => continue,
+            },
+            _ => continue,
+        };
+        if !plugin_spec_is_path(spec) || spec.starts_with("file://") {
+            continue;
+        }
+        let path = resolve_config_reference_path(spec, base);
+        *spec = url::Url::from_file_path(&path)
+            .map_err(|_| {
+                format!(
+                    "plugin path cannot be represented as a file URL: {}",
+                    path.display()
+                )
+            })?
+            .to_string();
+    }
+    Ok(())
+}
+
+fn plugin_spec_is_path(spec: &str) -> bool {
+    spec.starts_with("file://")
+        || spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with("~/")
+        || Path::new(spec).is_absolute()
+        || (spec.len() >= 3
+            && spec.as_bytes()[0].is_ascii_alphabetic()
+            && spec.as_bytes()[1] == b':'
+            && matches!(spec.as_bytes()[2], b'/' | b'\\'))
+}
+
+fn normalize_merged_config(config: &mut Map<String, Value>) {
+    if let Some(Value::Object(modes)) = config.get("mode").cloned() {
+        let agents = config
+            .entry("agent".to_string())
+            .or_insert_with(|| Value::Object(Map::new()));
+        if let Value::Object(agents) = agents {
+            for (name, mode) in modes {
+                let Value::Object(mut mode) = mode else {
+                    continue;
+                };
+                mode.insert("mode".to_string(), Value::String("primary".to_string()));
+                let mut layer = Map::new();
+                layer.insert(name, Value::Object(mode));
+                merge_config_objects(agents, layer, false);
+            }
+        }
+    }
+    if let Some(Value::Object(tools)) = config.get("tools").cloned() {
+        let mut permissions = Map::new();
+        for (tool, enabled) in tools {
+            let Some(enabled) = enabled.as_bool() else {
+                continue;
+            };
+            let tool = if matches!(tool.as_str(), "write" | "edit" | "patch") {
+                "edit".to_string()
+            } else {
+                tool
+            };
+            permissions.insert(
+                tool,
+                Value::String(if enabled { "allow" } else { "deny" }.to_string()),
+            );
+        }
+        if let Some(Value::Object(explicit)) = config.get("permission").cloned() {
+            merge_config_objects(&mut permissions, explicit, false);
+        }
+        config.insert("permission".to_string(), Value::Object(permissions));
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OpenCodeConfig {
     config_uri: String,
@@ -2458,6 +2807,190 @@ mod opencode_projection_contracts {
 
     const CONFIG: &str = include_str!("../tests/fixtures/opencode-example/opencode.json");
     const LOCAL_PLUGIN_PATH: &str = ".opencode/plugins/workspace-tools.ts";
+
+    #[test]
+    fn config_snapshot_loader_preserves_jsonc_without_requiring_schema() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(
+            workspace.path().join("opencode.jsonc"),
+            r#"{
+                // OpenCode accepts JSONC and does not require $schema.
+                "agent": { "build": { "prompt": "workspace" } },
+                "permission": { "bash": "deny" },
+                "plugin": ["alpha", "beta"]
+            }"#,
+        )
+        .expect("config");
+
+        let options = isolated_config_options(workspace.path().join("user-config"));
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert_eq!(snapshot.config["agent"]["build"]["prompt"], "workspace");
+        assert_eq!(snapshot.config["permission"]["bash"], "deny");
+        assert_eq!(
+            snapshot.config["plugin"],
+            serde_json::json!(["alpha", "beta"])
+        );
+    }
+
+    #[test]
+    fn config_snapshot_loader_deduplicates_plugin_identity_within_one_source() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            r#"{
+                "plugin": [
+                    "demo@1",
+                    ["other@1", {"value": "old"}],
+                    "demo@2",
+                    ["other@1", {"value": "new"}]
+                ]
+            }"#,
+        )
+        .expect("config");
+
+        let options = isolated_config_options(workspace.path().join("user-config"));
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert_eq!(
+            snapshot.config["plugin"],
+            serde_json::json!(["demo@2", ["other@1", {"value": "new"}]])
+        );
+    }
+
+    #[test]
+    fn config_snapshot_loader_merges_user_project_and_inline_precedence() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let user_config = workspace.path().join("user-config");
+        std::fs::create_dir_all(&user_config).expect("user config directory");
+        std::fs::write(
+            user_config.join("config.json"),
+            r#"{
+                "agent": { "build": { "prompt": "user", "model": "small" } },
+                "permission": { "bash": "ask" },
+                "plugin": ["user-plugin"],
+                "instructions": ["user.md"]
+            }"#,
+        )
+        .expect("user config");
+        std::fs::write(
+            user_config.join("opencode.json"),
+            r#"{
+                "plugin": ["user-override-plugin", "demo@1"],
+                "instructions": ["user-override.md"]
+            }"#,
+        )
+        .expect("later user config");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            r#"{
+                "agent": { "build": { "prompt": "workspace" } },
+                "permission": { "bash": "deny" },
+                "plugin": ["workspace-plugin", "demo@2"],
+                "instructions": ["workspace.md"]
+            }"#,
+        )
+        .expect("workspace config");
+        let mut options = isolated_config_options(user_config);
+        options.inline_config_content = Some(
+            r#"{
+                "agent": { "build": { "prompt": "inline" } },
+                "plugin": ["inline-plugin", "user-plugin"],
+                "instructions": ["inline.md", "user.md"]
+            }"#
+            .to_string(),
+        );
+
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert_eq!(snapshot.config["agent"]["build"]["prompt"], "inline");
+        assert_eq!(snapshot.config["agent"]["build"]["model"], "small");
+        assert_eq!(snapshot.config["permission"]["bash"], "deny");
+        assert_eq!(
+            snapshot.config["plugin"],
+            serde_json::json!([
+                "user-override-plugin",
+                "workspace-plugin",
+                "demo@2",
+                "inline-plugin",
+                "user-plugin"
+            ])
+        );
+        assert_eq!(
+            snapshot.config["instructions"],
+            serde_json::json!(["user-override.md", "workspace.md", "inline.md", "user.md"])
+        );
+    }
+
+    #[test]
+    fn config_snapshot_loader_accepts_missing_sources_as_empty() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let options = isolated_config_options(workspace.path().join("user-config"));
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert!(snapshot.config.is_empty());
+    }
+
+    #[test]
+    fn config_snapshot_loader_substitutes_files_and_resolves_plugin_paths_at_origin() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("prompt.txt"), "line one\nline two\n")
+            .expect("prompt");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            r#"{
+                "agent": { "build": { "prompt": "{file:prompt.txt}" } },
+                "plugin": ["./plugins/workspace.ts"]
+            }"#,
+        )
+        .expect("config");
+
+        let options = isolated_config_options(workspace.path().join("user-config"));
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert_eq!(
+            snapshot.config["agent"]["build"]["prompt"],
+            "line one\nline two"
+        );
+        let expected = url::Url::from_file_path(workspace.path().join("plugins/workspace.ts"))
+            .expect("plugin URL")
+            .to_string();
+        assert_eq!(snapshot.config["plugin"], serde_json::json!([expected]));
+    }
+
+    #[test]
+    fn config_snapshot_loader_applies_legacy_mode_and_tool_normalization() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(
+            workspace.path().join("opencode.json"),
+            r#"{
+                "agent": { "review": { "prompt": "base" } },
+                "mode": { "review": { "prompt": "mode" } },
+                "tools": { "write": false, "bash": true },
+                "permission": { "bash": "ask" }
+            }"#,
+        )
+        .expect("config");
+
+        let options = isolated_config_options(workspace.path().join("user-config"));
+        let snapshot = load_opencode_config_snapshot_with_options(workspace.path(), &options)
+            .expect("snapshot");
+        assert_eq!(snapshot.config["agent"]["review"]["prompt"], "mode");
+        assert_eq!(snapshot.config["agent"]["review"]["mode"], "primary");
+        assert_eq!(snapshot.config["permission"]["edit"], "deny");
+        assert_eq!(snapshot.config["permission"]["bash"], "ask");
+    }
+
+    fn isolated_config_options(user_config_dir: PathBuf) -> OpenCodeLocalConfigOptions {
+        OpenCodeLocalConfigOptions {
+            user_config_dir,
+            legacy_user_config_dir: None,
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        }
+    }
     const LOCAL_PLUGIN_SOURCE: &str =
         include_str!("../tests/fixtures/opencode-example/.opencode/plugins/workspace-tools.ts");
 

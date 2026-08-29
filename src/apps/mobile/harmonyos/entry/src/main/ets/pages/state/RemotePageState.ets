@@ -319,6 +319,20 @@ export class RemotePageState {
     this.hostCapabilities = [];
   }
 
+  /** Clears every conversation-scoped value when its remote identity ends. */
+  resetConversationContext(): void {
+    this.conversation.reset();
+    this.hasMoreSessions = false;
+    this.isLoadingSessions = false;
+    this.isLoadingConversation = false;
+    this.pendingSessionId = '';
+    this.isConversationDismissed = false;
+    this.isLoadingHome = false;
+    this.sessionErrorText = '';
+    this.hostCapabilities = [];
+    this.clearDownloadStatus();
+  }
+
   clearWorkspaceActions(): void {
     this.recentWorkspaces = [];
     this.assistants = [];

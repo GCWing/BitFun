@@ -42,12 +42,18 @@ impl AgentRegistry {
         agent_type: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
-        let entry = self
-            .find_agent_entry(agent_type, workspace_root)
-            .ok_or_else(|| {
-                error!("[AgentRegistry] Agent not found: {}", agent_type);
-                BitFunError::agent(format!("[AgentRegistry] Agent not found: {}", agent_type))
-            })?;
+        let externally_owned = workspace_root
+            .is_some_and(|workspace| self.is_external_subagent_route(agent_type, Some(workspace)));
+        let entry = if externally_owned {
+            workspace_root
+                .and_then(|workspace| self.find_external_route_entry(agent_type, workspace))
+        } else {
+            self.find_agent_entry(agent_type, workspace_root)
+        };
+        let entry = entry.ok_or_else(|| {
+            error!("[AgentRegistry] Agent not found: {}", agent_type);
+            BitFunError::agent(format!("[AgentRegistry] Agent not found: {}", agent_type))
+        })?;
 
         if let Some(config) = entry.custom_config {
             let model = config.model.trim();

@@ -296,7 +296,6 @@ Arguments:
 - "session_name": Used by create (defaults to "New Session") and required as the new title for rename.
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
-  - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
   - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
   - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 - "session_id": Required for cancel, delete, and rename."#
@@ -335,7 +334,7 @@ Arguments:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork", "DeepResearch"],
+                    "enum": ["agentic", "Cowork", "DeepResearch"],
                     "description": "Optional agent type when creating a session. Defaults to agentic."
                 }
             },
@@ -407,6 +406,7 @@ Arguments:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
+                        agent_route_key: None,
                         workspace_path: Some(workspace.display_workspace.clone()),
                         project_workspace_path: Some(workspace.project_workspace.clone()),
                         execution_target: workspace.execution_target.clone(),

@@ -239,14 +239,34 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
         match operation {
             RuntimeIpcOperation::Health => unreachable!("Health is owned by the IPC server"),
             RuntimeIpcOperation::ListAgentModes { session_id } => {
-                let workspace = match session_id {
-                    Some(session_id) => PathBuf::from(
-                        self.session_workspace_binding(&session_id)
-                            .await?
-                            .workspace_path,
-                    ),
-                    None => self.workspace.clone(),
+                let binding = match session_id {
+                    Some(session_id) => self.session_workspace_binding(&session_id).await?,
+                    None => AgentSessionWorkspaceBinding {
+                        workspace_id: None,
+                        workspace_path: self.workspace.to_string_lossy().to_string(),
+                        project_workspace_path: Some(self.workspace.to_string_lossy().to_string()),
+                        execution_target: Some(
+                            bitfun_runtime_ports::SessionExecutionTarget::local(
+                                self.workspace.to_string_lossy().to_string(),
+                            ),
+                        ),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    },
                 };
+                if let Err(error) = self.ensure_plugin_workspace_ready(&binding).await {
+                    tracing::warn!(
+                        "Configured plugin activation failed while loading Shared Runtime agent modes; continuing with native agents: {:?}",
+                        error
+                    );
+                }
+                let workspace = PathBuf::from(&binding.workspace_path);
+                if let Err(error) = bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(&workspace)).await {
+                    tracing::warn!(
+                        "Failed to initialize external agent sources for Shared TUI mode catalog: {}",
+                        error
+                    );
+                }
                 let modes = self
                     .runtime
                     .list_agent_modes(AgentModeCatalogQuery {
@@ -258,6 +278,7 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .into_iter()
                     .map(|mode| RuntimeAgentModeSummary {
                         id: mode.id,
+                        route_key: mode.route_key,
                         description: mode.description,
                         model_id: mode.model_id,
                         is_external: mode.is_external,

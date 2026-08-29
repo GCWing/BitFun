@@ -82,7 +82,6 @@ import { ConversationIntentDispatcher } from '../actions/ConversationIntentDispa
 import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { DeviceDirectoryState } from '../state/DeviceDirectoryState';
 import { RemotePageState } from '../state/RemotePageState';
-import { RemoteCreateSessionState, RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 import { WatchProvisionState } from '../state/WatchProvisionState';
 import {
   WatchProvisionController,
@@ -171,7 +170,6 @@ export abstract class AppRootRuntimeComposition {
   readonly generalChatPageState: GeneralChatPageState = new GeneralChatPageState();
   readonly remotePageState: RemotePageState = new RemotePageState();
   readonly deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
-  readonly remoteCreateState: RemoteCreateSessionState = new RemoteCreateSessionState();
   readonly watchProvisionState: WatchProvisionState = new WatchProvisionState();
   private readonly watchProvisionPort: WatchProvisionPort = {
     // Two ways to reach a credential, and the phone's own account is the
@@ -626,6 +624,7 @@ export abstract class AppRootRuntimeComposition {
         onRouteHome: (): void => this.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteHome),
         onStopPolling: (): void => this.remoteChatPollingLifecycleController.stop(),
         onStartPolling: (): void => this.conversationController.startRemotePolling(),
+        onNudgePolling: (): void => this.remoteChatPollingLifecycleController.nudge(),
         onResetTimeline: (sessionId: string): void => this.conversationController.resetRemoteTimeline(sessionId),
         onClearRemoteFiles: (): void => this.remoteFileDownloadController.clear(),
         onKnownStateReset: (): void => this.conversationController.resetKnownRemoteState(),
@@ -749,7 +748,6 @@ export abstract class AppRootRuntimeComposition {
     new ConversationController(
       this.generalChatPageState,
       this.remotePageState,
-      this.remoteCreateState,
       { currentRoute: (): AppRoute => this.appShellViewModel.currentRoute() },
       {
         timeline: this.chatTimelineStore,
@@ -861,10 +859,6 @@ export abstract class AppRootRuntimeComposition {
       createInPlace: (agentType: string): void => {
         this.conversationController.createRemoteSession(agentType, true);
       },
-      createAssistant: (): void => { this.conversationController.openRemoteCreateSession(); },
-      openCreateInWorkspace: (path: string, deviceId?: string): void => {
-        void this.conversationController.openRemoteCreateSessionInWorkspace(path, deviceId);
-      },
       createInWorkspace: (path: string, agentType: string, deviceId?: string): void => {
         this.conversationController.createRemoteSessionInWorkspace(path, agentType, false, deviceId);
       },
@@ -886,20 +880,6 @@ export abstract class AppRootRuntimeComposition {
       openSession: (session: RemoteSession): void => this.conversationController.openHomeSession(session),
       openSessionInPlace: (session: RemoteSession): void => this.conversationController.openHomeSession(session, true),
       deleteSession: (session: RemoteSession): void => { this.conversationController.deleteHomeSession(session); }
-    },
-    onRemoteCreate: {
-      back: (): void => this.conversationController.closeRemoteCreateSession(),
-      toggleDevices: (): void => { this.conversationController.toggleRemoteCreateDevices(); },
-      toggleWorkspaces: (): void => { this.conversationController.toggleRemoteCreateWorkspaces(); },
-      selectDevice: (device: CloudAccountDevice): void => {
-        this.conversationController.selectRemoteCreateDevice(device);
-      },
-      selectWorkspace: (path: string): void => this.conversationController.selectRemoteCreateWorkspace(path),
-      draftChanged: (value: string): void => this.remoteCreateState.setDraft(value),
-      voiceInput: async (): Promise<void> => { await this.toggleVoiceInput(); },
-      selectModel: (modelId: string): void => this.remoteCreateState.setSelectedModelId(modelId),
-      selectHarness: (profile: RemoteHarnessProfile): void => this.remoteCreateState.setSelectedHarnessProfile(profile),
-      send: (): void => { this.conversationController.submitRemoteCreateSession(); }
     },
     onSidebar: {
       close: (): void => this.closeAppSidebar(),

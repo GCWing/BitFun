@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { z } from "zod"
@@ -40,7 +41,29 @@ describe("plugin loader", () => {
     expect(result.diagnostics).toEqual([])
     expect(result.declarations).toHaveLength(1)
     expect(result.declarations[0]?.options).toEqual({ order: 2 })
+    expect(result.declarations[0]?.optionsDigest).toMatch(/^[0-9a-f]{64}$/)
     expect(result.declarations[0]?.resolvedSpec).toBe(pathToFileURL(await realpath(plugin)).href)
+  })
+
+  test("binds normalized source and declaration options into stable review facts", async () => {
+    const directory = await temporaryDirectory()
+    const plugin = path.join(directory, "plugin.ts")
+    await Bun.write(plugin, 'export default { id: "fixture.review", server: async () => ({}) }\n')
+
+    const first = await normalizePluginDeclarations([
+      { spec: "./plugin.ts", baseDirectory: directory, options: { nested: { right: 2, left: 1 } } },
+    ])
+    const reordered = await normalizePluginDeclarations([
+      { spec: pathToFileURL(plugin).href, baseDirectory: directory, options: { nested: { left: 1, right: 2 } } },
+    ])
+    const changed = await normalizePluginDeclarations([
+      { spec: "./plugin.ts", baseDirectory: directory, options: { nested: { left: 1, right: 3 } } },
+    ])
+
+    expect(first.declarations[0]?.identity).toBe(reordered.declarations[0]?.identity)
+    expect(first.declarations[0]?.resolvedSpec).toBe(reordered.declarations[0]?.resolvedSpec)
+    expect(first.declarations[0]?.optionsDigest).toBe(reordered.declarations[0]?.optionsDigest)
+    expect(first.declarations[0]?.optionsDigest).not.toBe(changed.declarations[0]?.optionsDigest)
   })
 
   test("prefers the default object-form plugin and exposes entrypoints without executing them", async () => {
@@ -74,6 +97,25 @@ describe("plugin loader", () => {
     const loaded = await loadPreparedPlugins(prepared)
     expect(loaded.loaded[0]?.entrypoints[0]?.id).toBe("fixture.prepared")
     expect(await Bun.file(marker).exists()).toBe(true)
+  })
+
+  test("changes the content digest when a local plugin dependency changes", async () => {
+    const directory = await temporaryDirectory()
+    const plugin = path.join(directory, "plugin.ts")
+    const dependency = path.join(directory, "dependency.ts")
+    await Bun.write(dependency, 'export const id = "first"\n')
+    await Bun.write(
+      plugin,
+      'import { id } from "./dependency"\nexport default { id, server: async () => ({}) }\n',
+    )
+
+    const first = await preparePlugins({ declarations: [plugin], cacheDirectory: directory })
+    await Bun.write(dependency, 'export const id = "second"\n')
+    const second = await preparePlugins({ declarations: [plugin], cacheDirectory: directory })
+
+    expect(first.prepared[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(second.prepared[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(second.prepared[0]?.contentHash).not.toBe(first.prepared[0]?.contentHash)
   })
 
   test("deduplicates legacy exports by exported value identity", async () => {
@@ -230,7 +272,7 @@ describe("plugin loader", () => {
       path.join(outside, "server.ts"),
       'export default { id: "fixture.escape", server: async () => ({}) }\n',
     )
-    await symlink(outside, path.join(plugin, "escape"), "dir")
+    await symlink(outside, path.join(plugin, "escape"), process.platform === "win32" ? "junction" : "dir")
 
     const result = await loadPlugins({
       declarations: [plugin],
@@ -288,11 +330,14 @@ describe("plugin loader", () => {
       type: "git",
     })
     expect(parseNpmPluginSpecifier("file:./plugin.tgz", "/tmp/extension-host-base").installSpec).toBe(
-      "file:/tmp/extension-host-base/plugin.tgz",
+      pathToFileURL(path.resolve("/tmp/extension-host-base/plugin.tgz")).href,
     )
   })
 
-  test("installs npm packages with lifecycle scripts disabled", async () => {
+  // Bun 1.3.x cannot install local file dependencies reliably on Windows
+  // (oven-sh/bun#13379). File plugin declarations use the direct validated
+  // loader path in production; this integration case remains covered on Unix.
+  test.skipIf(process.platform === "win32")("installs npm packages with lifecycle scripts disabled", async () => {
     const directory = await temporaryDirectory()
     const source = path.join(directory, "source")
     const marker = path.join(directory, "postinstall.txt")
@@ -309,7 +354,7 @@ describe("plugin loader", () => {
     await Bun.write(path.join(source, "index.js"), "export default { server: async () => ({}) }\n")
 
     const target = await installNpmPlugin({
-      spec: `file:${source}`,
+      spec: pathToFileURL(source).href,
       packageName: "fixture-install",
       cacheDirectory: path.join(directory, "cache"),
     })
@@ -317,6 +362,31 @@ describe("plugin loader", () => {
     expect(target.cache).toBe("installed")
     expect(await Bun.file(path.join(target.target, "package.json")).exists()).toBe(true)
     expect(await Bun.file(marker).exists()).toBe(false)
+  })
+
+  test("review preparation forwards the non-installing contract to npm resolution", async () => {
+    const directory = await temporaryDirectory()
+    let allowInstall: boolean | undefined
+    const result = await preparePlugins({
+      declarations: ["fixture-review@1.0.0"],
+      cacheDirectory: path.join(directory, "cache"),
+      allowInstall: false,
+      install: async (input) => {
+        allowInstall = input.allowInstall
+        throw new Error("activation review requires installation approval")
+      },
+    })
+
+    expect(allowInstall).toBe(false)
+    expect(result.reviewed[0]).toMatchObject({
+      spec: "fixture-review@1.0.0",
+      source: "npm",
+      identity: "npm:fixture-review",
+    })
+    expect(result.reviewed[0]?.optionsDigest).toMatch(/^[0-9a-f]{64}$/)
+    expect(result.prepared).toEqual([])
+    expect(result.diagnostics[0]?.stage).toBe("install")
+    expect(result.diagnostics[0]?.message).toContain("approval")
   })
 
   test("reuses an installed npm package directory without reinstalling it", async () => {
@@ -420,7 +490,7 @@ describe("plugin tool schemas", () => {
 })
 
 async function temporaryDirectory() {
-  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", "opencode-extension-host-"))
+  const directory = await mkdtemp(path.join(tmpdir(), "opencode-extension-host-"))
   temporaryDirectories.push(directory)
   return directory
 }

@@ -131,6 +131,7 @@ pub(crate) struct TurnAdmissionSessionFacts {
     max_context_tokens: usize,
     agent_type: String,
     agent_route_owner: SessionAgentRouteOwner,
+    agent_route_key: Option<String>,
     enable_tools: bool,
     workspace_path: Option<String>,
     project_workspace_path: Option<String>,
@@ -149,6 +150,7 @@ impl TurnAdmissionSessionFacts {
             max_context_tokens: session.config.max_context_tokens,
             agent_type: session.agent_type.clone(),
             agent_route_owner: session.config.agent_route_owner,
+            agent_route_key: session.config.agent_route_key.clone(),
             enable_tools: session.config.enable_tools,
             workspace_path: session.config.workspace_path.clone(),
             project_workspace_path: session.config.project_workspace_path.clone(),
@@ -171,6 +173,7 @@ impl TurnAdmissionSessionFacts {
             && self.max_context_tokens == session.config.max_context_tokens
             && self.agent_type == session.agent_type
             && self.agent_route_owner == session.config.agent_route_owner
+            && self.agent_route_key == session.config.agent_route_key
             && self.enable_tools == session.config.enable_tools
             && self.workspace_path == session.config.workspace_path
             && self.project_workspace_path == session.config.project_workspace_path
@@ -4034,6 +4037,7 @@ impl SessionManager {
         session_id: &str,
         agent_type: &str,
         route_owner: SessionAgentRouteOwner,
+        route_key: Option<String>,
     ) -> BitFunResult<()> {
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
         let original_session = self
@@ -4043,6 +4047,7 @@ impl SessionManager {
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
         if original_session.agent_type == agent_type
             && original_session.config.agent_route_owner == route_owner
+            && original_session.config.agent_route_key == route_key
         {
             return Ok(());
         }
@@ -4051,6 +4056,7 @@ impl SessionManager {
         let now = SystemTime::now();
         updated_session.agent_type = agent_type.to_string();
         updated_session.config.agent_route_owner = route_owner;
+        updated_session.config.agent_route_key = route_key.clone();
         updated_session.updated_at = now;
         updated_session.last_activity_at = now;
 
@@ -4082,11 +4088,12 @@ impl SessionManager {
         };
         active_session.agent_type = updated_session.agent_type;
         active_session.config.agent_route_owner = route_owner;
+        active_session.config.agent_route_key = route_key.clone();
         active_session.updated_at = now;
         active_session.last_activity_at = now;
         debug!(
-            "Session agent binding updated: session_id={}, agent_type={}, route_owner={:?}",
-            session_id, agent_type, route_owner
+            "Session agent binding updated: session_id={}, agent_type={}, route_owner={:?}, route_key={:?}",
+            session_id, agent_type, route_owner, route_key
         );
 
         Ok(())
@@ -5933,15 +5940,27 @@ impl SessionManager {
             let available_modes = agent_registry
                 .get_modes_info_for_workspace(external_workspace_root, external_sources_supported)
                 .await;
-            let persisted_binding = agent_registry.resolve_primary_agent_for_turn(
+            let persisted_binding = agent_registry.resolve_primary_agent_for_turn_with_route(
                 &session.agent_type,
                 external_workspace_root,
                 external_sources_supported,
                 Some(session.config.agent_route_owner),
+                session.config.agent_route_key.as_deref(),
             );
             if let Some(binding) = persisted_binding {
-                if session.config.agent_route_owner != binding.route_owner {
+                // A missing local route key is a valid legacy binding. Local
+                // resolution is already constrained by the persisted owner, so
+                // avoid rewriting the runtime state solely to backfill it.
+                // External bindings still persist their exact provider route
+                // key to prevent a same-name provider from taking over.
+                let external_route_key_changed = session.config.agent_route_owner
+                    == SessionAgentRouteOwner::External
+                    && session.config.agent_route_key != binding.route_key;
+                if session.config.agent_route_owner != binding.route_owner
+                    || external_route_key_changed
+                {
                     session.config.agent_route_owner = binding.route_owner;
+                    session.config.agent_route_key = binding.route_key;
                     should_persist_restored_session = true;
                 }
             } else if session.config.agent_route_owner == SessionAgentRouteOwner::External {
@@ -5967,6 +5986,7 @@ impl SessionManager {
                 );
                 session.agent_type = fallback_mode;
                 session.config.agent_route_owner = SessionAgentRouteOwner::Local;
+                session.config.agent_route_key = None;
                 should_persist_restored_session = true;
             }
         }
@@ -10766,6 +10786,7 @@ mod tests {
                 &session.session_id,
                 "agentic",
                 SessionAgentRouteOwner::External,
+                None,
             )
             .await
             .expect("same-name route owner update should succeed");
@@ -10783,6 +10804,54 @@ mod tests {
             )
             .await
             .expect_err("a concurrent route owner update must invalidate admission");
+
+        assert!(error.to_string().contains("changed during turn admission"));
+        assert_eq!(manager.get_turn_count(&session.session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn dialog_turn_admission_rejects_a_concurrent_agent_route_key_change() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Turn admission route key CAS".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    agent_route_key: Some("local:agentic:v1".to_string()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let expected = TurnAdmissionSessionFacts::from_session(&session);
+        manager
+            .update_session_agent_binding(
+                &session.session_id,
+                "agentic",
+                SessionAgentRouteOwner::Local,
+                Some("local:agentic:v2".to_string()),
+            )
+            .await
+            .expect("same-owner route key update should succeed");
+
+        let error = manager
+            .start_dialog_turn_with_prepended_messages_if_session_matches(
+                &session.session_id,
+                "agentic".to_string(),
+                "must reject stale route key".to_string(),
+                Some("turn-admission-route-key-race".to_string()),
+                None,
+                Vec::new(),
+                None,
+                &expected,
+            )
+            .await
+            .expect_err("a concurrent route key update must invalidate admission");
 
         assert!(error.to_string().contains("changed during turn admission"));
         assert_eq!(manager.get_turn_count(&session.session_id), 0);
@@ -13128,7 +13197,7 @@ mod tests {
         let session_id = session.session_id.clone();
         let update_task = tokio::spawn(async move {
             manager_for_update
-                .update_session_agent_type(&session_id, "Plan")
+                .update_session_agent_type(&session_id, "Cowork")
                 .await
         });
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -13286,7 +13355,7 @@ mod tests {
             .expect("session should create");
 
         manager
-            .update_session_agent_type(&session.session_id, "Plan")
+            .update_session_agent_type(&session.session_id, "Cowork")
             .await
             .expect("mode update should persist without a turn");
         let metadata = persistence_manager
@@ -13294,14 +13363,14 @@ mod tests {
             .await
             .expect("metadata should load")
             .expect("metadata should exist");
-        assert_eq!(metadata.agent_type, "Plan");
+        assert_eq!(metadata.agent_type, "Cowork");
 
         manager.evict_loaded_session_for_test(&session.session_id);
         let restored = manager
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("session should restore");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
     }
 
     #[tokio::test]
@@ -13328,6 +13397,7 @@ mod tests {
                 &session.session_id,
                 "agentic",
                 SessionAgentRouteOwner::External,
+                Some("test:external:agentic".to_string()),
             )
             .await
             .expect("same-id local-to-external rebind should persist");
@@ -13344,6 +13414,7 @@ mod tests {
                 &session.session_id,
                 "agentic",
                 SessionAgentRouteOwner::Local,
+                Some("local:agentic".to_string()),
             )
             .await
             .expect("same-id external-to-local rebind should persist");
@@ -13359,8 +13430,9 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "Plan",
+                "Cowork",
                 SessionAgentRouteOwner::External,
+                Some("test:external:plan".to_string()),
             )
             .await
             .expect("external route update should persist without a turn");
@@ -13369,7 +13441,7 @@ mod tests {
             .load_session_with_turns(workspace.path(), &session.session_id)
             .await
             .expect("persisted session should load");
-        assert_eq!(persisted.agent_type, "Plan");
+        assert_eq!(persisted.agent_type, "Cowork");
         assert_eq!(
             persisted.config.agent_route_owner,
             SessionAgentRouteOwner::External
@@ -13380,7 +13452,7 @@ mod tests {
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("external route should restore fail-closed");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
         assert_eq!(
             restored.config.agent_route_owner,
             SessionAgentRouteOwner::External,
@@ -13409,7 +13481,7 @@ mod tests {
         persistence_manager.fail_next_session_state_write_for_test(&session.session_id);
 
         manager
-            .update_session_agent_type(&session.session_id, "Plan")
+            .update_session_agent_type(&session.session_id, "Cowork")
             .await
             .expect("mode updates must not depend on rewriting runtime state");
         manager.evict_loaded_session_for_test(&session.session_id);
@@ -13418,7 +13490,7 @@ mod tests {
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("metadata-only mode update should remain restorable");
-        assert_eq!(restored.agent_type, "Plan");
+        assert_eq!(restored.agent_type, "Cowork");
     }
 
     #[tokio::test]
@@ -15078,7 +15150,7 @@ mod tests {
             turn.agent_type = Some(if index == 0 {
                 "agentic".to_string()
             } else {
-                "Plan".to_string()
+                "Cowork".to_string()
             });
             persistence_manager
                 .save_dialog_turn(workspace.path(), &turn)
@@ -15096,7 +15168,7 @@ mod tests {
                 "turn-1".to_string(),
                 "turn-2".to_string(),
             ];
-            active.last_user_dialog_agent_type = Some("Plan".to_string());
+            active.last_user_dialog_agent_type = Some("Cowork".to_string());
         }
         persistence_manager
             .save_turn_context_snapshot(
@@ -15907,7 +15979,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Rollback empty history".to_string(),
-                "Plan".to_string(),
+                "Cowork".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -15927,7 +15999,7 @@ mod tests {
                 metadata: None,
             },
         );
-        turn.agent_type = Some("Plan".to_string());
+        turn.agent_type = Some("Cowork".to_string());
         persistence_manager
             .save_dialog_turn(workspace.path(), &turn)
             .await
@@ -15939,7 +16011,7 @@ mod tests {
                 .get_mut(&session.session_id)
                 .expect("session should be active");
             active.dialog_turn_ids = vec!["turn-0".to_string()];
-            active.last_user_dialog_agent_type = Some("Plan".to_string());
+            active.last_user_dialog_agent_type = Some("Cowork".to_string());
         }
 
         manager
@@ -15950,7 +16022,7 @@ mod tests {
         let active = manager
             .get_session(&session.session_id)
             .expect("session should remain in memory");
-        assert_eq!(active.agent_type, "Plan");
+        assert_eq!(active.agent_type, "Cowork");
         assert_eq!(active.last_user_dialog_agent_type, None);
     }
 

@@ -117,13 +117,11 @@ import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   agentExecutionTier,
-  canonicalChatInputDirectiveId,
   canSwitchSessionMainAgent,
   isChatInputActionVisibleForTarget,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
   resolveChatInputCanUseSkills,
-  resolveChatInputDirectiveModes,
   resolveChatInputMainAgentModes,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
@@ -136,10 +134,6 @@ import {
   resolveChatInputExecutionLevelPolicy,
   resolveSelectedComposerExecutionLevel,
 } from '../utils/chatInputExecutionLevelPolicy';
-import {
-  chatInputTurnDirective,
-  type ChatInputTurnDirective,
-} from '../utils/chatInputDirective';
 import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
@@ -197,6 +191,7 @@ import {
   isSlashAddressableSkillName,
   replaceLeadingSlashCommandWithSkillToken,
 } from '../utils/skillPromptReference';
+import { resolveChatInputQuickSkillShortcuts } from '../utils/chatInputQuickSkills';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockReviewCommand } from '../utils/deepReviewCommandGuard';
@@ -239,6 +234,12 @@ import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
 import { IconButton } from '@bitfun/ui';
+import {
+  ChatComposer,
+  ChatComposerContent,
+  ChatComposerEndActions,
+  ChatComposerStartActions,
+} from '@bitfun/ui/flow-chat';
 
 const log = createLogger('ChatInput');
 
@@ -258,12 +259,6 @@ type SlashActionItem = {
   id: SlashActionId;
   command: string;
   label: string;
-};
-
-type SlashModeItem = {
-  kind: 'mode';
-  id: string;
-  name: string;
 };
 
 type SlashMcpPromptItem = {
@@ -312,7 +307,6 @@ function toSlashExternalPromptCommands(
 
 type SlashPickerItem =
   | SlashActionItem
-  | SlashModeItem
   | SlashMcpPromptItem
   | SlashAcpCommandItem
   | SlashSkillItem
@@ -329,7 +323,7 @@ function nativePromptCommandCandidateId(
 function toNativePromptCommandDescriptor(
   item: Exclude<SlashPickerItem, SlashExternalPromptCommandItem>,
 ): NativePromptCommandDescriptor {
-  const command = item.kind === 'mode' ? `/${item.id}` : item.command;
+  const command = item.command;
   const commandName = command.slice(1).split(/\s+/, 1)[0]?.toLowerCase() ?? '';
   const behaviorVersion = item.kind === 'mcpPrompt'
     ? JSON.stringify({
@@ -341,11 +335,9 @@ function toNativePromptCommandDescriptor(
           required: argument.required,
         })),
       })
-    : JSON.stringify(item.kind === 'mode'
-        ? { kind: item.kind, id: item.id }
-        : item.kind === 'skill'
-          ? { kind: item.kind, id: item.id, skillName: item.skillName }
-          : { kind: item.kind, id: item.id, command });
+    : JSON.stringify(item.kind === 'skill'
+        ? { kind: item.kind, id: item.id, skillName: item.skillName }
+        : { kind: item.kind, id: item.id, command });
   return {
     commandName,
     candidateId: nativePromptCommandCandidateId(item.kind, item.id),
@@ -466,14 +458,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const boostTriggerRef = useRef<HTMLSpanElement>(null);
   const boostMenuRef = useRef<HTMLDivElement>(null);
   const slashCommandPickerRef = useRef<HTMLDivElement>(null);
-  const boostMenuLayout = useAnchoredPopoverPosition({
-    open: modeState.dropdownOpen,
-    anchorRef: boostTriggerRef,
-    popoverRef: boostMenuRef,
-    preferredPlacement: 'top',
-    alignment: 'start',
-    gap: 6,
-  });
   const isImeComposingRef = useRef(false);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
@@ -484,8 +468,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
-  const nativePromptModeSelectionGenerationRef = useRef(0);
-  const nativePromptModeSelectionQueueRef = useRef<Promise<void>>(Promise.resolve());
   
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -508,8 +490,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     useState<SessionPermissionMode | null>(null);
   const [activeTurnPermissionMode, setActiveTurnPermissionMode] =
     useState<SessionPermissionMode | null>(null);
-  const [armedTurnDirective, setArmedTurnDirective] =
-    useState<ChatInputTurnDirective | null>(null);
   const [isHarnessSessionCreating, setIsHarnessSessionCreating] = useState(false);
   const permissionModeRequestGenerationRef = useRef(0);
   const permissionModeLifecycleRef = useRef<{
@@ -570,7 +550,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const changesValue = (action.type === 'SET_VALUE' && action.payload !== inputValueRef.current)
       || (action.type === 'CLEAR_VALUE' && inputValueRef.current !== '');
     if (changesValue) {
-      nativePromptModeSelectionGenerationRef.current += 1;
       markComposerMutation();
     }
     dispatchLocalInput(action);
@@ -591,6 +570,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const effectiveTargetSessionHasTurns = effectiveTargetSession
+    ? !isProjectedSessionEmpty(effectiveTargetSession)
+    : false;
+  // A submission keeps the session started even if every surviving Turn is
+  // later rolled back. Before that first submission, the composer intentionally
+  // stays expanded instead of collapsing as the empty draft is measured.
+  const effectiveTargetSessionStarted = effectiveTargetSessionHasTurns
+    || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
+  const isNewSessionComposer = !effectiveTargetSessionStarted;
   const dispatchObserverJob = dispatchJobStore(state => {
     const jobId = effectiveTargetSession?.config.dispatchJobId;
     return jobId ? state.jobs[jobId] : undefined;
@@ -683,8 +671,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   armedTurnPermissionModeRef.current = armedTurnPermissionMode;
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
-  // isMultiLine: true when content overflows a single line (scrollHeight > threshold or has newlines)
-  const [isMultiLine, setIsMultiLine] = useState(false);
+  // New sessions start expanded. Once the first Turn has been submitted, this
+  // returns to content-driven measurement (newlines, attachments, or wrapping).
+  const [isMultiLine, setIsMultiLine] = useState(isNewSessionComposer);
   // showPlaceholder is true when the editor DOM is truly empty (value empty AND no residual <br>)
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const liveCapsuleInputWidthRef = useRef<number | null>(null);
@@ -726,12 +715,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clone.classList.add('bitfun-chat-input--capsule');
     clone.classList.remove('bitfun-chat-input--multi-line');
 
-    const cloneBoxEl = clone.querySelector('.bitfun-chat-input__box') as HTMLElement | null;
+    const cloneComposerSurfaceEl = clone.querySelector(
+      '.bitfun-chat-input__composer-surface',
+    ) as HTMLElement | null;
     const cloneInputAreaEl = clone.querySelector('.bitfun-chat-input__input-area') as HTMLElement | null;
 
-    if (cloneBoxEl) {
-      cloneBoxEl.classList.add('bitfun-chat-input__box--capsule');
-      cloneBoxEl.classList.remove('bitfun-chat-input__box--multi-line');
+    if (cloneComposerSurfaceEl) {
+      // ChatComposer owns the compact/expanded grid. Force its public layout
+      // contract on the off-screen clone so collapse checks never measure the
+      // wider expanded content track by accident.
+      cloneComposerSurfaceEl.dataset.bfLayout = 'compact';
     }
 
     document.body.appendChild(clone);
@@ -769,6 +762,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Shared measurement: temporarily unconstrain the editor and use the capsule input
   // width so the result is consistent between capsule ↔ multi-line transitions.
   const measureIsMultiLine = useCallback((source: 'value-effect' | 'mutation-observer' | 'collapse-confirmation' | 'layout-change' = 'value-effect') => {
+    if (isNewSessionComposer) {
+      setIsMultiLine(true);
+      return;
+    }
     const hasNewline = inputState.value.includes('\n');
     const hasImages = imageContexts.length > 0;
     if (hasNewline || hasImages || showTargetSwitcher) {
@@ -820,12 +817,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     el.style.flex = 'none';
     el.style.minHeight = '0';
     el.style.width = `${measurementWidth}px`;
+    const measurementStyle = window.getComputedStyle(el);
+    const computedLineHeight = Number.parseFloat(measurementStyle.lineHeight);
+    const computedFontSize = Number.parseFloat(measurementStyle.fontSize);
+    const singleLineHeight = Number.isFinite(computedLineHeight)
+      ? computedLineHeight
+      : Number.isFinite(computedFontSize)
+        ? computedFontSize * 1.45
+        : 20;
+    const paddingBlock =
+      (Number.parseFloat(measurementStyle.paddingTop) || 0) +
+      (Number.parseFloat(measurementStyle.paddingBottom) || 0);
     const naturalHeightMeasured = el.scrollHeight;
     el.style.flex = prevFlex;
     el.style.minHeight = prevMinH;
     el.style.width = prevWidth;
-    // ~1.45 × 14px ≈ 20px per line; threshold of 32px means "needs > 1 line"
-    const nextIsMultiLine = naturalHeightMeasured > 32;
+    // The midpoint between one and two line boxes absorbs sub-pixel rounding
+    // while following the active layout's real line height. A fixed pixel
+    // threshold can oscillate when compact geometry crosses that fixed value:
+    // compact expands, expanded collapses, and the cycle repeats.
+    const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;
+    const nextIsMultiLine = naturalHeightMeasured > singleLineThreshold;
     const shouldVerifyCollapse =
       isMultiLine &&
       !nextIsMultiLine &&
@@ -855,7 +867,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     lockedCapsuleInputWidthRef.current = nextLockedWidth;
     setIsMultiLine(nextIsMultiLine);
-  }, [inputState.value, imageContexts.length, isMultiLine, measureCapsuleInputWidth, showTargetSwitcher]);
+  }, [inputState.value, imageContexts.length, isMultiLine, isNewSessionComposer, measureCapsuleInputWidth, showTargetSwitcher]);
   measureIsMultiLineRef.current = measureIsMultiLine;
 
   // Re-measure when value or image count changes (handles typing / deleting)
@@ -1111,8 +1123,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
   );
   const canSwitchModes = chatInputModePolicy.canSwitchModes && !isSubagentInputTarget;
-  // Directives and Other Agents sit on the Standard execution surface. Minimal
-  // and Ultimate keep their deliberately fixed capability sets.
+  // Other Agents sit on the Standard execution surface. Minimal and Ultimate
+  // keep their deliberately fixed capability sets.
   const showStandardExecutionOptions = agentExecutionTier(currentMode) === 'balanced';
   const selectedHarnessProfile = resolveSelectedComposerExecutionLevel({
     currentMode,
@@ -1122,19 +1134,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     () => resolveChatInputMainAgentModes(modeState.available),
     [modeState.available]
   );
-  const currentMainAgentDirectiveId = canonicalChatInputDirectiveId(currentMode);
-  const directiveModes = useMemo(
-    () => resolveChatInputDirectiveModes(modeState.available).filter(
-      mode => canonicalChatInputDirectiveId(mode.id) !== currentMainAgentDirectiveId,
-    ),
-    [currentMainAgentDirectiveId, modeState.available],
-  );
-  useEffect(() => {
-    if (!currentMainAgentDirectiveId) return;
-    setArmedTurnDirective(current => (
-      current?.id === currentMainAgentDirectiveId ? null : current
-    ));
-  }, [currentMainAgentDirectiveId]);
   const publishModeSelectionRef = useRef<((modeId: string) => void) | null>(null);
   const suppressNextUserDefaultModeApplicationRef = useRef(false);
 
@@ -1263,7 +1262,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Reset history index when switching sessions
   useEffect(() => {
     setHistoryIndex(-1);
-    setArmedTurnDirective(null);
   }, [effectiveTargetSessionId]);
   
   const modeInfoById = useMemo(
@@ -1460,6 +1458,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }),
     [effectiveSendAgentType, isSubagentInputTarget, targetSkillToolAgents],
   );
+  const quickSkillShortcuts = useMemo(
+    () => canUseSkillsForTarget
+      ? resolveChatInputQuickSkillShortcuts(resolvedModeSkills)
+      : [],
+    [canUseSkillsForTarget, resolvedModeSkills],
+  );
+  const boostMenuLayoutRevision = quickSkillShortcuts
+    .map(shortcut => shortcut.id)
+    .join('|');
+  const boostMenuLayout = useAnchoredPopoverPosition({
+    open: modeState.dropdownOpen,
+    anchorRef: boostTriggerRef,
+    popoverRef: boostMenuRef,
+    preferredPlacement: 'top',
+    alignment: 'start',
+    gap: 6,
+    layoutRevision: boostMenuLayoutRevision,
+  });
 
   const confirmPromptCacheGuardIfNeeded = useCallback(async () => {
     const nextMode = effectiveSendAgentType.trim();
@@ -1656,12 +1672,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const [slashCommandState, setSlashCommandState] = useState<{
     isActive: boolean;
-    kind: 'modes' | 'actions' | 'all' | 'skills';
+    kind: 'actions' | 'all' | 'skills';
     query: string;
     selectedIndex: number;
   }>({
     isActive: false,
-    kind: 'modes',
+    kind: 'all',
     query: '',
     selectedIndex: 0,
   });
@@ -1714,7 +1730,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const closeInlineSkillPicker = () => {
       setSlashCommandState(prev => (
         prev.isActive && prev.kind === 'skills'
-          ? { isActive: false, kind: 'modes', query: '', selectedIndex: 0 }
+          ? { isActive: false, kind: 'all', query: '', selectedIndex: 0 }
           : prev
       ));
     };
@@ -1781,7 +1797,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
     setSlashCommandState({
       isActive: false,
-      kind: 'modes',
+      kind: 'all',
       query: '',
       selectedIndex: 0,
     });
@@ -1847,8 +1863,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // that future turn's submission metadata.
     turnPermissionMode: activePermissionTurnId ? null : armedTurnPermissionMode,
     onTurnPermissionModeConsumed: () => setArmedTurnPermissionMode(null),
-    turnDirective: armedTurnDirective,
-    onTurnDirectiveConsumed: () => setArmedTurnDirective(null),
     onSessionConflictRetryStart: ({ sessionId }) => {
       sessionConflictRetryBaselinesRef.current.set(
         sessionId,
@@ -2528,13 +2542,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [effectiveSendAgentType, permissionMode, t, workspace]);
 
-  const effectiveTargetSessionHasTurns = effectiveTargetSession
-    ? !isProjectedSessionEmpty(effectiveTargetSession)
-    : false;
-  // Once the runtime accepts the first submission, the execution level remains fixed even
-  // if the user later rolls back all surviving Turns.
-  const harnessProfileLocked = effectiveTargetSessionHasTurns
-    || Boolean(effectiveTargetSession?.lastSubmittedMode?.trim());
+  const harnessProfileLocked = effectiveTargetSessionStarted;
   const dispatchControl = useMemo(() => {
     if (
       registration ||
@@ -3269,22 +3277,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const externalCommands = getFilteredExternalPromptCommands();
     const mcpPrompts = getFilteredMcpPromptCommands();
     const skills = getFilteredSkills();
-    let modeList = directiveModes;
-    if (canSwitchModes && slashCommandState.query) {
-      const q = slashCommandState.query;
-      modeList = directiveModes.filter(
-        mode =>
-          mode.name.toLowerCase().includes(q) ||
-          mode.id.toLowerCase().includes(q)
-      );
-    }
-    const modes: SlashModeItem[] = (canSwitchModes && showStandardExecutionOptions ? modeList : []).map(mode => ({
-      kind: 'mode',
-      id: mode.id,
-      name: mode.name,
-    }));
-    return [...acpCommands, ...actions, ...externalCommands, ...mcpPrompts, ...modes, ...skills];
-  }, [canSwitchModes, directiveModes, getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, isAcpInputSession, showStandardExecutionOptions, slashCommandState.query]);
+    return [...acpCommands, ...actions, ...externalCommands, ...mcpPrompts, ...skills];
+  }, [getFilteredActions, getFilteredAcpCommands, getFilteredExternalPromptCommands, getFilteredMcpPromptCommands, getFilteredSkills, isAcpInputSession]);
 
   const getActiveSlashPickerItems = useCallback((): SlashPickerItem[] => {
     if (slashCommandState.kind === 'actions') {
@@ -3361,7 +3355,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       if (isAcpInputSession && hasWhitespace) {
         if (slashCommandState.isActive) {
-          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+          setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
         }
         return;
       }
@@ -3370,7 +3364,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (isProcessing) {
         if (!localSlashCommandsEnabled) {
           if (slashCommandState.isActive) {
-            setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+            setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
           }
           return;
         }
@@ -3386,7 +3380,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             selectedIndex: 0,
           });
         } else if (slashCommandState.isActive && slashCommandState.kind === 'actions') {
-          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+          setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
         }
         return;
       }
@@ -3409,7 +3403,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       setSlashCommandState({
         isActive: false,
-        kind: 'modes',
+        kind: 'all',
         query: '',
         selectedIndex: 0,
       });
@@ -3438,7 +3432,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'CLEAR_VALUE' });
     clearPendingLargePastes();
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     if (!question) {
       notificationService.warning(t('btw.empty'));
@@ -3520,7 +3514,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     try {
       await FlowChatManager.getInstance().compactSession(effectiveTargetSessionId);
@@ -3605,7 +3599,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     try {
       await runEffectiveSessionUsageReport();
@@ -3661,7 +3655,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     try {
       await agentAPI.runInitAgentsMd({
@@ -3726,7 +3720,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const originalMessage = message;
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     const parsed = parseGoalCommand(message);
     const result = await threadGoalController.runSlashAction(message);
@@ -3764,7 +3758,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     try {
       await agentAPI.reloadSessionContext({
@@ -3866,7 +3860,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'CLEAR_VALUE' });
       clearPendingLargePastes();
       setQueuedInput(null);
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
       const launched = await launchPreparedReviewSession({
         parentSessionId: effectiveTargetSessionId,
@@ -3962,7 +3956,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'CLEAR_VALUE' });
     clearPendingLargePastes();
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
 
     try {
       const promptArguments = command.arguments.reduce<Record<string, string>>((acc, argument, index) => {
@@ -4809,152 +4803,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     composerMutationRevision,
   ]);
   
-  const getFilteredSelectableModes = useCallback(() => {
-    if (!canSwitchModes || !showStandardExecutionOptions) return [];
-    if (!slashCommandState.query) return directiveModes;
-    return directiveModes.filter(
-      mode =>
-        mode.name.toLowerCase().includes(slashCommandState.query) ||
-        mode.id.toLowerCase().includes(slashCommandState.query)
-    );
-  }, [canSwitchModes, directiveModes, showStandardExecutionOptions, slashCommandState.query]);
-
-  const requestTurnDirective = useCallback((modeId: string) => {
-    if (isInterruptedTurnRecoveryInFlight) {
-      dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      return;
-    }
-    if (!canSwitchModes) {
-      dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      return;
-    }
-
-    const directiveId = canonicalChatInputDirectiveId(modeId);
-    if (
-      !directiveId
-      || !directiveModes.some(mode => canonicalChatInputDirectiveId(mode.id) === directiveId)
-    ) {
-      dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      return;
-    }
-
-    setArmedTurnDirective(current => (
-      current?.id === directiveId ? null : chatInputTurnDirective(directiveId)
-    ));
-    dispatchMode({ type: 'CLOSE_DROPDOWN' });
-  }, [
-    canSwitchModes,
-    directiveModes,
-    isInterruptedTurnRecoveryInFlight,
-  ]);
-
   publishModeSelectionRef.current = publishModeSelection;
-  
-  const persistExplicitNativePromptCommandChoice = useCallback(async (
-    descriptor: NativePromptCommandDescriptor,
-    nativeCommands: NativePromptCommandDescriptor[],
-    operationIsCurrent: () => boolean,
-  ): Promise<boolean> => {
-    const capturedSessionId = effectiveTargetSessionId;
-    const capturedWorkspacePath = sessionBoundWorkspacePath;
-    const targetIsCurrent = () => isExternalPromptSubmissionTargetCurrent(
-      capturedSessionId,
-      effectiveTargetSessionIdRef.current,
-      capturedWorkspacePath,
-      workspacePathRef.current,
-    );
-    if (externalPromptCommandsIssue === 'host_unavailable') {
-      return targetIsCurrent() && operationIsCurrent();
-    }
-    try {
-      const snapshot = await externalSourcesAPI.getNativePromptCommandConflicts(
-        capturedWorkspacePath || undefined,
-        nativeCommands,
-      );
-      if (!targetIsCurrent() || !operationIsCurrent()) return false;
-      const conflict = snapshot.conflicts.find(item => (
-        item.commandName === descriptor.commandName
-      ));
-      const requiresReconfirmation = snapshot.reconfirmations?.some(item => (
-        item.nativeCandidateId === descriptor.candidateId
-      ));
-      if ((conflict && conflict.selectedCandidateId !== descriptor.candidateId)
-        || requiresReconfirmation) {
-        await externalSourcesAPI.setNativePromptCommandConflictChoice(
-          capturedWorkspacePath || undefined,
-          nativeCommands,
-          descriptor.candidateId,
-          snapshot.preferenceRevision,
-        );
-        if (!targetIsCurrent() || !operationIsCurrent()) return false;
-      }
-    } catch (error) {
-      log.warn('Failed to persist native prompt command conflict choice', {
-        code: error instanceof ExternalSourceApiError ? error.code : 'internal',
-      });
-      if (targetIsCurrent() && operationIsCurrent()) {
-        notificationService.warning(t('chatInput.nativeCommandChoiceNotSaved'));
-      }
-    }
-    return targetIsCurrent() && operationIsCurrent();
-  }, [effectiveTargetSessionId, externalPromptCommandsIssue, sessionBoundWorkspacePath, t]);
-
-  const selectSlashCommandMode = useCallback((modeId: string) => {
-    // Slash and add-menu entry points arm the same one-turn directive.
-    const operationGeneration = ++nativePromptModeSelectionGenerationRef.current;
-    const operationIsCurrent = () => (
-      nativePromptModeSelectionGenerationRef.current === operationGeneration
-    );
-    const descriptor = {
-      commandName: modeId.toLowerCase(),
-      candidateId: nativePromptCommandCandidateId('mode', modeId),
-      behaviorVersion: JSON.stringify({ kind: 'mode', id: modeId }),
-    };
-    const nativeCommands = getSlashPickerItems()
-      .filter((item): item is Exclude<SlashPickerItem, SlashExternalPromptCommandItem> => (
-        item.kind !== 'externalCommand'
-      ))
-      .map(toNativePromptCommandDescriptor)
-      .filter(item => item.commandName === descriptor.commandName)
-      .filter((item, index, all) => (
-        all.findIndex(candidate => candidate.candidateId === item.candidateId) === index
-      ));
-    const previousOperation = nativePromptModeSelectionQueueRef.current;
-    const operation = (async () => {
-      await previousOperation;
-      if (!operationIsCurrent()) return false;
-      return persistExplicitNativePromptCommandChoice(
-        descriptor,
-        nativeCommands,
-        operationIsCurrent,
-      );
-    })();
-    nativePromptModeSelectionQueueRef.current = operation.then(() => undefined, () => undefined);
-    void (async () => {
-      if (!await operation) return;
-      requestTurnDirective(modeId);
-      setSelectedExternalPromptCandidateId(undefined);
-      setSelectedNonExternalSlashCommand(undefined);
-      setSelectedNonExternalSlashCandidateId(undefined);
-
-      if (getInlineSlashCommandPickerQuery(inlineTriggerState) !== null) {
-        const controller = richTextInputRef.current as (HTMLDivElement & {
-          replaceActiveInlineTrigger?: (replacementText: string) => void;
-        }) | null;
-        controller?.replaceActiveInlineTrigger?.('');
-        setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-        return;
-      }
-
-      dispatchInput({ type: 'CLEAR_VALUE' });
-      setSlashCommandState({
-        isActive: false,
-        kind: 'modes',
-        query: '',
-        selectedIndex: 0,
-      });
-    })();
-  }, [dispatchInput, getSlashPickerItems, inlineTriggerState, persistExplicitNativePromptCommandChoice, requestTurnDirective]);
 
   const selectSlashCommandAction = useCallback((actionId: SlashActionId) => {
     const raw = inputState.value || '';
@@ -4962,7 +4811,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (next === null) {
       return;
     }
-    nativePromptModeSelectionGenerationRef.current += 1;
     setSelectedExternalPromptCandidateId(undefined);
     setSelectedNonExternalSlashCommand(next.trim().split(/\s+/, 1)[0]?.toLowerCase());
     setSelectedNonExternalSlashCandidateId(
@@ -4975,7 +4823,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }) | null;
       controller?.replaceActiveInlineTrigger?.(next.trimEnd());
       setQueuedInput(null);
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       return;
     }
 
@@ -4984,7 +4832,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Clear the machine's queued input so the queuedInput sync effect does not overwrite
     // the just-set "/btw ..." value back to the stale "/" that was queued while processing.
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, inputState.value, isBtwSession, setQueuedInput]);
 
@@ -5002,7 +4850,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.warning(item.unavailableReason || t('chatInput.noMatchingCommand'));
       return;
     }
-    nativePromptModeSelectionGenerationRef.current += 1;
     setSelectedExternalPromptCandidateId(item.candidateId);
     setSelectedNonExternalSlashCommand(undefined);
     setSelectedNonExternalSlashCandidateId(undefined);
@@ -5017,12 +4864,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       inputValueRef.current = replacement;
     }
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, setQueuedInput, t]);
 
   const selectSlashPromptCommand = useCallback((item: SlashMcpPromptItem) => {
-    nativePromptModeSelectionGenerationRef.current += 1;
     setSelectedExternalPromptCandidateId(undefined);
     setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     setSelectedNonExternalSlashCandidateId(
@@ -5034,7 +4880,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }) | null;
       controller?.replaceActiveInlineTrigger?.(item.command);
       setQueuedInput(null);
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       return;
     }
     const hasArguments = item.arguments.length > 0;
@@ -5043,12 +4889,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       payload: hasArguments ? `${item.command} ` : item.command,
     });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
   const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
-    nativePromptModeSelectionGenerationRef.current += 1;
     setSelectedExternalPromptCandidateId(undefined);
     setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     setSelectedNonExternalSlashCandidateId(
@@ -5060,12 +4905,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }) | null;
       controller?.replaceActiveInlineTrigger?.(acpSlashCommandText(item.id));
       setQueuedInput(null);
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       return;
     }
     dispatchInput({ type: 'SET_VALUE', payload: acpSlashCommandText(item.id) });
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, inlineTriggerState, setQueuedInput]);
 
@@ -5078,7 +4923,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const selectSlashSkill = useCallback((item: SlashSkillItem) => {
-    nativePromptModeSelectionGenerationRef.current += 1;
     setSelectedExternalPromptCandidateId(undefined);
     setSelectedNonExternalSlashCommand(item.command.toLowerCase());
     setSelectedNonExternalSlashCandidateId(
@@ -5089,7 +4933,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (inlineTriggerState.isActive) {
       replaceInlineTrigger?.(`[$${item.skillName}]`);
       setQueuedInput(null);
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+      setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       window.setTimeout(() => richTextInputRef.current?.focus(), 0);
       return;
     }
@@ -5098,7 +4942,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'SET_VALUE', payload: next });
     inputValueRef.current = next;
     setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [dispatchInput, getRichTextInlineTriggerController, inlineTriggerState.isActive, inputState.value, setQueuedInput]);
 
@@ -5190,11 +5034,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (slashCommandState.isActive) {
-      if (!(slashCommandState.kind === 'modes' && (!canSwitchModes || !showStandardExecutionOptions))) {
-        const items =
-          slashCommandState.kind === 'modes'
-            ? getFilteredSelectableModes()
-            : getActiveSlashPickerItems();
+        const items = getActiveSlashPickerItems();
         const maxIndex = Math.max(0, items.length - 1);
         
         if (e.key === 'ArrowDown') {
@@ -5228,27 +5068,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           if (items.length > 0) {
-            if (slashCommandState.kind === 'modes') {
-              const mode = items[slashCommandState.selectedIndex] as any;
-              selectSlashCommandMode(mode.id);
-            } else if (slashCommandState.kind === 'actions') {
-              const action = items[slashCommandState.selectedIndex] as any;
-              selectSlashCommandAction(action.id);
+            const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
+            if (item.kind === 'externalCommand') {
+              selectSlashExternalPromptCommand(item);
+            } else if (item.kind === 'mcpPrompt') {
+              selectSlashPromptCommand(item);
+            } else if (item.kind === 'acpCommand') {
+              selectSlashAcpCommand(item);
+            } else if (item.kind === 'skill') {
+              selectSlashSkill(item);
             } else {
-              const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
-              if (item.kind === 'mode') {
-                selectSlashCommandMode(item.id);
-              } else if (item.kind === 'externalCommand') {
-                selectSlashExternalPromptCommand(item);
-              } else if (item.kind === 'mcpPrompt') {
-                selectSlashPromptCommand(item);
-              } else if (item.kind === 'acpCommand') {
-                selectSlashAcpCommand(item);
-              } else if (item.kind === 'skill') {
-                selectSlashSkill(item);
-              } else {
-                selectSlashCommandAction(item.id);
-              }
+              selectSlashCommandAction(item.id);
             }
           }
           return;
@@ -5260,39 +5090,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           if (kind === 'skills') {
             getRichTextInlineTriggerController()?.closeInlineTrigger?.();
           }
-          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+          setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
           return;
         }
         
         if (e.key === 'Tab') {
           e.preventDefault();
           if (items.length > 0) {
-            if (slashCommandState.kind === 'modes') {
-              const mode = items[slashCommandState.selectedIndex] as any;
-              selectSlashCommandMode(mode.id);
-            } else if (slashCommandState.kind === 'actions') {
-              const action = items[slashCommandState.selectedIndex] as any;
-              selectSlashCommandAction(action.id);
+            const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
+            if (item.kind === 'externalCommand') {
+              selectSlashExternalPromptCommand(item);
+            } else if (item.kind === 'mcpPrompt') {
+              selectSlashPromptCommand(item);
+            } else if (item.kind === 'acpCommand') {
+              selectSlashAcpCommand(item);
+            } else if (item.kind === 'skill') {
+              selectSlashSkill(item);
             } else {
-              const item = items[slashCommandState.selectedIndex] as SlashPickerItem;
-              if (item.kind === 'mode') {
-                selectSlashCommandMode(item.id);
-              } else if (item.kind === 'externalCommand') {
-                selectSlashExternalPromptCommand(item);
-              } else if (item.kind === 'mcpPrompt') {
-                selectSlashPromptCommand(item);
-              } else if (item.kind === 'acpCommand') {
-                selectSlashAcpCommand(item);
-              } else if (item.kind === 'skill') {
-                selectSlashSkill(item);
-              } else {
-                selectSlashCommandAction(item.id);
-              }
+              selectSlashCommandAction(item.id);
             }
           }
           return;
         }
-      }
     }
     
     // Tab key: toggle send target when the child session switcher is visible
@@ -5412,7 +5231,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, showStandardExecutionOptions, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -5674,6 +5493,85 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   };
 
+  const workspaceStripVisible = Boolean(
+    chatStripWorkspaceLabel.trim()
+    || dispatchControl
+    || showPermissionModeControl
+    || (
+      effectiveTargetSessionId
+      && effectiveTargetSession
+      && caps.usageReport
+    ),
+  );
+  const workspaceStrip = workspaceStripVisible ? (
+    <ChatInputWorkspaceStrip
+      repositoryPath={chatStripRepositoryPath}
+      workspaceLabel={chatStripWorkspaceLabel}
+      executionTarget={effectiveTargetSession?.config.executionTarget}
+      dispatchControl={dispatchControl}
+      worktreeControl={worktreeControl}
+      deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
+      permissionControl={showPermissionModeControl
+        ? caps.sessionScopedApproval
+          ? {
+              mode: dispatchPermissionMode,
+              disabled: dispatchSubmissionOptionsLocked,
+              options: DISPATCH_PERMISSION_MODES,
+              scopeLabel: t('chatInput.dispatch.sessionScope'),
+              onChange: handleDispatchPermissionModeChange,
+              onHide: handleHidePermissionModeControl,
+            }
+          : {
+              mode: permissionMode,
+              saving: permissionModeSaving,
+              scopeLabel: activePermissionTurnId
+                ? t('chatInput.permissionMode.activeTurnScope')
+                : temporaryPermissionMode
+                  ? t('chatInput.permissionMode.turnScope')
+                  : t('chatInput.permissionMode.sessionScope'),
+              overridden: permissionModeOverridden,
+              nextTurnMode: temporaryPermissionMode
+                ? chatInputPermissionMode(temporaryPermissionMode)
+                : null,
+              activeTurn: activePermissionTurnId !== null,
+              onChangeForNextTurn: isAcpTargetSession
+                ? undefined
+                : handlePermissionModeForNextTurn,
+              onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
+              onResetToDefault: isAcpTargetSession
+                ? undefined
+                : handleResetPermissionModeToDefault,
+              onOpenDefaultSettings: isAcpTargetSession
+                ? undefined
+                : handleOpenPermissionDefaultSettings,
+              onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
+            }
+        : undefined}
+      usageReport={
+        effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
+          ? {
+              visible: true,
+              currentTokens: tokenUsage.current,
+              maxTokens: tokenUsage.max,
+              onOpen: handleToolbarUsageReport,
+            }
+          : undefined
+      }
+    />
+  ) : undefined;
+
+  const harnessProfileSelectorProps = {
+    legacySession: !canSwitchModes,
+    sessionStarted: harnessProfileLocked,
+    selectedProfile: selectedHarnessProfile,
+    selectedAgentId: selectedHarnessProfile === 'other' ? currentMode : undefined,
+    otherAgents: otherAgentOptions,
+    disabled: isModeChangePending || isHarnessSessionCreating,
+    onSelectProfile: requestHarnessProfileChange,
+    onSelectAgent: requestMainAgentChange,
+    onStartNewSession: requestHarnessNewSession,
+  } satisfies React.ComponentProps<typeof HarnessProfileSelector>;
+
   return (
     <>
       {deepReviewConsentDialog}
@@ -5736,7 +5634,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onRespondBatch={respondPermissionBatch}
             />
           ) : null}
-          <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`} data-bf-component="chat-input" data-bf-part="box">
+          <div className="bitfun-chat-input__box" data-bf-component="chat-input" data-bf-part="box">
+            <ChatComposer
+              className="bitfun-chat-input__composer"
+              surfaceClassName="bitfun-chat-input__composer-surface"
+              contextBar={workspaceStrip}
+              layout={isMultiLine ? 'expanded' : 'compact'}
+              busy={Boolean(derivedState?.isProcessing || caps.transferInFlight)}
+              disabled={caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
+            >
+              <ChatComposerContent>
+                <div className="bitfun-chat-input__content">
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-bf-component="chat-input" data-bf-part="targetSwitcher" data-testid="chat-input-target-switcher">
                 <span className="bitfun-chat-input__target-switcher-label" data-bf-component="chat-input" data-bf-part="targetLabel">{t('chatInput.conversationTarget')}</span>
@@ -5918,7 +5826,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
                 if (slashCommandState.kind === 'all') {
                   const items = getActiveSlashPickerItems();
-                  const firstModeIndex = items.findIndex(item => item.kind === 'mode');
                   const firstSkillIndex = items.findIndex(item => item.kind === 'skill');
                   return (
                     <div
@@ -5958,26 +5865,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           </button>
                         ) : items.length > 0 ? (
                           items.map((item, index) => {
-                            const commandText = item.kind === 'mode' ? `/${item.id}` : item.command;
-                            const labelText = item.kind === 'mode'
-                              ? item.name
-                              : item.kind === 'skill'
-                                ? item.label
+                            const commandText = item.command;
+                            const labelText = item.kind === 'skill'
+                              ? item.label
                               : item.kind === 'mcpPrompt'
                                 ? `${item.serverName} · ${item.label}`
                                 : item.label;
 
                             return (
                               <React.Fragment key={`${item.kind}-${item.id}`}>
-                                {index === firstModeIndex && (
-                                  <div className="bitfun-chat-input__slash-command-section" data-bf-component="chat-input" data-bf-part="commandSection">
-                                    <span className="bitfun-chat-input__slash-command-section-line" aria-hidden />
-                                    <span className="bitfun-chat-input__slash-command-section-title">
-                                      {t('chatInput.modeSection')}
-                                    </span>
-                                    <span className="bitfun-chat-input__slash-command-section-line" aria-hidden />
-                                  </div>
-                                )}
                                 {index === firstSkillIndex && (
                                   <div className="bitfun-chat-input__slash-command-section" data-bf-component="chat-input" data-bf-part="commandSection">
                                     <span className="bitfun-chat-input__slash-command-section-line" aria-hidden />
@@ -5991,16 +5887,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   data-bf-component="chat-input"
                                   data-bf-part="commandItem"
                                   data-bf-command-item-kind={item.kind === 'mcpPrompt' ? 'mcp' : item.kind === 'externalCommand' || item.kind === 'acpCommand' ? 'action' : item.kind}
-                                  data-bf-state={[
-                                    index === slashCommandState.selectedIndex && 'selected',
-                                    item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id && 'current',
-                                  ].filter(Boolean).join(' ')}
-                                  className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''} ${item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id ? 'bitfun-chat-input__slash-command-item--active' : ''}`}
+                                  data-bf-state={index === slashCommandState.selectedIndex ? 'selected' : undefined}
+                                  className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''}`}
                                   title={`${commandText}\n${labelText}`}
                                   onClick={() => {
-                                    if (item.kind === 'mode') {
-                                      selectSlashCommandMode(item.id);
-                                    } else if (item.kind === 'skill') {
+                                    if (item.kind === 'skill') {
                                       selectSlashSkill(item);
                                     } else if (item.kind === 'externalCommand') {
                                       selectSlashExternalPromptCommand(item);
@@ -6024,7 +5915,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   >
                                     {labelText}
                                   </span>
-                                  {item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id && <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.directive.nextMessage')}</span>}
                                   {item.kind === 'externalCommand' && item.status !== 'available' ? (
                                     <span
                                       className={`bitfun-chat-input__slash-command-status bitfun-chat-input__slash-command-status--${item.status === 'restricted' ? 'restricted' : 'choose'}`}
@@ -6094,11 +5984,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           </button>
                         ) : items.length > 0 ? (
                           items.map((item, index) => {
-                            const commandText = item.kind === 'mode' ? `/${item.id}` : item.command;
-                            const labelText = item.kind === 'mode'
-                              ? item.name
-                              : item.kind === 'skill'
-                                ? item.label
+                            const commandText = item.command;
+                            const labelText = item.kind === 'skill'
+                              ? item.label
                                 : item.kind === 'mcpPrompt'
                                   ? `${item.serverName} · ${item.label}`
                                   : item.label;
@@ -6106,17 +5994,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             return (
                               <div data-bf-component="chat-input" data-bf-part="commandItem"
                                 data-bf-command-item-kind={item.kind === 'mcpPrompt' ? 'mcp' : item.kind === 'externalCommand' || item.kind === 'acpCommand' ? 'action' : item.kind}
-                                data-bf-state={[
-                                  index === slashCommandState.selectedIndex && 'selected',
-                                  item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id && 'current',
-                                ].filter(Boolean).join(' ')}
+                                data-bf-state={index === slashCommandState.selectedIndex ? 'selected' : undefined}
                                 key={`${item.kind}-${item.id}`}
-                                className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''} ${item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id ? 'bitfun-chat-input__slash-command-item--active' : ''}`}
+                                className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''}`}
                                 title={`${commandText}\n${labelText}`}
                                 onClick={() => {
-                                  if (item.kind === 'mode') {
-                                    selectSlashCommandMode(item.id);
-                                  } else if (item.kind === 'skill') {
+                                  if (item.kind === 'skill') {
                                     selectSlashSkill(item);
                                   } else if (item.kind === 'externalCommand') {
                                     selectSlashExternalPromptCommand(item);
@@ -6140,7 +6023,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 >
                                   {labelText}
                                 </span>
-                                {item.kind === 'mode' && canonicalChatInputDirectiveId(item.id) === armedTurnDirective?.id && <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.directive.nextMessage')}</span>}
                               </div>
                             );
                           })
@@ -6154,61 +6036,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   );
                 }
 
-                if (!canSwitchModes || !showStandardExecutionOptions) return null;
-
-                const filteredModes = getFilteredSelectableModes();
-                return (
-                  <div
-                    ref={slashCommandPickerRef}
-                    data-bf-component="chat-input"
-                    data-bf-part="commandPicker"
-                    data-bf-command="modes"
-                    data-bf-state="open"
-                    data-bf-placement={slashCommandPickerLayout?.placement ?? 'top'}
-                    className="bitfun-chat-input__slash-command-picker"
-                    style={{
-                      top: `${slashCommandPickerLayout?.top ?? 0}px`,
-                      left: `${slashCommandPickerLayout?.left ?? 0}px`,
-                      visibility: slashCommandPickerLayout ? 'visible' : 'hidden',
-                    }}
-                  >
-                    <div className="bitfun-chat-input__slash-command-header" data-bf-component="chat-input" data-bf-part="commandHeader">
-                      <span>{t('chatInput.addModeMenuTitle')}</span>
-                      <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
-                    </div>
-                    <div className="bitfun-chat-input__slash-command-list" data-bf-component="chat-input" data-bf-part="commandList">
-                      {filteredModes.length > 0 ? (
-                        filteredModes.map((mode, index) => (
-                          <div
-                            data-bf-component="chat-input"
-                            data-bf-part="commandItem"
-                            data-bf-command-item-kind="mode"
-                            data-bf-state={[
-                              index === slashCommandState.selectedIndex && 'selected',
-                              canonicalChatInputDirectiveId(mode.id) === armedTurnDirective?.id && 'current',
-                            ].filter(Boolean).join(' ')}
-                            key={mode.id}
-                            className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''} ${canonicalChatInputDirectiveId(mode.id) === armedTurnDirective?.id ? 'bitfun-chat-input__slash-command-item--active' : ''}`}
-                            onClick={() => selectSlashCommandMode(mode.id)}
-                            onMouseEnter={() => setSlashCommandState(prev => ({ ...prev, selectedIndex: index }))}
-                          >
-                            <span className="bitfun-chat-input__slash-command-name" data-bf-component="chat-input" data-bf-part="commandName">/{mode.id}</span>
-                            <span className="bitfun-chat-input__slash-command-label" data-bf-component="chat-input" data-bf-part="commandLabel">{mode.name}</span>
-                            {canonicalChatInputDirectiveId(mode.id) === armedTurnDirective?.id && <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.directive.nextMessage')}</span>}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="bitfun-chat-input__slash-command-empty" data-bf-component="chat-input" data-bf-part="commandEmpty">
-                          {t('chatInput.noMatchingMode')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
+                return null;
               })(), getAppearanceOverlayHost())}
             </div>
-            
-            <div className="bitfun-chat-input__actions" data-bf-component="chat-input" data-bf-part="actions">
+                </div>
+              </ChatComposerContent>
+
+              <ChatComposerStartActions>
               <div className="bitfun-chat-input__actions-left" data-bf-component="chat-input" data-bf-part="actionsLeft">
                 <div
                   className="bitfun-chat-input__agent-boost"
@@ -6218,7 +6052,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   ref={agentBoostRef}
                 >
                   {!isAcpTargetSession && (
-                    <span ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
+                    <span className="bitfun-chat-input__agent-boost-trigger" ref={boostTriggerRef} data-bf-component="chat-input" data-bf-part="boostTrigger" data-bf-state={modeState.dropdownOpen ? 'open' : undefined}>
                       <Tooltip content={t('chatInput.addBoostTooltip')}>
                         <IconButton
                           aria-label={t('chatInput.addBoostTooltip')}
@@ -6254,54 +6088,56 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         visibility: boostMenuLayout ? 'visible' : 'hidden',
                       }}
                     >
+                      {quickSkillShortcuts.length > 0 && (
+                        <>
+                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
+                            {quickSkillShortcuts.map(shortcut => (
+                              <div
+                                key={shortcut.id}
+                                role="menuitem"
+                                tabIndex={0}
+                                className="bitfun-chat-input__boost-context-row"
+                                data-bf-component="chat-input"
+                                data-bf-part="boostItem"
+                                data-bf-boost-item-kind="skill"
+                                data-testid={`chat-input-quick-skill-${shortcut.id}`}
+                                title={shortcut.skill.description || shortcut.label}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  insertSkillIntoInput(shortcut.skill.name);
+                                }}
+                                onKeyDown={event => {
+                                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  insertSkillIntoInput(shortcut.skill.name);
+                                }}
+                              >
+                                <Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
+                                <span>{shortcut.label}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                        </>
+                      )}
+                      {!isMultiLine && executionLevelPolicy.userConfigurable ? (
+                        <>
+                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
+                            <HarnessProfileSelector
+                              {...harnessProfileSelectorProps}
+                              presentation="menu-item"
+                              onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}
+                            />
+                          </div>
+                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                        </>
+                      ) : null}
+
                       {canSwitchModes && showStandardExecutionOptions && (
                         <>
                           <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                            {directiveModes.length > 0 && (
-                              directiveModes.map(modeOption => {
-                                const directiveId = canonicalChatInputDirectiveId(modeOption.id);
-                                const selected = directiveId === armedTurnDirective?.id;
-                                const modeDescription =
-                                  t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
-                                  modeOption.description ||
-                                  modeOption.name;
-                                const modeName =
-                                  t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
-                                return (
-                                  <Tooltip key={modeOption.id} content={modeDescription} placement="left">
-                                    <div
-                                      data-bf-component="chat-input"
-                                      data-bf-part="boostItem"
-                                      data-bf-boost-item-kind="directive"
-                                      data-bf-mode-id={modeOption.id}
-                                      data-testid={`chat-input-mode-option-${modeOption.id}`}
-                                      data-bf-state={selected ? 'selected' : undefined}
-                                      className={`bitfun-chat-input__mode-option ${selected ? 'bitfun-chat-input__mode-option--active' : ''}`}
-                                      role="menuitemradio"
-                                      aria-checked={selected}
-                                      tabIndex={0}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        requestTurnDirective(modeOption.id);
-                                      }}
-                                      onKeyDown={e => {
-                                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        requestTurnDirective(modeOption.id);
-                                      }}
-                                    >
-                                      <span className="bitfun-chat-input__mode-option-name" data-bf-component="chat-input" data-bf-part="boostItemLabel">{modeName}</span>
-                                      <span className="bitfun-chat-input__mode-option-actions" data-bf-component="chat-input" data-bf-part="boostItemMeta">
-                                        {selected && (
-                                          <span className="bitfun-chat-input__slash-command-current" data-bf-component="chat-input" data-bf-part="commandCurrent">{t('chatInput.directive.nextMessage')}</span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  </Tooltip>
-                                );
-                              })
-                            )}
                             <div
                               role="menuitem"
                               tabIndex={0}
@@ -6540,25 +6376,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     getAppearanceOverlayHost(),
                   )}
                 </div>
-                {/* The add entry owns per-task directives. Harness is the one
-                    persistent execution/main-Agent control. */}
-                {executionLevelPolicy.userConfigurable ? (
+                {isMultiLine && executionLevelPolicy.userConfigurable ? (
                   <HarnessProfileSelector
-                    legacySession={!canSwitchModes}
-                    sessionStarted={harnessProfileLocked}
-                    selectedProfile={selectedHarnessProfile}
-                    selectedAgentId={selectedHarnessProfile === 'other' ? currentMode : undefined}
-                    directiveLabel={armedTurnDirective
-                      ? getModeDisplayName(armedTurnDirective.id)
-                      : undefined}
-                    otherAgents={otherAgentOptions}
-                    disabled={isModeChangePending || isHarnessSessionCreating}
-                    onSelectProfile={requestHarnessProfileChange}
-                    onSelectAgent={requestMainAgentChange}
-                    onStartNewSession={requestHarnessNewSession}
+                    {...harnessProfileSelectorProps}
+                    presentation="standalone"
                   />
                 ) : null}
               </div>
+
+              </ChatComposerStartActions>
+
+              <ChatComposerEndActions>
               <div className="bitfun-chat-input__actions-right" data-bf-component="chat-input" data-bf-part="actionsRight">
                 {voiceInput.phase === 'idle' ? (
                   <div className="bitfun-chat-input__model-usage-group" data-bf-component="chat-input" data-bf-part="model">
@@ -6574,6 +6402,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     modeDefaultModelId={targetModeInfo?.model}
                     persistSharedModeDefault={Boolean(targetModeInfo && targetModeInfo.source !== 'external')}
                     disabled={isInterruptedTurnRecoveryInFlight}
+                    reasoningTriggerPresentation="label"
                   />
                   </div>
                 ) : null}
@@ -6585,64 +6414,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}
               </div>
-            </div>
+              </ChatComposerEndActions>
+            </ChatComposer>
           </div>
         </div>
       </div>
-      <ChatInputWorkspaceStrip
-        repositoryPath={chatStripRepositoryPath}
-        workspaceLabel={chatStripWorkspaceLabel}
-        executionTarget={effectiveTargetSession?.config.executionTarget}
-        dispatchControl={dispatchControl}
-        worktreeControl={worktreeControl}
-        deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        permissionControl={showPermissionModeControl
-          ? caps.sessionScopedApproval
-            ? {
-                mode: dispatchPermissionMode,
-                disabled: dispatchSubmissionOptionsLocked,
-                options: DISPATCH_PERMISSION_MODES,
-                scopeLabel: t('chatInput.dispatch.sessionScope'),
-                onChange: handleDispatchPermissionModeChange,
-                onHide: handleHidePermissionModeControl,
-              }
-            : {
-                mode: permissionMode,
-                saving: permissionModeSaving,
-                scopeLabel: activePermissionTurnId
-                  ? t('chatInput.permissionMode.activeTurnScope')
-                  : temporaryPermissionMode
-                    ? t('chatInput.permissionMode.turnScope')
-                  : t('chatInput.permissionMode.sessionScope'),
-                overridden: permissionModeOverridden,
-                nextTurnMode: temporaryPermissionMode
-                  ? chatInputPermissionMode(temporaryPermissionMode)
-                  : null,
-                activeTurn: activePermissionTurnId !== null,
-                onChangeForNextTurn: isAcpTargetSession
-                  ? undefined
-                  : handlePermissionModeForNextTurn,
-                onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
-                onResetToDefault: isAcpTargetSession
-                  ? undefined
-                  : handleResetPermissionModeToDefault,
-                onOpenDefaultSettings: isAcpTargetSession
-                  ? undefined
-                  : handleOpenPermissionDefaultSettings,
-                onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
-              }
-          : undefined}
-        usageReport={
-          effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
-            ? {
-                visible: true,
-                currentTokens: tokenUsage.current,
-                maxTokens: tokenUsage.max,
-                onOpen: handleToolbarUsageReport,
-              }
-            : undefined
-        }
-      />
       {effectiveTargetSession && canUseThreadGoal ? (
         <ThreadGoalDialogs
           controller={threadGoalController}

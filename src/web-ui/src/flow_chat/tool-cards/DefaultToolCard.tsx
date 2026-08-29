@@ -4,17 +4,14 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { DefaultToolCard as DefaultToolCardView } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import {
   formatSessionViewPreviewText,
   isOnlySessionViewPreviewText,
 } from '../utils/sessionViewPreview';
-import './DefaultToolCard.scss';
 
 const MAX_PREVIEW_CHARS = 4000;
 const INLINE_PREVIEW_CHARS = 72;
@@ -231,49 +228,23 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const showConfirmationHighlight = needsConfirmation;
 
   return (
-    <div data-bf-component="default-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', showConfirmationHighlight && 'confirmation', hasError && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <CompactToolCard
+    <div data-bf-adapter="default-tool-card" ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+      <DefaultToolCardView
         status={status}
         isExpanded={isExpanded}
-        onClick={handleToggleExpand}
-        className={`default-tool-card ${showConfirmationHighlight ? 'requires-confirmation' : ''}`}
-        clickable={canExpand}
-        header={
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={config.icon ?? undefined} />}
-            action={config.displayName}
-            content={getSummaryText()}
-            rightStatusIcon={canExpand ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : undefined}
-          />
-        }
-        expandedContent={canExpand ? (
-          <div data-bf-component="default-tool-card" data-bf-part="expanded" className="default-tool-card__expanded">
-            <div data-bf-component="default-tool-card" data-bf-part="meta" className="default-tool-card__meta">
-              <span data-bf-component="default-tool-card" data-bf-part="metaLabel" className="default-tool-card__meta-label">{config.toolName}</span>
-              {config.description && (
-                <span data-bf-component="default-tool-card" data-bf-part="metaDescription" className="default-tool-card__meta-description">{config.description}</span>
-              )}
-            </div>
-
-            {hasInput && (
-              <div data-bf-component="default-tool-card" data-bf-part="section" className="default-tool-card__section">
-                <div data-bf-component="default-tool-card" data-bf-part="sectionLabel" className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
-                <pre data-bf-component="default-tool-card" data-bf-part="code" className="default-tool-card__code-block">{inputPreview}</pre>
-              </div>
-            )}
-
-            {hasResult && (
-              <div data-bf-component="default-tool-card" data-bf-part="section" className="default-tool-card__section">
-                <div data-bf-component="default-tool-card" data-bf-part="sectionLabel" className="default-tool-card__section-label">{t('toolCards.common.executionResult')}</div>
-                {toolResult?.success === false ? (
-                  <div data-bf-component="default-tool-card" data-bf-part="error" className="default-tool-card__error-message">{errorMessage}</div>
-                ) : (
-                  <pre data-bf-component="default-tool-card" data-bf-part="code" className="default-tool-card__code-block">{resultPreview}</pre>
-                )}
-              </div>
-            )}
-          </div>
-        ) : undefined}
+        onToggle={canExpand ? handleToggleExpand : undefined}
+        displayName={config.displayName}
+        toolName={config.toolName}
+        description={config.description}
+        hasDetails={canExpand}
+        icon={config.icon ?? undefined}
+        summary={getSummaryText()}
+        inputLabel={t('toolCards.common.inputParams')}
+        inputPreview={inputPreview}
+        resultLabel={t('toolCards.common.executionResult')}
+        resultPreview={toolResult?.success === false ? undefined : resultPreview}
+        error={errorMessage || undefined}
+        requiresConfirmation={showConfirmationHighlight}
       />
     </div>
   );

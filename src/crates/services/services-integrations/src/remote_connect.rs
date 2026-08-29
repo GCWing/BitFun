@@ -126,6 +126,7 @@ pub fn build_remote_session_create_request(
     AgentSessionCreateRequest {
         session_name: session_name.into(),
         agent_type: agent_type.into(),
+        agent_route_key: None,
         workspace_path: workspace_path.map(Into::into),
         project_workspace_path: None,
         execution_target: None,
@@ -1833,10 +1834,8 @@ pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
             "agentic"
         }
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
-        Some("multitask") | Some("Multitask") => "Multitask",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("claw") | Some("Claw") | Some("assistant") | Some("chat") => "Claw",
-        Some("plan") | Some("Plan") => "Plan",
         _ => "agentic",
     }
 }

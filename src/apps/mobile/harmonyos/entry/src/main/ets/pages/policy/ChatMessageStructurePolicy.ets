@@ -3,11 +3,6 @@ import { ActivityGroupPolicy, ActivityThinkingPart } from './ActivityGroupPolicy
 import { ThinkingPresentationPolicy } from './ThinkingPresentationPolicy';
 import { ToolStatusPresentationPolicy } from './ToolStatusPresentationPolicy';
 
-interface SubagentTaskInput {
-  description?: string;
-  title?: string;
-}
-
 export interface StructuredRenderGroup {
   type: string;
   items: ConversationUiMessageItem[];
@@ -39,12 +34,31 @@ export class ChatMessageStructurePolicy {
     return !ChatMessageStructurePolicy.isTextEntry(entry) || hasSubItems || !!entry.tool;
   }
 
+  /**
+   * A composite turn commonly ends with one growing top-level text item after
+   * its reasoning and tools. Keep that volatile item out of the keyed
+   * structured ForEach so its Markdown leaf can be retained while text grows.
+   * Only peel it when it is the final renderable entry, preserving transcript
+   * order for turns that continue with another tool or nested activity.
+   */
+  static trailingTopLevelText(items: ConversationUiMessageItem[]): string {
+    const index = ChatMessageStructurePolicy.trailingTopLevelTextIndex(items);
+    return index >= 0 ? (items[index].content || '') : '';
+  }
+
+  static withoutTrailingTopLevelText(items: ConversationUiMessageItem[]): ConversationUiMessageItem[] {
+    const index = ChatMessageStructurePolicy.trailingTopLevelTextIndex(items);
+    if (index < 0) return items;
+    return items.slice(0, index).concat(items.slice(index + 1));
+  }
+
   static structuredGroups(
     items: ConversationUiMessageItem[],
     prefix: string,
     activeScope: boolean,
     messageStatus: string
   ): StructuredRenderGroup[] {
+    const scopedItems = ChatMessageStructurePolicy.scopeSubagentItems(items);
     const groups: StructuredRenderGroup[] = [];
     let toolBuffer: ConversationUiToolStatus[] = [];
     let toolStart = 0;
@@ -54,7 +68,7 @@ export class ChatMessageStructurePolicy {
     let activityChildScopes: boolean[] = [];
     let activityStart = 0;
     let activityHasThinking = false;
-    const activeItemIndex = activeScope ? ChatMessageStructurePolicy.lastRenderableItemIndex(items) : -1;
+    const activeItemIndex = activeScope ? ChatMessageStructurePolicy.lastRenderableItemIndex(scopedItems) : -1;
 
     const flushTools = (): void => {
       if (toolBuffer.length === 0) return;
@@ -102,7 +116,10 @@ export class ChatMessageStructurePolicy {
       activityHasThinking = false;
     };
 
-    items.forEach((entry: ConversationUiMessageItem, index: number) => {
+    scopedItems.forEach((entry: ConversationUiMessageItem, index: number) => {
+      // Remote snapshots also mark tools executed inside a subagent. Those
+      // are Task details, not sibling subagent cards in the parent timeline.
+      if (ChatMessageStructurePolicy.isSubagentInternalTool(entry)) return;
       if (ChatMessageStructurePolicy.shouldFoldIntoActivityGroup(entry)) {
         if (activityItems.length === 0) activityStart = index;
         activityItems.push(entry);
@@ -116,6 +133,23 @@ export class ChatMessageStructurePolicy {
       }
 
       flushActivity();
+      // Task tool entries are subagent branches, not ordinary tool rows. Route
+      // them as structured items before the generic tool buffer so they keep
+      // their branch title, children, and lifecycle presentation.
+      if (ChatMessageStructurePolicy.isSubagentEntry(entry)) {
+        flushTools();
+        groups.push({
+          type: 'item', items: [entry],
+          itemStatuses: [ChatMessageStructurePolicy.itemStatus(entry, index, activeItemIndex,
+            activeScope, messageStatus)],
+          itemStreaming: [ChatMessageStructurePolicy.itemShouldStream(entry, index, activeItemIndex, activeScope)],
+          itemChildActiveScopes: [ChatMessageStructurePolicy.itemChildActiveScope(entry, index,
+            activeItemIndex, activeScope)],
+          tools: [], key: ChatMessageStructurePolicy.structuredItemKey(entry, `${prefix}-${index}`),
+          path: `${prefix}-${index}`
+        });
+        return;
+      }
       if (entry.tool) {
         if (toolBuffer.length === 0) toolStart = index;
         toolBuffer.push(entry.tool);
@@ -136,6 +170,59 @@ export class ChatMessageStructurePolicy {
     flushActivity();
     flushTools();
     return groups;
+  }
+
+  /**
+   * Rebuilds the branch hierarchy carried by the remote wire format.
+   *
+   * Live snapshots are intentionally flat and mark child-agent records with
+   * `is_subagent`. The parent UI must attach those records to the Task that
+   * owns them before grouping ordinary transcript activity. Older desktop
+   * builds did not emit the marker, so while a Task is running we use the same
+   * conservative fallback as mobile web and scope its following process items.
+   */
+  static scopeSubagentItems(items: ConversationUiMessageItem[]): ConversationUiMessageItem[] {
+    const result: ConversationUiMessageItem[] = [];
+    const hasSubagentMarkers = items.some((entry: ConversationUiMessageItem) => entry.is_subagent === true);
+    let currentTask: ConversationUiMessageItem | undefined = undefined;
+
+    items.forEach((entry: ConversationUiMessageItem) => {
+      if (ChatMessageStructurePolicy.isParentTaskEntry(entry)) {
+        const task = ChatMessageStructurePolicy.copyItem(entry);
+        result.push(task);
+        currentTask = task;
+        return;
+      }
+      if (entry.is_subagent === true) {
+        if (currentTask) {
+          currentTask.subItems = (currentTask.subItems || []).concat([entry]);
+        }
+        return;
+      }
+      if (!hasSubagentMarkers && currentTask &&
+        ChatMessageStructurePolicy.isRunningTaskEntry(currentTask) &&
+        ChatMessageStructurePolicy.isLegacySubagentProcessEntry(entry)) {
+        currentTask.subItems = (currentTask.subItems || []).concat([entry]);
+        return;
+      }
+      result.push(entry);
+    });
+    return result;
+  }
+
+  static structuredRenderKey(
+    items: ConversationUiMessageItem[],
+    prefix: string,
+    activeScope: boolean,
+    messageStatus: string
+  ): string {
+    const groupKeys = ChatMessageStructurePolicy.structuredGroups(
+      items,
+      prefix,
+      activeScope,
+      messageStatus
+    ).map((group: StructuredRenderGroup) => group.key);
+    return `${prefix}-structured-${ChatMessageStructurePolicy.stableTextHash(groupKeys.join('|'))}`;
   }
 
   static activityGroupTools(group: StructuredRenderGroup): ConversationUiToolStatus[] {
@@ -212,6 +299,7 @@ export class ChatMessageStructurePolicy {
   }
 
   static isRenderableStructuredEntry(entry: ConversationUiMessageItem): boolean {
+    if (ChatMessageStructurePolicy.isSubagentInternalTool(entry)) return false;
     if (ChatMessageStructurePolicy.isThinkingEntry(entry) || ChatMessageStructurePolicy.isTextEntry(entry) ||
       ChatMessageStructurePolicy.isSubagentEntry(entry) || !!entry.tool) return true;
     return !!entry.subItems && entry.subItems.some((child: ConversationUiMessageItem) =>
@@ -237,15 +325,57 @@ export class ChatMessageStructurePolicy {
       (!!entry.tool && ToolStatusPresentationPolicy.normalizedName(entry.tool) === 'task');
   }
 
+  private static isParentTaskEntry(entry: ConversationUiMessageItem): boolean {
+    return entry.is_subagent !== true && !!entry.tool &&
+      ToolStatusPresentationPolicy.normalizedName(entry.tool) === 'task';
+  }
+
+  private static isRunningTaskEntry(entry: ConversationUiMessageItem): boolean {
+    if (!entry.tool) return false;
+    const status = (entry.tool.status || '').toLowerCase();
+    return status === 'running' || status === 'active' || status === 'preparing' ||
+      status === 'pending' || status === 'queued';
+  }
+
+  private static isLegacySubagentProcessEntry(entry: ConversationUiMessageItem): boolean {
+    return ChatMessageStructurePolicy.isThinkingEntry(entry) ||
+      ChatMessageStructurePolicy.isTextEntry(entry) || !!entry.tool;
+  }
+
+  private static copyItem(entry: ConversationUiMessageItem): ConversationUiMessageItem {
+    return {
+      type: entry.type,
+      content: entry.content,
+      tool: entry.tool,
+      is_subagent: entry.is_subagent,
+      subItems: entry.subItems ? entry.subItems.slice() : []
+    };
+  }
+
+  private static isSubagentInternalTool(entry: ConversationUiMessageItem): boolean {
+    return entry.is_subagent === true && !!entry.tool &&
+      ToolStatusPresentationPolicy.normalizedName(entry.tool) !== 'task';
+  }
+
   static subagentTitle(entry: ConversationUiMessageItem): string {
-    const content = (entry.content || '').trim();
-    if (content.length > 0 && content.length <= 80) return content;
-    if (entry.tool && ToolStatusPresentationPolicy.normalizedName(entry.tool) === 'task') {
+    const taskTool = !!entry.tool && ToolStatusPresentationPolicy.normalizedName(entry.tool) === 'task';
+    if (entry.tool && taskTool) {
       const title = ChatMessageStructurePolicy.subagentTaskTitle(entry.tool);
       if (title.length > 0) return title;
     }
-    if (entry.tool && entry.tool.name) return entry.tool.name;
-    return 'Subagent';
+    const content = ChatMessageStructurePolicy.plainSubagentLabel(entry.content || '');
+    if (content.length > 0 && content.length <= 80) return content;
+    if (entry.tool && entry.tool.name && !taskTool) {
+      return ChatMessageStructurePolicy.plainSubagentLabel(entry.tool.name);
+    }
+    return '';
+  }
+
+  static subagentBody(entry: ConversationUiMessageItem): string {
+    if (entry.tool && ToolStatusPresentationPolicy.normalizedName(entry.tool) === 'task') return '';
+    const content = ChatMessageStructurePolicy.plainSubagentLabel(entry.content || '');
+    if (content.length === 0 || content === ChatMessageStructurePolicy.subagentTitle(entry)) return '';
+    return content;
   }
 
   static isAttentionTool(tool: ConversationUiToolStatus): boolean {
@@ -270,6 +400,12 @@ export class ChatMessageStructurePolicy {
       if (ChatMessageStructurePolicy.isRenderableStructuredEntry(items[index])) return index;
     }
     return -1;
+  }
+
+  private static trailingTopLevelTextIndex(items: ConversationUiMessageItem[]): number {
+    const index = ChatMessageStructurePolicy.lastRenderableItemIndex(items);
+    if (index < 0 || !ChatMessageStructurePolicy.isTextEntry(items[index])) return -1;
+    return index;
   }
 
   private static itemStatus(
@@ -373,14 +509,23 @@ export class ChatMessageStructurePolicy {
   }
 
   private static subagentTaskTitle(tool: ConversationUiToolStatus): string {
-    const raw = tool.input_preview || '';
-    if (raw.length === 0) return '';
-    try {
-      const input = JSON.parse(raw) as SubagentTaskInput;
-      return (input.description || input.title || '').trim();
-    } catch (_err) {
-      return '';
+    return ChatMessageStructurePolicy.plainSubagentLabel(ToolStatusPresentationPolicy.taskTitle(tool));
+  }
+
+  private static plainSubagentLabel(raw: string): string {
+    let text = (raw || '').trim();
+    const wrappers: string[] = ['**', '__', '`', '*', '_'];
+    for (let index = 0; index < wrappers.length; index++) {
+      const wrapper = wrappers[index];
+      if (text.length > wrapper.length * 2 && text.startsWith(wrapper) && text.endsWith(wrapper)) {
+        text = text.slice(wrapper.length, text.length - wrapper.length).trim();
+        break;
+      }
     }
+    while (text.startsWith('#')) {
+      text = text.slice(1).trim();
+    }
+    return text;
   }
 
   static structuredItemKey(entry: ConversationUiMessageItem, path: string): string {

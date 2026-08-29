@@ -15,24 +15,6 @@ export class ToolCollapseGroup {
 export class ToolCollapsePolicy {
   static readonly MIN_SUMMARY_COUNT: number = 2;
 
-  static defaultSubagentExpanded(isRunning: boolean): boolean {
-    return isRunning;
-  }
-
-  static subagentExpandedForStatus(
-    isRunning: boolean,
-    userToggled: boolean,
-    currentlyExpanded: boolean
-  ): boolean {
-    if (!isRunning) {
-      return false;
-    }
-    if (userToggled) {
-      return currentlyExpanded;
-    }
-    return true;
-  }
-
   static shouldFoldIntoSummary(tool: ConversationUiToolStatus): boolean {
     if (ToolCollapsePolicy.hasError(tool) ||
       ToolCollapsePolicy.isPending(tool) ||

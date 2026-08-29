@@ -17,20 +17,43 @@
 //!   inspection of other AI applications' hook configuration.
 
 #[cfg(feature = "native-hook-runtime")]
+mod call;
+#[cfg(feature = "native-hook-runtime")]
 mod engine;
+#[cfg(feature = "native-hook-runtime")]
+mod handler;
+#[cfg(feature = "native-hook-runtime")]
+mod kind;
 #[cfg(feature = "native-hook-runtime")]
 mod output;
 #[cfg(feature = "native-hook-runtime")]
 mod payload;
+#[cfg(feature = "native-hook-runtime")]
+mod registry;
 mod settings;
 
 #[cfg(feature = "native-hook-runtime")]
-pub use engine::{AgentHookEngine, MAX_HOOK_MODEL_OUTPUT_BYTES};
+pub use call::{HookCall, HookCallPayload};
+#[cfg(feature = "native-hook-runtime")]
+pub use engine::{AgentHookEngine, PluginHookDispatchResult, MAX_HOOK_MODEL_OUTPUT_BYTES};
+#[cfg(feature = "native-hook-runtime")]
+pub use handler::{
+    BuiltinHookExecutor, HookHandler, HookHandlerResult, PluginHookCall, PluginHookExecutor,
+    PluginHookGenerationIdentity, PluginHookResult, RuntimeHookRegistration,
+};
+#[cfg(feature = "native-hook-runtime")]
+pub use kind::{RuntimeHookKind, RuntimeHookSource};
 #[cfg(feature = "native-hook-runtime")]
 pub use output::{AgentHookOutcome, AgentHookPermissionOutcome};
 #[cfg(feature = "native-hook-runtime")]
 pub use payload::{
     AgentHookEventPayload, AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode,
+};
+#[cfg(feature = "native-hook-runtime")]
+pub use registry::{
+    RuntimeHookActivation, RuntimeHookCommitToken, RuntimeHookErrorPolicy, RuntimeHookPlan,
+    RuntimeHookRegistry, RuntimeHookRegistryBuildError, RuntimeHookRegistryBuilder,
+    RuntimeHookRegistryError,
 };
 pub use settings::{
     AgentHookEvent, AgentHookHandler, AgentHookMatcher, AgentHookRule, AgentHookScope,

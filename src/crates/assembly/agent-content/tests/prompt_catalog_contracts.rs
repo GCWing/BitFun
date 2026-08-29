@@ -66,28 +66,12 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/minimal-harness-v1.md"),
     ),
     (
-        "multitask_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/multitask_mode_first_entry_reminder.md"),
-    ),
-    (
-        "multitask_mode_ongoing_reminder",
-        include_bytes!("../prompts/agents/multitask_mode_ongoing_reminder.md"),
-    ),
-    (
         "phase1_system",
         include_bytes!("../prompts/memories/phase1_system.md"),
     ),
     (
         "phase2_system",
         include_bytes!("../prompts/memories/phase2_system.md"),
-    ),
-    (
-        "plan_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/plan_mode_first_entry_reminder.md"),
-    ),
-    (
-        "plan_mode_ongoing_reminder",
-        include_bytes!("../prompts/agents/plan_mode_ongoing_reminder.md"),
     ),
     (
         "research_specialist_agent",

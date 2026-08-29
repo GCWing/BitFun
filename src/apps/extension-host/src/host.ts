@@ -1,5 +1,6 @@
 import path from "node:path"
 import { realpath } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import type {
   AuthHook,
   AuthOAuthResult,
@@ -121,8 +122,16 @@ type ActiveAuthFetch = {
   descriptor?: StreamDescriptor
 }
 
+type ActiveTool = {
+  controller: AbortController
+  done: Promise<void>
+  stoppedAfterAbort: boolean
+}
+
 type Instance = {
   id: string
+  generationKey?: string
+  revision?: string
   canonicalDirectory: string
   directory: string
   worktree: string
@@ -135,7 +144,8 @@ type Instance = {
   workspaces: Map<string, WorkspaceRegistration>
   flows: Map<string, OAuthFlow>
   fetches: Map<string, AuthFetch>
-  activeTools: Map<string, AbortController>
+  activeTools: Map<string, ActiveTool>
+  activeHooks: Set<Promise<void>>
   activeFetches: Map<string, ActiveAuthFetch>
   openDone: Promise<void>
   finishOpen(): void
@@ -146,18 +156,23 @@ type Instance = {
 
 export type InstanceOpenInput = {
   instanceID: string
+  generationKey?: string
+  revision?: string
   project: WireValue
   directory: string
   worktree: string
   config: WireValue
   plugins: PluginDeclaration[]
   configurationFingerprint?: string
+  expectedContentDigests?: Record<string, string>
+  expectedReviewDigest?: string
 }
 
 export type PluginsPrepareInput = {
   plugins: PluginDeclaration[]
   configurationFingerprint?: string
   defaultBaseDirectory?: string
+  allowInstall?: boolean
 }
 
 export class ExtensionHost {
@@ -197,17 +212,28 @@ export class ExtensionHost {
       declarations: input.plugins,
       defaultBaseDirectory: input.defaultBaseDirectory,
       configurationFingerprint: input.configurationFingerprint,
+      allowInstall: input.allowInstall,
     })
-    return HostMethodSchemas["host.plugins.prepare"].result.parse({
+    const result = {
       ...(input.configurationFingerprint
         ? { configurationFingerprint: input.configurationFingerprint }
         : {}),
+      reviewed: prepared.reviewed.map((plugin) => ({
+        spec: plugin.spec,
+        source: plugin.source,
+        identity: plugin.identity,
+        canonicalSource: plugin.resolvedSpec,
+        baseDirectory: plugin.baseDirectory,
+        optionsDigest: plugin.optionsDigest,
+      })),
       prepared: prepared.prepared.map((plugin) => ({
         spec: plugin.spec,
+        identity: plugin.identity,
         source: plugin.source,
         target: plugin.target,
         entry: plugin.entry,
         cache: plugin.cache,
+        ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
         ...(typeof plugin.package?.manifest.version === "string"
           ? { version: plugin.package.manifest.version }
           : {}),
@@ -218,6 +244,10 @@ export class ExtensionHost {
         message: diagnostic.message,
       })),
       diagnostics: prepared.diagnostics.map(protocolDiagnostic),
+    }
+    return HostMethodSchemas["host.plugins.prepare"].result.parse({
+      ...result,
+      reviewDigest: preparationReviewDigest(result),
     })
   }
 
@@ -251,7 +281,7 @@ export class ExtensionHost {
         })
       }
 
-      const config = cloneWireValue(input.config, "config")
+      let config = cloneWireValue(input.config, "config")
       const gateway = await this.#gatewayFactory({
         instanceID: input.instanceID,
         rpc: this.#rpc,
@@ -260,6 +290,8 @@ export class ExtensionHost {
       const opened = Promise.withResolvers<void>()
       const instance: Instance = {
         id: input.instanceID,
+        generationKey: input.generationKey,
+        revision: input.revision,
         canonicalDirectory,
         directory: input.directory,
         worktree: input.worktree,
@@ -273,6 +305,7 @@ export class ExtensionHost {
         flows: new Map(),
         fetches: new Map(),
         activeTools: new Map(),
+        activeHooks: new Set(),
         activeFetches: new Map(),
         openDone: opened.promise,
         finishOpen: opened.resolve,
@@ -294,7 +327,59 @@ export class ExtensionHost {
           declarations: input.plugins,
           defaultBaseDirectory: input.directory,
           configurationFingerprint: input.configurationFingerprint,
+          allowInstall: true,
         })
+        if (input.expectedReviewDigest) {
+          const reviewDigest = preparationReviewDigest({
+            ...(input.configurationFingerprint
+              ? { configurationFingerprint: input.configurationFingerprint }
+              : {}),
+            reviewed: prepared.reviewed.map((plugin) => ({
+              spec: plugin.spec,
+              source: plugin.source,
+              identity: plugin.identity,
+              canonicalSource: plugin.resolvedSpec,
+              baseDirectory: plugin.baseDirectory,
+              optionsDigest: plugin.optionsDigest,
+            })),
+            prepared: prepared.prepared.map((plugin) => ({
+              spec: plugin.spec,
+              identity: plugin.identity,
+              source: plugin.source,
+              target: plugin.target,
+              entry: plugin.entry,
+              ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
+              ...(typeof plugin.package?.manifest.version === "string"
+                ? { version: plugin.package.manifest.version }
+                : {}),
+            })),
+            failed: prepared.diagnostics.map((diagnostic) => ({
+              spec: diagnostic.spec,
+              stage: diagnostic.stage,
+            })),
+          })
+          if (reviewDigest !== input.expectedReviewDigest) {
+            throw new ExtensionHostError(-32004, "Plugin preparation changed before import", {
+              kind: "prepared_review_changed",
+            })
+          }
+        }
+        if (input.expectedContentDigests) {
+          for (const plugin of prepared.prepared) {
+            const expected = input.expectedContentDigests[plugin.identity]
+            if (!expected || !plugin.contentHash || expected !== plugin.contentHash) {
+              throw new ExtensionHostError(-32004, `Plugin ${plugin.spec} content changed before import`, {
+                kind: "prepared_content_changed",
+                plugin: plugin.spec,
+              })
+            }
+          }
+          if (prepared.prepared.length !== Object.keys(input.expectedContentDigests).length) {
+            throw new ExtensionHostError(-32004, "Prepared plugin graph changed before import", {
+              kind: "prepared_graph_changed",
+            })
+          }
+        }
         const loaded = await loadPreparedPlugins(prepared)
         this.#assertOpening(instance)
         diagnostics.push(...loaded.diagnostics)
@@ -315,14 +400,43 @@ export class ExtensionHost {
           diagnostic_count: diagnostics.length,
         })
 
+        const configContributions: Array<{
+          plugin: PluginMeta
+          outcome: "applied" | "failed"
+          config: WireValue
+        }> = []
         for (const retained of instance.hooks) {
           this.#assertOpening(instance)
           if (!retained.hooks.config) continue
+          const configBeforeHook = cloneWireValue(config, "configBeforeHook")
+          logEvent("plugin.activation.config_hook.begin", {
+            instance_id: instance.id,
+            plugin: retained.plugin.spec,
+          }, "debug")
           try {
             await Promise.resolve(retained.hooks.config(config as never))
+            configContributions.push({
+              plugin: retained.plugin,
+              outcome: "applied",
+              config: cloneWireValue(config, "configContribution.config"),
+            })
+            logEvent("plugin.activation.config_hook.complete", {
+              instance_id: instance.id,
+              plugin: retained.plugin.spec,
+            }, "debug")
           } catch (error) {
+            config = configBeforeHook
             const diagnostic = runtimeDiagnostic(retained.plugin, "config", error)
             diagnostics.push(diagnostic)
+            configContributions.push({
+              plugin: retained.plugin,
+              outcome: "failed",
+              config: cloneWireValue(config, "configContribution.config"),
+            })
+            logError("plugin.activation.config_hook.failed", error, {
+              instance_id: instance.id,
+              plugin: retained.plugin.spec,
+            })
             await publishDiagnostic(this.#rpc, toPublishedDiagnostic(instance.id, diagnostic)).catch(() => {})
           }
           this.#assertOpening(instance)
@@ -331,7 +445,16 @@ export class ExtensionHost {
         this.#assertOpening(instance)
         this.#indexRegistrations(instance, diagnostics)
         this.#assertOpening(instance)
-        const result = HostMethodSchemas["host.instance.open"].result.parse(openResult(instance, config, diagnostics))
+        const result = HostMethodSchemas["host.instance.open"].result.parse(
+          openResult(instance, config, diagnostics, configContributions),
+        )
+        logEvent("plugin.activation.registrations", {
+          instance_id: instance.id,
+          hook_count: result.hooks.length,
+          config_hook_count: instance.hooks.filter(({ hooks }) => typeof hooks.config === "function").length,
+          tool_count: result.tools.length,
+          diagnostic_count: result.diagnostics.length,
+        })
         instance.status = "open"
         return result
       } catch (error) {
@@ -390,6 +513,7 @@ export class ExtensionHost {
     declarations: readonly PluginDeclaration[]
     defaultBaseDirectory?: string
     configurationFingerprint?: string
+    allowInstall?: boolean
   }) {
     const key = preparationKey(input)
     const pending = this.#preparations.get(key)
@@ -413,6 +537,7 @@ export class ExtensionHost {
       cacheDirectory: this.#cacheDirectory,
       defaultBaseDirectory: input.defaultBaseDirectory,
       compatibilityVersion: OPENCODE_VERSION,
+      allowInstall: input.allowInstall,
     })
       .then((result) => {
         for (const diagnostic of result.diagnostics) {
@@ -442,28 +567,52 @@ export class ExtensionHost {
         })
         throw error
       })
+      // Preparation de-duplicates only concurrent callers. Keeping a settled
+      // result here would let a later open validate an old content digest
+      // against the same cached snapshot after a local plugin changed.
+      .finally(() => {
+        this.#preparations.delete(key)
+      })
     this.#preparations.set(key, operation)
     return operation
   }
 
-  async callHook(input: { instanceID: string; name: string; input: WireValue; output: WireValue }) {
+  async callHook(input: {
+    instanceID: string
+    generationKey?: string
+    revision?: string
+    name: string
+    input: WireValue
+    output: WireValue
+  }) {
     const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
     const hookInput = cloneWireValue(input.input, "input")
     const hookOutput = cloneWireValue(input.output, "output")
-
-    for (const retained of instance.hooks) {
-      const hook = Reflect.get(retained.hooks, input.name)
-      if (typeof hook !== "function") continue
-      try {
-        await Promise.resolve(hook(hookInput, hookOutput))
-      } catch (error) {
-        throw pluginError(retained.plugin, input.name, error)
+    const completed = Promise.withResolvers<void>()
+    instance.activeHooks.add(completed.promise)
+    try {
+      for (const retained of instance.hooks) {
+        const hook = Reflect.get(retained.hooks, input.name)
+        if (typeof hook !== "function") continue
+        try {
+          await Promise.resolve(hook(hookInput, hookOutput))
+        } catch (error) {
+          throw pluginError(retained.plugin, input.name, error)
+        }
       }
-    }
 
-    return {
-      input: cloneWireValue(hookInput, "input"),
-      output: cloneWireValue(hookOutput, "output"),
+      return {
+        instanceID: instance.id,
+        generationKey: instance.generationKey,
+        revision: instance.revision,
+        hook: input.name,
+        input: cloneWireValue(hookInput, "input"),
+        output: cloneWireValue(hookOutput, "output"),
+      }
+    } finally {
+      instance.activeHooks.delete(completed.promise)
+      completed.resolve()
     }
   }
 
@@ -492,6 +641,8 @@ export class ExtensionHost {
 
   async executeTool(input: {
     instanceID: string
+    generationKey?: string
+    revision?: string
     registrationID: string
     executionID: string
     args: WireValue
@@ -503,6 +654,7 @@ export class ExtensionHost {
     }
   }) {
     const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
     const registration = findRegistration(instance.tools, input.registrationID)
     if (!registration) throw missingHandle("tool", input.registrationID)
     if (instance.activeTools.has(input.executionID)) {
@@ -510,7 +662,13 @@ export class ExtensionHost {
     }
 
     const controller = new AbortController()
-    instance.activeTools.set(input.executionID, controller)
+    const completed = Promise.withResolvers<void>()
+    const active: ActiveTool = {
+      controller,
+      done: completed.promise,
+      stoppedAfterAbort: false,
+    }
+    instance.activeTools.set(input.executionID, active)
     try {
       const args = validateToolArguments(registration.definition.args, cloneWireValue(input.args, "args"))
       const result = await registration.definition.execute(args as never, {
@@ -521,6 +679,8 @@ export class ExtensionHost {
         metadata: (metadata) => {
           const pending = this.#rpc.notify("backend.tool.metadata", {
             instanceID: instance.id,
+            generationKey: instance.generationKey,
+            revision: instance.revision,
             executionID: input.executionID,
             ...(cloneWireValue(metadata, "metadata") as Record<string, WireValue>),
           })
@@ -531,6 +691,8 @@ export class ExtensionHost {
             "backend.tool.ask",
             {
               instanceID: instance.id,
+              generationKey: instance.generationKey,
+              revision: instance.revision,
               executionID: input.executionID,
               ...(cloneWireValue(request, "request") as Record<string, WireValue>),
             },
@@ -538,19 +700,30 @@ export class ExtensionHost {
           )
         },
       })
-      return cloneWireValue(result, "result")
+      return {
+        instanceID: instance.id,
+        generationKey: instance.generationKey,
+        revision: instance.revision,
+        executionID: input.executionID,
+        result: cloneWireValue(result, "result"),
+      }
     } catch (error) {
+      if (controller.signal.aborted) active.stoppedAfterAbort = true
       throw pluginError(registration.plugin, `tool:${registration.id}`, error)
     } finally {
       instance.activeTools.delete(input.executionID)
+      completed.resolve()
     }
   }
 
-  cancelTool(input: { instanceID: string; executionID: string; reason?: string }) {
-    const controller = this.#instance(input.instanceID).activeTools.get(input.executionID)
-    if (!controller) return { cancelled: false }
-    controller.abort(input.reason)
-    return { cancelled: true }
+  async cancelTool(input: { instanceID: string; generationKey?: string; revision?: string; executionID: string; reason?: string }) {
+    const instance = this.#instance(input.instanceID)
+    assertGeneration(instance, input.generationKey, input.revision)
+    const active = instance.activeTools.get(input.executionID)
+    if (!active) return { cancelled: false }
+    active.controller.abort(input.reason)
+    await active.done
+    return { cancelled: active.stoppedAfterAbort }
   }
 
   evaluateAuthPrompt(input: {
@@ -823,12 +996,20 @@ export class ExtensionHost {
   #beginClose(instance: Instance) {
     if (instance.closePromise) return instance.closePromise
     instance.status = "closing"
-    instance.closePromise = this.#disposeInstance(instance)
+    instance.closePromise = (async () => {
+      await instance.openDone
+      await this.#disposeInstance(instance)
+    })()
     return instance.closePromise
   }
 
   async #disposeInstance(instance: Instance) {
-    for (const controller of instance.activeTools.values()) controller.abort("Instance closed")
+    let lifecycleTimeout: unknown
+    const activeHookDrains = [...instance.activeHooks]
+    const activeToolDrains = [...instance.activeTools.values()].map((active) => {
+      active.controller.abort("Instance closed")
+      return active.done
+    })
     for (const active of instance.activeFetches.values()) {
       active.controller.abort("Instance closed")
       void active.body?.cancel("Instance closed").catch(() => {})
@@ -836,6 +1017,45 @@ export class ExtensionHost {
         void this.#streams.cancelRemote?.(instance.id, active.descriptor, "Instance closed").catch(() => {})
       }
     }
+    // Do not forget active calls after aborting them. A plugin may ignore the
+    // signal, so the host must keep the instance fenced until every call has
+    // settled; the Rust owner will terminate the process when this bounded
+    // dispose phase exceeds its deadline.
+    try {
+      await promiseWithDeadline(
+        Promise.allSettled(activeHookDrains).then(() => undefined),
+        2_000,
+        "Plugin hook drain timed out",
+      )
+    } catch (error) {
+      lifecycleTimeout = error
+      this.#status = "closing"
+      await publishDiagnostic(this.#rpc, {
+        level: "error",
+        message: `Instance ${instance.id} active hook drain failed`,
+        instanceID: instance.id,
+        operation: "dispose",
+        error: errorData(error),
+      }).catch(() => {})
+    }
+    try {
+      await promiseWithDeadline(
+        Promise.allSettled(activeToolDrains).then(() => undefined),
+        2_000,
+        "Plugin tool drain timed out",
+      )
+    } catch (error) {
+      lifecycleTimeout = error
+      this.#status = "closing"
+      await publishDiagnostic(this.#rpc, {
+        level: "error",
+        message: `Instance ${instance.id} active tool drain failed`,
+        instanceID: instance.id,
+        operation: "dispose",
+        error: errorData(error),
+      }).catch(() => {})
+    }
+    instance.activeHooks.clear()
     instance.activeTools.clear()
     instance.activeFetches.clear()
     try {
@@ -850,7 +1070,6 @@ export class ExtensionHost {
       }).catch(() => {})
     } finally {
       await instance.gateway.close().catch(() => {})
-      await instance.openDone
       instance.flows.clear()
       instance.fetches.clear()
 
@@ -859,8 +1078,12 @@ export class ExtensionHost {
         instance.disposed.add(retained)
         if (!retained.hooks.dispose) continue
         try {
-          await Promise.resolve(retained.hooks.dispose())
+          await promiseWithDeadline(Promise.resolve(retained.hooks.dispose()), 2_000, "Plugin dispose timed out")
         } catch (error) {
+          if (error instanceof Error && error.message === "Plugin dispose timed out") {
+            lifecycleTimeout ??= error
+            this.#status = "closing"
+          }
           await publishDiagnostic(this.#rpc, {
             level: "error",
             message: `Plugin ${retained.plugin.spec} dispose hook failed`,
@@ -877,6 +1100,7 @@ export class ExtensionHost {
         this.#directories.delete(instance.canonicalDirectory)
       }
     }
+    if (lifecycleTimeout) throw lifecycleTimeout
   }
 
   #instance(instanceID: string) {
@@ -980,10 +1204,37 @@ export class ExtensionHost {
   }
 }
 
-function openResult(instance: Instance, config: WireValue, diagnostics: HostDiagnostic[]) {
+async function promiseWithDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+function openResult(
+  instance: Instance,
+  config: WireValue,
+  diagnostics: HostDiagnostic[],
+  configContributions: Array<{
+    plugin: PluginMeta
+    outcome: "applied" | "failed"
+    config: WireValue
+  }>,
+) {
   return {
     instanceID: instance.id,
+    generationKey: instance.generationKey,
+    revision: instance.revision,
     config: cloneWireValue(config, "config"),
+    configContributors: configContributions.map(({ plugin, outcome }) => ({ plugin, outcome })),
+    configContributions,
     diagnostics: diagnostics.map(protocolDiagnostic),
     gatewayURL: instance.gateway.url.toString(),
     hooks: GENERIC_HOOKS.filter((name) =>
@@ -1010,6 +1261,14 @@ function openResult(instance: Instance, config: WireValue, diagnostics: HostDiag
       description: adapter.description,
     })),
   }
+}
+
+function assertGeneration(instance: Instance, generationKey?: string, revision?: string) {
+  if (instance.generationKey === generationKey && instance.revision === revision) return
+  throw new ExtensionHostError(-32002, `Generation lease does not match instance ${instance.id}`, {
+    kind: "generation_mismatch",
+    instanceID: instance.id,
+  })
 }
 
 function authDescriptor(provider: string, registration: AuthRegistration) {
@@ -1062,15 +1321,65 @@ function preparationKey(input: {
   declarations: readonly PluginDeclaration[]
   defaultBaseDirectory?: string
   configurationFingerprint?: string
+  allowInstall?: boolean
 }) {
-  const needsDefaultBaseDirectory = input.declarations.some(
-    ({ spec, baseDirectory }) => !baseDirectory && (spec.startsWith(".") || spec.startsWith("file:")),
-  )
+  const needsDefaultBaseDirectory = input.declarations.some(({ baseDirectory }) => !baseDirectory)
   return JSON.stringify({
     configurationFingerprint: input.configurationFingerprint,
+    allowInstall: input.allowInstall ?? true,
     declarations: input.declarations,
     ...(needsDefaultBaseDirectory ? { defaultBaseDirectory: input.defaultBaseDirectory } : {}),
   })
+}
+
+function preparationReviewDigest(input: {
+  configurationFingerprint?: string
+  reviewed: Array<{
+    spec: string
+    source: string
+    identity: string
+    canonicalSource: string
+    baseDirectory: string
+    optionsDigest: string
+  }>
+  prepared: Array<{
+    spec: string
+    identity: string
+    source: string
+    target: string
+    entry: string
+    contentHash?: string
+    version?: string
+  }>
+  failed: Array<{ spec: string; stage: string }>
+}) {
+  // Project only stable approval facts. Cache hit/installed state and
+  // diagnostic prose are operational details and must not make the same
+  // executable graph require a different approval at open time.
+  const material = {
+    ...(input.configurationFingerprint
+      ? { configurationFingerprint: input.configurationFingerprint }
+      : {}),
+    reviewed: input.reviewed.map((plugin) => ({
+      spec: plugin.spec,
+      source: plugin.source,
+      identity: plugin.identity,
+      canonicalSource: plugin.canonicalSource,
+      baseDirectory: plugin.baseDirectory,
+      optionsDigest: plugin.optionsDigest,
+    })),
+    prepared: input.prepared.map((plugin) => ({
+      spec: plugin.spec,
+      identity: plugin.identity,
+      source: plugin.source,
+      target: plugin.target,
+      entry: plugin.entry,
+      ...(plugin.contentHash ? { contentHash: plugin.contentHash } : {}),
+      ...(plugin.version ? { version: plugin.version } : {}),
+    })),
+    failed: input.failed.map((failure) => ({ spec: failure.spec, stage: failure.stage })),
+  }
+  return createHash("sha256").update(JSON.stringify(material)).digest("hex")
 }
 
 function findRegistration<T extends { registrationID: string }>(map: Map<string, T>, registrationID: string) {

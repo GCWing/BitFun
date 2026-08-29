@@ -337,9 +337,12 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
           if (node.classList?.contains('model-round-item__footer')) return false;
           if (node.classList?.contains('user-message-item__actions')) return false;
           if (node.classList?.contains('tool-card__actions')) return false;
-          if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
-          if (node.classList?.contains('base-tool-card-expanded')) return false;
-          if (node.classList?.contains('compact-tool-card-expanded')) return false;
+          if (
+            node.matches?.(
+              '[data-bf-component="flow-chat-tool-card"][data-bf-part="actionRegion"], '
+              + '[data-bf-component="flow-chat-tool-card"][data-bf-part="expanded"]',
+            )
+          ) return false;
         }
         return true;
       };

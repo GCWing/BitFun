@@ -447,24 +447,6 @@ test('theme color audit reports static contract token external consumption', (t)
 
 test('theme color audit reports deprecated surface-local token names', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --base-tool-card-accent-color: #60a5fa;',
-      '  --snapshot-card-operation-color: #60a5fa;',
-      '}',
-      '',
-    ].join('\n'),
-    'component-library/components/FlowChatCards/BaseToolCard/BaseToolCard.scss': [
-      '.base-tool-card {',
-      '  --primary-color: var(--base-tool-card-accent-color);',
-      '  color: var(--primary-color);',
-      '}',
-      '',
-    ].join('\n'),
-    'component-library/components/FlowChatCards/SnapshotCard/SnapshotCard.tsx': [
-      "export const style = { '--operation-color': 'var(--snapshot-card-operation-color)' };",
-      '',
-    ].join('\n'),
     'tools/editor/meditor/components/TiptapEditor.scss': [
       '.m-editor-tiptap {',
       '  --m-editor-highlight-rgb: var(--private-markdown-editor-highlight-rgb);',
@@ -479,14 +461,12 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
   const report = JSON.parse(result.stdout);
-  assert.equal(report.surfaceTokenRenames.activeUnique, 3);
-  assert.equal(report.surfaceTokenRenames.activeOccurrences, 5);
+  assert.equal(report.surfaceTokenRenames.activeUnique, 1);
+  assert.equal(report.surfaceTokenRenames.activeOccurrences, 2);
   assert.deepEqual(
     report.surfaceTokenRenames.active.map(row => [row.key, row.canonical, row.definitionCount, row.usageCount]),
     [
       ['--m-editor-highlight-rgb', '--private-markdown-editor-highlight-rgb', 1, 1],
-      ['--primary-color', '--base-tool-card-accent-color', 1, 1],
-      ['--operation-color', '--snapshot-card-operation-color', 1, 0],
     ],
   );
 });

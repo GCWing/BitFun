@@ -208,7 +208,6 @@ fn is_long_task_agent(agent_type: &str) -> bool {
     matches!(
         agent_type,
         "agentic"
-            | "Multitask"
             | "DeepReview"
             | "DeepResearch"
             | "ComputerUse"

@@ -10,13 +10,17 @@ describe('design-system Vite integration', () => {
   it('resolves UI package entry points to source only while serving for HMR', () => {
     const serveAliases = createDesignSystemSourceAliases('serve');
 
-    expect(serveAliases).toHaveLength(3);
+    expect(serveAliases).toHaveLength(4);
     expect(serveAliases.map(alias => String(alias.find))).toEqual([
+      '/^@bitfun\\/ui\\/flow-chat$/',
       '/^@bitfun\\/ui\\/registry$/',
       '/^@bitfun\\/ui\\/styles\\.css$/',
       '/^@bitfun\\/ui$/',
     ]);
-    expect(path.normalize(serveAliases[2].replacement)).toContain(
+    expect(path.normalize(serveAliases[0].replacement)).toContain(
+      path.normalize('design-system/packages/ui/src/flow-chat.ts'),
+    );
+    expect(path.normalize(serveAliases[3].replacement)).toContain(
       path.normalize('design-system/packages/ui/src/index.ts'),
     );
     expect(createDesignSystemSourceAliases('build')).toEqual([]);

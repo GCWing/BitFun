@@ -7,7 +7,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useMessageSender } from './useMessageSender';
-import { chatInputTurnDirective } from '../utils/chatInputDirective';
 
 const mocks = vi.hoisted(() => {
   const createChatSession = vi.fn();
@@ -65,18 +64,6 @@ function Probe() {
   return null;
 }
 
-function DirectiveProbe({ onConsumed }: { onConsumed: () => void }) {
-  const { sendMessage } = useMessageSender({
-    currentSessionId: 'existing-session',
-    contexts: [],
-    onClearContexts: mocks.onClearContexts,
-    turnDirective: chatInputTurnDirective('Plan'),
-    onTurnDirectiveConsumed: onConsumed,
-  });
-  sendFromProbe = () => sendMessage('hello');
-  return null;
-}
-
 describe('useMessageSender', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -119,44 +106,5 @@ describe('useMessageSender', () => {
       undefined,
       expect.any(Object),
     );
-  });
-
-  it('applies a directive to one task without replacing the Session main Agent', async () => {
-    const onConsumed = vi.fn();
-    await act(async () => {
-      root.render(<DirectiveProbe onConsumed={onConsumed} />);
-    });
-    await act(async () => {
-      await sendFromProbe?.();
-    });
-
-    expect(mocks.createChatSession).not.toHaveBeenCalled();
-    expect(mocks.sendMessage).toHaveBeenCalledWith(
-      expect.stringContaining('<task-directive name="Plan">'),
-      'existing-session',
-      'hello',
-      'agentic',
-      undefined,
-      expect.objectContaining({
-        userMessageMetadata: expect.objectContaining({
-          taskDirective: { id: 'Plan' },
-        }),
-      }),
-    );
-    expect(onConsumed).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the directive armed when submission fails', async () => {
-    const onConsumed = vi.fn();
-    mocks.sendMessage.mockRejectedValueOnce(new Error('submission failed'));
-    await act(async () => {
-      root.render(<DirectiveProbe onConsumed={onConsumed} />);
-    });
-
-    await act(async () => {
-      await expect(sendFromProbe?.()).rejects.toThrow('submission failed');
-    });
-
-    expect(onConsumed).not.toHaveBeenCalled();
   });
 });

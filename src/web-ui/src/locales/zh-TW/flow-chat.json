@@ -697,9 +697,7 @@
     },
     "harness": {
       "selectorTooltip": "目前執行：{{name}}",
-      "selectorTooltipWithDirective": "目前執行：{{name}}；下一則訊息同時附加 {{directive}} 指令。",
       "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
-      "fixedTooltipWithDirective": "本工作階段使用 {{name}}；下一則訊息同時附加 {{directive}} 指令。",
       "activateBalanced": "切換到標準 Harness",
       "compatibilityShort": "相容模式",
       "comingSoon": "開發中",
@@ -712,7 +710,6 @@
       "profileChangeOutcomeUnknown": "暫時無法確認 Harness 是否已切換，請重新整理工作階段後再重試。",
       "profileUnavailable": "目前 BitFun Host 不支援該 Harness。",
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
-      "nextMessageDirective": "下一則 · {{directive}}",
       "startNewSession": "以其他方式開始新工作階段",
       "newSessionModesTitle": "新工作階段方式",
       "otherAgentsTitle": "智能體",
@@ -797,26 +794,18 @@
       "fullAccessWarningMessageActiveTurn": "完全存取會預設放行工具呼叫，不再逐次確認。此設定從目前輪次的後續模型輪次生效，專案規則與強制規則仍然生效。",
       "openDefaultSettings": "開啟權限設定"
     },
-    "addModeTooltip": "附加 Plan 或 Multitask",
-    "boostSectionAgent": "指令",
     "boostSectionContext": "上下文",
     "boostStartBtw": "發起側問",
     "boostNewSession": "新建會話",
     "boostAddContext": "引用檔案或資料夾",
     "boostSkills": "Skills",
-    "modeSection": "指令",
     "boostSkillsLoading": "正在載入 Skills…",
     "boostSkillsLoadFailed": "Skills 載入失敗，點擊重試",
     "boostSkillsEmpty": "暫無已啟用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "addModeMenuTitle": "選擇指令",
-    "directive": {
-      "nextMessage": "下一則訊息"
-    },
     "createCustomMode": "自訂 Agent",
     "resetToAgentic": "移除目前 Agent",
-    "noIncrementalModes": "暫無可附加模式",
     "defaultModeSetTooltip": "將 {{mode}} 設為新聊天預設模式",
     "defaultModeUnsetTooltip": "預設模式覆蓋已啟用，點擊清除",
     "defaultModeSet": "已將 {{mode}} 設為新聊天預設模式。",
@@ -877,7 +866,6 @@
     "reloadInstructionsDone": "指令將在下一則訊息時重新讀取。",
     "reloadFailed": "重新載入失敗",
     "currentMode": "目前模式: {{mode}}",
-    "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
     "externalCommandContextUnsupported": "執行此委派命令前，請先移除輸入框中的附件與引用。",
     "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
@@ -900,9 +888,7 @@
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
-      "Multitask": "多工模式：將工作拆成正交分支，並在合適時主動並行調度子 Agent 推進",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
-      "Plan": "先規劃後執行，先明確需求並制定實施計劃，再進行編碼",
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
       "ComputerUse": "獨立電腦操作智能體：感知本機環境，操作應用、瀏覽器與系統介面",
       "DeepResearch": "深度研究：並行派發多個子 Agent 同時調研不同章節，快速生成高質量研究報告",
@@ -910,9 +896,7 @@
     },
     "modeNames": {
       "agentic": "Agentic",
-      "Multitask": "Multitask",
       "Claw": "Claw",
-      "Plan": "Plan",
       "Cowork": "Cowork",
       "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
@@ -1592,7 +1576,7 @@
       "expandPreview": "展開預覽",
       "collapsePreview": "收起預覽",
       "openFullCodeHint": "開啟全量代碼",
-      "viewGitDiff": "查看 Diff",
+      "changeSummary": "新增 {{additions}} 行，刪除 {{deletions}} 行",
       "viewBaselineDiff": "查看基線 Diff"
     },
     "getFileDiff": {
@@ -1797,6 +1781,8 @@
     },
     "plan": {
       "loadingPlan": "正在載入計劃...",
+      "invalidFormat": "計劃格式無效",
+      "invalidFormatDescription": "請開啟計劃檔案，檢查並修正 YAML 檔頭或 Markdown 內文。",
       "generating": "生成中...",
       "clickToOpenPlan": "點擊開啟計劃檔案",
       "saveToProject": "儲存到專案",
@@ -2126,6 +2112,7 @@
       "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。",
       "tokenChange": "{{before}} → {{after}} tokens",
       "savingsTag": "節省 {{saved}} · 壓縮率 {{ratio}}%",
+      "resultSummary": "壓縮後上下文長度 {{length}}（壓縮比例 {{ratio}}%）",
       "compressingContext": "正在壓縮上下文...",
       "compressionCount": "第 {{count}} 次壓縮"
     },

@@ -1,8 +1,5 @@
 import { ChatTimelineItem } from '../../model/ChatTimelineModels';
-import { RecentWorkspaceEntry } from '../../model/RemoteModels';
-import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ChatSurface } from '../state/ChatSurface';
-import { RemoteHarnessProfile } from '../state/RemoteCreateSessionState';
 import { ComposerPresentation } from './ComposerBar';
 
 /** Layout and host chrome that vary independently from conversation data. */
@@ -15,17 +12,6 @@ export class ConversationViewOptions {
   composerPresentation: ComposerPresentation = ComposerPresentation.Compact;
   composerInputId: string = 'conversation-composer-input';
   hoverOperateMode: boolean = false;
-  showRemoteCreateContext: boolean = false;
-}
-
-/** Actions that only exist on the remote-session creation surface. */
-export class RemoteCreateViewActions {
-  toggleDeviceMenu: () => void = () => {};
-  toggleWorkspaceMenu: () => void = () => {};
-  selectDevice: (device: CloudAccountDevice) => void = (_device: CloudAccountDevice) => {};
-  selectWorkspace: (workspace?: RecentWorkspaceEntry) => void = (_workspace?: RecentWorkspaceEntry) => {};
-  selectHarness: (profile: RemoteHarnessProfile) => void = (_profile: RemoteHarnessProfile) => {};
-  backgroundTap: () => void = () => {};
 }
 
 export class ConversationViewContract {

@@ -84,7 +84,7 @@ mod tests {
             .expect("agent selection boundary")
             .0;
 
-        assert!(selection.contains(".update_session_mode(&task_session_id, &task_mode_id)"));
+        assert!(selection.contains(".update_session_mode_with_route("));
         assert!(!selection.contains("selected.id == self.agent_type"));
     }
 
@@ -1818,7 +1818,7 @@ mod tests {
     fn previous_session_update_failure_is_not_reported_as_a_success() {
         let status = previous_session_update_status(
             "mode",
-            "Plan",
+            "Cowork",
             &SessionUpdateApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
         );
 

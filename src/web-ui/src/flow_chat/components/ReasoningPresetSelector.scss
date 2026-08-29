@@ -37,6 +37,24 @@
     }
   }
 
+  &[data-bf-presentation='label'] &__trigger {
+    width: auto;
+    min-width: 0;
+    padding-inline: 2px;
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+  }
+
+  &__trigger-label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: flow-type.$control-size;
+    font-weight: 400;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__status-meter {
     position: relative;
     display: inline-grid;

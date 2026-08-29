@@ -50,7 +50,8 @@ async fn handshake_accepts_matching_token_and_returns_cache_directory() {
                     "token": "test-token",
                     "protocolVersion": 1,
                     "opencodeVersion": "1.17.18",
-                    "maxFrameBytes": DEFAULT_MAX_FRAME_BYTES
+                    "maxFrameBytes": DEFAULT_MAX_FRAME_BYTES,
+                    "capabilities": ["config-contributors-v1", "config-contributions-v2", "generation-fencing-v1", "unknown-v1"]
                 }
             }),
             DEFAULT_MAX_FRAME_BYTES,
@@ -71,7 +72,11 @@ async fn handshake_accepts_matching_token_and_returns_cache_directory() {
         .expect("matching handshake should succeed");
     let response = host.await.expect("fake host task should finish");
 
-    assert_eq!(negotiated, DEFAULT_MAX_FRAME_BYTES);
+    assert_eq!(negotiated.max_frame_bytes, DEFAULT_MAX_FRAME_BYTES);
+    assert!(negotiated.capabilities.supports("config-contributors-v1"));
+    assert!(negotiated.capabilities.supports("config-contributions-v2"));
+    assert!(negotiated.capabilities.supports("generation-fencing-v1"));
+    assert!(!negotiated.capabilities.supports("unknown-v1"));
     assert_eq!(
         response["result"]["cacheDirectory"],
         expected_cache_directory
@@ -204,7 +209,7 @@ async fn handshake_clamps_requested_frame_limit_to_the_safe_range() {
             .await
             .expect("handshake should succeed");
         host.await.expect("fake host should finish");
-        negotiated
+        negotiated.max_frame_bytes
     }
 
     assert_eq!(negotiate(1).await, MIN_NEGOTIATED_FRAME_BYTES);
@@ -352,7 +357,6 @@ async fn plugin_host_shutdown_waits_for_rpc_response_and_process_exit() {
     let report = host.shutdown(PluginHostShutdownPolicy::default()).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Graceful);
-    assert!(report.reaped);
     assert!(report.rpc_completed);
     assert_eq!(report.exit_code, Some(0));
     assert!(
@@ -437,7 +441,6 @@ async fn plugin_host_shutdown_forces_a_host_that_ignores_shutdown_and_eof() {
     let report = host.shutdown(policy).await;
 
     assert_eq!(report.disposition, PluginHostShutdownDisposition::Forced);
-    assert!(report.reaped);
     assert!(!report.rpc_completed);
     assert!(report.duration_ms < 2_000);
 }

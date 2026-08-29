@@ -16,6 +16,10 @@ export default defineConfig(({ command }) => ({
       command === "serve"
         ? [
             {
+              find: /^@bitfun\/ui\/flow-chat$/,
+              replacement: path.join(uiSourceDirectory, "flow-chat.ts"),
+            },
+            {
               find: /^@bitfun\/ui\/registry$/,
               replacement: path.join(uiSourceDirectory, "registry.ts"),
             },

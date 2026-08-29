@@ -23,10 +23,8 @@ describe('FlowChat collapse spacing', () => {
     const projectionRoots = [
       '.explore-region__content',
       '.thinking-content',
-      '.base-tool-card-expanded',
-      '.base-tool-card-error',
-      '.compact-tool-card-expanded',
-      '.view-image-tool-card__content',
+      "[data-bf-component='flow-chat-tool-card'][data-bf-part='expanded']",
+      "[data-bf-component='flow-chat-tool-card'][data-bf-part='error']",
       '.subagent-items-container',
       '.subagent-projection-container--expanded',
     ];
@@ -51,33 +49,17 @@ describe('FlowChat collapse spacing', () => {
   });
 
   it('keeps bordered tool and subagent bodies padded on every side', () => {
-    const baseToolStyles = readSource('../../tool-cards/BaseToolCard.scss');
-    const compactToolStyles = readSource('../../tool-cards/CompactToolCard.scss');
-    const imageStyles = readSource('../../tool-cards/ViewImageToolCard.scss');
+    const publicToolCardStyles = readSource('../../../../../../design-system/packages/ui/src/flow-chat/tool-cards/FlowChatToolCard.module.css');
+    const flowToolCardStyles = readSource('../FlowToolCard.scss');
     const subagentStyles = readSource('./SubagentItems.scss');
     const subagentProjectionStyles = readSource('../subagent/SubagentProjectionView.scss');
     const taskStyles = readSource('../../tool-cards/TaskToolDisplay.scss');
 
-    expect(extractBlock(baseToolStyles, '.base-tool-card-expanded')).toContain(
-      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-tool-card-expanded-pad-x);',
+    expect(publicToolCardStyles).toMatch(
+      /\.expanded,\s*\.error\s*\{[\s\S]*?padding:\s*var\(--bf-space-3\);/,
     );
-    expect(extractBlock(baseToolStyles, '.base-tool-card-error')).toContain(
-      'margin-left: 0;',
-    );
-    expect(extractBlock(baseToolStyles, '.base-tool-card-error')).toMatch(
-      /padding:\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\);/,
-    );
-    expect(extractBlock(compactToolStyles, '.compact-tool-card-expanded')).toContain(
-      'margin-left: 0;',
-    );
-    expect(extractBlock(compactToolStyles, '.compact-tool-card-expanded')).toContain(
-      'padding: 12px;',
-    );
-    expect(extractBlock(compactToolStyles, '.flow-tool-card-note')).toContain(
-      'margin-left: 0;',
-    );
-    expect(extractBlock(imageStyles, '.view-image-tool-card__content')).toContain(
-      'margin: 8px 0 0;',
+    expect(extractBlock(flowToolCardStyles, '.flow-tool-card-note')).toContain(
+      'margin-inline-start: 0;',
     );
     expect(extractBlock(subagentStyles, '.subagent-items-container')).toContain(
       'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);',
@@ -96,21 +78,10 @@ describe('FlowChat collapse spacing', () => {
     );
   });
 
-  it('lets full-bleed footer and list surfaces consume the shared body inset', () => {
-    const terminalStyles = readSource('../../tool-cards/TerminalToolCard.scss');
-    const gitStyles = readSource('../../tool-cards/GitToolDisplay.scss');
+  it('lets product-owned full-bleed footer surfaces consume the shared body inset', () => {
     const miniAppStyles = readSource('../../tool-cards/MiniAppToolDisplay.scss');
-    const todoStyles = readSource('../../tool-cards/TodoWriteDisplay.scss');
-
-    expect(terminalStyles).toContain(
-      '.base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));',
-    );
-    expect(gitStyles).toMatch(/git-result-footer[\s\S]{0,120}margin-left:\s*-\d/);
     expect(miniAppStyles).toContain(
-      '.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));',
-    );
-    expect(extractBlock(todoStyles, '.todo-expanded-body')).toMatch(
-      /margin:\s*calc\(var\(--bf-appearance-token-flowchat-card-expanded-pad-y\) \* -1\)\s*calc\(var\(--bf-appearance-token-tool-card-expanded-pad-x\) \* -1\);/,
+      ".miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));",
     );
   });
 });

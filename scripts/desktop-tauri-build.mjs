@@ -47,6 +47,7 @@ async function main() {
   console.log(`[release] channel=${releaseChannel.channel}`);
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
+  preparePluginHost();
   const flashgrepBinary = prepareMacOSFlashgrepForSigning(
     ensureFlashgrepBinary(),
     desktopDir,
@@ -99,6 +100,21 @@ async function main() {
   }
 
   process.exit(r.status ?? 1);
+}
+
+function preparePluginHost() {
+  const result = spawnSync('pnpm', ['run', 'plugin-host:prepare'], {
+    cwd: ROOT,
+    env: process.env,
+    stdio: 'inherit',
+    shell: true,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`OpenCode extension Host preparation failed with exit code ${result.status}`);
+  }
 }
 
 function runTauriBuild(tauriBin, args, desktopDir) {

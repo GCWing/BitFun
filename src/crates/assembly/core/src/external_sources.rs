@@ -144,7 +144,6 @@ const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
 /// ecosystems, but the cap keeps a corrupted or hostile file from growing
 /// without limit.
 const MAX_ACKNOWLEDGED_ECOSYSTEMS: usize = 256;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedPromptCommandShell {
     display_name: String,
@@ -2907,7 +2906,24 @@ impl WorkspaceExternalSourceService {
     }
 
     fn snapshot(&self) -> ExternalSourceCatalogSnapshot {
-        lock_snapshot(&self.snapshot).clone()
+        #[cfg(feature = "opencode-plugin-host")]
+        let mut snapshot = lock_snapshot(&self.snapshot).clone();
+        #[cfg(not(feature = "opencode-plugin-host"))]
+        let snapshot = lock_snapshot(&self.snapshot).clone();
+        #[cfg(feature = "opencode-plugin-host")]
+        for message in crate::plugin_host::configured_plugin_activation_failures(
+            self.workspace_root.as_deref(),
+        ) {
+            if !snapshot.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "plugin.activation_failed" && diagnostic.message == message
+            }) {
+                snapshot.diagnostics.push(
+                    ExternalSourceDiagnostic::warning("plugin.activation_failed", message, None)
+                        .with_asset_kind(ExternalSourceAssetKind::Hook),
+                );
+            }
+        }
+        snapshot
     }
 
     fn source_location(&self, stable_key: &str) -> Result<PathBuf, String> {
@@ -3521,10 +3537,21 @@ impl WorkspaceExternalSourceService {
                 )
             })?;
         if matches!(candidate.kind, ExternalToolConflictCandidateKind::External) {
-            let source_key = candidate.source.as_ref().ok_or_else(|| {
-                missing_candidate_error("External tool conflict source is missing")
-            })?;
-            ensure_source_capability_active(&snapshot, source_key, EXTERNAL_CAPABILITY_TOOL)?;
+            match candidate.source.as_ref() {
+                Some(source_key) => {
+                    ensure_source_capability_active(
+                        &snapshot,
+                        source_key,
+                        EXTERNAL_CAPABILITY_TOOL,
+                    )?;
+                }
+                None if candidate.provider_id == "opencode-plugin" => {}
+                None => {
+                    return Err(missing_candidate_error(
+                        "External tool conflict source is missing",
+                    ));
+                }
+            }
         }
         validate_conflict_preference(conflict_key, candidate_id)?;
         let preferences =

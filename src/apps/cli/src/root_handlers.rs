@@ -4,17 +4,6 @@ use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::Path;
 
-use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, SessionTranscriptRequest};
-use bitfun_core::external_sources::{
-    external_source_snapshot, sanitize_external_source_operation_error,
-    update_external_integration_policy, EcosystemId, ExternalIntegrationAccess,
-    ExternalIntegrationCapabilityId, ExternalIntegrationMode, ExternalIntegrationPolicyMutation,
-    ExternalIntegrationPolicyOperation, ExternalIntegrationPolicyScope,
-    ExternalIntegrationPolicyStatus, ExternalSourceCatalogSnapshot,
-    ExternalSourceOperationErrorCode, EXTERNAL_CAPABILITY_COMMAND, EXTERNAL_CAPABILITY_MCP,
-    EXTERNAL_CAPABILITY_SUBAGENT, EXTERNAL_CAPABILITY_TOOL,
-};
-
 use crate::{
     chat_state::{transcript_message_preview, transcript_role_label},
     config::CliConfig,
@@ -25,6 +14,16 @@ use crate::{
     ui::string_utils::truncate_str,
     ConfigAction, DispatchAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
+};
+use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, SessionTranscriptRequest};
+use bitfun_core::external_sources::{
+    external_source_snapshot, sanitize_external_source_operation_error,
+    update_external_integration_policy, EcosystemId, ExternalIntegrationAccess,
+    ExternalIntegrationCapabilityId, ExternalIntegrationMode, ExternalIntegrationPolicyMutation,
+    ExternalIntegrationPolicyOperation, ExternalIntegrationPolicyScope,
+    ExternalIntegrationPolicyStatus, ExternalSourceCatalogSnapshot,
+    ExternalSourceOperationErrorCode, EXTERNAL_CAPABILITY_COMMAND, EXTERNAL_CAPABILITY_MCP,
+    EXTERNAL_CAPABILITY_SUBAGENT, EXTERNAL_CAPABILITY_TOOL,
 };
 
 /// Sized for submit/continue requests carrying inline image attachments

@@ -1,5 +1,6 @@
 import type { Plugin, PluginModule } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
+import { z } from "zod"
 
 const ExamplePlugin: Plugin = async (input) => {
   input.experimental_workspace.register("example-local", {
@@ -23,7 +24,52 @@ const ExamplePlugin: Plugin = async (input) => {
   })
 
   return {
+    config: async (config) => {
+      config.bitfunDemo = {
+        enabled: true,
+        directory: input.directory,
+      }
+      config.agent = {
+        ...(config.agent ?? {}),
+        Cowork: {
+          mode: "primary",
+          description: "Demo agent for exercising the BitFun OpenCode plugin bridge",
+          prompt: "Use the bitfun_demo_echo tool when the user asks you to echo text.",
+          permission: {
+            bitfun_demo_echo: "allow",
+          },
+        },
+      }
+    },
     tool: {
+      bitfun_demo_echo: tool({
+        description: "Echo text from the BitFun OpenCode plugin demo",
+        args: {
+          text: z.string().describe("Text to echo"),
+        },
+        async execute(args, context) {
+          context.metadata({
+            title: "Preparing BitFun demo echo",
+            metadata: { phase: "before-ask" },
+          })
+          await context.ask({
+            permission: "bitfun_demo_echo",
+            patterns: ["demo-echo"],
+            always: ["demo-echo"],
+            metadata: {
+              riskDescription: "Allow the demo plugin to echo text",
+            },
+          })
+          context.metadata({
+            title: "BitFun demo echo approved",
+            metadata: { phase: "after-ask" },
+          })
+          return {
+            title: "BitFun demo echo",
+            output: `${args.text}:${input.directory}`,
+          }
+        },
+      }),
       extension_host_info: tool({
         description: "Exercise the injected OpenCode SDK client and raw HTTP gateway",
         args: {},

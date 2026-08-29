@@ -13,8 +13,7 @@ import { CARD, FLOATING_PANEL_BG, GREEN, INK, LINE, MUTED, RED, SOFT } from './T
 
 export enum ComposerPresentation {
   Compact = 'compact',
-  Floating = 'floating',
-  Create = 'create'
+  Floating = 'floating'
 }
 
 const COMPOSER_ACTION_SIZE: number = MobileDesignGeometry.composerActionSize;

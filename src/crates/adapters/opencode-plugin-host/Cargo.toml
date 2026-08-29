@@ -11,8 +11,10 @@ name = "bitfun_opencode_plugin_host"
 crate-type = ["rlib"]
 
 [dependencies]
+async-trait = { workspace = true }
 base64 = { workspace = true }
 bitfun-services-core = { path = "../../services/services-core", features = ["process-runtime"] }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime"] }
 log = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

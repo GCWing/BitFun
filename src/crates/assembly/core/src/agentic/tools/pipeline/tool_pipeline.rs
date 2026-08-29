@@ -13,6 +13,8 @@ use crate::agentic::tools::registry::ToolRegistry;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
+#[cfg(feature = "opencode-plugin-host")]
+use crate::agentic::WorkspaceBinding;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -39,7 +41,6 @@ use bitfun_runtime_ports::{
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -53,19 +54,15 @@ use tool_runtime::pipeline::{
 
 fn resolve_contextual_tool(
     tool: Arc<dyn crate::agentic::tools::framework::Tool>,
-    workspace_root: Option<&Path>,
-    remote: bool,
+    context: &ToolUseContext,
 ) -> Option<Arc<dyn crate::agentic::tools::framework::Tool>> {
     #[cfg(feature = "external-sources")]
     {
-        return crate::external_tools::resolve_external_tool_for_workspace(
-            tool,
-            crate::external_tools::external_tool_route_root(workspace_root, remote),
-        );
+        return crate::external_tools::resolve_external_tool_for_context(tool, context);
     }
     #[cfg(not(feature = "external-sources"))]
     {
-        let _ = (workspace_root, remote);
+        let _ = context;
         Some(tool)
     }
 }
@@ -75,6 +72,49 @@ fn persisted_effective_tool_name(
     effective_tool_name: &str,
 ) -> Option<String> {
     (wire_tool_name != effective_tool_name).then(|| effective_tool_name.to_string())
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+struct PluginAfterPresentation {
+    title: String,
+    output: String,
+    metadata: serde_json::Value,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn plugin_after_presentation(
+    tool_name: &str,
+    tool_result: &ModelToolResult,
+) -> PluginAfterPresentation {
+    let object = tool_result.result.as_object();
+    let title = object
+        .and_then(|value| value.get("title"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(tool_name)
+        .to_string();
+    let output = object
+        .and_then(|value| value.get("output"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .or_else(|| tool_result.result_for_assistant.clone())
+        .unwrap_or_else(|| tool_result.result.to_string());
+    let metadata = object
+        .and_then(|value| value.get("metadata"))
+        .filter(|value| value.is_object())
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({"isError": tool_result.is_error}));
+    PluginAfterPresentation {
+        title,
+        output,
+        metadata,
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn local_plugin_workspace_scope(workspace: &WorkspaceBinding) -> Option<String> {
+    (!workspace.is_remote())
+        .then(|| crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path()))
+        .flatten()
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -402,6 +442,9 @@ const ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE: &str =
     "Tool execution cancelled because a pending round injection requested running-tool preemption for this turn.";
 
 fn should_retry_tool_error(error: &BitFunError) -> bool {
+    if matches!(error, BitFunError::OutcomeUnknown(_)) {
+        return false;
+    }
     matches!(
         error,
         BitFunError::Timeout(_)
@@ -811,25 +854,13 @@ impl ToolPipeline {
             return None;
         }
 
+        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let tool = {
             let registry = self.tool_registry.read().await;
             registry
                 .get_tool(task.effective_tool_name())
-                .and_then(|tool| {
-                    resolve_contextual_tool(
-                        tool,
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .map(|workspace| workspace.root_path()),
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .is_some_and(|workspace| workspace.is_remote()),
-                    )
-                })
+                .and_then(|tool| resolve_contextual_tool(tool, &tool_context))
         }?;
-        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let validation = tool
             .validate_input_rewrite_invariants(
                 &task.original_effective_arguments,
@@ -868,7 +899,7 @@ impl ToolPipeline {
     /// but cannot relax non-relaxable validation of the original input.
     async fn apply_pre_tool_use_hooks(&self, task_ids: &[String]) {
         for task_id in task_ids {
-            let Some(task) = self.state_manager.get_task(task_id) else {
+            let Some(mut task) = self.state_manager.get_task(task_id) else {
                 continue;
             };
             if task.invocation_resolution_error.is_some()
@@ -878,6 +909,52 @@ impl ToolPipeline {
                 continue;
             }
             let tool_name = task.invocation.effective_tool_name.clone();
+            #[cfg(feature = "opencode-plugin-host")]
+            if let Some(workspace_scope) = task
+                .context
+                .workspace
+                .as_ref()
+                .and_then(local_plugin_workspace_scope)
+            {
+                match native_hooks::dispatch_plugin_tool_before(
+                    &workspace_scope,
+                    &tool_name,
+                    Some(&task.context.session_id),
+                    Some(&task.tool_call.tool_id),
+                    Some(&task.context.agent_type),
+                    task.invocation.effective_arguments.clone(),
+                )
+                .await
+                {
+                    Ok(Some(updated_input)) => {
+                        if self.apply_hook_input_rewrite(&task, updated_input).await {
+                            info!(
+                                "OpenCode plugin hook rewrite was rejected by original-input constraints: tool_name={}, tool_id={}",
+                                tool_name, task_id
+                            );
+                            continue;
+                        }
+                        let Some(updated_task) = self.state_manager.get_task(task_id) else {
+                            continue;
+                        };
+                        task = updated_task;
+                    }
+                    Ok(None) => {}
+                    Err(reason) => {
+                        error!(
+                            "OpenCode plugin before hook rejected tool execution: tool_name={}, tool_id={}, error={}",
+                            tool_name, task_id, reason
+                        );
+                        self.permission_plans.lock().await.insert(
+                            task_id.clone(),
+                            PermissionExecutionPlan::Rejected {
+                                reason: format!("OpenCode plugin before hook failed: {reason}"),
+                            },
+                        );
+                        continue;
+                    }
+                }
+            }
             let decision = native_hooks::dispatch_pre_tool_use(
                 native_hook_session_facts(&task.context, &task.options),
                 &tool_name,
@@ -937,21 +1014,10 @@ impl ToolPipeline {
                 if task.invocation_resolution_error.is_some() {
                     return (false, false);
                 }
+                let tool_context = self.build_tool_use_context(&task, CancellationToken::new());
                 let tool = registry
                     .get_tool(task.effective_tool_name())
-                    .and_then(|tool| {
-                        resolve_contextual_tool(
-                            tool,
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .map(|workspace| workspace.root_path()),
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .is_some_and(|workspace| workspace.is_remote()),
-                        )
-                    });
+                    .and_then(|tool| resolve_contextual_tool(tool, &tool_context));
                 let tool_is_concurrency_safe = tool
                     .as_ref()
                     .map(|tool| tool.is_concurrency_safe(Some(task.effective_arguments())))
@@ -970,9 +1036,66 @@ impl ToolPipeline {
             .collect()
     }
 
-    /// Run PostToolUse hooks for a completed tool call and fold blocking
+    /// Give the OpenCode after-hook the complete model-visible output before
+    /// large-result storage replaces it with a file reference.
+    async fn apply_plugin_post_tool_use_hook(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_id: &str,
+        tool_result: &mut ModelToolResult,
+    ) {
+        #[cfg(feature = "opencode-plugin-host")]
+        if let Some(workspace_scope) = task
+            .context
+            .workspace
+            .as_ref()
+            .and_then(local_plugin_workspace_scope)
+        {
+            let presentation = plugin_after_presentation(tool_name, tool_result);
+            match native_hooks::dispatch_plugin_tool_after(
+                &workspace_scope,
+                tool_name,
+                Some(&task.context.session_id),
+                Some(tool_id),
+                Some(&task.context.agent_type),
+                task.invocation.effective_arguments.clone(),
+                presentation.title,
+                presentation.output,
+                presentation.metadata,
+            )
+            .await
+            {
+                Ok(Some(transformed)) => {
+                    // Keep the canonical raw tool result immutable for audit
+                    // and persistence. OpenCode's presentation output is the
+                    // model-visible result consumed by the rest of the turn.
+                    tool_result.result_for_assistant = Some(transformed.into_model_output());
+                }
+                Ok(None) => {}
+                Err(reason) => {
+                    // The tool has already executed. Surface the hook failure
+                    // on this result without returning to the retry loop.
+                    error!(
+                        "OpenCode plugin after hook failed after tool execution: tool_name={}, tool_id={}, error={}",
+                        tool_name, tool_id, reason
+                    );
+                    let original = tool_result.result_for_assistant.take().unwrap_or_default();
+                    let failure = format!("OpenCode plugin after hook failed: {reason}");
+                    tool_result.result_for_assistant = Some(if original.is_empty() {
+                        failure
+                    } else {
+                        format!("{original}\n\n{failure}")
+                    });
+                    tool_result.is_error = true;
+                }
+            }
+        }
+    }
+
+    /// Run native PostToolUse hooks after storage compaction and fold blocking
     /// feedback and additional context into the model-visible result text.
-    async fn apply_post_tool_use_hooks(
+    async fn apply_native_post_tool_use_hooks(
         &self,
         task: &ToolTask,
         tool_name: &str,
@@ -2025,6 +2148,12 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
+                let mut tool_result = tool_result;
+                tool_result.duration_ms = Some(duration_ms);
+
+                self.apply_plugin_post_tool_use_hook(&task, &tool_name, &tool_id, &mut tool_result)
+                    .await;
+
                 let mut tool_result =
                     tool_result_storage::maybe_persist_large_tool_result_for_tool(
                         tool_result,
@@ -2032,7 +2161,6 @@ impl ToolPipeline {
                         &tool_context,
                     )
                     .await;
-                tool_result.duration_ms = Some(duration_ms);
 
                 if !matches!(repair_kind, ToolArgumentRepairKind::None) || recovered_from_truncation
                 {
@@ -2054,8 +2182,13 @@ impl ToolPipeline {
                     });
                 }
 
-                self.apply_post_tool_use_hooks(&task, &tool_name, &tool_id, &mut tool_result)
-                    .await;
+                self.apply_native_post_tool_use_hooks(
+                    &task,
+                    &tool_name,
+                    &tool_id,
+                    &mut tool_result,
+                )
+                .await;
 
                 self.state_manager
                     .update_state(
@@ -2276,11 +2409,7 @@ impl ToolPipeline {
 
         let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
-        let timeout_owner = resolve_contextual_tool(
-            Arc::clone(&tool),
-            tool_context.workspace_root(),
-            tool_context.is_remote(),
-        );
+        let timeout_owner = resolve_contextual_tool(Arc::clone(&tool), &tool_context);
         let pipeline_timeout_secs = if timeout_owner
             .as_ref()
             .is_some_and(|selected| selected.manages_own_execution_timeout())
@@ -2543,6 +2672,67 @@ mod tests {
             tool_name: tool_name.to_string(),
             catalog_generation,
         }
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_prefers_the_plugin_result_contract() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": {"path": "report.md"}
+            }),
+            result_for_assistant: Some("report ready".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("report", &result);
+        assert_eq!(presentation.title, "Generated report");
+        assert_eq!(presentation.output, "report ready");
+        assert_eq!(presentation.metadata["path"], "report.md");
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_normalizes_non_object_metadata() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": ["legacy"]
+            }),
+            result_for_assistant: Some("report ready".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("report", &result);
+        assert_eq!(presentation.metadata, json!({"isError": false}));
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn remote_workspace_never_resolves_a_local_plugin_hook_scope() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let local = WorkspaceBinding::new(None, workspace.path().to_path_buf());
+        let mut remote = local.clone();
+        remote.backend = crate::agentic::workspace::WorkspaceBackend::Remote {
+            connection_id: "remote-a".to_string(),
+            connection_name: "Remote A".to_string(),
+        };
+
+        assert!(local_plugin_workspace_scope(&local).is_some());
+        assert!(local_plugin_workspace_scope(&remote).is_none());
     }
 
     #[test]

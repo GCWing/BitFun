@@ -270,18 +270,6 @@ export const FALLBACK_VAR_CONTRACTS = [];
 
 export const SURFACE_TOKEN_RENAME_CONTRACTS = [
   {
-    key: '--primary-color',
-    canonical: '--base-tool-card-accent-color',
-    owner: 'src/web-ui/src/component-library/components/FlowChatCards/BaseToolCard',
-    reason: 'BaseToolCard used a generic local primary color key; the explicit component key prevents accidental global primary-token coupling.',
-  },
-  {
-    key: '--operation-color',
-    canonical: '--snapshot-card-operation-color',
-    owner: 'src/web-ui/src/component-library/components/FlowChatCards/SnapshotCard',
-    reason: 'Snapshot operation color is a card-local role and should not look like a reusable operation namespace for other surfaces.',
-  },
-  {
     key: '--um-failed-fs',
     canonical: '--user-message-failed-font-size',
     owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',

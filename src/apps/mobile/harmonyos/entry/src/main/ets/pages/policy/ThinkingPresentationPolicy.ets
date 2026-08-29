@@ -1,4 +1,13 @@
 export class ThinkingPresentationPolicy {
+  static readonly RUNNING_DOT_COUNT: number = 3;
+  static readonly RUNNING_DOT_WIDTH: number = 6;
+  static readonly RUNNING_DOT_GAP: number = 6;
+
+  static runningDotsWidth(): number {
+    return ThinkingPresentationPolicy.RUNNING_DOT_WIDTH * ThinkingPresentationPolicy.RUNNING_DOT_COUNT +
+      ThinkingPresentationPolicy.RUNNING_DOT_GAP * (ThinkingPresentationPolicy.RUNNING_DOT_COUNT - 1);
+  }
+
   static isRunning(status: string): boolean {
     const normalized = (status || '').toLowerCase();
     return normalized === 'active' || normalized === 'running';

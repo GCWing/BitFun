@@ -60,7 +60,6 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           selectedProfile="balanced"
-          directiveLabel="Plan"
           onSelectProfile={vi.fn()}
         />,
       );
@@ -70,7 +69,7 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.querySelector('.bitfun-harness-selector__density-mark')).toBeNull();
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -121,6 +120,59 @@ describe('HarnessProfileSelector', () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
         ?.disabled,
     ).toBe(true);
+  });
+
+  it('nests the menu-item picker inside its parent menu and closes it after an Agent choice', async () => {
+    const onSelectAgent = vi.fn();
+    const onSelectionComplete = vi.fn();
+    await act(async () => {
+      root.render(
+        <div data-testid="parent-add-menu">
+          <HarnessProfileSelector
+            presentation="menu-item"
+            selectedProfile="balanced"
+            otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
+            onSelectProfile={vi.fn()}
+            onSelectAgent={onSelectAgent}
+            onSelectionComplete={onSelectionComplete}
+          />
+        </div>,
+      );
+    });
+
+    const selectorRoot = container.querySelector<HTMLElement>(
+      '[data-bf-component="harness-selector"][data-bf-part="root"]',
+    );
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="harness-profile-selector"]',
+    );
+    expect(selectorRoot?.dataset.bfPresentation).toBe('menu-item');
+    expect(trigger?.querySelector('.bitfun-harness-selector__trigger-chevron')).not.toBeNull();
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const menu = selectorRoot?.querySelector<HTMLElement>('.bitfun-harness-selector__menu');
+    expect(menu).not.toBeNull();
+    expect(menu?.dataset.bfPlacement).toBe('side');
+    expect(container.querySelector('[data-testid="parent-add-menu"]')?.contains(menu ?? null))
+      .toBe(true);
+
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(menu?.dataset.bfPage).toBe('agents');
+    expect(onSelectionComplete).not.toHaveBeenCalled();
+
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-agent-DeepResearch"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelectAgent).toHaveBeenCalledWith('DeepResearch');
+    expect(onSelectionComplete).toHaveBeenCalledTimes(1);
+    expect(selectorRoot?.querySelector('.bitfun-harness-selector__menu')).toBeNull();
   });
 
   it('offers three Harness gears, Creative, and the second-level Agents entry', async () => {
@@ -211,7 +263,6 @@ describe('HarnessProfileSelector', () => {
         <HarnessProfileSelector
           selectedProfile="other"
           selectedAgentId="DeepResearch"
-          directiveLabel="Multitask"
           otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
           onSelectProfile={vi.fn()}
           onSelectAgent={onSelectAgent}
@@ -220,7 +271,7 @@ describe('HarnessProfileSelector', () => {
     });
     expect(
       container.querySelector('[data-testid="harness-profile-selector"]')?.textContent,
-    ).toBe('Deep Research · Multitask');
+    ).toBe('Deep Research');
   });
 
   it('activates every implemented profile including Creative', async () => {
@@ -273,7 +324,6 @@ describe('HarnessProfileSelector', () => {
         <HarnessProfileSelector
           sessionStarted
           selectedProfile="balanced"
-          directiveLabel="Plan"
           otherAgents={[{ id: 'Plan', name: 'Plan' }]}
           onSelectProfile={onSelectProfile}
           onStartNewSession={onStartNewSession}
@@ -287,7 +337,7 @@ describe('HarnessProfileSelector', () => {
     expect(trigger?.dataset.harnessLocked).toBe('true');
     expect(trigger?.dataset.harnessFixed).toBe('true');
     expect(trigger?.disabled).toBe(false);
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name · Plan');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -300,7 +350,6 @@ describe('HarnessProfileSelector', () => {
       menu?.querySelector('[data-testid="harness-session-summary"]')?.textContent,
     ).toContain('chatInput.harness.profiles.balanced.name');
     expect(menu?.querySelector('.bitfun-harness-selector__session-scope')).toBeNull();
-    expect(menu?.textContent).toContain('chatInput.harness.nextMessageDirective');
     const startNewSession = menu?.querySelector<HTMLButtonElement>(
       '[data-testid="harness-start-new-session"]',
     );

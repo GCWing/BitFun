@@ -10,8 +10,8 @@
  * - src/mobile-web/dist missing → cargo check -p bitfun-desktop and
  *   cargo check --workspace fail with "resource path '../../mobile-web/dist'
  *   doesn't exist" in the bitfun-desktop build script
- * - OpenCode extension Host dist missing → CLI builds cannot bundle the
- *   Bun plugin Host resources
+ * - OpenCode extension Host dist missing → Desktop, CLI, and app-server
+ *   builds cannot bundle or launch the Bun plugin Host resources
  * - sherpa-onnx prebuilt libs missing → sherpa-onnx-sys build script attempts
  *   a network download from GitHub that fails on poor connectivity
  *
@@ -59,7 +59,7 @@ function runChecks(rootDir) {
     });
   }
 
-  // --- Check 3: OpenCode extension Host dist (CLI bundled resource) ---
+  // --- Check 3: OpenCode extension Host dist (product runtime resource) ---
   const pluginHostDist = join(
     rootDir,
     'src',
@@ -72,7 +72,7 @@ function runChecks(rootDir) {
     errors.push({
       name: 'OpenCode extension Host dist',
       message:
-        'src/apps/extension-host/dist is missing the Bun Host entry. CLI builds bundle this directory as the plugin Host resource.',
+        'src/apps/extension-host/dist is missing the Bun Host entry. Desktop, CLI, and app-server builds require this plugin Host runtime resource.',
       fix: ['pnpm', 'run', 'plugin-host:prepare'],
     });
   }

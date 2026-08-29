@@ -17,7 +17,8 @@ import {
   Terminal,
   Wrench,
 } from 'lucide-react';
-import { MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
+import { MarkdownRenderer, Tooltip } from '@/component-library';
+import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import {

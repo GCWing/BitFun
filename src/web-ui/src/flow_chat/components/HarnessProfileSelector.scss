@@ -47,9 +47,48 @@
 }
 
 .bitfun-harness-selector__trigger-value {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bitfun-harness-selector__trigger-chevron {
+  flex: none;
+  color: var(--bf-appearance-token-color-text-muted);
+}
+
+// Inside ChatInput's add menu the current Harness/main-Agent signature becomes
+// a normal disclosure row. Its secondary picker is portaled back into this
+// root so both menus share one outside-click boundary.
+.bitfun-harness-selector--menu-item {
+  width: 100%;
+
+  .bitfun-harness-selector__trigger {
+    width: 100%;
+    height: 32px;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 8px;
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-weight: 500;
+
+    &:hover,
+    &[data-bf-state~='open'] {
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+  }
+
+  .bitfun-harness-selector__menu {
+    position: absolute;
+    inset: auto auto -5px calc(100% + 7px);
+    z-index: tokens.$z-popover;
+    max-height: min(420px, calc(100vh - 16px));
+    overflow-y: auto;
+    visibility: visible;
+  }
 }
 
 // The execution gears grow from focus corners to a 2 x 2 plan and finally a
@@ -148,17 +187,6 @@
   min-width: 0;
   overflow: hidden;
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bitfun-harness-selector__session-directive {
-  grid-column: 1 / -1;
-  min-width: 0;
-  margin-top: 1px;
-  overflow: hidden;
-  color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$support-size;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -273,4 +301,13 @@
 .bitfun-harness-selector__agent-count {
   color: var(--bf-appearance-token-color-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 360px) {
+  .bitfun-harness-selector--menu-item .bitfun-harness-selector__menu {
+    inset-inline: 0;
+    bottom: -5px;
+    width: 100%;
+    min-width: 100%;
+  }
 }

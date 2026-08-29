@@ -1760,54 +1760,24 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
-    reason:
-      'agent-runtime must own portable hook registry and post-call routing decisions while concrete hook execution stays in the owning runtime',
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/kind.rs',
+    reason: 'agent-runtime must own portable hook kind contracts',
     patterns: [
-      {
-        regex: /\bpub enum RuntimeHookKind\b/,
-        message: 'missing runtime hook kind contract',
-      },
-      {
-        regex: /\bpub enum RuntimeHookErrorPolicy\b/,
-        message: 'missing runtime hook error policy contract',
-      },
-      {
-        regex: /\bpub struct RuntimeHookPlan\b/,
-        message: 'missing runtime hook plan contract',
-      },
-      {
-        regex: /\bpub struct RuntimeHookRegistry\b/,
-        message: 'missing runtime hook registry contract',
-      },
-      {
-        regex: /\btimeout_millis\b/,
-        message: 'missing runtime hook timeout contract',
-      },
-      {
-        regex: /\bDuplicateHookId\b/,
-        message: 'missing runtime hook duplicate-id guard',
-      },
-      {
-        regex: /\bEmptyHookId\b/,
-        message: 'missing runtime hook empty-id guard',
-      },
-      {
-        regex: /\bInvalidTimeoutMillis\b/,
-        message: 'missing runtime hook non-zero-timeout guard',
-      },
-      {
-        regex: /\bpub const fn successful_tool_post_call_hooks\b/,
-        message: 'missing successful tool post-call hook routing decision',
-      },
-      {
-        regex: /\bpub trait SuccessfulToolPostCallHookExecutor\b/,
-        message: 'missing successful tool post-call hook executor contract',
-      },
-      {
-        regex: /\bpub fn run_successful_tool_post_call_hooks\b/,
-        message: 'missing successful tool post-call hook executor runner',
-      },
+      { regex: /\bpub enum RuntimeHookKind\b/, message: 'missing runtime hook kind contract' },
+      { regex: /\bSuccessfulToolPostCall\b/, message: 'missing successful tool post-call hook kind' },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/native_hooks/registry.rs',
+    reason: 'agent-runtime must own portable hook registry and validation contracts',
+    patterns: [
+      { regex: /\bpub enum RuntimeHookErrorPolicy\b/, message: 'missing runtime hook error policy contract' },
+      { regex: /\bpub struct RuntimeHookPlan\b/, message: 'missing runtime hook plan contract' },
+      { regex: /\bpub struct RuntimeHookRegistry\b/, message: 'missing runtime hook registry contract' },
+      { regex: /\btimeout_millis\b/, message: 'missing runtime hook timeout contract' },
+      { regex: /\bDuplicateHookId\b/, message: 'missing runtime hook duplicate-id guard' },
+      { regex: /\bEmptyHookId\b/, message: 'missing runtime hook empty-id guard' },
+      { regex: /\bInvalidTimeoutMillis\b/, message: 'missing runtime hook non-zero-timeout guard' },
     ],
   },
   {
@@ -1816,11 +1786,11 @@ export const requiredContentRules = [
       'agent-runtime post-call hook owner must keep behavior-equivalence contracts for successful tool-call hook routing',
     patterns: [
       {
-        regex: /\bsuccessful_tool_call_routes_to_shared_context_measurement_hook\b/,
+        regex: /\bsuccessful_tool_call_uses_stable_builtin_registration_id\b/,
         message: 'missing successful tool post-call hook routing regression',
       },
       {
-        regex: /\bruntime_hook_registry_preserves_order_timeout_and_error_policy\b/,
+        regex: /\bruntime_hook_registry_preserves_source_order_timeout_and_error_policy\b/,
         message: 'missing runtime hook order/timeout/error-policy regression',
       },
       {
@@ -2702,14 +2672,7 @@ export const requiredContentRules = [
     reason:
       'core post-call hooks must delegate portable hook routing to agent-runtime while retaining concrete hook execution',
     patterns: [
-      {
-        regex: /\brun_successful_tool_post_call_hooks\b/,
-        message: 'missing post-call hook executor runner delegation',
-      },
-      {
-        regex: /\bSuccessfulToolPostCallHookExecutor\b/,
-        message: 'missing post-call hook executor implementation',
-      },
+      { regex: /\bdispatch_successful_tool_post_call\b/, message: 'missing post-call hook dispatch delegation' },
     ],
   },
   {
@@ -5283,6 +5246,8 @@ export const requiredContentRules = [
       { regex: /#\[cfg\(feature = "agent-api"\)\]\r?\npub use agent_api::\*;/, message: 'agent-api must gate its public exports' },
       { regex: /#\[cfg\(feature = "plugin-runtime"\)\]\r?\nmod plugin;/, message: 'plugin-runtime must gate its source module' },
       { regex: /#\[cfg\(feature = "plugin-runtime"\)\]\r?\npub use plugin::\{/, message: 'plugin-runtime must gate its public exports' },
+      { regex: /#\[cfg\(feature = "hook-function-runtime"\)\]\r?\nmod hook_function;/, message: 'hook-function-runtime must gate its source module' },
+      { regex: /#\[cfg\(feature = "hook-function-runtime"\)\]\r?\npub use hook_function::\*;/, message: 'hook-function-runtime must gate its public exports' },
       { regex: /#\[cfg\(feature = "product-search"\)\]\r?\nmod product_search;/, message: 'product-search must gate its source module' },
       { regex: /#\[cfg\(feature = "product-search"\)\]\r?\npub use product_search::ProductSearchPort;/, message: 'product-search must gate its public exports' },
       { regex: /#\[cfg\(feature = "script-tool-runtime"\)\]\r?\nmod script_tool;/, message: 'script-tool-runtime must gate its source module' },
@@ -7898,21 +7863,6 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/agents/definitions/modes/mod.rs',
-    reason:
-      'core agent mode definitions must continue exposing Multitask mode until an approved agent-runtime migration preserves mode registration semantics',
-    patterns: [
-      {
-        regex: /\bmod multitask\b/,
-        message: 'missing Multitask mode module',
-      },
-      {
-        regex: /\bpub use multitask::MultitaskMode\b/,
-        message: 'missing Multitask mode export',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/agentic/agents/definitions/subagents/mod.rs',
     reason:
       'core subagent definitions must continue exposing the built-in GeneralPurpose subagent until registry ownership migration has equivalence coverage',
@@ -7950,10 +7900,6 @@ export const requiredContentRules = [
       {
         regex: /\bbuiltin_agent_definition_specs\(\)/,
         message: 'missing builtin agent definition catalog owner',
-      },
-      {
-        regex: /builtin_agent_spec\(\s*"Multitask",\s*Mode,\s*"auto"/,
-        message: 'missing Multitask runtime default model mapping',
       },
       {
         regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"primary"/,
@@ -8453,23 +8399,31 @@ export const requiredContentRules = [
   {
     path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
     reason:
-      'web-ui file operation surface must continue owning snapshot-to-local diff fallback until product surface migration is reviewed',
+      'web-ui file operation surface must preserve snapshot-independent inline diffs after the design-system migration',
     patterns: [
       {
-        regex: /\bopenLocalDiff\b/,
-        message: 'missing local tool diff fallback',
+        regex: /\bInlineDiffPreview\b/,
+        message: 'missing snapshot-independent inline diff renderer',
       },
       {
-        regex: /snapshotAPI\.getOperationDiff/,
-        message: 'missing snapshot operation diff path',
+        regex: /previewVariant === 'completed-diff'/,
+        message: 'missing completed file-operation diff state',
       },
       {
-        regex: /Snapshot diff unavailable/,
-        message: 'missing snapshot-unavailable fallback diagnostic',
+        regex: /originalContent=\{oldStringContent\}/,
+        message: 'missing Edit original-content projection',
       },
       {
-        regex: /\blocalDiffContent\b/,
-        message: 'missing local diff content fallback state',
+        regex: /modifiedContent=\{newStringContent\}/,
+        message: 'missing Edit modified-content projection',
+      },
+      {
+        regex: /originalContent=""/,
+        message: 'missing Write empty-baseline projection',
+      },
+      {
+        regex: /modifiedContent=\{contentPreview\}/,
+        message: 'missing Write content projection',
       },
     ],
   },

@@ -801,6 +801,34 @@ body,
   background: transparent;
 }
 
+.component-library-section-heading {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+  align-items: end;
+  gap: 48px;
+  margin: 34px 0 18px;
+}
+
+.component-library-section-heading > div {
+  display: grid;
+  gap: 7px;
+}
+
+.component-library-section-heading h2 {
+  margin: 0;
+  color: var(--lab-text);
+  font-size: 22px;
+  letter-spacing: -0.025em;
+}
+
+.component-library-section-heading p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--lab-text-secondary);
+  font-size: var(--bf-font-size-small);
+  line-height: var(--bf-line-height-body);
+}
+
 .component-card {
   display: grid;
   grid-template-rows: auto 160px minmax(0, 1fr) auto;
@@ -3637,6 +3665,53 @@ input.lab-force-focus {
 
 .component-preview-matrix[data-component="select"] [data-bf-component="select"] {
   min-inline-size: 240px;
+}
+
+.flow-chat-state-list {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 24px 24px;
+}
+
+.flow-chat-state-list__item {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 20px 0 24px;
+  border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+}
+
+.flow-chat-state-list__item:last-child {
+  border-bottom: 0;
+}
+
+.flow-chat-state-list__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bf-space-4);
+}
+
+.flow-chat-state-list__heading strong {
+  color: var(--bf-color-content-primary);
+  font-size: var(--bf-font-size-small);
+}
+
+.flow-chat-state-list__heading code {
+  color: var(--bf-color-content-muted);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-caption);
+}
+
+.flow-chat-state-list__preview {
+  width: min(100%, 920px);
+  min-width: 0;
+}
+
+.flow-chat-state-list__preview[data-component-name="AskUser"] {
+  width: min(100%, 680px);
+  margin-inline: auto;
 }
 
 .component-preview-matrix[data-component="switch"] {

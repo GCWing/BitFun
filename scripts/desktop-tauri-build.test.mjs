@@ -33,6 +33,21 @@ test('Desktop DMG uses the branded installer layout', () => {
   });
 });
 
+test('Desktop builds prepare and bundle the OpenCode extension Host', () => {
+  const source = readFileSync(join(ROOT, 'scripts', 'desktop-tauri-build.mjs'), 'utf8');
+  assert.match(source, /preparePluginHost\(\)/);
+
+  for (const name of ['tauri.conf.json', 'tauri.dev.conf.json']) {
+    const config = JSON.parse(
+      readFileSync(join(ROOT, 'src', 'apps', 'desktop', name), 'utf8')
+    );
+    assert.equal(
+      config.bundle.resources['../extension-host/dist/extension-host.js'],
+      'resources/ext-host/extension-host.js'
+    );
+  }
+});
+
 test('macOS release signing covers the bundled flashgrep executable', () => {
   const fixture = join(tmpdir(), `bitfun-flashgrep-signing-${process.pid}-${Date.now()}`);
   const desktopDir = join(fixture, 'src', 'apps', 'desktop');

@@ -7,11 +7,11 @@ const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
   'claw',
   'creative',
   'minimal',
+  // Retired built-in modes that may still be advertised by an older peer.
   'multitask',
+  'plan',
   'ultra',
 ]);
-
-export type ChatInputDirectiveId = 'Plan' | 'Multitask';
 
 export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
 
@@ -264,30 +264,11 @@ export function resolveChatInputModePolicy(params: {
   };
 }
 
-export function isChatInputDirectiveModeId(
-  modeId: string | null | undefined,
-): modeId is ChatInputDirectiveId {
-  const normalized = normalizeModeLookupId(modeId);
-  return normalized === 'plan' || normalized === 'multitask';
-}
-
-export function canonicalChatInputDirectiveId(
-  modeId: string | null | undefined,
-): ChatInputDirectiveId | null {
-  switch (normalizeModeLookupId(modeId)) {
-    case 'plan':
-      return 'Plan';
-    case 'multitask':
-      return 'Multitask';
-    default:
-      return null;
-  }
-}
-
 /**
  * Main Agents are selected with the Harness control before the first Turn.
  * Standard, Minimal, and Ultra are already represented by Harness profiles;
- * Claw belongs to Assistant workspaces; Multitask is a per-task directive.
+ * Claw belongs to Assistant workspaces. Retired built-in modes stay filtered
+ * when an older peer still advertises them.
  */
 export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   availableModes: Iterable<TMode>,
@@ -295,13 +276,6 @@ export function resolveChatInputMainAgentModes<TMode extends { id: string }>(
   return Array.from(availableModes).filter(
     mode => !MAIN_AGENT_EXCLUDED_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
   );
-}
-
-/** Plan is intentionally dual-use: it is both a main Agent and a directive. */
-export function resolveChatInputDirectiveModes<TMode extends { id: string }>(
-  availableModes: Iterable<TMode>,
-): TMode[] {
-  return Array.from(availableModes).filter(mode => isChatInputDirectiveModeId(mode.id));
 }
 
 export function resolveChatInputSendAgentType(params: {
@@ -432,7 +406,8 @@ export function resolveAvailableChatInputMode(params: {
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
     normalizedUserDefaultModeId
-      && normalizeModeLookupId(normalizedUserDefaultModeId) !== 'multitask'
+      // Do not restore retired built-in Agents from older user config.
+      && !['multitask', 'plan'].includes(normalizeModeLookupId(normalizedUserDefaultModeId) ?? '')
       && availableModeIds.has(normalizedUserDefaultModeId)
       ? normalizedUserDefaultModeId
       : null;

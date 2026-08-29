@@ -32,5 +32,3 @@ export * from './ConfigPage';
 export * from './CubeLoading';
 export * from './DotMatrixLoader';
 export * from './TaskRunningIndicator';
-
-export * from './FlowChatCards';

@@ -316,6 +316,8 @@ function sameDispatchTargetIdentity(
   }
 }
 
+// Retired built-in ids remain readable for historical sessions and older peer
+// hosts; new-session selection filters them from the current Agent catalog.
 const VALID_AGENT_TYPES = new Set([
   'agentic',
   'Multitask',

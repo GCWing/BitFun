@@ -314,6 +314,12 @@ impl StartupPage {
         &self.agent_type
     }
 
+    pub(crate) fn selected_agent_route_key(&self) -> Option<String> {
+        self.selected_agent_mode()
+            .map(|mode| mode.route_key)
+            .filter(|route_key| !route_key.is_empty())
+    }
+
     /// Set a model ID override (from `--model` flag) for display and session
     /// composition. The ID is validated when applied to the session; an invalid
     /// ID logs a warning and falls back to the default model.
@@ -2016,6 +2022,7 @@ impl StartupPage {
             .into_iter()
             .map(|m| AgentItem {
                 id: m.id,
+                route_key: (!m.route_key.is_empty()).then_some(m.route_key),
                 description: m.description,
             })
             .collect();
@@ -2728,12 +2735,14 @@ mod logo_contract_tests {
     fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
         let local = TuiAgentMode {
             id: "agentic".to_string(),
+            route_key: "agentic".to_string(),
             description: String::new(),
             model_id: None,
             is_external: false,
         };
         let external = TuiAgentMode {
             id: "reviewer".to_string(),
+            route_key: "external::reviewer".to_string(),
             description: String::new(),
             model_id: None,
             is_external: true,

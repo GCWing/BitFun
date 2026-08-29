@@ -225,6 +225,7 @@ export default function deviceDirectoryUnitTest() {
       viewModel.syncDevices([
         { deviceId: 'desk-studio', deviceName: 'Studio', online: true }
       ]);
+      state.select('desk-studio');
       expect(state.selectedDeviceId).assertEqual('desk-studio');
       viewModel.syncDevices([
         { deviceId: 'desk-studio', deviceName: '', online: false }
@@ -248,7 +249,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-other', deviceName: 'Other', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertTrue();
-      expect(state.selectedDeviceId).assertEqual('desk-live');
+      expect(state.selectedDeviceId).assertEqual('');
       // The override must not outlive the link it is based on, or a device that
       // really did go away keeps a lit row forever.
       expect(state.find('desk-other')?.online).assertFalse();
@@ -257,7 +258,7 @@ export default function deviceDirectoryUnitTest() {
         { deviceId: 'desk-live', deviceName: 'Studio', online: false }
       ]);
       expect(state.find('desk-live')?.online).assertFalse();
-      expect(state.selectedDeviceId).assertEqual('desk-live');
+      expect(state.selectedDeviceId).assertEqual('');
     });
 
     it('keeps an explicit device selection across syncDevices', 0, async () => {
@@ -279,7 +280,7 @@ export default function deviceDirectoryUnitTest() {
       ]);
       expect(state.workspaceExpanded('desk-other', '/workspace/project')).assertTrue();
       expect(state.workspaceStatus('desk-other', '/workspace/project/')).assertEqual('loading');
-      expect(state.selectedDeviceId).assertEqual('desk-active');
+      expect(state.selectedDeviceId).assertEqual('');
       await viewModel.selectDevice('desk-other');
       expect(state.selectedDeviceId).assertEqual('desk-other');
       viewModel.syncDevices([
