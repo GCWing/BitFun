@@ -17,6 +17,10 @@ const deviceStatusControlSource = readFileSync(
   new URL('../NavPanel/components/DeviceStatusControl.tsx', import.meta.url),
   'utf8',
 );
+const navPanelStyleSource = readFileSync(
+  new URL('../NavPanel/NavPanel.scss', import.meta.url),
+  'utf8',
+);
 const accountPanelSource = readFileSync(
   new URL('./AccountPanel.tsx', import.meta.url),
   'utf8',
@@ -101,6 +105,32 @@ describe('Remote Connect safety contracts', () => {
   });
 
   it('uses the real monochrome app marks for every chat provider', () => {
+    const overviewBrandStyle = dialogStyleSource.slice(
+      dialogStyleSource.indexOf('.bitfun-remote-connect__chat-brand-item'),
+      dialogStyleSource.indexOf(
+        "[data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='account']",
+      ),
+    );
+    const identityBrandStyle = dialogStyleSource.slice(
+      dialogStyleSource.indexOf('.bitfun-remote-connect__bot-identity-icon'),
+      dialogStyleSource.indexOf('.bitfun-remote-connect__bot-identity-title'),
+    );
+    const connectedBrandStyle = dialogStyleSource.slice(
+      dialogStyleSource.indexOf('.bitfun-remote-connect__connected-app-icon'),
+      dialogStyleSource.indexOf('.bitfun-remote-connect__connected-app-copy'),
+    );
+    const footerMessageBrandStyle = navPanelStyleSource.slice(
+      navPanelStyleSource.indexOf("&[data-bf-device-kind='message-app'] {"),
+      navPanelStyleSource.indexOf('.bitfun-nav-panel__footer-device-status-attached-count'),
+    );
+    const overviewMessageBrandStart = navPanelStyleSource.indexOf(
+      "&[data-bf-device-kind='message-app'] .bitfun-device-overview__device-icon {",
+    );
+    const overviewMessageBrandStyle = navPanelStyleSource.slice(
+      overviewMessageBrandStart,
+      navPanelStyleSource.indexOf('  strong {', overviewMessageBrandStart),
+    );
+
     expect(dialogSource).toContain('<ChatAppBrandIcon app={botTab} size={28} />');
     expect(dialogSource).toContain('bitfun-remote-connect__chat-brand-group');
     expect(dialogSource).toContain('<ChatAppBrandIcon app={brand} size={15} />');
@@ -110,6 +140,15 @@ describe('Remote Connect safety contracts', () => {
     expect(chatAppBrandIconSource.match(/fill="currentColor"/g)).toHaveLength(5);
     expect(deviceStatusControlSource).toContain('chatAppBrandFromIdentity(identity)');
     expect(deviceStatusControlSource).toContain('<ChatAppBrandIcon app={chatApp} size={size} />');
+    expect(overviewBrandStyle).toContain('border: 0');
+    expect(overviewBrandStyle).toContain('background: transparent');
+    expect(identityBrandStyle).not.toContain('background:');
+    expect(connectedBrandStyle).not.toContain('background:');
+    expect(footerMessageBrandStyle).toContain('border: 0');
+    expect(footerMessageBrandStyle).toContain('background: transparent');
+    expect(footerMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
+    expect(overviewMessageBrandStyle).toContain('background: transparent');
+    expect(overviewMessageBrandStyle).toContain('--bf-appearance-token-color-text-primary');
     expect(dialogSource).not.toContain('<Send size={28} />');
     expect(dialogSource).not.toContain('<MessageSquareText size={28} />');
     expect(dialogSource).not.toContain('<MessagesSquare size={28} />');

@@ -7,7 +7,7 @@ interface ChatAppBrandIconProps {
 
 /**
  * Monochrome contours of the actual chat-app marks. The SVGs intentionally
- * inherit color from the surrounding identity badge so they work in every
+ * inherit color from the surrounding UI so they work in every
  * theme without replacing the recognizable brand silhouettes.
  * References: telegram.org/tour/screenshots, feishu.cn, and the CC0
  * simple-icons WeChat/Telegram vectors.

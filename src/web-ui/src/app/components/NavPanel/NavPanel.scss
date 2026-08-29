@@ -1638,10 +1638,9 @@ $_section-header-height: 22px;
   line-height: 1.25;
 }
 
-// Attached remote parties are shown as one badge per device kind in the
-// connection-live green the workspace list already teaches in this panel. The
-// number lives inside a badge, so twenty attached hosts occupy the same width
-// as one and no state sentence sits in permanent navigation chrome.
+// Attached remote parties are shown once per device kind. Message-app marks
+// stay unframed and inherit the theme foreground; connection state is already
+// communicated by the device overview rather than by recoloring the brand.
 .bitfun-nav-panel__footer-device-status-attached {
   display: flex;
   flex-shrink: 0;
@@ -1665,17 +1664,9 @@ $_section-header-height: 22px;
   line-height: 1;
 
   &[data-bf-device-kind='message-app'] {
-    border-color: color-mix(
-      in srgb,
-      var(--bf-appearance-token-color-success) 24%,
-      var(--bf-appearance-token-border-subtle)
-    );
-    background: color-mix(
-      in srgb,
-      var(--bf-appearance-token-color-success) 9%,
-      var(--bf-appearance-token-element-bg-subtle)
-    );
-    color: var(--bf-appearance-token-color-success);
+    border: 0;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -2238,12 +2229,8 @@ $_section-header-height: 22px;
   }
 
   &[data-bf-device-kind='message-app'] .bitfun-device-overview__device-icon {
-    background: color-mix(
-      in srgb,
-      var(--bf-appearance-token-color-success) 10%,
-      var(--bf-appearance-token-element-bg-subtle)
-    );
-    color: var(--bf-appearance-token-color-success);
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   strong {
