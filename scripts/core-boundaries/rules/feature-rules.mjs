@@ -449,7 +449,7 @@ export const capabilityContractDependencyRules = [
         capabilityEdge(['agent-api', 'permission', 'workspace-ports']),
       ])],
       ['bitfun-opencode-adapter', capabilityConsumer([
-        capabilityEdge(['plugin-runtime']),
+        capabilityEdge(['hook-function-runtime', 'plugin-runtime']),
         capabilityEdge(['script-tool-runtime'], { kind: 'dev' }),
       ])],
       ['bitfun-opencode-plugin-host', capabilityConsumer([

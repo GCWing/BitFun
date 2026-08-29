@@ -531,10 +531,10 @@ pub async fn ensure_configured_plugin_instance(
             })
     };
     if let Some(instance) = reusable_instance {
-        if crate::plugin_config_projection::active_generation_key(&canonical_directory).as_deref()
+        if crate::plugin_config_publication::active_generation_key(&canonical_directory).as_deref()
             != Some(instance.generation_key.as_str())
         {
-            let projection = crate::plugin_config_projection::prepare(
+            let publication = crate::plugin_config_publication::prepare(
                 &canonical_directory,
                 &instance.generation_key,
                 &initial_config,
@@ -550,7 +550,7 @@ pub async fn ensure_configured_plugin_instance(
                 &comparable_directory,
                 instance.hook_commit_token.as_ref(),
             );
-            projection.commit();
+            publication.commit();
         }
         log::debug!(
             "Configured plugin host instance reused: generation={}, instance_id={}",
@@ -704,13 +704,13 @@ pub async fn ensure_configured_plugin_instance(
             return Err(error);
         }
     };
-    let config_projection = match crate::plugin_config_projection::prepare(
+    let config_publication = match crate::plugin_config_publication::prepare(
         &canonical_directory,
         &generation_key,
         &initial_config,
         &registration_batch,
     ) {
-        Ok(projection) => projection,
+        Ok(publication) => publication,
         Err(error) => {
             discard_opening_plugin_instance(
                 &client,
@@ -723,7 +723,7 @@ pub async fn ensure_configured_plugin_instance(
             return Err(error);
         }
     };
-    let plugin_agent_runtime_keys = config_projection.agent_runtime_keys();
+    let plugin_agent_runtime_keys = config_publication.agent_runtime_keys();
     log::info!(
         "Configured plugin host instance prepared: generation={}, instance_id={}, plugin_count={}",
         client.generation(),
@@ -765,7 +765,7 @@ pub async fn ensure_configured_plugin_instance(
         &revision,
         &config_fingerprint,
         &registration_batch,
-        &config_projection,
+        &config_publication,
     )
     .await
     {
@@ -838,7 +838,7 @@ pub async fn ensure_configured_plugin_instance(
             &comparable_directory,
             hook_commit_token.as_ref(),
         );
-        config_projection.commit();
+        config_publication.commit();
     }
     if !retire_superseded_plugin_instances(
         &client,
@@ -937,7 +937,7 @@ async fn withdraw_configured_plugin_workspace(directory: &Path) {
 async fn withdraw_configured_plugin_workspace_locked(canonical: &Path, workspace_scope: &str) {
     let registry = crate::native_hooks::plugin_hook_registry(&workspace_scope);
     crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
-    crate::plugin_config_projection::release_workspace(canonical);
+    crate::plugin_config_publication::release_workspace(canonical);
     let Some(instances) = PLUGIN_HOST_INSTANCES.get() else {
         crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
         return;
@@ -1038,10 +1038,10 @@ async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_gene
             &instance.generation_key,
         )
         .await;
-        if crate::plugin_config_projection::active_generation_key(&instance.directory).as_deref()
+        if crate::plugin_config_publication::active_generation_key(&instance.directory).as_deref()
             == Some(instance.generation_key.as_str())
         {
-            crate::plugin_config_projection::release_workspace(&instance.directory);
+            crate::plugin_config_publication::release_workspace(&instance.directory);
         }
         if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
             bridge.cancel_instance_streams(&instance.instance_id).await;
@@ -1061,7 +1061,7 @@ async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_gene
     });
     if !has_replacement {
         crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
-        crate::plugin_config_projection::release_workspace(&canonical);
+        crate::plugin_config_publication::release_workspace(&canonical);
         crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
     }
 }
@@ -1205,7 +1205,7 @@ fn schedule_plugin_instance_retirement(
                 }
                 instance.clone()
             };
-            if crate::plugin_config_projection::active_generation_key(&snapshot.directory)
+            if crate::plugin_config_publication::active_generation_key(&snapshot.directory)
                 .as_deref()
                 == Some(snapshot.generation_key.as_str())
             {
@@ -1278,7 +1278,7 @@ async fn retire_plugin_instance(
     };
     close_plugin_host_ptys(&instance.instance_id).await;
     if closed {
-        crate::plugin_config_projection::release_workspace_generation(
+        crate::plugin_config_publication::release_workspace_generation(
             &instance.directory,
             &instance.generation_key,
         );
@@ -1702,7 +1702,7 @@ pub async fn shutdown_configured_plugin_host(
                 &instance.generation_key,
             )
             .await;
-            crate::plugin_config_projection::release_workspace(&instance.directory);
+            crate::plugin_config_publication::release_workspace(&instance.directory);
         }
         let workspaces = instances
             .values()
@@ -1745,7 +1745,7 @@ async fn register_plugin_tools(
     revision: &str,
     config_fingerprint: &str,
     registration_batch: &HookFunctionRegistrationBatch,
-    projection: &crate::plugin_config_projection::PluginConfigProjectionPlan,
+    projection: &crate::plugin_config_publication::PluginConfigPublicationPlan,
 ) -> crate::BitFunResult<Vec<String>> {
     let tools = &registration_batch.tools;
     if tools.is_empty() {

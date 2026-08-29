@@ -2,8 +2,9 @@
 
 # OpenCode Adapter
 
-当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览，以及 Command、standalone Tool 和 Subagent
-能力专属 provider 契约的 OpenCode 实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。
+当前 crate 负责现有受管包路径使用的 P0 OpenCode 静态来源预览、受管 Plugin Host Config Hook 结果的类型化
+Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Subagent 能力专属 provider 契约的 OpenCode
+实现。它保留 OpenCode 来源发现、优先级、格式、参数展开和版本化兼容语义。
 共享来源目录、生命周期协调、
 文件观察实现、产品策略、界面、凭据、worker 监督和最终结果写入均由其他 owner 负责。
 
@@ -21,7 +22,8 @@
   物理健康按实际进程分组，不默认按全局或 workspace 建键。跨项目本身
   不重复询问，只有运行条件、凭据或能力扩大时确认。
 - `ExternalSourceControlPlane` 负责候选版本，并通过现有来源协调模块替换 provider；本 adapter 通过窄 provider 契约提供 OpenCode 限定的来源
-  身份/顺序和观察根，可复用文件观察服务只提供变化事实。配置归属模块提供规范化配置快照，`ScriptToolRuntime`
+  身份/顺序和观察根，可复用文件观察服务只提供变化事实。本 crate 提供规范化配置快照和 Config contributor
+  类型化投影，Core 保留逻辑 workspace generation 与能力原子发布；`opencode-plugin-host` 负责 Host wire/连接，`ScriptToolRuntime`
   所在的 services 实现拥有依赖、worker、进程树和物理健康；`PluginRuntimeClient` 当前只拥有请求可靠性、诊断和
   故障诊断，并消费既有归属模块提供的生命周期事实；贡献注册仍由对应能力归属模块提交。
 - 第三方模块 import 前必须依据来源、插件身份、实际执行域/用户、产品/组织策略上限、凭据范围和环境范围重新计算
@@ -35,8 +37,10 @@
 
 - 依赖 `bitfun-runtime-ports` 等稳定接口和 `PluginRuntimeAdapter` 边界 trait，不依赖
   `bitfun-core`、app crate、Tauri API、产品界面或具体服务管理器。
-- OpenCode 配置 JSON、来源顺序、加载器兼容和参数展开保留在本 crate 内。跨 crate 输出使用类型化来源快照、
-  adapter 绑定和 `PluginRuntimeClient` DTO，不得把 OpenCode 原始 JSON 或源码语法暴露为产品接口。
+- OpenCode 配置 JSON、来源顺序、加载器兼容、参数展开和受管 Plugin Host Config 贡献归属保留在本 crate 内。
+  跨 crate 输出使用类型化来源快照、Agent/权限/Plugin Tool/Skill 投影、adapter 绑定和 `PluginRuntimeClient` DTO，
+  不得把 OpenCode 原始 JSON 或源码语法暴露为产品接口。Config 投影不得生成 Agent runtime key、选择原生 Tool
+  基线、修改产品 registry 或扩成通用 Config 平台。
 - 当前源码探测只识别测试覆盖的声明式语法子集，不是通用 JS/TS 解析器；没有可识别入口的包和已识别但不支持的 hook
   必须返回诊断，其他语法不属于当前兼容范围。
 - 未支持的 OpenCode 能力必须显式返回类型化诊断或不支持状态，不得静默忽略。
@@ -44,8 +48,9 @@
   OpenCode JSON 访问，也不得只为目标设计完整性增加 API。
 - 经评审的产品组装根只选择并构造已编译的 OpenCode adapter/provider，再注入 `PluginRuntimeClient`；它不发现
   动态来源、不准备依赖，也不 import 插件模块。
-- Product Assembly 只允许从经过评审的组装模块（如 `bitfun-core/plugin_runtime` 或
-  `bitfun-core/external_sources`）消费本 crate；增加其他消费方时必须同步边界脚本和聚焦组装路径测试。
+- Product Assembly 只允许从经过评审的组装模块（如 `bitfun-core/plugin_runtime`、
+  `bitfun-core/external_sources` 或 `bitfun-core/plugin_config_publication`）消费本 crate；增加其他消费方时必须同步
+  边界脚本和聚焦组装路径测试。
 - 本 crate 不得依赖 Codex、Claude Code 或其他生态 adapter。新生态是由 Product Assembly 注册的同级 adapter，
   不是本 adapter 的模式。
 - 生产 crate 不得直接依赖 `bitfun_opencode_adapter` 内部类型。未支持能力必须诊断化，
@@ -59,5 +64,6 @@
 - `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
 - `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
 - `cargo test -p bitfun-opencode-adapter --lib p0_c2_fixture`
+- `cargo test -p bitfun-opencode-adapter --lib plugin_config_projection`
 - `cargo test -p bitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

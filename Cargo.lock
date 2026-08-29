@@ -1277,6 +1277,7 @@ dependencies = [
  "dunce",
  "globset",
  "hex",
+ "log",
  "oxc",
  "regex",
  "serde",
