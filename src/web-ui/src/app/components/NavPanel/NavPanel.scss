@@ -1646,16 +1646,37 @@ $_section-header-height: 22px;
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 6px;
-  margin-left: 2px;
-  color: var(--bf-appearance-token-color-success);
+  gap: 4px;
+  margin-left: 1px;
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .bitfun-nav-panel__footer-device-status-attached-group {
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 1px;
+  box-sizing: border-box;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-sm;
+  background: var(--bf-appearance-token-element-bg-subtle);
   line-height: 1;
+
+  &[data-bf-device-kind='message-app'] {
+    border-color: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-success) 24%,
+      var(--bf-appearance-token-border-subtle)
+    );
+    background: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-success) 9%,
+      var(--bf-appearance-token-element-bg-subtle)
+    );
+    color: var(--bf-appearance-token-color-success);
+  }
 }
 
 .bitfun-nav-panel__footer-device-status-attached-count {
@@ -2134,15 +2155,19 @@ $_section-header-height: 22px;
 
 // Device overview v2: separate the device roles from the connection service.
 .bitfun-device-overview {
-  width: min(344px, calc(100vw - 16px));
+  width: min(336px, calc(100vw - 16px));
 }
 
 .bitfun-device-overview__header {
-  min-height: 28px;
+  min-height: 24px;
+  padding: 1px 4px 2px;
 
   .bitfun-device-overview__title {
     overflow: hidden;
-    text-align: center;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 600;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2155,9 +2180,11 @@ $_section-header-height: 22px;
 .bitfun-device-overview__local-device {
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 32px;
-  padding: 2px 4px;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 6px;
+  border-radius: $size-radius-sm;
+  background: var(--bf-appearance-token-element-bg-subtle);
 
   svg {
     flex-shrink: 0;
@@ -2176,14 +2203,14 @@ $_section-header-height: 22px;
 }
 
 .bitfun-device-overview__device-group {
-  margin-top: 18px;
+  margin-top: 16px;
 
   &.is-primary {
     margin-top: 2px;
   }
 
   h3 {
-    margin: 0 4px 7px;
+    margin: 0 6px 7px;
     color: var(--bf-appearance-token-color-text-muted);
     font-size: 10px;
     font-weight: 600;
@@ -2194,19 +2221,29 @@ $_section-header-height: 22px;
 .bitfun-device-overview__device-rows {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .bitfun-device-overview__device-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 32px;
-  padding: 2px 4px;
+  min-height: 42px;
+  padding: 4px 6px;
+  border-radius: $size-radius-sm;
 
-  svg {
-    color: var(--bf-appearance-token-color-text-primary);
+  .is-primary & {
+    background: var(--bf-appearance-token-element-bg-subtle);
+  }
+
+  &[data-bf-device-kind='message-app'] .bitfun-device-overview__device-icon {
+    background: color-mix(
+      in srgb,
+      var(--bf-appearance-token-color-success) 10%,
+      var(--bf-appearance-token-element-bg-subtle)
+    );
+    color: var(--bf-appearance-token-color-success);
   }
 
   strong {
@@ -2241,6 +2278,22 @@ $_section-header-height: 22px;
       background: var(--bf-appearance-token-color-success);
       vertical-align: 1px;
     }
+  }
+}
+
+.bitfun-device-overview__device-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: $size-radius-sm;
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-primary);
+
+  svg {
+    flex-shrink: 0;
   }
 }
 
@@ -2281,7 +2334,13 @@ $_section-header-height: 22px;
 }
 
 .bitfun-device-overview__actions {
-  padding: 0 4px;
+  margin-top: 2px;
+  padding: 12px 4px 0;
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+
+  > [data-bf-component='button'] {
+    min-height: 34px;
+  }
 }
 
 .bitfun-nav-panel__remote-disclaimer {

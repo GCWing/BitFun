@@ -120,7 +120,7 @@ describe('ConfigPageLayout', () => {
     expect(row?.querySelector('.bitfun-config-page-row__control')).toBeNull();
   });
 
-  it('preserves design-system component ownership while forwarding feature-owned parts', () => {
+  it('forwards feature-owned layout contracts while preserving nested design-system ownership', () => {
     act(() => {
       root.render(
         <ConfigPageLayout
@@ -150,8 +150,8 @@ describe('ConfigPageLayout', () => {
     const contentElement = container.querySelector('[data-testid="feature-content"]');
     const sectionElement = container.querySelector('[data-testid="feature-section"]');
 
-    expect(rootElement?.getAttribute('data-bf-component')).toBe('scroll-area');
-    expect(rootElement?.getAttribute('data-bf-part')).toBe('viewport');
+    expect(rootElement?.getAttribute('data-bf-component')).toBe('model-settings');
+    expect(rootElement?.getAttribute('data-bf-part')).toBe('root');
     expect(contentElement?.getAttribute('data-bf-component')).toBe('model-settings');
     expect(contentElement?.getAttribute('data-bf-part')).toBe('providerSelection');
     expect(sectionElement?.getAttribute('data-bf-component')).toBe('form-section');

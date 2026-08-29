@@ -13,6 +13,10 @@ const chatAppBrandIconSource = readFileSync(
   new URL('./ChatAppBrandIcon.tsx', import.meta.url),
   'utf8',
 );
+const deviceStatusControlSource = readFileSync(
+  new URL('../NavPanel/components/DeviceStatusControl.tsx', import.meta.url),
+  'utf8',
+);
 const accountPanelSource = readFileSync(
   new URL('./AccountPanel.tsx', import.meta.url),
   'utf8',
@@ -98,10 +102,14 @@ describe('Remote Connect safety contracts', () => {
 
   it('uses the real monochrome app marks for every chat provider', () => {
     expect(dialogSource).toContain('<ChatAppBrandIcon app={botTab} size={28} />');
+    expect(dialogSource).toContain('bitfun-remote-connect__chat-brand-group');
+    expect(dialogSource).toContain('<ChatAppBrandIcon app={brand} size={15} />');
     expect(chatAppBrandIconSource).toContain("app === 'telegram'");
     expect(chatAppBrandIconSource).toContain("app === 'feishu'");
     expect(chatAppBrandIconSource.match(/viewBox="0 0 24 24"/g)).toHaveLength(3);
     expect(chatAppBrandIconSource.match(/fill="currentColor"/g)).toHaveLength(5);
+    expect(deviceStatusControlSource).toContain('chatAppBrandFromIdentity(identity)');
+    expect(deviceStatusControlSource).toContain('<ChatAppBrandIcon app={chatApp} size={size} />');
     expect(dialogSource).not.toContain('<Send size={28} />');
     expect(dialogSource).not.toContain('<MessageSquareText size={28} />');
     expect(dialogSource).not.toContain('<MessagesSquare size={28} />');
