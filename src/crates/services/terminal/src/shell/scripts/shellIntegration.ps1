@@ -175,7 +175,7 @@ if (Get-Module -Name PSReadLine) {
 		[Console]::Write("$([char]0x1b)]633;P;ContinuationPrompt=$(__Terminal-Escape-Value $Global:__TerminalState.ContinuationPrompt)`a")
 	}
 
-	# For programmatic terminals (bash_tool), disable PSReadLine inline
+	# For programmatic terminal sessions, disable PSReadLine inline
 	# prediction to prevent ConPTY rendering interference. ConPTY's async
 	# renderer can flush prediction rendering (cursor repositioning, partial
 	# text fragments) AFTER the 633;C marker, polluting captured output.
@@ -183,4 +183,3 @@ if (Get-Module -Name PSReadLine) {
 		try { Set-PSReadLineOption -PredictionSource None } catch {}
 	}
 }
-

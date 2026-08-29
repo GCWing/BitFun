@@ -197,7 +197,7 @@ mod tests {
     fn progress() -> ToolExecutionProgressInfo {
         ToolExecutionProgressInfo {
             tool_use_id: "tool-1".to_string(),
-            tool_name: "Bash".to_string(),
+            tool_name: "ExecCommand".to_string(),
             progress_message: "running".to_string(),
             percentage: Some(50.0),
             timestamp: 1,

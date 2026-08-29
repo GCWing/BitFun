@@ -8,7 +8,6 @@ pub mod analyze_image_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod appearance_publish_tool;
 pub mod ask_user_question_tool;
-pub mod bash_tool;
 pub mod bitfun_control_tool;
 #[cfg(feature = "tools-canvas")]
 pub mod canvas_tools;
@@ -37,8 +36,6 @@ pub mod generative_ui_tool;
 #[cfg(feature = "tools-git")]
 pub mod get_file_diff_tool;
 pub mod get_time_tool;
-#[cfg(feature = "tools-git")]
-pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
 pub mod list_models_tool;
@@ -67,7 +64,6 @@ pub mod session_message_tool;
 pub mod skill_tool;
 pub mod skills;
 pub mod task;
-pub mod terminal_control_tool;
 pub mod thread_goal_tools;
 pub mod todo_write_tool;
 pub mod util;
@@ -87,7 +83,6 @@ pub use analyze_image_tool::AnalyzeImageTool;
 #[cfg(feature = "tools-miniapp")]
 pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
-pub use bash_tool::BashTool;
 pub use bitfun_control_tool::BitFunControlTool;
 #[cfg(feature = "tools-canvas")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
@@ -110,8 +105,6 @@ pub use generative_ui_tool::GenerativeUITool;
 #[cfg(feature = "tools-git")]
 pub use get_file_diff_tool::GetFileDiffTool;
 pub use get_time_tool::GetTimeTool;
-#[cfg(feature = "tools-git")]
-pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
 pub use list_models_tool::ListModelsTool;
@@ -143,7 +136,6 @@ pub use skill_tool::SkillTool;
 pub use task::{
     AgentInterruptTool, AgentSendInputTool, AgentSpawnTool, LaunchReviewAgentTool, TaskTool,
 };
-pub use terminal_control_tool::TerminalControlTool;
 pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
 #[cfg(feature = "tools-image-analysis")]

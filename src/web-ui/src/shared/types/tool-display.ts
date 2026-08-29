@@ -49,15 +49,6 @@ export interface ToolDisplayComponentProps {
   width?: number | string;
 }
 
-export interface BashToolResult {
-  stdout: string;
-  stdoutLines: number;
-  stderr: string;
-  stderrLines: number;
-  interrupted: boolean;
-  exitCode?: number;
-}
-
 export interface FileToolResult {
   content?: string;
   filePath: string;

@@ -341,7 +341,7 @@ await using client = await AgentClient.start({ cwd });
 // 常见的一次 Query；返回可迭代、可取消、可关闭的句柄。
 await using query = await client.query({
   prompt: "Find and fix the failing test",
-  allowedTools: ["Read", "Edit", "Bash"],
+  allowedTools: ["Read", "Edit", "ExecCommand"],
 });
 for await (const message of query) {
   // Message / Event / Result

@@ -100,7 +100,7 @@
     },
     {
       "key": "terminal",
-      "owner": "src/web-ui/src/tools/terminal; src/web-ui/src/flow_chat/tool-cards/TerminalToolCard",
+      "owner": "src/web-ui/src/tools/terminal; src/web-ui/src/app/components/panels/TerminalEditModal",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],

@@ -634,7 +634,7 @@ If a suitable BitFun outside-voice or review sub-agent is available, use AskUser
 
 If user chooses A, launch both voices simultaneously:
 
-1. **outside-voice sub-agent** (via Bash, `model_reasoning_effort="medium"`):
+1. **outside-voice sub-agent** (via ExecCommand, `model_reasoning_effort="medium"`):
 ```bash
 TMPERR_SKETCH=$(mktemp /tmp/codex-sketch-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }

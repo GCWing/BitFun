@@ -487,11 +487,11 @@ mod tests {
             tool_name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
             tool_call: ToolCallData {
                 id: "call_1".to_string(),
-                input: json!({ "tool_name": "Git" }),
+                input: json!({ "tool_name": "Worktree" }),
             },
             tool_result: Some(ToolResultData {
                 result: json!({
-                    "name": "Git",
+                    "name": "Worktree",
                     "description": "full schema definition",
                     "input_schema": {
                         "type": "object",

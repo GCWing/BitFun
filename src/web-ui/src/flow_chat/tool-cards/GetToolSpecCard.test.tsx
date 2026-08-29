@@ -42,13 +42,13 @@ function buildDetailItem(): FlowToolItem {
     toolCall: {
       id: 'call-spec-1',
       input: {
-        tool_name: 'Git',
+        tool_name: 'Worktree',
       },
     },
     toolResult: {
       success: true,
       result: {
-        tool_name: 'Git',
+        tool_name: 'Worktree',
         description: 'Inspect and operate on the Git repository.',
         input_schema: {
           type: 'object',
@@ -128,7 +128,7 @@ describe('GetToolSpecCard', () => {
     });
 
     expect(container.textContent).toContain('Tool Spec');
-    expect(container.textContent).toContain('Loaded spec for Git');
+    expect(container.textContent).toContain('Loaded spec for Worktree');
     expect(container.textContent).not.toContain('Inspect and operate on the Git repository.');
     expect(container.textContent).not.toContain('"command"');
 

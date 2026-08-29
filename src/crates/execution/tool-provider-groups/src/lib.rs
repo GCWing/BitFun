@@ -91,7 +91,7 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" => {
             Some(ToolPackFeatureGroup::Basic)
         }
-        "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
+        "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
         "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
             Some(ToolPackFeatureGroup::Mcp)
         }
@@ -222,7 +222,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.git",
         feature_groups: CORE_GIT_FEATURE_GROUPS,
-        tool_names: &["GetFileDiff", "Git", "Worktree", "ReviewPlatform"],
+        tool_names: &["GetFileDiff", "Worktree", "ReviewPlatform"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.web",
@@ -545,7 +545,6 @@ mod tests {
                 "Cron",
                 "PortForward",
                 "GetFileDiff",
-                "Git",
                 "Worktree",
                 "ReviewPlatform",
                 "WebSearch",

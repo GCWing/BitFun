@@ -6,13 +6,13 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 171,
+      "maxTotal": 168,
       "bySurface": {
         "core": 15,
         "installer": 0,
         "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 156
+        "web-ui": 153
       },
       "bySharedKey": {
         "agents.claw": 3,
@@ -32,7 +32,7 @@
         "product.name": 0,
         "statuses.cancelled": 27,
         "statuses.done": 24,
-        "statuses.failed": 42,
+        "statuses.failed": 39,
         "statuses.loading": 5,
         "statuses.running": 10,
         "tools.edit": 33,

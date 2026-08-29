@@ -262,7 +262,7 @@ mod tests {
             workspace_root: Some("/home/user/project".to_string()),
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string()]),
-                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_names: BTreeSet::from(["ExecCommand".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
                 miniapp_context_scope: None,

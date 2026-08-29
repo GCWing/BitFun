@@ -136,7 +136,6 @@ export const COLOR_DOMAIN_RULES = [
     label: 'Terminal',
     pathParts: [
       'tools/terminal',
-      'flow_chat/tool-cards/TerminalToolCard',
       'app/components/panels/TerminalEditModal',
     ],
   },
@@ -232,7 +231,7 @@ export const COLOR_DOMAIN_CONTRACTS = [
   },
   {
     key: 'terminal',
-    owner: 'src/web-ui/src/tools/terminal; src/web-ui/src/flow_chat/tool-cards/TerminalToolCard',
+    owner: 'src/web-ui/src/tools/terminal; src/web-ui/src/app/components/panels/TerminalEditModal',
     reason: 'Terminal colors include ANSI and terminal surface roles that must stay compatible with shell output semantics.',
     mergePolicy: 'Keep ANSI roles independent even when values resemble app semantic colors.',
   },

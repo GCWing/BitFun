@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use tauri::State;
 
 use bitfun_agent_runtime::sdk::AgentUserAnswersRequest;
+use bitfun_core::agentic::tools::product_runtime::{build_tool_info, ToolInfoDto};
 use bitfun_core::agentic::{
     tools::framework::ToolUseContext,
     tools::{get_all_tools, get_readonly_tools},
     workspace::{local_workspace_services, remote_workspace_services},
     WorkspaceBinding,
 };
-use bitfun_core::agentic::tools::product_runtime::{build_tool_info, ToolInfoDto};
 use bitfun_core::product_runtime::CoreRuntimeServicesProvider;
 use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
@@ -170,7 +170,7 @@ fn write_file_path(input: &serde_json::Value) -> Option<&str> {
 
 fn tool_requires_workspace_path(tool_name: &str, input: &serde_json::Value) -> bool {
     match tool_name {
-        "Bash" => true,
+        "ExecCommand" => true,
         "Glob" | "Grep" => input.get("path").is_none() || is_relative_path(input.get("path")),
         "Write" => write_file_path(input).map_or_else(
             || input.get("payload").is_some(),

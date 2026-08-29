@@ -1199,7 +1199,7 @@ mod tests {
             "Read".to_string(),
             "WebFetch".to_string(),
             "GetFileDiff".to_string(),
-            "Git".to_string(),
+            "Worktree".to_string(),
         ];
 
         let manifest = resolve_product_resolved_tool_manifest(
@@ -1215,7 +1215,7 @@ mod tests {
                 "Read".to_string(),
                 "WebFetch".to_string(),
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
+                "Worktree".to_string(),
                 GET_TOOL_SPEC_TOOL_NAME.to_string(),
                 "CallDeferredTool".to_string(),
             ],
@@ -1226,7 +1226,7 @@ mod tests {
             vec![
                 "GetFileDiff".to_string(),
                 "WebFetch".to_string(),
-                "Git".to_string()
+                "Worktree".to_string()
             ],
             "deferred loaded-spec list must follow product registry snapshot order"
         );
@@ -1240,7 +1240,7 @@ mod tests {
             "prompt-visible definitions must keep the current discovery insertion and policy order stable"
         );
 
-        for tool_name in ["GetFileDiff", "WebFetch", "Git"] {
+        for tool_name in ["GetFileDiff", "WebFetch", "Worktree"] {
             assert!(
                 !manifest
                     .tool_definitions

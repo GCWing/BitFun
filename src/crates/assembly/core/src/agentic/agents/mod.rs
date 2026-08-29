@@ -148,7 +148,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
-        "Git".to_string(),
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         // Pairs with ControlHub: its `wait` sends anything repeating, or

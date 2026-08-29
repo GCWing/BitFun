@@ -3582,7 +3582,7 @@ describe('FlowChatStore historical session hydration state', () => {
           toolItems: [
             {
               id: 'tool-1',
-              toolName: 'Bash',
+              toolName: 'ExecCommand',
               toolCall: { id: 'call-1', input: { command: 'printf output' } },
               toolResult: {
                 result: {

@@ -34,28 +34,28 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn normalizes_execute_tools_to_bash_card() {
+    fn normalizes_execute_tools_to_exec_command_card() {
         let input = json!({ "command": "pnpm test" });
         assert_eq!(
             acp_tool_name("Run shell command", Some(&input), Some(&ToolKind::Execute)),
-            "Bash"
+            "ExecCommand"
         );
 
-        let params = normalize_tool_params("Bash", json!({ "cmd": "ls -la" }));
-        assert_eq!(params["command"], "ls -la");
+        let params = normalize_tool_params("ExecCommand", json!({ "command": "ls -la" }));
+        assert_eq!(params["cmd"], "ls -la");
     }
 
     #[test]
-    fn normalizes_bash_command_arrays_to_display_string() {
+    fn normalizes_exec_command_arrays_to_display_string() {
         let params = normalize_tool_params(
-            "Bash",
+            "ExecCommand",
             json!({
                 "command": ["/bin/zsh", "-lc", "sed -n '1,120p' src/lib.rs"],
                 "cwd": "/tmp/project"
             }),
         );
 
-        assert_eq!(params["command"], "/bin/zsh -lc sed -n '1,120p' src/lib.rs");
+        assert_eq!(params["cmd"], "/bin/zsh -lc sed -n '1,120p' src/lib.rs");
         assert_eq!(params["cwd"], "/tmp/project");
     }
 
@@ -145,10 +145,10 @@ mod tests {
             "Read"
         );
 
-        let bash_input = json!({ "command": "cargo test" });
+        let command_input = json!({ "command": "cargo test" });
         assert_eq!(
-            acp_tool_name("bash", Some(&bash_input), Some(&ToolKind::Execute)),
-            "Bash"
+            acp_tool_name("shell", Some(&command_input), Some(&ToolKind::Execute)),
+            "ExecCommand"
         );
 
         // An unknown harness tool keeps its own name rather than being forced
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn splits_the_str_replace_editor_family_by_its_command() {
         // One tool name, several operations. Without the split every call would
-        // land on Bash, because the `command` key looks like a shell call.
+        // land on ExecCommand, because the `command` key looks like a shell call.
         let edit_input = json!({
             "command": "str_replace",
             "path": "/repo/src/lib.rs",
@@ -218,7 +218,7 @@ mod tests {
     fn code_mode_gets_its_own_card_rather_than_an_empty_terminal() {
         // DeepSeek Harness's PTC preset answers every step with one `run_code`
         // call whose argument is a TypeScript program. As an Execute kind with
-        // no `command`, it used to land on the Bash card and render blank.
+        // no `command`, it used to land on the command card and render blank.
         let input = json!({
             "code": "const files = await tools.bash({ command: \"ls\" });",
             "description": "List the project root",
@@ -246,7 +246,7 @@ mod tests {
             "print(1)"
         );
 
-        // A shell call that happens to carry a `code` argument is still Bash:
+        // A shell call that happens to carry a `code` argument is still ExecCommand:
         // the command is what ran.
         assert_eq!(
             acp_tool_name(
@@ -254,7 +254,7 @@ mod tests {
                 Some(&json!({ "command": "echo hi", "code": "unused" })),
                 Some(&ToolKind::Execute)
             ),
-            "Bash"
+            "ExecCommand"
         );
     }
 
@@ -264,11 +264,11 @@ mod tests {
         // rawInput shape keeps deciding these.
         assert_eq!(
             acp_tool_name(
-                "Run Bash",
+                "Run shell",
                 Some(&json!({ "command": "ls" })),
                 Some(&ToolKind::Execute)
             ),
-            "Bash"
+            "ExecCommand"
         );
         assert_eq!(
             acp_tool_name(

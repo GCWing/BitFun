@@ -208,7 +208,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat shell command text | `chat-shell-command-text` | Shell command text node. |
 | Chat shell command output | `chat-shell-command-output` | Shell command stdout/stderr or live output area. |
 | Chat shell command exit code | `chat-shell-command-exit-code` | Exit code node. Includes `data-exit-code` and `data-status`. |
-| Chat shell tool card | `chat-shell-tool-card` | Outer FlowToolCard wrapper for Bash. Includes `data-tool-name` and `data-tool-card-id`. |
+| Chat shell tool card | `chat-shell-tool-card` | Outer FlowToolCard wrapper for ExecCommand. Includes `data-tool-name` and `data-tool-card-id`. |
 | Chat shell tool open panel | `chat-shell-tool-open-panel` | Opens the associated terminal panel when a terminal session is available. |
 | Chat browser tool card | `chat-browser-tool-card` | Outer FlowToolCard wrapper for WebFetch. Includes `data-tool-name` and `data-tool-card-id`. |
 | Chat file change card | `chat-file-change-card` | File operation card root. Includes `data-status`, `data-action`, `data-path`, and `data-expanded`. |
@@ -299,7 +299,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 
 Notes:
 
-- The standalone xterm terminal does not expose a structured per-command history DOM. Tests should use `shell-command-output` for rendered terminal output and `chat-shell-command-*` for structured Bash ToolCard assertions.
+- The standalone xterm terminal does not expose a structured per-command history DOM. Tests should use `shell-command-output` for rendered terminal output and `chat-shell-command-*` for structured ExecCommand card assertions.
 - `shell-command-copy` is not currently exposed because the active terminal copy action is context-menu/selection driven rather than a stable visible button.
 
 ## Browser Panel

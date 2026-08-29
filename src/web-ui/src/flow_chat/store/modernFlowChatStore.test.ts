@@ -21,7 +21,6 @@ vi.mock('../tool-cards/toolCardMetadata', () => ({
     'GetFileDiff',
     'GetToolSpec',
     'ReviewSessionSummary',
-    'TerminalControl',
     'SessionControl',
     'ExecControl',
     'AgentWait',
@@ -158,7 +157,6 @@ describe('sessionToVirtualItems explore grouping', () => {
     'GetFileDiff',
     'GetToolSpec',
     'ReviewSessionSummary',
-    'TerminalControl',
     'SessionControl',
     'ExecControl',
     'view_image',
@@ -215,7 +213,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     },
   );
 
-  it.each(['Bash', 'Git', 'ExecCommand', 'TodoWrite', 'ContextCompression', 'Skill', 'SessionMessage'])(
+  it.each(['ExecCommand', 'TodoWrite', 'ContextCompression', 'Skill', 'SessionMessage'])(
     'keeps conditionally important %s rounds visible',
     (toolName) => {
       const session = makeSession({

@@ -209,8 +209,8 @@
 | Chat shell 命令文本 | `chat-shell-command-text` | Shell 命令文本节点。 |
 | Chat shell 命令输出 | `chat-shell-command-output` | Shell 命令 stdout/stderr 或实时输出区域。 |
 | Chat shell 命令退出码 | `chat-shell-command-exit-code` | 退出码节点。包含 `data-exit-code` 和 `data-status`。 |
-| Chat shell 工具卡片 | `chat-shell-tool-card` | Bash 的外层 FlowToolCard wrapper。包含 `data-tool-name` 和 `data-tool-card-id`。 |
-| Chat shell 工具打开面板按钮 | `chat-shell-tool-open-panel` | 存在 terminal session 时，从 Bash ToolCard 打开关联终端面板。 |
+| Chat shell 工具卡片 | `chat-shell-tool-card` | ExecCommand 的外层 FlowToolCard wrapper。包含 `data-tool-name` 和 `data-tool-card-id`。 |
+| Chat shell 工具打开面板按钮 | `chat-shell-tool-open-panel` | 存在 terminal session 时，从 ExecCommand 卡片打开关联终端面板。 |
 | Chat browser 工具卡片 | `chat-browser-tool-card` | WebFetch 的外层 FlowToolCard wrapper。包含 `data-tool-name` 和 `data-tool-card-id`。 |
 | Chat 文件变更卡片 | `chat-file-change-card` | 文件操作卡片根节点。包含 `data-status`、`data-action`、`data-path` 和 `data-expanded`。 |
 | Chat 文件变更展开按钮 | `chat-file-change-toggle` | 文件操作卡片的展开/收起点击目标。 |
@@ -299,7 +299,7 @@
 
 说明：
 
-- 独立 xterm 终端没有结构化的逐命令历史 DOM。测试应使用 `shell-command-output` 断言终端渲染输出，使用 `chat-shell-command-*` 断言结构化 Bash ToolCard。
+- 独立 xterm 终端没有结构化的逐命令历史 DOM。测试应使用 `shell-command-output` 断言终端渲染输出，使用 `chat-shell-command-*` 断言结构化 ExecCommand 卡片。
 - `shell-command-copy` 当前未暴露，因为活动终端复制能力基于选择/右键上下文菜单，并不是稳定可见按钮。
 
 ## Browser Panel

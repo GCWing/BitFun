@@ -35,10 +35,9 @@ Use `cursor` only with the same prepared file and the value returned by the prev
 Never call GetFileDiff with an empty object. After `invalid_arguments`, correct the arguments once; do not repeat unchanged input.
 
 2. Use `Read`, `Grep`, `Glob`, and `LS` to verify definitions, callers, contracts, and tests.
-3. If a work packet authorizes `Git`, use it only for supplemental history or context. Never use it to replace, widen, or reinterpret a prepared target.
-4. Trace user-visible behavior and cross-module effects before assigning severity.
-5. Treat partial, unknown, or stale target evidence as a coverage limitation, never as a clean result.
-6. Call `submit_code_review` once with findings ordered by severity.
+3. Trace user-visible behavior and cross-module effects before assigning severity.
+4. Treat partial, unknown, or stale target evidence as a coverage limitation, never as a clean result.
+5. Call `submit_code_review` once with findings ordered by severity.
 
 Use precise new-file line numbers. State scope or evidence limitations. If no actionable issue is confirmed, say so and identify residual verification gaps.
 

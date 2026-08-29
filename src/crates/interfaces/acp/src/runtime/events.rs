@@ -563,7 +563,7 @@ mod tests {
     fn completed_event_maps_to_completed_update_with_output() {
         let mut seen = HashSet::new();
         let event = ToolEventData::Completed {
-            identity: identity("Bash"),
+            identity: identity("ExecCommand"),
             result: serde_json::json!({ "stdout": "ok" }),
             result_for_assistant: Some("done".to_string()),
             image_attachments: None,
@@ -1010,7 +1010,7 @@ mod tests {
     fn replay_without_result_defaults_to_in_progress() {
         // No status, no interruption reason: the stored state is indeterminate,
         // so the replayed card stays InProgress (matches live streaming shape).
-        let item = replay_tool_item("tool-1", "Bash", None, None);
+        let item = replay_tool_item("tool-1", "ExecCommand", None, None);
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
         assert!(update.fields.raw_output.is_none());
@@ -1019,7 +1019,7 @@ mod tests {
 
     #[test]
     fn replay_with_running_status_stays_in_progress() {
-        let item = replay_tool_item("tool-1", "Bash", Some("running"), None);
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("running"), None);
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
     }
@@ -1029,14 +1029,14 @@ mod tests {
         // `build_model_rounds_from_messages` stamps `completed` on tool items
         // whose results live in separate tool_result messages; that is not a
         // terminal-without-result signal, so we must not flip it to Failed.
-        let item = replay_tool_item("tool-1", "Bash", Some("completed"), None);
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("completed"), None);
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
     }
 
     #[test]
     fn replay_with_interruption_reason_settles_to_failed() {
-        let item = replay_tool_item("tool-1", "Bash", None, Some("cancelled"));
+        let item = replay_tool_item("tool-1", "ExecCommand", None, Some("cancelled"));
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
         assert_eq!(
@@ -1056,7 +1056,7 @@ mod tests {
 
     #[test]
     fn replay_with_cancelled_status_settles_to_failed() {
-        let item = replay_tool_item("tool-1", "Bash", Some("cancelled"), None);
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("cancelled"), None);
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
         assert_eq!(
@@ -1067,7 +1067,7 @@ mod tests {
 
     #[test]
     fn replay_with_error_status_settles_to_failed() {
-        let item = replay_tool_item("tool-1", "Bash", Some("error"), None);
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("error"), None);
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
         assert_eq!(
@@ -1078,7 +1078,7 @@ mod tests {
 
     #[test]
     fn replay_interruption_reason_takes_precedence_over_running_status() {
-        let item = replay_tool_item("tool-1", "Bash", Some("running"), Some("aborted"));
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("running"), Some("aborted"));
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
         assert_eq!(
@@ -1089,7 +1089,7 @@ mod tests {
 
     #[test]
     fn replay_with_blank_interruption_reason_falls_back_to_status() {
-        let item = replay_tool_item("tool-1", "Bash", Some("cancelled"), Some("   "));
+        let item = replay_tool_item("tool-1", "ExecCommand", Some("cancelled"), Some("   "));
         let update = replay_update(&item);
         assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
         assert_eq!(

@@ -8,7 +8,6 @@ import {
   ToolExecutionInfo, 
   ToolResult, 
   ToolDisplayMessage,
-  BashToolResult,
   FileToolResult,
   SearchToolResult,
   WebToolResult,
@@ -276,8 +275,6 @@ export class ToolExecutionService {
     const normalizedName = toolName.toLowerCase().replace(/[_-]/g, '');
 
     switch (normalizedName) {
-      case 'bash':
-        return this.normalizeBashResult(content);
       case 'fileread':
       case 'filewrite':
       case 'fileedit':
@@ -296,27 +293,6 @@ export class ToolExecutionService {
       default:
         return content;
     }
-  }
-
-  private normalizeBashResult(content: any): BashToolResult {
-    if (typeof content === 'string') {
-      return {
-        stdout: content,
-        stdoutLines: content.split('\n').length,
-        stderr: '',
-        stderrLines: 0,
-        interrupted: false
-      };
-    }
-
-    return {
-      stdout: content.stdout || content.output || '',
-      stdoutLines: content.stdoutLines || (content.stdout || content.output || '').split('\n').length,
-      stderr: content.stderr || '',
-      stderrLines: content.stderrLines || (content.stderr || '').split('\n').length,
-      interrupted: content.interrupted || false,
-      exitCode: content.exitCode
-    };
   }
 
   private normalizeFileResult(content: any, toolName: string): FileToolResult {

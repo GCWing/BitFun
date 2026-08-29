@@ -604,7 +604,6 @@ mod tests {
             "ListMCPPrompts",
             "GetMCPPrompt",
             "GenerativeUI",
-            "Git",
             "Worktree",
             "ReviewPlatform",
             "InitMiniApp",
@@ -778,7 +777,6 @@ mod tests {
         assert!(registry.is_tool_deferred("GetFileDiff"));
         assert!(registry.is_tool_deferred("ListModels"));
         assert!(!registry.is_tool_deferred("GetToolSpec"));
-        assert!(registry.is_tool_deferred("Git"));
         assert!(registry.is_tool_deferred("Worktree"));
         assert!(registry.is_tool_deferred("ReviewPlatform"));
         assert!(!registry.is_tool_deferred("InitMiniApp"));
@@ -809,7 +807,6 @@ mod tests {
                 "ListMCPPrompts",
                 "GetMCPPrompt",
                 "GenerativeUI",
-                "Git",
                 "Worktree",
                 "ReviewPlatform",
                 "ControlHub",

@@ -1171,7 +1171,7 @@ pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<Val
     for target in &targets {
         if let Some(rejection) = check(
             Some(context),
-            "Bash",
+            "ExecCommand",
             target.operation.guard_operation(),
             &target.path,
             false,
@@ -1195,7 +1195,7 @@ pub fn check_bash_command(context: &ToolUseContext, command: &str) -> Option<Val
         }) {
             return decision_result(
                 Some(context),
-                "Bash",
+                "ExecCommand",
                 "unresolved_shell_mutation",
                 "<dynamic shell target>",
                 "deny_unresolved_target",

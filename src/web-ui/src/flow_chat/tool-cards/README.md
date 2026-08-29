@@ -82,7 +82,7 @@ Current examples:
 - `useToolCardHeightContract`
 - `FileOperationToolCard`
 - `ModelThinkingDisplay`
-- `TerminalToolCard`
+- `ExecProcessToolCardView`
 - `ExploreGroupRenderer`
 
 For details, read:

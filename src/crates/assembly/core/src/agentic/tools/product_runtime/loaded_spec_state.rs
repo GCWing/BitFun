@@ -166,7 +166,7 @@ mod tests {
                     tool_name: "GetToolSpec".to_string(),
                     effective_tool_name: None,
                     result: json!({
-                            "tool_name": "Git",
+                            "tool_name": "Worktree",
                     "catalog_generation": 42,
                         }),
                     result_for_assistant: None,
@@ -229,13 +229,13 @@ mod tests {
             &[
                 "WebFetch".to_string(),
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
+                "Worktree".to_string(),
             ],
         );
 
         assert_eq!(
             loaded_specs,
-            vec![loaded_spec("Git"), loaded_spec("WebFetch")]
+            vec![loaded_spec("Worktree"), loaded_spec("WebFetch")]
         );
     }
 
@@ -247,7 +247,7 @@ mod tests {
                 tool_name: "GetToolSpec".to_string(),
                 effective_tool_name: None,
                 result: json!({
-                    "tool_name": "Git",
+                    "tool_name": "Worktree",
                 "catalog_generation": 42,
                 }),
                 result_for_assistant: None,
@@ -255,11 +255,11 @@ mod tests {
                 duration_ms: Some(1),
                 image_attachments: None,
             })],
-            &["Git".to_string(), "WebFetch".to_string()],
+            &["Worktree".to_string(), "WebFetch".to_string()],
         );
 
-        assert!(state.is_loaded("Git"));
+        assert!(state.is_loaded("Worktree"));
         assert!(!state.is_loaded("WebFetch"));
-        assert_eq!(state.into_loaded_specs(), vec![loaded_spec("Git")]);
+        assert_eq!(state.into_loaded_specs(), vec![loaded_spec("Worktree")]);
     }
 }

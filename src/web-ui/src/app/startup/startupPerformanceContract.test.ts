@@ -391,7 +391,6 @@ describe('startup performance contract', () => {
   it('keeps terminal xterm runtime out of session startup until terminal output is rendered', () => {
     const sessionSceneSource = readSource('../scenes/session/SessionScene.tsx');
     const flexiblePanelSource = readSource('../components/panels/base/FlexiblePanel.tsx');
-    const terminalToolCardSource = readSource('../../flow_chat/tool-cards/TerminalToolCard.tsx');
     const execProcessToolCardSource = readSource('../../flow_chat/tool-cards/ExecProcessToolCardView.tsx');
     const backgroundCommandOutputPanelSource = readSource(
       '../../flow_chat/components/background-command/BackgroundCommandOutputPanel.tsx'
@@ -405,10 +404,6 @@ describe('startup performance contract', () => {
     expect(flexiblePanelSource).not.toContain("import('@/tools/terminal')");
     expect(flexiblePanelSource).toContain(
       "import('@/tools/terminal/components/ConnectedTerminal')"
-    );
-    expect(terminalToolCardSource).not.toMatch(/from\s+['"]@\/tools\/terminal\/components['"]/);
-    expect(terminalToolCardSource).toContain(
-      "from '@/tools/terminal/components/LazyTerminalOutputRenderer'"
     );
     expect(execProcessToolCardSource).toContain(
       "from '@/tools/terminal/components/LazyTerminalOutputRenderer'"
@@ -494,7 +489,6 @@ describe('startup performance contract', () => {
 
     expect(metadataSource).toContain('TOOL_CARD_CONFIGS');
     expect(metadataSource).toContain('isCollapsibleTool');
-    expect(metadataSource).not.toMatch(/from\s+['"]\.\/TerminalToolCard['"]/);
     expect(metadataSource).not.toMatch(/from\s+['"]\.\/FileOperationToolCard['"]/);
 
     expect(registrySource).not.toContain('export const TOOL_CARD_CONFIGS');

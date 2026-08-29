@@ -293,18 +293,6 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.reviewSummary
   },
 
-  // Git version control tool
-  'Git': {
-    toolName: 'Git',
-    displayName: 'Git',
-    icon: 'GIT',
-    requiresConfirmation: false, // Read-only needs no confirmation; writes are backend-controlled.
-    resultDisplayType: 'detailed',
-    description: 'Run Git commands',
-    displayMode: 'compact',
-    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.git
-  },
-
   // GetFileDiff tool
   'GetFileDiff': {
     toolName: 'GetFileDiff',
@@ -329,18 +317,6 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     primaryColor: 'var(--bf-appearance-token-color-warning)'
   },
 
-  // TerminalControl tool
-  'TerminalControl': {
-    toolName: 'TerminalControl',
-    displayName: 'Terminal Control',
-    icon: 'TC',
-    requiresConfirmation: false,
-    resultDisplayType: 'summary',
-    description: 'Kill or interrupt a terminal session',
-    displayMode: 'compact',
-    primaryColor: 'var(--bf-appearance-token-color-error)'
-  },
-
   'SessionControl': {
     toolName: 'SessionControl',
     displayName: 'Session Control',
@@ -361,18 +337,6 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     description: 'Send a message to another session',
     displayMode: 'compact',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
-  },
-
-  // Bash terminal tool
-  'Bash': {
-    toolName: 'Bash',
-    displayName: 'Run Command',
-    icon: 'TERM',
-    requiresConfirmation: true, // Requires user confirmation.
-    resultDisplayType: 'detailed',
-    description: 'Run commands in the terminal',
-    displayMode: 'standard',
-    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
 
   // Code-mode agents (e.g. DeepSeek Harness's PTC preset) answer a step by
@@ -649,13 +613,10 @@ export const DEDICATED_TOOL_CARD_NAMES = new Set([
   'Skill',
   'AskUserQuestion',
   'ReviewSessionSummary',
-  'Git',
   'GetFileDiff',
   'CreatePlan',
-  'TerminalControl',
   'SessionControl',
   'SessionMessage',
-  'Bash',
   'RunCode',
   'ExecCommand',
   'WriteStdin',
@@ -692,7 +653,6 @@ export const COLLAPSIBLE_TOOL_NAMES = new Set([
   'GetFileDiff',
   'GetToolSpec',
   'ReviewSessionSummary',
-  'TerminalControl',
   'SessionControl',
   'ExecControl',
   'view_image',

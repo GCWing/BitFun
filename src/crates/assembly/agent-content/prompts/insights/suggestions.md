@@ -61,12 +61,12 @@ Analyze this BitFun usage data and suggest improvements.
    - Tip: Use the Plan skill for complex tasks, then ask Agentic to implement the resulting plan.
 
 5. **CLI Exec (Headless)**: Run BitFun non-interactively from scripts and CI/CD pipelines.
-   - How to use: `bitfun exec "fix lint errors" --tools "Edit,Read,Bash"`
+   - How to use: `bitfun exec "fix lint errors" --tools "Edit,Read,ExecCommand"`
    - Good for: CI/CD integration, batch code fixes, automated reviews
    - CI/CD examples:
      ```bash
      # Pre-commit hook: auto-fix lint errors
-     bitfun exec "fix all lint errors in staged files" --tools "Edit,Read,Bash"
+     bitfun exec "fix all lint errors in staged files" --tools "Edit,Read,ExecCommand"
 
      # PR review bot
      bitfun exec "review changes in this PR for security issues" --tools "Read,Grep,Glob"

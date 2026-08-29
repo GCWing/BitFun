@@ -41,15 +41,12 @@ import { ContextCompressionDisplay } from './ContextCompressionDisplay';
 import { MCPToolDisplay } from './MCPToolDisplay';
 import { SkillDisplay } from './SkillDisplay';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
-import { GitToolDisplay } from './GitToolDisplay';
 import { GetFileDiffDisplay } from './GetFileDiffDisplay';
 import { CreatePlanDisplay } from './CreatePlanDisplay';
-import { TerminalToolCard } from './TerminalToolCard';
 import { RunCodeToolCard } from './RunCodeToolCard';
 import { ExecCommandToolCard } from './ExecCommandToolCard';
 import { WriteStdinToolCard } from './WriteStdinToolCard';
 import { ExecControlToolCard } from './ExecControlToolCard';
-import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { PageDeployDisplay } from './PageDeployToolDisplay';
 import { PagePublishDisplay } from './PagePublishToolDisplay';
@@ -98,21 +95,12 @@ export const STANDARD_TOOL_CARD_ADAPTERS = {
 
   'ReviewSessionSummary': ReviewSessionSummaryCard,
 
-  // Git version control
-  'Git': GitToolDisplay,
-
   // GetFileDiff tool
   'GetFileDiff': GetFileDiffDisplay,
-
-  // TerminalControl tool
-  'TerminalControl': TerminalControlDisplay,
 
   // Session tools
   'SessionControl': SessionControlToolCard,
   'SessionMessage': SessionMessageToolCard,
-
-  // Bash tool
-  'Bash': TerminalToolCard,
 
   // Code-mode agents: one program per step instead of one card per action
   'RunCode': RunCodeToolCard,

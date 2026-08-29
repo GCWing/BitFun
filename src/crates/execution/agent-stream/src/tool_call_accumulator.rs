@@ -145,7 +145,7 @@ pub struct PendingToolCalls {
 /// Tools where a repaired truncation can be passed to schema validation.
 /// Write requires its path/content separator before execution, so a truncation
 /// inside the path is rejected while a truncation in the content can still
-/// write the safe prefix. For everything else (Bash, Edit, Task, ...) we surface
+/// write the safe prefix. For everything else (ExecCommand, Edit, Task, ...) we surface
 /// the truncation as an error: a partial shell command or a partial
 /// `old_string`/`new_string` for Edit can change semantics destructively.
 pub fn is_write_like_tool_name(tool_name: &str) -> bool {
@@ -245,94 +245,22 @@ fn repair_truncated_json(raw: &str) -> Option<String> {
 }
 
 impl PendingToolCall {
-    fn strip_argument_wrapping(raw_arguments: &str) -> &str {
-        let trimmed = raw_arguments.trim();
-        let Some(stripped) = trimmed
-            .strip_prefix("```")
-            .and_then(|value| value.strip_suffix("```"))
-        else {
-            return trimmed.trim_matches('`').trim();
-        };
-
-        let stripped = stripped.trim();
-        if let Some((first_line, rest)) = stripped.split_once('\n') {
-            if first_line
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-            {
-                return rest.trim();
-            }
-        }
-
-        stripped
-    }
-
-    /// Best-effort repair for Git tool calls whose arguments came back as a raw
-    /// shell-style command (e.g. `git status`, `"git diff --staged"`).
-    fn parse_git_command_arguments(raw_arguments: &str) -> Option<Value> {
-        let trimmed = Self::strip_argument_wrapping(raw_arguments);
-        let command = trimmed
-            .strip_prefix("git ")
-            .map(str::trim)
-            .unwrap_or(trimmed);
-        let mut parts = command.splitn(2, char::is_whitespace);
-        let operation = parts.next()?.trim();
-        if operation.is_empty()
-            || !operation
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-        {
-            return None;
-        }
-
-        let args = parts.next().map(str::trim).filter(|args| !args.is_empty());
-        let mut value = json!({ "operation": operation });
-        if let Some(args) = args {
-            value["args"] = json!(args);
-        }
-        Some(value)
-    }
-
-    fn normalize_git_tool_arguments(arguments: Value) -> Value {
-        if let Value::String(raw) = &arguments {
-            if let Some(repaired) = Self::parse_git_command_arguments(raw) {
-                warn!("Git tool call arguments repaired from JSON string command");
-                return repaired;
-            }
-        }
-        arguments
-    }
-
     fn parse_arguments(
-        tool_name: &str,
+        _tool_name: &str,
         raw_arguments: &str,
     ) -> Result<Value, ToolArgumentParseError> {
         match serde_json::from_str::<Value>(raw_arguments) {
-            Ok(arguments) => {
-                if tool_name == "Git" {
-                    Ok(Self::normalize_git_tool_arguments(arguments))
-                } else {
-                    Ok(arguments)
-                }
-            }
-            Err(primary_error) => {
-                if tool_name == "Git" {
-                    if let Some(arguments) = Self::parse_git_command_arguments(raw_arguments) {
-                        warn!("Git tool call arguments repaired from raw command");
-                        return Ok(arguments);
-                    }
-                }
-                Err(ToolArgumentParseError {
-                    message: primary_error.to_string(),
-                    is_eof: primary_error.is_eof(),
-                    category: match primary_error.classify() {
-                        serde_json::error::Category::Io => "io",
-                        serde_json::error::Category::Syntax => "syntax",
-                        serde_json::error::Category::Data => "data",
-                        serde_json::error::Category::Eof => "eof",
-                    },
-                })
-            }
+            Ok(arguments) => Ok(arguments),
+            Err(primary_error) => Err(ToolArgumentParseError {
+                message: primary_error.to_string(),
+                is_eof: primary_error.is_eof(),
+                category: match primary_error.classify() {
+                    serde_json::error::Category::Io => "io",
+                    serde_json::error::Category::Syntax => "syntax",
+                    serde_json::error::Category::Data => "data",
+                    serde_json::error::Category::Eof => "eof",
+                },
+            }),
         }
     }
 
@@ -673,86 +601,9 @@ mod tests {
     }
 
     #[test]
-    fn repairs_git_raw_command_arguments() {
-        let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Git".to_string()));
-        pending.append_arguments("git status");
-
-        let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
-            .expect("finalized tool");
-
-        assert_eq!(finalized.raw_arguments, "git status");
-        assert_eq!(finalized.arguments, json!({"operation": "status"}));
-        assert!(!finalized.is_error);
-    }
-
-    #[test]
-    fn repairs_git_json_string_command_arguments() {
-        let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Git".to_string()));
-        pending.append_arguments("\"git diff --staged\"");
-
-        let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
-            .expect("finalized tool");
-
-        assert_eq!(
-            finalized.arguments,
-            json!({"operation": "diff", "args": "--staged"})
-        );
-        assert!(!finalized.is_error);
-    }
-
-    #[test]
-    fn git_args_only_object_is_left_for_tool_schema_diagnostic() {
-        let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Git".to_string()));
-        pending.append_arguments("{\"args\": \"--since=\\\"2026-05-02\\\" --oneline\"}");
-
-        let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
-            .expect("finalized tool");
-
-        assert_eq!(
-            finalized.arguments,
-            json!({"args": "--since=\"2026-05-02\" --oneline"})
-        );
-        assert!(!finalized.is_error);
-    }
-
-    #[test]
-    fn git_duplicate_subcommand_in_args_is_left_for_tool_schema_diagnostic() {
-        let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Git".to_string()));
-        pending.append_arguments("{\"args\": \"log --oneline -10\"}");
-
-        let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
-            .expect("finalized tool");
-
-        assert_eq!(finalized.arguments, json!({"args": "log --oneline -10"}));
-        assert!(!finalized.is_error);
-    }
-
-    #[test]
-    fn does_not_infer_git_operation_from_ambiguous_args_only_object() {
-        let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Git".to_string()));
-        pending.append_arguments("{\"args\": \"--stat\"}");
-
-        let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
-            .expect("finalized tool");
-
-        assert_eq!(finalized.arguments, json!({"args": "--stat"}));
-        assert!(!finalized.is_error);
-    }
-
-    #[test]
     fn raw_string_arguments_for_single_field_tools_stay_invalid_json() {
         let cases = [
-            ("Bash", "pnpm test"),
+            ("ExecCommand", "pnpm test"),
             ("Skill", "openai-docs"),
             ("Read", "src/main.rs"),
             ("GetFileDiff", "src/lib.rs"),
@@ -782,7 +633,7 @@ mod tests {
     #[test]
     fn incomplete_json_object_for_single_field_tools_stays_invalid() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments(
             "{\"command\": \"git log --since=\\\"2026-05-02\\\" --oneline --stat",
         );
@@ -798,7 +649,7 @@ mod tests {
     #[test]
     fn does_not_wrap_incomplete_json_object_as_raw_string_argument() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments("{\"command\": ");
 
         let finalized = pending
@@ -828,7 +679,7 @@ mod tests {
     #[test]
     fn does_not_repair_object_without_key_value_payload() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments("{");
 
         let finalized = pending
@@ -842,7 +693,7 @@ mod tests {
     #[test]
     fn does_not_execute_truncated_incomplete_json_object() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments("{\"command\": \"git log --since=\\\"2026-05-02\\\" --on");
 
         let finalized = pending
@@ -856,7 +707,7 @@ mod tests {
     #[test]
     fn json_string_arguments_for_single_field_tools_are_schema_errors_not_rewritten() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments("\"git status\"");
 
         let finalized = pending
@@ -870,7 +721,7 @@ mod tests {
     #[test]
     fn fenced_raw_arguments_for_single_field_tools_stay_invalid_json() {
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments("```bash\npnpm run lint:web\n```");
 
         let finalized = pending
@@ -1159,7 +1010,7 @@ mod tests {
     fn non_write_truncated_command_still_errors_without_repair_provenance() {
         let raw = r#"{"command": "git log --since=\"2026-05-02\" --on"#;
         let mut pending = PendingToolCall::default();
-        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.start_new("call_1".to_string(), Some("ExecCommand".to_string()));
         pending.append_arguments(raw);
 
         let finalized = pending

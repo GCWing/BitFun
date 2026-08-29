@@ -40,7 +40,7 @@ const TOOL_EXPANDED_BASE_HEIGHT_PX = 96;
 const EXPLORE_GROUP_HEADER_HEIGHT_PX = 20;
 const EXPLORE_GROUP_MAX_CONTENT_HEIGHT_PX = 400;
 const ESTIMATED_TEXT_CHARS_PER_LINE = 60;
-const TERMINAL_TOOL_NAMES = new Set(['Bash', 'ExecCommand', 'WriteStdin', 'ExecControl', 'TerminalControl']);
+const TERMINAL_TOOL_NAMES = new Set(['ExecCommand', 'WriteStdin', 'ExecControl']);
 const COLLAPSED_TOOL_STATUSES = new Set(['completed', 'cancelled', 'error', 'rejected']);
 
 function clamp(value: number, min: number, max: number): number {

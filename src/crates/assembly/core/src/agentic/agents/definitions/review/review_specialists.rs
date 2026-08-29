@@ -50,7 +50,7 @@ mod tests {
             );
             assert!(agent.is_readonly());
             assert!(agent.default_tools().contains(&"GetFileDiff".to_string()));
-            assert!(!agent.default_tools().contains(&"Git".to_string()));
+            assert!(!agent.default_tools().contains(&"ExecCommand".to_string()));
         }
     }
 }

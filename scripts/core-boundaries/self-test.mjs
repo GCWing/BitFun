@@ -2298,12 +2298,6 @@ export function runManifestParserSelfTest({
       throw new Error(`CronTool boundary rule must forbid direct coordinator ${contract}`);
     }
   }
-  const bashToolRuleText = forbiddenRuleTextForPath(
-    'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
-  );
-  if (!bashToolRuleText.includes('scheduler') || !bashToolRuleText.includes('deliver_background_result')) {
-    throw new Error('Bash boundary rule must forbid direct scheduler background delivery');
-  }
   const coordinatorRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
   );

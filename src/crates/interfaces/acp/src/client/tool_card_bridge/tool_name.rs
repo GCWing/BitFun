@@ -21,7 +21,7 @@ pub(super) fn acp_tool_name(
     // rawInput is the tool arguments (`{todos}`, `{command}`, …) with no name
     // key at all, so `todo_write` would otherwise reach the heuristics below and
     // match their "write" substring as a Write card. The match is whole-string,
-    // so a descriptive title like "Run Bash" still falls through.
+    // so a descriptive title like "Run shell" still falls through.
     let trimmed_title = title.trim();
     let from_title = normalize_known_tool_alias(trimmed_title);
     if from_title != trimmed_title || is_native_tool_name(&from_title) {
@@ -36,7 +36,7 @@ pub(super) fn acp_tool_name(
 ///
 /// The name alone cannot answer which card to draw: every view would open an
 /// Edit card. Worse, the generic path never gets that far — the `command` key
-/// reads as a shell call and the whole family lands on Bash. DeepSeek Harness's
+/// reads as a shell call and the whole family lands on ExecCommand. DeepSeek Harness's
 /// minimal preset ships exactly this tool as one of its two.
 fn editor_family_tool_name(name: &str, raw_input: Option<&serde_json::Value>) -> Option<String> {
     if !matches!(
@@ -108,7 +108,7 @@ fn normalize_tool_name(
             return "RunCode".to_string();
         }
         if has_any_key(input, &["command", "cmd"]) {
-            return "Bash".to_string();
+            return "ExecCommand".to_string();
         }
         if has_any_key(
             input,
@@ -180,7 +180,7 @@ fn normalize_tool_name(
             "run command",
         ],
     ) {
-        return "Bash".to_string();
+        return "ExecCommand".to_string();
     }
     if contains_any(&haystack, &["list", "directory", "folder", "ls"]) {
         return "LS".to_string();
@@ -216,7 +216,7 @@ fn normalize_tool_name(
         Some(ToolKind::Delete) => "Delete".to_string(),
         Some(ToolKind::Move) => "Edit".to_string(),
         Some(ToolKind::Search) => "Grep".to_string(),
-        Some(ToolKind::Execute) => "Bash".to_string(),
+        Some(ToolKind::Execute) => "ExecCommand".to_string(),
         Some(ToolKind::Fetch) => "WebSearch".to_string(),
         Some(ToolKind::Think) | Some(ToolKind::SwitchMode) | Some(ToolKind::Other) | Some(_) => {
             fallback_tool_name(candidate, title)
@@ -244,7 +244,9 @@ fn normalize_known_tool_alias(name: &str) -> String {
         "ls" | "list" | "list_dir" | "list_directory" | "readdir" => "LS".to_string(),
         "grep" | "rg" | "search" | "text_search" => "Grep".to_string(),
         "glob" | "find" | "file_search" => "Glob".to_string(),
-        "bash" | "sh" | "shell" | "terminal" | "command" | "cmd" | "execute" => "Bash".to_string(),
+        "bash" | "sh" | "shell" | "terminal" | "command" | "cmd" | "execute" => {
+            "ExecCommand".to_string()
+        }
         "write" | "write_file" | "create" => "Write".to_string(),
         "edit" | "patch" | "replace" | "update" => "Edit".to_string(),
         "delete" | "remove" | "rm" => "Delete".to_string(),
@@ -265,7 +267,7 @@ fn is_native_tool_name(name: &str) -> bool {
             | "LS"
             | "Grep"
             | "Glob"
-            | "Bash"
+            | "ExecCommand"
             | "RunCode"
             | "TodoWrite"
             | "WebSearch"

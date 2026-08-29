@@ -23,8 +23,6 @@ use std::path::Path;
 pub(crate) const READ_MAX_TOOL_RESULT_CHARS: usize = 72_000;
 
 const READ_TOOL_NAME: &str = "Read";
-const BASH_TOOL_NAME: &str = "Bash";
-const SHELL_MAX_TOOL_RESULT_CHARS: usize = 30_000;
 
 fn effective_tool_name(result: &ToolResult) -> &str {
     result
@@ -56,16 +54,11 @@ pub(crate) async fn maybe_persist_large_tool_result_for_tool(
 
     let per_tool_limit = effective_per_tool_limit(effective_tool_name, policy);
     let visible_chars = result_visible_content(&result).chars().count();
-    let content_override =
-        content_override_if_oversized(&result, effective_tool_name, per_tool_limit);
-    if visible_chars <= per_tool_limit
-        && content_override.is_none()
-        && !json_result_is_oversized(&result, per_tool_limit)
-    {
+    if visible_chars <= per_tool_limit && !json_result_is_oversized(&result, per_tool_limit) {
         return result;
     }
 
-    match persist_and_render_replacement(&result, context, policy, content_override).await {
+    match persist_and_render_replacement(&result, context, policy, None).await {
         Ok(replacement) => {
             result.result_for_assistant = Some(replacement);
             result
@@ -280,25 +273,8 @@ fn serialize_tool_result_content(result: &ToolResult) -> BitFunResult<(String, b
 fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) -> usize {
     match tool_name {
         READ_TOOL_NAME => READ_MAX_TOOL_RESULT_CHARS,
-        BASH_TOOL_NAME => SHELL_MAX_TOOL_RESULT_CHARS,
         _ => policy.per_tool_limit_chars,
     }
-}
-
-fn content_override_if_oversized(
-    result: &ToolResult,
-    effective_tool_name: &str,
-    limit: usize,
-) -> Option<String> {
-    if effective_tool_name != BASH_TOOL_NAME {
-        return None;
-    }
-
-    let output = result
-        .result
-        .get("output")
-        .and_then(|value| value.as_str())?;
-    (output.chars().count() > limit).then(|| output.to_string())
 }
 
 fn json_result_is_oversized(result: &ToolResult, limit: usize) -> bool {
@@ -416,33 +392,13 @@ mod tests {
         }
     }
 
-    fn bash_result(tool_id: &str, output: String, result_for_assistant: String) -> ToolResult {
-        ToolResult {
-            tool_id: tool_id.to_string(),
-            tool_name: "Bash".to_string(),
-            effective_tool_name: None,
-            result: json!({
-                "success": false,
-                "output": output,
-                "exit_code": 1,
-                "timed_out": false,
-                "working_directory": "/repo",
-                "terminal_session_id": "term_1"
-            }),
-            result_for_assistant: Some(result_for_assistant),
-            is_error: false,
-            duration_ms: None,
-            image_attachments: None,
-        }
-    }
-
     #[tokio::test]
     async fn single_large_result_persists_and_replaces_assistant_text() {
         let root = temp_workspace("single");
         let context = test_context(root.clone());
         let result = tool_result(
             "tool/one",
-            "Bash",
+            "WebFetch",
             "x".repeat(DEFAULT_MAX_TOOL_RESULT_CHARS + 1),
         );
 
@@ -556,44 +512,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bash_full_output_persists_even_when_assistant_text_is_already_truncated() {
-        let root = temp_workspace("bash");
-        let context = test_context(root.clone());
-        let full_output = format!(
-            "{}\nfinal-error",
-            "x".repeat(SHELL_MAX_TOOL_RESULT_CHARS + 1)
-        );
-        let result = bash_result(
-            "bash_1",
-            full_output.clone(),
-            "<output truncated=\"true\">tail only</output>".to_string(),
-        );
-
-        let processed = maybe_persist_large_tool_result(result, &context).await;
-        let assistant = processed.result_for_assistant.unwrap_or_default();
-
-        assert!(assistant.starts_with(PERSISTED_OUTPUT_TAG));
-        assert!(assistant.contains("exit_code: 1"));
-        assert!(assistant.contains("working_directory: /repo"));
-        assert!(assistant.contains("Line count: 2"));
-        let output_path = context
-            .current_workspace_session_tool_result_path("session_1", "bash_1.txt")
-            .expect("tool result path");
-        let saved = std::fs::read_to_string(output_path).expect("saved output");
-        assert_eq!(saved, full_output);
-
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[tokio::test]
     async fn round_budget_persists_largest_results_including_read() {
         let root = temp_workspace("round");
         let context = test_context(root.clone());
         let read = tool_result("read_1", "Read", "a".repeat(170_000));
         let medium = tool_result("medium_1", "WebFetch", "b".repeat(60_000));
-        let bash = tool_result("bash_1", "Bash", "c".repeat(30_000));
+        let small = tool_result("small_1", "OtherTool", "c".repeat(30_000));
 
-        let processed = apply_round_tool_result_budget(vec![read, medium, bash], &context).await;
+        let processed = apply_round_tool_result_budget(vec![read, medium, small], &context).await;
 
         assert!(processed[0]
             .result_for_assistant
@@ -616,7 +542,7 @@ mod tests {
             .expect("session tool-results dir");
         assert!(session_dir.join("read_1.txt").exists());
         assert!(!session_dir.join("medium_1.txt").exists());
-        assert!(!session_dir.join("bash_1.txt").exists());
+        assert!(!session_dir.join("small_1.txt").exists());
 
         let _ = std::fs::remove_dir_all(root);
     }

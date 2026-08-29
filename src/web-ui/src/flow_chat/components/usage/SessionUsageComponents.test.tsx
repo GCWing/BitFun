@@ -1574,7 +1574,7 @@ describe('Session usage report UI components', () => {
     const report = usageReport({
       slowest: [
         {
-          label: 'Bash',
+          label: 'ExecCommand',
           kind: 'tool',
           durationMs: 95_000,
           redacted: false,
@@ -1605,7 +1605,7 @@ describe('Session usage report UI components', () => {
       slowestTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('Bash');
+    expect(container.textContent).toContain('ExecCommand');
     expect(container.textContent).toContain('Input');
     expect(container.textContent).toContain('curl https://api.example.test/slow');
     expect(container.textContent).toContain('Status');
