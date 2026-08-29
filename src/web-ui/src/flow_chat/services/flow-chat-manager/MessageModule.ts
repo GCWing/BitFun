@@ -144,6 +144,7 @@ function recoverSubmissionAfterSurfaceSwitch(
       agentType: draft.agentType,
       imageContexts: draft.options?.imageContexts,
       imageDisplayData: draft.options?.imageDisplayData,
+      composerDraft: draft.options?.pendingQueueDraft,
       userMessageMetadata: draft.options?.userMessageMetadata,
     });
     log.info('Device surface switched before submit reached the host; message re-queued', {
@@ -270,6 +271,7 @@ export async function sendMessage(
           agentType,
           imageContexts: options?.imageContexts,
           imageDisplayData: options?.imageDisplayData,
+          composerDraft: options?.pendingQueueDraft,
           userMessageMetadata: options?.userMessageMetadata,
         });
         log.info('Message enqueued: session busy or queue non-empty', {
@@ -598,6 +600,7 @@ export async function drainPendingQueue(
               mimeType?: string;
             }>
           | undefined,
+        pendingQueueDraft: next.composerDraft,
         userMessageMetadata: next.userMessageMetadata,
         bypassPendingQueue: true,
       },

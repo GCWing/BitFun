@@ -23,11 +23,13 @@ import {
   Image as ImageIcon,
   Info,
   Layers,
+  ListEnd,
   ListTodo,
   MessageSquare,
   Mic,
   Monitor,
   Plus,
+  Pencil,
   Rocket,
   Search,
   SearchCheck,
@@ -35,9 +37,11 @@ import {
   SquareTerminal,
   Terminal,
   Timer,
+  Trash2,
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { IconButton } from "@bitfun/ui";
 import {
   AgentControlToolCard,
   AgentWaitToolCard,
@@ -45,6 +49,14 @@ import {
   AmbientToolCardHeader,
   AskUser,
   ChatComposer,
+  ChatComposerQueue,
+  ChatComposerQueueAttachmentBadge,
+  ChatComposerQueueHeader,
+  ChatComposerQueueItem,
+  ChatComposerQueueItemActions,
+  ChatComposerQueueItemContent,
+  ChatComposerQueueList,
+  ChatComposerQueueTitle,
   CommandToolCard,
   ContextCompressionToolCard,
   DefaultToolCard,
@@ -122,6 +134,7 @@ type PreviewProps = FlowChatPreviewRenderOptions;
 function ChatComposerPreview({ interactive, state }: PreviewProps) {
   const [value, setValue] = useState("");
   const expanded = state === "expanded";
+  const queued = state === "queued";
 
   return (
     <div className="flow-chat-composer-preview">
@@ -168,6 +181,44 @@ function ChatComposerPreview({ interactive, state }: PreviewProps) {
           </>
         )}
         layout={expanded ? "expanded" : "compact"}
+        queue={queued ? (
+          <ChatComposerQueue aria-label="Wait for sending">
+            <ChatComposerQueueHeader>
+              <ListEnd aria-hidden="true" />
+              <ChatComposerQueueTitle count={13}>
+                Wait for sending
+              </ChatComposerQueueTitle>
+            </ChatComposerQueueHeader>
+            <ChatComposerQueueList>
+              <ChatComposerQueueItem>
+                <ChatComposerQueueItemContent>
+                  Help me turn these two photos into Studio Ghibli style. Wait, maybe…
+                </ChatComposerQueueItemContent>
+                <ChatComposerQueueAttachmentBadge
+                  count={3}
+                  label="3 image attachments"
+                />
+                <ChatComposerQueueItemActions>
+                  <IconButton
+                    aria-label="Send now"
+                    icon={<ArrowUp />}
+                    size="xs"
+                  />
+                  <IconButton
+                    aria-label="Delete"
+                    icon={<Trash2 />}
+                    size="xs"
+                  />
+                  <IconButton
+                    aria-label="Edit"
+                    icon={<Pencil />}
+                    size="xs"
+                  />
+                </ChatComposerQueueItemActions>
+              </ChatComposerQueueItem>
+            </ChatComposerQueueList>
+          </ChatComposerQueue>
+        ) : undefined}
         startActions={(
           <button
             aria-label="Add context"
@@ -970,7 +1021,7 @@ export const flowChatPreviewDefinitions = {
   },
   ChatComposer: {
     attention: "adaptive",
-    codeSample: () => `import { ChatComposer } from "@bitfun/ui/flow-chat";\n\n<ChatComposer\n  contextBar={<WorkspaceContext />}\n  layout={multiline ? "expanded" : "compact"}\n  startActions={<AddMenu />}\n  endActions={<ComposerActions />}\n>\n  <RichTextEditor />\n</ChatComposer>`,
+    codeSample: () => `import { ChatComposer } from "@bitfun/ui/flow-chat";\n\n<ChatComposer\n  contextBar={<WorkspaceContext />}\n  queue={pendingMessages.length ? <PendingMessageQueue items={pendingMessages} /> : undefined}\n  layout={multiline ? "expanded" : "compact"}\n  startActions={<AddMenu />}\n  endActions={<ComposerActions />}\n>\n  <RichTextEditor />\n</ChatComposer>`,
     icon: MessageSquare,
     render: (options) => <ChatComposerPreview {...options} />,
     section: "framework",

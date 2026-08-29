@@ -2603,24 +2603,24 @@
     "showAll": "顯示全部"
   },
   "pendingQueue": {
-    "title": "待發送 ({{count}})",
-    "hint": "目前對話結束後會按順序自動發送",
-    "editorHint": "⌘/Ctrl+Enter 儲存 · Esc 取消",
+    "title": "等待發送",
+    "label": "等待發送 {{count}}",
+    "attachmentCount": "{{count}} 個圖片附件",
+    "attachmentCount_one": "{{count}} 個圖片附件",
+    "attachmentCount_other": "{{count}} 個圖片附件",
     "emptyPlaceholder": "（空訊息）",
     "statusSending": "正在引導…",
     "statusFailed": "發送失敗 — 請編輯 / 立即發送 / 刪除以清除該項",
     "actions": {
       "edit": "編輯",
       "sendNow": "立即發送（引導）",
-      "delete": "刪除",
-      "saveEdit": "儲存（⌘/Ctrl+Enter）",
-      "cancelEdit": "取消（Esc）"
+      "delete": "刪除"
     },
     "tooltip": {
       "sendNow": "立即作為引導訊息插入目前對話"
     },
     "errors": {
-      "emptyContent": "訊息內容不能為空",
+      "composerNotEmpty": "請先發送或清空目前輸入與附件，再編輯這則等待發送的訊息",
       "sendNowFailed": "立即發送失敗，請稍後重試"
     }
   },

@@ -12,6 +12,7 @@ import type {
 } from '@/shared/types/session-history';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { ContextItem } from '@/shared/types/context';
 
 export type ModelRoundAttemptDiagnostic = import('@/shared/types/session-history').ModelRoundAttemptDiagnostic;
 
@@ -645,6 +646,15 @@ export interface SessionConfig {
  * once the session returns to IDLE; users may also "send now" to inject the item
  * mid-turn (Codex-style steering) via the new `steer_dialog_turn` Tauri command.
  */
+export interface QueuedComposerDraft {
+  /** Original editor value before transport-specific prompt expansion. */
+  value: string;
+  /** Composer-owned context chips, including the original image attachments. */
+  contexts: ContextItem[];
+  /** Large-paste substitutions needed to expand placeholders on resubmission. */
+  pendingLargePastes: Record<string, string>;
+}
+
 export interface QueuedMessage {
   id: string;
   sessionId: string;
@@ -669,6 +679,8 @@ export interface QueuedMessage {
   /** Image / attachment payloads forwarded to `start_dialog_turn` when drained. */
   imageContexts?: unknown[];
   imageDisplayData?: unknown[];
+  /** Optional for upgrade compatibility with queues persisted by older builds. */
+  composerDraft?: QueuedComposerDraft;
   /** Structured metadata forwarded to `start_dialog_turn` when drained. */
   userMessageMetadata?: Record<string, unknown>;
   localDialogTurnId?: string;

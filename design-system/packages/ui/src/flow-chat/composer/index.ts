@@ -7,3 +7,22 @@ export {
   type ChatComposerProps,
   type ChatComposerSlotProps,
 } from "./ChatComposer";
+export {
+  ChatComposerQueue,
+  ChatComposerQueueAttachmentBadge,
+  ChatComposerQueueHeader,
+  ChatComposerQueueItem,
+  ChatComposerQueueItemActions,
+  ChatComposerQueueItemContent,
+  ChatComposerQueueList,
+  ChatComposerQueueTitle,
+  type ChatComposerQueueAttachmentBadgeProps,
+  type ChatComposerQueueHeaderProps,
+  type ChatComposerQueueItemActionsProps,
+  type ChatComposerQueueItemContentProps,
+  type ChatComposerQueueItemProps,
+  type ChatComposerQueueItemState,
+  type ChatComposerQueueListProps,
+  type ChatComposerQueueProps,
+  type ChatComposerQueueTitleProps,
+} from "./ChatComposerQueue";

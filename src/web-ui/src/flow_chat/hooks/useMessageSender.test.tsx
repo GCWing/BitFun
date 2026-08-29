@@ -54,6 +54,7 @@ vi.mock('@/shared/utils/logger', () => ({
 }));
 
 let sendFromProbe: (() => Promise<void>) | undefined;
+let sendDraftFromProbe: (() => Promise<void>) | undefined;
 
 function Probe() {
   const { sendMessage } = useMessageSender({
@@ -61,6 +62,13 @@ function Probe() {
     onClearContexts: mocks.onClearContexts,
   });
   sendFromProbe = () => sendMessage('hello');
+  sendDraftFromProbe = () => sendMessage('expanded paste content', {
+    displayMessage: '[Pasted text #1]',
+    composerDraft: {
+      value: '[Pasted text #1]',
+      pendingLargePastes: { '[Pasted text #1]': 'expanded paste content' },
+    },
+  });
   return null;
 }
 
@@ -81,6 +89,7 @@ describe('useMessageSender', () => {
     act(() => root.unmount());
     container.remove();
     sendFromProbe = undefined;
+    sendDraftFromProbe = undefined;
     vi.clearAllMocks();
   });
 
@@ -104,7 +113,37 @@ describe('useMessageSender', () => {
       'hello',
       'agentic',
       undefined,
-      expect.any(Object),
+      expect.objectContaining({
+        pendingQueueDraft: {
+          value: 'hello',
+          contexts: [],
+          pendingLargePastes: {},
+        },
+      }),
+    );
+  });
+
+  it('preserves the original large-paste composer draft for queued restoration', async () => {
+    await act(async () => {
+      root.render(<Probe />);
+    });
+    await act(async () => {
+      await sendDraftFromProbe?.();
+    });
+
+    expect(mocks.sendMessage).toHaveBeenCalledWith(
+      'expanded paste content',
+      'created-session',
+      '[Pasted text #1]',
+      'agentic',
+      undefined,
+      expect.objectContaining({
+        pendingQueueDraft: {
+          value: '[Pasted text #1]',
+          contexts: [],
+          pendingLargePastes: { '[Pasted text #1]': 'expanded paste content' },
+        },
+      }),
     );
   });
 });

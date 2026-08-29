@@ -32,6 +32,7 @@ import type {
   AgentDialogTurnExecution,
   SessionPermissionMode,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import type { PendingLargePasteMap } from '../store/sessionComposerStore';
 
 const log = createLogger('FlowChat');
 
@@ -77,6 +78,10 @@ interface UseMessageSenderReturn {
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      composerDraft?: {
+        value: string;
+        pendingLargePastes: PendingLargePasteMap;
+      };
       execution?: AgentDialogTurnExecution;
     }
   ) => Promise<void>;
@@ -103,6 +108,10 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      composerDraft?: {
+        value: string;
+        pendingLargePastes: PendingLargePasteMap;
+      };
       execution?: AgentDialogTurnExecution;
     }
   ) => {
@@ -219,6 +228,11 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         undefined,
         {
           ...(imagePayload ?? {}),
+          pendingQueueDraft: {
+            value: options?.composerDraft?.value ?? displayMessage,
+            contexts: [...contexts],
+            pendingLargePastes: { ...(options?.composerDraft?.pendingLargePastes ?? {}) },
+          },
           ...(userMessageMetadata ? { userMessageMetadata } : {}),
           ...(options?.execution ? { execution: options.execution } : {}),
           onSessionConflictRetryStart: () => {
