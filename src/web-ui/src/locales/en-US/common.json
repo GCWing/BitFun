@@ -193,10 +193,6 @@
         "sessionUnavailable": "This session is no longer available"
       }
     },
-    "githubStar": {
-      "label": "Star",
-      "tooltip": "Star BitFun on GitHub"
-    },
     "displayModes": {
       "pro": "Expert Mode",
       "assistant": "Assistant Mode",

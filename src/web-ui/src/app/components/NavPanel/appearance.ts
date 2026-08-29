@@ -25,7 +25,6 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'footer', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'deviceStatus', propertyProfile: 'control', visualRole: 'control' },
     { id: 'settingsEntry', propertyProfile: 'control', visualRole: 'control' },
-    { id: 'footerButton', propertyProfile: 'control', visualRole: 'control' },
   ],
   facets: [
     { id: 'layer', attribute: 'data-bf-layer', values: ['main', 'scene'] },

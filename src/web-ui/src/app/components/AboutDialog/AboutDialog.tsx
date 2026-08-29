@@ -27,10 +27,10 @@ import { canCheckForAppUpdates, isTauriRuntime } from '@/infrastructure/update/t
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
-import { GITHUB_STAR_URL } from '../NavPanel/components/githubStarCtaStorage';
 import './AboutDialog.scss';
 
 const log = createLogger('AboutDialog');
+const GITHUB_REPOSITORY_URL = 'https://github.com/GCWing/BitFun';
 const ABOUT_DOT_MATRIX_COLUMNS = 13;
 const ABOUT_DOT_MATRIX_ROWS = 7;
 const ABOUT_DOT_MATRIX = Array.from(
@@ -147,8 +147,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   }, [t]);
 
   const handleGithubStar = useCallback(() => {
-    systemAPI.openExternal(GITHUB_STAR_URL).catch(error => {
-      log.error('Failed to open the GitHub repository', { url: GITHUB_STAR_URL, error });
+    systemAPI.openExternal(GITHUB_REPOSITORY_URL).catch(error => {
+      log.error('Failed to open the GitHub repository', { url: GITHUB_REPOSITORY_URL, error });
     });
   }, []);
 

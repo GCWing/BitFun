@@ -193,10 +193,6 @@
         "sessionUnavailable": "該會話已不可用"
       }
     },
-    "githubStar": {
-      "label": "Star",
-      "tooltip": "在 GitHub 上為 BitFun 點個 Star"
-    },
     "displayModes": {
       "pro": "專業模式",
       "assistant": "助理模式",
