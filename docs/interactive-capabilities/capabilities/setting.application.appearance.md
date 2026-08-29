@@ -11,9 +11,9 @@ title_en: "Appearance & language"
 
 > 设置 / Setting
 
-切换主题与语言，调整字体和动效，并安装或导入外观包。
+切换主题与语言，调整字体，并安装或导入外观包。
 
-Switch themes and languages, tune typography and motion, and install or import appearance packs.
+Switch themes and languages, tune typography, and install or import appearance packs.
 
 ## 完整功能清单 / Everything included
 
@@ -23,8 +23,6 @@ Switch themes and languages, tune typography and motion, and install or import a
   - Switch among Simplified Chinese, Traditional Chinese, English, and other supported UI languages
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 分别调整整个界面与聊天区字号，并支持自定义像素值
   - Adjust global UI and chat font sizes independently, including custom pixel values
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 控制鼠标光效，并让动态背景尊重系统的减少动效偏好
-  - Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 导入、预览、应用、导出和删除本地外观包
   - Import, preview, apply, export, and delete local appearance packages
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览、搜索、筛选并安装或更新 Skin 市场外观
@@ -42,8 +40,8 @@ Switch themes and languages, tune typography and motion, and install or import a
    Open Settings
 2. 进入“应用 > 外观”
    Go to Application > Appearance
-3. 选择主题、语言或外观效果
-   Choose a theme, language, or visual effect
+3. 选择主题、语言或外观包
+   Choose a theme, language, or appearance package
 
 入口 / Entry: BitFun 设置
 

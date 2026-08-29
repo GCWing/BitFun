@@ -1,7 +1,6 @@
-import { Select, Switch } from '@bitfun/ui';
+import { Select } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
-import { useMouseGlowPreference } from '@/infrastructure/mouse-glow';
 import { useTranslation } from 'react-i18next';
 import { Select as LegacySelect } from '@/component-library';
 import {
@@ -34,7 +33,6 @@ function AppearanceSelectionSection() {
   const [packageActivationFailure, setPackageActivationFailure] = useState<
     AppearancePackageFailure | null
   >(null);
-  const { enabled: mouseGlowEnabled, setEnabled: setMouseGlowEnabled } = useMouseGlowPreference();
   const {
     selectedAppearanceId,
     appearances,
@@ -215,18 +213,6 @@ function AppearanceSelectionSection() {
                 />
               </div>
             </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={tAppearance('effects.mouseGlow.label')}
-            description={tAppearance('effects.mouseGlow.description')}
-            align="center"
-          >
-            <Switch
-              checked={mouseGlowEnabled}
-              onChange={(event) => setMouseGlowEnabled(event.target.checked)}
-              aria-label={tAppearance('effects.mouseGlow.label')}
-              data-testid="appearance-mouse-glow-switch"
-            />
           </ConfigPageRow>
           <ConfigPageRow
             className="appearance-settings__package-row"

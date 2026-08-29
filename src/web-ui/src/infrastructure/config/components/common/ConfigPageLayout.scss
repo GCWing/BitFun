@@ -121,8 +121,7 @@
   box-shadow: none;
 }
 
-// Sections whose children own their own cards. Every visual boundary has to go,
-// including the inset highlight, or the mouse glow keeps tracing this container.
+// Sections whose children own their own cards should not render a second surface.
 .bitfun-config-page-section__body--flush {
   background: transparent;
   border: 0;

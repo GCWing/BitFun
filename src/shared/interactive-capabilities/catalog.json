@@ -5339,8 +5339,8 @@
       "categoryId": "application",
       "titleZh": "外观与语言",
       "titleEn": "Appearance & language",
-      "summaryZh": "切换主题与语言，调整字体和动效，并安装或导入外观包。",
-      "summaryEn": "Switch themes and languages, tune typography and motion, and install or import appearance packs.",
+      "summaryZh": "切换主题与语言，调整字体，并安装或导入外观包。",
+      "summaryEn": "Switch themes and languages, tune typography, and install or import appearance packs.",
       "keywordsZh": [
         "外观",
         "主题",
@@ -5348,7 +5348,6 @@
         "浅色模式",
         "语言",
         "字体",
-        "动效",
         "皮肤"
       ],
       "keywordsEn": [
@@ -5358,18 +5357,17 @@
         "light mode",
         "language",
         "font",
-        "motion",
         "skin"
       ],
       "highlightsZh": [
         "系统、深色与浅色主题",
         "界面语言与字号",
-        "鼠标光效、动效和外观包"
+        "本地与市场外观包"
       ],
       "highlightsEn": [
         "System, dark, and light themes",
         "UI language and font size",
-        "Mouse glow, motion, and appearance packs"
+        "Local and marketplace appearance packs"
       ],
       "items": [
         {
@@ -5423,21 +5421,6 @@
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.fontSize.uiSizeLabel",
             "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.fontSize.flowChatLabel"
-          ]
-        },
-        {
-          "id": "visual-effects",
-          "titleZh": "控制鼠标光效，并让动态背景尊重系统的减少动效偏好",
-          "titleEn": "Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“控制鼠标光效，并让动态背景尊重系统的减少动效偏好”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/appearance.json#effects.mouseGlow.label",
-            "source:src/web-ui/src/infrastructure/appearance/runtime/AppearanceBackgroundMedia.tsx#prefers-reduced-motion: reduce"
           ]
         },
         {
@@ -5529,12 +5512,12 @@
       "stepsZh": [
         "打开设置",
         "进入“应用 > 外观”",
-        "选择主题、语言或外观效果"
+        "选择主题、语言或外观包"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Application > Appearance",
-        "Choose a theme, language, or visual effect"
+        "Choose a theme, language, or appearance package"
       ],
       "agentExamplesZh": [
         "切换成深色主题",

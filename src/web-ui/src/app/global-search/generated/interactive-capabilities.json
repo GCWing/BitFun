@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "0aaa3d178d4cfea701cce3169071ee1414c3b1b816f5912590aad64ac9fb9502",
+  "digest": "8761689df7f8e1015b97fa3d2928eaa5ed58833a68e97a1efb1420b759a4cdaf",
   "ownerDigest": "a6a8c5337fb877e641b66f5774740d5213caed4800fe9b006eb53632f7eb1c2d",
   "searchAcceptance": [
     {
@@ -138,11 +138,11 @@
     "features": 22,
     "settings": 16,
     "userFacing": 38,
-    "documentedItems": 318,
+    "documentedItems": 317,
     "controlCoverage": {
       "direct": 49,
       "delegated": 62,
-      "interactive": 207,
+      "interactive": 206,
       "unsupported": 0
     }
   },
@@ -10825,7 +10825,6 @@
         "built-in-appearance",
         "language",
         "ui-font-size",
-        "visual-effects",
         "local-packages",
         "appearance-market",
         "agent-market-submit",
@@ -10981,52 +10980,6 @@
       "capabilityId": "setting.application.appearance",
       "itemIds": [
         "ui-font-size"
-      ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        }
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "openReason": "unstructuredInteraction",
-      "presentationTarget": {
-        "kind": "settings",
-        "pageId": "application.appearance"
-      }
-    },
-    {
-      "id": "setting.application.appearance:open:visual-effects",
-      "capabilityId": "setting.application.appearance",
-      "itemIds": [
-        "visual-effects"
       ],
       "kind": "open",
       "risk": "ui",
@@ -24013,8 +23966,8 @@
       "categoryId": "application",
       "titleZh": "外观与语言",
       "titleEn": "Appearance & language",
-      "summaryZh": "切换主题与语言，调整字体和动效，并安装或导入外观包。",
-      "summaryEn": "Switch themes and languages, tune typography and motion, and install or import appearance packs.",
+      "summaryZh": "切换主题与语言，调整字体，并安装或导入外观包。",
+      "summaryEn": "Switch themes and languages, tune typography, and install or import appearance packs.",
       "keywordsZh": [
         "外观",
         "主题",
@@ -24022,7 +23975,6 @@
         "浅色模式",
         "语言",
         "字体",
-        "动效",
         "皮肤"
       ],
       "keywordsEn": [
@@ -24032,18 +23984,17 @@
         "light mode",
         "language",
         "font",
-        "motion",
         "skin"
       ],
       "highlightsZh": [
         "系统、深色与浅色主题",
         "界面语言与字号",
-        "鼠标光效、动效和外观包"
+        "本地与市场外观包"
       ],
       "highlightsEn": [
         "System, dark, and light themes",
         "UI language and font size",
-        "Mouse glow, motion, and appearance packs"
+        "Local and marketplace appearance packs"
       ],
       "items": [
         {
@@ -24083,17 +24034,6 @@
             "reasonCode": "unstructuredInteraction",
             "reasonZh": "“分别调整整个界面与聊天区字号，并支持自定义像素值”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
             "reasonEn": "“Adjust global UI and chat font sizes independently, including custom pixel values” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
-        },
-        {
-          "id": "visual-effects",
-          "titleZh": "控制鼠标光效，并让动态背景尊重系统的减少动效偏好",
-          "titleEn": "Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“控制鼠标光效，并让动态背景尊重系统的减少动效偏好”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           }
         },
         {
@@ -24163,12 +24103,12 @@
       "stepsZh": [
         "打开设置",
         "进入“应用 > 外观”",
-        "选择主题、语言或外观效果"
+        "选择主题、语言或外观包"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Application > Appearance",
-        "Choose a theme, language, or visual effect"
+        "Choose a theme, language, or appearance package"
       ],
       "agentExamplesZh": [
         "切换成深色主题",
@@ -24236,7 +24176,6 @@
         "浅色模式",
         "语言",
         "字体",
-        "动效",
         "皮肤",
         "appearance",
         "theme",
@@ -24244,22 +24183,19 @@
         "light mode",
         "language",
         "font",
-        "motion",
         "skin",
         "系统、深色与浅色主题",
         "界面语言与字号",
-        "鼠标光效、动效和外观包",
+        "本地与市场外观包",
         "System, dark, and light themes",
         "UI language and font size",
-        "Mouse glow, motion, and appearance packs",
+        "Local and marketplace appearance packs",
         "选择跟随系统、浅色、深色、单色、Midnight、中国风、Cyber、Slate 或 Tokyo Night 等内置外观",
         "Choose system, light, dark, monochrome, Midnight, China, Cyber, Slate, Tokyo Night, and other built-in appearances",
         "切换简体中文、繁体中文、英文等受支持界面语言",
         "Switch among Simplified Chinese, Traditional Chinese, English, and other supported UI languages",
         "分别调整整个界面与聊天区字号，并支持自定义像素值",
         "Adjust global UI and chat font sizes independently, including custom pixel values",
-        "控制鼠标光效，并让动态背景尊重系统的减少动效偏好",
-        "Control mouse-glow effects while dynamic backgrounds respect the system reduced-motion preference",
         "导入、预览、应用、导出和删除本地外观包",
         "Import, preview, apply, export, and delete local appearance packages",
         "浏览、搜索、筛选并安装或更新 Skin 市场外观",

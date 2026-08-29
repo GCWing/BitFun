@@ -311,7 +311,7 @@ export function AppearancePackageConfigSection() {
       className="appearance-package-config"
       title={t('package.title')}
       description={t('package.description')}
-      mouseGlowSurface={false}
+      bodySurface={false}
       extra={(
         <div
           className="appearance-package-config__actions"

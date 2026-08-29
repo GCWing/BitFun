@@ -1,14 +1,6 @@
 {
   "title": "Appearance",
-  "subtitle": "Interface language, visual appearance, effects, appearance packages, and global font size",
-  "effects": {
-    "title": "Visual effects",
-    "hint": "Control visual feedback across the interface.",
-    "mouseGlow": {
-      "label": "Pointer-follow glow",
-      "description": "Show a soft spotlight that follows the pointer along card edges. It pauses automatically when reduced motion is enabled."
-    }
-  },
+  "subtitle": "Interface language, visual appearance, appearance packages, and global font size",
   "package": {
     "title": "Appearance packages",
     "description": "Choose an appearance package from the list; hover the thumbnail for a larger preview. Packages stay on this device.",

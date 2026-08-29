@@ -737,7 +737,7 @@ const WorktreeSettingsPage: React.FC = () => {
         {renderSettings()}
         <ConfigPageSection
           className="bitfun-worktree-settings__management-section"
-          mouseGlowSurface={false}
+          bodySurface={false}
           title={t('management.title')}
           description={t('management.description')}
           extra={(

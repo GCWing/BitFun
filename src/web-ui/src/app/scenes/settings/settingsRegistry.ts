@@ -70,13 +70,12 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
     descriptionKey: 'navigation.pages.appearance.description',
     keywords: [
       'theme', 'language', 'locale', 'font', 'size', 'motion', 'animation',
-      'effect', 'mouse glow', 'appearance pack', 'skin', 'import',
+      'appearance pack', 'skin', 'import',
     ],
     namespaces: ['settings/appearance', 'settings/application'],
     searchPhrases: [
       phrase('settings/appearance', 'title'),
       phrase('settings/appearance', 'subtitle'),
-      phrase('settings/appearance', 'effects.mouseGlow.label'),
       phrase('settings/appearance', 'package.title'),
       phrase('settings/appearance', 'package.description'),
       phrase('settings/application', 'appearance.fontSize.title'),
