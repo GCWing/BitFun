@@ -239,14 +239,13 @@ function AppearanceSelectionSection() {
               data-bf-component="appearance-settings"
               data-bf-part="packageSelect"
             >
-              <LegacySelect
-                size="small"
+              <Select
+                size="sm"
                 value={selectedPackageId}
                 options={packageOptions}
-                onChange={handlePackageChange}
+                onValueChange={handlePackageChange}
                 disabled={!initialized || status === 'applying'}
-                placement="bottom"
-                triggerTestId="appearance-package-select"
+                data-testid="appearance-package-select"
               />
             </div>
           </ConfigPageRow>

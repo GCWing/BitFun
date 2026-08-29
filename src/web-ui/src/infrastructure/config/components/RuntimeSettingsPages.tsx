@@ -2,7 +2,7 @@ import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { ConfigPageLoading, Select as LegacySelect, type SelectOption } from '@/component-library';
+import { ConfigPageLoading, type SelectOption } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -898,14 +898,17 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             description={t('features.pet.displayModeDescription')}
             align="center"
           >
-            <LegacySelect
+            <Select
               className="bitfun-runtime-settings__pet-select"
-              dropdownClassName="bitfun-runtime-settings__pet-select-dropdown"
-              size="small"
-              options={companionDisplayModeOptions}
+              size="sm"
+              options={companionDisplayModeOptions.map(option => ({
+                disabled: option.disabled,
+                label: option.description ? `${option.label} — ${option.description}` : option.label,
+                value: option.value,
+              }))}
               value={settings.agent_companion_display_mode}
-              onChange={(value) => {
-                const selectedValue = String(Array.isArray(value) ? value[0] : value);
+              onValueChange={(value) => {
+                const selectedValue = String(value);
                 void updateSetting(
                   'agent_companion_display_mode',
                   selectedValue === 'desktop' ? 'desktop' : 'input',
