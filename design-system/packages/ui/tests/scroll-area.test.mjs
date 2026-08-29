@@ -30,6 +30,19 @@ test("ScrollArea exposes orientation and scrollbar visibility contracts", () => 
   assert.match(markup, /data-bf-scrollbar-visibility="always"/);
 });
 
+test("ScrollArea preserves feature-owned appearance contracts", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      ScrollArea,
+      { "data-bf-component": "model-settings", "data-bf-part": "root" },
+      "Content",
+    ),
+  );
+
+  assert.match(markup, /data-bf-component="model-settings"/);
+  assert.match(markup, /data-bf-part="root"/);
+});
+
 test("ScrollArea styling uses public scrollbar tokens and preserves native scrolling", async () => {
   const styles = await readFile(
     new URL("../src/components/ScrollArea/ScrollArea.module.css", import.meta.url),

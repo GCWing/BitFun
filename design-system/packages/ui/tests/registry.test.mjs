@@ -86,6 +86,7 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("control.") ||
           token.startsWith("font.") ||
           token.startsWith("layout.") ||
+          token.startsWith("lineHeight.") ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||
