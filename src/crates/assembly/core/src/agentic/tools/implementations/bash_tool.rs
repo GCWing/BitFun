@@ -138,25 +138,6 @@ impl BashTool {
         context.resolve_workspace_tool_path(trimmed).map(Some)
     }
 
-    async fn is_existing_workspace_directory(
-        context: &ToolUseContext,
-        resolved_dir: &str,
-    ) -> BitFunResult<bool> {
-        if context.is_remote() {
-            let fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool(
-                    "Remote workspace filesystem is unavailable; cannot validate working_directory"
-                        .to_string(),
-                )
-            })?;
-            fs.is_dir(resolved_dir).await.map_err(|e| {
-                BitFunError::tool(format!("Failed to validate working_directory: {e}"))
-            })
-        } else {
-            Ok(Path::new(resolved_dir).is_dir())
-        }
-    }
-
     /// Build environment variables that suppress interactive behaviors
     /// (pagers, editors, prompts) so agent-driven commands never block.
     pub fn noninteractive_env() -> std::collections::HashMap<String, String> {
@@ -506,32 +487,11 @@ Usage notes:
             return rejection;
         }
 
+        // Resolve and enforce remote workspace containment here, but leave existence checks to
+        // the shell's `cd`. A separate filesystem stat is racy locally and unnecessarily couples
+        // remote command execution to the SFTP channel.
         match Self::resolve_working_directory(input, context) {
-            Ok(Some(resolved_dir)) => {
-                match Self::is_existing_workspace_directory(context, &resolved_dir).await {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        return ValidationResult {
-                            result: false,
-                            message: Some(format!(
-                                "working_directory must be an existing directory inside the current workspace: {}",
-                                resolved_dir
-                            )),
-                            error_code: Some(400),
-                            meta: None,
-                        };
-                    }
-                    Err(err) => {
-                        return ValidationResult {
-                            result: false,
-                            message: Some(err.to_string()),
-                            error_code: Some(400),
-                            meta: None,
-                        };
-                    }
-                }
-            }
-            Ok(None) => {}
+            Ok(_) => {}
             Err(err) => {
                 return ValidationResult {
                     result: false,
@@ -1419,6 +1379,61 @@ impl BashTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::workspace::WorkspaceBinding;
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn remote_tool_context_without_filesystem(root: &str) -> ToolUseContext {
+        let session_identity =
+            workspace_session_identity(root, Some("conn-1"), Some("remote-host"))
+                .expect("remote session identity should build");
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: Some("session-1".to_string()),
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                None,
+                PathBuf::from(root),
+                "conn-1".to_string(),
+                "Remote Host".to_string(),
+                session_identity,
+            )),
+            loaded_deferred_tool_specs: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_workdir_validation_does_not_require_filesystem_service() {
+        let context = remote_tool_context_without_filesystem("/home/me/project");
+
+        let validation = BashTool::new()
+            .validate_input(
+                &json!({
+                    "command": "pwd",
+                    "working_directory": "crates/core"
+                }),
+                Some(&context),
+            )
+            .await;
+
+        assert!(
+            validation.result,
+            "validation failed: {:?}",
+            validation.message
+        );
+        assert!(
+            context.ws_fs().is_none(),
+            "the regression context has no SFTP service"
+        );
+    }
 
     #[test]
     fn checkpoint_detection_flags_mutating_bash_commands() {
