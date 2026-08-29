@@ -4,7 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Icon, Tooltip } from '@bitfun/ui';
+import { Button, Icon, Tooltip } from '@bitfun/ui';
 import {
   GITHUB_STAR_URL,
   isGithubStarCtaDismissed,
@@ -38,20 +38,23 @@ const GithubStarButton: React.FC = () => {
   return (
     <div className="bitfun-nav-panel__footer-star">
       <Tooltip content={t('nav.githubStar.tooltip')} placement="top">
-        <button
-          type="button"
+        <Button
+          variant="text"
+          size="xs"
           className="bitfun-nav-panel__footer-star-btn"
           onClick={handleStar}
           data-testid="nav-footer-github-star-btn"
           data-bf-component="nav-panel"
           data-bf-part="footerButton"
+          leadingIcon={(
+            <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
+              <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-default" />
+              <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
+            </span>
+          )}
         >
-          <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
-            <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-default" />
-            <Icon name="star" size="sm" className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
-          </span>
           <span className="bitfun-nav-panel__footer-star-label">{t('nav.githubStar.label')}</span>
-        </button>
+        </Button>
       </Tooltip>
     </div>
   );

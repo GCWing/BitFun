@@ -5,7 +5,7 @@ import {
   NavigationSessionViewGroupedIcon,
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
-import { Tooltip } from '@bitfun/ui';
+import { IconButton, Tooltip } from '@bitfun/ui';
 import {
   getNextWorkspaceSessionGrouping,
   useWorkspaceSessionViewStore,
@@ -27,11 +27,13 @@ const WorkspaceSessionGroupingToggle: React.FC = () => {
       placement="right"
       followCursor
     >
-      <button
-        type="button"
+      <IconButton
         className="bitfun-nav-panel__section-action bitfun-nav-panel__session-view-toggle"
-        aria-label={t('nav.sessions.viewToggle.allTooltip')}
+        aria-label={actionTooltip}
         aria-pressed={isAll}
+        icon={<ViewIcon size={BITFUN_ICON_SIZE.navigation} aria-hidden="true" />}
+        size="xs"
+        variant="quiet"
         data-bf-action="toggle-session-view"
         data-bf-component="session-navigation"
         data-bf-part="viewToggle"
@@ -39,9 +41,7 @@ const WorkspaceSessionGroupingToggle: React.FC = () => {
         data-testid="nav-workspace-session-view-toggle"
         data-view-mode={grouping}
         onClick={() => setGrouping(getNextWorkspaceSessionGrouping(grouping))}
-      >
-        <ViewIcon size={BITFUN_ICON_SIZE.navigation} aria-hidden="true" />
-      </button>
+      />
     </Tooltip>
   );
 };

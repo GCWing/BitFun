@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   PictureInPicture2,
 } from 'lucide-react';
-import { Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
 import { PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
@@ -185,9 +185,8 @@ const PersistentFooterActions: React.FC = () => {
               followCursor
               disabled={menuOpen}
             >
-              <button
+              <IconButton
                 ref={menuTriggerRef}
-                type="button"
                 className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${menuOpen || isSettingsActive ? ' is-active' : ''}`}
                 aria-label={t('shared:features.settings')}
                 aria-expanded={menuOpen}
@@ -198,9 +197,10 @@ const PersistentFooterActions: React.FC = () => {
                 data-bf-component="nav-panel"
                 data-bf-part="settingsEntry"
                 data-bf-state={menuOpen ? 'open' : isSettingsActive ? 'active' : undefined}
-              >
-                <Icon name="settings" size="sm" aria-hidden="true" />
-              </button>
+                icon={<Icon name="settings" size="sm" aria-hidden="true" />}
+                size="sm"
+                variant="quiet"
+              />
             </Tooltip>
 
             {menuOpen && createPortal(
