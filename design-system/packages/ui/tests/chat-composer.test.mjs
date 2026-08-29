@@ -93,10 +93,15 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
   assert.match(styles, /--bf-space-8/);
   assert.match(styles, /--bf-radius-2xl/);
   assert.match(styles, /--bf-color-surface-panel/);
-  assert.match(
-    styles,
-    /\.\w+\[data-has-context=(?:"true"|true)\][^{]*\{[^}]*background:\s*var\(--bf-color-surface-panel\)/,
+  const contextBackgroundRule = styles.match(
+    /\.\w+\[data-has-context=(?:"true"|true)\][^{]*\{[^}]*\}/,
   );
+  assert.ok(contextBackgroundRule);
+  assert.match(
+    contextBackgroundRule[0],
+    /background:\s*color-mix\(in srgb,\s*var\(--bf-color-surface-panel\)\s*94%,\s*var\(--bf-color-content-primary\)\s*6%\)/,
+  );
+  assert.doesNotMatch(contextBackgroundRule[0], /\btransparent\b/);
   assert.match(styles, /--bf-color-action-neutral-border/);
   assert.match(styles, /--bf-shadow-base/);
   assert.match(
