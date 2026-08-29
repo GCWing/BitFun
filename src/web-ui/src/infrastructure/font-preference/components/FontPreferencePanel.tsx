@@ -1,12 +1,13 @@
 import {
   Button,
+  NumberInput,
   SegmentedControl,
   Select,
   Switch,
   type SegmentedControlOption,
   type SelectOption,
 } from '@bitfun/ui';
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
 import { useFontPreference } from '../hooks/useFontPreference';
@@ -23,7 +24,6 @@ export function FontPreferencePanel() {
   const { level, customPx } = preference.uiSize;
   const [customInput, setCustomInput] = useState<string>(String(customPx ?? 14));
   const [fcBaseInput, setFcBaseInput] = useState<string>(String(preference.flowChat.basePx ?? 14));
-  const [customError, setCustomError] = useState<string | null>(null);
 
   useEffect(() => {
     if (preference.flowChat.mode === 'independent') {
@@ -56,34 +56,17 @@ export function FontPreferencePanel() {
     } else {
       await setUiSize(l);
     }
-    setCustomError(null);
   }, [getEffectiveUiBasePx, setUiSize]);
 
-  const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setCustomInput(raw);
-    const px = parseInt(raw, 10);
-    if (isNaN(px) || px < 12 || px > 20) {
-      setCustomError(t('appearance.fontSize.customPxOutOfRange'));
-    } else {
-      setCustomError(null);
-      void setUiSize('custom', px);
-    }
-  };
-
-  const handleCustomStep = (delta: number) => {
-    const current = parseInt(customInput, 10);
-    const next = Math.max(12, Math.min(20, (isNaN(current) ? 14 : current) + delta));
-    setCustomInput(String(next));
-    setCustomError(null);
-    void setUiSize('custom', next);
+  const handleCustomValueChange = (px: number) => {
+    setCustomInput(String(px));
+    void setUiSize('custom', px);
   };
 
   const handleReset = async () => {
     await reset();
     setCustomInput('14');
     setFcBaseInput('14');
-    setCustomError(null);
   };
 
   const previewBasePx = level === 'custom'
@@ -204,57 +187,29 @@ export function FontPreferencePanel() {
                   data-bf-component="font-preference"
                   data-bf-part="customControls"
                 >
-                  <div className="font-pref-panel__stepper">
-                    <button
-                      type="button"
-                      className="font-pref-panel__step-btn"
-                      onClick={() => handleCustomStep(-1)}
-                      aria-label="-1"
-                      data-testid="appearance-ui-font-custom-step-minus"
-                    >−</button>
-                    <input
-                      type="number"
-                      className={[
-                        'font-pref-panel__number-input',
-                        customError ? 'font-pref-panel__number-input--error' : '',
-                      ].join(' ').trim()}
-                      value={customInput}
-                      min={12}
-                      max={20}
-                      step={1}
-                      placeholder={t('appearance.fontSize.customPxPlaceholder')}
-                      onChange={handleCustomInputChange}
-                      onFocus={() => void handleLevelClick('custom')}
-                      aria-invalid={!!customError}
-                      data-testid="appearance-ui-font-custom-input"
-                      data-font-level="custom"
-                      data-bf-component="font-preference"
-                      data-bf-part="numberInput"
-                      data-bf-state={customError ? 'error' : undefined}
-                    />
-                    <button
-                      type="button"
-                      className="font-pref-panel__step-btn"
-                      onClick={() => handleCustomStep(1)}
-                      aria-label="+1"
-                      data-testid="appearance-ui-font-custom-step-plus"
-                    >+</button>
-                  </div>
-                  <span className="font-pref-panel__custom-unit">px</span>
+                  <NumberInput
+                    className="font-pref-panel__custom-number-input"
+                    value={parseInt(customInput, 10) || 14}
+                    min={12}
+                    max={20}
+                    step={1}
+                    unit="px"
+                    variant="stepper"
+                    size="sm"
+                    decrementLabel={`${t('appearance.fontSize.customPxLabel')} −1`}
+                    incrementLabel={`${t('appearance.fontSize.customPxLabel')} +1`}
+                    onChange={handleCustomValueChange}
+                    inputProps={{
+                      'aria-label': t('appearance.fontSize.customPxLabel'),
+                      'data-testid': 'appearance-ui-font-custom-input',
+                      'data-font-level': 'custom',
+                      onFocus: () => void handleLevelClick('custom'),
+                    }}
+                  />
                 </div>
               )}
             </div>
           </div>
-          {customError && (
-            <span
-              className="font-pref-panel__error"
-              data-bf-component="font-preference"
-              data-bf-part="error"
-              data-bf-state="error"
-            >
-              {customError}
-            </span>
-          )}
 
           {/* Live preview */}
           <div
