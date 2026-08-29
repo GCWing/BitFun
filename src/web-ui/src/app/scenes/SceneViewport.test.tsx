@@ -17,7 +17,7 @@ const sceneHarness = vi.hoisted(() => {
   return {
     state: {
       openTabs: [{ id: 'session', lastUsed: 0 }],
-      activeTabId: 'session',
+      activeTabId: 'session' as string | null,
       navigationMotion: 'instant',
       navigationSequence: 0,
     },
@@ -55,6 +55,10 @@ vi.mock('./assistant/AssistantScene', () => ({
   default: () => <div data-testid="assistant-scene-content" />,
 }));
 
+vi.mock('./welcome/WelcomeScene', () => ({
+  default: () => <div data-testid="welcome-scene" />,
+}));
+
 vi.mock('./agents/AgentsScene', () => ({
   default: () => {
     if (!sceneHarness.agentsAreReady()) {
@@ -85,6 +89,12 @@ describe('SceneViewport transitions', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    sceneHarness.state = {
+      openTabs: [{ id: 'session', lastUsed: 0 }],
+      activeTabId: 'session',
+      navigationMotion: 'instant',
+      navigationSequence: 0,
+    };
   });
 
   afterEach(() => {
@@ -98,6 +108,21 @@ describe('SceneViewport transitions', () => {
     return Array.from(container.querySelectorAll('[data-testid="scene-viewport-scene"]'))
       .filter(scene => scene.classList.contains('bitfun-scene-viewport__scene--visible'));
   }
+
+  it('renders the welcome surface when no tab is open', () => {
+    sceneHarness.state = {
+      openTabs: [],
+      activeTabId: null,
+      navigationMotion: 'instant',
+      navigationSequence: 0,
+    };
+
+    act(() => root.render(<SceneViewport />));
+
+    expect(visibleScenes()).toHaveLength(1);
+    expect(container.querySelector('[data-testid="welcome-scene"]')).not.toBeNull();
+    expect(container.querySelector('[role="tab"]')).toBeNull();
+  });
 
   it('keeps one scene visible while a lazy pointer target becomes ready', async () => {
     act(() => root.render(<SceneViewport />));

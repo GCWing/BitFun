@@ -22,27 +22,7 @@
     border-radius: inherit;
   }
 
-  // ── Welcome overlay (app start) ──────────────────────
-
-  &__clip--welcome {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  // ── Empty state (all tabs closed) ─────────────────────
-
-  &__clip--empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  &__empty-hint {
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    margin: 0;
-  }
+  // ── Tabless welcome state ─────────────────────────────
 
   &__empty {
     display: flex;

@@ -29,15 +29,6 @@ function catalogSceneIcon(name: IconName): SceneTabIcon {
 
 export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
-    id: 'welcome' as SceneTabId,
-    label: 'Welcome',
-    labelKey: 'welcomeScene.tabLabel',
-    Icon: catalogSceneIcon('side-chat'),
-    pinned: false,
-    singleton: true,
-    defaultOpen: true,
-  },
-  {
     id: 'session' as SceneTabId,
     label: 'Session',
     labelKey: 'scenes.aiAgent',

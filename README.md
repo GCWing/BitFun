@@ -77,7 +77,7 @@ Prerequisites: [Node.js](https://nodejs.org/) 22.12+ (LTS recommended), [pnpm](h
 
 ### First run
 
-1. Launch BitFun, click **Open** on the Welcome tab, and choose a project folder.
+1. Launch BitFun, then use the workspace controls to open a project folder.
 2. Open **More options (…) → Settings → Models → Create First Configuration**.
 3. Choose a provider, enter its API key, select one or more models, and click **Save**. BitFun makes the first saved model primary and tests the connection automatically.
 4. Return to the **Session** tab, type a concrete task, and press Enter or click **Send**.

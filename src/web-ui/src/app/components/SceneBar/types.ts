@@ -13,7 +13,6 @@ export type SceneTabIcon = (props: SceneTabIconProps) => ReactNode;
 
 /** Scene tab identifier. Open scenes are kept until the user closes them. */
 export type SceneTabId =
-  | 'welcome'
   | 'session'
   | 'terminal'
   | 'git'
