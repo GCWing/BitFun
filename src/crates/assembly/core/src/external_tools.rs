@@ -530,7 +530,7 @@ impl ExternalToolMux {
             }) if tool.dynamic_provider_id() == Some("opencode-plugin") => {
                 let uses_plugin_agent = context
                     .and_then(|context| context.agent_type.as_deref())
-                    .is_some_and(crate::plugin_config_publication::is_plugin_agent_runtime_key);
+                    .is_some_and(crate::plugin_host::is_opencode_plugin_agent_runtime_key);
                 let original = self.original();
                 if uses_plugin_agent || native_agent_visible || original.is_none() {
                     Some(tool)

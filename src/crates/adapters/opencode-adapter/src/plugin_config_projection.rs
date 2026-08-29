@@ -1,4 +1,8 @@
 use bitfun_product_domains::external_subagents::ExternalSubagentMode;
+use bitfun_product_domains::plugin_capabilities::{
+    PluginAgentProjection, PluginCapabilityProjection, PluginContributorIdentity,
+    PluginSkillRootContribution, PluginToolRef,
+};
 use bitfun_product_domains::tool_permissions::{
     PermissionConstraintLayer, PermissionEffect, PermissionRule,
 };
@@ -16,88 +20,6 @@ const MAX_PROMPT_BYTES: usize = 1024 * 1024;
 const MAX_PLUGIN_SKILL_ROOTS: usize = 64;
 const MIN_AGENT_TEMPERATURE: f64 = 0.0;
 const MAX_AGENT_TEMPERATURE: f64 = 2.0;
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct OpenCodePluginContributor {
-    id: Option<String>,
-    spec: String,
-    entry: String,
-    index: usize,
-    stable_key: String,
-    label: String,
-}
-
-impl OpenCodePluginContributor {
-    pub fn stable_key(&self) -> &str {
-        &self.stable_key
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-}
-
-impl From<&HookFunctionPluginIdentity> for OpenCodePluginContributor {
-    fn from(value: &HookFunctionPluginIdentity) -> Self {
-        Self {
-            id: value.id.clone(),
-            spec: value.spec.clone(),
-            entry: value.entry.clone(),
-            index: value.index,
-            stable_key: format!("{}\n{}\n{}", value.spec, value.entry, value.index),
-            label: value.id.clone().unwrap_or_else(|| value.spec.clone()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct OpenCodePluginToolRef {
-    pub contributor: OpenCodePluginContributor,
-    pub id: String,
-}
-
-impl TryFrom<&HookFunctionToolRegistration> for OpenCodePluginToolRef {
-    type Error = OpenCodePluginConfigProjectionError;
-
-    fn try_from(tool: &HookFunctionToolRegistration) -> Result<Self, Self::Error> {
-        let contributor = tool
-            .plugin
-            .as_ref()
-            .map(OpenCodePluginContributor::from)
-            .ok_or_else(|| contribution_error("Plugin tool identity is missing"))?;
-        validate_plugin_identity(&contributor)?;
-        validate_tool_id(&tool.id)?;
-        Ok(Self {
-            contributor,
-            id: tool.id.clone(),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct OpenCodePluginAgentProjection {
-    pub contributor: OpenCodePluginContributor,
-    pub logical_id: String,
-    pub description: String,
-    pub prompt: String,
-    pub mode: ExternalSubagentMode,
-    pub hidden: bool,
-    pub temperature: Option<f64>,
-    pub permission_constraints: PermissionConstraintLayer,
-    pub plugin_tools: Vec<OpenCodePluginToolRef>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OpenCodePluginSkillRootProjection {
-    pub path: PathBuf,
-    pub precedence: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct OpenCodePluginConfigProjection {
-    pub agents: Vec<OpenCodePluginAgentProjection>,
-    pub skill_roots: Vec<OpenCodePluginSkillRootProjection>,
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenCodePluginConfigProjectionError {
@@ -129,13 +51,13 @@ fn skill_error(message: impl Into<String>) -> OpenCodePluginConfigProjectionErro
 
 #[derive(Debug)]
 struct ConfigContributor {
-    plugin: OpenCodePluginContributor,
+    plugin: PluginContributorIdentity,
     outcome: ContributorOutcome,
 }
 
 #[derive(Debug, Clone)]
 struct ConfigContribution {
-    plugin: OpenCodePluginContributor,
+    plugin: PluginContributorIdentity,
     outcome: ContributorOutcome,
     config: Map<String, Value>,
 }
@@ -156,38 +78,84 @@ impl From<HookFunctionContributorOutcome> for ContributorOutcome {
 }
 
 struct ConfigAttribution {
-    agent_owners: BTreeMap<String, OpenCodePluginContributor>,
-    permission_owners: BTreeMap<(String, String), OpenCodePluginContributor>,
-    skill_owners: BTreeMap<PathBuf, OpenCodePluginContributor>,
+    agent_owners: BTreeMap<String, PluginContributorIdentity>,
+    permission_owners: BTreeMap<(String, String), PluginContributorIdentity>,
+    skill_owners: BTreeMap<PathBuf, PluginContributorIdentity>,
+}
+
+fn identity_component(value: &str) -> String {
+    format!("{}:{value}", value.len())
+}
+
+fn project_plugin_identity(
+    plugin: &HookFunctionPluginIdentity,
+) -> Result<PluginContributorIdentity, OpenCodePluginConfigProjectionError> {
+    if plugin.spec.trim().is_empty() || plugin.entry.trim().is_empty() {
+        return Err(contribution_error(
+            "Plugin config contributor identity is incomplete",
+        ));
+    }
+    let id = plugin.id.as_deref().unwrap_or_default();
+    let identity_key = format!(
+        "{}{}{}{}",
+        identity_component(if plugin.id.is_some() { "1" } else { "0" }),
+        identity_component(id),
+        identity_component(&plugin.spec),
+        identity_component(&plugin.entry),
+    );
+    Ok(PluginContributorIdentity::new(
+        format!(
+            "{identity_key}{}",
+            identity_component(&plugin.index.to_string())
+        ),
+        format!("{}\n{}\n{}", plugin.spec, plugin.entry, plugin.index),
+        plugin.id.clone().unwrap_or_else(|| plugin.spec.clone()),
+    ))
+}
+
+pub fn project_plugin_tool_ref(
+    tool: &HookFunctionToolRegistration,
+) -> Result<PluginToolRef, OpenCodePluginConfigProjectionError> {
+    let contributor = tool
+        .plugin
+        .as_ref()
+        .ok_or_else(|| contribution_error("Plugin tool identity is missing"))
+        .and_then(project_plugin_identity)?;
+    validate_tool_id(&tool.id)?;
+    Ok(PluginToolRef::new(contributor, tool.id.clone()))
 }
 
 pub fn project_plugin_config(
     workspace_root: &Path,
     initial_config: &Map<String, Value>,
     registration_batch: &HookFunctionRegistrationBatch,
-) -> Result<OpenCodePluginConfigProjection, OpenCodePluginConfigProjectionError> {
+) -> Result<PluginCapabilityProjection, OpenCodePluginConfigProjectionError> {
     let contributors = registration_batch
         .config_contributors
         .iter()
-        .map(|entry| ConfigContributor {
-            plugin: OpenCodePluginContributor::from(&entry.plugin),
-            outcome: entry.outcome.into(),
+        .map(|entry| {
+            Ok(ConfigContributor {
+                plugin: project_plugin_identity(&entry.plugin)?,
+                outcome: entry.outcome.into(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, OpenCodePluginConfigProjectionError>>()?;
     if contributors.is_empty() {
-        return Ok(OpenCodePluginConfigProjection::default());
+        return Ok(PluginCapabilityProjection::default());
     }
 
     let config = &registration_batch.config;
     let contributions = registration_batch
         .config_contributions
         .iter()
-        .map(|entry| ConfigContribution {
-            plugin: OpenCodePluginContributor::from(&entry.plugin),
-            outcome: entry.outcome.into(),
-            config: entry.config.clone(),
+        .map(|entry| {
+            Ok(ConfigContribution {
+                plugin: project_plugin_identity(&entry.plugin)?,
+                outcome: entry.outcome.into(),
+                config: entry.config.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, OpenCodePluginConfigProjectionError>>()?;
     let contributions = config_contribution_sequence(&contributions, &contributors, config)?;
     let attribution = attribute_config(initial_config, &contributions, config, workspace_root)?;
     let final_agents = config_object_field(config, "agent")?;
@@ -239,10 +207,10 @@ pub fn project_plugin_config(
                 tool_owners
                     .get(&id)
                     .cloned()
-                    .map(|contributor| OpenCodePluginToolRef { contributor, id })
+                    .map(|contributor| PluginToolRef::new(contributor, id))
             })
             .collect();
-        agents.push(OpenCodePluginAgentProjection {
+        agents.push(PluginAgentProjection {
             contributor: owner.clone(),
             logical_id,
             description,
@@ -262,7 +230,7 @@ pub fn project_plugin_config(
             .collect::<Vec<_>>();
     skill_roots.sort_by_key(|root| root.precedence);
 
-    Ok(OpenCodePluginConfigProjection {
+    Ok(PluginCapabilityProjection {
         agents,
         skill_roots,
     })
@@ -321,7 +289,6 @@ fn attribute_config(
         .collect::<Result<BTreeSet<_>, _>>()?;
 
     for contribution in contributions {
-        validate_plugin_identity(&contribution.plugin)?;
         let before_agents = config_object_field(previous, "agent")?;
         let after_agents = config_object_field(&contribution.config, "agent")?;
         let agent_ids = before_agents
@@ -402,17 +369,6 @@ fn agent_permission_object(
     }
 }
 
-fn validate_plugin_identity(
-    plugin: &OpenCodePluginContributor,
-) -> Result<(), OpenCodePluginConfigProjectionError> {
-    if plugin.spec.trim().is_empty() || plugin.entry.trim().is_empty() {
-        return Err(contribution_error(
-            "Plugin config contributor identity is incomplete",
-        ));
-    }
-    Ok(())
-}
-
 fn validate_tool_id(id: &str) -> Result<(), OpenCodePluginConfigProjectionError> {
     if id.is_empty() || id.len() > 256 || id.chars().any(char::is_control) {
         return Err(contribution_error("Plugin tool id is invalid"));
@@ -483,7 +439,7 @@ fn parse_temperature(
 
 fn parse_description(
     value: Option<&Value>,
-    plugin: &OpenCodePluginContributor,
+    plugin: &PluginContributorIdentity,
 ) -> Result<String, OpenCodePluginConfigProjectionError> {
     let description = value
         .and_then(Value::as_str)
@@ -523,16 +479,16 @@ fn parse_prompt(
 fn plugin_tool_ids_by_owner(
     tools: &[HookFunctionToolRegistration],
 ) -> Result<
-    BTreeMap<OpenCodePluginContributor, BTreeSet<String>>,
+    BTreeMap<PluginContributorIdentity, BTreeSet<String>>,
     OpenCodePluginConfigProjectionError,
 > {
-    let mut result = BTreeMap::<OpenCodePluginContributor, BTreeSet<String>>::new();
+    let mut result = BTreeMap::<PluginContributorIdentity, BTreeSet<String>>::new();
     for tool in tools {
-        let tool_ref = OpenCodePluginToolRef::try_from(tool)?;
+        let tool_ref = project_plugin_tool_ref(tool)?;
         result
-            .entry(tool_ref.contributor)
+            .entry(tool_ref.contributor().clone())
             .or_default()
-            .insert(tool_ref.id);
+            .insert(tool_ref.id().to_string());
     }
     Ok(result)
 }
@@ -669,15 +625,14 @@ fn normalized_skill_path_identity(
 
 fn attributed_skill_roots(
     final_config: &Map<String, Value>,
-    owners: &BTreeMap<PathBuf, OpenCodePluginContributor>,
+    owners: &BTreeMap<PathBuf, PluginContributorIdentity>,
     workspace_root: &Path,
 ) -> Result<
-    BTreeMap<OpenCodePluginContributor, Vec<OpenCodePluginSkillRootProjection>>,
+    BTreeMap<PluginContributorIdentity, Vec<PluginSkillRootContribution>>,
     OpenCodePluginConfigProjectionError,
 > {
     let mut seen = BTreeSet::new();
-    let mut roots =
-        BTreeMap::<OpenCodePluginContributor, Vec<OpenCodePluginSkillRootProjection>>::new();
+    let mut roots = BTreeMap::<PluginContributorIdentity, Vec<PluginSkillRootContribution>>::new();
     for path in skill_paths(final_config)? {
         let path = resolve_plugin_skill_path(&path, workspace_root)?;
         let identity = normalized_skill_path_identity(&path, workspace_root)?;
@@ -706,7 +661,7 @@ fn attributed_skill_roots(
         roots
             .entry(owner.clone())
             .or_default()
-            .push(OpenCodePluginSkillRootProjection {
+            .push(PluginSkillRootContribution {
                 path: canonical,
                 precedence: seen.len() - 1,
             });
@@ -782,6 +737,16 @@ mod tests {
     }
 
     #[test]
+    fn projects_owner_scoped_tool_reference_for_publication() {
+        let owner = plugin("first");
+        let projected =
+            project_plugin_tool_ref(&tool(owner, "build_project")).expect("plugin tool reference");
+
+        assert_eq!(projected.contributor().label(), "first");
+        assert_eq!(projected.id(), "build_project");
+    }
+
+    #[test]
     fn supports_legacy_single_contributor_without_contribution_snapshots() {
         let owner = plugin("first");
         let config = json!({"agent": {"build": {"prompt": "Build"}}})
@@ -799,7 +764,7 @@ mod tests {
         assert_eq!(projection.agents[0].logical_id, "build");
         assert_eq!(projection.agents[0].contributor.label(), "first");
         assert_eq!(
-            projection.agents[0].contributor.stable_key(),
+            projection.agents[0].contributor.behavior_key(),
             "D:/plugins/first\nD:/plugins/first/index.js\n0"
         );
     }
@@ -926,7 +891,7 @@ mod tests {
             build
                 .plugin_tools
                 .iter()
-                .map(|tool| tool.id.as_str())
+                .map(PluginToolRef::id)
                 .collect::<Vec<_>>(),
             vec!["first_tool", "second_tool"]
         );
@@ -934,7 +899,7 @@ mod tests {
         assert_eq!(
             plan.plugin_tools
                 .iter()
-                .map(|tool| tool.id.as_str())
+                .map(PluginToolRef::id)
                 .collect::<Vec<_>>(),
             vec!["second_tool"]
         );
@@ -942,8 +907,8 @@ mod tests {
 
     #[test]
     fn reattributes_deleted_and_recreated_agents_and_permissions() {
-        let first = OpenCodePluginContributor::from(&plugin("first"));
-        let second = OpenCodePluginContributor::from(&plugin("second"));
+        let first = project_plugin_identity(&plugin("first")).unwrap();
+        let second = project_plugin_identity(&plugin("second")).unwrap();
         let initial = json!({"agent": {"build": {"prompt": "native"}}})
             .as_object()
             .unwrap()
@@ -1149,8 +1114,8 @@ mod tests {
         let base = tempfile::tempdir().expect("base skill root");
         let first_root = tempfile::tempdir().expect("first plugin skill root");
         let second_root = tempfile::tempdir().expect("second plugin skill root");
-        let first = OpenCodePluginContributor::from(&plugin("first"));
-        let second = OpenCodePluginContributor::from(&plugin("second"));
+        let first = project_plugin_identity(&plugin("first")).unwrap();
+        let second = project_plugin_identity(&plugin("second")).unwrap();
         let initial = json!({"skills": {"paths": [base.path()]}})
             .as_object()
             .unwrap()

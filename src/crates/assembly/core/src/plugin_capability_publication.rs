@@ -3,20 +3,40 @@ use crate::agentic::agents::{
     ExternalProvidedAgent, ExternalSubagentModelBinding, ExternalSubagentRegistration,
     ExternalSubagentRoute,
 };
-use bitfun_opencode_adapter::{OpenCodePluginConfigProjection, OpenCodePluginToolRef};
 use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_subagents::ExternalSubagentMode;
-use bitfun_runtime_ports::{HookFunctionRegistrationBatch, HookFunctionToolRegistration};
-use serde_json::{Map, Value};
+use bitfun_product_domains::plugin_capabilities::{PluginCapabilityProjection, PluginToolRef};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
 
-const OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER: &str = "opencode-plugin-config";
+pub(crate) fn is_agent_runtime_key_for_namespace(
+    runtime_agent_key: &str,
+    runtime_namespace: &str,
+) -> bool {
+    runtime_agent_key.starts_with(&format!("external_subagent_runtime:{runtime_namespace}:"))
+}
 
-pub(crate) fn is_plugin_agent_runtime_key(runtime_agent_key: &str) -> bool {
-    runtime_agent_key.starts_with("external_subagent_runtime:opencode-plugin:")
+#[derive(Debug, Clone)]
+pub(crate) struct PluginPublicationIdentity {
+    ecosystem_id: String,
+    runtime_namespace: String,
+    route_owner: String,
+}
+
+impl PluginPublicationIdentity {
+    pub(crate) fn new(
+        ecosystem_id: impl Into<String>,
+        runtime_namespace: impl Into<String>,
+        route_owner: impl Into<String>,
+    ) -> Self {
+        Self {
+            ecosystem_id: ecosystem_id.into(),
+            runtime_namespace: runtime_namespace.into(),
+            route_owner: route_owner.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -31,27 +51,33 @@ struct PublishedSkillGeneration {
     workspace_roots: Vec<PluginSkillRootContribution>,
 }
 
-fn skill_generations() -> &'static RwLock<HashMap<PathBuf, PublishedSkillGeneration>> {
-    static GENERATIONS: OnceLock<RwLock<HashMap<PathBuf, PublishedSkillGeneration>>> =
+fn skill_generations() -> &'static RwLock<HashMap<(PathBuf, String), PublishedSkillGeneration>> {
+    static GENERATIONS: OnceLock<RwLock<HashMap<(PathBuf, String), PublishedSkillGeneration>>> =
         OnceLock::new();
     GENERATIONS.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
-pub(crate) struct PluginConfigPublicationPlan {
+pub(crate) struct PluginCapabilityPublicationPlan {
     workspace_root: PathBuf,
     generation_key: String,
+    publication: PluginPublicationIdentity,
     registrations: Vec<ExternalSubagentRegistration>,
     routes: BTreeMap<String, ExternalSubagentRoute>,
     runtime_agent_keys: BTreeSet<String>,
     workspace_skill_roots: Vec<PluginSkillRootContribution>,
-    tool_runtime_agent_keys: BTreeMap<OpenCodePluginToolRef, BTreeSet<String>>,
+    tool_runtime_agent_keys: BTreeMap<PluginToolRef, BTreeSet<String>>,
 }
 
-impl PluginConfigPublicationPlan {
-    pub(crate) fn empty(workspace_root: &Path, generation_key: &str) -> Self {
+impl PluginCapabilityPublicationPlan {
+    pub(crate) fn empty(
+        workspace_root: &Path,
+        generation_key: &str,
+        publication: PluginPublicationIdentity,
+    ) -> Self {
         Self {
             workspace_root: workspace_root.to_path_buf(),
             generation_key: generation_key.to_string(),
+            publication,
             registrations: Vec::new(),
             routes: BTreeMap::new(),
             runtime_agent_keys: BTreeSet::new(),
@@ -66,21 +92,18 @@ impl PluginConfigPublicationPlan {
 
     pub(crate) fn allowed_runtime_agent_keys_for_tool(
         &self,
-        tool: &HookFunctionToolRegistration,
-    ) -> crate::BitFunResult<BTreeSet<String>> {
-        let tool_ref = OpenCodePluginToolRef::try_from(tool)
-            .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
-        Ok(self
-            .tool_runtime_agent_keys
-            .get(&tool_ref)
+        tool: &PluginToolRef,
+    ) -> BTreeSet<String> {
+        self.tool_runtime_agent_keys
+            .get(tool)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
     }
 
     pub(crate) fn commit(self) {
         get_agent_registry().replace_external_subagent_route_overlay(
             &self.workspace_root,
-            OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER,
+            &self.publication.route_owner,
             self.registrations,
             self.routes,
         );
@@ -88,7 +111,7 @@ impl PluginConfigPublicationPlan {
             .write()
             .expect("plugin skill generation lock poisoned");
         generations.insert(
-            self.workspace_root,
+            (self.workspace_root, self.publication.route_owner),
             PublishedSkillGeneration {
                 generation_key: self.generation_key,
                 workspace_roots: self.workspace_skill_roots,
@@ -97,20 +120,18 @@ impl PluginConfigPublicationPlan {
     }
 }
 
-pub(crate) fn release_workspace(workspace_root: &Path) {
+pub(crate) fn release_workspace(workspace_root: &Path, route_owner: &str) {
     let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
-    get_agent_registry().release_external_subagent_route_overlay(
-        &workspace_root,
-        OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER,
-    );
+    get_agent_registry().release_external_subagent_route_overlay(&workspace_root, route_owner);
     skill_generations()
         .write()
         .expect("plugin skill generation lock poisoned")
-        .remove(&workspace_root);
+        .remove(&(workspace_root, route_owner.to_string()));
 }
 
 pub(crate) fn release_workspace_generation(
     workspace_root: &Path,
+    route_owner: &str,
     expected_generation_key: &str,
 ) -> bool {
     let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
@@ -118,16 +139,13 @@ pub(crate) fn release_workspace_generation(
         .write()
         .expect("plugin skill generation lock poisoned");
     if generations
-        .get(&workspace_root)
+        .get(&(workspace_root.clone(), route_owner.to_string()))
         .is_none_or(|generation| generation.generation_key != expected_generation_key)
     {
         return false;
     }
-    get_agent_registry().release_external_subagent_route_overlay(
-        &workspace_root,
-        OPENCODE_PLUGIN_CONFIG_ROUTE_OWNER,
-    );
-    generations.remove(&workspace_root);
+    get_agent_registry().release_external_subagent_route_overlay(&workspace_root, route_owner);
+    generations.remove(&(workspace_root, route_owner.to_string()));
     true
 }
 
@@ -139,53 +157,58 @@ pub(crate) fn skill_roots_for_agent(
         return Vec::new();
     };
     let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
-    skill_generations()
+    let generations = skill_generations()
         .read()
-        .expect("plugin skill generation lock poisoned")
-        .get(&workspace_root)
-        .map(|generation| generation.workspace_roots.clone())
-        .unwrap_or_default()
+        .expect("plugin skill generation lock poisoned");
+    let mut publications = generations
+        .iter()
+        .filter(|((root, _), _)| root == &workspace_root)
+        .collect::<Vec<_>>();
+    publications.sort_by(|((_, left), _), ((_, right), _)| left.cmp(right));
+    publications
+        .into_iter()
+        .flat_map(|(_, generation)| generation.workspace_roots.iter().cloned())
+        .enumerate()
+        .map(|(precedence, mut root)| {
+            root.precedence = precedence;
+            root
+        })
+        .collect()
 }
 
 pub(crate) fn prepare(
     workspace_root: &Path,
     generation_key: &str,
-    initial_config: &Map<String, Value>,
-    registration_batch: &HookFunctionRegistrationBatch,
-) -> crate::BitFunResult<PluginConfigPublicationPlan> {
-    let projection = bitfun_opencode_adapter::project_plugin_config(
-        workspace_root,
-        initial_config,
-        registration_batch,
-    )
-    .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
-    prepare_projection(workspace_root, generation_key, projection)
-}
-
-fn prepare_projection(
-    workspace_root: &Path,
-    generation_key: &str,
-    projection: OpenCodePluginConfigProjection,
-) -> crate::BitFunResult<PluginConfigPublicationPlan> {
+    publication: PluginPublicationIdentity,
+    projection: PluginCapabilityProjection,
+) -> crate::BitFunResult<PluginCapabilityPublicationPlan> {
     let workspace_root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
     if projection.agents.is_empty() && projection.skill_roots.is_empty() {
-        return Ok(PluginConfigPublicationPlan::empty(
+        return Ok(PluginCapabilityPublicationPlan::empty(
             &workspace_root,
             generation_key,
+            publication,
         ));
     }
+
+    let ecosystem_id = EcosystemId::new(&publication.ecosystem_id).map_err(|error| {
+        crate::BitFunError::Validation(format!(
+            "Invalid plugin publication ecosystem id '{}': {error}",
+            publication.ecosystem_id
+        ))
+    })?;
 
     let mut registrations = Vec::new();
     let mut routes = BTreeMap::new();
     let mut runtime_agent_keys = BTreeSet::new();
-    let mut tool_runtime_agent_keys = BTreeMap::<OpenCodePluginToolRef, BTreeSet<String>>::new();
+    let mut tool_runtime_agent_keys = BTreeMap::<PluginToolRef, BTreeSet<String>>::new();
     for projected in projection.agents {
         let mut tools =
             native_tool_baseline(&projected.logical_id, projected.mode, &workspace_root);
         let permitted_plugin_tools = projected
             .plugin_tools
             .iter()
-            .map(|tool| tool.id.clone())
+            .map(|tool| tool.id().to_string())
             .collect::<Vec<_>>();
         tools.extend(permitted_plugin_tools.iter().cloned());
         for plugin_tool in &permitted_plugin_tools {
@@ -200,7 +223,7 @@ fn prepare_projection(
         let mut hasher = Sha256::new();
         hasher.update(generation_key.as_bytes());
         hasher.update([0]);
-        hasher.update(projected.contributor.stable_key().as_bytes());
+        hasher.update(projected.contributor.behavior_key().as_bytes());
         hasher.update([0]);
         hasher.update(projected.logical_id.as_bytes());
         hasher.update([0]);
@@ -212,7 +235,8 @@ fn prepare_projection(
             hasher.update([0xff]);
         }
         let digest = hex::encode(hasher.finalize());
-        let runtime_key = external_subagent_runtime_key(&format!("opencode-plugin:{digest}"));
+        let runtime_key =
+            external_subagent_runtime_key(&format!("{}:{digest}", publication.runtime_namespace));
         let behavior_version = format!("sha256:{digest}");
         let agent = Arc::new(ExternalProvidedAgent::new(
             runtime_key.clone(),
@@ -229,15 +253,14 @@ fn prepare_projection(
             runtime_key: runtime_key.clone(),
             logical_id: projected.logical_id.clone(),
             route_key: format!(
-                "opencode:{}:{}",
+                "{}:{}:{}",
+                publication.ecosystem_id,
                 hex::encode(Sha256::digest(
-                    projected.contributor.stable_key().as_bytes()
+                    projected.contributor.behavior_key().as_bytes()
                 )),
                 projected.logical_id.to_ascii_lowercase()
             ),
-            ecosystem_id: EcosystemId::new("opencode").map_err(|error| {
-                crate::BitFunError::Validation(format!("Invalid OpenCode ecosystem id: {error}"))
-            })?,
+            ecosystem_id: ecosystem_id.clone(),
             provider_label: projected.contributor.label().to_string(),
             model_binding: ExternalSubagentModelBinding::InheritParent,
             hidden: projected.hidden,
@@ -257,17 +280,19 @@ fn prepare_projection(
         runtime_agent_keys.insert(runtime_key);
     }
 
-    let workspace_skill_roots = projection
+    let mut workspace_skill_roots = projection
         .skill_roots
         .into_iter()
         .map(|root| PluginSkillRootContribution {
             path: root.path,
             precedence: root.precedence,
         })
-        .collect();
-    Ok(PluginConfigPublicationPlan {
+        .collect::<Vec<_>>();
+    workspace_skill_roots.sort_by_key(|root| root.precedence);
+    Ok(PluginCapabilityPublicationPlan {
         workspace_root,
         generation_key: generation_key.to_string(),
+        publication,
         registrations,
         routes,
         runtime_agent_keys,
@@ -294,137 +319,126 @@ fn native_tool_baseline(
     }
 }
 
-pub(crate) fn active_generation_key(workspace_root: &Path) -> Option<String> {
+pub(crate) fn active_generation_key(workspace_root: &Path, route_owner: &str) -> Option<String> {
     let root = crate::agentic::workspace::canonical_local_workspace_path(workspace_root);
     skill_generations()
         .read()
         .ok()?
-        .get(&root)
+        .get(&(root, route_owner.to_string()))
         .map(|generation| generation.generation_key.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_runtime_ports::{
-        HookFunctionConfigContribution, HookFunctionConfigContributor,
-        HookFunctionContributorOutcome, HookFunctionGeneration, HookFunctionPluginIdentity,
-        HookFunctionRegistrationBatch, HookFunctionToolRegistration,
+    use bitfun_product_domains::plugin_capabilities::{
+        PluginAgentProjection, PluginContributorIdentity, PluginSkillRootContribution,
     };
-    use serde_json::{json, Map};
 
-    fn plugin() -> HookFunctionPluginIdentity {
-        HookFunctionPluginIdentity {
-            id: Some("deveco-harness".to_string()),
-            spec: "D:/code/deveco_harness".to_string(),
-            entry: "D:/code/deveco_harness/dist/index.js".to_string(),
-            index: 0,
-        }
+    const OPENCODE_ROUTE_OWNER: &str = "opencode-plugin-config";
+
+    fn publication(ecosystem: &str) -> PluginPublicationIdentity {
+        PluginPublicationIdentity::new(
+            ecosystem,
+            format!("{ecosystem}-plugin"),
+            format!("{ecosystem}-plugin-config"),
+        )
     }
 
-    fn registration_batch(config: Map<String, serde_json::Value>) -> HookFunctionRegistrationBatch {
-        let plugin = plugin();
-        HookFunctionRegistrationBatch {
-            generation: HookFunctionGeneration {
-                instance_id: "projection-test".to_string(),
-                generation_key: "projection-generation".to_string(),
-                revision: "projection-revision".to_string(),
-            },
-            config: config.clone(),
-            config_contributors: vec![HookFunctionConfigContributor {
-                plugin: plugin.clone(),
-                outcome: HookFunctionContributorOutcome::Applied,
-            }],
-            config_contributions: vec![HookFunctionConfigContribution {
-                plugin: plugin.clone(),
-                outcome: HookFunctionContributorOutcome::Applied,
-                config,
-            }],
-            diagnostics: Vec::new(),
-            hooks: Vec::new(),
-            tools: vec![HookFunctionToolRegistration {
-                registration_id: "registration-build-project".to_string(),
-                id: "build_project".to_string(),
-                plugin: Some(plugin),
-                description: String::new(),
-                parameters: json!({"type": "object"}),
-            }],
-        }
+    fn contributor() -> PluginContributorIdentity {
+        PluginContributorIdentity::new(
+            "opencode-owner",
+            "D:/code/deveco_harness\nD:/code/deveco_harness/dist/index.js\n0",
+            "deveco-harness",
+        )
     }
 
     #[test]
     fn generation_scoped_release_never_withdraws_a_replacement() {
         let workspace = tempfile::tempdir().expect("workspace");
-        PluginConfigPublicationPlan::empty(workspace.path(), "generation-a").commit();
+        PluginCapabilityPublicationPlan::empty(
+            workspace.path(),
+            "generation-a",
+            publication("opencode"),
+        )
+        .commit();
 
         assert!(!release_workspace_generation(
             workspace.path(),
+            OPENCODE_ROUTE_OWNER,
             "generation-b"
         ));
         assert_eq!(
-            active_generation_key(workspace.path()).as_deref(),
+            active_generation_key(workspace.path(), OPENCODE_ROUTE_OWNER).as_deref(),
             Some("generation-a")
         );
         assert!(release_workspace_generation(
             workspace.path(),
+            OPENCODE_ROUTE_OWNER,
             "generation-a"
         ));
-        assert_eq!(active_generation_key(workspace.path()), None);
+        assert_eq!(
+            active_generation_key(workspace.path(), OPENCODE_ROUTE_OWNER),
+            None
+        );
     }
 
     #[test]
-    fn publishes_plugin_skill_roots_to_all_workspace_agents() {
+    fn keeps_skill_generations_isolated_by_publication_owner() {
         let workspace = tempfile::tempdir().expect("workspace");
-        let skill_root = tempfile::tempdir().expect("plugin skill root");
-        let config = json!({"skills": {"paths": [skill_root.path()]}})
-            .as_object()
-            .expect("config object")
-            .clone();
-        let batch = registration_batch(config);
-        let projection =
-            bitfun_opencode_adapter::project_plugin_config(workspace.path(), &Map::new(), &batch)
-                .expect("OpenCode projection");
-        let plan = prepare_projection(workspace.path(), "skill-only-generation", projection)
-            .expect("skill-only plugin publication");
-        assert!(plan.registrations.is_empty());
-        plan.commit();
-
-        for agent in [Some("build"), Some("external-agent"), None] {
-            let roots = skill_roots_for_agent(Some(workspace.path()), agent);
-            assert_eq!(roots.len(), 1);
-            assert_eq!(
-                roots[0].path,
-                dunce::canonicalize(skill_root.path()).unwrap()
-            );
+        let first_root = tempfile::tempdir().expect("first skill root");
+        let second_root = tempfile::tempdir().expect("second skill root");
+        for (ecosystem, root) in [("ecosystem-a", &first_root), ("ecosystem-b", &second_root)] {
+            prepare(
+                workspace.path(),
+                &format!("{ecosystem}-generation"),
+                publication(ecosystem),
+                PluginCapabilityProjection {
+                    agents: Vec::new(),
+                    skill_roots: vec![PluginSkillRootContribution {
+                        path: root.path().to_path_buf(),
+                        precedence: 0,
+                    }],
+                },
+            )
+            .expect("skill publication")
+            .commit();
         }
-        release_workspace(workspace.path());
+
+        let roots = skill_roots_for_agent(Some(workspace.path()), None);
+        assert_eq!(roots.len(), 2);
+        release_workspace(workspace.path(), "ecosystem-a-plugin-config");
+        let roots = skill_roots_for_agent(Some(workspace.path()), None);
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].path, second_root.path());
+        release_workspace(workspace.path(), "ecosystem-b-plugin-config");
     }
 
     #[test]
     fn materializes_projected_agent_fields_and_plugin_tool_permissions() {
-        let config = json!({
-            "agent": {
-                "build": {
-                    "mode": "primary",
-                    "temperature": 0.7,
-                    "description": "Build projects",
-                    "prompt": "Build prompt",
-                    "permission": {"build_project": "allow"}
-                }
-            }
-        })
-        .as_object()
-        .expect("config object")
-        .clone();
-        let batch = registration_batch(config);
-        let projection = bitfun_opencode_adapter::project_plugin_config(
+        let contributor = contributor();
+        let tool = PluginToolRef::new(contributor.clone(), "build_project");
+        let projection = PluginCapabilityProjection {
+            agents: vec![PluginAgentProjection {
+                contributor,
+                logical_id: "build".to_string(),
+                description: "Build projects".to_string(),
+                prompt: "Build prompt".to_string(),
+                mode: ExternalSubagentMode::Primary,
+                hidden: false,
+                temperature: Some(0.7),
+                permission_constraints: Default::default(),
+                plugin_tools: vec![tool.clone()],
+            }],
+            skill_roots: Vec::new(),
+        };
+        let plan = prepare(
             Path::new("C:/workspace"),
-            &Map::new(),
-            &batch,
+            "generation-1",
+            publication("opencode"),
+            projection,
         )
-        .expect("OpenCode projection");
-        let plan = prepare_projection(Path::new("C:/workspace"), "generation-1", projection)
-            .expect("publication");
+        .expect("publication");
 
         assert_eq!(plan.registrations.len(), 1);
         let build = &plan.registrations[0];
@@ -448,10 +462,9 @@ mod tests {
         assert!(plan
             .runtime_agent_keys
             .iter()
-            .all(|key| is_plugin_agent_runtime_key(key)));
+            .all(|key| is_agent_runtime_key_for_namespace(key, "opencode-plugin")));
         assert_eq!(
-            plan.allowed_runtime_agent_keys_for_tool(&batch.tools[0])
-                .expect("tool access"),
+            plan.allowed_runtime_agent_keys_for_tool(&tool),
             plan.runtime_agent_keys
         );
     }

@@ -37,8 +37,11 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
   transitions.
 - `external-sources` may own open ecosystem/source identifiers, typed
   capability-provider ports, catalog DTOs, and version-sensitive conflict
-  fingerprints. Provider refresh, filesystem watching, persistence, and
-  lifecycle coordination belong to assembly, services, or adapters.
+  fingerprints. It also owns the provider-neutral Agent, Tool-reference, and
+  Skill-root contribution DTOs produced by executable plugin adapters. These
+  DTOs do not define source formats, Host protocols, execution handles, or
+  lifecycle. Provider refresh, filesystem watching, persistence, and lifecycle
+  coordination belong to assembly, services, or adapters.
 - Concrete filesystem writes, marker IO, host dispatch, worker side effects,
   compile orchestration, `PathManager` integration, concrete Git/AI services,
   provider acquisition, and transport error mapping must stay outside

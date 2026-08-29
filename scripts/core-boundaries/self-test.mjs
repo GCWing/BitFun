@@ -1430,6 +1430,22 @@ export function runManifestParserSelfTest({
       throw new Error(`plugin runtime boundary rule must forbid: ${forbiddenContract}`);
     }
   }
+  const pluginCapabilityPublicationRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/plugin_capability_publication.rs',
+  );
+  for (const forbiddenDependency of [
+    'OpenCode',
+    'DeepSeek',
+    'HookFunction',
+    'serde_json',
+    'bitfun_[a-z0-9_]+_adapter',
+  ]) {
+    if (!pluginCapabilityPublicationRuleText.includes(forbiddenDependency)) {
+      throw new Error(
+        `plugin capability publication boundary must forbid: ${forbiddenDependency}`,
+      );
+    }
+  }
   const pluginPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
   );
@@ -1456,6 +1472,9 @@ export function runManifestParserSelfTest({
   );
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
+  );
+  const pluginCapabilityProjectionPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/plugin_capabilities.rs',
   );
   const externalHookPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_contributions.rs',
@@ -1604,10 +1623,24 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,load_opencode_config_snapshot,OpenCodeConfigSnapshot,OpenCodeConfigSnapshotError,project_plugin_config,OpenCodePluginAgentProjection,OpenCodePluginConfigProjection,OpenCodePluginConfigProjectionError,OpenCodePluginContributor,OpenCodePluginSkillRootProjection,OpenCodePluginToolRef,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
+    'load_opencode_package_adapter,load_opencode_config_snapshot,OpenCodeConfigSnapshot,OpenCodeConfigSnapshotError,project_plugin_config,project_plugin_tool_ref,OpenCodePluginConfigProjectionError,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
       'OpenCode adapter public API budget must stay limited to the reviewed package factory, managed Plugin Host Config projection, and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
+    );
+  }
+  if (!pluginCapabilityProjectionPublicApiRule) {
+    throw new Error('plugin capability projection must have a public API budget rule');
+  }
+  const pluginCapabilityProjectionSymbols = (
+    pluginCapabilityProjectionPublicApiRule.allowedSymbolEntries || []
+  ).map((entry) => entry.symbol);
+  if (
+    pluginCapabilityProjectionSymbols.join(',') !==
+    'PluginContributorIdentity,PluginToolRef,PluginAgentProjection,PluginSkillRootContribution,PluginCapabilityProjection'
+  ) {
+    throw new Error(
+      'plugin capability projection public API must stay limited to the reviewed provider-neutral contribution DTOs',
     );
   }
   const opencodeInstructionSymbols = new Set([

@@ -11,6 +11,14 @@ It does not execute Cordis plugins, install npm packages, or depend on a
 user-local `dsh` CLI. Execution of dsh bundles belongs to future Plugin Host /
 external-ACP work, not this adapter boundary.
 
+If executable dsh support is added, the dsh adapter may project capabilities
+whose BitFun owner semantics have been verified through the provider-neutral
+plugin capability contract. Cordis source parsing, execution handles, Host
+protocol, and lifecycle remain dsh-owned and must not reuse the OpenCode Config
+Hook or OpenCode Plugin Host composition path. The current configured Skill-root
+merge and precedence behavior remains OpenCode-owned; dsh Skill publication
+requires its own consumer evidence before that path is shared.
+
 ## Boundary Rules
 
 - Depend on stable contracts (`bitfun-runtime-ports`, `bitfun-product-domains`)

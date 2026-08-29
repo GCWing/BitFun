@@ -38,9 +38,10 @@ Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Sub
 - 依赖 `bitfun-runtime-ports` 等稳定接口和 `PluginRuntimeAdapter` 边界 trait，不依赖
   `bitfun-core`、app crate、Tauri API、产品界面或具体服务管理器。
 - OpenCode 配置 JSON、来源顺序、加载器兼容、参数展开和受管 Plugin Host Config 贡献归属保留在本 crate 内。
-  跨 crate 输出使用类型化来源快照、Agent/权限/Plugin Tool/Skill 投影、adapter 绑定和 `PluginRuntimeClient` DTO，
+  跨 crate 输出使用类型化来源快照、生态无关的 Agent/权限/Plugin Tool/Skill 贡献、adapter 绑定和 `PluginRuntimeClient` DTO，
   不得把 OpenCode 原始 JSON 或源码语法暴露为产品接口。Config 投影不得生成 Agent runtime key、选择原生 Tool
-  基线、修改产品 registry 或扩成通用 Config 平台。
+  基线、修改产品 registry 或扩成通用 Config 平台；OpenCode contributor 解析和 Tool registration 转换仍留在本 crate，
+  不得让 OpenCode 专属 DTO 进入通用发布模块。
 - 当前源码探测只识别测试覆盖的声明式语法子集，不是通用 JS/TS 解析器；没有可识别入口的包和已识别但不支持的 hook
   必须返回诊断，其他语法不属于当前兼容范围。
 - 未支持的 OpenCode 能力必须显式返回类型化诊断或不支持状态，不得静默忽略。
@@ -49,7 +50,7 @@ Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Sub
 - 经评审的产品组装根只选择并构造已编译的 OpenCode adapter/provider，再注入 `PluginRuntimeClient`；它不发现
   动态来源、不准备依赖，也不 import 插件模块。
 - Product Assembly 只允许从经过评审的组装模块（如 `bitfun-core/plugin_runtime`、
-  `bitfun-core/external_sources` 或 `bitfun-core/plugin_config_publication`）消费本 crate；增加其他消费方时必须同步
+  `bitfun-core/external_sources` 或 OpenCode 专属的 `bitfun-core/plugin_host` 组装路径）消费本 crate；增加其他消费方时必须同步
   边界脚本和聚焦组装路径测试。
 - 本 crate 不得依赖 Codex、Claude Code 或其他生态 adapter。新生态是由 Product Assembly 注册的同级 adapter，
   不是本 adapter 的模式。

@@ -186,6 +186,7 @@ export const productDomainsIntegrationTestTargets = [
       'tests/external_source_contracts/external_hook_catalog_contracts.rs',
       'tests/external_source_contracts/external_hook_contribution_contracts.rs',
       'tests/external_source_contracts/external_source_contracts.rs',
+      'tests/external_source_contracts/plugin_capability_contracts.rs',
       'tests/external_source_contracts/workspace_reference_contracts.rs',
     ],
     requiredFeatures: ['external-sources'],

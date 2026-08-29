@@ -24,7 +24,8 @@ ports；具体 runtime 行为不属于本 crate。
   和 Git/AI port trait。
 - `plugin-source` 可以拥有 BitFun 插件包清单数据结构、来源标识、工作区信任记录和纯信任版本变更规则。
 - `external-sources` 可以拥有开放生态/来源标识、类型化能力 provider 端口、目录 DTO 与版本敏感冲突指纹；
-  provider 刷新、文件观察、偏好持久化和生命周期协调属于 assembly、services 或 adapters。
+  也可以拥有可执行插件 adapter 输出的生态无关 Agent、Tool 引用与 Skill 根贡献 DTO。这些 DTO 不定义来源格式、
+  Host 协议、执行句柄或生命周期；provider 刷新、文件观察、偏好持久化和生命周期协调属于 assembly、services 或 adapters。
 - 具体 filesystem writes、marker IO、host dispatch、worker side effect、compile orchestration、`PathManager` integration、
   concrete Git/AI service、provider acquisition 和 transport error mapping 均属于本 crate 外部。
 

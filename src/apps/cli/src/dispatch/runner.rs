@@ -501,7 +501,6 @@ mod tests {
         let mut leader = command.spawn().expect("spawn process-group leader");
         let process_group = i32::try_from(leader.id()).expect("safe pid");
         let _guard = ProcessGroupGuard(process_group);
-        assert!(worker_process_alive(process_group as u32, job_id));
         for _ in 0..100 {
             if ready_path.is_file() {
                 break;
@@ -512,6 +511,7 @@ mod tests {
             ready_path.is_file(),
             "TERM-resistant child must be ready before cancellation"
         );
+        assert!(worker_process_alive(process_group as u32, job_id));
         let reaper = std::thread::spawn(move || leader.wait());
 
         let error = terminate_worker(process_group as u32, job_id)
