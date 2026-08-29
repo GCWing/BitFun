@@ -12,7 +12,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyHint } from '@bitfun/ui';
+import { KeyHint, Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, ChevronDown, Network, Search, CalendarClock } from 'lucide-react';
@@ -276,105 +276,87 @@ const MainNav: React.FC<MainNavProps> = ({
   }, [isAgentsActive, isEcosystemCompatibilityActive, isSkillsActive]);
 
   const workspaceMenuPortal = workspaceMenuOpen ? createPortal(
-    <div
+    <Menu
       ref={workspaceMenuRef}
       className={`bitfun-nav-panel__workspace-menu${workspaceMenuClosing ? ' is-closing' : ''}`}
-      data-bf-component="nav-panel"
-      data-bf-part="workspaceMenu"
-      data-bf-state={workspaceMenuClosing ? 'closing' : 'open'}
-      role="menu"
       style={{ top: workspaceMenuPos.top, left: workspaceMenuPos.left }}
     >
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        data-bf-component="nav-panel"
-        data-bf-part="workspaceMenuItem"
-        role="menuitem"
+      <MenuItem
+        leading={<FolderOpen size={13} />}
         onClick={() => { closeWorkspaceMenu(); void handleOpenProject(); }}
       >
-        <FolderOpen size={13} />
-        <span>{t('header.openProject')}</span>
-      </button>
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        data-bf-component="nav-panel"
-        data-bf-part="workspaceMenuItem"
-        role="menuitem"
+        {t('header.openProject')}
+      </MenuItem>
+      <MenuItem
+        leading={<FolderPlus size={13} />}
         onClick={() => { closeWorkspaceMenu(); handleNewProject(); }}
       >
-        <FolderPlus size={13} />
-        <span>{t('header.newProject')}</span>
-      </button>
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        data-bf-component="nav-panel"
-        data-bf-part="workspaceMenuItem"
-        role="menuitem"
+        {t('header.newProject')}
+      </MenuItem>
+      <MenuItem
+        leading={<User size={13} />}
         onClick={handleOpenAssistantManager}
         data-testid="nav-session-group-add-assistant"
       >
-        <User size={13} />
-        <span>{t('nav.workspaces.actions.newAssistant')}</span>
-      </button>
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        data-bf-component="nav-panel"
-        data-bf-part="workspaceMenuItem"
-        role="menuitem"
+        {t('nav.workspaces.actions.newAssistant')}
+      </MenuItem>
+      <MenuItem
+        leading={(
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-6v6" />
+          </svg>
+        )}
         onClick={handleOpenRemoteSSH}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-6v6" />
-        </svg>
-        <span>{t('ssh.remote.connect')}</span>
-      </button>
-      <div className="bitfun-nav-panel__workspace-menu-divider" data-bf-component="nav-panel" data-bf-part="workspaceMenuDivider" role="separator" />
-      <div className="bitfun-nav-panel__workspace-menu-section-title" data-bf-component="nav-panel" data-bf-part="workspaceMenuTitle">
-        <History size={12} aria-hidden="true" />
-        <span>{t('header.recentWorkspaces')}</span>
-      </div>
-      {recentWorkspaces.length === 0 ? (
-        <div className="bitfun-nav-panel__workspace-menu-empty" data-bf-component="nav-panel" data-bf-part="workspaceMenuEmpty" data-bf-state="empty">
-          <span>{t('header.noRecentWorkspaces')}</span>
-        </div>
-      ) : (
-        <div className="bitfun-nav-panel__workspace-menu-workspaces">
-          {recentWorkspaces.map((workspace) => {
+        {t('ssh.remote.connect')}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuSection
+        title={(
+          <>
+            <History size={12} aria-hidden="true" />
+            <span>{t('header.recentWorkspaces')}</span>
+          </>
+        )}
+        itemsClassName="bitfun-nav-panel__workspace-menu-workspaces"
+      >
+        {recentWorkspaces.length === 0 ? (
+          <div className="bitfun-nav-panel__workspace-menu-empty">
+            <span>{t('header.noRecentWorkspaces')}</span>
+          </div>
+        ) : (
+          recentWorkspaces.map((workspace) => {
             const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
+            const isCurrent = workspace.id === currentWorkspace?.id;
             return (
-            <button data-bf-component="nav-panel" data-bf-part="workspaceMenuItem"
-              key={workspace.id}
-              type="button"
-              className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
-              role="menuitem"
-              title={tooltip}
-              onClick={() => { void handleSwitchWorkspace(workspace.id); }}
-              data-testid="nav-workspace-menu-recent-workspace"
-              data-workspace-id={workspace.id}
-            >
-              <FolderOpen size={13} aria-hidden="true" />
-              <span className="bitfun-nav-panel__workspace-menu-item-main">
-                {hostPrefix ? (
-                  <>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
-                      ·
-                    </span>
-                  </>
-                ) : null}
-                <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
-              </span>
-              {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
-            </button>
+              <MenuItem
+                key={workspace.id}
+                leading={<FolderOpen size={13} aria-hidden="true" />}
+                role="menuitemradio"
+                checked={isCurrent}
+                metadata={isCurrent ? <Check size={12} aria-hidden="true" /> : undefined}
+                title={tooltip}
+                onClick={() => { void handleSwitchWorkspace(workspace.id); }}
+                data-testid="nav-workspace-menu-recent-workspace"
+                data-workspace-id={workspace.id}
+              >
+                <span className="bitfun-nav-panel__workspace-menu-item-main">
+                  {hostPrefix ? (
+                    <>
+                      <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                      <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
+                        ·
+                      </span>
+                    </>
+                  ) : null}
+                  <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+                </span>
+              </MenuItem>
             );
-          })}
-        </div>
-      )}
-    </div>,
+          })
+        )}
+      </MenuSection>
+    </Menu>,
     getAppearanceOverlayHost()
   ) : null;
 

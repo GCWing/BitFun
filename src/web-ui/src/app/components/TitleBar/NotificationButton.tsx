@@ -7,6 +7,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Bell, BellDot, BellRing } from 'lucide-react';
+import { MenuItem } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import {
@@ -64,17 +65,9 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
         : null;
 
     return (
-      <button
-        type="button"
-        role="menuitem"
-        className={['bitfun-nav-panel__footer-menu-item', className].filter(Boolean).join(' ')}
-        onClick={handleActivate}
-        aria-label={t('nav.notifications')}
-        data-testid="notification-button"
-        data-bf-component="notification-button"
-        data-bf-part="menuItem"
-      >
-        {activeNotification?.variant === 'loading' ? (
+      <MenuItem
+        className={className || undefined}
+        leading={activeNotification?.variant === 'loading' ? (
           <svg
             width="14"
             height="14"
@@ -92,15 +85,17 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
         ) : (
           <Bell size={14} aria-hidden="true" />
         )}
-        <span className="bitfun-nav-panel__footer-menu-item-label">
-          {t('nav.notifications')}
-        </span>
-        {progressLabel ? (
+        metadata={progressLabel ? (
           <span className="bitfun-notification-btn__menu-status">{progressLabel}</span>
         ) : unreadCount > 0 ? (
           <span className="bitfun-notification-btn__menu-count">{unreadCount}</span>
-        ) : null}
-      </button>
+        ) : undefined}
+        onClick={handleActivate}
+        aria-label={t('nav.notifications')}
+        data-testid="notification-button"
+      >
+        {t('nav.notifications')}
+      </MenuItem>
     );
   }
 

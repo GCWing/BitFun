@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Check, ChevronDown } from 'lucide-react';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { Tooltip } from '@/component-library/components/Tooltip';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
@@ -66,10 +67,9 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
 
       {workspaceMenuOpen && hasMultipleWorkspaces && workspaceMenuPosition
         ? createPortal(
-            <div
+            <Menu
               ref={workspaceMenuRef}
               className="bitfun-shell-nav__workspace-menu"
-              role="menu"
               aria-label={switchWorkspaceLabel}
               style={{
                 top: `${workspaceMenuPosition.top}px`,
@@ -87,22 +87,23 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
                     placement="right"
                     disabled={!workspace.rootPath}
                   >
-                    <button
-                      type="button"
+                    <MenuItem
                       role="menuitemradio"
-                      aria-checked={isActive}
-                      className={`bitfun-shell-nav__workspace-menu-item${isActive ? ' is-active' : ''}`}
+                      checked={isActive}
+                      reserveLeadingSpace
+                      leading={isActive ? (
+                        <span className="bitfun-shell-nav__workspace-menu-check" aria-hidden="true">
+                          <Check size={12} />
+                        </span>
+                      ) : undefined}
                       onClick={() => { void onSelectWorkspace(workspace.id); }}
                     >
-                      <span className="bitfun-shell-nav__workspace-menu-check" aria-hidden="true">
-                        {isActive ? <Check size={12} /> : null}
-                      </span>
                       <span className="bitfun-shell-nav__workspace-menu-text">{label}</span>
-                    </button>
+                    </MenuItem>
                   </Tooltip>
                 );
               })}
-            </div>,
+            </Menu>,
             getAppearanceOverlayHost(),
           )
         : null}

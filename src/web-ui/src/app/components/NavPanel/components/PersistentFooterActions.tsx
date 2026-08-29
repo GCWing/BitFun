@@ -6,7 +6,7 @@ import {
   PictureInPicture2,
   Palette,
 } from 'lucide-react';
-import { Modal } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSeparator, Modal } from '@bitfun/ui';
 import { Tooltip, PresenceBoundary } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
@@ -212,77 +212,48 @@ const PersistentFooterActions: React.FC = () => {
                   className="bitfun-nav-panel__footer-backdrop"
                   onClick={closeMenu}
                 />
-                <div
+                <Menu
                   ref={menuPopoverRef}
                   className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
-                  role="menu"
                   aria-label={t('shared:features.settings')}
                   data-testid="nav-settings-menu"
-                  data-bf-component="nav-panel"
-                  data-bf-part="footerMenu"
-                  data-bf-state={menuClosing ? 'closing' : 'open'}
-                  data-bf-placement={menuLayout?.placement ?? 'top'}
                   style={{
                     top: `${menuLayout?.top ?? 0}px`,
                     left: `${menuLayout?.left ?? 0}px`,
                     visibility: menuLayout ? 'visible' : 'hidden',
                   }}
                 >
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
+                  <MenuItem
+                    leading={<PictureInPicture2 size={14} aria-hidden="true" />}
                     onClick={handleFloatingMode}
                     data-testid="nav-settings-floating-item"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    data-bf-action="floating-window"
                   >
-                    <PictureInPicture2 size={14} aria-hidden="true" />
-                    <span>{t('nav.settingsMenu.floatingWindow')}</span>
-                  </button>
+                    {t('nav.settingsMenu.floatingWindow')}
+                  </MenuItem>
                   <NotificationButton menuItem onActivate={closeMenu} />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
+                  <MenuItem
+                    leading={<Palette size={14} aria-hidden="true" />}
                     onClick={handleOpenThemeConfiguration}
                     data-testid="nav-settings-theme-item"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    data-bf-action="appearance-configuration"
                   >
-                    <Palette size={14} aria-hidden="true" />
-                    <span>{t('nav.settingsMenu.themeConfiguration')}</span>
-                  </button>
-                  <div className="bitfun-nav-panel__footer-menu-divider" data-bf-component="nav-panel" data-bf-part="footerMenuDivider" />
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
+                    {t('nav.settingsMenu.themeConfiguration')}
+                  </MenuItem>
+                  <MenuSeparator />
+                  <MenuItem
+                    leading={<Settings size={14} aria-hidden="true" />}
                     onClick={handleOpenSettings}
                     data-testid="nav-settings-open-item"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    data-bf-action="open-settings"
                   >
-                    <Settings size={14} aria-hidden="true" />
-                    <span>{t('nav.settingsMenu.openSettings')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
+                    {t('nav.settingsMenu.openSettings')}
+                  </MenuItem>
+                  <MenuItem
+                    leading={<Info size={14} aria-hidden="true" />}
                     onClick={handleShowAbout}
                     data-testid="nav-settings-about-item"
-                    data-bf-component="nav-panel"
-                    data-bf-part="footerMenuItem"
-                    data-bf-action="about"
                   >
-                    <Info size={14} aria-hidden="true" />
-                    <span>{t('nav.settingsMenu.about')}</span>
-                  </button>
-                </div>
+                    {t('nav.settingsMenu.about')}
+                  </MenuItem>
+                </Menu>
               </>,
               getAppearanceOverlayHost(),
             )}
