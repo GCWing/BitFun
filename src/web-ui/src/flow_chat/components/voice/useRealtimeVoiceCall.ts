@@ -82,6 +82,22 @@ function silentPcm16Base64(sampleRate: number): string {
   return window.btoa(binary);
 }
 
+/**
+ * Client control-plane commands exposed to the provider-hosted Voice model.
+ *
+ * This union mirrors the client tool schemas in
+ * `src/crates/services/services-integrations/src/speech/realtime.rs`; it is not
+ * the workspace Agent tool contract. `run_task` crosses that boundary by
+ * delegating a complete request to a normal Agent session. The delegated Agent
+ * independently resolves its filesystem, terminal, MCP, browser, and other
+ * tools together with their usual permission policy.
+ *
+ * Extension rule for future agents:
+ * - Add direct BitFun client operations here and in the Rust Voice schema.
+ * - Add workspace execution abilities to the normal Agent tool registry; do
+ *   not mirror individual Agent tools into Voice.
+ * - Keep the parser, dispatcher, provider schema, and focused tests in sync.
+ */
 type VoiceFunctionCommand =
   | { kind: 'get_client_context' }
   | { kind: 'switch_workspace'; workspaceReference: string }
@@ -362,6 +378,12 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     setAudioLevel(0);
   }, [clearAssistantSpeechFallbackTimer]);
 
+  /**
+   * Dispatches Voice client commands only. It may read or mutate client state,
+   * create one normal Agent session, or cancel the task owned by this call. It
+   * must not become a second executor for workspace Agent tools; task-level
+   * delegation and lifecycle events are the boundary between the two systems.
+   */
   const handleFunctionCall = useCallback(async (
     callSessionId: string,
     call: SpeechRealtimeFunctionCall,

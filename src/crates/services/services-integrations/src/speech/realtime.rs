@@ -597,6 +597,28 @@ fn session_create_payload(
                     "loudness": config.loudness,
                 },
             },
+            // Architecture boundary for future agents:
+            //
+            // This is the provider-hosted Voice model's client control-plane
+            // tool list. It is intentionally independent from the tool registry
+            // assembled for a normal BitFun Agent session. In particular,
+            // `run_bitfun_task` delegates one complete user intent to a newly
+            // created Agent session; Voice never receives, mirrors, or proxies
+            // that session's filesystem, terminal, MCP, browser, or other tools.
+            // The delegated session resolves its own tools and permissions in
+            // the normal workspace execution path.
+            //
+            // Add a Voice tool only for a direct client-level operation that
+            // cannot be expressed as an Agent task. A new Voice tool requires
+            // coordinated changes in all of these places:
+            // 1. its provider schema below;
+            // 2. `VoiceFunctionCommand`, `parseFunctionCall`, and
+            //    `handleFunctionCall` in
+            //    `src/web-ui/src/flow_chat/components/voice/useRealtimeVoiceCall.ts`;
+            // 3. focused Rust payload-contract and Web UI dispatch tests.
+            // Workspace execution capabilities belong in the normal Agent tool
+            // registry and become available to delegated tasks without being
+            // copied into this list.
             "tools": [
                 {
                     "type": "function",
