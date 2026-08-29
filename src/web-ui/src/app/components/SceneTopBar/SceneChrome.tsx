@@ -17,7 +17,7 @@ interface SceneChromeContributionRecord {
 }
 
 interface SceneChromeContextValue {
-  activeSceneId: SceneTabId;
+  activeSceneId: SceneTabId | null;
   setContribution: (
     sceneId: SceneTabId,
     owner: symbol,
@@ -30,7 +30,7 @@ const SceneChromeContext = createContext<SceneChromeContextValue | null>(null);
 const SceneChromeContentContext = createContext<ReactNode>(null);
 
 interface SceneChromeProviderProps {
-  activeSceneId: SceneTabId;
+  activeSceneId: SceneTabId | null;
   children: ReactNode;
 }
 
@@ -73,7 +73,9 @@ export const SceneChromeProvider: React.FC<SceneChromeProviderProps> = ({
     setContribution,
     removeContribution,
   }), [activeSceneId, removeContribution, setContribution]);
-  const activeContent = contributions.get(activeSceneId)?.content ?? null;
+  const activeContent = activeSceneId
+    ? contributions.get(activeSceneId)?.content ?? null
+    : null;
 
   return (
     <SceneChromeContext.Provider value={registrationValue}>

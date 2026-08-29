@@ -200,7 +200,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }, [canUseNativeWindowControls, handleToggleFullscreen, isToolbarMode, showWindowFullscreenHint]);
   const activeSceneId = useSceneStore(s => s.activeTabId);
   const isAgentScene = activeSceneId === 'session';
-  const isWelcomeScene = activeSceneId === 'welcome';
+  const isWelcomeScene = activeSceneId === null;
 
   const isTransitioning = false;
   const transitionDir: TransitionDirection = null;

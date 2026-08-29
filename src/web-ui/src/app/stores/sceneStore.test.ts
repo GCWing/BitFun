@@ -12,8 +12,17 @@ describe('sceneStore transition snapshots', () => {
     vi.restoreAllMocks();
   });
 
-  it('publishes the first scene switch atomically without a blank active scene', () => {
-    const snapshots: Array<{ activeTabId: string; openTabIds: string[] }> = [];
+  it('starts on the welcome surface without creating a tab', () => {
+    const state = useSceneStore.getState();
+
+    expect(state.openTabs).toEqual([]);
+    expect(state.activeTabId).toBeNull();
+    expect(state.navHistory).toEqual([]);
+    expect(state.navCursor).toBe(-1);
+  });
+
+  it('publishes the first scene switch atomically from the tabless welcome surface', () => {
+    const snapshots: Array<{ activeTabId: string | null; openTabIds: string[] }> = [];
     const unsubscribe = useSceneStore.subscribe(state => {
       snapshots.push({
         activeTabId: state.activeTabId,
@@ -26,8 +35,7 @@ describe('sceneStore transition snapshots', () => {
 
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0].activeTabId).toBe('settings');
-    expect(snapshots[0].openTabIds).toContain('settings');
-    expect(snapshots[0].openTabIds).not.toContain('welcome');
+    expect(snapshots[0].openTabIds).toEqual(['session', 'settings']);
   });
 
   it('records pointer scene navigation without animating keyboard activation', () => {
@@ -104,7 +112,7 @@ describe('sceneStore transition snapshots', () => {
     expect(useSceneStore.getState().activeTabId).toBe('terminal');
   });
 
-  it('resets an expanded tab set when the peer host changes', () => {
+  it('resets an expanded tab set to the tabless welcome surface when the peer host changes', () => {
     useSceneStore.getState().openScene('settings');
     useSceneStore.getState().openScene('terminal');
     useSceneStore.getState().openScene('git');
@@ -113,9 +121,9 @@ describe('sceneStore transition snapshots', () => {
     useSceneStore.getState().resetForPeerSwitch();
 
     const state = useSceneStore.getState();
-    expect(state.openTabs.map(tab => tab.id)).toEqual(['welcome']);
-    expect(state.activeTabId).toBe('welcome');
-    expect(state.navHistory).toEqual(['welcome']);
-    expect(state.navCursor).toBe(0);
+    expect(state.openTabs).toEqual([]);
+    expect(state.activeTabId).toBeNull();
+    expect(state.navHistory).toEqual([]);
+    expect(state.navCursor).toBe(-1);
   });
 });

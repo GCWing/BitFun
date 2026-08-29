@@ -8889,7 +8889,6 @@
     "settings.shortcuts.open": "setting.application.input"
   },
   "sceneOwners": {
-    "welcome": "feature.ai-assistant",
     "session": "feature.ai-assistant",
     "terminal": "feature.terminal",
     "git": "feature.git",

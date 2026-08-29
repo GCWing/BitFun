@@ -1,8 +1,6 @@
 /**
- * WelcomeScene — the lightweight landing scene shown inside SceneViewport.
- *
- * It remains a regular scene tab. This phase establishes the greeting region;
- * composer integration is deliberately deferred to the next shell iteration.
+ * WelcomeScene — the lightweight, tabless landing surface shown by
+ * SceneViewport until the user opens a scene.
  */
 
 import React, { useState } from 'react';

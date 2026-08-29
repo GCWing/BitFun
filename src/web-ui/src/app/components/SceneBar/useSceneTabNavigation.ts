@@ -18,7 +18,7 @@ interface TabScrollState {
 }
 
 interface UseSceneTabNavigationOptions {
-  activeTabId: SceneTabId;
+  activeTabId: SceneTabId | null;
   navigationMotion: InteractionMotion;
   openTabIds: readonly SceneTabId[];
 }

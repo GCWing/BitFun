@@ -4,8 +4,8 @@
  * Tab rules:
  *   - Every explicitly opened scene stays in openTabs until the user closes it.
  *   - Pinned tabs (e.g. session/agent) cannot be manually closed.
- *   - 'welcome' tab is the default initial tab; it auto-closes the first time
- *     any other scene is explicitly opened.
+ *   - The app starts with no tabs. SceneViewport owns the tabless welcome
+ *     surface until the first scene is explicitly opened.
  *
  * Navigation history (navHistory / navCursor):
  *   - Records the sequence of activeTabId changes.
@@ -26,7 +26,6 @@ import {
 import type { SceneTab, SceneTabId } from '../components/SceneBar/types';
 
 const AGENT_SCENE_ID: SceneTabId = 'session';
-const WELCOME_SCENE_ID: SceneTabId = 'welcome';
 
 function getSceneDefOrMiniapp(id: SceneTabId) {
   const d = getSceneDef(id);
@@ -47,13 +46,14 @@ function buildSceneTab(id: SceneTabId, now: number): SceneTab {
   return { id, lastUsed: now };
 }
 
-function resolveNavSceneId(sceneId: SceneTabId): SceneTabId | null {
+function resolveNavSceneId(sceneId: SceneTabId | null): SceneTabId | null {
+  if (sceneId === null) return null;
   return getSceneNav(sceneId) ? sceneId : null;
 }
 
 interface SceneState {
   openTabs: SceneTab[];
-  activeTabId: SceneTabId;
+  activeTabId: SceneTabId | null;
   /** Ordered history of activeTabId values. */
   navHistory: SceneTabId[];
   /** Index of the current position in navHistory. */
@@ -112,13 +112,13 @@ function removeFromHistory(
 }
 
 const initialTabs = buildDefaultTabs();
-const initialActiveId: SceneTabId = initialTabs[0]?.id ?? WELCOME_SCENE_ID;
+const initialActiveId = initialTabs[0]?.id ?? null;
 
 export const useSceneStore = create<SceneState>((set, get) => ({
   openTabs:    initialTabs,
   activeTabId: initialActiveId,
-  navHistory:  [initialActiveId],
-  navCursor:   0,
+  navHistory:  initialActiveId ? [initialActiveId] : [],
+  navCursor:   initialActiveId ? 0 : -1,
   navigationMotion: 'instant',
   navigationSequence: 0,
 
@@ -146,15 +146,9 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     let navHistory = state.navHistory;
     let navCursor = state.navCursor;
 
-    // Compute welcome removal and the target activation as one store update.
-    // Publishing the intermediate "welcome is active but no longer mounted"
-    // snapshot gives React a blank viewport that looks like a full page refresh.
-    if (id !== WELCOME_SCENE_ID && openTabs.some(tab => tab.id === WELCOME_SCENE_ID)) {
-      openTabs = openTabs.filter(tab => tab.id !== WELCOME_SCENE_ID);
-      navHistory = navHistory.filter(historyId => historyId !== WELCOME_SCENE_ID);
-      navCursor = Math.max(0, navHistory.length - 1);
-
-      // If the first opened scene is not session, companion-open session alongside it.
+    // If the first opened scene is not session, companion-open the pinned
+    // session tab alongside it without turning the welcome surface into a tab.
+    if (openTabs.length === 0) {
       if (id !== AGENT_SCENE_ID && !openTabs.some(tab => tab.id === AGENT_SCENE_ID)) {
         openTabs = [buildSceneTab(AGENT_SCENE_ID, 0), ...openTabs];
       }
@@ -203,7 +197,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       if (nextTabs.length === 0) {
         set({
           openTabs: [],
-          activeTabId: '' as SceneTabId,
+          activeTabId: null,
           navHistory: [],
           navCursor: -1,
           navigationMotion: getInteractionMotion(),
@@ -212,6 +206,18 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         return;
       }
       newActiveId = [...nextTabs].sort((a, b) => b.lastUsed - a.lastUsed)[0].id;
+    }
+
+    if (newActiveId === null) {
+      set({
+        openTabs: [],
+        activeTabId: null,
+        navHistory: [],
+        navCursor: -1,
+        navigationMotion: getInteractionMotion(),
+        navigationSequence: state.navigationSequence + 1,
+      });
+      return;
     }
 
     const histUpdate = removeFromHistory(navHistory, navCursor, id, newActiveId);
@@ -267,12 +273,12 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   resetForPeerSwitch: () => {
     const state = get();
     const tabs = buildDefaultTabs();
-    const activeTabId: SceneTabId = tabs[0]?.id ?? WELCOME_SCENE_ID;
+    const activeTabId = tabs[0]?.id ?? null;
     set({
       openTabs: tabs,
       activeTabId,
-      navHistory: [activeTabId],
-      navCursor: 0,
+      navHistory: activeTabId ? [activeTabId] : [],
+      navCursor: activeTabId ? 0 : -1,
       navigationMotion: 'instant',
       navigationSequence: state.navigationSequence + 1,
     });

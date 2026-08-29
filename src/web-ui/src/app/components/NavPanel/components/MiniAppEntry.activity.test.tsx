@@ -66,10 +66,10 @@ describe('MiniAppEntry activity', () => {
     container.remove();
     useMiniAppStore.setState({ apps: [], runningWorkerIds: [], customizingAppIds: [] });
     useSceneStore.setState({
-      openTabs: [{ id: 'welcome', lastUsed: 1 }],
-      activeTabId: 'welcome',
-      navHistory: ['welcome'],
-      navCursor: 0,
+      openTabs: [],
+      activeTabId: null,
+      navHistory: [],
+      navCursor: -1,
     });
   });
 
