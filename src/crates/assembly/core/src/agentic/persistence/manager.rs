@@ -6533,7 +6533,10 @@ mod tests {
         assert_eq!(stats.raw_result_string_chars, 40);
         assert_eq!(stats.result_for_assistant_chars, 17);
         assert_eq!(stats.largest_raw_result_chars, 40);
-        assert_eq!(stats.largest_raw_result_path, "message[1].Bash.output");
+        assert_eq!(
+            stats.largest_raw_result_path,
+            "message[1].ExecCommand.output"
+        );
         assert!(!stats.largest_raw_result_path.contains(&"x".repeat(40)));
     }
 
