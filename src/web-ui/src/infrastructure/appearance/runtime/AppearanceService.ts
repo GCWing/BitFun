@@ -174,6 +174,14 @@ export class AppearanceService {
     return this.snapshot;
   }
 
+  hasAppliedPendingSelection(id: AppearanceSelectionId): boolean {
+    if (this.snapshot.status !== 'applying' || this.snapshot.pendingSelectionId !== id) {
+      return false;
+    }
+    const resolvedId = id === SYSTEM_APPEARANCE_ID ? getSystemAppearanceId() : id;
+    return this.runtime.getSnapshot()?.id === resolvedId;
+  }
+
   getPackage(id: string): Promise<AppearancePackage | null> {
     const builtin = getBuiltinAppearance(id);
     if (builtin) return Promise.resolve(builtin);

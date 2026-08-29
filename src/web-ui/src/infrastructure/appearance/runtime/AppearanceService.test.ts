@@ -143,6 +143,29 @@ describe('AppearanceService', () => {
     });
   });
 
+  it('reports a pending selection after its runtime apply while persistence is in flight', async () => {
+    configMocks.getConfig.mockResolvedValue('system');
+    const pendingWrite = deferred<void>();
+    configMocks.setConfig.mockReturnValueOnce(pendingWrite.promise);
+    const { service } = createService();
+    await service.initialize();
+
+    const selection = service.select('bitfun-dark');
+    await vi.waitFor(() => expect(configMocks.setConfig).toHaveBeenCalledOnce());
+
+    expect(service.getSnapshot()).toMatchObject({
+      status: 'applying',
+      selectedAppearanceId: 'system',
+      pendingSelectionId: 'bitfun-dark',
+    });
+    expect(service.hasAppliedPendingSelection('bitfun-dark')).toBe(true);
+    expect(service.hasAppliedPendingSelection('bitfun-light')).toBe(false);
+
+    pendingWrite.resolve(undefined);
+    await selection;
+    expect(service.hasAppliedPendingSelection('bitfun-dark')).toBe(false);
+  });
+
   it('reconciles externally persisted selections without writing them again', async () => {
     configMocks.getConfig.mockResolvedValueOnce('system').mockResolvedValueOnce('bitfun-dark');
     const { service } = createService();

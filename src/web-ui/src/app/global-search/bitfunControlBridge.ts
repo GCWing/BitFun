@@ -118,9 +118,11 @@ async function handleRequest(request: BitFunControlRequest): Promise<void> {
 }
 
 function appearanceAlreadyApplied(event: BitFunControlAppliedEvent): boolean {
-  return event.changedPaths.includes('appearance.selection')
-    && typeof event.value === 'string'
-    && appearanceService.getSnapshot().selectedAppearanceId === event.value;
+  if (!event.changedPaths.includes('appearance.selection') || typeof event.value !== 'string') {
+    return false;
+  }
+  return appearanceService.getSnapshot().selectedAppearanceId === event.value
+    || appearanceService.hasAppliedPendingSelection(event.value);
 }
 
 function languageAlreadyApplied(event: BitFunControlAppliedEvent): boolean {
