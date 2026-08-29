@@ -3539,7 +3539,15 @@ pub fn remote_persisted_poll_response(
         None
     } else if turn_finished {
         let status = tracker.turn_status();
-        if status == "completed" {
+        // A settled (completed) turn must not be echoed as an active turn when
+        // the persisted snapshot being delivered below already carries the
+        // final assistant message: clients that render both the message list
+        // and the active-turn bubble (mobile-web) would show the same reply
+        // twice. The completed projection is only a fallback for clients that
+        // have no durable copy yet, so suppress it whenever the snapshot
+        // provides one and settle the turn state instead.
+        if status == "completed" && message_snapshot.is_none() {
+
             tracker.snapshot_active_turn()
         } else {
             tracker.finalize_completed_turn();
@@ -4178,6 +4186,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn settled_turn_with_already_synced_final_message_does_not_echo_active_turn() {
+        // The durable per-turn fence settles the Turn after the mobile client
+        // already counted the final assistant message. The persisted snapshot
+        // being delivered carries that message, so echoing a completed
+        // active_turn on top of it would render the same reply twice on
+        // clients that draw both the message list and the active-turn bubble.
+        let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-settled".to_string(),
+            turn_index: 1,
+            user_input: "hello".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-settled".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "final answer".to_string(),
+        });
+        // Persistence landed before the client pulled the final message, so the
+        // tracker settles the turn from the fence rather than a terminal event.
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-settled".to_string()),
+        });
+
+        assert!(tracker.is_turn_finished());
+        assert_eq!(tracker.turn_status(), "completed");
+        assert!(tracker.is_persistence_dirty());
+        assert!(tracker.is_history_snapshot_required());
+
+        let user_message = ChatMessage {
+            id: "message-user".to_string(),
+            role: "user".to_string(),
+            content: "hello".to_string(),
+            timestamp: "1".to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: None,
+        };
+        let final_message = ChatMessage {
+            id: "turn-settled_assistant".to_string(),
+            role: "assistant".to_string(),
+            content: "final answer".to_string(),
+            timestamp: "2".to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: None,
+        };
+        let host = FakePollHost {
+            tracker: tracker.clone(),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![user_message, final_message],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let current_version = tracker.version();
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: current_version - 1,
+                // The client already counted the final assistant message.
+                known_msg_count: 2,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        match response {
+            RemoteResponse::SessionPoll {
+                new_messages,
+                total_msg_count,
+                message_snapshot,
+                active_turn,
+                ..
+            } => {
+                assert_eq!(new_messages, Some(Vec::new()));
+                assert_eq!(total_msg_count, Some(2));
+                let snapshot = message_snapshot.expect("snapshot is delivered");
+                assert_eq!(snapshot.len(), 2);
+                assert_eq!(snapshot[1].id, "turn-settled_assistant");
+                assert!(
+                    active_turn.is_none(),
+                    "completed turn must not be echoed once its final message is synced"
+                );
+            }
+            other => panic!("expected SessionPoll, got {other:?}"),
+        }
+
+        // The settled turn is finalized during response construction: a later
+        // poll cannot resurrect the completed active turn.
+        assert!(tracker.snapshot_active_turn().is_none());
+        assert!(!tracker.is_turn_finished());
+    }
+
     async fn per_turn_durable_fence_requests_a_snapshot_without_dropping_a_newer_live_turn() {
         let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
         tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
