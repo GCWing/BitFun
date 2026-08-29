@@ -188,13 +188,34 @@
     "current": "Current"
   },
   "quickSwitch": {
+    "menuLabel": "Switch branch",
     "searchPlaceholder": "Search branches...",
     "loading": "Loading...",
+    "conflict": {
+      "title": "Commit changes to switch branch",
+      "description": "Your changes to the following files would be overwritten by checkout:",
+      "instruction": "Please commit your changes to continue.",
+      "filesUnavailable": "Git did not report which changed files block checkout.",
+      "cancel": "Cancel",
+      "commitAndSwitch": "Commit and switch branch…",
+      "commitTitle": "Commit changes and switch to {{branch}}",
+      "commitDescription": "All changes in this workspace will be staged and committed on the current branch before switching to {{branch}}.",
+      "retryDescription": "The changes were committed. Retry switching to {{branch}}.",
+      "commitMessageLabel": "Commit message",
+      "commitMessagePlaceholder": "Enter commit message...",
+      "commitMessageRequired": "Enter a commit message to continue.",
+      "commitAction": "Commit and switch",
+      "retrySwitchAction": "Retry switch",
+      "stageFailed": "Could not stage the changes: {{error}}",
+      "commitFailed": "Could not commit the changes: {{error}}",
+      "retryFailed": "The changes were committed, but the branch still could not be switched: {{error}}"
+    },
     "notifications": {
       "switchSuccess": "Switched to branch {{branch}}"
     },
     "errors": {
       "title": "Branch switch failed",
+      "loadFailed": "Could not load branches",
       "switchFailed": "Failed to switch branch",
       "switchFailedWithMessage": "Failed to switch branch: {{error}}",
       "localChanges": "Please commit or stash local changes first",

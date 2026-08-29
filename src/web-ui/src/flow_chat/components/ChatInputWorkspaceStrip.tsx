@@ -27,6 +27,7 @@ import {
   SquareCheck,
 } from 'lucide-react';
 import { Tooltip } from '@/component-library';
+import { BranchQuickSwitch } from '@/tools/git/components/BranchQuickSwitch';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -164,6 +165,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const branchTriggerRef = useRef<HTMLButtonElement>(null);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const permissionMenuLayout = useAnchoredPopoverPosition({
     open: permissionMenuOpen,
     anchorRef: permissionTriggerRef,
@@ -314,6 +317,20 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     && worktreeControl?.lockedReason === 'dispatch'
     ? dispatchControl?.branch?.trim()
     : undefined;
+  // A managed worktree/dispatch branch is part of the session execution
+  // target. Only the ordinary workspace branch is mutable from this strip;
+  // changing a managed target behind its lifecycle owner would leave the
+  // session binding and cleanup metadata describing a different checkout.
+  const branchSwitchable = !dispatchBranch
+    && !isWorktree
+    && isRepository
+    && !!currentBranch?.trim()
+    && !!trimmedPath;
+
+  useEffect(() => {
+    setBranchMenuOpen(false);
+  }, [branchSwitchable, currentBranch, trimmedPath]);
+
   const branchTooltipContent = useMemo(
     () =>
       dispatchBranch
@@ -335,6 +352,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   }
 
   const branchLabel = dispatchBranch
+    || (branchSwitchable ? currentBranch?.trim() : undefined)
     || executionTarget?.branch?.trim()
     || (isWorktree && currentBranch?.trim())
     || (isWorktree && executionTarget?.baseCommit
@@ -417,23 +435,70 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     handleWorktreeChange(!worktreeEnabledRef.current);
   };
 
-  // The branch reports where the session sits; it is a fact, not a control.
-  // Isolation is selected from the local destination menu when that picker is
-  // present; the checkbox below remains a fallback for embedded surfaces that
-  // do not expose dispatch targets.
-  const renderBranchChip = () => (
-    <Tooltip content={branchTooltipContent} placement="top">
-      <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
+  // The ordinary workspace branch doubles as a picker. Managed worktree and
+  // detached-dispatch branches stay facts because their lifecycle owner must
+  // remain the only writer of that execution target.
+  const renderBranchChip = () => {
+    const contents = (
+      <>
         <GitBranch
           className="bitfun-chat-input-workspace-strip__branch-icon"
           size={12}
           strokeWidth={1.8}
           aria-hidden
         />
-        <span data-bf-component="chat-input-workspace-strip" data-bf-part="branch" className="bitfun-chat-input-workspace-strip__branch">{branchLabel}</span>
-      </span>
-    </Tooltip>
-  );
+        <span
+          data-bf-component="chat-input-workspace-strip"
+          data-bf-part="branch"
+          className="bitfun-chat-input-workspace-strip__branch"
+        >
+          {branchLabel}
+        </span>
+      </>
+    );
+
+    if (!branchSwitchable || !currentBranch?.trim()) {
+      return (
+        <Tooltip content={branchTooltipContent} placement="top">
+          <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
+            {contents}
+          </span>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <>
+        <Tooltip content={branchTooltipContent} placement="top">
+          <button
+            ref={branchTriggerRef}
+            type="button"
+            className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch bitfun-chat-input-workspace-strip__chip--branch-switchable"
+            aria-label={t('workspaceStrip.branchSwitchLabel', { branch: branchLabel })}
+            aria-haspopup="listbox"
+            aria-expanded={branchMenuOpen}
+            data-testid="chat-input-branch-trigger"
+            onClick={event => {
+              event.stopPropagation();
+              setBranchMenuOpen(open => !open);
+            }}
+          >
+            {contents}
+          </button>
+        </Tooltip>
+        <BranchQuickSwitch
+          isOpen={branchMenuOpen}
+          onClose={() => setBranchMenuOpen(false)}
+          repositoryPath={trimmedPath}
+          currentBranch={currentBranch.trim()}
+          anchorRef={branchTriggerRef}
+          onSwitchSuccess={() => {
+            void refreshBasic();
+          }}
+        />
+      </>
+    );
+  };
 
   // The workspace names where the session lives; with more than one workspace
   // open it doubles as the switcher. Either way it wears the track's pill so

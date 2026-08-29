@@ -238,7 +238,7 @@ describe('overlay surface contracts', () => {
     'app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.scss',
     'app/layout/AppLayout.scss',
     'app/layout/FloatingMiniChat.scss',
-    'app/components/NavPanel/components/BranchQuickSwitch.scss',
+    'tools/git/components/BranchQuickSwitch.scss',
     'infrastructure/i18n/components/LanguageSelector.scss',
     'shared/announcement-system/styles/AnnouncementToast.scss',
     'shared/notification-system/components/LoadingNotification.scss',

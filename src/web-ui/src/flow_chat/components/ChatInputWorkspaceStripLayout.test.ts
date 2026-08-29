@@ -104,18 +104,24 @@ describe('composer context track layout', () => {
     );
 
     // Branch wears the same pill so the three left-rail segments keep one
-    // rhythm, but it is still a fact — the picker and its uncommitted-changes
-    // guard are a follow-up — so nothing on it offers a click it cannot
-    // answer yet.
+    // rhythm. Managed-worktree and dispatch branches stay inert facts, while
+    // the ordinary workspace branch opts into the live-control modifier.
     const chip = stylesheet.slice(
       stylesheet.indexOf('  &__chip {'),
       stylesheet.indexOf('  // Isolation switch.'),
     );
+    const staticBranch = chip.slice(
+      chip.indexOf('    &--branch {'),
+      chip.indexOf('    &--branch-switchable {'),
+    );
     expect(chip).toContain('cursor: default;');
-    expect(chip).not.toContain(':hover');
-    expect(chip).toMatch(/&--branch \{[\s\S]*?height: 18px;/);
-    expect(chip).toMatch(/&--branch \{[\s\S]*?padding: 0 7px;/);
-    expect(chip).toMatch(/&--branch \{[\s\S]*?border-radius: 999px;/);
+    expect(staticBranch).not.toContain(':hover');
+    expect(staticBranch).toContain('height: 18px;');
+    expect(staticBranch).toContain('padding: 0 7px;');
+    expect(staticBranch).toContain('border-radius: 999px;');
+    expect(chip).toMatch(
+      /&--branch-switchable \{[\s\S]*?cursor: pointer;[\s\S]*?&:hover:not\(:disabled\)[\s\S]*?background: var\(--bf-appearance-token-element-bg-soft\);/,
+    );
 
     // A hairline parts the segments; inside a segment spacing is the only
     // grouping, so the two gaps are named and must stay far enough apart to

@@ -188,18 +188,39 @@
     "current": "目前"
   },
   "quickSwitch": {
+    "menuLabel": "切換分支",
     "searchPlaceholder": "搜尋分支...",
     "loading": "載入中...",
+    "conflict": {
+      "title": "提交變更後切換分支",
+      "description": "簽出目標分支會覆寫以下檔案中的變更：",
+      "instruction": "請先提交變更以繼續。",
+      "filesUnavailable": "Git 未回報阻止簽出的具體檔案。",
+      "cancel": "取消",
+      "commitAndSwitch": "提交並切換分支…",
+      "commitTitle": "提交變更並切換到 {{branch}}",
+      "commitDescription": "將暫存並提交此工作區中的所有變更，然後切換到 {{branch}}。",
+      "retryDescription": "變更已提交，請重試切換到 {{branch}}。",
+      "commitMessageLabel": "提交資訊",
+      "commitMessagePlaceholder": "輸入提交資訊...",
+      "commitMessageRequired": "請輸入提交資訊後繼續。",
+      "commitAction": "提交並切換",
+      "retrySwitchAction": "重試切換",
+      "stageFailed": "無法暫存變更：{{error}}",
+      "commitFailed": "無法提交變更：{{error}}",
+      "retryFailed": "變更已提交，但仍無法切換分支：{{error}}"
+    },
     "notifications": {
       "switchSuccess": "已切換到分支 {{branch}}"
     },
     "errors": {
-      "title": "Branch switch failed",
-      "switchFailed": "Failed to switch branch",
-      "switchFailedWithMessage": "Failed to switch branch: {{error}}",
-      "localChanges": "Please commit or stash local changes first",
-      "indexConflict": "Please resolve the current index conflicts first",
-      "unexpected": "Unexpected error while switching branches"
+      "title": "分支切換失敗",
+      "loadFailed": "無法載入分支清單",
+      "switchFailed": "無法切換分支",
+      "switchFailedWithMessage": "無法切換分支：{{error}}",
+      "localChanges": "請先提交或暫存本機變更",
+      "indexConflict": "請先解決目前的索引衝突",
+      "unexpected": "切換分支時發生未預期的錯誤"
     }
   },
   "branchSelect": {
