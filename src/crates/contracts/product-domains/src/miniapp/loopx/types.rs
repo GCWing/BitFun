@@ -261,6 +261,21 @@ pub enum LoopxTaskState {
     RecoveryRequired,
 }
 
+/// Authoritative Goal lifecycle projected from the LoopX CLI. This is kept
+/// separate from [`LoopxTaskState`], which describes BitFun's local host job
+/// (workspace, Agent session, cancellation, and recovery lifecycle).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopxCliGoalState {
+    #[default]
+    Unknown,
+    Active,
+    WaitingForUser,
+    Completed,
+    Failed,
+    Archived,
+}
+
 impl LoopxTaskState {
     pub fn is_terminal(self) -> bool {
         matches!(
@@ -330,20 +345,42 @@ pub struct LoopxTaskSnapshot {
     pub generation: u64,
     pub revision: u64,
     pub goal_id: Option<String>,
+    /// Read-only Goal lifecycle from LoopX. Legacy records leave this absent
+    /// until the host reconciles them against the CLI.
+    pub goal_state: Option<LoopxCliGoalState>,
     pub agent_id: Option<String>,
+    /// BitFun host-job lifecycle; this is not the Goal authority.
     #[serde(alias = "status")]
     pub state: LoopxTaskState,
     pub phase: LoopxPhase,
+    /// Durable answerable gate projection. Event history may be truncated, so
+    /// interactive approval surfaces must not depend on replay to recover it.
+    pub pending_gate_id: Option<String>,
+    pub pending_gate_message: Option<String>,
+    pub pending_gate_action_kind: Option<String>,
     pub workspace_path: Option<String>,
     pub model_id: Option<String>,
     pub granted_scopes: Vec<LoopxPermissionScope>,
     pub current_turn_id: Option<String>,
     pub current_tool: Option<String>,
     pub last_output_at: Option<i64>,
+    /// Bounded final response from the latest Agent turn. It is persisted
+    /// before settlement so recovery surfaces retain the useful outcome even
+    /// when quota finalization fails. Empty for legacy tasks and active turns
+    /// that have not produced a final response yet.
+    pub last_agent_summary: Option<String>,
+    pub last_agent_summary_at: Option<i64>,
     pub deadline_at: Option<i64>,
     pub retry_at: Option<i64>,
     pub error: Option<String>,
     pub settlement: LoopxSettlementSummary,
+    /// Number of successfully settled autonomous turns since the latest
+    /// explicit owner decision. Legacy records default to zero.
+    pub autonomous_turns_since_review: u32,
+    /// Total LoopX settlement receipts observed when the latest owner review
+    /// baseline was established. Legacy records default to zero, so existing
+    /// long-running Goals are evaluated from their authoritative history.
+    pub autonomy_review_baseline_receipts: u32,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -472,6 +509,9 @@ pub struct LoopxEvent {
 pub struct LoopxAttachRequest {
     pub known_stream_id: Option<String>,
     pub after_cursor: Option<LoopxEventCursor>,
+    /// Set only when the trusted MiniApp detects a wall-clock discontinuity
+    /// consistent with host suspend/resume. Legacy clients omit it.
+    pub resume_detected: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -683,4 +723,38 @@ pub struct LoopxExistingTask {
     pub task_id: String,
     pub identity: LoopxTaskIdentity,
     pub state: LoopxTaskState,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_task_snapshot_defaults_agent_summary_fields() {
+        let task: LoopxTaskSnapshot = serde_json::from_value(serde_json::json!({
+            "taskId": "legacy-task",
+            "state": "queued",
+            "phase": "queued"
+        }))
+        .expect("legacy task snapshot");
+
+        assert_eq!(task.last_agent_summary, None);
+        assert_eq!(task.last_agent_summary_at, None);
+        assert_eq!(task.autonomous_turns_since_review, 0);
+        assert_eq!(task.autonomy_review_baseline_receipts, 0);
+        assert_eq!(task.pending_gate_id, None);
+        assert_eq!(task.pending_gate_message, None);
+        assert_eq!(task.pending_gate_action_kind, None);
+    }
+
+    #[test]
+    fn legacy_attach_request_defaults_resume_signal() {
+        let request: LoopxAttachRequest = serde_json::from_value(serde_json::json!({
+            "knownStreamId": "stream-1",
+            "afterCursor": 4
+        }))
+        .expect("legacy attach request");
+
+        assert!(!request.resume_detected);
+    }
 }

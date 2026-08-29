@@ -4,12 +4,14 @@
  * ai.* → Host AI client, agent.* → Host agent bridge (hidden subagent runs),
  * deck.renderPage → hidden host WebView slide rasterization (export),
  * chat.* → floating session bubble composer claims and session focus,
- * loopx.* → the host-owned persistent LoopX controller (verified builtin only),
+ * private loopx.* → the host-owned persistent LoopX controller (verified builtin only;
+ * this namespace is not injected into ordinary or marketplace MiniApps),
  * clipboard.* → Host navigator.clipboard.
  * Also handles bitfun/request-appearance and pushes Appearance changes to the iframe.
  */
 import { useLayoutEffect, useRef, useEffect, useState, RefObject } from 'react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { loopxAPI } from '@/infrastructure/api/service-api/LoopxAPI';
 import { open as dialogOpen, save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -256,30 +258,30 @@ export function useMiniAppBridge(
 
           const call = parseLoopxBridgeCall(method, params);
           if (call.kind === 'attach') {
-            reply(await miniAppAPI.loopxAttach(appId, call.request));
+            reply(await loopxAPI.attach(appId, call.request));
             return;
           }
           if (call.kind === 'listModels') {
-            reply(await miniAppAPI.loopxListModels(appId));
+            reply(await loopxAPI.listModels(appId));
             return;
           }
           if (call.kind === 'resolveIntake') {
-            reply(await miniAppAPI.loopxResolveIntake(appId, call.request));
+            reply(await loopxAPI.resolveIntake(appId, call.request));
             return;
           }
           if (call.kind === 'createTask') {
-            reply(await miniAppAPI.loopxCreateTask(appId, call.request));
+            reply(await loopxAPI.createTask(appId, call.request));
             return;
           }
           if (call.kind === 'action') {
-            reply(await miniAppAPI.loopxAction(appId, call.request));
+            reply(await loopxAPI.action(appId, call.request));
             return;
           }
           if (call.kind === 'eventsSince') {
-            reply(await miniAppAPI.loopxEventsSince(appId, call.request));
+            reply(await loopxAPI.eventsSince(appId, call.request));
             return;
           }
-          reply(await miniAppAPI.loopxTurnOutputSince(appId, call.request));
+          reply(await loopxAPI.turnOutputSince(appId, call.request));
           return;
         }
 

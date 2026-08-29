@@ -151,12 +151,7 @@ pub async fn miniapp_loopx_list_models(
                 model_name: model.model_name.clone(),
                 provider: model.provider.clone(),
                 enabled: model.enabled,
-                supports_text_chat: model.capabilities.iter().any(|capability| {
-                    matches!(
-                        capability,
-                        bitfun_core::service::config::types::ModelCapability::TextChat
-                    )
-                }),
+                supports_text_chat: model.supports_text_generation(),
             }),
         &[],
         &primary_id,
@@ -182,7 +177,14 @@ pub async fn miniapp_loopx_attach(
             )
             .await);
     }
-    let _ = request.input;
+    if request.input.resume_detected {
+        let resume_controller = controller.controller.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = resume_controller.handle_host_resume().await {
+                log::warn!("LoopX host resume reconciliation failed: {error}");
+            }
+        });
+    }
     Ok(controller
         .controller
         .attach(

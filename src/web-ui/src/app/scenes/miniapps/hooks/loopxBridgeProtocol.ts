@@ -9,7 +9,7 @@ import type {
   LoopxPermissionScope,
   LoopxResolveIntakeRequest,
   LoopxTurnOutputSinceRequest,
-} from '@/infrastructure/api/service-api/MiniAppAPI';
+} from '@/infrastructure/api/service-api/LoopxAPI';
 
 export const LOOPX_BUILTIN_APP_ID = 'builtin-bitfun-loopx';
 
@@ -197,12 +197,15 @@ export function parseLoopxBridgeCall(
   assertNoHostControlledFields(rawParams);
 
   if (method === 'loopx.attach') {
-    assertAllowedKeys(rawParams, ['knownStreamId', 'afterCursor'], 'params');
+    assertAllowedKeys(rawParams, ['knownStreamId', 'afterCursor', 'resumeDetected'], 'params');
     return {
       kind: 'attach',
       request: {
         knownStreamId: optionalString(rawParams.knownStreamId, 'params.knownStreamId'),
         afterCursor: optionalUnsignedInteger(rawParams.afterCursor, 'params.afterCursor'),
+        resumeDetected: rawParams.resumeDetected === undefined
+          ? undefined
+          : requiredBoolean(rawParams.resumeDetected, 'params.resumeDetected'),
       },
     };
   }

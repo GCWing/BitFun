@@ -1,12 +1,13 @@
+use super::tool_activity::project_tool_activity;
 use crate::agentic::coordination::ConversationCoordinator;
-use bitfun_events::{AgenticEvent, ToolEventData};
+use bitfun_events::AgenticEvent;
 use bitfun_product_domains::miniapp::loopx::{
     LoopxAgentCancelRequest, LoopxAgentCancelResult, LoopxAgentFinishRequest,
     LoopxAgentFinishResult, LoopxAgentOutputSinceRequest, LoopxAgentOutputSinceResult,
     LoopxAgentPort, LoopxAgentProbeRequest, LoopxAgentProbeResult, LoopxAgentResetRequest,
     LoopxAgentResetResult, LoopxAgentStartRequest, LoopxAgentStartResult, LoopxHostFuture,
-    LoopxHostPortError, LoopxHostPortErrorKind, LoopxTurnOutputEvent,
-    LoopxTurnOutputEventKind,
+    LoopxHostPortError, LoopxHostPortErrorKind, LoopxTurnOutputEvent, LoopxTurnOutputEventKind,
+    LOOPX_BUILTIN_APP_ID,
 };
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionSource,
@@ -73,24 +74,14 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                         &request.operation_id,
                     )
                 })?;
-            if !model.capabilities.iter().any(|capability| {
-                matches!(
-                    capability,
-                    crate::service::config::types::ModelCapability::TextChat
-                )
-            }) {
+            if !model.supports_text_generation() {
                 return Err(host_error(
                     LoopxHostPortErrorKind::Unsupported,
                     format!("LoopX Agent model '{model_id}' does not support text chat"),
                     &request.operation_id,
                 ));
             }
-            let supports_images = model.capabilities.iter().any(|capability| {
-                matches!(
-                    capability,
-                    crate::service::config::types::ModelCapability::ImageUnderstanding
-                )
-            });
+            let supports_images = model.supports_image_understanding();
             Ok(LoopxAgentProbeResult {
                 model_id,
                 supports_images,
@@ -109,24 +100,8 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
             }
             let session_id = format!("loopx-{}", uuid::Uuid::new_v4());
             let turn_id = format!("loopx-turn-{}", uuid::Uuid::new_v4());
-            let mut metadata = serde_json::Map::new();
-            metadata.insert("surface".to_string(), serde_json::json!("loopx"));
-            metadata.insert(
-                "loopxTaskId".to_string(),
-                serde_json::json!(request.task_id),
-            );
-            metadata.insert(
-                "generation".to_string(),
-                serde_json::json!(request.generation),
-            );
-            metadata.insert(
-                "goalId".to_string(),
-                serde_json::json!(request.metadata.goal_id),
-            );
-            metadata.insert(
-                "loopxTurnId".to_string(),
-                serde_json::json!(request.metadata.loopx_turn_id),
-            );
+            let task_id = request.task_id.clone();
+            let metadata = loopx_session_metadata(&request);
             let created = AgentSubmissionPort::create_transient_session_with_id(
                 self.coordinator.as_ref(),
                 session_id.clone(),
@@ -146,11 +121,17 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
             )
             .await
             .map_err(|error| map_port_error(error, &request.operation_id))?;
+            log::info!(
+                "LoopX transient Agent session created: task_id={}, session_id={}, requested_turn_id={}",
+                task_id,
+                created.session_id,
+                turn_id
+            );
             let submitted = AgentSubmissionPort::submit_message(
                 self.coordinator.as_ref(),
                 AgentSubmissionRequest {
                     session_id: created.session_id.clone(),
-                    message: request.prompt,
+                    message: with_host_execution_context(request.prompt),
                     turn_id: Some(turn_id.clone()),
                     source: Some(AgentSubmissionSource::DesktopApi),
                     attachments: Vec::new(),
@@ -175,6 +156,12 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                     &request.operation_id,
                 ));
             }
+            log::info!(
+                "LoopX Agent turn accepted: task_id={}, session_id={}, turn_id={}",
+                task_id,
+                created.session_id,
+                submitted.turn_id
+            );
             Ok(LoopxAgentStartResult {
                 session_id: created.session_id,
                 turn_id: submitted.turn_id,
@@ -229,6 +216,12 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                         &request.operation_id,
                     )
                 })?;
+            log::info!(
+                "LoopX transient Agent session discarded: task_id={}, session_id={}, discarded={}",
+                request.task_id,
+                request.session_id,
+                discarded
+            );
             Ok(LoopxAgentFinishResult {
                 session_id: request.session_id,
                 discarded,
@@ -330,11 +323,7 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                 request.limit,
             )
             .map_err(|error| {
-                host_error(
-                    LoopxHostPortErrorKind::Io,
-                    error,
-                    &request.operation_id,
-                )
+                host_error(LoopxHostPortErrorKind::Io, error, &request.operation_id)
             })?;
             let Some(page) = page else {
                 return Ok(LoopxAgentOutputSinceResult {
@@ -345,7 +334,9 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
             let events = page
                 .events
                 .into_iter()
-                .filter_map(|record| turn_output_event(record.cursor, &request.turn_id, record.event))
+                .filter_map(|record| {
+                    turn_output_event(record.cursor, &request.turn_id, record.event)
+                })
                 .collect();
             Ok(LoopxAgentOutputSinceResult {
                 stream_id: Some(page.stream_id),
@@ -355,6 +346,19 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
             })
         })
     }
+}
+
+fn with_host_execution_context(prompt: String) -> String {
+    format!(
+        r#"<bitfun_host_execution_context>
+The current workspace is already a dedicated task worktree. Work directly in it; do not create a nested or sibling worktree.
+Before installing dependencies, inspect the existing install state. Package-manager download caches are shared by the host, but mutable node_modules and build outputs remain worktree-local.
+Only call WriteStdin or ExecControl when the immediately preceding tool result returned a concrete session_id. If no session_id was returned, use a new bounded foreground command or inspect the process/result artifact with a new command.
+Prefer targeted checks before repository-wide installs, builds, packaging, or end-to-end smoke tests. Every wait must have a bounded deadline; when it expires, record the evidence and choose a recovery or narrower next action instead of starting an indefinite sleep-poll loop.
+</bitfun_host_execution_context>
+
+{prompt}"#
+    )
 }
 
 fn turn_output_event(
@@ -428,57 +432,51 @@ fn turn_output_event(
             round_id,
             tool_event,
             ..
-        } => Some(LoopxTurnOutputEvent {
-            cursor,
-            turn_id,
-            round_id: Some(round_id),
-            kind: LoopxTurnOutputEventKind::Tool,
-            text: tool_event_message(&tool_event),
-            tool_name: Some(tool_event.effective_tool_name().to_string()),
-            tool_state: Some(tool_event_state(&tool_event).to_string()),
-            ..LoopxTurnOutputEvent::default()
-        }),
+        } => {
+            let activity = project_tool_activity(&tool_event)?;
+            let text = activity
+                .details
+                .get("summary")
+                .cloned()
+                .unwrap_or(activity.message);
+            Some(LoopxTurnOutputEvent {
+                cursor,
+                turn_id,
+                round_id: Some(round_id),
+                kind: LoopxTurnOutputEventKind::Tool,
+                text: Some(text),
+                tool_name: Some(activity.tool_name),
+                tool_state: Some(activity.state.to_string()),
+                ..LoopxTurnOutputEvent::default()
+            })
+        }
         _ => None,
     }
 }
 
-fn tool_event_state(event: &ToolEventData) -> &'static str {
-    match event {
-        ToolEventData::EarlyDetected { .. } => "detected",
-        ToolEventData::ParamsPartial { .. } => "params",
-        ToolEventData::Queued { .. } => "queued",
-        ToolEventData::Waiting { .. } => "waiting",
-        ToolEventData::Started { .. } => "started",
-        ToolEventData::Progress { .. } => "progress",
-        ToolEventData::Streaming { .. } => "streaming",
-        ToolEventData::StreamChunk { .. } => "stream",
-        ToolEventData::ConfirmationNeeded { .. } => "confirmation",
-        ToolEventData::Confirmed { .. } => "confirmed",
-        ToolEventData::Rejected { .. } => "rejected",
-        ToolEventData::Completed { .. } => "completed",
-        ToolEventData::Failed { .. } => "failed",
-        ToolEventData::Cancelled { .. } => "cancelled",
-    }
-}
-
-fn tool_event_message(event: &ToolEventData) -> Option<String> {
-    match event {
-        ToolEventData::Progress {
-            message,
-            percentage,
-            ..
-        } => Some(format!("{message} ({percentage:.0}%)")),
-        ToolEventData::Completed { duration_ms, .. } => {
-            Some(format!("Completed in {duration_ms} ms"))
-        }
-        ToolEventData::Failed { error, .. } => Some(error.clone()),
-        ToolEventData::Cancelled { reason, .. } => Some(reason.clone()),
-        ToolEventData::Queued { position, .. } => Some(format!("Queued at position {position}")),
-        ToolEventData::Waiting { dependencies, .. } if !dependencies.is_empty() => {
-            Some(format!("Waiting for {}", dependencies.join(", ")))
-        }
-        _ => None,
-    }
+fn loopx_session_metadata(
+    request: &LoopxAgentStartRequest,
+) -> serde_json::Map<String, serde_json::Value> {
+    serde_json::Map::from_iter([
+        ("surface".to_string(), serde_json::json!("miniapp_agent")),
+        ("appId".to_string(), serde_json::json!(LOOPX_BUILTIN_APP_ID)),
+        (
+            "loopxTaskId".to_string(),
+            serde_json::json!(request.task_id.clone()),
+        ),
+        (
+            "generation".to_string(),
+            serde_json::json!(request.generation),
+        ),
+        (
+            "goalId".to_string(),
+            serde_json::json!(request.metadata.goal_id.clone()),
+        ),
+        (
+            "loopxTurnId".to_string(),
+            serde_json::json!(request.metadata.loopx_turn_id.clone()),
+        ),
+    ])
 }
 
 fn map_port_error(
@@ -502,5 +500,68 @@ fn host_error(
         message: message.into(),
         operation_id: Some(operation_id.to_string()),
         retryable: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_events::{ToolEventData, ToolEventIdentity};
+    use bitfun_product_domains::miniapp::loopx::{
+        LoopxAgentTurnMetadata, LoopxIssueKey, LoopxItemKind, LoopxRepositoryKey,
+    };
+
+    #[test]
+    fn loopx_sessions_use_the_transient_miniapp_surface_contract() {
+        let request = LoopxAgentStartRequest {
+            task_id: "task-1".to_string(),
+            generation: 2,
+            metadata: LoopxAgentTurnMetadata {
+                goal_id: "goal-1".to_string(),
+                loopx_turn_id: "turn-1".to_string(),
+                item: LoopxIssueKey {
+                    repository: LoopxRepositoryKey {
+                        host: "github.com".to_string(),
+                        owner: "owner".to_string(),
+                        repository: "repo".to_string(),
+                    },
+                    kind: LoopxItemKind::Issue,
+                    number: 42,
+                },
+                attempt: 1,
+            },
+            ..LoopxAgentStartRequest::default()
+        };
+
+        let metadata = loopx_session_metadata(&request);
+        assert_eq!(metadata["surface"], serde_json::json!("miniapp_agent"));
+        assert_eq!(metadata["appId"], serde_json::json!(LOOPX_BUILTIN_APP_ID));
+    }
+
+    #[test]
+    fn loopx_prompt_carries_host_execution_constraints_without_workflow_policy() {
+        let prompt = with_host_execution_context("LoopX-owned turn contract".to_string());
+
+        assert!(prompt.contains("already a dedicated task worktree"));
+        assert!(prompt.contains("concrete session_id"));
+        assert!(prompt.contains("Every wait must have a bounded deadline"));
+        assert!(prompt.ends_with("LoopX-owned turn contract"));
+    }
+
+    #[test]
+    fn live_output_omits_partial_tool_parameters() {
+        let event = AgenticEvent::ToolEvent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            tool_event: ToolEventData::ParamsPartial {
+                identity: ToolEventIdentity::direct("tool-1", "ExecCommand"),
+                params: "{\"cmd\":\"cargo".to_string(),
+            },
+        };
+
+        assert!(turn_output_event(1, "turn-1", event).is_none());
     }
 }

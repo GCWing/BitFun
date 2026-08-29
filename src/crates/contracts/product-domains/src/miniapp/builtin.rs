@@ -161,7 +161,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-bitfun-loopx",
-        version: 4,
+        version: 14,
         meta_json: include_str!("builtin/assets/bitfun-loopx/meta.json"),
         html: include_str!("builtin/assets/bitfun-loopx/index.html"),
         css: include_str!("builtin/assets/bitfun-loopx/style.css"),
@@ -415,9 +415,16 @@ mod tests {
 
         for app in BUILTIN_APPS {
             let meta: MiniAppMeta = serde_json::from_str(app.meta_json).unwrap_or_else(|e| {
-                panic!("builtin '{}' meta.json does not parse as MiniAppMeta: {e}", app.id)
+                panic!(
+                    "builtin '{}' meta.json does not parse as MiniAppMeta: {e}",
+                    app.id
+                )
             });
-            assert_eq!(meta.id, app.id, "builtin '{}' meta id must match the bundle id", app.id);
+            assert_eq!(
+                meta.id, app.id,
+                "builtin '{}' meta id must match the bundle id",
+                app.id
+            );
             assert!(
                 !meta.name.trim().is_empty(),
                 "builtin '{}' meta name must not be empty",
@@ -442,8 +449,8 @@ mod tests {
                 app.id
             );
 
-            let deps: Vec<EsmDep> = serde_json::from_str(app.esm_dependencies_json)
-                .unwrap_or_else(|e| {
+            let deps: Vec<EsmDep> =
+                serde_json::from_str(app.esm_dependencies_json).unwrap_or_else(|e| {
                     panic!(
                         "builtin '{}' esm_dependencies.json does not parse as an ESM dep list: {e}",
                         app.id

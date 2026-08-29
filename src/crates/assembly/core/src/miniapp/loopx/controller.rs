@@ -1,17 +1,38 @@
+use super::tool_activity::ToolActivityProjection;
 use super::{LoopxPersistedState, LoopxStateStore, LoopxTaskRuntimeRecord};
 use bitfun_product_domains::miniapp::loopx::*;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 const DEFAULT_AGENT_ID: &str = "bitfun-agent";
 const EVENT_CHANNEL_CAPACITY: usize = 256;
 const INTAKE_PREVIEW_TTL_MS: i64 = 5 * 60 * 1000;
 const MAX_INTAKE_PREVIEWS: usize = 64;
+const MAX_AGENT_SUMMARY_CHARS: usize = 16_000;
+const GOAL_RECONCILE_TTL_MS: i64 = 30_000;
+const GOAL_RECONCILE_DEADLINE_MS: i64 = 30_000;
+/// Budget is counted at verified durable settlements, never at tool-call or
+/// prompt-pattern level. A natural LoopX gate or Goal terminal state wins
+/// before this policy is considered.
+const AUTONOMOUS_TURN_BUDGET: u32 = 4;
+const AUTONOMY_REVIEW_ACTION_KIND: &str = "autonomous_budget_review";
+/// loopx 0.5.1's turn plan exposes only cadence labels, never a numeric
+/// scheduler hint, so the host owns the heartbeat cadence for waiting goals.
+const WAIT_RESCHEDULE_FALLBACK_MS: u64 = 60_000;
 
 struct ScheduledTask {
     task_id: String,
+}
+
+struct ResetInProgressGuard<'a>(&'a AtomicBool);
+
+impl Drop for ResetInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 #[derive(Default)]
@@ -44,12 +65,14 @@ pub struct LoopxController {
     store: LoopxStateStore,
     state: RwLock<LoopxPersistedState>,
     mutation_lock: Mutex<()>,
+    reconcile_lock: Mutex<()>,
     previews: RwLock<HashMap<String, LoopxIntakePreview>>,
     active_tasks: Mutex<HashMap<String, bool>>,
     active_repositories: Mutex<HashMap<String, String>>,
     event_sender: broadcast::Sender<LoopxEvent>,
     task_sender: mpsc::UnboundedSender<ScheduledTask>,
     load_error: RwLock<Option<String>>,
+    reset_in_progress: AtomicBool,
 }
 
 impl LoopxController {
@@ -75,12 +98,14 @@ impl LoopxController {
             store,
             state: RwLock::new(persisted),
             mutation_lock: Mutex::new(()),
+            reconcile_lock: Mutex::new(()),
             previews: RwLock::new(HashMap::new()),
             active_tasks: Mutex::new(HashMap::new()),
             active_repositories: Mutex::new(HashMap::new()),
             event_sender,
             task_sender,
             load_error: RwLock::new(load_error),
+            reset_in_progress: AtomicBool::new(false),
         });
         if restart_changed {
             if let Err(error) = controller.persist_current().await {
@@ -124,6 +149,14 @@ impl LoopxController {
         execution_support: LoopxExecutionSupport,
         unsupported_reason: Option<String>,
     ) -> LoopxAttachResponse {
+        let environment_ready =
+            self.state.read().await.environment.status == LoopxEnvironmentStatus::Ready;
+        if execution_support == LoopxExecutionSupport::Supported
+            && environment_ready
+            && self.load_error.read().await.is_none()
+        {
+            self.reconcile_goal_projections(false).await;
+        }
         let state = self.state.read().await;
         let mut snapshot = state.snapshot(
             execution_domain,
@@ -137,6 +170,144 @@ impl LoopxController {
             snapshot.environment.status = LoopxEnvironmentStatus::Blocked;
         }
         LoopxAttachResponse { snapshot }
+    }
+
+    /// Re-hydrates LoopX-owned projections after the trusted Desktop surface
+    /// observes a suspend/resume clock discontinuity. Active Agent turns are
+    /// preserved: Windows can resume their subprocess tree successfully, so
+    /// this path invalidates stale clients and refreshes only read-only host
+    /// facts instead of manufacturing a failure or duplicate turn.
+    pub async fn handle_host_resume(self: &Arc<Self>) -> Result<(), String> {
+        if self.reset_in_progress.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        {
+            let _mutation = self.mutation_lock.lock().await;
+            let mut state = self.state.write().await;
+            let start_cursor = state.cursor;
+            state.revision = state.revision.saturating_add(1);
+            state.append_event(LoopxEvent {
+                kind: LoopxEventKind::SnapshotInvalidated,
+                level: LoopxEventLevel::Info,
+                source: LoopxEventSource::Controller,
+                message: "Host resumed; refreshing LoopX projections".to_string(),
+                occurred_at: now_ms(),
+                ..LoopxEvent::default()
+            });
+            let persisted = state.clone();
+            drop(state);
+            self.store.save(&persisted).await?;
+            self.broadcast_new_events(&persisted, start_cursor);
+        }
+
+        if let Err(error) = self.refresh_environment().await {
+            log::warn!("LoopX environment refresh after host resume failed: {error}");
+        }
+        self.reconcile_goal_projections(true).await;
+        Ok(())
+    }
+
+    /// Refresh the read-only LoopX Goal projection before presenting persisted
+    /// host jobs. Failures preserve the last local projection and are surfaced
+    /// in logs; they never manufacture a Goal transition or local fallback.
+    async fn reconcile_goal_projections(&self, force: bool) {
+        let Ok(_reconcile) = self.reconcile_lock.try_lock() else {
+            return;
+        };
+        let now = now_ms();
+        let candidates = {
+            let state = self.state.read().await;
+            state
+                .tasks
+                .iter()
+                .filter(|task| {
+                    task.goal_id.as_deref().is_some_and(|id| !id.is_empty())
+                        && task
+                            .workspace_path
+                            .as_deref()
+                            .is_some_and(|path| !path.is_empty())
+                        && !matches!(
+                            task.state,
+                            LoopxTaskState::Preparing
+                                | LoopxTaskState::Running
+                                | LoopxTaskState::Cancelling
+                                | LoopxTaskState::Aborted
+                                | LoopxTaskState::Archived
+                        )
+                        // Passive states change through explicit host actions. Re-
+                        // inspecting them on every UI attach only spawns sidecar
+                        // processes that can time out. Suspend/resume keeps the force
+                        // path so an externally changed Goal is still repaired.
+                        && (force
+                            || (task.state == LoopxTaskState::WaitingForUser
+                                && task.pending_gate_id.is_none())
+                            || !matches!(
+                                task.state,
+                                LoopxTaskState::WaitingForUser
+                                    | LoopxTaskState::Completed
+                                    | LoopxTaskState::Stopped
+                                    | LoopxTaskState::Failed
+                                    | LoopxTaskState::RecoveryRequired
+                            ))
+                        && (force
+                            || task.goal_state.is_none()
+                            || now.saturating_sub(task.updated_at) >= GOAL_RECONCILE_TTL_MS)
+                })
+                .filter_map(|task| {
+                    let runtime = state.runtime.get(&task.task_id)?.clone();
+                    (!runtime.registry_path.is_empty()).then(|| (task.clone(), runtime))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (task, runtime) in candidates {
+            let mut context = goal_context(&task, &runtime);
+            context.call.operation_id =
+                format!("reconcile-goal-{}-{}", task.task_id, uuid::Uuid::new_v4());
+            context.call.deadline_at = Some(now_ms().saturating_add(GOAL_RECONCILE_DEADLINE_MS));
+            let progress = BufferedProgress::default();
+            let result = self
+                .cli
+                .inspect_goal(
+                    LoopxCliInspectGoalRequest {
+                        context,
+                        goal_id: task.goal_id.clone().unwrap_or_default(),
+                        agent_id: task
+                            .agent_id
+                            .clone()
+                            .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string()),
+                    },
+                    &progress,
+                )
+                .await;
+            if let Err(error) = self.record_progress(progress.take()).await {
+                log::warn!(
+                    "Failed to persist LoopX reconciliation progress: task_id={}, error={}",
+                    task.task_id,
+                    error
+                );
+            }
+            let snapshot = match result {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    log::warn!(
+                        "LoopX Goal reconciliation failed: task_id={}, goal_id={}, error={}",
+                        task.task_id,
+                        task.goal_id.as_deref().unwrap_or("unknown"),
+                        error
+                    );
+                    continue;
+                }
+            };
+            if let Err(error) = self.apply_goal_projection(&task, &snapshot).await {
+                log::warn!(
+                    "Failed to apply LoopX Goal projection: task_id={}, goal_id={}, error={}",
+                    task.task_id,
+                    snapshot.goal_id,
+                    error
+                );
+            }
+        }
     }
 
     pub async fn events_since(&self, request: LoopxEventsSinceRequest) -> LoopxEventsSinceResponse {
@@ -165,7 +336,11 @@ impl LoopxController {
                     ..LoopxTurnOutputSinceResponse::default()
                 };
             };
-            let runtime = state.runtime.get(&task.task_id).cloned().unwrap_or_default();
+            let runtime = state
+                .runtime
+                .get(&task.task_id)
+                .cloned()
+                .unwrap_or_default();
             (task.clone(), runtime)
         };
 
@@ -273,7 +448,9 @@ impl LoopxController {
             tokio::join!(handshake, workspace, agent, github_auth);
         self.record_progress(progress.take()).await?;
         self.commit_environment(handshake, workspace, agent, github_auth)
-            .await
+            .await?;
+        self.reconcile_goal_projections(true).await;
+        Ok(())
     }
 
     async fn probe_github_auth(&self) -> LoopxGithubAuthProbe {
@@ -742,17 +919,41 @@ impl LoopxController {
         if task.state != LoopxTaskState::Running {
             return Ok(());
         }
+        log::info!(
+            "LoopX Agent terminal handling started: task_id={}, goal_id={}, agent_turn_id={}, status={:?}",
+            task.task_id,
+            task.goal_id.as_deref().unwrap_or("unknown"),
+            turn_id,
+            status
+        );
+        if let Some(summary) = summary
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            let bounded = bounded_agent_summary(summary);
+            self.mutate_task(&task.task_id, None, |current, _| {
+                if current.generation != task.generation {
+                    return;
+                }
+                current.last_agent_summary = Some(bounded);
+                current.last_agent_summary_at = Some(now_ms());
+                current.revision = current.revision.saturating_add(1);
+            })
+            .await?;
+        }
         self.update_task_phase(
             &task.task_id,
             task.generation,
             LoopxPhase::ValidatingProgress,
-            "Agent turn ended; validating durable LoopX progress",
+            "Agent turn ended; finalizing LoopX-owned durable settlement",
         )
         .await?;
         let progress = BufferedProgress::default();
+        let settlement_started = Instant::now();
         let result = self
             .cli
-            .settle_turn(
+            .finalize_turn_settlement(
                 LoopxCliSettleTurnRequest {
                     context: goal_context(&task, &runtime),
                     goal_id: task.goal_id.clone().unwrap_or_default(),
@@ -772,6 +973,24 @@ impl LoopxController {
                 &progress,
             )
             .await;
+        match &result {
+            Ok(settlement) => log::info!(
+                "LoopX turn settlement completed: task_id={}, goal_id={}, loopx_turn_id={}, status={:?}, duration_ms={}, scheduler_hint_ms={:?}",
+                task.task_id,
+                task.goal_id.as_deref().unwrap_or("unknown"),
+                settlement.turn_id,
+                settlement.status,
+                settlement_started.elapsed().as_millis(),
+                settlement.scheduler_hint_ms
+            ),
+            Err(error) => log::warn!(
+                "LoopX turn settlement failed: task_id={}, goal_id={}, duration_ms={}, error={}",
+                task.task_id,
+                task.goal_id.as_deref().unwrap_or("unknown"),
+                settlement_started.elapsed().as_millis(),
+                error
+            ),
+        }
         self.record_progress(progress.take()).await?;
         let finish_result = if let (Some(session_id), Some(agent_turn_id)) =
             (runtime.session_id.clone(), runtime.agent_turn_id.clone())
@@ -790,6 +1009,19 @@ impl LoopxController {
         } else {
             Ok(LoopxAgentFinishResult::default())
         };
+        match &finish_result {
+            Ok(finish) => log::info!(
+                "LoopX transient Agent session finished: task_id={}, session_id={}, discarded={}",
+                task.task_id,
+                finish.session_id,
+                finish.discarded
+            ),
+            Err(error) => log::warn!(
+                "LoopX transient Agent session cleanup failed: task_id={}, error={}",
+                task.task_id,
+                error
+            ),
+        }
         match (result, finish_result) {
             (Ok(settlement), Ok(_)) => {
                 self.apply_settlement(
@@ -806,11 +1038,7 @@ impl LoopxController {
         }
     }
 
-    pub async fn handle_agent_activity(
-        &self,
-        turn_id: &str,
-        tool_name: Option<String>,
-    ) -> Result<(), String> {
+    pub(super) async fn handle_agent_activity(&self, turn_id: &str) -> Result<(), String> {
         let task_id = {
             let state = self.state.read().await;
             state
@@ -822,24 +1050,74 @@ impl LoopxController {
         let Some(task_id) = task_id else {
             return Ok(());
         };
-        let updated = self
-            .mutate_task(&task_id, None, |task, _| {
-                if task.state != LoopxTaskState::Running {
-                    return;
-                }
-                task.last_output_at = Some(now_ms());
-                task.current_tool = tool_name.clone();
-                task.revision = task.revision.saturating_add(1);
-            })
-            .await?;
-        if let Some(tool_name) = tool_name {
-            self.append_task_event(
-                &updated,
-                LoopxEventKind::Log,
-                &format!("Agent tool activity: {tool_name}"),
-                false,
-            )
-            .await?;
+        self.mutate_task(&task_id, None, |task, _| {
+            if task.state != LoopxTaskState::Running {
+                return;
+            }
+            task.last_output_at = Some(now_ms());
+            task.revision = task.revision.saturating_add(1);
+        })
+        .await?;
+        Ok(())
+    }
+
+    pub(super) async fn handle_agent_tool_activity(
+        &self,
+        turn_id: &str,
+        activity: ToolActivityProjection,
+    ) -> Result<(), String> {
+        let _mutation = self.mutation_lock.lock().await;
+        let mut state = self.state.write().await;
+        let Some(task_id) = state
+            .runtime
+            .iter()
+            .find(|(_, runtime)| runtime.agent_turn_id.as_deref() == Some(turn_id))
+            .map(|(task_id, _)| task_id.clone())
+        else {
+            return Ok(());
+        };
+        let Some(task_index) = state.tasks.iter().position(|task| task.task_id == task_id) else {
+            return Ok(());
+        };
+        if state.tasks[task_index].state != LoopxTaskState::Running {
+            return Ok(());
+        }
+
+        let now = now_ms();
+        {
+            let task = &mut state.tasks[task_index];
+            task.last_output_at = Some(now);
+            task.updated_at = now;
+            task.current_tool = activity.current_tool.clone();
+            task.revision = task.revision.saturating_add(1);
+        }
+        let updated = state.tasks[task_index].clone();
+        state.revision = state.revision.saturating_add(1);
+        state.append_event(LoopxEvent {
+            task_id: Some(updated.task_id.clone()),
+            generation: Some(updated.generation),
+            revision: Some(updated.revision),
+            kind: LoopxEventKind::Log,
+            level: if activity.important {
+                LoopxEventLevel::Error
+            } else {
+                LoopxEventLevel::Info
+            },
+            source: LoopxEventSource::Agent,
+            phase: Some(updated.phase),
+            message: activity.message,
+            important: activity.important,
+            tool_name: Some(activity.tool_name),
+            details: activity.details,
+            occurred_at: now,
+            ..LoopxEvent::default()
+        });
+        let persisted = state.clone();
+        let event = persisted.events.last().cloned();
+        drop(state);
+        self.store.save(&persisted).await?;
+        if let Some(event) = event {
+            let _ = self.event_sender.send(event);
         }
         Ok(())
     }
@@ -940,6 +1218,7 @@ impl LoopxController {
             .await
             .map_err(|error| error.to_string())?;
         self.record_progress(progress.take()).await?;
+        self.record_goal_state(&task, inspected.state).await?;
         match inspected.run_decision {
             LoopxCliRunDecision::Wait => {
                 self.release_repository(&task).await;
@@ -956,9 +1235,14 @@ impl LoopxController {
                     Some(&task_id),
                 )
                 .await;
-                if let Some(delay) = inspected.scheduler_hint_ms {
-                    self.enqueue_task(task_id, Duration::from_millis(delay))?;
-                }
+                // loopx 0.5.1 never emits a numeric scheduler hint, and a
+                // waiting goal with no requeue would sleep forever. The host
+                // owns the heartbeat cadence: honor an explicit hint when one
+                // exists, otherwise fall back to a bounded polling interval.
+                let delay = inspected
+                    .scheduler_hint_ms
+                    .unwrap_or(WAIT_RESCHEDULE_FALLBACK_MS);
+                self.enqueue_task(task_id, Duration::from_millis(delay))?;
                 Ok(())
             }
             LoopxCliRunDecision::WaitingForUser => {
@@ -970,19 +1254,26 @@ impl LoopxController {
                     message,
                     action_kind,
                 } = gate;
+                let durable_revision = inspected.durable_revision.clone();
                 self.release_repository(&task).await;
                 let updated = self
-                    .transition_task(
-                        &task_id,
-                        task.generation,
-                        LoopxTaskState::WaitingForUser,
-                        LoopxPhase::WaitingForApproval,
-                        "LoopX requires an explicit user decision",
-                    )
+                    .mutate_task(&task_id, None, |current, current_runtime| {
+                        if current.generation != task.generation {
+                            return;
+                        }
+                        current.state = LoopxTaskState::WaitingForUser;
+                        current.phase = LoopxPhase::WaitingForApproval;
+                        current.pending_gate_id = Some(gate_id.clone());
+                        current.pending_gate_message = Some(message.clone());
+                        current.pending_gate_action_kind = action_kind.clone();
+                        current.revision = current.revision.saturating_add(1);
+                        current_runtime.expected_durable_revision =
+                            Some(durable_revision.clone());
+                    })
                     .await?;
                 let mut details = BTreeMap::new();
-                details.insert("gateId".to_string(), gate_id);
-                if let Some(action_kind) = action_kind {
+                details.insert("gateId".to_string(), gate_id.clone());
+                if let Some(action_kind) = action_kind.clone() {
                     details.insert("actionKind".to_string(), action_kind);
                 }
                 self.append_task_event_with_details(
@@ -1023,6 +1314,15 @@ impl LoopxController {
                     .await
             }
             LoopxCliRunDecision::RunNow => {
+                let autonomous_turns = autonomous_turns_since_review(
+                    &task,
+                    inspected.settlement_receipt_ids.len() as u32,
+                );
+                if autonomy_review_required(autonomous_turns) {
+                    return self
+                        .require_autonomy_review(&task, &runtime, autonomous_turns)
+                        .await;
+                }
                 let progress = BufferedProgress::default();
                 let turn = self
                     .cli
@@ -1067,9 +1367,9 @@ impl LoopxController {
 
     /// Best-effort teardown of a task's agent run (cancel then finish). A stale
     /// session — for example one persisted before a host restart — must not
-    /// abort pause or reset: the controller's persisted state is the task
-    /// lifecycle source of truth, so teardown failures are logged and the
-    /// operation continues.
+    /// abort pause or reset. The local record owns only host-job cleanup; LoopX
+    /// remains authoritative for Goal lifecycle, so teardown failures are
+    /// logged and the operator action continues.
     async fn teardown_agent_run(
         self: &Arc<Self>,
         task: &LoopxTaskSnapshot,
@@ -1237,7 +1537,11 @@ impl LoopxController {
                 task.state = LoopxTaskState::Queued;
                 task.phase = LoopxPhase::Recovering;
                 task.current_turn_id = None;
+                task.pending_gate_id = None;
+                task.pending_gate_message = None;
+                task.pending_gate_action_kind = None;
                 task.error = None;
+                task.autonomous_turns_since_review = 0;
                 runtime.operation_id = format!("resume-{}-{}", task.task_id, task.generation);
                 runtime.session_id = None;
                 runtime.agent_turn_id = None;
@@ -1353,7 +1657,20 @@ impl LoopxController {
         self: &Arc<Self>,
         request: &LoopxActionRequest,
     ) -> Result<LoopxActionResponse, String> {
-        let (tasks, runtimes, previous_stream_id) = {
+        if self
+            .reset_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Ok(LoopxActionResponse {
+                status: LoopxActionStatus::Duplicate,
+                current_revision: self.state.read().await.revision,
+                message: Some("LoopX reset is already in progress".to_string()),
+                ..LoopxActionResponse::default()
+            });
+        }
+        let _reset_guard = ResetInProgressGuard(&self.reset_in_progress);
+        let (tasks, runtimes, previous_stream_id, environment) = {
             let _mutation = self.mutation_lock.lock().await;
             let mut state = self.state.write().await;
             if state.has_processed_request(&request.client_request_id) {
@@ -1374,6 +1691,7 @@ impl LoopxController {
             }
             let tasks = state.tasks.clone();
             let runtimes = state.runtime.clone();
+            let environment = state.environment.clone();
             for task in &mut state.tasks {
                 if matches!(
                     task.state,
@@ -1395,7 +1713,7 @@ impl LoopxController {
             let previous_stream_id = state.stream_id.clone();
             drop(state);
             self.store.save(&persisted).await?;
-            (tasks, runtimes, previous_stream_id)
+            (tasks, runtimes, previous_stream_id, environment)
         };
 
         for task in &tasks {
@@ -1433,6 +1751,41 @@ impl LoopxController {
             })
             .await
             .map_err(|error| error.to_string())?;
+        let goal_ids = tasks
+            .iter()
+            .map(|task| goal_id_for(&task.identity))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let reset_goals = if goal_ids.is_empty() {
+            LoopxCliResetGoalsResult::default()
+        } else {
+            let progress = BufferedProgress::default();
+            let result = self
+                .cli
+                .reset_goals(
+                    LoopxCliResetGoalsRequest {
+                        call: LoopxCliCallContext {
+                            operation_id: format!("reset-goals-{}", uuid::Uuid::new_v4()),
+                            deadline_at: None,
+                        },
+                        goal_ids,
+                    },
+                    &progress,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            self.record_progress(progress.take()).await?;
+            result
+        };
+        log::info!(
+            "LoopX reset goal cleanup completed: requested={}, retired={}, already_absent={}, archived={}, missing_runtime={}",
+            reset_goals.requested_goal_ids.len(),
+            reset_goals.retired_goal_ids.len(),
+            reset_goals.already_absent_goal_ids.len(),
+            reset_goals.archived_goal_ids.len(),
+            reset_goals.missing_runtime_goal_ids.len()
+        );
         self.agent
             .reset(LoopxAgentResetRequest {
                 operation_id: format!("reset-history-{}", uuid::Uuid::new_v4()),
@@ -1440,7 +1793,8 @@ impl LoopxController {
             .await
             .map_err(|error| error.to_string())?;
 
-        let fresh = LoopxPersistedState::new(now_ms());
+        let mut fresh = LoopxPersistedState::new(now_ms());
+        fresh.environment = environment;
         self.store.clear().await?;
         {
             let _mutation = self.mutation_lock.lock().await;
@@ -1448,6 +1802,7 @@ impl LoopxController {
             self.active_tasks.lock().await.clear();
             self.active_repositories.lock().await.clear();
             self.previews.write().await.clear();
+            *self.load_error.write().await = None;
         }
         let _ = self.event_sender.send(LoopxEvent {
             stream_id: fresh.stream_id,
@@ -1459,14 +1814,13 @@ impl LoopxController {
             occurred_at: now_ms(),
             ..LoopxEvent::default()
         });
-        // The fresh state starts with an unknown environment; validate it again
-        // so the UI can re-enable intake after "clear and start over".
-        self.refresh_environment().await?;
         Ok(LoopxActionResponse {
             current_revision: fresh.revision,
             message: Some(format!(
-                "Cleared {} LoopX tasks, managed workspaces, and persisted controller state",
-                tasks.len()
+                "Cleared {} LoopX tasks, {} global goal routes, managed workspaces, runtime state, and persisted controller state",
+                tasks.len(),
+                reset_goals.retired_goal_ids.len()
+                    + reset_goals.already_absent_goal_ids.len()
             )),
             ..LoopxActionResponse::default()
         })
@@ -1482,6 +1836,9 @@ impl LoopxController {
             .gate_id
             .clone()
             .ok_or_else(|| "gateId is required".to_string())?;
+        let is_autonomy_review = self
+            .is_autonomy_review_gate(&task.task_id, &gate_id)
+            .await;
         let progress = BufferedProgress::default();
         let result = self
             .cli
@@ -1515,26 +1872,150 @@ impl LoopxController {
                 message: Some("LoopX did not apply the gate decision".to_string()),
             });
         }
+        self.record_goal_state(task, result.goal_state).await?;
+        self.mutate_task(&task.task_id, None, |current, current_runtime| {
+            if current.generation != task.generation {
+                return;
+            }
+            current.autonomous_turns_since_review = 0;
+            current.autonomy_review_baseline_receipts = result.settlement_receipt_count;
+            current.revision = current.revision.saturating_add(1);
+            current_runtime.expected_durable_revision = Some(result.durable_revision.clone());
+        })
+        .await?;
+        let stop_after_reject = is_autonomy_review
+            && request.action == LoopxActionKind::Reject;
         let response = self
             .transition_action(
                 &task.task_id,
-                LoopxTaskState::Queued,
-                LoopxPhase::Queued,
+                if stop_after_reject {
+                    LoopxTaskState::Stopped
+                } else {
+                    LoopxTaskState::Queued
+                },
+                if stop_after_reject {
+                    LoopxPhase::Finished
+                } else {
+                    LoopxPhase::Queued
+                },
                 &request.client_request_id,
             )
             .await?;
-        if request.action == LoopxActionKind::Approve {
-            let task_id = task.task_id.clone();
-            self.enqueue_task(task_id, Duration::ZERO)?;
-        } else {
-            self.release_repository(task).await;
+        self.release_repository(task).await;
+        if stop_after_reject {
+            if let Some(updated) = response.task.as_ref() {
+                self.append_task_event(
+                    updated,
+                    LoopxEventKind::StateChanged,
+                    "Owner stopped autonomous investigation at the review gate",
+                    true,
+                )
+                .await?;
+            }
             self.schedule_next_for_repository(
                 &task.identity.item.repository.canonical_id(),
                 Some(&task.task_id),
             )
             .await;
+        } else {
+            self.enqueue_task(task.task_id.clone(), Duration::ZERO)?;
         }
         Ok(response)
+    }
+
+    async fn require_autonomy_review(
+        self: &Arc<Self>,
+        task: &LoopxTaskSnapshot,
+        runtime: &LoopxTaskRuntimeRecord,
+        autonomous_turns: u32,
+    ) -> Result<(), String> {
+        let agent_id = task
+            .agent_id
+            .clone()
+            .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string());
+        let message = format!(
+            "LoopX autonomy review checkpoint {}: completed {} autonomous turns without completing this Issue. Approve another bounded investigation segment, optionally authorize a preventive fix in the approval note, or reject to stop while preserving the worktree and evidence.",
+            task.revision,
+            autonomous_turns,
+        );
+        let mut context = goal_context(task, runtime);
+        context.call.operation_id = format!(
+            "autonomy-review-{}-{}",
+            task.task_id,
+            uuid::Uuid::new_v4()
+        );
+        let progress = BufferedProgress::default();
+        let gate = self
+            .cli
+            .create_user_gate(
+                LoopxCliCreateUserGateRequest {
+                    context,
+                    goal_id: task.goal_id.clone().unwrap_or_default(),
+                    agent_id,
+                    message: message.clone(),
+                    action_kind: AUTONOMY_REVIEW_ACTION_KIND.to_string(),
+                },
+                &progress,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        self.record_progress(progress.take()).await?;
+        let updated = self
+            .mutate_task(&task.task_id, None, |current, current_runtime| {
+                if current.generation != task.generation {
+                    return;
+                }
+                current.state = LoopxTaskState::WaitingForUser;
+                current.phase = LoopxPhase::WaitingForApproval;
+                current.goal_state = Some(LoopxCliGoalState::WaitingForUser);
+                current.pending_gate_id = Some(gate.gate_id.clone());
+                current.pending_gate_message = Some(message.clone());
+                current.pending_gate_action_kind =
+                    Some(AUTONOMY_REVIEW_ACTION_KIND.to_string());
+                current.current_turn_id = None;
+                current.current_tool = None;
+                current.deadline_at = None;
+                current.autonomous_turns_since_review = 0;
+                current.autonomy_review_baseline_receipts = gate.settlement_receipt_count;
+                current.revision = current.revision.saturating_add(1);
+                current_runtime.expected_durable_revision = Some(gate.durable_revision.clone());
+            })
+            .await?;
+        let mut details = BTreeMap::new();
+        details.insert("gateId".to_string(), gate.gate_id);
+        details.insert(
+            "actionKind".to_string(),
+            AUTONOMY_REVIEW_ACTION_KIND.to_string(),
+        );
+        details.insert(
+            "autonomousTurns".to_string(),
+            autonomous_turns.to_string(),
+        );
+        self.append_task_event_with_details(
+            &updated,
+            LoopxEventKind::ApprovalRequired,
+            &message,
+            true,
+            details,
+        )
+        .await?;
+        self.release_repository(task).await;
+        self.schedule_next_for_repository(
+            &task.identity.item.repository.canonical_id(),
+            Some(&task.task_id),
+        )
+        .await;
+        Ok(())
+    }
+
+    async fn is_autonomy_review_gate(&self, task_id: &str, gate_id: &str) -> bool {
+        self.state.read().await.events.iter().rev().any(|event| {
+            event.task_id.as_deref() == Some(task_id)
+                && event.kind == LoopxEventKind::ApprovalRequired
+                && event.details.get("gateId").map(String::as_str) == Some(gate_id)
+                && event.details.get("actionKind").map(String::as_str)
+                    == Some(AUTONOMY_REVIEW_ACTION_KIND)
+        })
     }
 
     async fn apply_settlement(
@@ -1568,8 +2049,15 @@ impl LoopxController {
             .mutate_task(&task.task_id, None, |task, runtime| {
                 task.state = final_state;
                 task.phase = phase;
+                task.goal_state = Some(match settlement.status {
+                    LoopxCliSettlementStatus::GoalCompleted => LoopxCliGoalState::Completed,
+                    _ => LoopxCliGoalState::Active,
+                });
                 task.revision = task.revision.saturating_add(1);
                 task.current_turn_id = None;
+                task.pending_gate_id = None;
+                task.pending_gate_message = None;
+                task.pending_gate_action_kind = None;
                 task.deadline_at = None;
                 task.error = (agent_status == LoopxAgentTurnStatus::Failed)
                     .then(|| failure_summary.unwrap_or("Agent turn failed").to_string());
@@ -1579,12 +2067,28 @@ impl LoopxController {
                     durable_revision: Some(settlement.after_revision.clone()),
                     settled_at: Some(now_ms()),
                 };
+                if final_state == LoopxTaskState::Queued {
+                    task.autonomous_turns_since_review = task
+                        .autonomous_turns_since_review
+                        .saturating_add(1);
+                } else if final_state == LoopxTaskState::Completed {
+                    task.autonomous_turns_since_review = 0;
+                }
                 runtime.session_id = None;
                 runtime.agent_turn_id = None;
                 runtime.expected_durable_revision = Some(settlement.after_revision.clone());
             })
             .await?;
+        log::info!(
+            "LoopX task settlement applied: task_id={}, goal_id={}, final_state={:?}, phase={:?}, settlement_status={:?}",
+            updated.task_id,
+            updated.goal_id.as_deref().unwrap_or("unknown"),
+            updated.state,
+            updated.phase,
+            settlement.status
+        );
         self.release_repository(&updated).await;
+        let mut yielded_repository = false;
         if agent_status == LoopxAgentTurnStatus::Failed {
             let reason = failure_summary.unwrap_or("Agent turn failed");
             self.append_task_event(&updated, LoopxEventKind::StateChanged, reason, true)
@@ -1613,13 +2117,17 @@ impl LoopxController {
             };
             self.append_task_event(&updated, kind, message, important)
                 .await?;
-            self.schedule_next_for_repository(
-                &updated.identity.item.repository.canonical_id(),
-                Some(&updated.task_id),
-            )
-            .await;
+            yielded_repository = self
+                .schedule_next_for_repository(
+                    &updated.identity.item.repository.canonical_id(),
+                    Some(&updated.task_id),
+                )
+                .await;
+            if yielded_repository {
+                self.suppress_pending_task_rerun(&updated.task_id).await;
+            }
         }
-        if final_state == LoopxTaskState::Queued {
+        if should_requeue_after_settlement(final_state, yielded_repository) {
             let task_id = task.task_id.clone();
             let delay = settlement.scheduler_hint_ms.unwrap_or(0);
             self.enqueue_task(task_id, Duration::from_millis(delay))?;
@@ -1885,6 +2393,7 @@ impl LoopxController {
                 return;
             }
             task.goal_id = Some(goal.goal_id.clone());
+            task.goal_state = Some(LoopxCliGoalState::Active);
             task.state = LoopxTaskState::Queued;
             task.phase = LoopxPhase::InspectingGoal;
             task.revision = task.revision.saturating_add(1);
@@ -1892,6 +2401,114 @@ impl LoopxController {
         })
         .await
         .map(|_| ())
+    }
+
+    async fn record_goal_state(
+        &self,
+        task: &LoopxTaskSnapshot,
+        goal_state: LoopxCliGoalState,
+    ) -> Result<(), String> {
+        if task.goal_state == Some(goal_state) {
+            return Ok(());
+        }
+        self.mutate_task(&task.task_id, None, |current, _| {
+            if current.generation != task.generation {
+                return;
+            }
+            current.goal_state = Some(goal_state);
+            current.revision = current.revision.saturating_add(1);
+        })
+        .await
+        .map(|_| ())
+    }
+
+    async fn apply_goal_projection(
+        &self,
+        expected: &LoopxTaskSnapshot,
+        goal: &LoopxCliGoalSnapshot,
+    ) -> Result<(), String> {
+        let projection = project_host_task_from_goal(expected.state, expected.phase, goal.state);
+        let preserve_pending_gate = preserve_unanswered_local_gate(expected, goal);
+        let pending_gate_id = if preserve_pending_gate {
+            expected.pending_gate_id.as_deref()
+        } else {
+            goal.pending_user_gate
+                .as_ref()
+                .map(|gate| gate.gate_id.as_str())
+        };
+        let pending_gate_message = if preserve_pending_gate {
+            expected.pending_gate_message.as_deref()
+        } else {
+            goal.pending_user_gate
+                .as_ref()
+                .map(|gate| gate.message.as_str())
+        };
+        let pending_gate_action_kind = if preserve_pending_gate {
+            expected.pending_gate_action_kind.as_deref()
+        } else {
+            goal.pending_user_gate
+                .as_ref()
+                .and_then(|gate| gate.action_kind.as_deref())
+        };
+        if expected.goal_state == Some(goal.state)
+            && expected.state == projection.state
+            && expected.phase == projection.phase
+            && expected.pending_gate_id.as_deref() == pending_gate_id
+            && expected.pending_gate_message.as_deref() == pending_gate_message
+            && expected.pending_gate_action_kind.as_deref() == pending_gate_action_kind
+        {
+            return Ok(());
+        }
+
+        let host_state_changed = expected.state != projection.state;
+        let updated = self
+            .mutate_task(&expected.task_id, None, |task, runtime| {
+                if task.generation != expected.generation {
+                    return;
+                }
+                let preserve_pending_gate = preserve_unanswered_local_gate(task, goal);
+                let current = project_host_task_from_goal(task.state, task.phase, goal.state);
+                task.goal_state = Some(goal.state);
+                task.state = current.state;
+                task.phase = current.phase;
+                if !preserve_pending_gate {
+                    task.pending_gate_id = goal
+                        .pending_user_gate
+                        .as_ref()
+                        .map(|gate| gate.gate_id.clone());
+                    task.pending_gate_message = goal
+                        .pending_user_gate
+                        .as_ref()
+                        .map(|gate| gate.message.clone());
+                    task.pending_gate_action_kind = goal
+                        .pending_user_gate
+                        .as_ref()
+                        .and_then(|gate| gate.action_kind.clone());
+                }
+                task.revision = task.revision.saturating_add(1);
+                runtime.expected_durable_revision = Some(goal.durable_revision.clone());
+                if task.state.is_terminal() {
+                    task.current_turn_id = None;
+                    task.current_tool = None;
+                    task.deadline_at = None;
+                    task.retry_at = None;
+                }
+            })
+            .await?;
+
+        if host_state_changed {
+            self.append_task_event(
+                &updated,
+                LoopxEventKind::SnapshotInvalidated,
+                "BitFun host task reconciled with authoritative LoopX Goal state",
+                false,
+            )
+            .await?;
+            if updated.state == LoopxTaskState::Queued {
+                self.enqueue_task(updated.task_id.clone(), Duration::ZERO)?;
+            }
+        }
+        Ok(())
     }
 
     async fn bind_turn(
@@ -1956,6 +2573,11 @@ impl LoopxController {
                 }
                 task.state = state;
                 task.phase = phase;
+                if state != LoopxTaskState::WaitingForUser {
+                    task.pending_gate_id = None;
+                    task.pending_gate_message = None;
+                    task.pending_gate_action_kind = None;
+                }
                 task.revision = task.revision.saturating_add(1);
             })
             .await?;
@@ -1980,6 +2602,14 @@ impl LoopxController {
             .mutate_task(task_id, Some(request_id), |task, _| {
                 task.state = state;
                 task.phase = phase;
+                if state != LoopxTaskState::WaitingForUser {
+                    task.pending_gate_id = None;
+                    task.pending_gate_message = None;
+                    task.pending_gate_action_kind = None;
+                }
+                if state == LoopxTaskState::Queued {
+                    task.autonomous_turns_since_review = 0;
+                }
                 task.revision = task.revision.saturating_add(1);
             })
             .await?;
@@ -2026,6 +2656,9 @@ impl LoopxController {
                 } else {
                     LoopxPhase::Recovering
                 };
+                task.pending_gate_id = None;
+                task.pending_gate_message = None;
+                task.pending_gate_action_kind = None;
                 task.error = Some(error.clone());
                 task.deadline_at = None;
                 task.revision = task.revision.saturating_add(1);
@@ -2080,7 +2713,7 @@ impl LoopxController {
         self: &Arc<Self>,
         repository_id: &str,
         exclude_task_id: Option<&str>,
-    ) {
+    ) -> bool {
         let next = {
             let state = self.state.read().await;
             state
@@ -2094,7 +2727,9 @@ impl LoopxController {
                 .map(|task| task.task_id.clone())
         };
         if let Some(task_id) = next {
-            let _ = self.enqueue_task(task_id, Duration::ZERO);
+            self.enqueue_task(task_id, Duration::ZERO).is_ok()
+        } else {
+            false
         }
     }
 
@@ -2150,6 +2785,12 @@ impl LoopxController {
             .await
             .remove(task_id)
             .unwrap_or(false)
+    }
+
+    async fn suppress_pending_task_rerun(&self, task_id: &str) {
+        if let Some(pending) = self.active_tasks.lock().await.get_mut(task_id) {
+            *pending = false;
+        }
     }
 
     async fn mutate_task(
@@ -2292,8 +2933,12 @@ fn is_repository_recovery_candidate(task: &LoopxTaskSnapshot, repository_id: &st
     task.identity.item.repository.canonical_id() == repository_id
         && matches!(
             task.state,
-            LoopxTaskState::Failed | LoopxTaskState::RecoveryRequired
+            LoopxTaskState::Stopped | LoopxTaskState::Failed | LoopxTaskState::RecoveryRequired
         )
+}
+
+fn should_requeue_after_settlement(final_state: LoopxTaskState, yielded_repository: bool) -> bool {
+    final_state == LoopxTaskState::Queued && !yielded_repository
 }
 
 fn goal_context(task: &LoopxTaskSnapshot, runtime: &LoopxTaskRuntimeRecord) -> LoopxCliGoalContext {
@@ -2380,6 +3025,19 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
+fn bounded_agent_summary(summary: &str) -> String {
+    let mut chars = summary.chars();
+    let bounded = chars
+        .by_ref()
+        .take(MAX_AGENT_SUMMARY_CHARS)
+        .collect::<String>();
+    if chars.next().is_some() {
+        format!("{bounded}\n\n[Summary truncated by LoopX host]")
+    } else {
+        bounded
+    }
+}
+
 fn github_auth_fact_status(probe: &LoopxGithubAuthProbe) -> LoopxEnvironmentFactStatus {
     if probe.authenticated {
         LoopxEnvironmentFactStatus::Available
@@ -2410,6 +3068,37 @@ fn unavailable_environment_fact(
     }
 }
 
+fn autonomous_turns_since_review(
+    task: &LoopxTaskSnapshot,
+    settlement_receipt_count: u32,
+) -> u32 {
+    task.autonomous_turns_since_review.max(
+        settlement_receipt_count.saturating_sub(task.autonomy_review_baseline_receipts),
+    )
+}
+
+fn autonomy_review_required(autonomous_turns: u32) -> bool {
+    autonomous_turns >= AUTONOMOUS_TURN_BUDGET
+}
+
+/// Reconciliation may replace a local gate with a durable gate projection, but
+/// it must never infer approval from an active Goal. Only an explicit gate
+/// answer transitions the host task away from WaitingForUser.
+fn preserve_unanswered_local_gate(
+    task: &LoopxTaskSnapshot,
+    goal: &LoopxCliGoalSnapshot,
+) -> bool {
+    task.state == LoopxTaskState::WaitingForUser
+        && task.pending_gate_id.is_some()
+        && goal.pending_user_gate.is_none()
+        && !matches!(
+            goal.state,
+            LoopxCliGoalState::Completed
+                | LoopxCliGoalState::Failed
+                | LoopxCliGoalState::Archived
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2433,7 +3122,7 @@ mod tests {
     }
 
     #[test]
-    fn repository_recovery_excludes_intentionally_stopped_tasks() {
+    fn repository_recovery_includes_all_resumable_tasks() {
         let repository = LoopxRepositoryKey {
             host: "github.com".to_string(),
             owner: "owner".to_string(),
@@ -2461,10 +3150,62 @@ mod tests {
             &task(LoopxTaskState::Failed),
             &repository_id,
         ));
-        assert!(!is_repository_recovery_candidate(
+        assert!(is_repository_recovery_candidate(
             &task(LoopxTaskState::Stopped),
             &repository_id,
         ));
+    }
+
+    #[test]
+    fn agent_summary_projection_is_bounded_on_character_boundaries() {
+        let summary = "界".repeat(MAX_AGENT_SUMMARY_CHARS + 1);
+        let bounded = bounded_agent_summary(&summary);
+
+        assert!(bounded.ends_with("[Summary truncated by LoopX host]"));
+        assert_eq!(bounded.matches('界').count(), MAX_AGENT_SUMMARY_CHARS);
+    }
+
+    #[test]
+    fn settled_task_does_not_self_requeue_after_yielding_repository() {
+        assert!(!should_requeue_after_settlement(
+            LoopxTaskState::Queued,
+            true,
+        ));
+        assert!(should_requeue_after_settlement(
+            LoopxTaskState::Queued,
+            false,
+        ));
+        assert!(!should_requeue_after_settlement(
+            LoopxTaskState::Completed,
+            false,
+        ));
+    }
+
+    #[test]
+    fn autonomous_turn_budget_requires_an_owner_review_at_the_boundary() {
+        let below = LoopxTaskSnapshot {
+            autonomous_turns_since_review: AUTONOMOUS_TURN_BUDGET - 1,
+            ..LoopxTaskSnapshot::default()
+        };
+        let reached = LoopxTaskSnapshot {
+            autonomous_turns_since_review: AUTONOMOUS_TURN_BUDGET,
+            ..LoopxTaskSnapshot::default()
+        };
+
+        assert!(!autonomy_review_required(autonomous_turns_since_review(
+            &below,
+            AUTONOMOUS_TURN_BUDGET - 1,
+        )));
+        assert!(autonomy_review_required(autonomous_turns_since_review(
+            &reached,
+            AUTONOMOUS_TURN_BUDGET,
+        )));
+
+        let legacy = LoopxTaskSnapshot::default();
+        assert_eq!(
+            autonomous_turns_since_review(&legacy, AUTONOMOUS_TURN_BUDGET + 2),
+            AUTONOMOUS_TURN_BUDGET + 2,
+        );
     }
 
     #[test]
@@ -2494,5 +3235,35 @@ mod tests {
             goal_id: Some("  ".to_string()),
             ..LoopxTaskSnapshot::default()
         }));
+    }
+
+    #[test]
+    fn reconciliation_cannot_clear_an_unanswered_local_gate() {
+        let task = LoopxTaskSnapshot {
+            state: LoopxTaskState::WaitingForUser,
+            phase: LoopxPhase::WaitingForApproval,
+            pending_gate_id: Some("todo_owner_review".to_string()),
+            ..LoopxTaskSnapshot::default()
+        };
+        let active_goal = LoopxCliGoalSnapshot {
+            state: LoopxCliGoalState::Active,
+            ..LoopxCliGoalSnapshot::default()
+        };
+        assert!(preserve_unanswered_local_gate(&task, &active_goal));
+
+        let answered_task = LoopxTaskSnapshot {
+            state: LoopxTaskState::Queued,
+            ..task.clone()
+        };
+        assert!(!preserve_unanswered_local_gate(
+            &answered_task,
+            &active_goal,
+        ));
+
+        let completed_goal = LoopxCliGoalSnapshot {
+            state: LoopxCliGoalState::Completed,
+            ..active_goal
+        };
+        assert!(!preserve_unanswered_local_gate(&task, &completed_goal));
     }
 }

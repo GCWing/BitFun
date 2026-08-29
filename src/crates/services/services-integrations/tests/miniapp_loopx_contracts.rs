@@ -5,7 +5,7 @@ use bitfun_product_domains::miniapp::loopx::{
     LoopxCliPlanItemRequest, LoopxCliPort, LoopxCliProgress, LoopxCliProgressSink,
     LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey, LoopxItemKind,
     LoopxPermissionScope, LoopxRepositoryKey, LoopxWorkspaceDisposeRequest, LoopxWorkspacePort,
-    LoopxWorkspacePrepareRequest, LoopxWorkspaceProbeRequest,
+    LoopxWorkspacePrepareRequest, LoopxWorkspaceProbeRequest, LoopxWorkspaceResetRequest,
 };
 use bitfun_services_integrations::miniapp::loopx_cli::{
     LoopxCliAdapterConfig, LoopxCliProcessAdapter, LoopxCommandPlan, LoopxCommandSource,
@@ -531,10 +531,12 @@ async fn waiting_goal_projects_the_concrete_open_user_gate() {
     let registry = worktree.join(".loopx").join("registry.json");
     let turn_plan = json!({
         "ok": true,
+        "status": "operator_gate_notify",
         "schema_version": "loopx_turn_plan_v0",
         "turn_envelope": {
-            "should_run": false,
-            "state": "operator_gate",
+            "should_run": true,
+            "state": "active",
+            "effective_action": "operator_gate_notify",
             "open_count": 1,
             "user": {
                 "action_required": true,
@@ -932,6 +934,58 @@ async fn workspace_dispose_removes_linked_worktree_and_last_shared_bare_reposito
         plan.args
             .windows(2)
             .any(|w| w == [OsString::from("worktree"), OsString::from("list")])
+    }));
+}
+
+#[tokio::test]
+async fn workspace_reset_detaches_tasks_but_retains_bare_repository_cache() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("loopx-workspaces");
+    let runner = Arc::new(WorkspaceFakeRunner::new(
+        "https://github.com/owner/repo.git",
+    ));
+    let service = LoopxWorkspaceService::with_runner(
+        LoopxWorkspaceServiceConfig::new(&root, "git"),
+        runner.clone(),
+        Arc::new(NoopLoopxProcessObserver),
+    );
+    let item = LoopxIssueKey {
+        repository: LoopxRepositoryKey {
+            host: "github.com".to_string(),
+            owner: "owner".to_string(),
+            repository: "repo".to_string(),
+        },
+        kind: LoopxItemKind::Issue,
+        number: 42,
+    };
+    let prepared = service
+        .prepare(LoopxWorkspacePrepareRequest {
+            operation_id: "workspace-reset-prepare".to_string(),
+            task_id: "task-42".to_string(),
+            item,
+        })
+        .await
+        .unwrap();
+    let worktree = PathBuf::from(prepared.worktree_path);
+    let repository_dir = worktree.parent().unwrap().to_path_buf();
+    let bare = repository_dir.join("bare.git");
+    std::fs::write(worktree.join("large-generated-file"), b"payload").unwrap();
+
+    let reset = service
+        .reset(LoopxWorkspaceResetRequest {
+            operation_id: "workspace-reset".to_string(),
+        })
+        .await
+        .unwrap();
+
+    assert!(reset.removed);
+    assert!(root.exists());
+    assert!(bare.exists());
+    assert!(!worktree.exists());
+    assert!(runner.plans.lock().unwrap().iter().any(|plan| {
+        plan.args
+            .windows(2)
+            .any(|pair| pair == ["worktree", "prune"])
     }));
 }
 

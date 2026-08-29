@@ -1,10 +1,10 @@
 //! Pure parsing and lifecycle decisions for LoopX tasks.
 
 use super::types::{
-    LoopxActionStatus, LoopxCoreEnvironmentFacts, LoopxEnvironmentFactStatus,
+    LoopxActionStatus, LoopxCliGoalState, LoopxCoreEnvironmentFacts, LoopxEnvironmentFactStatus,
     LoopxEnvironmentStatus, LoopxEventsPageStatus, LoopxExistingTask, LoopxIntakeCandidate,
     LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind, LoopxOptionalEnvironmentFacts,
-    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxTaskState,
+    LoopxPermissionScope, LoopxPhase, LoopxRemoteItemState, LoopxRepositoryKey, LoopxTaskState,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -299,6 +299,69 @@ pub fn task_state_after_restart(state: LoopxTaskState) -> LoopxTaskState {
     match decide_task_restart(state) {
         LoopxRestartDecision::RequireRecovery => LoopxTaskState::RecoveryRequired,
         LoopxRestartDecision::Preserve { state } => state,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoopxGoalProjection {
+    pub state: LoopxTaskState,
+    pub phase: LoopxPhase,
+}
+
+/// Reconcile BitFun's local host-job projection with the authoritative LoopX
+/// Goal lifecycle. Explicit local operator states and in-flight host work are
+/// preserved; terminal or user-gate facts from LoopX replace stale projections.
+pub fn project_host_task_from_goal(
+    current_state: LoopxTaskState,
+    current_phase: LoopxPhase,
+    goal_state: LoopxCliGoalState,
+) -> LoopxGoalProjection {
+    if matches!(
+        current_state,
+        LoopxTaskState::Stopped
+            | LoopxTaskState::Aborted
+            | LoopxTaskState::Archived
+            | LoopxTaskState::Running
+            | LoopxTaskState::Cancelling
+    ) {
+        return LoopxGoalProjection {
+            state: current_state,
+            phase: current_phase,
+        };
+    }
+
+    match goal_state {
+        LoopxCliGoalState::Completed => LoopxGoalProjection {
+            state: LoopxTaskState::Completed,
+            phase: LoopxPhase::Finished,
+        },
+        LoopxCliGoalState::Failed => LoopxGoalProjection {
+            state: LoopxTaskState::Failed,
+            phase: LoopxPhase::Finished,
+        },
+        LoopxCliGoalState::Archived => LoopxGoalProjection {
+            state: LoopxTaskState::Archived,
+            phase: LoopxPhase::Finished,
+        },
+        LoopxCliGoalState::WaitingForUser => LoopxGoalProjection {
+            state: LoopxTaskState::WaitingForUser,
+            phase: LoopxPhase::WaitingForApproval,
+        },
+        LoopxCliGoalState::Active
+            if matches!(
+                current_state,
+                LoopxTaskState::Completed | LoopxTaskState::Failed
+            ) =>
+        {
+            LoopxGoalProjection {
+                state: LoopxTaskState::RecoveryRequired,
+                phase: LoopxPhase::Recovering,
+            }
+        }
+        LoopxCliGoalState::Unknown | LoopxCliGoalState::Active => LoopxGoalProjection {
+            state: current_state,
+            phase: current_phase,
+        },
     }
 }
 

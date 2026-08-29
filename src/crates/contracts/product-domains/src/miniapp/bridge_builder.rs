@@ -1,11 +1,14 @@
 //! Bridge script builder — generate window.app Runtime Adapter (BitFun Hosted) for iframe.
 
+use crate::miniapp::loopx::private_bridge_extension;
 use crate::miniapp::types::{EsmDep, MiniAppPermissions};
 use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, loopx.*, deck.*, chat.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, deck.*, chat.*, clipboard.*, lifecycle, and events. Verified
+/// built-in product surfaces may receive an additional private namespace; it
+/// is not part of the public MiniApp API.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -13,11 +16,53 @@ pub fn build_bridge_script(
     appearance_mode: &str,
     platform: &str,
 ) -> String {
+    build_bridge_script_internal(
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        appearance_mode,
+        platform,
+        true,
+    )
+}
+
+/// Marketplace compilation always receives the public MiniApp API, even if an
+/// imported package attempts to spoof a reserved built-in id.
+pub fn build_market_bridge_script(
+    app_id: &str,
+    app_data_dir: &str,
+    workspace_dir: &str,
+    appearance_mode: &str,
+    platform: &str,
+) -> String {
+    build_bridge_script_internal(
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        appearance_mode,
+        platform,
+        false,
+    )
+}
+
+fn build_bridge_script_internal(
+    app_id: &str,
+    app_data_dir: &str,
+    workspace_dir: &str,
+    appearance_mode: &str,
+    platform: &str,
+    allow_private_builtin_extensions: bool,
+) -> String {
     let app_id_esc = escape_js_str(app_id);
     let app_data_esc = escape_js_str(app_data_dir);
     let workspace_esc = escape_js_str(workspace_dir);
     let appearance_mode_esc = escape_js_str(appearance_mode);
     let platform_esc = escape_js_str(platform);
+    let private_builtin_extension = if allow_private_builtin_extensions {
+        private_bridge_extension(app_id).unwrap_or_default()
+    } else {
+        ""
+    };
 
     format!(
         r#"
@@ -131,21 +176,7 @@ pub fn build_bridge_script(
       offEvent:       (fn) => app.off('agent:event', fn),
     }},
 
-    // Built-in LoopX console namespace. The outer bridge and Desktop host
-    // verify the exact built-in identity, active runner scope, content hash,
-    // customization origin, and local execution domain before accepting any
-    // method. Other MiniApps receive an explicit unsupported response.
-    loopx: {{
-      attach:        (opts) => _rpc('loopx.attach', opts || {{}}),
-      listModels:    () => _rpc('loopx.listModels', {{}}),
-      resolveIntake: (opts) => _rpc('loopx.resolveIntake', opts || {{}}),
-      createTask:    (opts) => _rpc('loopx.createTask', opts || {{}}),
-      action:        (opts) => _rpc('loopx.action', opts || {{}}),
-      eventsSince:   (opts) => _rpc('loopx.eventsSince', opts || {{}}),
-      turnOutputSince: (opts) => _rpc('loopx.turnOutputSince', opts || {{}}),
-      onEvent:       (fn) => app.on('loopx:event', fn),
-      offEvent:      (fn) => app.off('loopx:event', fn),
-    }},
+    {private_builtin_extension}
 
     // Deck namespace — renders one slide HTML page in a hidden host WebView
     // and returns base64 PNG/PDF. Used by presentation MiniApps for
@@ -276,7 +307,8 @@ pub fn build_bridge_script(
         app_data_esc = app_data_esc,
         workspace_esc = workspace_esc,
         appearance_mode_esc = appearance_mode_esc,
-        platform_esc = platform_esc
+        platform_esc = platform_esc,
+        private_builtin_extension = private_builtin_extension,
     )
 }
 

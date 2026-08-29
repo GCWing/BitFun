@@ -82,6 +82,8 @@ function taskSnapshot(now) {
     currentTurnId: 'turn-4',
     currentTool: 'cargo test',
     lastOutputAt: now - 5000,
+    lastAgentSummary: null,
+    lastAgentSummaryAt: null,
     deadlineAt: now + 120000,
     retryAt: null,
     error: null,
@@ -153,15 +155,19 @@ function historyEvents(now) {
       taskId: 'task-2382-1',
       generation: 2,
       revision: 7,
-      kind: 'phase_changed',
+      kind: 'log',
       level: 'info',
       source: 'agent',
       phase: 'agent_running',
-      message: 'Agent turn is running in the bound worktree',
-      important: true,
-      toolName: 'cargo test',
+      message: 'Tool started: ExecCommand',
+      important: false,
+      toolName: 'ExecCommand',
       deadlineAt: now + 120000,
-      details: {},
+      details: {
+        activity: 'started',
+        toolName: 'ExecCommand',
+        summary: 'cargo test -p bitfun-core',
+      },
       occurredAt: now - 5000,
     },
   ];
@@ -226,6 +232,7 @@ test('thin client boots from host state and completes the confirmed intake flow'
   const eventRequests = [];
   const resolveRequests = [];
   const createRequests = [];
+  const storedHistory = [];
   const forbiddenAccesses = [];
   let eventListener = null;
 
@@ -252,14 +259,32 @@ test('thin client boots from host state and completes the confirmed intake flow'
         hasMore: false,
       };
     },
-    async turnOutputSince() {
+    async turnOutputSince(request) {
       return {
         status: 'current',
         taskId: task.taskId,
         turnId: task.currentTurnId,
         streamId: 'output-stream-1',
-        events: [],
-        nextCursor: 0,
+        events: request.afterCursor > 0 ? [] : [{
+          cursor: 1,
+          turnId: task.currentTurnId,
+          roundId: 'round-1',
+          kind: 'thinking',
+          text: 'Inspecting the issue and repository state',
+          toolName: null,
+          toolState: null,
+          isEnd: true,
+        }, {
+          cursor: 2,
+          turnId: task.currentTurnId,
+          roundId: 'round-1',
+          kind: 'tool',
+          text: 'cargo test -p bitfun-core',
+          toolName: 'ExecCommand',
+          toolState: 'started',
+          isEnd: false,
+        }],
+        nextCursor: 2,
         hasMore: false,
         message: null,
       };
@@ -287,6 +312,10 @@ test('thin client boots from host state and completes the confirmed intake flow'
   const appTarget = {
     locale: 'en-US',
     loopx,
+    storage: {
+      async get() { return []; },
+      async set(key, value) { storedHistory.push([key, structuredClone(value)]); },
+    },
     onLocaleChange() {},
     onActivate() {},
   };
@@ -315,7 +344,9 @@ test('thin client boots from host state and completes the confirmed intake flow'
     assert.match(window.document.querySelector('#task-items').textContent, /GCWing\/BitFun · Issue #2382/);
     assert.equal(window.document.querySelector('#environment-status').textContent, 'Degraded');
     assert.match(window.document.querySelector('#core-environment-list').textContent, /0\.5\.1/);
-    assert.match(window.document.querySelector('#log-list').textContent, /Agent turn is running/);
+    assert.match(window.document.querySelector('#log-list').textContent, /Issue #2382/);
+    assert.match(window.document.querySelector('#log-list').textContent, /Inspecting the issue/);
+    assert.match(window.document.querySelector('#log-list').textContent, /cargo test -p bitfun-core/);
 
     assert.equal(typeof eventListener, 'function');
     eventListener({
@@ -335,10 +366,8 @@ test('thin client boots from host state and completes the confirmed intake flow'
         occurredAt: now,
       },
     });
-    await waitFor(
-      () => /Validation produced one warning/.test(window.document.querySelector('#log-list').textContent),
-      'stream event rendering',
-    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.doesNotMatch(window.document.querySelector('#log-list').textContent, /Validation produced one warning/);
 
     const connectionChanges = [];
     const connectionObserver = new window.MutationObserver(() => {
@@ -372,6 +401,14 @@ test('thin client boots from host state and completes the confirmed intake flow'
     assert.equal(window.document.querySelector('#connection-label').textContent, 'Connected');
     assert.ok(!connectionChanges.includes('Resynchronizing'));
 
+    const originalDateNow = window.Date.now;
+    const resumedAt = originalDateNow() + 60000;
+    window.Date.now = () => resumedAt;
+    window.dispatchEvent(new window.Event('focus'));
+    await waitFor(() => attachRequests.length === 3, 'host resume reattach');
+    assert.equal(attachRequests[2].resumeDetected, true);
+    window.Date.now = originalDateNow;
+
     const input = window.document.querySelector('#intake-input');
     input.value = 'https://github.com/GCWing/BitFun/issues/2382';
     window.document.querySelector('#intake-form').dispatchEvent(new window.Event('submit', {
@@ -395,6 +432,14 @@ test('thin client boots from host state and completes the confirmed intake flow'
       window.document.querySelector('input[name="permission"][value="publish"]').checked,
       false,
     );
+    assert.deepEqual(plain(storedHistory), [[
+      'loopx.intakeHistory',
+      ['https://github.com/GCWing/BitFun/issues/2382'],
+    ]]);
+    assert.equal(
+      window.document.querySelector('#intake-history option').value,
+      'https://github.com/GCWing/BitFun/issues/2382',
+    );
 
     window.document.querySelector('#intake-confirm-form').dispatchEvent(new window.Event('submit', {
       bubbles: true,
@@ -413,6 +458,12 @@ test('thin client boots from host state and completes the confirmed intake flow'
     assert.equal(createRequests[0].retryTerminal, false);
     assert.ok(createRequests[0].clientRequestId);
     assert.match(window.document.querySelector('#notice').textContent, /existing task.*duplicate/i);
+    assert.equal(
+      window.document.querySelector('[data-task-id="task-2382-1"]').getAttribute('aria-pressed'),
+      'true',
+    );
+    assert.equal(window.document.querySelector('#issue-detail-dialog').open, true);
+    assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
     assert.deepEqual(forbiddenAccesses, []);
     assert.deepEqual(jsdomErrors, []);
   } finally {
@@ -420,7 +471,7 @@ test('thin client boots from host state and completes the confirmed intake flow'
   }
 });
 
-test('task rail prioritizes user decisions and keeps single failures out of repository bulk recovery', async () => {
+test('task rail is flat and exposes one repository recovery action', async () => {
   const [html, ui] = await Promise.all([
     readAsset('index.html'),
     readAsset('ui.js'),
@@ -454,14 +505,25 @@ test('task rail prioritizes user decisions and keeps single failures out of repo
     error: null,
     ...overrides,
   });
-  const waiting = makeTask('task-waiting', 42, 'waiting_for_user', 'waiting_for_approval');
+  const waiting = makeTask('task-waiting', 42, 'waiting_for_user', 'waiting_for_approval', {
+    pendingGateId: 'todo_release_approval',
+    pendingGateMessage: 'Approve creating the draft pull request',
+    pendingGateActionKind: 'gate',
+    lastAgentSummary: '## Root cause\nThe focus behavior is caused by the current restore path.\n\n## Output\nA bounded implementation plan is ready.',
+    lastAgentSummaryAt: now - 2000,
+  });
   const failed = makeTask('task-failed', 43, 'recovery_required', 'recovering', {
     error: 'LoopX process exited with status 1',
+  });
+  const resolvedUpstream = makeTask('task-resolved-upstream', 46, 'recovery_required', 'recovering', {
+    error: 'Settlement metadata was incomplete',
+    lastAgentSummary: 'The original failure path is covered-upstream no-follow-up; no PR is required.',
+    lastAgentSummaryAt: now - 1500,
   });
   const running = makeTask('task-running', 44, 'running', 'agent_running');
   const queued = makeTask('task-queued', 45, 'queued', 'queued');
   const snapshot = controllerSnapshot(now, running);
-  snapshot.tasks = [queued, running, failed, waiting];
+  snapshot.tasks = [queued, running, failed, waiting, resolvedUpstream];
   snapshot.cursor = 1;
   snapshot.revision = 24;
   const events = [{
@@ -527,44 +589,66 @@ test('task rail prioritizes user decisions and keeps single failures out of repo
   try {
     window.eval(ui);
     await waitFor(
-      () => window.document.querySelectorAll('#task-items .task-group').length === 4,
-      'priority task groups',
+      () => window.document.querySelectorAll('#task-items .task-item').length === 5,
+      'flat task list',
+    );
+    await waitFor(
+      () => window.document.querySelector('#issue-detail-dialog').open,
+      'automatic approval focus',
     );
 
-    const groups = [...window.document.querySelectorAll('#task-items .task-group')]
-      .map((group) => group.dataset.group);
-    assert.deepEqual(groups, ['decision', 'error', 'active', 'queued']);
-    assert.equal(window.document.querySelector('#decision-count').hidden, false);
-    assert.equal(window.document.querySelector('#decision-count').textContent, '1');
-    assert.equal(window.document.querySelector('[data-group="queued"]').open, false);
-    assert.equal(window.document.querySelector('#repository-actions').hidden, true);
+    assert.equal(window.document.querySelectorAll('#task-items .task-group').length, 0);
+    assert.deepEqual(
+      [...window.document.querySelectorAll('#task-items .task-item')].map((item) => item.dataset.taskId),
+      ['task-running', 'task-waiting', 'task-queued', 'task-failed', 'task-resolved-upstream'],
+    );
+    assert.equal(window.document.querySelector('#repository-actions').hidden, false);
+    assert.match(window.document.querySelector('#resume-repository').textContent, /repository tasks \(1\)/i);
     assert.match(
       window.document.querySelector('[data-task-id="task-waiting"]').textContent,
-      /Review and decide/,
+      /Waiting for approval/,
     );
+    assert.equal(window.document.querySelector('#approval-alert').hidden, false);
     assert.match(
       window.document.querySelector('[data-task-id="task-failed"]').textContent,
-      /View error/,
+      /Interrupted/,
     );
     window.document.querySelector('#reset-loopx').click();
     assert.equal(window.document.querySelector('#reset-loopx-dialog').open, true);
-    assert.match(window.document.querySelector('#reset-loopx-message').textContent, /4 tasks, 1 log event/);
+    assert.match(window.document.querySelector('#reset-loopx-message').textContent, /5 tasks, 1 log event/);
     window.document.querySelector('#reset-loopx-cancel').click();
     assert.equal(window.document.querySelector('#reset-loopx-dialog').open, false);
 
     window.document.querySelector('[data-task-id="task-waiting"]').click();
+    assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
+    assert.equal(window.document.querySelectorAll('#issue-stage-list > li').length, 5);
+    assert.match(window.document.querySelector('#issue-outcome').textContent, /waiting for your decision/i);
+    assert.equal(window.document.querySelector('#issue-description-panel').hidden, false);
     await waitFor(
-      () => /temporarily unavailable/.test(window.document.querySelector('#liveness-description').textContent),
+      () => /temporarily unavailable/.test(window.document.querySelector('#issue-description').textContent),
       'selected task metadata refresh',
     );
-    const decisionButton = window.document.querySelector('#task-actions button');
-    assert.equal(decisionButton.textContent, 'Review and decide');
-    decisionButton.click();
-    assert.equal(window.document.querySelector('#gate-dialog').open, true);
+    assert.equal(window.document.querySelector('#task-actions button'), null);
+    assert.equal(window.document.querySelector('#issue-approval-panel').hidden, false);
     assert.match(
-      window.document.querySelector('#gate-message').textContent,
-      /Approve creating the draft pull request/,
+      window.document.querySelector('#issue-approval-title').textContent,
+      /publish the fix and create a pull request/i,
     );
+    assert.match(window.document.querySelector('#issue-approval-approve-effect').textContent, /does not merge/i);
+    assert.doesNotMatch(window.document.querySelector('#issue-detail-dialog').textContent, /Root cause|todo_|settlement_result|durable_writeback/i);
+
+    const resolvedButton = window.document.querySelector('[data-task-id="task-resolved-upstream"]');
+    assert.match(resolvedButton.textContent, /Resolved upstream/);
+    assert.equal(resolvedButton.dataset.state, 'completed');
+    resolvedButton.click();
+    assert.equal(window.document.querySelector('#selected-state').textContent, 'Resolved upstream');
+    assert.equal(
+      [...window.document.querySelectorAll('#issue-stage-list > li')]
+        .every((stage) => stage.dataset.status === 'complete'),
+      true,
+    );
+    assert.match(window.document.querySelector('#issue-outcome').textContent, /does not need another repair patch/i);
+    assert.equal(window.document.querySelector('#task-actions button'), null);
     assert.deepEqual(jsdomErrors, []);
   } finally {
     window.close();

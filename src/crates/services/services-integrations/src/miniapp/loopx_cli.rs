@@ -10,7 +10,7 @@ use bitfun_services_core::process_tree::ProcessTreeChild;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -32,6 +32,8 @@ const MAX_STDOUT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STDERR_TAIL_BYTES: usize = 32 * 1024;
 const MAX_PROGRESS_LINE_BYTES: usize = 4 * 1024;
 const PIPE_DRAIN_DEADLINE: Duration = Duration::from_millis(250);
+const SETTLEMENT_HISTORY_LIMIT: &str = "100";
+const AGENT_CLI_USAGE_RULES: &str = "LoopX CLI syntax contract:\n- Put the global `--format json` option immediately after the exact executable and before the subcommand. Do not append it after a subcommand unless that subcommand's help explicitly lists a local format option.\n- Use `--agent-id` only on subcommands whose `--help` output lists it. Do not move that option between a parent command and its child action.\n- When a command rejects an argument, inspect that exact subcommand's `--help` once and retry with the documented form; do not repeat the rejected form.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopxSystemFallbackPolicy {
@@ -530,6 +532,52 @@ impl LoopxCliProcessAdapter {
                     executable: verified.executable,
                     args,
                     current_dir: current_dir.map(Path::to_path_buf),
+                    environment: BTreeMap::new(),
+                    deadline,
+                    terminate_grace: self.config.terminate_grace,
+                },
+                cancellation,
+                observer,
+            )
+            .await?;
+        let payload = serde_json::from_str(&output.stdout).map_err(|error| {
+            LoopxCliAdapterError::InvalidJson {
+                message: error.to_string(),
+            }
+        })?;
+        Ok(LoopxJsonOutput {
+            payload,
+            stderr_tail: output.stderr_tail,
+            elapsed: output.elapsed,
+        })
+    }
+
+    async fn run_global_json_command(
+        &self,
+        operation_id: &str,
+        command_args: Vec<OsString>,
+        deadline: Duration,
+        observer: &dyn LoopxProcessObserver,
+    ) -> Result<LoopxJsonOutput, LoopxCliAdapterError> {
+        let (cancellation, _registration) = self.register_operation(operation_id)?;
+        let verified = self
+            .ensure_verified(
+                operation_id,
+                cancellation.clone(),
+                deadline.min(self.config.startup_deadline),
+                observer,
+            )
+            .await?;
+        let mut args = vec![OsString::from("--format"), OsString::from("json")];
+        args.extend(command_args);
+        let output = self
+            .runner
+            .run(
+                LoopxCommandPlan {
+                    operation_id: operation_id.to_string(),
+                    executable: verified.executable,
+                    args,
+                    current_dir: None,
                     environment: BTreeMap::new(),
                     deadline,
                     terminate_grace: self.config.terminate_grace,
@@ -1103,6 +1151,62 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
         })
     }
 
+    fn create_user_gate<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliCreateUserGateRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliCreateUserGateResult> {
+        Box::pin(async move {
+            validate_goal_context(&request.context)?;
+            let operation_id = &request.context.call.operation_id;
+            let observer = PortProcessObserver {
+                progress,
+                fallback: self.observer.as_ref(),
+                task_id: Some(request.context.task_id.clone()),
+                stage: loopx_contract::LoopxCliProgressStage::AnsweringGate,
+            };
+            report_port_progress(
+                progress,
+                operation_id,
+                Some(request.context.task_id.clone()),
+                loopx_contract::LoopxCliProgressStage::AnsweringGate,
+                "Creating a bounded LoopX owner review gate",
+            );
+            let result = run_port_command(
+                self,
+                &request.context,
+                add_user_gate_args(&request)?,
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&result.payload, operation_id)?;
+            let gate_id = required_json_string(&result.payload, "todo_id", operation_id)?;
+            let created = result
+                .payload
+                .get("added")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let inspection = run_port_command(
+                self,
+                &request.context,
+                inspect_goal_args(&request.goal_id, &request.agent_id, None),
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&inspection.payload, operation_id)?;
+            let snapshot =
+                project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
+            let settlement_receipt_count = snapshot.settlement_receipt_ids.len() as u32;
+            Ok(loopx_contract::LoopxCliCreateUserGateResult {
+                goal_id: request.goal_id,
+                gate_id,
+                created,
+                durable_revision: snapshot.durable_revision,
+                settlement_receipt_count,
+            })
+        })
+    }
+
     fn inspect_goal<'a>(
         &'a self,
         request: loopx_contract::LoopxCliInspectGoalRequest,
@@ -1188,20 +1292,14 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     true,
                 ));
             }
-            let settlement_token = plan
-                .payload
-                .pointer("/transaction/turn_key")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    port_error(
-                        loopx_contract::LoopxCliErrorKind::SchemaMismatch,
-                        operation_id,
-                        "turn plan did not contain transaction.turn_key",
-                        false,
-                    )
-                })?
-                .to_string();
+            let settlement_binding = planned_settlement_binding(&plan.payload);
+            let settlement_token = planned_settlement_token(
+                &plan.payload,
+                &request.goal_id,
+                &request.agent_id,
+                &turn_id,
+                operation_id,
+            )?;
             let prompt_output = run_port_command(
                 self,
                 &request.context,
@@ -1232,15 +1330,31 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 )
             })?;
             let command = agent_shell_command(&verified.executable);
+            let registry = agent_shell_value(&request.context.registry_path);
+            let cli_prefix = format!("{command} --format json --registry {registry}");
+            let adapted_prompt = raw_prompt
+                .replace("${LOOPX_TURN:?}", &turn_id)
+                .replace(
+                    "loopx --format json --registry \"$HOME/.codex/loopx/registry.global.json\" ",
+                    &format!("{cli_prefix} "),
+                )
+                .replace("loopx ", &format!("{cli_prefix} "));
+            let settlement_override = settlement_prompt_override(
+                &cli_prefix,
+                &request.goal_id,
+                &request.agent_id,
+                &turn_id,
+                settlement_binding.as_ref(),
+            );
             let prompt = format!(
-                "LoopX control-plane binding for this turn:\n- Repository: {}\n- Registry: {}\n- Exact command: {}\n- Turn id: {}\nUse this exact command and registry for every LoopX progress, todo, refresh, and settlement operation. Do not probe PATH and do not use a global registry. The host will accept success only when LoopX exposes a matching durable validation/settlement receipt.\n\n{}",
+                "LoopX host binding for this bounded turn:\n- Repository: {}\n- Registry: {}\n- Exact CLI prefix: {}\n- Turn id: {}\nUse this immutable binding for every LoopX command. Do not probe PATH, switch registries, invent a Turn id, infer state from prose, or substitute host-specific policy. Query the exact CLI prefix when fresh LoopX state is required; the generated task body below remains the authority for work selection.\n{}\n\n{}\n\n{}",
                 request.context.worktree_path,
                 request.context.registry_path,
-                command,
+                cli_prefix,
                 turn_id,
-                raw_prompt
-                    .replace("${LOOPX_TURN:?}", &turn_id)
-                    .replace("loopx ", &format!("{command} ")),
+                AGENT_CLI_USAGE_RULES,
+                adapted_prompt,
+                settlement_override,
             );
             Ok(loopx_contract::LoopxCliBuildTurnResult {
                 goal_id: request.goal_id,
@@ -1291,16 +1405,21 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             )
             .await?;
             require_payload_ok(&inspection.payload, operation_id)?;
+            let snapshot =
+                project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
+            let settlement_receipt_count = snapshot.settlement_receipt_ids.len() as u32;
             Ok(loopx_contract::LoopxCliAnswerGateResult {
                 goal_id: request.goal_id,
                 gate_id: request.gate_id,
                 applied: true,
-                durable_revision: extract_durable_revision(&inspection.payload, operation_id)?,
+                durable_revision: snapshot.durable_revision,
+                goal_state: snapshot.state,
+                settlement_receipt_count,
             })
         })
     }
 
-    fn settle_turn<'a>(
+    fn finalize_turn_settlement<'a>(
         &'a self,
         request: loopx_contract::LoopxCliSettleTurnRequest,
         progress: &'a dyn loopx_contract::LoopxCliProgressSink,
@@ -1317,7 +1436,7 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &request.context.call.operation_id,
                 Some(request.context.task_id.clone()),
                 loopx_contract::LoopxCliProgressStage::SettlingTurn,
-                "Verifying the durable LoopX settlement receipt",
+                "Verifying durable LoopX progress and quota settlement evidence",
             );
             let operation_id = &request.context.call.operation_id;
             let observer = PortProcessObserver {
@@ -1335,11 +1454,108 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             .await?;
             require_payload_ok(&inspection.payload, operation_id)?;
             require_schema(&inspection.payload, "loopx_turn_plan_v0", operation_id)?;
-            let snapshot =
+            let mut snapshot =
                 project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
-            let receipt =
-                matching_settlement_receipt(&inspection.payload, &request.settlement_token);
-            let Some(receipt) = receipt else {
+            if let Some(receipt) =
+                matching_settlement_receipt(&inspection.payload, &request.settlement_token)
+            {
+                return project_legacy_settlement(&request, &snapshot, receipt, operation_id);
+            }
+
+            let mut history = run_port_command(
+                self,
+                &request.context,
+                settlement_history_args(&request.goal_id),
+                &observer,
+            )
+            .await?;
+            require_payload_ok(&history.payload, operation_id)?;
+            let mut evidence = matching_durable_progress(
+                &history.payload,
+                &request.goal_id,
+                &request.agent_id,
+                &request.turn_id,
+                &request.settlement_token,
+                operation_id,
+            )?;
+            if evidence
+                .as_ref()
+                .is_some_and(|evidence| !evidence.quota_spent)
+                && request.agent_status == loopx_contract::LoopxAgentTurnStatus::Completed
+            {
+                let binding = evidence.as_ref().expect("checked above").binding.clone();
+                report_port_progress(
+                    progress,
+                    operation_id,
+                    Some(request.context.task_id.clone()),
+                    loopx_contract::LoopxCliProgressStage::SettlingTurn,
+                    "Finalizing LoopX quota accounting for validated durable writeback",
+                );
+                let quota = run_port_command(
+                    self,
+                    &request.context,
+                    quota_spend_args(
+                        &request.goal_id,
+                        &request.agent_id,
+                        &binding,
+                        &request.turn_id,
+                    ),
+                    &observer,
+                )
+                .await?;
+                require_payload_ok(&quota.payload, operation_id)?;
+                require_quota_spend_response(&quota.payload, operation_id)?;
+
+                history = run_port_command(
+                    self,
+                    &request.context,
+                    settlement_history_args(&request.goal_id),
+                    &observer,
+                )
+                .await?;
+                require_payload_ok(&history.payload, operation_id)?;
+                evidence = matching_durable_progress(
+                    &history.payload,
+                    &request.goal_id,
+                    &request.agent_id,
+                    &request.turn_id,
+                    &request.settlement_token,
+                    operation_id,
+                )?;
+                if evidence
+                    .as_ref()
+                    .is_some_and(|evidence| evidence.quota_spent)
+                {
+                    let refreshed = run_port_command(
+                        self,
+                        &request.context,
+                        inspect_goal_args(
+                            &request.goal_id,
+                            &request.agent_id,
+                            Some(&request.turn_id),
+                        ),
+                        &observer,
+                    )
+                    .await?;
+                    snapshot =
+                        project_goal_snapshot(&request.goal_id, &refreshed.payload, operation_id)?;
+                    report_port_progress(
+                        progress,
+                        operation_id,
+                        Some(request.context.task_id.clone()),
+                        loopx_contract::LoopxCliProgressStage::SettlingTurn,
+                        "LoopX quota accounting finalized and verified by readback",
+                    );
+                }
+            }
+            let Some(evidence) = evidence else {
+                report_port_progress(
+                    progress,
+                    operation_id,
+                    Some(request.context.task_id.clone()),
+                    loopx_contract::LoopxCliProgressStage::SettlingTurn,
+                    "No matching durable LoopX writeback was found for this turn",
+                );
                 let status = if matches!(
                     request.agent_status,
                     loopx_contract::LoopxAgentTurnStatus::Failed
@@ -1360,48 +1576,39 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                     ..loopx_contract::LoopxCliSettleTurnResult::default()
                 });
             };
-            let receipt_id = receipt
-                .get("receipt_id")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    port_error(
-                        loopx_contract::LoopxCliErrorKind::SchemaMismatch,
-                        operation_id,
-                        "matching LoopX settlement receipt has no receipt_id",
-                        false,
-                    )
-                })?
-                .to_string();
-            let validation_succeeded = receipt
-                .get("validation_succeeded")
-                .and_then(Value::as_bool)
-                .or_else(|| {
-                    receipt
-                        .pointer("/validation/succeeded")
-                        .and_then(Value::as_bool)
-                })
-                .unwrap_or(false);
-            if !validation_succeeded {
+            if !evidence.quota_spent {
+                report_port_progress(
+                    progress,
+                    operation_id,
+                    Some(request.context.task_id.clone()),
+                    loopx_contract::LoopxCliProgressStage::SettlingTurn,
+                    "Matching durable LoopX writeback exists, but quota finalization was not verified",
+                );
                 return Ok(loopx_contract::LoopxCliSettleTurnResult {
                     goal_id: request.goal_id,
                     turn_id: request.turn_id,
-                    receipt_id,
-                    status: loopx_contract::LoopxCliSettlementStatus::NoDurableProgress,
+                    status: loopx_contract::LoopxCliSettlementStatus::RetryRequired,
                     before_revision: request.expected_durable_revision,
                     after_revision: snapshot.durable_revision,
-                    validation_succeeded: false,
                     scheduler_hint_ms: snapshot.scheduler_hint_ms,
+                    ..loopx_contract::LoopxCliSettleTurnResult::default()
                 });
             }
+            report_port_progress(
+                progress,
+                operation_id,
+                Some(request.context.task_id.clone()),
+                loopx_contract::LoopxCliProgressStage::SettlingTurn,
+                "Matched validated LoopX progress and quota settlement evidence",
+            );
             Ok(loopx_contract::LoopxCliSettleTurnResult {
                 goal_id: request.goal_id,
                 turn_id: request.turn_id,
-                receipt_id,
+                receipt_id: evidence.effect_id,
                 status: if snapshot.state == loopx_contract::LoopxCliGoalState::Completed {
                     loopx_contract::LoopxCliSettlementStatus::GoalCompleted
                 } else {
-                    loopx_contract::LoopxCliSettlementStatus::AlreadySettled
+                    loopx_contract::LoopxCliSettlementStatus::Settled
                 },
                 before_revision: request.expected_durable_revision,
                 after_revision: snapshot.durable_revision,
@@ -1438,6 +1645,126 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
             })
         })
     }
+
+    fn reset_goals<'a>(
+        &'a self,
+        request: loopx_contract::LoopxCliResetGoalsRequest,
+        progress: &'a dyn loopx_contract::LoopxCliProgressSink,
+    ) -> loopx_contract::LoopxCliFuture<'a, loopx_contract::LoopxCliResetGoalsResult> {
+        Box::pin(async move {
+            validate_operation_id(&request.call.operation_id)?;
+            let goal_ids = request
+                .goal_ids
+                .into_iter()
+                .map(|goal_id| goal_id.trim().to_string())
+                .filter(|goal_id| !goal_id.is_empty())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            if goal_ids.is_empty() {
+                return Err(port_error(
+                    loopx_contract::LoopxCliErrorKind::InvalidInput,
+                    &request.call.operation_id,
+                    "reset_goals requires at least one explicit goal id",
+                    false,
+                ));
+            }
+            let operation_id = &request.call.operation_id;
+            let observer = PortProcessObserver {
+                progress,
+                fallback: self.observer.as_ref(),
+                task_id: None,
+                stage: loopx_contract::LoopxCliProgressStage::Cancelling,
+            };
+            report_port_progress(
+                progress,
+                operation_id,
+                None,
+                loopx_contract::LoopxCliProgressStage::Cancelling,
+                "Retiring global LoopX goal routes and archiving runtime state",
+            );
+            let deadline = effective_deadline(
+                request.call.deadline_at,
+                self.config.command_deadline,
+                operation_id,
+            )?;
+            let mut result = loopx_contract::LoopxCliResetGoalsResult {
+                requested_goal_ids: goal_ids.clone(),
+                ..loopx_contract::LoopxCliResetGoalsResult::default()
+            };
+
+            for goal_id in goal_ids {
+                let retired = run_idempotent_global_command(
+                    self,
+                    operation_id,
+                    retire_global_goal_args(&goal_id),
+                    "goal_id not found in global registry:",
+                    deadline,
+                    &observer,
+                )
+                .await?;
+                if let Some(output) = retired {
+                    require_payload_ok(&output.payload, operation_id)?;
+                    require_schema(
+                        &output.payload,
+                        "loopx_global_goal_retirement_v0",
+                        operation_id,
+                    )?;
+                    let retired_ids = output
+                        .payload
+                        .get("retired_goal_ids")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default();
+                    if !retired_ids
+                        .iter()
+                        .any(|value| value.as_str() == Some(&goal_id))
+                    {
+                        return Err(port_error(
+                            loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                            operation_id,
+                            format!("retire-global-goal did not confirm goal {goal_id}"),
+                            false,
+                        ));
+                    }
+                    result.retired_goal_ids.push(goal_id.clone());
+                    if let Some(path) = output.payload.get("backup_path").and_then(Value::as_str) {
+                        result.backup_paths.push(path.to_string());
+                    }
+                } else {
+                    result.already_absent_goal_ids.push(goal_id.clone());
+                }
+
+                let archived = run_idempotent_global_command(
+                    self,
+                    operation_id,
+                    archive_runtime_args(&goal_id),
+                    "runtime goal directory does not exist:",
+                    deadline,
+                    &observer,
+                )
+                .await?;
+                if let Some(output) = archived {
+                    require_payload_ok(&output.payload, operation_id)?;
+                    if output.payload.get("archived").and_then(Value::as_bool) != Some(true) {
+                        return Err(port_error(
+                            loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                            operation_id,
+                            format!("archive-runtime did not confirm goal {goal_id}"),
+                            false,
+                        ));
+                    }
+                    result.archived_goal_ids.push(goal_id.clone());
+                    if let Some(path) = output.payload.get("archive_path").and_then(Value::as_str) {
+                        result.archive_paths.push(path.to_string());
+                    }
+                } else {
+                    result.missing_runtime_goal_ids.push(goal_id);
+                }
+            }
+            Ok(result)
+        })
+    }
 }
 
 fn matching_settlement_receipt<'a>(payload: &'a Value, turn_key: &str) -> Option<&'a Value> {
@@ -1451,12 +1778,354 @@ fn matching_settlement_receipt<'a>(payload: &'a Value, turn_key: &str) -> Option
         })
 }
 
+fn planned_settlement_token(
+    payload: &Value,
+    goal_id: &str,
+    agent_id: &str,
+    turn_id: &str,
+    operation_id: &str,
+) -> loopx_contract::LoopxCliResult<String> {
+    if let Some(binding) = planned_settlement_binding(payload) {
+        return Ok(binding.effect_id(goal_id, agent_id, turn_id));
+    }
+
+    payload
+        .pointer("/transaction/turn_key")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "turn plan did not contain a selected Todo or transaction.turn_key",
+                false,
+            )
+        })
+}
+
+fn planned_settlement_binding(payload: &Value) -> Option<SettlementBinding> {
+    let route_kind = payload.pointer("/route/kind").and_then(Value::as_str);
+    if route_kind == Some("replan_required") {
+        let obligation_id = payload
+            .pointer("/turn_envelope/replan_action_packet/obligation_id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())?;
+        return Some(SettlementBinding::AutonomousReplan {
+            obligation_id: obligation_id.to_string(),
+        });
+    }
+
+    planned_todo_id(payload).map(|todo_id| SettlementBinding::Todo {
+        todo_id: todo_id.to_string(),
+    })
+}
+
+fn planned_todo_id(payload: &Value) -> Option<&str> {
+    [
+        "/route/selected_todo/todo_id",
+        "/turn_envelope/action/selected_todo/todo_id",
+    ]
+    .into_iter()
+    .find_map(|pointer| {
+        payload
+            .pointer(pointer)
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum SettlementBinding {
+    Todo { todo_id: String },
+    AutonomousReplan { obligation_id: String },
+}
+
+impl SettlementBinding {
+    fn effect_id(&self, goal_id: &str, agent_id: &str, turn_id: &str) -> String {
+        match self {
+            Self::Todo { todo_id } => settlement_effect_id(goal_id, agent_id, todo_id, turn_id),
+            Self::AutonomousReplan { obligation_id } => {
+                replan_settlement_effect_id(goal_id, agent_id, obligation_id, turn_id)
+            }
+        }
+    }
+}
+
+fn settlement_prompt_override(
+    cli_prefix: &str,
+    goal_id: &str,
+    agent_id: &str,
+    turn_id: &str,
+    binding: Option<&SettlementBinding>,
+) -> String {
+    let binding_flags = match binding {
+        Some(SettlementBinding::Todo { todo_id }) => format!(
+            "--todo-id {todo_id} --turn-instance-id {turn_id} --agent-id {agent_id}"
+        ),
+        Some(SettlementBinding::AutonomousReplan { obligation_id }) => format!(
+            "--replan-obligation-id {obligation_id} --turn-instance-id {turn_id} --autonomous-replan-recorded --agent-id {agent_id}"
+        ),
+        None => format!("--turn-instance-id {turn_id} --agent-id {agent_id}"),
+    };
+    format!(
+        "BitFun external-host settlement boundary (this final block overrides generic spend examples above):\n- The host owns quota accounting. Do not run `quota spend-slot`; do not retry or repair quota yourself.\n- Before ending a materially productive turn, validate the real result and append one accountable `refresh-state` using the exact CLI prefix and these mandatory binding flags: `{binding_flags}`.\n- Choose truthful classification, delivery scale, delivery outcome, and typed progress fields from the work actually completed; never invent progress.\n- On Windows, keep LoopX control-plane text arguments in English ASCII so command-line writeback remains lossless. Product files and user-visible source content are not restricted by this rule.\n- Required command shape: `{cli_prefix} refresh-state --goal-id {goal_id} <truthful outcome fields> {binding_flags}`.\n- After that durable writeback succeeds, end the turn. The host will verify it and append/read back the exact idempotent quota receipt."
+    )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DurableSettlementEvidence {
+    effect_id: String,
+    binding: SettlementBinding,
+    quota_spent: bool,
+}
+
+fn matching_durable_progress(
+    payload: &Value,
+    goal_id: &str,
+    agent_id: &str,
+    turn_id: &str,
+    settlement_token: &str,
+    operation_id: &str,
+) -> loopx_contract::LoopxCliResult<Option<DurableSettlementEvidence>> {
+    let goals = payload
+        .get("goals")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "LoopX history response did not contain goals",
+                false,
+            )
+        })?;
+    let Some(goal) = goals
+        .iter()
+        .find(|goal| goal.get("id").and_then(Value::as_str) == Some(goal_id))
+    else {
+        return Ok(None);
+    };
+    let runs = goal
+        .get("latest_runs")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "LoopX history goal did not contain latest_runs",
+                false,
+            )
+        })?;
+
+    let mut accountable_effects = BTreeMap::<String, SettlementBinding>::new();
+    let mut quota_effects = BTreeSet::<String>::new();
+    for run in runs {
+        let Some((effect_id, binding)) = matching_run_identity(run, goal_id, agent_id, turn_id)
+        else {
+            continue;
+        };
+        match run.get("classification").and_then(Value::as_str) {
+            Some("quota_slot_spent") => {
+                quota_effects.insert(effect_id);
+            }
+            _ if run_has_accountable_progress(run) => {
+                accountable_effects.insert(effect_id, binding);
+            }
+            _ => {}
+        }
+    }
+
+    // Every candidate above is already pinned to this exact goal, agent, and
+    // host-issued turn id by `matching_run_identity`. The planned settlement
+    // token additionally pins the todo the projection selected at build time,
+    // but the agent may legitimately advance a different todo within the same
+    // bounded turn; that progress is still durable evidence for this turn, so
+    // fall back to the turn-scoped candidates when no token match exists.
+    let token_matches = accountable_effects
+        .iter()
+        .filter(|(effect_id, _)| {
+            settlement_token == *effect_id || is_legacy_turn_key(settlement_token)
+        })
+        .map(|(effect_id, binding)| (effect_id.clone(), binding.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let candidates = if token_matches.is_empty() {
+        accountable_effects
+    } else {
+        token_matches
+    };
+    // Prefer a candidate whose quota spend already settled; otherwise take the
+    // first deterministic entry.
+    let chosen = candidates
+        .iter()
+        .find(|(effect_id, _)| quota_effects.contains(*effect_id))
+        .or_else(|| candidates.iter().next());
+    let Some((effect_id, binding)) = chosen else {
+        return Ok(None);
+    };
+    Ok(Some(DurableSettlementEvidence {
+        effect_id: effect_id.clone(),
+        binding: binding.clone(),
+        quota_spent: quota_effects.contains(effect_id),
+    }))
+}
+
+fn run_has_accountable_progress(run: &Value) -> bool {
+    if let Some(observation) = run
+        .get("progress_observation")
+        .filter(|observation| !observation.is_null())
+    {
+        let typed_progress = observation.get("schema_version").and_then(Value::as_str)
+            == Some("typed_progress_observation_v0")
+            && matches!(
+                observation.get("result_class").and_then(Value::as_str),
+                Some("advanced" | "no_followup")
+            );
+        if typed_progress {
+            return true;
+        }
+    }
+
+    matches!(
+        run.get("delivery_outcome").and_then(Value::as_str),
+        Some("outcome_progress" | "primary_goal_outcome")
+    )
+}
+
+fn matching_run_identity(
+    run: &Value,
+    goal_id: &str,
+    agent_id: &str,
+    turn_id: &str,
+) -> Option<(String, SettlementBinding)> {
+    let identity = run.get("settlement_identity")?;
+    let effect_id = identity
+        .get("effect_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+    let exact_owner = identity.get("goal_id").and_then(Value::as_str) == Some(goal_id)
+        && identity.get("agent_id").and_then(Value::as_str) == Some(agent_id)
+        && identity.get("turn_instance_id").and_then(Value::as_str) == Some(turn_id)
+        && run.get("goal_id").and_then(Value::as_str) == Some(goal_id)
+        && run.get("agent_id").and_then(Value::as_str) == Some(agent_id)
+        && run.get("turn_instance_id").and_then(Value::as_str) == Some(turn_id);
+    if !exact_owner {
+        return None;
+    }
+
+    let binding = match identity.get("schema_version").and_then(Value::as_str) {
+        Some("quota_settlement_identity_v0") => {
+            let todo_id = identity
+                .get("todo_id")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())?;
+            if run.get("todo_id").and_then(Value::as_str) != Some(todo_id) {
+                return None;
+            }
+            SettlementBinding::Todo {
+                todo_id: todo_id.to_string(),
+            }
+        }
+        Some("quota_settlement_identity_v1")
+            if identity.get("binding_kind").and_then(Value::as_str)
+                == Some("autonomous_replan") =>
+        {
+            let obligation_id = identity
+                .get("replan_obligation_id")
+                .or_else(|| identity.get("binding_id"))
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())?;
+            if run.get("replan_obligation_id").and_then(Value::as_str) != Some(obligation_id) {
+                return None;
+            }
+            SettlementBinding::AutonomousReplan {
+                obligation_id: obligation_id.to_string(),
+            }
+        }
+        _ => return None,
+    };
+    (effect_id == binding.effect_id(goal_id, agent_id, turn_id)).then_some((effect_id, binding))
+}
+
+fn settlement_effect_id(goal_id: &str, agent_id: &str, todo_id: &str, turn_id: &str) -> String {
+    format!("{goal_id}:{agent_id}:{todo_id}:{turn_id}")
+}
+
+fn replan_settlement_effect_id(
+    goal_id: &str,
+    agent_id: &str,
+    obligation_id: &str,
+    turn_id: &str,
+) -> String {
+    format!("{goal_id}:{agent_id}:autonomous_replan:{obligation_id}:{turn_id}")
+}
+
+fn is_legacy_turn_key(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|digest| {
+        digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
+
+fn project_legacy_settlement(
+    request: &loopx_contract::LoopxCliSettleTurnRequest,
+    snapshot: &loopx_contract::LoopxCliGoalSnapshot,
+    receipt: &Value,
+    operation_id: &str,
+) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxCliSettleTurnResult> {
+    let receipt_id = receipt
+        .get("receipt_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            port_error(
+                loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+                operation_id,
+                "matching LoopX settlement receipt has no receipt_id",
+                false,
+            )
+        })?
+        .to_string();
+    let validation_succeeded = receipt
+        .get("validation_succeeded")
+        .and_then(Value::as_bool)
+        .or_else(|| {
+            receipt
+                .pointer("/validation/succeeded")
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(false);
+    Ok(loopx_contract::LoopxCliSettleTurnResult {
+        goal_id: request.goal_id.clone(),
+        turn_id: request.turn_id.clone(),
+        receipt_id,
+        status: if !validation_succeeded {
+            loopx_contract::LoopxCliSettlementStatus::NoDurableProgress
+        } else if snapshot.state == loopx_contract::LoopxCliGoalState::Completed {
+            loopx_contract::LoopxCliSettlementStatus::GoalCompleted
+        } else {
+            loopx_contract::LoopxCliSettlementStatus::AlreadySettled
+        },
+        before_revision: request.expected_durable_revision.clone(),
+        after_revision: snapshot.durable_revision.clone(),
+        validation_succeeded,
+        scheduler_hint_ms: snapshot.scheduler_hint_ms,
+    })
+}
+
 fn agent_shell_command(path: &Path) -> String {
     let display = path.to_string_lossy().replace('"', "\\\"");
     if cfg!(windows) {
         format!("& \"{display}\"")
     } else {
         format!("'{}'", display.replace('\'', "'\\''"))
+    }
+}
+
+fn agent_shell_value(value: &str) -> String {
+    if cfg!(windows) {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
     }
 }
 
@@ -1483,6 +2152,43 @@ async fn run_port_command(
         )
         .await
         .map_err(|error| map_port_error(error, operation_id))
+}
+
+async fn run_idempotent_global_command(
+    adapter: &LoopxCliProcessAdapter,
+    operation_id: &str,
+    args: Vec<OsString>,
+    missing_error_prefix: &str,
+    deadline: Duration,
+    observer: &dyn LoopxProcessObserver,
+) -> loopx_contract::LoopxCliResult<Option<LoopxJsonOutput>> {
+    match adapter
+        .run_global_json_command(operation_id, args, deadline, observer)
+        .await
+    {
+        Ok(output) => Ok(Some(output)),
+        Err(error) => {
+            if process_error_json(&error)
+                .and_then(|payload| {
+                    payload
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .is_some_and(|message| message.starts_with(missing_error_prefix))
+            {
+                return Ok(None);
+            }
+            Err(map_port_error(error, operation_id))
+        }
+    }
+}
+
+fn process_error_json(error: &LoopxCliAdapterError) -> Option<Value> {
+    let LoopxCliAdapterError::Process(LoopxProcessError::Exited { stdout_tail, .. }) = error else {
+        return None;
+    };
+    serde_json::from_str(&stdout_tail.join("\n")).ok()
 }
 
 fn plan_item_args(request: &loopx_contract::LoopxCliPlanItemRequest) -> Vec<OsString> {
@@ -1632,6 +2338,52 @@ fn add_todo_args(
     Ok(args.into_iter().map(OsString::from).collect())
 }
 
+fn add_user_gate_args(
+    request: &loopx_contract::LoopxCliCreateUserGateRequest,
+) -> loopx_contract::LoopxCliResult<Vec<OsString>> {
+    let operation_id = &request.context.call.operation_id;
+    validate_nonempty("goal_id", &request.goal_id, operation_id)?;
+    validate_nonempty("agent_id", &request.agent_id, operation_id)?;
+    validate_nonempty("message", &request.message, operation_id)?;
+    if request.message.len() > 700 {
+        return Err(port_error(
+            loopx_contract::LoopxCliErrorKind::InvalidInput,
+            operation_id,
+            "user gate message exceeds the 700-byte adapter limit",
+            false,
+        ));
+    }
+    if !is_public_token(&request.action_kind) {
+        return Err(port_error(
+            loopx_contract::LoopxCliErrorKind::InvalidInput,
+            operation_id,
+            "user gate action_kind must be a bounded public-safe token",
+            false,
+        ));
+    }
+    Ok([
+        "todo",
+        "add",
+        "--goal-id",
+        request.goal_id.as_str(),
+        "--role",
+        "user",
+        "--text",
+        request.message.as_str(),
+        "--task-class",
+        "user_gate",
+        "--action-kind",
+        request.action_kind.as_str(),
+        "--agent-id",
+        request.agent_id.as_str(),
+        "--blocks-agent",
+        request.agent_id.as_str(),
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect())
+}
+
 fn inspect_goal_args(goal_id: &str, agent_id: &str, turn_id: Option<&str>) -> Vec<OsString> {
     let mut args = vec![
         "turn".to_string(),
@@ -1672,6 +2424,502 @@ fn heartbeat_prompt_args(goal_id: &str, agent_id: &str) -> Vec<OsString> {
     .into_iter()
     .map(OsString::from)
     .collect()
+}
+
+fn settlement_history_args(goal_id: &str) -> Vec<OsString> {
+    [
+        "history",
+        "--goal-id",
+        goal_id,
+        "--limit",
+        SETTLEMENT_HISTORY_LIMIT,
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
+}
+
+fn quota_spend_args(
+    goal_id: &str,
+    agent_id: &str,
+    binding: &SettlementBinding,
+    turn_id: &str,
+) -> Vec<OsString> {
+    let mut args = vec![
+        "quota".to_string(),
+        "spend-slot".to_string(),
+        "--goal-id".to_string(),
+        goal_id.to_string(),
+        "--agent-id".to_string(),
+        agent_id.to_string(),
+    ];
+    match binding {
+        SettlementBinding::Todo { todo_id } => {
+            args.extend(["--todo-id".to_string(), todo_id.clone()]);
+        }
+        SettlementBinding::AutonomousReplan { obligation_id } => {
+            args.extend(["--replan-obligation-id".to_string(), obligation_id.clone()]);
+        }
+    }
+    args.extend([
+        "--turn-instance-id".to_string(),
+        turn_id.to_string(),
+        "--slots".to_string(),
+        "1".to_string(),
+        "--source".to_string(),
+        "heartbeat".to_string(),
+        "--execute".to_string(),
+    ]);
+    args.into_iter().map(OsString::from).collect()
+}
+
+fn require_quota_spend_response(
+    payload: &Value,
+    operation_id: &str,
+) -> loopx_contract::LoopxCliResult<()> {
+    if payload.get("mode").and_then(Value::as_str) != Some("spend-slot")
+        || payload.get("dry_run").and_then(Value::as_bool) != Some(false)
+    {
+        return Err(port_error(
+            loopx_contract::LoopxCliErrorKind::SchemaMismatch,
+            operation_id,
+            "LoopX quota finalization did not return an executed spend-slot result",
+            false,
+        ));
+    }
+    Ok(())
+}
+
+fn retire_global_goal_args(goal_id: &str) -> Vec<OsString> {
+    ["retire-global-goal", "--goal-id", goal_id, "--execute"]
+        .into_iter()
+        .map(OsString::from)
+        .collect()
+}
+
+fn archive_runtime_args(goal_id: &str) -> Vec<OsString> {
+    ["archive-runtime", "--goal-id", goal_id, "--execute"]
+        .into_iter()
+        .map(OsString::from)
+        .collect()
+}
+
+#[cfg(test)]
+mod prompt_contract_tests {
+    use super::{
+        add_user_gate_args, loopx_contract, matching_durable_progress, planned_settlement_token,
+        project_goal_snapshot, quota_spend_args, settlement_prompt_override, SettlementBinding,
+        AGENT_CLI_USAGE_RULES,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn agent_cli_contract_pins_global_format_and_scoped_agent_options() {
+        assert!(AGENT_CLI_USAGE_RULES.contains("before the subcommand"));
+        assert!(AGENT_CLI_USAGE_RULES.contains("whose `--help` output lists it"));
+        assert!(AGENT_CLI_USAGE_RULES.contains("do not repeat the rejected form"));
+    }
+
+    #[test]
+    fn owner_review_gate_is_translated_to_a_scoped_typed_todo() {
+        let request = loopx_contract::LoopxCliCreateUserGateRequest {
+            context: loopx_contract::LoopxCliGoalContext {
+                call: loopx_contract::LoopxCliCallContext {
+                    operation_id: "review-1".to_string(),
+                    deadline_at: None,
+                },
+                ..loopx_contract::LoopxCliGoalContext::default()
+            },
+            goal_id: "goal-1".to_string(),
+            agent_id: "agent-1".to_string(),
+            message: "Approve another bounded segment or reject to stop.".to_string(),
+            action_kind: "autonomous_budget_review".to_string(),
+        };
+        let args = add_user_gate_args(&request)
+            .expect("typed gate args")
+            .into_iter()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(args
+            .windows(2)
+            .any(|pair| pair[0] == "--task-class" && pair[1] == "user_gate"));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair[0] == "--blocks-agent" && pair[1] == "agent-1"));
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "--action-kind" && pair[1] == "autonomous_budget_review"
+        }));
+    }
+
+    #[test]
+    fn selected_todo_builds_the_exact_settlement_effect_identity() {
+        let token = planned_settlement_token(
+            &json!({
+                "route": {"selected_todo": {"todo_id": "todo-1"}},
+                "transaction": {"turn_key": "sha256:legacy"}
+            }),
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            "build-turn",
+        )
+        .unwrap();
+
+        assert_eq!(token, "goal-1:agent-1:todo-1:turn-1");
+    }
+
+    #[test]
+    fn replan_route_builds_the_autonomous_replan_effect_identity() {
+        let token = planned_settlement_token(
+            &json!({
+                "route": {
+                    "kind": "replan_required",
+                    "selected_todo": {"todo_id": "todo-1"}
+                },
+                "turn_envelope": {
+                    "replan_action_packet": {"obligation_id": "replan-1"}
+                },
+                "transaction": {"turn_key": "sha256:legacy"}
+            }),
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            "build-turn",
+        )
+        .unwrap();
+
+        assert_eq!(token, "goal-1:agent-1:autonomous_replan:replan-1:turn-1");
+    }
+
+    #[test]
+    fn durable_settlement_requires_matching_advanced_progress_and_quota_spend() {
+        let effect_id = "goal-1:agent-1:todo-1:turn-1";
+        let identity = json!({
+            "schema_version": "quota_settlement_identity_v0",
+            "effect_id": effect_id,
+            "goal_id": "goal-1",
+            "agent_id": "agent-1",
+            "todo_id": "todo-1",
+            "turn_instance_id": "turn-1"
+        });
+        let payload = json!({
+            "goals": [{
+                "id": "goal-1",
+                "latest_runs": [
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-1",
+                        "classification": "validated_progress",
+                        "progress_observation": {
+                            "schema_version": "typed_progress_observation_v0",
+                            "result_class": "advanced",
+                            "work_item_id": "todo-1"
+                        },
+                        "settlement_identity": identity.clone()
+                    },
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-1",
+                        "classification": "quota_slot_spent",
+                        "settlement_identity": identity
+                    }
+                ]
+            }]
+        });
+
+        let evidence = matching_durable_progress(
+            &payload,
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            effect_id,
+            "settle-turn",
+        )
+        .unwrap()
+        .expect("settlement evidence");
+        assert_eq!(evidence.effect_id, effect_id);
+        assert!(evidence.quota_spent);
+    }
+
+    #[test]
+    fn durable_progress_without_quota_exposes_the_binding_for_host_finalization() {
+        let effect_id = "goal-1:agent-1:todo-1:turn-1";
+        let payload = json!({
+            "goals": [{
+                "id": "goal-1",
+                "latest_runs": [{
+                    "goal_id": "goal-1",
+                    "agent_id": "agent-1",
+                    "todo_id": "todo-1",
+                    "turn_instance_id": "turn-1",
+                    "classification": "validated_progress",
+                    "progress_observation": {
+                        "schema_version": "typed_progress_observation_v0",
+                        "result_class": "advanced",
+                        "work_item_id": "todo-1"
+                    },
+                    "settlement_identity": {
+                        "schema_version": "quota_settlement_identity_v0",
+                        "effect_id": effect_id,
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-1"
+                    }
+                }]
+            }]
+        });
+
+        let evidence = matching_durable_progress(
+            &payload,
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            effect_id,
+            "settle-turn",
+        )
+        .unwrap()
+        .expect("validated progress");
+        assert!(!evidence.quota_spent);
+        assert_eq!(
+            evidence.binding,
+            SettlementBinding::Todo {
+                todo_id: "todo-1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn autonomous_replan_progress_uses_the_v1_settlement_binding() {
+        let effect_id = "goal-1:agent-1:autonomous_replan:replan-1:turn-1";
+        let payload = json!({
+            "goals": [{
+                "id": "goal-1",
+                "latest_runs": [{
+                    "goal_id": "goal-1",
+                    "agent_id": "agent-1",
+                    "turn_instance_id": "turn-1",
+                    "replan_obligation_id": "replan-1",
+                    "classification": "state_projection_repair",
+                    "delivery_outcome": "outcome_progress",
+                    "progress_observation": {
+                        "schema_version": "typed_progress_observation_v0",
+                        "result_class": "advanced"
+                    },
+                    "settlement_identity": {
+                        "schema_version": "quota_settlement_identity_v1",
+                        "effect_id": effect_id,
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "turn_instance_id": "turn-1",
+                        "binding_kind": "autonomous_replan",
+                        "binding_id": "replan-1",
+                        "replan_obligation_id": "replan-1"
+                    }
+                }]
+            }]
+        });
+
+        let evidence = matching_durable_progress(
+            &payload,
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            "sha256:legacy",
+            "settle-turn",
+        )
+        .unwrap()
+        .expect("replan progress");
+        assert_eq!(evidence.effect_id, effect_id);
+        assert_eq!(
+            evidence.binding,
+            SettlementBinding::AutonomousReplan {
+                obligation_id: "replan-1".to_string()
+            }
+        );
+        assert!(!evidence.quota_spent);
+    }
+
+    #[test]
+    fn quota_finalization_uses_the_exact_typed_binding() {
+        let args = quota_spend_args(
+            "goal-1",
+            "agent-1",
+            &SettlementBinding::AutonomousReplan {
+                obligation_id: "replan-1".to_string(),
+            },
+            "turn-1",
+        );
+        let args = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--replan-obligation-id", "replan-1"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--turn-instance-id", "turn-1"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--source", "heartbeat"]));
+        assert!(!args.iter().any(|arg| arg == "--todo-id"));
+        assert!(args.iter().any(|arg| arg == "--execute"));
+    }
+
+    #[test]
+    fn prompt_override_keeps_writeback_exact_and_spend_host_owned() {
+        let prompt = settlement_prompt_override(
+            "loopx-prefix",
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            Some(&SettlementBinding::Todo {
+                todo_id: "todo-1".to_string(),
+            }),
+        );
+
+        assert!(prompt.contains("--todo-id todo-1 --turn-instance-id turn-1"));
+        assert!(prompt.contains("The host owns quota accounting"));
+        assert!(prompt.contains("Do not run `quota spend-slot`"));
+        assert!(prompt.contains("English ASCII"));
+    }
+
+    #[test]
+    fn terminal_no_followup_is_a_completed_goal() {
+        let snapshot = project_goal_snapshot(
+            "goal-1",
+            &json!({
+                "ok": true,
+                "schema_version": "loopx_turn_plan_v0",
+                "turn_envelope": {
+                    "should_run": false,
+                    "state": "terminal_no_followup",
+                    "effective_action": "terminal_no_followup",
+                    "action_signature": {
+                        "source_hash": "sha256:terminal"
+                    }
+                }
+            }),
+            "inspect-goal",
+        )
+        .unwrap();
+
+        assert_eq!(
+            snapshot.run_decision,
+            loopx_contract::LoopxCliRunDecision::Complete
+        );
+        assert_eq!(snapshot.state, loopx_contract::LoopxCliGoalState::Completed);
+    }
+
+    #[test]
+    fn durable_progress_on_an_unplanned_todo_still_settles_the_turn() {
+        let planned_token = "goal-1:agent-1:todo-planned:turn-1";
+        let actual_effect = "goal-1:agent-1:todo-actual:turn-1";
+        let identity = json!({
+            "schema_version": "quota_settlement_identity_v0",
+            "effect_id": actual_effect,
+            "goal_id": "goal-1",
+            "agent_id": "agent-1",
+            "todo_id": "todo-actual",
+            "turn_instance_id": "turn-1"
+        });
+        let payload = json!({
+            "goals": [{
+                "id": "goal-1",
+                "latest_runs": [
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-actual",
+                        "turn_instance_id": "turn-1",
+                        "classification": "validated_progress",
+                        "progress_observation": {
+                            "schema_version": "typed_progress_observation_v0",
+                            "result_class": "advanced",
+                            "work_item_id": "todo-actual"
+                        },
+                        "settlement_identity": identity.clone()
+                    },
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-actual",
+                        "turn_instance_id": "turn-1",
+                        "classification": "quota_slot_spent",
+                        "settlement_identity": identity
+                    }
+                ]
+            }]
+        });
+
+        let evidence = matching_durable_progress(
+            &payload,
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            planned_token,
+            "settle-turn",
+        )
+        .unwrap()
+        .expect("turn-scoped evidence on a different todo");
+        assert!(evidence.quota_spent);
+    }
+
+    #[test]
+    fn legacy_validated_progress_uses_accountable_delivery_outcome() {
+        let effect_id = "goal-1:agent-1:todo-1:turn-1";
+        let identity = json!({
+            "schema_version": "quota_settlement_identity_v0",
+            "effect_id": effect_id,
+            "goal_id": "goal-1",
+            "agent_id": "agent-1",
+            "todo_id": "todo-1",
+            "turn_instance_id": "turn-1"
+        });
+        let payload = json!({
+            "goals": [{
+                "id": "goal-1",
+                "latest_runs": [
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-1",
+                        "classification": "validated_progress",
+                        "delivery_outcome": "outcome_progress",
+                        "settlement_identity": identity.clone()
+                    },
+                    {
+                        "goal_id": "goal-1",
+                        "agent_id": "agent-1",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-1",
+                        "classification": "quota_slot_spent",
+                        "settlement_identity": identity
+                    }
+                ]
+            }]
+        });
+
+        let evidence = matching_durable_progress(
+            &payload,
+            "goal-1",
+            "agent-1",
+            "turn-1",
+            effect_id,
+            "settle-turn",
+        )
+        .unwrap()
+        .expect("legacy settlement evidence");
+        assert!(evidence.quota_spent);
+    }
 }
 
 fn answer_gate_args(
@@ -1738,11 +2986,25 @@ fn project_goal_snapshot(
         .get("effective_action")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let run_decision = if should_run {
-        loopx_contract::LoopxCliRunDecision::RunNow
-    } else if user_action_required {
+    let control_status = payload
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let operator_gate_notify = matches!(
+        effective_action,
+        "operator_gate" | "operator_gate_notify" | "waiting_for_user"
+    ) || matches!(state_text, "operator_gate" | "operator_gate_notify")
+        || control_status == "operator_gate_notify";
+    let run_decision = if user_action_required || operator_gate_notify {
         loopx_contract::LoopxCliRunDecision::WaitingForUser
-    } else if matches!(state_text, "completed" | "complete" | "closed") {
+    } else if should_run {
+        loopx_contract::LoopxCliRunDecision::RunNow
+    } else if effective_action == "terminal_no_followup"
+        || matches!(
+            state_text,
+            "completed" | "complete" | "closed" | "terminal_no_followup"
+        )
+    {
         loopx_contract::LoopxCliRunDecision::Complete
     } else if matches!(state_text, "failed" | "error") {
         loopx_contract::LoopxCliRunDecision::Failed

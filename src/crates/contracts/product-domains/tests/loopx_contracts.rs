@@ -3,17 +3,18 @@
 use bitfun_product_domains::miniapp::loopx::{
     build_intake_fingerprint, decide_action_status, decide_events_page_status, decide_task_dedup,
     decide_task_restart, decide_task_transition, derive_environment_status,
-    intake_scope_is_pregrantable, parse_loopx_intake, task_state_after_restart, LoopxActionKind,
-    LoopxActionRequest, LoopxActionStatus, LoopxAgentFinishRequest, LoopxAgentPort,
-    LoopxAgentStartRequest, LoopxCliAnswerGateRequest, LoopxCliGateDecision, LoopxCliGoalSnapshot,
-    LoopxCliHandshakeRequest, LoopxCliPort, LoopxCoreEnvironmentFacts, LoopxCreateTaskRequest,
-    LoopxDedupDecision, LoopxEnvironmentFact, LoopxEnvironmentFactStatus, LoopxEnvironmentStatus,
+    intake_scope_is_pregrantable, parse_loopx_intake, project_host_task_from_goal,
+    task_state_after_restart, LoopxActionKind, LoopxActionRequest, LoopxActionStatus,
+    LoopxAgentFinishRequest, LoopxAgentPort, LoopxAgentStartRequest, LoopxCliAnswerGateRequest,
+    LoopxCliGateDecision, LoopxCliGoalSnapshot, LoopxCliGoalState, LoopxCliHandshakeRequest,
+    LoopxCliPort, LoopxCoreEnvironmentFacts, LoopxCreateTaskRequest, LoopxDedupDecision,
+    LoopxEnvironmentFact, LoopxEnvironmentFactStatus, LoopxEnvironmentStatus,
     LoopxEventsPageStatus, LoopxExistingTask, LoopxIntakeCandidate, LoopxIntakeParseErrorKind,
     LoopxIntakePreview, LoopxIntakeTarget, LoopxIssueKey, LoopxItemKind,
-    LoopxOptionalEnvironmentFacts, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
-    LoopxResolveIntakeRequest, LoopxRestartDecision, LoopxSnapshot, LoopxTaskIdentity,
-    LoopxTaskState, LoopxTransitionDecision, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
-    LOOPX_CLI_SCHEMA_VERSION, LOOPX_PINNED_VERSION,
+    LoopxOptionalEnvironmentFacts, LoopxPermissionScope, LoopxPhase, LoopxRemoteItemState,
+    LoopxRepositoryKey, LoopxResolveIntakeRequest, LoopxRestartDecision, LoopxSnapshot,
+    LoopxTaskIdentity, LoopxTaskState, LoopxTransitionDecision, LoopxWorkspacePort,
+    LoopxWorkspacePrepareRequest, LOOPX_CLI_SCHEMA_VERSION, LOOPX_PINNED_VERSION,
 };
 
 fn issue(owner: &str, repository: &str, number: u64) -> LoopxIssueKey {
@@ -198,6 +199,40 @@ fn restart_requeues_safe_pending_work_and_recovers_inflight_work() {
         );
         assert_eq!(task_state_after_restart(state), state);
     }
+}
+
+#[test]
+fn authoritative_goal_projection_preserves_explicit_host_stops() {
+    let stopped = project_host_task_from_goal(
+        LoopxTaskState::Stopped,
+        LoopxPhase::Finished,
+        LoopxCliGoalState::Completed,
+    );
+    assert_eq!(stopped.state, LoopxTaskState::Stopped);
+
+    let completed = project_host_task_from_goal(
+        LoopxTaskState::RecoveryRequired,
+        LoopxPhase::Recovering,
+        LoopxCliGoalState::Completed,
+    );
+    assert_eq!(completed.state, LoopxTaskState::Completed);
+    assert_eq!(completed.phase, LoopxPhase::Finished);
+
+    let reopened = project_host_task_from_goal(
+        LoopxTaskState::Completed,
+        LoopxPhase::Finished,
+        LoopxCliGoalState::Active,
+    );
+    assert_eq!(reopened.state, LoopxTaskState::RecoveryRequired);
+    assert_eq!(reopened.phase, LoopxPhase::Recovering);
+
+    let pending_approval = project_host_task_from_goal(
+        LoopxTaskState::WaitingForUser,
+        LoopxPhase::WaitingForApproval,
+        LoopxCliGoalState::Active,
+    );
+    assert_eq!(pending_approval.state, LoopxTaskState::WaitingForUser);
+    assert_eq!(pending_approval.phase, LoopxPhase::WaitingForApproval);
 }
 
 #[test]

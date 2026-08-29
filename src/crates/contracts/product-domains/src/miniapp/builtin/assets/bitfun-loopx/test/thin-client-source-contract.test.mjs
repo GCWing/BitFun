@@ -156,4 +156,58 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
     intakeOffset < railOffset && railOffset < logOffset,
     'the document order must be top intake, task rail, then primary log view',
   );
+
+  assert.match(html, /\blist\s*=\s*(['"])intake-history\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])resume-repository\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-progress-panel\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-stage-list\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-detail-dialog\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])approval-alert\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-panel\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-approve\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-approval-reject\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-description-panel\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-outcome\1/i);
+  assert.ok(
+    html.indexOf('id="issue-description-panel"') < html.indexOf('id="issue-progress-panel"'),
+    'the visible Issue description must appear before detailed progress',
+  );
+  for (const removedId of [
+    'sync-button',
+    'mode-key',
+    'mode-full',
+    'mode-output',
+    'log-search',
+    'errors-only',
+    'export-logs',
+    'liveness-panel',
+    'approval-alert-review',
+    'issue-stage-walker',
+    'gate-dialog',
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`\\bid\\s*=\\s*(['"])${removedId}\\1`, 'i'));
+  }
+});
+
+test('LoopX keeps intake history and renders one flat repository task list', async () => {
+  const ui = await readAsset('ui.js');
+
+  assert.match(ui, /app\.storage\.get\s*\(INTAKE_HISTORY_STORAGE_KEY\)/);
+  assert.match(ui, /app\.storage\.set\s*\(INTAKE_HISTORY_STORAGE_KEY/);
+  assert.match(ui, /sortedTaskList\(tasks\)\.forEach\(\(task\)\s*=>\s*fragment\.append\(taskButton\(task\)\)\)/);
+  assert.doesNotMatch(ui, /group\.className\s*=\s*['"]task-group['"]/);
+  assert.doesNotMatch(ui, /makeActionButton\([^)]*['"]resume['"]/s);
+  assert.match(ui, /task\.lastAgentSummary/);
+  assert.match(ui, /function isResolvedUpstream\(task\)/);
+  assert.match(ui, /autonomyApprovalSummaryAnalyzed/);
+  assert.doesNotMatch(ui, /Several investigation stages have completed/);
+  assert.match(ui, /resumeDetected:\s*true/);
+  assert.match(ui, /outputBlockDomKey/);
+  assert.match(ui, /syncApprovalAttention/);
+  assert.match(ui, /task\.pendingGateId/);
+  assert.match(ui, /visibilitychange/);
+  assert.match(ui, /pageshow/);
+  assert.match(ui, /STALE_ACTIVE_REATTACH_MS/);
+  assert.match(ui, /focusedTaskId/);
+  assert.match(ui, /resetLoopxDialog\.close\(\)[\s\S]*resettingLoopxBackground/);
 });

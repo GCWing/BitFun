@@ -5,26 +5,24 @@
 const app = window.app;
 const byId = (id) => document.getElementById(id);
 const MAX_EVENTS = 2000;
-const MAX_RENDERED_EVENTS = 600;
-const MAX_TURN_OUTPUT_EVENTS = 1200;
+const MAX_RENDERED_OUTPUT_BLOCKS = 500;
+const MAX_TURN_OUTPUT_EVENTS = 800;
+const MAX_OUTPUT_HISTORY_EVENTS = 2400;
+const MAX_OUTPUT_EVENT_CHARS = 16000;
+const MAX_OUTPUT_BLOCK_CHARS = 120000;
+const MAX_OUTPUT_HISTORY_CHARS = 1200000;
+const MAX_INTAKE_HISTORY = 12;
+const HOST_CLOCK_TICK_MS = 5000;
+const HOST_RESUME_GAP_MS = 30000;
+const STALE_ACTIVE_REATTACH_MS = 30000;
 const MODEL_SELECTION_STORAGE_KEY = 'loopx.modelId';
+const INTAKE_HISTORY_STORAGE_KEY = 'loopx.intakeHistory';
 const HIGH_RISK_SCOPES = new Set([
   'publish',
   'public_comment',
   'pull_request',
   'merge',
   'production_action',
-]);
-const KEY_EVENT_KINDS = new Set([
-  'task_created',
-  'progress',
-  'state_changed',
-  'phase_changed',
-  'approval_required',
-  'settlement_recorded',
-  'environment_changed',
-  'operation_cancelled',
-  'snapshot_invalidated',
 ]);
 const SNAPSHOT_EVENT_KINDS = new Set([
   'task_created',
@@ -49,6 +47,8 @@ const COPY = {
     model: '模型',
     modelAuto: '自动模型',
     modelLoading: '正在加载模型…',
+    modelEmpty: '未找到已启用的文本模型',
+    modelLoadFailed: '模型列表加载失败',
     modelReloadTitle: '刷新模型列表',
     modelSelectionChanged: '已切换模型，请重新分析链接。',
     modelPrimaryTag: '主模型',
@@ -57,14 +57,15 @@ const COPY = {
     refresh: '刷新状态',
     resetLoopx: '重置 LoopX',
     resettingLoopx: '正在重置 LoopX…',
+    resettingLoopxBackground: '正在后台清理任务与工作进展；窗口可以继续使用，完成后会自动刷新。',
     destructiveAction: '危险操作',
     resetLoopxTitle: '清空并重新开始',
-    resetLoopxMessage: '将停止并删除 {tasks} 个任务、{events} 条日志、全部 Goal 状态和受管工作区。此操作不可撤销。',
-    resetLoopxRetained: '模型配置、GitHub 登录和 MiniApp 设置会保留。',
+    resetLoopxMessage: '将停止并删除 {tasks} 个任务、{events} 条日志、全部工作进展和受管工作区。此操作不可撤销。',
+    resetLoopxRetained: '模型配置、GitHub 登录、MiniApp 设置和干净的 Git 对象缓存会保留；仍在进行的工作区不会被复用。',
     resetLoopxConfirm: '清空并重新开始',
     resetLoopxApplied: 'LoopX 已清空，可以重新开始测试。',
     unsupportedTitle: '当前执行位置不支持 LoopX',
-    unsupportedDefault: 'LoopX 目前只支持本地 Desktop 工作区。此入口不会回退到控制端执行。',
+    unsupportedDefault: 'LoopX 目前只支持本地 Desktop 工作区；远程工作区不会静默改在本机执行。',
     environment: '环境',
     coreEnvironment: '核心环境',
     optionalEnvironment: '增强能力',
@@ -77,8 +78,8 @@ const COPY = {
     expandTasks: '展开任务栏',
     allActivity: '全部活动',
     noTasks: '暂无任务',
-    activity: '运行日志',
-    allTaskEvents: '所有任务的实时日志和阶段进度',
+    activity: '模型实时输出',
+    allTaskEvents: '所有 Issue 的模型输出会按时间保留在这里',
     selectedTaskEvents: '当前任务的事件与运行状态',
     mainProgress: '进行中 {active} · 排队 {queued}',
     mainProgressOnlyQueued: '排队 {queued} · 等待调度',
@@ -89,7 +90,7 @@ const COPY = {
     mainProgressWaiting: '正在同步任务状态；阶段变化和宿主输出会继续出现在这里。',
     keyEvents: '关键事件',
     fullLog: '完整日志',
-    liveOutput: '实时输出',
+    liveOutput: '模型实时输出',
     searchLogs: '搜索日志',
     errorsOnly: '仅错误',
     exportLogs: '导出日志',
@@ -102,7 +103,49 @@ const COPY = {
     outputModel: '模型',
     outputText: '输出',
     outputChunks: '{value} 段',
-    newEvents: '查看新事件',
+    sourceScheduler: '任务调度',
+    sourceLoopx: 'LoopX 引擎',
+    sourceAgent: 'Agent',
+    sourceGit: 'Git',
+    sourceGithub: 'GitHub',
+    sourceSystem: '系统',
+    toolExecCommand: '执行命令',
+    toolRead: '读取文件',
+    toolGrep: '搜索内容',
+    toolLs: '浏览目录',
+    toolWebFetch: '访问网页',
+    toolWebSearch: '搜索网页',
+    toolWrite: '写入文件',
+    toolEdit: '修改文件',
+    toolQueued: '工具已排队：{tool}',
+    toolWaiting: '工具等待中：{tool}',
+    toolStarted: '正在运行：{tool}',
+    toolConfirmation: '工具等待确认：{tool}',
+    toolConfirmed: '已确认工具：{tool}',
+    toolRejected: '已拒绝工具：{tool}',
+    toolCompleted: '工具完成：{tool}',
+    toolFailed: '工具失败：{tool}',
+    toolCancelled: '工具已取消：{tool}',
+    toolStateQueued: '排队',
+    toolStateWaiting: '等待',
+    toolStateStarted: '运行中',
+    toolStateConfirmation: '等待确认',
+    toolStateConfirmed: '已确认',
+    toolStateRejected: '已拒绝',
+    toolStateCompleted: '已完成',
+    toolStateFailed: '失败',
+    toolStateCancelled: '已取消',
+    detailDurationMs: '耗时（毫秒）',
+    detailExitCode: '退出码',
+    detailMatchCount: '匹配数',
+    detailFileCount: '文件数',
+    detailEntryCount: '条目数',
+    detailLineCount: '读取行数',
+    detailContentLength: '内容长度',
+    detailTitle: '标题',
+    detailQueuePosition: '队列位置',
+    detailDependencies: '等待项',
+    newEvents: '滚动到最新输出',
     confirmTask: '确认任务',
     repository: '仓库',
     workspace: '工作区',
@@ -122,7 +165,9 @@ const COPY = {
     newAttempt: '新尝试',
     terminalExists: '已有终态任务',
     confirmNewAttempt: '确认新尝试',
-    approvalGate: '查看并决定',
+    decisionRequired: '需要你的决定',
+    afterApprove: '批准后',
+    afterReject: '拒绝后',
     approvalNote: '审批备注',
     approvalNotePlaceholder: '补充批准或拒绝的原因（可选）',
     reject: '拒绝',
@@ -130,14 +175,14 @@ const COPY = {
     pause: '暂停',
     resume: '恢复',
     continueRun: '仅继续此任务',
-    resumeRepository: '恢复此仓库的异常任务（{value}）',
+    resumeRepository: '恢复仓库任务（{value}）',
     resumingRepository: '正在恢复异常任务…',
     repositorySerial: '同仓库串行执行',
     batchAction: '批量操作',
     resumeRepositoryTitle: '恢复此仓库的异常任务',
     confirmContinue: '确认继续',
-    resumeRepositoryMessage: '将恢复 {repository} 中 {value} 个失败或需要恢复的任务。同一时间只运行 1 个，其余任务进入队列。',
-    resumeRepositoryApplied: '已将 {value} 个异常任务加入仓库队列。',
+    resumeRepositoryMessage: '将恢复 {repository} 中 {value} 个已暂停、中止或失败的任务。同一时间只运行 1 个，其余任务进入队列。',
+    resumeRepositoryApplied: '已将 {value} 个仓库任务加入队列。',
     repositoryPausedByModel: '模型请求失败，仓库队列已暂停',
     fixModelBeforeContinue: '修复模型并重新检查环境后继续',
     groupDecision: '待你决定',
@@ -159,16 +204,95 @@ const COPY = {
     retry: '重试',
     details: '详情',
     currentTool: '工具',
-    turn: 'Turn',
-    goal: 'Goal',
+    turn: '阶段',
+    goal: '目标',
     deadline: '截止',
     noRecentOutput: '已 {duration} 没有新输出',
     lastOutput: '最后输出 {duration} 前',
     updated: '更新于 {duration} 前',
     openInGithub: '在 GitHub 中打开',
+    issueProgress: '处理进度',
+    currentWork: '当前',
+    evidenceAndOutputs: '已完成的工作',
+    nextAction: '下一步',
+    latestOutcome: '最近进展',
+    outcomeUpdated: '{duration}前更新',
+    stageWorkspace: '工作区',
+    stageAnalysis: '分析与方案',
+    stageImplementation: '实施',
+    stageValidation: '结果核验',
+    stageSettlement: '完成',
+    stagePending: '待开始',
+    stageActive: '进行中',
+    stageComplete: '已完成',
+    stageBlocked: '已阻塞',
+    progressMeta: '{done}/{total} 个阶段已完成',
+    progressPreparing: '正在准备独立 Worktree',
+    progressQueued: '等待同仓库前序 Issue',
+    progressAnalyzing: '正在分析原因并形成可执行方案',
+    progressImplementing: '已进入代码修改阶段',
+    progressValidating: '正在核验本轮产出',
+    progressSettling: '正在保存本轮进展',
+    progressWaiting: '等待你的决定',
+    progressRecovery: '本轮执行已中断',
+    progressCompleted: '修复流程已完成',
+    progressResolvedUpstream: '上游已处理该问题',
+    progressResolvedUpstreamDetail: '已确认当前上游代码移除了原始故障路径，不需要再提交额外修复。',
+    progressIdle: '等待任务推进',
+    evidenceWorkspace: '独立工作区已准备完成',
+    evidenceProgressSaved: '当前工作进展已保存，中断后可以继续',
+    evidenceAnalysisReady: '已完成问题分析并形成修复方向',
+    evidenceCodeChanges: '已完成代码修改（涉及 {value} 个文件）',
+    evidenceCodeChangesUnknown: '已完成代码修改',
+    evidenceValidationPassed: '已运行项目验证，当前未发现失败',
+    evidenceValidationNeedsAttention: '部分验证未通过，仍需继续处理',
+    evidenceResolvedUpstream: '已核对当前上游代码，原始故障路径已被移除',
+    evidenceNoPatchRequired: '当前没有需要提交的修复补丁',
+    evidenceNone: '任务尚未产生可展示的工作结果',
+    nextPrepare: '完成 Worktree 后开始分析 Issue。',
+    nextQueued: '等待仓库执行槽释放后自动开始。',
+    nextAnalyze: '完成原因定位并形成可执行方案。',
+    nextImplement: '继续实现并保留可核验的修改证据。',
+    nextValidate: '核验当前产出并保存进展。',
+    nextSettle: '保存进展后继续下一阶段或完成任务。',
+    nextRecover: '处理执行异常后继续任务。',
+    nextApproval: '查看审批内容并决定是否继续。',
+    nextCompleted: '检查最终结论和产出。',
+    nextResolvedUpstream: '无需继续修复，可以保留记录或归档任务。',
     issueDescription: 'Issue 描述',
     loadingIssueDescription: '正在加载 Issue 描述…',
     issueDescriptionUnavailable: '暂时无法加载 Issue 描述。',
+    publishApprovalTitle: '是否发布修复并创建 Pull Request？',
+    publishApprovalSummary: '修复已在分支 {branch} 的提交 {commit} 中准备完成，目标仓库为 {repository}。现在需要你决定是否发布。',
+    publishApprovalSummaryGeneric: '修复和发布材料已经准备完成，目标仓库为 {repository}。现在需要你决定是否发布为 Pull Request。',
+    publishApprovalApproveEffect: '推送修复分支并创建 Pull Request，随后进入 macOS 真机验证。批准不会自动合并代码。',
+    publishApprovalRejectEffect: '不推送分支，也不创建 Pull Request；本地分支、提交和验证结果会保留，任务停在当前步骤。',
+    publishApprovalRecommendationReady: '建议批准：当前修改已有验证结果，批准后仍可在 Pull Request 中继续评审，并不会自动合并。',
+    publishApprovalRecommendationReview: '建议先确认修改和验证结果；批准只会发布 Pull Request，不会自动合并。',
+    publishApprovalApprove: '批准并创建 PR',
+    publishApprovalReject: '暂不发布',
+    autonomyApprovalTitle: '修复尚未完成，是否继续处理？',
+    autonomyApprovalSummaryAnalyzed: '已经完成问题分析并找到继续处理的方向，但修复和验证尚未完成。',
+    autonomyApprovalSummaryImplemented: '已经产生修复修改，但还需要继续验证并确认最终结果。',
+    autonomyApprovalApproveEffect: '继续修复和验证，完成后汇报结果。不会发布或合并代码。',
+    autonomyApprovalRejectEffect: '暂停处理并保留当前工作区、修改和调查结果。',
+    autonomyApprovalRecommendation: '建议继续：当前已经形成明确方向，下一步主要是实施和验证。',
+    continueRepair: '继续处理',
+    pauseProcessing: '暂不继续',
+    genericApprovalTitle: '是否允许任务执行下一步？',
+    genericApprovalSummary: '任务已到需要人工确认的操作。请根据下面的影响决定是否继续。',
+    genericApprovalApproveEffect: '允许任务执行本次操作，并继续后续流程。',
+    genericApprovalRejectEffect: '不执行本次操作，保留已有修改和进展，任务停在当前步骤。',
+    genericApprovalRecommendation: '建议：确认操作范围符合预期后再批准；不确定时先拒绝，并在备注中说明需要补充的信息。',
+    outcomeWaiting: '代码修改和已有验证结果已保存，任务正在等待你决定是否执行下一步。',
+    outcomeRecovery: '任务执行过程中断。已有调查结果和修改仍然保留，恢复后可以从当前进度继续。',
+    outcomeCompleted: '修复流程已经完成，可以检查最终产出和验证结果。',
+    outcomeResolvedUpstream: '已确认当前上游代码已经移除导致问题的旧路径，本任务无需再提交修复。',
+    outcomeValidated: '修复修改已经完成，并已进入结果核验或等待后续操作。',
+    outcomeImplemented: '已经产生代码修改，当前正在补充验证并收敛最终结果。',
+    outcomeAnalyzed: '已经完成问题分析，正在形成或实施修复方案。',
+    outcomeQueued: '任务已经创建，正在等待工作区或仓库执行槽就绪。',
+    outcomeStarted: '任务已经开始，当前进展会持续更新。',
     justNow: '刚刚',
     seconds: '{value} 秒',
     minutes: '{value} 分钟',
@@ -177,7 +301,7 @@ const COPY = {
     deadlinePassed: '已超过截止时间 {duration}',
     deadlineRemaining: '剩余 {duration}',
     intakeUnavailable: '当前执行位置不支持创建任务。',
-    bridgeUnavailable: '宿主没有提供受信任的 LoopX 控制器接口。请更新 BitFun 后重试。',
+    bridgeUnavailable: '宿主没有提供受信任的 LoopX 运行接口。请更新 BitFun 后重试。',
     selectAtLeastOne: '至少选择一个仍开放的 Issue 或 PR。',
     selectAll: '全选',
     selectPermissions: '请确认本次任务需要的权限范围。',
@@ -195,6 +319,8 @@ const COPY = {
     liveVerification: '目标需要再次在线复核，暂未创建任务。',
     retryRequired: '该目标已有终态任务。只有确认后才会创建新的 attempt。',
     actionApplied: '操作已应用。',
+    approvalSubmitting: '正在提交审批决定，任务会在宿主确认后继续。',
+    approvalSubmittingShort: '正在提交决定…',
     actionPending: '正在提交操作',
     pausePending: '正在暂停',
     resumePending: '正在继续',
@@ -206,6 +332,15 @@ const COPY = {
     logsExported: '日志已导出。',
     noGate: '没有找到可回答的审批门禁，请刷新任务状态。',
     approvalNeeded: '任务正在等待远程可回答的审批。',
+    continueInvestigation: '继续调查',
+    stopTask: '停止任务',
+    activityInstallingDependencies: '正在准备项目依赖',
+    activityBuildingInstaller: '正在构建 Windows 安装包',
+    activityTestingUpgrade: '正在验证安装器升级链路',
+    activityWaitingProcess: '正在等待外部进程返回结果',
+    activitySyncingProgress: '正在同步工作进展',
+    activityCheckingRepository: '正在检查仓库状态',
+    activityRunningCommand: '正在执行项目命令',
     coreBlocked: '核心环境未就绪，任务不会静默启动。',
     optionalDegraded: '增强能力不可用，核心修复流程仍可继续。',
     truncatedCandidates: '候选项已截断，请缩小仓库范围后重新分析。',
@@ -219,7 +354,7 @@ const COPY = {
     taskNumber: '任务 {value}',
     eventCount: '{value} 条事件',
     allSources: '全部来源',
-    sidecar: 'LoopX sidecar',
+    sidecar: 'LoopX 引擎',
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent 模型',
     pythonFallback: 'Python 备用',
@@ -239,22 +374,23 @@ const COPY = {
     state_retry_wait: '等待重试',
     state_cancelling: '正在停止',
     state_stopped: '已暂停',
-    state_recovery_required: '需要恢复',
+    state_recovery_required: '已中止',
     state_completed: '已完成',
     state_failed: '失败',
     state_archived: '已归档',
+    state_resolved_upstream: '上游已修复',
     phase_unknown: '等待宿主状态',
     phase_validating_environment: '验证环境',
     phase_resolving_intake: '复核输入',
-    phase_preparing_workspace: '准备 Worktree',
-    phase_creating_goal: '创建 Goal',
+    phase_preparing_workspace: '准备独立工作区',
+    phase_creating_goal: '准备任务目标',
     phase_queued: '等待调度',
-    phase_inspecting_goal: '检查 Goal',
-    phase_building_turn: '构建 Turn',
-    phase_starting_agent: '启动 Agent',
-    phase_agent_running: 'Agent 执行中',
-    phase_validating_progress: '验证持久进度',
-    phase_settling_turn: '结算 Turn',
+    phase_inspecting_goal: '检查任务目标',
+    phase_building_turn: '正在准备下一阶段',
+    phase_starting_agent: '启动修复任务',
+    phase_agent_running: '正在分析或修改',
+    phase_validating_progress: '正在核验结果',
+    phase_settling_turn: '正在保存进展',
     phase_waiting_for_approval: '等待审批',
     phase_retry_backoff: '重试退避',
     phase_cancelling: '正在取消',
@@ -284,6 +420,8 @@ const COPY = {
     model: 'Model',
     modelAuto: 'Automatic model',
     modelLoading: 'Loading models...',
+    modelEmpty: 'No enabled text models found',
+    modelLoadFailed: 'Model list failed to load',
     modelReloadTitle: 'Refresh model list',
     modelSelectionChanged: 'Model changed. Analyze the URL again.',
     modelPrimaryTag: 'Primary',
@@ -292,14 +430,15 @@ const COPY = {
     refresh: 'Refresh status',
     resetLoopx: 'Reset LoopX',
     resettingLoopx: 'Resetting LoopX...',
+    resettingLoopxBackground: 'Cleaning tasks and saved progress in the background. You can keep using this window; it refreshes when cleanup finishes.',
     destructiveAction: 'Destructive action',
     resetLoopxTitle: 'Clear and start over',
-    resetLoopxMessage: 'Stop and delete {tasks} tasks, {events} log events, every Goal state, and all managed workspaces. This cannot be undone.',
-    resetLoopxRetained: 'Model configuration, GitHub login, and MiniApp settings are retained.',
+    resetLoopxMessage: 'Stop and delete {tasks} tasks, {events} log events, all saved progress, and all managed workspaces. This cannot be undone.',
+    resetLoopxRetained: 'Model configuration, GitHub login, MiniApp settings, and clean Git object caches are retained. Unsettled worktrees are not reused.',
     resetLoopxConfirm: 'Clear and start over',
     resetLoopxApplied: 'LoopX was cleared. You can start a fresh test.',
     unsupportedTitle: 'LoopX is unavailable in this execution location',
-    unsupportedDefault: 'LoopX currently supports local Desktop workspaces only. It will not fall back to the controller machine.',
+    unsupportedDefault: 'LoopX currently supports local Desktop workspaces only. Remote workspaces will not silently run on this device instead.',
     environment: 'Environment',
     coreEnvironment: 'Core environment',
     optionalEnvironment: 'Optional capabilities',
@@ -312,8 +451,8 @@ const COPY = {
     expandTasks: 'Expand task rail',
     allActivity: 'All activity',
     noTasks: 'No tasks yet',
-    activity: 'Run log',
-    allTaskEvents: 'Live logs and phase progress for every task',
+    activity: 'Live model output',
+    allTaskEvents: 'Model output for every issue is retained here in time order',
     selectedTaskEvents: 'Events and liveness for the selected task',
     mainProgress: '{active} active · {queued} queued',
     mainProgressOnlyQueued: '{queued} queued · waiting for the scheduler',
@@ -324,7 +463,7 @@ const COPY = {
     mainProgressWaiting: 'Syncing task state; phase changes and host output will continue to appear here.',
     keyEvents: 'Key events',
     fullLog: 'Full log',
-    liveOutput: 'Live output',
+    liveOutput: 'Live model output',
     searchLogs: 'Search logs',
     errorsOnly: 'Errors only',
     exportLogs: 'Export logs',
@@ -337,7 +476,49 @@ const COPY = {
     outputModel: 'Model',
     outputText: 'Output',
     outputChunks: '{value} chunks',
-    newEvents: 'View new events',
+    sourceScheduler: 'Task scheduler',
+    sourceLoopx: 'LoopX engine',
+    sourceAgent: 'Agent',
+    sourceGit: 'Git',
+    sourceGithub: 'GitHub',
+    sourceSystem: 'System',
+    toolExecCommand: 'Run command',
+    toolRead: 'Read file',
+    toolGrep: 'Search content',
+    toolLs: 'Browse directory',
+    toolWebFetch: 'Fetch web page',
+    toolWebSearch: 'Search web',
+    toolWrite: 'Write file',
+    toolEdit: 'Edit file',
+    toolQueued: 'Tool queued: {tool}',
+    toolWaiting: 'Tool waiting: {tool}',
+    toolStarted: 'Running: {tool}',
+    toolConfirmation: 'Tool needs confirmation: {tool}',
+    toolConfirmed: 'Tool confirmed: {tool}',
+    toolRejected: 'Tool rejected: {tool}',
+    toolCompleted: 'Tool completed: {tool}',
+    toolFailed: 'Tool failed: {tool}',
+    toolCancelled: 'Tool cancelled: {tool}',
+    toolStateQueued: 'Queued',
+    toolStateWaiting: 'Waiting',
+    toolStateStarted: 'Running',
+    toolStateConfirmation: 'Needs confirmation',
+    toolStateConfirmed: 'Confirmed',
+    toolStateRejected: 'Rejected',
+    toolStateCompleted: 'Completed',
+    toolStateFailed: 'Failed',
+    toolStateCancelled: 'Cancelled',
+    detailDurationMs: 'Duration (ms)',
+    detailExitCode: 'Exit code',
+    detailMatchCount: 'Matches',
+    detailFileCount: 'Files',
+    detailEntryCount: 'Entries',
+    detailLineCount: 'Lines read',
+    detailContentLength: 'Content length',
+    detailTitle: 'Title',
+    detailQueuePosition: 'Queue position',
+    detailDependencies: 'Waiting for',
+    newEvents: 'Scroll to latest output',
     confirmTask: 'Confirm task',
     repository: 'Repository',
     workspace: 'Workspace',
@@ -357,7 +538,9 @@ const COPY = {
     newAttempt: 'New attempt',
     terminalExists: 'A terminal task already exists',
     confirmNewAttempt: 'Confirm new attempt',
-    approvalGate: 'Review and decide',
+    decisionRequired: 'Your decision is required',
+    afterApprove: 'If approved',
+    afterReject: 'If rejected',
     approvalNote: 'Approval note',
     approvalNotePlaceholder: 'Optional reason for approving or rejecting',
     reject: 'Reject',
@@ -365,14 +548,14 @@ const COPY = {
     pause: 'Pause',
     resume: 'Resume',
     continueRun: 'Continue only this task',
-    resumeRepository: 'Recover repository failures ({value})',
+    resumeRepository: 'Recover repository tasks ({value})',
     resumingRepository: 'Recovering failed tasks...',
     repositorySerial: 'Runs serially per repository',
     batchAction: 'Batch action',
     resumeRepositoryTitle: 'Recover repository failures',
     confirmContinue: 'Continue tasks',
-    resumeRepositoryMessage: 'Recover {value} failed or recovery-required tasks in {repository}. One task runs at a time; the rest remain queued.',
-    resumeRepositoryApplied: 'Queued {value} failed repository tasks.',
+    resumeRepositoryMessage: 'Recover {value} paused, interrupted, or failed tasks in {repository}. One task runs at a time; the rest remain queued.',
+    resumeRepositoryApplied: 'Queued {value} repository tasks.',
     repositoryPausedByModel: 'Model request failed; repository queue paused',
     fixModelBeforeContinue: 'Fix the model and recheck the environment',
     groupDecision: 'Waiting for you',
@@ -394,16 +577,95 @@ const COPY = {
     retry: 'Retry',
     details: 'Details',
     currentTool: 'tool',
-    turn: 'Turn',
-    goal: 'Goal',
+    turn: 'Stage',
+    goal: 'Objective',
     deadline: 'deadline',
     noRecentOutput: 'No new output for {duration}',
     lastOutput: 'Last output {duration} ago',
     updated: 'Updated {duration} ago',
     openInGithub: 'Open in GitHub',
+    issueProgress: 'Issue progress',
+    currentWork: 'Current',
+    evidenceAndOutputs: 'Work completed',
+    nextAction: 'Next',
+    latestOutcome: 'Recent progress',
+    outcomeUpdated: 'Updated {duration} ago',
+    stageWorkspace: 'Worktree',
+    stageAnalysis: 'Analysis and plan',
+    stageImplementation: 'Implementation',
+    stageValidation: 'Outcome validation',
+    stageSettlement: 'Finish',
+    stagePending: 'Pending',
+    stageActive: 'Active',
+    stageComplete: 'Complete',
+    stageBlocked: 'Blocked',
+    progressMeta: '{done}/{total} stages complete',
+    progressPreparing: 'Preparing an isolated worktree',
+    progressQueued: 'Waiting for the previous repository issue',
+    progressAnalyzing: 'Analyzing the cause and forming an actionable plan',
+    progressImplementing: 'Code changes are in progress',
+    progressValidating: 'Validating this outcome',
+    progressSettling: 'Saving this stage of progress',
+    progressWaiting: 'Waiting for your decision',
+    progressRecovery: 'Execution was interrupted',
+    progressCompleted: 'The repair workflow is complete',
+    progressResolvedUpstream: 'Resolved upstream',
+    progressResolvedUpstreamDetail: 'The current upstream code has removed the original failure path, so no additional patch is required.',
+    progressIdle: 'Waiting for task progress',
+    evidenceWorkspace: 'The isolated workspace is ready',
+    evidenceProgressSaved: 'Current progress is saved and can resume after an interruption',
+    evidenceAnalysisReady: 'Issue analysis is complete and a repair direction is ready',
+    evidenceCodeChanges: 'Code changes are ready across {value} files',
+    evidenceCodeChangesUnknown: 'Code changes are ready',
+    evidenceValidationPassed: 'Project validation has run without a reported failure',
+    evidenceValidationNeedsAttention: 'Some validation did not pass and still needs attention',
+    evidenceResolvedUpstream: 'Current upstream code no longer contains the original failure path',
+    evidenceNoPatchRequired: 'No repair patch needs to be submitted',
+    evidenceNone: 'No user-facing work result is available yet',
+    nextPrepare: 'Finish the worktree, then analyze the issue.',
+    nextQueued: 'Start automatically when the repository slot is free.',
+    nextAnalyze: 'Finish root-cause analysis and form an actionable plan.',
+    nextImplement: 'Continue implementation and retain verifiable change evidence.',
+    nextValidate: 'Validate the current output and save progress.',
+    nextSettle: 'Save progress, then continue to the next stage or finish.',
+    nextRecover: 'Resolve the execution failure, then continue the task.',
+    nextApproval: 'Review the approval request and decide whether to continue.',
+    nextCompleted: 'Review the final outcome and outputs.',
+    nextResolvedUpstream: 'No further repair is required. Keep the record or archive this task.',
     issueDescription: 'Issue description',
     loadingIssueDescription: 'Loading issue description...',
     issueDescriptionUnavailable: 'Issue description is temporarily unavailable.',
+    publishApprovalTitle: 'Publish the fix and create a pull request?',
+    publishApprovalSummary: 'The fix is prepared on branch {branch} at commit {commit} for {repository}. Your approval is required before publishing it.',
+    publishApprovalSummaryGeneric: 'The fix and publishing materials are ready for {repository}. Your approval is required before creating the pull request.',
+    publishApprovalApproveEffect: 'Push the fix branch, create a pull request, then continue with macOS host verification. Approval does not merge code automatically.',
+    publishApprovalRejectEffect: 'Do not push the branch or create a pull request. Keep the local branch, commit, and validation results, and stop at this step.',
+    publishApprovalRecommendationReady: 'Recommended: approve. The change has validation results and remains reviewable in the pull request; it will not be merged automatically.',
+    publishApprovalRecommendationReview: 'Review the change and validation results first. Approval publishes a pull request but does not merge it automatically.',
+    publishApprovalApprove: 'Approve and create PR',
+    publishApprovalReject: 'Keep local only',
+    autonomyApprovalTitle: 'The repair is not finished. Continue?',
+    autonomyApprovalSummaryAnalyzed: 'The issue has been analyzed and a clear direction is available, but implementation and validation are not complete.',
+    autonomyApprovalSummaryImplemented: 'Repair changes are available, but validation and final confirmation are not complete.',
+    autonomyApprovalApproveEffect: 'Continue repairing and validating, then report the result. This will not publish or merge code.',
+    autonomyApprovalRejectEffect: 'Pause work and preserve the current workspace, changes, and investigation results.',
+    autonomyApprovalRecommendation: 'Recommendation: continue. The direction is clear and the remaining work is implementation and validation.',
+    continueRepair: 'Continue repair',
+    pauseProcessing: 'Pause for now',
+    genericApprovalTitle: 'Allow the task to take the next step?',
+    genericApprovalSummary: 'The task reached an operation that requires human confirmation. Review the effects below before deciding.',
+    genericApprovalApproveEffect: 'Allow this operation and continue the remaining workflow.',
+    genericApprovalRejectEffect: 'Do not perform this operation. Preserve existing changes and progress, and stop at this step.',
+    genericApprovalRecommendation: 'Recommendation: approve only when the operation scope matches your expectation. Otherwise reject it and note what information is missing.',
+    outcomeWaiting: 'Code changes and available validation results are saved. The task is waiting for your decision before taking the next step.',
+    outcomeRecovery: 'Execution was interrupted. Existing investigation results and changes are preserved and can resume from the current progress.',
+    outcomeCompleted: 'The repair workflow is complete. Review the final outputs and validation results.',
+    outcomeResolvedUpstream: 'Current upstream code has removed the old failure path, so this task does not need another repair patch.',
+    outcomeValidated: 'The repair changes are ready and have reached validation or a follow-up operation.',
+    outcomeImplemented: 'Code changes are ready. Validation and final outcome work are still in progress.',
+    outcomeAnalyzed: 'Issue analysis is complete. The repair approach is being finalized or implemented.',
+    outcomeQueued: 'The task is created and waiting for its workspace or repository execution slot.',
+    outcomeStarted: 'The task has started. Progress will continue to update here.',
     justNow: 'just now',
     seconds: '{value}s',
     minutes: '{value}m',
@@ -412,7 +674,7 @@ const COPY = {
     deadlinePassed: 'Deadline passed by {duration}',
     deadlineRemaining: '{duration} remaining',
     intakeUnavailable: 'Tasks cannot be created from this execution location.',
-    bridgeUnavailable: 'The host did not expose the trusted LoopX controller. Update BitFun and try again.',
+    bridgeUnavailable: 'The host did not expose the trusted LoopX runtime interface. Update BitFun and try again.',
     selectAtLeastOne: 'Select at least one open issue or pull request.',
     selectAll: 'Select all',
     selectPermissions: 'Confirm the permission scopes required by this run.',
@@ -430,6 +692,8 @@ const COPY = {
     liveVerification: 'The target needs another live verification before a task can be created.',
     retryRequired: 'A terminal task exists. Confirm before creating a new attempt.',
     actionApplied: 'Action applied.',
+    approvalSubmitting: 'Submitting the decision. The task will continue after host confirmation.',
+    approvalSubmittingShort: 'Submitting decision...',
     actionPending: 'Applying action',
     pausePending: 'Pausing',
     resumePending: 'Continuing',
@@ -441,6 +705,15 @@ const COPY = {
     logsExported: 'Logs exported.',
     noGate: 'No answerable approval gate was found. Refresh the task state.',
     approvalNeeded: 'The task is waiting at an approval gate that can be answered remotely.',
+    continueInvestigation: 'Continue investigation',
+    stopTask: 'Stop task',
+    activityInstallingDependencies: 'Preparing project dependencies',
+    activityBuildingInstaller: 'Building the Windows installer',
+    activityTestingUpgrade: 'Validating the installer upgrade path',
+    activityWaitingProcess: 'Waiting for an external process to finish',
+    activitySyncingProgress: 'Synchronizing durable progress',
+    activityCheckingRepository: 'Checking repository state',
+    activityRunningCommand: 'Running a project command',
     coreBlocked: 'The core environment is not ready, so execution will not start silently.',
     optionalDegraded: 'Optional capabilities are unavailable; the core fix flow can continue.',
     truncatedCandidates: 'The candidate list was truncated. Narrow the repository scope and analyze again.',
@@ -454,7 +727,7 @@ const COPY = {
     taskNumber: 'Task {value}',
     eventCount: '{value} events',
     allSources: 'All sources',
-    sidecar: 'LoopX sidecar',
+    sidecar: 'LoopX engine',
     gitWorktree: 'Git / Worktree',
     agentModel: 'Agent model',
     pythonFallback: 'Python fallback',
@@ -474,22 +747,23 @@ const COPY = {
     state_retry_wait: 'Retry wait',
     state_cancelling: 'Stopping',
     state_stopped: 'Paused',
-    state_recovery_required: 'Recovery required',
+    state_recovery_required: 'Interrupted',
     state_completed: 'Completed',
     state_failed: 'Failed',
     state_archived: 'Archived',
+    state_resolved_upstream: 'Resolved upstream',
     phase_unknown: 'Waiting for host state',
     phase_validating_environment: 'Validating environment',
     phase_resolving_intake: 'Resolving intake',
-    phase_preparing_workspace: 'Preparing worktree',
-    phase_creating_goal: 'Creating goal',
+    phase_preparing_workspace: 'Preparing an isolated workspace',
+    phase_creating_goal: 'Preparing the task objective',
     phase_queued: 'Waiting for scheduler',
-    phase_inspecting_goal: 'Inspecting goal',
+    phase_inspecting_goal: 'Reviewing the task objective',
     phase_building_turn: 'Building turn',
-    phase_starting_agent: 'Starting agent',
-    phase_agent_running: 'Agent running',
-    phase_validating_progress: 'Validating durable progress',
-    phase_settling_turn: 'Settling turn',
+    phase_starting_agent: 'Starting the repair task',
+    phase_agent_running: 'Analyzing or modifying code',
+    phase_validating_progress: 'Validating results',
+    phase_settling_turn: 'Saving progress',
     phase_waiting_for_approval: 'Waiting for approval',
     phase_retry_backoff: 'Retry backoff',
     phase_cancelling: 'Cancelling',
@@ -515,13 +789,19 @@ const view = {
   connectionLabel: byId('connection-label'),
   intakeForm: byId('intake-form'),
   intakeInput: byId('intake-input'),
+  intakeHistory: byId('intake-history'),
   modelSelect: byId('model-select'),
   resolveButton: byId('resolve-button'),
   resetLoopx: byId('reset-loopx'),
-  syncButton: byId('sync-button'),
   notice: byId('notice'),
   unsupportedBanner: byId('unsupported-banner'),
   unsupportedReason: byId('unsupported-reason'),
+  approvalAlert: byId('approval-alert'),
+  approvalAlertTitle: byId('approval-alert-title'),
+  approvalAlertMessage: byId('approval-alert-message'),
+  approvalAlertOpen: byId('approval-alert-open'),
+  approvalAlertReject: byId('approval-alert-reject'),
+  approvalAlertApprove: byId('approval-alert-approve'),
   environmentPanel: byId('environment-panel'),
   environmentDot: byId('environment-dot'),
   environmentStatus: byId('environment-status'),
@@ -533,7 +813,6 @@ const view = {
   railSplitter: byId('rail-splitter'),
   collapseTasks: byId('collapse-tasks'),
   taskCount: byId('task-count'),
-  decisionCount: byId('decision-count'),
   repositoryActions: byId('repository-actions'),
   resumeRepository: byId('resume-repository'),
   repositoryActionsMeta: byId('repository-actions-meta'),
@@ -543,29 +822,35 @@ const view = {
   logTitle: byId('log-title'),
   selectedState: byId('selected-state'),
   selectedSummary: byId('selected-summary'),
-  modeKey: byId('mode-key'),
-  modeFull: byId('mode-full'),
-  modeOutput: byId('mode-output'),
-  logSearch: byId('log-search'),
-  errorsOnly: byId('errors-only'),
-  exportLogs: byId('export-logs'),
-  livenessPanel: byId('liveness-panel'),
-  livenessDot: byId('liveness-dot'),
-  livenessPhase: byId('liveness-phase'),
-  livenessSince: byId('liveness-since'),
-  livenessTurn: byId('liveness-turn'),
-  livenessTool: byId('liveness-tool'),
-  livenessDeadline: byId('liveness-deadline'),
-  livenessGoal: byId('liveness-goal'),
-  livenessError: byId('liveness-error'),
-  livenessItem: byId('liveness-item'),
+  issueLink: byId('issue-link'),
+  issueNumber: byId('issue-number'),
+  issueApprovalPanel: byId('issue-approval-panel'),
+  issueApprovalTitle: byId('issue-approval-title'),
+  issueApprovalSummary: byId('issue-approval-summary'),
+  issueApprovalApproveEffect: byId('issue-approval-approve-effect'),
+  issueApprovalRejectEffect: byId('issue-approval-reject-effect'),
+  issueApprovalRecommendation: byId('issue-approval-recommendation'),
+  issueApprovalNote: byId('issue-approval-note'),
+  issueApprovalReject: byId('issue-approval-reject'),
+  issueApprovalApprove: byId('issue-approval-approve'),
+  issueProgressPanel: byId('issue-progress-panel'),
+  issueProgressMeta: byId('issue-progress-meta'),
+  issueStageList: byId('issue-stage-list'),
+  issueCurrentHeading: byId('issue-current-heading'),
+  issueCurrentDetail: byId('issue-current-detail'),
+  issueEvidenceList: byId('issue-evidence-list'),
+  issueNextAction: byId('issue-next-action'),
+  issueOutcomePanel: byId('issue-outcome-panel'),
+  issueOutcomeMeta: byId('issue-outcome-meta'),
+  issueOutcome: byId('issue-outcome'),
   issueDescriptionPanel: byId('issue-description-panel'),
-  livenessDescription: byId('liveness-description'),
+  issueDescription: byId('issue-description'),
   taskActions: byId('task-actions'),
   logScroll: byId('log-scroll'),
   logEmpty: byId('log-empty'),
   logList: byId('log-list'),
   newEvents: byId('new-events'),
+  issueDetailDialog: byId('issue-detail-dialog'),
   intakeDialog: byId('intake-dialog'),
   intakeConfirmForm: byId('intake-confirm-form'),
   intakeDialogTitle: byId('intake-dialog-title'),
@@ -583,14 +868,6 @@ const view = {
   retryMessage: byId('retry-message'),
   retryCancel: byId('retry-cancel'),
   retryConfirm: byId('retry-confirm'),
-  gateDialog: byId('gate-dialog'),
-  gateForm: byId('gate-form'),
-  gateTitle: byId('gate-dialog-title'),
-  gateMessage: byId('gate-message'),
-  gateNote: byId('gate-note'),
-  gateCancel: byId('gate-cancel'),
-  gateReject: byId('gate-reject'),
-  gateApprove: byId('gate-approve'),
   repositoryResumeDialog: byId('repository-resume-dialog'),
   repositoryResumeMessage: byId('repository-resume-message'),
   repositoryResumeCancel: byId('repository-resume-cancel'),
@@ -606,21 +883,26 @@ const state = {
   events: [],
   eventKeys: new Set(),
   selectedTaskId: null,
-  logMode: 'full',
-  query: '',
-  errorsOnly: false,
   followLogs: true,
   preview: null,
   pendingCreate: null,
   pendingRetry: null,
-  gate: null,
+  approvalTaskId: null,
+  promptedGateIds: new Set(),
+  pendingApprovalPrompt: false,
   syncing: false,
   syncRequested: false,
+  pendingResumeSignal: false,
+  lastClockSampleAt: Date.now(),
+  lastHostSignalAt: Date.now(),
+  lastReattachAt: 0,
   gapRecovery: null,
   connected: false,
   railCollapsed: false,
-  taskGroupOpen: {},
-  visibleEvents: [],
+  intakeHistory: [],
+  outputHistory: [],
+  outputKeys: new Set(),
+  outputCharacters: 0,
   turnOutput: {
     taskId: null,
     turnId: null,
@@ -717,7 +999,14 @@ function isWorkspacePreparationFailure(task) {
   return Boolean(task && task.error && !task.workspacePath && !task.goalId);
 }
 
+function isResolvedUpstream(task) {
+  const summary = String(task && task.lastAgentSummary || '');
+  return /covered[-_ ]?upstream.{0,80}no[-_ ]?follow[-_ ]?up/is.test(summary)
+    || /原始故障路径.{0,40}(?:消失|移除).{0,120}(?:不开\s*PR|无需.{0,20}修复)/is.test(summary);
+}
+
 function taskStateLabel(task) {
+  if (isResolvedUpstream(task)) return stateLabel('resolved_upstream');
   return isWorkspacePreparationFailure(task) ? stateLabel('failed') : stateLabel(task && task.state);
 }
 
@@ -728,6 +1017,7 @@ function pendingActionFor(task) {
 function taskVisualState(task) {
   const pending = pendingActionFor(task);
   if (pending === 'pause' || pending === 'abort') return 'cancelling';
+  if (isResolvedUpstream(task)) return 'completed';
   return isWorkspacePreparationFailure(task)
     ? 'failed'
     : ((task && task.state) || 'recovery_required');
@@ -791,11 +1081,62 @@ function writeStoredModelSelection(value) {
   }
 }
 
+function renderIntakeHistory() {
+  if (!view.intakeHistory) return;
+  const fragment = document.createDocumentFragment();
+  state.intakeHistory.forEach((url) => {
+    const option = document.createElement('option');
+    option.value = url;
+    fragment.append(option);
+  });
+  view.intakeHistory.replaceChildren(fragment);
+}
+
+async function loadIntakeHistory() {
+  if (!app || !app.storage || typeof app.storage.get !== 'function') return;
+  try {
+    const stored = await app.storage.get(INTAKE_HISTORY_STORAGE_KEY);
+    state.intakeHistory = Array.isArray(stored)
+      ? stored.filter((value) => typeof value === 'string' && value.trim()).slice(0, MAX_INTAKE_HISTORY)
+      : [];
+    renderIntakeHistory();
+  } catch (_error) {
+    state.intakeHistory = [];
+  }
+}
+
+async function rememberIntake(value) {
+  const url = String(value || '').trim();
+  if (!url) return;
+  state.intakeHistory = [
+    url,
+    ...state.intakeHistory.filter((entry) => entry.toLowerCase() !== url.toLowerCase()),
+  ].slice(0, MAX_INTAKE_HISTORY);
+  renderIntakeHistory();
+  if (!app || !app.storage || typeof app.storage.set !== 'function') return;
+  try {
+    await app.storage.set(INTAKE_HISTORY_STORAGE_KEY, state.intakeHistory);
+  } catch (_error) {
+    // Input history remains available for the current session.
+  }
+}
+
 function currentModelSelection() {
   const stored = readStoredModelSelection();
   const selected = view.modelSelect && view.modelSelect.value ? view.modelSelect.value : '';
   if (selected && (selected !== 'auto' || !stored || stored === 'auto')) return selected;
   return stored || selected || 'auto';
+}
+
+function describeModelOption(model) {
+  const displayName = String(model.name || model.modelName || model.id || '').trim();
+  const modelName = String(model.modelName || '').trim();
+  const provider = String(model.provider || '').trim();
+  const primary = displayName || modelName || model.id;
+  const details = [];
+  if (modelName && modelName !== primary) details.push(modelName);
+  if (provider && provider !== primary && provider !== modelName) details.push(provider);
+  return details.length > 0 ? `${primary} (${details.join(' · ')})` : primary;
 }
 
 function setButtonBusy(button, busy) {
@@ -872,11 +1213,11 @@ function selectedTask() {
 
 function runningOutputTask() {
   const selected = selectedTask();
-  if (selected && selected.state === 'running') return selected;
+  if (selected && selected.state === 'running' && selected.phase === 'agent_running') return selected;
   const tasks = state.snapshot && Array.isArray(state.snapshot.tasks)
     ? state.snapshot.tasks
     : [];
-  return tasks.find((task) => task.state === 'running') || null;
+  return tasks.find((task) => task.state === 'running' && task.phase === 'agent_running') || null;
 }
 
 function resetTurnOutput(task) {
@@ -908,7 +1249,6 @@ function clearTurnOutputTimer() {
 
 function scheduleTurnOutputPoll(delay = 1200) {
   clearTurnOutputTimer();
-  if (state.logMode !== 'output') return;
   const task = runningOutputTask();
   if (!task || !app || !app.loopx || typeof app.loopx.turnOutputSince !== 'function') return;
   state.turnOutput.timer = setTimeout(() => {
@@ -948,6 +1288,29 @@ function replaceStreamEvents(streamId) {
   state.eventKeys = new Set(state.events.map((event) => `${event.streamId}:${event.cursor}`));
 }
 
+function clearRunUiState() {
+  state.events = [];
+  state.eventKeys.clear();
+  state.selectedTaskId = null;
+  state.preview = null;
+  state.pendingCreate = null;
+  state.pendingRetry = null;
+  state.approvalTaskId = null;
+  state.promptedGateIds.clear();
+  state.pendingApprovalPrompt = false;
+  state.repositoryResumeTarget = null;
+  state.repositoryResumePending = false;
+  state.taskActionPending.clear();
+  state.itemMetadata.clear();
+  state.metadataRequests.clear();
+  state.outputHistory = [];
+  state.outputKeys.clear();
+  state.outputCharacters = 0;
+  clearTurnOutputTimer();
+  resetTurnOutput(null);
+  if (view.issueDetailDialog.open) view.issueDetailDialog.close();
+}
+
 async function replayEvents(streamId, afterCursor, historical = false) {
   let cursor = afterCursor;
   let pageCount = 0;
@@ -975,7 +1338,7 @@ async function replayEvents(streamId, afterCursor, historical = false) {
 }
 
 async function refreshTurnOutput() {
-  if (state.turnOutput.inFlight || state.logMode !== 'output') return;
+  if (state.turnOutput.inFlight) return;
   const task = runningOutputTask();
   if (!task) {
     resetTurnOutput(null);
@@ -1018,10 +1381,34 @@ async function refreshTurnOutput() {
       if (!Number.isSafeInteger(event.cursor)) return;
       if (state.turnOutput.events.some((existing) => existing.cursor === event.cursor)) return;
       state.turnOutput.events.push(event);
+      const turnId = event.turnId || page.turnId || state.turnOutput.turnId || '';
+      const outputKey = `${task.taskId}:${turnId}:${event.cursor}`;
+      if (!state.outputKeys.has(outputKey)) {
+        const rawText = event.text == null ? '' : String(event.text);
+        const boundedText = rawText.length <= MAX_OUTPUT_EVENT_CHARS
+          ? rawText
+          : `${rawText.slice(0, MAX_OUTPUT_EVENT_CHARS / 2)}\n...\n${rawText.slice(-MAX_OUTPUT_EVENT_CHARS / 2)}`;
+        state.outputKeys.add(outputKey);
+        state.outputHistory.push({
+          ...event,
+          text: boundedText,
+          taskId: task.taskId,
+          turnId,
+        });
+        state.outputCharacters += boundedText.length;
+      }
     });
     state.turnOutput.events.sort((left, right) => left.cursor - right.cursor);
     while (state.turnOutput.events.length > MAX_TURN_OUTPUT_EVENTS) {
       state.turnOutput.events.shift();
+    }
+    while (
+      state.outputHistory.length > MAX_OUTPUT_HISTORY_EVENTS
+      || state.outputCharacters > MAX_OUTPUT_HISTORY_CHARS
+    ) {
+      const removed = state.outputHistory.shift();
+      state.outputKeys.delete(`${removed.taskId}:${removed.turnId || ''}:${removed.cursor}`);
+      state.outputCharacters = Math.max(0, state.outputCharacters - String(removed.text || '').length);
     }
     state.turnOutput.cursor = Math.max(
       state.turnOutput.cursor,
@@ -1044,47 +1431,63 @@ function applySnapshot(snapshot) {
     throw new Error('The host returned an invalid LoopX snapshot.');
   }
   const previousStreamId = state.snapshot && state.snapshot.streamId;
+  const streamChanged = previousStreamId && previousStreamId !== snapshot.streamId;
   state.snapshot = snapshot;
-  if (previousStreamId && previousStreamId !== snapshot.streamId) {
+  if (streamChanged) {
+    clearRunUiState();
+  } else {
     replaceStreamEvents(snapshot.streamId);
   }
   if (state.selectedTaskId && !taskForId(state.selectedTaskId)) {
     state.selectedTaskId = null;
+    if (view.issueDetailDialog.open) view.issueDetailDialog.close();
   }
   state.connected = true;
+  state.lastHostSignalAt = Date.now();
   view.connectionLabel.textContent = text('connected');
   view.root.setAttribute('aria-busy', 'false');
   renderAll();
+  if (state.pendingApprovalPrompt) {
+    syncApprovalAttention(true);
+    if (currentApprovalAttention()) state.pendingApprovalPrompt = false;
+  }
 }
 
-async function attachSnapshot(loadHistory = false) {
+async function attachSnapshot(loadHistory = false, resumeDetected = false) {
   if (!app || !app.loopx) {
     showBridgeUnavailable();
     return;
   }
+  if (resumeDetected) state.pendingResumeSignal = true;
   if (state.syncing) {
     state.syncRequested = true;
     return;
   }
   state.syncing = true;
-  setButtonBusy(view.syncButton, true);
   if (!view.repositoryActions.hidden) view.resumeRepository.disabled = true;
   try {
     do {
       state.syncRequested = false;
+      const reportResume = state.pendingResumeSignal;
+      state.pendingResumeSignal = false;
       const knownStreamId = state.snapshot && state.snapshot.streamId;
       const afterCursor = state.snapshot && state.snapshot.cursor;
       if (!state.connected) view.connectionLabel.textContent = text('connecting');
       const response = await app.loopx.attach({
         ...(knownStreamId ? { knownStreamId } : {}),
         ...(Number.isSafeInteger(afterCursor) ? { afterCursor } : {}),
+        ...(reportResume ? { resumeDetected: true } : {}),
       });
+      state.lastReattachAt = Date.now();
       applySnapshot(response && response.snapshot);
       void loadModelCatalog();
       const snapshot = state.snapshot;
       if (loadHistory && state.events.length === 0 && snapshot.cursor > 0) {
         const replay = await replayEvents(snapshot.streamId, 0, true);
-        if (replay.changed) renderLogs();
+        if (replay.changed) {
+          renderLogs();
+          syncApprovalAttention(true);
+        }
       }
     } while (state.syncRequested);
   } catch (error) {
@@ -1093,7 +1496,6 @@ async function attachSnapshot(loadHistory = false) {
     showNotice(errorMessage(error), 'error');
   } finally {
     state.syncing = false;
-    setButtonBusy(view.syncButton, false);
     const tasks = state.snapshot && Array.isArray(state.snapshot.tasks)
       ? state.snapshot.tasks
       : [];
@@ -1133,6 +1535,7 @@ async function recoverEventGap(event) {
 function onLoopxEvent(payload) {
   const event = payload && payload.event ? payload.event : payload;
   if (!validEvent(event)) return;
+  state.lastHostSignalAt = Date.now();
   if (event.kind === 'snapshot_invalidated' && event.cursor === 0) {
     state.syncRequested = true;
     queueMicrotask(() => void attachSnapshot(false));
@@ -1148,9 +1551,11 @@ function onLoopxEvent(payload) {
     return;
   }
   const changed = addEvent(event);
+  if (event.kind === 'approval_required') state.pendingApprovalPrompt = true;
   state.snapshot.cursor = Math.max(cursor, event.cursor);
   if (changed) {
     renderLogs();
+    if (event.kind === 'approval_required') syncApprovalAttention(true);
   }
   if (SNAPSHOT_EVENT_KINDS.has(event.kind)) {
     state.syncRequested = true;
@@ -1172,12 +1577,12 @@ function renderExecutionSupport() {
   const snapshot = state.snapshot;
   const supported = snapshotSupported();
   const environmentStatus = snapshot && snapshot.environment && snapshot.environment.status;
-  const coreReady = environmentStatus === 'ready' || environmentStatus === 'degraded';
+  const environmentBusyOrBlocked = environmentStatus === 'checking' || environmentStatus === 'blocked';
   view.unsupportedBanner.hidden = !snapshot || supported;
   if (snapshot && !supported) {
     view.unsupportedReason.textContent = snapshot.unsupportedReason || text('unsupportedDefault');
   }
-  view.resolveButton.disabled = !supported || !coreReady;
+  view.resolveButton.disabled = !supported || environmentBusyOrBlocked || state.resetPending;
   view.retryEnvironment.disabled = !supported;
 }
 
@@ -1227,8 +1632,8 @@ function renderEnvironment() {
   );
 }
 
-const DECISION_TASK_STATES = new Set(['waiting_for_user']);
 const ERROR_TASK_STATES = new Set(['recovery_required', 'failed']);
+const RECOVERABLE_TASK_STATES = new Set(['stopped', ...ERROR_TASK_STATES]);
 const ACTIVE_TASK_STATES = new Set([
   'running',
   'preparing',
@@ -1243,18 +1648,8 @@ function repositoryKey(repository) {
     : '';
 }
 
-function taskGroupKey(task) {
-  if (DECISION_TASK_STATES.has(task.state)) return 'decision';
-  if (ERROR_TASK_STATES.has(task.state)) return 'error';
-  if (ACTIVE_TASK_STATES.has(task.state)) return 'active';
-  if (QUEUED_TASK_STATES.has(task.state)) return 'queued';
-  if (task.state === 'stopped') return 'paused';
-  if (task.state === 'archived') return 'archived';
-  if (task.state === 'completed') return 'completed';
-  return 'error';
-}
-
 function taskSortPriority(task) {
+  if (isResolvedUpstream(task)) return 20;
   const priorities = {
     running: 0,
     waiting_for_user: 1,
@@ -1311,28 +1706,11 @@ function activeWorkEmptyMessage() {
   return text('mainProgressWaiting');
 }
 
-function taskStatusIcon(task) {
-  const status = isWorkspacePreparationFailure(task) ? 'failed' : task.state;
-  const symbols = {
-    running: '▶',
-    preparing: '…',
-    queued: '◷',
-    retry_wait: '◷',
-    waiting_for_user: '?',
-    cancelling: '■',
-    recovery_required: '↻',
-    failed: '!',
-    stopped: 'Ⅱ',
-    completed: '✓',
-    archived: '□',
-  };
-  return { status, symbol: symbols[status] || '•' };
-}
-
 function recoverableTasksForRepository(tasks, repository) {
   const key = repositoryKey(repository);
   return tasks.filter((task) =>
-    ERROR_TASK_STATES.has(task.state)
+    RECOVERABLE_TASK_STATES.has(task.state)
+    && !isResolvedUpstream(task)
     && repositoryKey(task.identity && task.identity.item && task.identity.item.repository) === key);
 }
 
@@ -1340,7 +1718,7 @@ function renderRepositoryActions(tasks) {
   const selected = selectedTask();
   const eligibleRepositories = new Map();
   tasks.forEach((task) => {
-    if (!ERROR_TASK_STATES.has(task.state)) return;
+    if (!RECOVERABLE_TASK_STATES.has(task.state) || isResolvedUpstream(task)) return;
     const repository = task.identity && task.identity.item && task.identity.item.repository;
     const key = repositoryKey(repository);
     if (key && !eligibleRepositories.has(key)) eligibleRepositories.set(key, repository);
@@ -1351,9 +1729,9 @@ function renderRepositoryActions(tasks) {
     && selected.identity.item.repository;
   const repository = selectedRepository && eligibleRepositories.has(repositoryKey(selectedRepository))
     ? selectedRepository
-    : (eligibleRepositories.size === 1 ? [...eligibleRepositories.values()][0] : null);
+    : ([...eligibleRepositories.values()][0] || null);
   const eligible = repository ? recoverableTasksForRepository(tasks, repository) : [];
-  state.repositoryResumeTarget = repository && eligible.length > 1
+  state.repositoryResumeTarget = repository && eligible.length > 0
     ? { repository, tasks: eligible }
     : null;
   view.repositoryActions.hidden = !state.repositoryResumeTarget;
@@ -1381,13 +1759,6 @@ function taskButton(task) {
   button.dataset.taskId = task.taskId;
   button.setAttribute('aria-pressed', String(task.taskId === state.selectedTaskId));
 
-  const icon = document.createElement('span');
-  icon.className = 'task-item__icon';
-  icon.setAttribute('aria-hidden', 'true');
-  const statusIcon = taskStatusIcon(task);
-  icon.dataset.status = statusIcon.status;
-  icon.textContent = statusIcon.symbol;
-
   const main = document.createElement('span');
   main.className = 'task-item__main';
   const label = document.createElement('strong');
@@ -1398,16 +1769,6 @@ function taskButton(task) {
   const activity = task.lastOutputAt || task.updatedAt;
   meta.textContent = `${repositoryLabel(item && item.repository)} · ${compactItemLabel(item)} · ${relativeLabel(activity)}`;
   main.append(label, meta);
-  const gate = task.state === 'waiting_for_user' ? latestGate(task.taskId) : null;
-  const reasonText = gate && gate.event.message
-    ? gate.event.message
-    : (ERROR_TASK_STATES.has(task.state) ? task.error : '');
-  if (reasonText) {
-    const reason = document.createElement('small');
-    reason.className = 'task-item__reason';
-    reason.textContent = reasonText;
-    main.append(reason);
-  }
   if (task.state === 'queued') {
     const reason = latestTaskWaitReason(task);
     if (reason) main.title = reason;
@@ -1423,122 +1784,162 @@ function taskButton(task) {
   if (pendingAction) {
     taskState.classList.add('task-item__hint', 'task-item__hint--pending');
     taskState.textContent = taskStateDisplayLabel(task);
-  } else if (task.state === 'waiting_for_user' || ERROR_TASK_STATES.has(visualState)) {
-    taskState.classList.add('task-item__hint');
-    taskState.textContent = task.state === 'waiting_for_user'
-      ? text('approvalGate')
-      : text('viewError');
-  } else if (visualState === 'running') {
-    taskState.classList.add('task-item__hint', 'task-item__hint--running');
-    taskState.textContent = text('runningNow');
   } else {
-    taskState.classList.add('status-dot');
+    taskState.classList.add('task-item__hint');
+    if (visualState === 'running') taskState.classList.add('task-item__hint--running');
+    taskState.textContent = taskStateDisplayLabel(task);
   }
   taskState.title = taskStateDisplayLabel(task);
   button.setAttribute('aria-label', `${label.textContent}, ${taskStateDisplayLabel(task)}`);
-  button.append(icon, main, taskState);
+  const compact = document.createElement('span');
+  compact.className = 'task-item__compact';
+  compact.textContent = item && item.number ? `#${item.number}` : shortId(task.taskId);
+  button.append(main, compact, taskState);
   button.addEventListener('click', () => selectTask(task.taskId));
   return button;
-}
-
-function updateTaskGroupHeading(heading, definition, count, open) {
-  if (!definition.collapsible) return;
-  const toggle = heading.querySelector('.task-group__toggle');
-  if (toggle) toggle.textContent = text(open ? 'collapseGroup' : 'expandGroup');
-  const title = text(open ? 'collapseGroupTitle' : 'expandGroupTitle', {
-    label: definition.label,
-    count,
-  });
-  heading.title = title;
-  heading.setAttribute('aria-label', title);
-  heading.setAttribute('aria-expanded', String(open));
 }
 
 function renderTasks() {
   const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
   const fragment = document.createDocumentFragment();
-  const definitions = [
-    { key: 'decision', label: text('groupDecision'), collapsible: false },
-    { key: 'error', label: text('groupError'), collapsible: false },
-    { key: 'active', label: text('groupActive'), collapsible: false },
-    { key: 'queued', label: text('groupQueued'), collapsible: true },
-    { key: 'paused', label: text('groupPaused'), collapsible: true },
-    { key: 'completed', label: text('groupCompleted'), collapsible: true },
-    { key: 'archived', label: text('groupArchived'), collapsible: true },
-  ];
-  definitions.forEach((definition) => {
-    const grouped = sortedTaskList(tasks.filter((task) => taskGroupKey(task) === definition.key));
-    if (!grouped.length) return;
-    const group = document.createElement(definition.collapsible ? 'details' : 'section');
-    group.className = 'task-group';
-    group.dataset.group = definition.key;
-    if (definition.collapsible) {
-      const saved = Object.prototype.hasOwnProperty.call(state.taskGroupOpen, definition.key)
-        ? state.taskGroupOpen[definition.key]
-        : undefined;
-      group.open = saved === undefined
-        ? grouped.some((task) => task.taskId === state.selectedTaskId)
-        : Boolean(saved);
-    }
-    const heading = document.createElement(definition.collapsible ? 'summary' : 'div');
-    heading.className = 'task-group__heading';
-    const label = document.createElement('span');
-    label.className = 'task-group__label';
-    if (definition.collapsible) {
-      const chevron = document.createElement('span');
-      chevron.className = 'task-group__chevron';
-      chevron.setAttribute('aria-hidden', 'true');
-      label.append(chevron);
-    }
-    const labelText = document.createElement('span');
-    labelText.className = 'task-group__label-text';
-    labelText.textContent = definition.label;
-    label.append(labelText);
-    const meta = document.createElement('span');
-    meta.className = 'task-group__meta';
-    const count = document.createElement('span');
-    count.className = 'task-group__count';
-    count.textContent = String(grouped.length);
-    meta.append(count);
-    if (definition.collapsible) {
-      const toggle = document.createElement('span');
-      toggle.className = 'task-group__toggle';
-      meta.append(toggle);
-      group.addEventListener('toggle', () => {
-        state.taskGroupOpen[definition.key] = group.open;
-        updateTaskGroupHeading(heading, definition, grouped.length, group.open);
-      });
-    }
-    heading.append(label, meta);
-    if (definition.collapsible) {
-      updateTaskGroupHeading(heading, definition, grouped.length, group.open);
-    }
-    const items = document.createElement('div');
-    grouped.forEach((task) => items.append(taskButton(task)));
-    if (definition.key === 'error') group.append(heading, view.repositoryActions, items);
-    else group.append(heading, items);
-    fragment.append(group);
-  });
+  sortedTaskList(tasks).forEach((task) => fragment.append(taskButton(task)));
   view.taskItems.replaceChildren(fragment);
   view.taskCount.textContent = String(tasks.length);
-  const decisionCount = tasks.filter((task) => DECISION_TASK_STATES.has(task.state)).length;
-  view.decisionCount.hidden = decisionCount === 0;
-  view.decisionCount.textContent = String(decisionCount);
-  view.decisionCount.title = text('decisionCountTitle');
-  view.decisionCount.setAttribute('aria-label', `${text('decisionCountTitle')}: ${decisionCount}`);
   view.taskEmpty.hidden = tasks.length !== 0;
   renderRepositoryActions(tasks);
+  syncApprovalAttention(false);
 }
 
 function latestGate(taskId) {
+  const task = taskForId(taskId);
+  if (task && task.pendingGateId) {
+    const actionKind = task.pendingGateActionKind || '';
+    return {
+      gateId: task.pendingGateId,
+      actionKind,
+      event: {
+        message: task.pendingGateMessage || text('approvalNeeded'),
+        details: {
+          gateId: task.pendingGateId,
+          actionKind,
+          autonomousTurns: String(task.autonomousTurnsSinceReview || 4),
+        },
+      },
+    };
+  }
   for (let index = state.events.length - 1; index >= 0; index -= 1) {
     const event = state.events[index];
     if (event.taskId !== taskId || event.kind !== 'approval_required') continue;
     const details = event.details || {};
     const gateId = details.gateId || details.gate_id || details.id;
-    if (gateId) return { event, gateId };
+    if (gateId) {
+      return {
+        event,
+        gateId,
+        actionKind: details.actionKind || details.action_kind || '',
+      };
+    }
   }
   return null;
+}
+
+function currentApprovalAttention() {
+  const tasks = state.snapshot && Array.isArray(state.snapshot.tasks)
+    ? sortedTaskList(state.snapshot.tasks)
+    : [];
+  const task = tasks.find((candidate) => candidate.state === 'waiting_for_user') || null;
+  if (!task) return null;
+  return { task, gate: latestGate(task.taskId) };
+}
+
+function gateRawMessage(gate) {
+  return String(gate && gate.event && gate.event.message || '').trim();
+}
+
+function approvalPresentation(task, gate) {
+  const rawMessage = gateRawMessage(gate);
+  const actionKind = String(gate && gate.actionKind || '').toLowerCase();
+  if (actionKind === 'autonomous_budget_review') {
+    const evidence = taskProgressEvidence(task);
+    return {
+      title: text('autonomyApprovalTitle'),
+      summary: text(evidence.changes > 0
+        ? 'autonomyApprovalSummaryImplemented'
+        : 'autonomyApprovalSummaryAnalyzed'),
+      approveEffect: text('autonomyApprovalApproveEffect'),
+      rejectEffect: text('autonomyApprovalRejectEffect'),
+      recommendation: text('autonomyApprovalRecommendation'),
+      approveLabel: text('continueRepair'),
+      rejectLabel: text('pauseProcessing'),
+    };
+  }
+
+  const publishPullRequest = actionKind.includes('publish')
+    || actionKind.includes('pull_request')
+    || /\bpr bundle\b|(?:publish|push|creat(?:e|ing|ion)).{0,100}(?:pull request|\bpr\b)/i.test(rawMessage);
+  if (publishPullRequest) {
+    const branch = rawMessage.match(/\bbranch\s+([^,\s)]+)/i)?.[1] || '';
+    const commit = rawMessage.match(/\bcommit\s+([0-9a-f]{7,40})\b/i)?.[1] || '';
+    const messageRepository = rawMessage.match(/\bto\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=;|[\s.,]|$)/i)?.[1] || '';
+    const item = task && task.identity && task.identity.item;
+    const repository = messageRepository || repositoryLabel(item && item.repository) || '--';
+    const evidence = taskProgressEvidence(task);
+    const validated = evidence.validated || evidence.settled || /\b(?:validated|verified)\b/i.test(rawMessage);
+    return {
+      title: text('publishApprovalTitle'),
+      summary: branch && commit
+        ? text('publishApprovalSummary', { branch, commit, repository })
+        : text('publishApprovalSummaryGeneric', { repository }),
+      approveEffect: text('publishApprovalApproveEffect'),
+      rejectEffect: text('publishApprovalRejectEffect'),
+      recommendation: text(validated ? 'publishApprovalRecommendationReady' : 'publishApprovalRecommendationReview'),
+      approveLabel: text('publishApprovalApprove'),
+      rejectLabel: text('publishApprovalReject'),
+    };
+  }
+
+  return {
+    title: text('genericApprovalTitle'),
+    summary: text('genericApprovalSummary'),
+    approveEffect: text('genericApprovalApproveEffect'),
+    rejectEffect: text('genericApprovalRejectEffect'),
+    recommendation: text('genericApprovalRecommendation'),
+    approveLabel: text('approve'),
+    rejectLabel: text('reject'),
+  };
+}
+
+function syncApprovalAttention(autoOpen = false) {
+  const attention = currentApprovalAttention();
+  state.approvalTaskId = attention ? attention.task.taskId : null;
+  view.approvalAlert.hidden = !attention;
+  if (!attention) return;
+
+  const { task, gate } = attention;
+  const item = task.identity && task.identity.item;
+  const presentation = approvalPresentation(task, gate);
+  view.approvalAlertTitle.textContent = `${identityTitleOf(task) || itemLabel(item)} · ${text('decisionRequired')}`;
+  view.approvalAlertOpen.title = presentation.summary;
+  view.approvalAlertOpen.setAttribute('aria-label', `${presentation.title} ${presentation.summary}`);
+  const pending = Boolean(pendingActionFor(task));
+  view.approvalAlertMessage.textContent = pending
+    ? text('approvalSubmitting')
+    : `${presentation.title} ${presentation.summary}`;
+  view.approvalAlertReject.textContent = presentation.rejectLabel;
+  view.approvalAlertApprove.textContent = pending ? text('approvalSubmittingShort') : presentation.approveLabel;
+  view.approvalAlertReject.disabled = pending || !gate;
+  view.approvalAlertApprove.disabled = pending || !gate;
+
+  if (
+    autoOpen
+    && gate
+    && !state.promptedGateIds.has(gate.gateId)
+  ) {
+    state.promptedGateIds.add(gate.gateId);
+    const anotherDialogOpen = [...document.querySelectorAll('dialog[open]')]
+      .some((dialog) => dialog !== view.issueDetailDialog);
+    if (!anotherDialogOpen) selectTask(task.taskId);
+  }
 }
 
 function makeActionButton(label, action, task, tone) {
@@ -1550,8 +1951,7 @@ function makeActionButton(label, action, task, tone) {
   button.dataset.action = action;
   button.textContent = label;
   button.addEventListener('click', () => {
-    if (action === 'gate') openGateDialog(task);
-    else void performAction(action, task);
+    void performAction(action, task);
   });
   return button;
 }
@@ -1574,29 +1974,11 @@ function renderTaskActions(task) {
     view.taskActions.append(fragment);
     return;
   }
+  if (isResolvedUpstream(task)) {
+    return;
+  }
   if (['preparing', 'queued', 'running', 'retry_wait'].includes(task.state)) {
     fragment.append(makeActionButton(text('pause'), 'pause', task));
-  }
-  if (['stopped', 'recovery_required', 'failed'].includes(task.state)) {
-    const modelStatus = state.snapshot
-      && state.snapshot.environment
-      && state.snapshot.environment.core
-      && state.snapshot.environment.core.agentModel
-      && state.snapshot.environment.core.agentModel.status;
-    const modelBlocked = modelStatus === 'degraded' || modelStatus === 'unavailable';
-    const resumeButton = makeActionButton(
-      modelBlocked
-        ? text('fixModelBeforeContinue')
-        : (isWorkspacePreparationFailure(task) ? text('retry') : text('continueRun')),
-      'resume',
-      task,
-      'primary',
-    );
-    resumeButton.disabled = modelBlocked;
-    fragment.append(resumeButton);
-  }
-  if (task.state === 'waiting_for_user') {
-    fragment.append(makeActionButton(text('approvalGate'), 'gate', task));
   }
   if (['stopped', 'completed', 'failed'].includes(task.state)) {
     fragment.append(makeActionButton(text('archive'), 'archive', task));
@@ -1607,143 +1989,516 @@ function renderTaskActions(task) {
   view.taskActions.append(fragment);
 }
 
+function safeMarkdownUrl(rawUrl, baseUrl) {
+  try {
+    const url = new URL(rawUrl, baseUrl || undefined);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+  } catch (_error) {
+    return '';
+  }
+}
+
+function appendInlineMarkdown(parent, source, baseUrl) {
+  const pattern = /(`[^`\n]+`|\[[^\]\n]+\]\([^\s)]+\)|\*\*[^*\n]+\*\*|__[^_\n]+__)/g;
+  let cursor = 0;
+  for (const match of source.matchAll(pattern)) {
+    if (match.index > cursor) parent.append(document.createTextNode(source.slice(cursor, match.index)));
+    const token = match[0];
+    if (token.startsWith('`')) {
+      const code = document.createElement('code');
+      code.textContent = token.slice(1, -1);
+      parent.append(code);
+    } else if (token.startsWith('[')) {
+      const parts = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      const href = parts ? safeMarkdownUrl(parts[2], baseUrl) : '';
+      if (parts && href) {
+        const link = document.createElement('a');
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = parts[1];
+        parent.append(link);
+      } else {
+        parent.append(document.createTextNode(token));
+      }
+    } else {
+      const strong = document.createElement('strong');
+      strong.textContent = token.slice(2, -2);
+      parent.append(strong);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < source.length) parent.append(document.createTextNode(source.slice(cursor)));
+}
+
+function renderMarkdown(target, source, baseUrl) {
+  const fragment = document.createDocumentFragment();
+  const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+  let list = null;
+  let code = null;
+  let paragraph = null;
+  const closeParagraph = () => { paragraph = null; };
+  const closeList = () => { list = null; };
+  lines.forEach((line) => {
+    if (/^```/.test(line)) {
+      closeParagraph();
+      closeList();
+      if (code) {
+        code = null;
+      } else {
+        const pre = document.createElement('pre');
+        code = document.createElement('code');
+        pre.append(code);
+        fragment.append(pre);
+      }
+      return;
+    }
+    if (code) {
+      code.append(document.createTextNode(`${code.textContent ? '\n' : ''}${line}`));
+      return;
+    }
+    if (!line.trim()) {
+      closeParagraph();
+      closeList();
+      return;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      closeParagraph();
+      closeList();
+      const element = document.createElement(`h${Math.min(heading[1].length + 2, 6)}`);
+      appendInlineMarkdown(element, heading[2], baseUrl);
+      fragment.append(element);
+      return;
+    }
+    const listItem = line.match(/^\s*(?:[-*+] |\d+\. )(.+)$/);
+    if (listItem) {
+      closeParagraph();
+      if (!list) {
+        list = document.createElement(/^\s*\d+\./.test(line) ? 'ol' : 'ul');
+        fragment.append(list);
+      }
+      const item = document.createElement('li');
+      appendInlineMarkdown(item, listItem[1], baseUrl);
+      list.append(item);
+      return;
+    }
+    closeList();
+    const quote = line.match(/^>\s?(.*)$/);
+    if (quote) {
+      closeParagraph();
+      const element = document.createElement('blockquote');
+      appendInlineMarkdown(element, quote[1], baseUrl);
+      fragment.append(element);
+      return;
+    }
+    if (!paragraph) {
+      paragraph = document.createElement('p');
+      fragment.append(paragraph);
+    } else {
+      paragraph.append(document.createElement('br'));
+    }
+    appendInlineMarkdown(paragraph, line, baseUrl);
+  });
+  target.replaceChildren(fragment);
+}
+
+function progressTaskEvents(task) {
+  return state.events.filter((event) => (
+    event.taskId === task.taskId
+    && (event.generation == null || Number(event.generation) === Number(task.generation))
+  ));
+}
+
+function compactArtifactPath(value) {
+  const parts = String(value || '').split(/[\\/]/).filter(Boolean);
+  return parts.slice(-3).join('/');
+}
+
+function isProductArtifact(value) {
+  const normalized = String(value || '').replace(/\\/g, '/').toLowerCase();
+  if (!normalized) return false;
+  return !normalized.startsWith('.loopx/')
+    && !normalized.includes('/.loopx/')
+    && !normalized.startsWith('.codex/')
+    && !normalized.includes('/.codex/')
+    && !normalized.startsWith('.bitfun/')
+    && !normalized.includes('/.bitfun/')
+    && !normalized.includes('/appdata/local/temp/');
+}
+
+function taskProgressEvidence(task) {
+  const events = progressTaskEvents(task);
+  const started = events.filter((event) => event.details && event.details.activity === 'started');
+  const countTools = (names) => started.filter((event) => names.has(event.toolName)).length;
+  const reads = countTools(new Set(['Read', 'LS']));
+  const searches = countTools(new Set(['Grep']));
+  const web = countTools(new Set(['WebFetch', 'WebSearch']));
+  const changes = started.filter((event) => (
+    ['Write', 'Edit', 'ApplyPatch'].includes(event.toolName)
+    && isProductArtifact(event.details && event.details.summary)
+  ));
+  const commands = countTools(new Set(['ExecCommand']));
+  const failures = events.filter((event) => event.details && event.details.activity === 'failed').length;
+  const artifacts = [...new Set(changes
+    .map((event) => compactArtifactPath(event.details && event.details.summary))
+    .filter(Boolean))].slice(-3);
+  const validated = events.some((event) => event.phase === 'validating_progress');
+  const settled = Boolean(task.settlement && task.settlement.receiptId);
+  return {
+    reads,
+    searches,
+    web,
+    analysisCount: reads + searches + web,
+    changes: changes.length,
+    commands,
+    failures,
+    artifacts,
+    validated,
+    settled,
+  };
+}
+
+function progressStageStatus(task, evidence) {
+  if (isResolvedUpstream(task)) {
+    return [
+      ['stageWorkspace', 'complete'],
+      ['stageAnalysis', 'complete'],
+      ['stageImplementation', 'complete'],
+      ['stageValidation', 'complete'],
+      ['stageSettlement', 'complete'],
+    ];
+  }
+  const hasSummary = Boolean(task.lastAgentSummary);
+  const afterAgent = hasSummary || evidence.validated || evidence.settled
+    || ['validating_progress', 'settling_turn', 'recovering', 'finished'].includes(task.phase);
+  const workspace = task.workspacePath
+    ? 'complete'
+    : (task.phase === 'preparing_workspace' ? 'active' : (task.error ? 'blocked' : 'pending'));
+  const analysis = hasSummary
+    ? 'complete'
+    : (evidence.analysisCount > 0
+    ? (afterAgent || evidence.changes > 0 ? 'complete' : 'active')
+    : (task.phase === 'agent_running' ? 'active' : 'pending'));
+  const implementation = evidence.changes > 0
+    ? (afterAgent ? 'complete' : 'active')
+    : 'pending';
+  const validation = evidence.validated || evidence.settled
+    ? 'complete'
+    : (['validating_progress', 'settling_turn'].includes(task.phase) ? 'active' : 'pending');
+  let settlement = 'pending';
+  if (task.state === 'completed') settlement = 'complete';
+  else if (task.state === 'recovery_required' || task.state === 'failed') settlement = 'blocked';
+  else if (task.phase === 'settling_turn' || task.state === 'waiting_for_user') settlement = 'active';
+  return [
+    ['stageWorkspace', workspace],
+    ['stageAnalysis', analysis],
+    ['stageImplementation', implementation],
+    ['stageValidation', validation],
+    ['stageSettlement', settlement],
+  ];
+}
+
+function currentProgressHeading(task, evidence) {
+  if (isResolvedUpstream(task)) return text('progressResolvedUpstream');
+  if (task.state === 'completed') return text('progressCompleted');
+  if (task.state === 'waiting_for_user') return text('progressWaiting');
+  if (task.state === 'recovery_required' || task.state === 'failed') return text('progressRecovery');
+  if (task.phase === 'preparing_workspace') return text('progressPreparing');
+  if (task.state === 'queued' || task.phase === 'queued') return text('progressQueued');
+  if (task.phase === 'validating_progress') return text('progressValidating');
+  if (task.phase === 'settling_turn') return text('progressSettling');
+  if (task.phase === 'agent_running') {
+    return text(evidence.changes > 0 ? 'progressImplementing' : 'progressAnalyzing');
+  }
+  return text('progressIdle');
+}
+
+function currentProgressDetail(task, events) {
+  if (isResolvedUpstream(task)) return text('progressResolvedUpstreamDetail');
+  if (task.state === 'queued') return latestTaskWaitReason(task);
+  if (task.currentTool) {
+    const activity = [...events].reverse().find((event) => (
+      event.toolName === task.currentTool
+      && event.details
+      && event.details.activity === 'started'
+    ));
+    const summary = activity && activity.details && activity.details.summary;
+    return activitySummary(task.currentTool, summary);
+  }
+  if (task.state === 'recovery_required' || task.state === 'failed') return text('nextRecover');
+  if (task.workspacePath && task.phase === 'creating_goal') {
+    return `${text('evidenceWorkspace')} · ${compactArtifactPath(task.workspacePath)}`;
+  }
+  return taskPhaseLabel(task);
+}
+
+function activitySummary(toolName, rawSummary) {
+  const summary = String(rawSummary || '');
+  if (toolName !== 'ExecCommand') {
+    const path = compactArtifactPath(summary);
+    return path ? `${toolLabel(toolName)} · ${path}` : toolLabel(toolName);
+  }
+  if (/yarn\s+(?:workspace\s+\S+\s+)?install|pnpm\s+install|npm\s+(?:ci|install)/i.test(summary)) {
+    return text('activityInstallingDependencies');
+  }
+  if (/dist:win|electron-builder|package-win|makensis|nsis/i.test(summary)) {
+    return text('activityBuildingInstaller');
+  }
+  if (/smoke-windows-installer-upgrade|installer-upgrade|overwrite-marker|repro-overwrite/i.test(summary)) {
+    return text('activityTestingUpgrade');
+  }
+  if (/Start-Sleep|Wait-Process|Get-Process|Get-CimInstance/i.test(summary)) {
+    return text('activityWaitingProcess');
+  }
+  if (/loopx(?:\.exe)?[^\n]*(?:refresh-state|todo|heartbeat-prompt|quota)/i.test(summary)) {
+    return text('activitySyncingProgress');
+  }
+  if (/\bgit\b/i.test(summary)) return text('activityCheckingRepository');
+  return text('activityRunningCommand');
+}
+
+function nextProgressAction(task, evidence) {
+  if (isResolvedUpstream(task)) return text('nextResolvedUpstream');
+  if (task.state === 'completed') return text('nextCompleted');
+  if (task.state === 'waiting_for_user') return text('nextApproval');
+  if (task.state === 'recovery_required' || task.state === 'failed') return text('nextRecover');
+  if (task.phase === 'preparing_workspace') return text('nextPrepare');
+  if (task.state === 'queued' || task.phase === 'queued') return text('nextQueued');
+  if (task.phase === 'validating_progress') return text('nextValidate');
+  if (task.phase === 'settling_turn') return text('nextSettle');
+  if (task.phase === 'agent_running') return text(evidence.changes > 0 ? 'nextImplement' : 'nextAnalyze');
+  return text('nextAnalyze');
+}
+
+function renderIssueApproval(task) {
+  const gate = task && task.state === 'waiting_for_user' ? latestGate(task.taskId) : null;
+  view.issueApprovalPanel.hidden = !gate;
+  if (!gate) return;
+  const presentation = approvalPresentation(task, gate);
+  view.issueApprovalTitle.textContent = presentation.title;
+  view.issueApprovalSummary.textContent = presentation.summary;
+  view.issueApprovalApproveEffect.textContent = presentation.approveEffect;
+  view.issueApprovalRejectEffect.textContent = presentation.rejectEffect;
+  view.issueApprovalRecommendation.textContent = presentation.recommendation;
+  const pending = Boolean(pendingActionFor(task));
+  view.issueApprovalApprove.textContent = pending ? text('approvalSubmittingShort') : presentation.approveLabel;
+  view.issueApprovalReject.textContent = presentation.rejectLabel;
+  view.issueApprovalApprove.disabled = pending;
+  view.issueApprovalReject.disabled = pending;
+  view.issueApprovalNote.disabled = pending;
+}
+
+function issueOutcomeSummary(task, evidence) {
+  if (isResolvedUpstream(task)) return text('outcomeResolvedUpstream');
+  if (task.state === 'waiting_for_user') return text('outcomeWaiting');
+  if (task.state === 'recovery_required' || task.state === 'failed') return text('outcomeRecovery');
+  if (task.state === 'completed') return text('outcomeCompleted');
+  if (evidence.validated || evidence.settled) return text('outcomeValidated');
+  if (evidence.changes > 0) return text('outcomeImplemented');
+  if (evidence.analysisCount > 0 || String(task.lastAgentSummary || '').trim()) {
+    return text('outcomeAnalyzed');
+  }
+  if (task.state === 'queued' || task.state === 'preparing') return text('outcomeQueued');
+  return text('outcomeStarted');
+}
+
+function renderIssueProgress(task) {
+  const evidence = taskProgressEvidence(task);
+  const stages = progressStageStatus(task, evidence);
+  const stageFragment = document.createDocumentFragment();
+  stages.forEach(([labelKey, status]) => {
+    const item = document.createElement('li');
+    item.dataset.status = status;
+    const label = document.createElement('strong');
+    label.textContent = text(labelKey);
+    const statusLabelElement = document.createElement('span');
+    statusLabelElement.textContent = text(`stage${status[0].toUpperCase()}${status.slice(1)}`);
+    item.append(label, statusLabelElement);
+    stageFragment.append(item);
+  });
+  view.issueStageList.replaceChildren(stageFragment);
+  view.issueProgressMeta.textContent = text('progressMeta', {
+    done: stages.filter(([, status]) => status === 'complete').length,
+    total: stages.length,
+  });
+
+  const taskEvents = progressTaskEvents(task);
+  view.issueCurrentHeading.textContent = currentProgressHeading(task, evidence);
+  view.issueCurrentDetail.textContent = currentProgressDetail(task, taskEvents);
+  view.issueNextAction.textContent = nextProgressAction(task, evidence);
+
+  const facts = isResolvedUpstream(task)
+    ? [text('evidenceResolvedUpstream'), text('evidenceNoPatchRequired')]
+    : [];
+  if (!isResolvedUpstream(task)) {
+    if (evidence.validated || evidence.settled) facts.push(text('evidenceProgressSaved'));
+    if (task.workspacePath) facts.push(text('evidenceWorkspace'));
+    if (evidence.analysisCount > 0) facts.push(text('evidenceAnalysisReady'));
+    if (evidence.changes > 0) {
+      facts.push(text(
+        evidence.artifacts.length > 0 ? 'evidenceCodeChanges' : 'evidenceCodeChangesUnknown',
+        { value: evidence.artifacts.length },
+      ));
+    }
+    if (evidence.commands > 0) {
+      facts.push(text(evidence.failures > 0 ? 'evidenceValidationNeedsAttention' : 'evidenceValidationPassed'));
+    }
+  }
+  if (facts.length === 0) facts.push(text('evidenceNone'));
+  const factFragment = document.createDocumentFragment();
+  facts.slice(0, 5).forEach((fact) => {
+    const item = document.createElement('li');
+    item.textContent = fact;
+    factFragment.append(item);
+  });
+  view.issueEvidenceList.replaceChildren(factFragment);
+
+  const outcome = issueOutcomeSummary(task, evidence);
+  view.issueOutcomePanel.hidden = false;
+  view.issueOutcomeMeta.textContent = task.lastAgentSummaryAt
+    ? text('outcomeUpdated', { duration: relativeLabel(task.lastAgentSummaryAt) })
+    : '';
+  view.issueOutcome.textContent = outcome;
+}
+
 function renderLiveness() {
   const task = selectedTask();
-  const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
   view.selectedState.hidden = !task;
   view.showAllEvents.hidden = !task;
   if (!task) {
-    const primary = primaryProgressTask(tasks);
-    const counts = progressCounts(tasks);
-    const showProgress = Boolean(primary || counts.queued > 0);
-    view.livenessPanel.hidden = !showProgress;
+    view.logTitle.textContent = text('liveOutput');
     view.selectedSummary.hidden = false;
     view.selectedSummary.textContent = text('allTaskEvents');
-    view.logTitle.textContent = text('activity');
-    view.livenessItem.hidden = true;
-    view.livenessItem.removeAttribute('href');
+    view.issueLink.hidden = true;
+    view.issueLink.removeAttribute('href');
+    view.issueNumber.textContent = '';
+    view.issueApprovalPanel.hidden = true;
+    view.issueProgressPanel.hidden = true;
+    view.issueStageList.replaceChildren();
+    view.issueEvidenceList.replaceChildren();
+    view.issueOutcomePanel.hidden = true;
+    view.issueOutcome.replaceChildren();
     view.issueDescriptionPanel.hidden = true;
-    view.livenessDescription.textContent = '';
+    view.issueDescription.replaceChildren();
     renderTaskActions(null);
-    if (!showProgress) {
-      view.livenessPanel.removeAttribute('data-state');
-      view.livenessGoal.hidden = true;
-      view.livenessGoal.textContent = '';
-      view.livenessTurn.hidden = true;
-      view.livenessTurn.textContent = '';
-      view.livenessTool.hidden = true;
-      view.livenessTool.textContent = '';
-      view.livenessDeadline.hidden = true;
-      view.livenessDeadline.textContent = '';
-      view.livenessError.hidden = true;
-      view.livenessError.textContent = '';
-      return;
-    }
-    const visualState = primary ? taskVisualState(primary) : 'queued';
-    view.livenessPanel.dataset.state = visualState;
-    view.livenessDot.dataset.status = visualState;
-    view.livenessPhase.textContent = primary
-      ? (pendingActionFor(primary) ? taskStateDisplayLabel(primary) : taskPhaseLabel(primary))
-      : text('groupQueued');
-    view.livenessSince.textContent = progressSummary(counts);
-    view.livenessTurn.hidden = !primary;
-    view.livenessTurn.textContent = primary
-      ? text('mainProgressCurrent', { item: progressItemLabel(primary) })
-      : '';
-    view.livenessTool.hidden = !primary;
-    view.livenessTool.textContent = primary
-      ? text('mainProgressPhase', { phase: taskPhaseLabel(primary) })
-      : '';
-    const waitReason = primary && primary.state === 'queued' ? latestTaskWaitReason(primary) : '';
-    view.livenessDeadline.hidden = !waitReason;
-    view.livenessDeadline.textContent = waitReason;
-    view.livenessGoal.hidden = !primary || !primary.goalId;
-    view.livenessGoal.textContent = primary && primary.goalId ? `${text('goal')}: ${primary.goalId}` : '';
-    view.livenessError.hidden = !primary || !primary.error;
-    view.livenessError.textContent = primary && primary.error ? primary.error : '';
     return;
   }
-  view.livenessPanel.hidden = false;
-  const selectedVisualState = taskVisualState(task);
-  view.livenessPanel.dataset.state = selectedVisualState;
-  view.logTitle.textContent = identityTitleOf(task) || itemLabel(task.identity && task.identity.item);
+
+  const visualState = taskVisualState(task);
+  const item = task.identity && task.identity.item;
+  const url = itemUrl(item);
+  const itemLabelText = itemLabel(item);
+  view.logTitle.textContent = identityTitleOf(task) || itemLabelText;
   view.selectedSummary.hidden = true;
   view.selectedState.hidden = false;
-  view.selectedState.dataset.state = selectedVisualState;
+  view.selectedState.dataset.state = visualState;
   view.selectedState.textContent = taskStateDisplayLabel(task);
-  view.livenessDot.dataset.status = selectedVisualState;
-  view.livenessPhase.textContent = pendingActionFor(task) ? taskStateDisplayLabel(task) : taskPhaseLabel(task);
-
-  const item = task.identity && task.identity.item;
-  if (item && item.repository) {
-    const itemLabelText = itemLabel(item);
-    view.livenessItem.hidden = false;
-    view.livenessItem.textContent = itemLabelText;
-    view.livenessItem.href = itemUrl(item);
-    view.livenessItem.setAttribute('aria-label', `${text('openInGithub')}: ${itemLabelText}`);
-    view.livenessItem.removeAttribute('title');
+  view.issueLink.hidden = !url;
+  view.issueLink.textContent = itemLabelText;
+  if (url) {
+    view.issueLink.href = url;
+    view.issueLink.setAttribute('aria-label', `${text('openInGithub')}: ${itemLabelText}`);
   } else {
-    view.livenessItem.hidden = true;
-    view.livenessItem.removeAttribute('href');
-    view.livenessItem.removeAttribute('aria-label');
-    view.livenessItem.textContent = '';
+    view.issueLink.removeAttribute('href');
+    view.issueLink.removeAttribute('aria-label');
   }
+  view.issueNumber.textContent = item && item.number
+    ? `${item.kind === 'pr' ? 'PR' : 'Issue'} #${item.number}`
+    : '';
+  renderIssueApproval(task);
+  view.issueProgressPanel.hidden = false;
+  renderIssueProgress(task);
+
   const description = identityDescriptionOf(task);
   const metadataKey = itemKey(item);
   const loadingDescription = state.metadataRequests.has(metadataKey);
   const descriptionUnavailable = (state.itemMetadata.get(metadataKey) || {}).unavailable === true;
-  view.issueDescriptionPanel.hidden = !description && !loadingDescription && !descriptionUnavailable;
-  view.livenessDescription.textContent = description
-    || (loadingDescription ? text('loadingIssueDescription') : text('issueDescriptionUnavailable'));
-  view.livenessDescription.removeAttribute('title');
-
-  const lastActivity = task.lastOutputAt || task.updatedAt;
-  const idleDuration = Date.now() - normalizeTimestamp(lastActivity);
-  if (task.state === 'running' && idleDuration > 120000) {
-    view.livenessSince.textContent = text('noRecentOutput', { duration: durationLabel(idleDuration) });
-    view.livenessDot.dataset.status = 'degraded';
-  } else if (task.lastOutputAt) {
-    view.livenessSince.textContent = text('lastOutput', { duration: relativeLabel(task.lastOutputAt) });
-  } else {
-    view.livenessSince.textContent = text('updated', { duration: relativeLabel(task.updatedAt) });
-  }
-
-  view.livenessTool.hidden = !task.currentTool;
-  view.livenessTool.textContent = task.currentTool ? `${text('currentTool')}: ${task.currentTool}` : '';
-  view.livenessTurn.hidden = !task.currentTurnId;
-  view.livenessTurn.textContent = task.currentTurnId ? `${text('turn')}: ${shortId(task.currentTurnId)}` : '';
-  view.livenessGoal.hidden = !task.goalId;
-  view.livenessGoal.textContent = task.goalId ? `${text('goal')}: ${task.goalId}` : '';
-  const deadline = normalizeTimestamp(task.deadlineAt);
-  view.livenessDeadline.hidden = !deadline;
-  if (deadline) {
-    const delta = deadline - Date.now();
-    view.livenessDeadline.textContent = delta >= 0
-      ? text('deadlineRemaining', { duration: durationLabel(delta) })
-      : text('deadlinePassed', { duration: durationLabel(-delta) });
-  }
-  view.livenessError.hidden = !task.error;
-  view.livenessError.textContent = task.error || '';
+  view.issueDescriptionPanel.hidden = false;
+  renderMarkdown(
+    view.issueDescription,
+    description || (descriptionUnavailable
+      ? text('issueDescriptionUnavailable')
+      : text('loadingIssueDescription')),
+    url,
+  );
   renderTaskActions(task);
 }
 
-function eventMatches(event) {
-  if (state.selectedTaskId && event.taskId !== state.selectedTaskId) return false;
-  if (state.errorsOnly && event.level !== 'error') return false;
-  if (
-    state.logMode === 'key'
-    && !event.important
-    && event.level !== 'warning'
-    && event.level !== 'error'
-    && !KEY_EVENT_KINDS.has(event.kind)
-  ) return false;
-  if (!state.query) return true;
-  const details = event.details ? Object.values(event.details).join(' ') : '';
-  const haystack = [event.message, event.source, event.phase, event.kind, event.toolName, details]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(state.query);
+function eventSourceLabel(source) {
+  const keys = {
+    controller: 'sourceScheduler',
+    sidecar: 'sourceLoopx',
+    agent: 'sourceAgent',
+    git: 'sourceGit',
+    github: 'sourceGithub',
+    system: 'sourceSystem',
+  };
+  return keys[source] ? text(keys[source]) : (source || text('sourceScheduler'));
+}
+
+function toolLabel(toolName) {
+  const keys = {
+    ExecCommand: 'toolExecCommand',
+    Read: 'toolRead',
+    Grep: 'toolGrep',
+    LS: 'toolLs',
+    WebFetch: 'toolWebFetch',
+    WebSearch: 'toolWebSearch',
+    Write: 'toolWrite',
+    Edit: 'toolEdit',
+  };
+  return keys[toolName] ? text(keys[toolName]) : (toolName || text('outputTool'));
+}
+
+function toolStateLabel(stateValue) {
+  const key = {
+    queued: 'toolStateQueued',
+    waiting: 'toolStateWaiting',
+    started: 'toolStateStarted',
+    confirmation: 'toolStateConfirmation',
+    confirmed: 'toolStateConfirmed',
+    rejected: 'toolStateRejected',
+    completed: 'toolStateCompleted',
+    failed: 'toolStateFailed',
+    cancelled: 'toolStateCancelled',
+  }[stateValue];
+  return key ? text(key) : stateValue;
+}
+
+function eventMessage(event) {
+  const activity = event.details && event.details.activity;
+  const key = {
+    queued: 'toolQueued',
+    waiting: 'toolWaiting',
+    started: 'toolStarted',
+    confirmation: 'toolConfirmation',
+    confirmed: 'toolConfirmed',
+    rejected: 'toolRejected',
+    completed: 'toolCompleted',
+    failed: 'toolFailed',
+    cancelled: 'toolCancelled',
+  }[activity];
+  if (key) {
+    return text(key, { tool: toolLabel(event.toolName || event.details.toolName) });
+  }
+  return event.message || event.kind || 'event';
+}
+
+function eventDetailLabel(key) {
+  const keys = {
+    durationMs: 'detailDurationMs',
+    exitCode: 'detailExitCode',
+    matchCount: 'detailMatchCount',
+    fileCount: 'detailFileCount',
+    entryCount: 'detailEntryCount',
+    lineCount: 'detailLineCount',
+    contentLength: 'detailContentLength',
+    title: 'detailTitle',
+    queuePosition: 'detailQueuePosition',
+    dependencies: 'detailDependencies',
+  };
+  return keys[key] ? text(keys[key]) : key;
 }
 
 function eventRow(event) {
@@ -1764,14 +2519,22 @@ function eventRow(event) {
 
   const source = document.createElement('span');
   source.className = 'log-source';
-  source.textContent = event.source || 'controller';
+  source.textContent = eventSourceLabel(event.source);
 
   const content = document.createElement('div');
   content.className = 'log-content';
   const message = document.createElement('div');
   message.className = 'log-message';
-  message.textContent = event.message || event.kind || 'event';
+  message.textContent = eventMessage(event);
   content.append(message);
+
+  const toolSummary = event.details && event.details.summary;
+  if (toolSummary) {
+    const summary = document.createElement('div');
+    summary.className = 'log-tool-summary';
+    summary.textContent = String(toolSummary);
+    content.append(summary);
+  }
 
   const metaValues = [];
   if (!state.selectedTaskId && event.taskId) {
@@ -1780,7 +2543,7 @@ function eventRow(event) {
     metaValues.push(item ? compactItemLabel(item) : event.taskId);
   }
   if (event.phase) metaValues.push(phaseLabel(event.phase));
-  if (event.toolName) metaValues.push(`${text('currentTool')}: ${event.toolName}`);
+  if (event.toolName) metaValues.push(`${text('currentTool')}: ${toolLabel(event.toolName)}`);
   if (event.deadlineAt) metaValues.push(`${text('deadline')}: ${clockLabel(event.deadlineAt)}`);
   if (metaValues.length) {
     const meta = document.createElement('div');
@@ -1793,7 +2556,8 @@ function eventRow(event) {
     content.append(meta);
   }
 
-  const detailEntries = Object.entries(event.details || {});
+  const detailEntries = Object.entries(event.details || {})
+    .filter(([key]) => !['activity', 'toolName', 'summary'].includes(key));
   if (detailEntries.length) {
     const details = document.createElement('details');
     details.className = 'log-details';
@@ -1802,23 +2566,13 @@ function eventRow(event) {
     const list = document.createElement('dl');
     detailEntries.forEach(([key, value]) => {
       const term = document.createElement('dt');
-      term.textContent = key;
+      term.textContent = eventDetailLabel(key);
       const description = document.createElement('dd');
       description.textContent = String(value);
       list.append(term, description);
     });
     details.append(summary, list);
     content.append(details);
-  }
-
-  if (event.kind === 'approval_required' && event.taskId) {
-    const task = taskForId(event.taskId);
-    if (task) {
-      const actions = document.createElement('div');
-      actions.className = 'task-actions log-meta';
-      actions.append(makeActionButton(text('approvalGate'), 'gate', task));
-      content.append(actions);
-    }
   }
 
   row.append(time, level, source, content);
@@ -1841,7 +2595,7 @@ function liveProgressRow(task, counts) {
 
   const source = document.createElement('span');
   source.className = 'log-source';
-  source.textContent = 'controller';
+  source.textContent = eventSourceLabel('controller');
 
   const content = document.createElement('div');
   content.className = 'log-content';
@@ -1878,7 +2632,9 @@ function outputKindLabel(kind) {
 function appendOutputText(existing, next) {
   const value = next == null ? '' : String(next);
   if (!value) return existing;
-  return existing ? `${existing}${value}` : value;
+  const combined = existing ? `${existing}${value}` : value;
+  if (combined.length <= MAX_OUTPUT_BLOCK_CHARS) return combined;
+  return `${combined.slice(0, MAX_OUTPUT_BLOCK_CHARS / 2)}\n...\n${combined.slice(-MAX_OUTPUT_BLOCK_CHARS / 2)}`;
 }
 
 function outputEventFallbackText(event) {
@@ -1905,6 +2661,8 @@ function compactTurnOutputBlocks(events) {
       && last
       && last.kind === kind
       && last.roundId === roundId
+      && last.taskId === event.taskId
+      && last.turnId === event.turnId
       && !last.isEnd
     ) {
       last.endCursor = event.cursor;
@@ -1916,6 +2674,8 @@ function compactTurnOutputBlocks(events) {
     blocks.push({
       startCursor: event.cursor,
       endCursor: event.cursor,
+      taskId: event.taskId || '',
+      turnId: event.turnId || '',
       kind,
       roundId,
       toolName,
@@ -1928,26 +2688,18 @@ function compactTurnOutputBlocks(events) {
   return blocks;
 }
 
-function turnOutputBlockMatches(block) {
-  if (state.errorsOnly && block.toolState !== 'failed') return false;
-  if (!state.query) return true;
-  const haystack = [
-    block.kind,
-    block.text,
-    block.toolName,
-    block.toolState,
-    block.roundId,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(state.query);
-}
-
 function cursorRangeLabel(block) {
   return block.startCursor === block.endCursor
     ? `#${block.startCursor}`
     : `#${block.startCursor}-${block.endCursor}`;
+}
+
+function outputBlockDomKey(block) {
+  return `${block.taskId}:${block.turnId}:${block.kind}:${block.startCursor}`;
+}
+
+function outputBlockDomVersion(block) {
+  return `${block.endCursor}:${block.eventCount}:${block.toolState}:${String(block.text || '').length}`;
 }
 
 function turnOutputBlockRow(block) {
@@ -1956,9 +2708,24 @@ function turnOutputBlockRow(block) {
   row.dataset.kind = block.kind;
   row.dataset.level = block.toolState === 'failed' ? 'error' : 'info';
   row.dataset.cursor = String(block.endCursor);
+  row.dataset.taskId = block.taskId;
+  row.dataset.blockKey = outputBlockDomKey(block);
+  row.dataset.blockVersion = outputBlockDomVersion(block);
 
   const header = document.createElement('div');
   header.className = 'output-block__header';
+
+  const task = taskForId(block.taskId);
+  const item = task && task.identity && task.identity.item;
+  const issue = document.createElement(itemUrl(item) ? 'a' : 'span');
+  issue.className = 'output-block__issue';
+  issue.textContent = item ? compactItemLabel(item) : text('taskNumber', { value: shortId(block.taskId) });
+  if (issue.tagName === 'A') {
+    issue.href = itemUrl(item);
+    issue.target = '_blank';
+    issue.rel = 'noopener noreferrer';
+    issue.title = identityTitleOf(task) || itemLabel(item);
+  }
 
   const level = document.createElement('span');
   level.className = 'event-level';
@@ -1967,13 +2734,13 @@ function turnOutputBlockRow(block) {
 
   const source = document.createElement('span');
   source.className = 'output-block__source';
-  source.textContent = block.toolName || 'agent';
+  source.textContent = block.toolName ? toolLabel(block.toolName) : eventSourceLabel('agent');
 
   const cursor = document.createElement('span');
   cursor.className = 'output-block__cursor';
   cursor.textContent = cursorRangeLabel(block);
 
-  header.append(level, source, cursor);
+  header.append(issue, level, source, cursor);
 
   if (block.roundId) {
     const round = document.createElement('span');
@@ -1985,7 +2752,7 @@ function turnOutputBlockRow(block) {
   if (block.toolState) {
     const status = document.createElement('span');
     status.className = 'output-block__meta';
-    status.textContent = block.toolState;
+    status.textContent = toolStateLabel(block.toolState);
     header.append(status);
   }
   if (block.eventCount > 1) {
@@ -2006,17 +2773,32 @@ function turnOutputBlockRow(block) {
 function renderTurnOutput() {
   const task = runningOutputTask();
   if (task) ensureTurnOutputTarget(task);
-  const blocks = compactTurnOutputBlocks(state.turnOutput.events);
-  const matches = blocks.filter(turnOutputBlockMatches);
-  const visible = matches.slice(-MAX_RENDERED_EVENTS);
-  const fragment = document.createDocumentFragment();
-  visible.forEach((block) => fragment.append(turnOutputBlockRow(block)));
-  view.logList.replaceChildren(fragment);
+  const blocks = compactTurnOutputBlocks(state.outputHistory);
+  const visible = blocks.slice(-MAX_RENDERED_OUTPUT_BLOCKS);
+  const existing = new Map(
+    [...view.logList.children]
+      .filter((node) => node.dataset && node.dataset.blockKey)
+      .map((node) => [node.dataset.blockKey, node]),
+  );
+  const desired = visible.map((block) => {
+    const key = outputBlockDomKey(block);
+    const node = existing.get(key);
+    return node && node.dataset.blockVersion === outputBlockDomVersion(block)
+      ? node
+      : turnOutputBlockRow(block);
+  });
+  desired.forEach((node, index) => {
+    const current = view.logList.children[index];
+    if (current !== node) view.logList.insertBefore(node, current || null);
+  });
+  const desiredNodes = new Set(desired);
+  [...view.logList.children].forEach((node) => {
+    if (!desiredNodes.has(node)) node.remove();
+  });
   const hasOutput = visible.length !== 0;
   view.logEmpty.hidden = hasOutput;
   if (!hasOutput) {
-    const message = state.turnOutput.message
-      || (task ? text('noLiveOutput') : text('outputNotRunning'));
+    const message = state.turnOutput.message || text('noLiveOutput');
     view.logEmpty.querySelector('p').textContent = message;
   }
   if (state.followLogs) {
@@ -2033,31 +2815,7 @@ function renderTurnOutput() {
 }
 
 function renderLogs() {
-  if (state.logMode === 'output') {
-    renderTurnOutput();
-    return;
-  }
-  const wasFollowing = state.followLogs;
-  const matches = state.events.filter(eventMatches);
-  state.visibleEvents = matches;
-  const visible = matches.slice(-MAX_RENDERED_EVENTS);
-  const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
-  const liveTask = state.selectedTaskId ? null : primaryProgressTask(tasks);
-  const counts = progressCounts(tasks);
-  const fragment = document.createDocumentFragment();
-  visible.forEach((event) => fragment.append(eventRow(event)));
-  if (liveTask) fragment.append(liveProgressRow(liveTask, counts));
-  view.logList.replaceChildren(fragment);
-  view.logEmpty.querySelector('p').textContent = activeWorkEmptyMessage();
-  view.logEmpty.hidden = visible.length !== 0 || Boolean(liveTask);
-  if (wasFollowing) {
-    requestAnimationFrame(() => {
-      view.logScroll.scrollTop = view.logScroll.scrollHeight;
-      view.newEvents.hidden = true;
-    });
-  } else if (visible.length) {
-    view.newEvents.hidden = false;
-  }
+  renderTurnOutput();
 }
 
 function renderAll() {
@@ -2100,20 +2858,18 @@ async function hydrateTaskMetadata(taskId) {
 }
 
 function selectTask(taskId) {
+  const changed = state.selectedTaskId !== (taskId || null);
   state.selectedTaskId = taskId || null;
-  if (taskId) view.issueDescriptionPanel.open = false;
-  const task = taskId ? taskForId(taskId) : null;
-  if (task && task.state === 'running') {
-    setLogMode('output');
-  } else if (!taskId && state.logMode === 'output') {
-    setLogMode('full');
-  } else if (state.logMode === 'output') {
-    setLogMode('key');
-  }
+  if (changed) view.issueApprovalNote.value = '';
   renderTasks();
   renderLiveness();
   renderLogs();
-  if (taskId) void hydrateTaskMetadata(taskId);
+  if (taskId) {
+    if (!view.issueDetailDialog.open) view.issueDetailDialog.showModal();
+    void hydrateTaskMetadata(taskId);
+  } else if (view.issueDetailDialog.open) {
+    view.issueDetailDialog.close();
+  }
 }
 
 function factValue(value, fallback = '--') {
@@ -2287,21 +3043,35 @@ async function loadModelCatalog() {
     auto.selected = current === 'auto';
     select.appendChild(auto);
     let selectedExists = current === 'auto';
-    for (const model of Array.isArray(models) ? models : []) {
+    const availableModels = Array.isArray(models) ? models : [];
+    let renderedModelCount = 0;
+    for (const model of availableModels) {
       if (!model || !model.id) continue;
       const option = document.createElement('option');
       option.value = model.id;
       const tag = model.isDefault === true ? ` · ${text('modelPrimaryTag')}` : '';
-      option.textContent = `${model.name || model.modelName || model.id}${tag}`;
+      option.textContent = `${describeModelOption(model)}${tag}`;
       option.selected = current === model.id;
       selectedExists = selectedExists || option.selected;
       select.appendChild(option);
+      renderedModelCount += 1;
+    }
+    if (select.options.length === 1) {
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = text('modelEmpty');
+      empty.disabled = true;
+      empty.dataset.status = 'empty';
+      select.appendChild(empty);
     }
     if (!selectedExists) select.value = 'auto';
-    state.modelCatalogLoaded = select.options.length > 1;
+    state.modelCatalogLoaded = renderedModelCount > 0;
     select.title = text('modelReloadTitle');
   } catch (error) {
     const current = currentModelSelection();
+    [...select.options].forEach((option) => {
+      if (option.dataset.status) option.remove();
+    });
     if (select.options.length === 0) {
       const auto = document.createElement('option');
       auto.value = 'auto';
@@ -2310,6 +3080,14 @@ async function loadModelCatalog() {
     } else {
       const auto = [...select.options].find((option) => option.value === 'auto');
       if (auto) auto.textContent = text('modelAuto');
+    }
+    if (![...select.options].some((option) => option.dataset.status === 'load-failed')) {
+      const failed = document.createElement('option');
+      failed.value = '';
+      failed.textContent = text('modelLoadFailed');
+      failed.disabled = true;
+      failed.dataset.status = 'load-failed';
+      select.appendChild(failed);
     }
     select.value = current === 'auto' ? 'auto' : select.value;
     select.title = errorMessage(error);
@@ -2338,6 +3116,7 @@ async function resolveIntake() {
       modelId: view.modelSelect.value,
     });
     if (!response || !response.preview) throw new Error(text('previewExpired'));
+    await rememberIntake(input);
     renderPreview(response.preview);
     showNotice('');
     view.intakeDialog.showModal();
@@ -2431,8 +3210,11 @@ async function createTasks(retryTerminal) {
     state.preview = null;
     state.pendingRetry = null;
     await attachSnapshot(false);
-    selectTask(null);
-    setLogMode('full');
+    const focusedTaskId = outcomes
+      .find((outcome) => outcome.taskId && ['created', 'opened_existing'].includes(outcome.kind))
+      ?.taskId;
+    state.followLogs = true;
+    selectTask(focusedTaskId || null);
   } catch (error) {
     showNotice(errorMessage(error), 'error');
   } finally {
@@ -2471,9 +3253,14 @@ async function resetLoopx() {
   state.resetPending = true;
   setButtonBusy(view.resetLoopx, true);
   view.resetLoopxConfirm.disabled = true;
+  view.resetLoopxDialog.close();
+  view.root.setAttribute('aria-busy', 'true');
+  showNotice(text('resettingLoopxBackground'));
+  renderExecutionSupport();
   try {
     const clientRequestId = requestId();
     await attachSnapshot(false);
+    view.root.setAttribute('aria-busy', 'true');
     let request = {
       action: 'reset_all',
       clientRequestId,
@@ -2492,22 +3279,19 @@ async function resetLoopx() {
     } else if (response && response.status === 'rejected') {
       showNotice(response.message || text('actionRejected'), 'error');
     } else {
-      state.events = [];
-      state.eventKeys.clear();
-      state.selectedTaskId = null;
-      state.repositoryResumeTarget = null;
+      clearRunUiState();
       showNotice(text('resetLoopxApplied'), 'success');
     }
-    view.resetLoopxDialog.close();
     await attachSnapshot(false);
   } catch (error) {
     showNotice(errorMessage(error), 'error');
-    view.resetLoopxDialog.close();
     await attachSnapshot(false);
   } finally {
     state.resetPending = false;
     setButtonBusy(view.resetLoopx, false);
     view.resetLoopxConfirm.disabled = false;
+    view.root.setAttribute('aria-busy', 'false');
+    renderExecutionSupport();
   }
 }
 
@@ -2651,94 +3435,42 @@ async function performAction(action, task, extra = {}) {
   }
 }
 
-function openGateDialog(task) {
-  const gate = latestGate(task.taskId);
-  if (!gate) {
+async function answerTaskGate(task, action, note = '') {
+  const gate = task && latestGate(task.taskId);
+  if (!task || !gate) {
     showNotice(text('noGate'), 'error');
     return;
   }
-  state.gate = { task, gateId: gate.gateId };
-  view.gateTitle.textContent = identityTitleOf(task) || itemLabel(task.identity && task.identity.item);
-  view.gateMessage.textContent = gate.event.message || text('approvalNeeded');
-  view.gateNote.value = '';
-  view.gateDialog.showModal();
-  view.gateNote.focus();
-}
-
-async function answerGate(action) {
-  if (!state.gate) return;
-  const gate = state.gate;
-  const note = view.gateNote.value.trim();
-  view.gateApprove.disabled = true;
-  view.gateReject.disabled = true;
+  showNotice(text('approvalSubmitting'));
   try {
-    const applied = await performAction(action, gate.task, { gateId: gate.gateId, note });
-    if (applied) {
-      state.gate = null;
-      view.gateDialog.close();
-    }
+    const applied = await performAction(action, task, { gateId: gate.gateId, note: note.trim() });
+    if (applied && state.selectedTaskId === task.taskId) view.issueApprovalNote.value = '';
   } finally {
-    view.gateApprove.disabled = false;
-    view.gateReject.disabled = false;
+    syncApprovalAttention(false);
   }
 }
 
-function filteredExportEvents() {
-  return state.visibleEvents.map((event) => ({
-    streamId: event.streamId,
-    cursor: event.cursor,
-    taskId: event.taskId || null,
-    kind: event.kind,
-    level: event.level,
-    source: event.source,
-    phase: event.phase || null,
-    message: event.message,
-    important: Boolean(event.important),
-    toolName: event.toolName || null,
-    deadlineAt: event.deadlineAt || null,
-    details: event.details || {},
-    occurredAt: event.occurredAt,
-  }));
+function approvalAlertGate() {
+  const task = state.approvalTaskId ? taskForId(state.approvalTaskId) : null;
+  const gate = task ? latestGate(task.taskId) : null;
+  return task && gate ? { task, gate } : null;
 }
 
-function exportLogs() {
-  const payload = {
-    schemaVersion: state.snapshot && state.snapshot.schemaVersion,
-    streamId: state.snapshot && state.snapshot.streamId,
-    exportedAt: Date.now(),
-    selectedTaskId: state.selectedTaskId,
-    mode: state.logMode,
-    query: state.query,
-    errorsOnly: state.errorsOnly,
-    events: filteredExportEvents(),
-    turnOutput: state.logMode === 'output' ? state.turnOutput.events : [],
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `loopx-events-${Date.now()}.json`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-  showNotice(text('logsExported'), 'success');
+function openApprovalAlertGate() {
+  const attention = approvalAlertGate();
+  if (attention) selectTask(attention.task.taskId);
 }
 
-function setLogMode(mode) {
-  state.logMode = mode;
-  const keyMode = mode === 'key';
-  const fullMode = mode === 'full';
-  const outputMode = mode === 'output';
-  view.modeKey.classList.toggle('is-active', keyMode);
-  view.modeKey.setAttribute('aria-checked', String(keyMode));
-  view.modeFull.classList.toggle('is-active', fullMode);
-  view.modeFull.setAttribute('aria-checked', String(fullMode));
-  view.modeOutput.classList.toggle('is-active', outputMode);
-  view.modeOutput.setAttribute('aria-checked', String(outputMode));
-  if (!outputMode) clearTurnOutputTimer();
-  renderLogs();
-  if (outputMode) scheduleTurnOutputPoll(0);
+function answerApprovalAlertGate(action) {
+  const attention = approvalAlertGate();
+  if (!attention) return;
+  void answerTaskGate(attention.task, action);
+}
+
+function answerSelectedTaskGate(action) {
+  const task = selectedTask();
+  if (!task) return;
+  void answerTaskGate(task, action, view.issueApprovalNote.value);
 }
 
 const RAIL_MIN_WIDTH = 180;
@@ -2750,6 +3482,17 @@ function setRailWidth(width) {
   const workbench = view.taskRail.parentElement;
   workbench.style.setProperty('--rail-width', `${width}px`);
   state.railWidth = width;
+}
+
+function setRailCollapsed(collapsed) {
+  state.railCollapsed = Boolean(collapsed);
+  view.taskRail.classList.toggle('is-collapsed', state.railCollapsed);
+  view.taskRail.parentElement.classList.toggle('tasks-collapsed', state.railCollapsed);
+  view.collapseTasks.setAttribute('aria-expanded', String(!state.railCollapsed));
+  view.collapseTasks.setAttribute(
+    'title',
+    state.railCollapsed ? text('expandTasks') : text('collapseTasks'),
+  );
 }
 
 function bindRailSplitter() {
@@ -2764,6 +3507,7 @@ function bindRailSplitter() {
     if (!active) return;
     const next = startWidth + (event.clientX - startX);
     setRailWidth(Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, next)));
+    splitter.setAttribute('aria-valuenow', String(width()));
     event.preventDefault();
   };
 
@@ -2780,7 +3524,10 @@ function bindRailSplitter() {
   };
 
   splitter.addEventListener('pointerdown', (event) => {
-    if (state.railCollapsed) return;
+    if (state.railCollapsed) {
+      setRailCollapsed(false);
+      setRailWidth(Math.max(RAIL_MIN_WIDTH, width()));
+    }
     active = true;
     startX = event.clientX;
     startWidth = width();
@@ -2796,17 +3543,19 @@ function bindRailSplitter() {
 
   // Double-click or double-activate resets to the default width.
   splitter.addEventListener('dblclick', () => {
-    if (state.railCollapsed) return;
+    if (state.railCollapsed) setRailCollapsed(false);
     setRailWidth(RAIL_DEFAULT_WIDTH);
+    splitter.setAttribute('aria-valuenow', String(width()));
     persistRailWidth();
   });
   splitter.addEventListener('keydown', (event) => {
-    if (state.railCollapsed) return;
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
+    if (state.railCollapsed) setRailCollapsed(false);
     const step = event.shiftKey ? 48 : 12;
     const next = event.key === 'ArrowRight' ? width() + step : width() - step;
     setRailWidth(Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, next)));
+    splitter.setAttribute('aria-valuenow', String(width()));
     persistRailWidth();
   });
 
@@ -2867,11 +3616,15 @@ function bindEvents() {
     event.preventDefault();
     void resetLoopx();
   });
-  view.syncButton.addEventListener('click', () => void attachSnapshot(false));
   view.retryEnvironment.addEventListener('click', async () => {
     await performAction('retry_environment', null);
   });
   view.resumeRepository.addEventListener('click', openRepositoryResumeDialog);
+  view.approvalAlertOpen.addEventListener('click', openApprovalAlertGate);
+  view.approvalAlertApprove.addEventListener('click', () => answerApprovalAlertGate('approve'));
+  view.approvalAlertReject.addEventListener('click', () => answerApprovalAlertGate('reject'));
+  view.issueApprovalApprove.addEventListener('click', () => answerSelectedTaskGate('approve'));
+  view.issueApprovalReject.addEventListener('click', () => answerSelectedTaskGate('reject'));
   view.repositoryResumeCancel.addEventListener('click', () => {
     view.repositoryResumeDialog.close();
   });
@@ -2880,28 +3633,13 @@ function bindEvents() {
     void resumeRepository();
   });
   view.collapseTasks.addEventListener('click', () => {
-    state.railCollapsed = !state.railCollapsed;
-    view.taskRail.classList.toggle('is-collapsed', state.railCollapsed);
-    view.taskRail.parentElement.classList.toggle('tasks-collapsed', state.railCollapsed);
-    view.collapseTasks.setAttribute('aria-expanded', String(!state.railCollapsed));
-    view.collapseTasks.setAttribute(
-      'title',
-      state.railCollapsed ? text('expandTasks') : text('collapseTasks'),
-    );
+    setRailCollapsed(!state.railCollapsed);
   });
   view.showAllEvents.addEventListener('click', () => selectTask(null));
-  view.modeKey.addEventListener('click', () => setLogMode('key'));
-  view.modeFull.addEventListener('click', () => setLogMode('full'));
-  view.modeOutput.addEventListener('click', () => setLogMode('output'));
-  view.logSearch.addEventListener('input', () => {
-    state.query = view.logSearch.value.trim().toLowerCase();
-    renderLogs();
+  view.issueDetailDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    selectTask(null);
   });
-  view.errorsOnly.addEventListener('change', () => {
-    state.errorsOnly = view.errorsOnly.checked;
-    renderLogs();
-  });
-  view.exportLogs.addEventListener('click', exportLogs);
   view.logScroll.addEventListener('scroll', () => {
     const remaining = view.logScroll.scrollHeight - view.logScroll.scrollTop - view.logScroll.clientHeight;
     state.followLogs = remaining < 40;
@@ -2926,25 +3664,50 @@ function bindEvents() {
     event.preventDefault();
     void confirmRetry();
   });
-  view.gateCancel.addEventListener('click', () => {
-    state.gate = null;
-    view.gateDialog.close();
-  });
-  view.gateForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void answerGate('approve');
-  });
-  view.gateReject.addEventListener('click', () => void answerGate('reject'));
 }
 
 function updateLivenessClock() {
   renderLiveness();
   renderTasks();
+  const resumed = sampleHostClock();
+  if (resumed) {
+    void attachSnapshot(false, true);
+    return;
+  }
+  const tasks = state.snapshot && Array.isArray(state.snapshot.tasks) ? state.snapshot.tasks : [];
+  const hasActiveWork = tasks.some((task) => [
+    'preparing',
+    'running',
+    'cancelling',
+    'retry_wait',
+  ].includes(task.state));
+  const now = Date.now();
+  if (
+    hasActiveWork
+    && document.visibilityState === 'visible'
+    && now - state.lastHostSignalAt >= STALE_ACTIVE_REATTACH_MS
+    && now - state.lastReattachAt >= STALE_ACTIVE_REATTACH_MS
+  ) {
+    void attachSnapshot(false);
+  }
+}
+
+function sampleHostClock() {
+  const now = Date.now();
+  const elapsed = now - state.lastClockSampleAt;
+  state.lastClockSampleAt = now;
+  return elapsed >= HOST_RESUME_GAP_MS;
+}
+
+function handleHostSurfaceReturn() {
+  if (document.visibilityState !== 'visible') return;
+  void attachSnapshot(false, sampleHostClock());
 }
 
 async function start() {
   bindEvents();
   applyLocale();
+  void loadIntakeHistory();
   void loadModelCatalog();
   if (!app || !app.loopx) {
     showBridgeUnavailable();
@@ -2952,14 +3715,22 @@ async function start() {
   }
   app.loopx.onEvent(onLoopxEvent);
   if (typeof app.onLocaleChange === 'function') app.onLocaleChange(applyLocale);
-  if (typeof app.onActivate === 'function') app.onActivate(() => void attachSnapshot(false));
+  if (typeof app.onActivate === 'function') app.onActivate(handleHostSurfaceReturn);
+  document.addEventListener('visibilitychange', handleHostSurfaceReturn);
+  window.addEventListener('focus', handleHostSurfaceReturn);
+  window.addEventListener('pageshow', handleHostSurfaceReturn);
+  window.addEventListener('online', handleHostSurfaceReturn);
   window.addEventListener('beforeunload', () => {
     clearTurnOutputTimer();
+    document.removeEventListener('visibilitychange', handleHostSurfaceReturn);
+    window.removeEventListener('focus', handleHostSurfaceReturn);
+    window.removeEventListener('pageshow', handleHostSurfaceReturn);
+    window.removeEventListener('online', handleHostSurfaceReturn);
     if (app.loopx && typeof app.loopx.offEvent === 'function') {
       app.loopx.offEvent(onLoopxEvent);
     }
   });
-  window.setInterval(updateLivenessClock, 5000);
+  window.setInterval(updateLivenessClock, HOST_CLOCK_TICK_MS);
   await attachSnapshot(true);
 }
 

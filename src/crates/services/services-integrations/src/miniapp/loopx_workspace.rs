@@ -39,7 +39,11 @@ impl LoopxWorkspaceServiceConfig {
         Self {
             root_dir: root_dir.into(),
             git_executable: git_executable.into(),
-            clone_deadline: Duration::from_secs(300),
+            // A first-time bare clone downloads the full history of the target
+            // repository; medium repositories on residential bandwidth
+            // regularly need more than five minutes. 30 minutes bounds runaway
+            // transfers without killing an otherwise healthy clone.
+            clone_deadline: Duration::from_secs(1800),
             command_deadline: Duration::from_secs(30),
             terminate_grace: Duration::from_secs(2),
         }
@@ -149,6 +153,27 @@ pub fn plan_git_bare_clone_command(
             OsString::from("--"),
             OsString::from(&layout.clone_url),
             layout.bare_repo_path.as_os_str().to_owned(),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+/// Cheap validity probe for the shared bare repository. A clone that was
+/// killed mid-transfer (deadline, crash) leaves a directory with no resolvable
+/// HEAD; every later `worktree add` would fail with "invalid reference".
+pub fn plan_git_bare_head_check_command(
+    git_executable: &Path,
+    layout: &LoopxWorkspaceLayout,
+) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git_executable.to_path_buf(),
+        args: vec![
+            OsString::from("-C"),
+            layout.bare_repo_path.as_os_str().to_owned(),
+            OsString::from("rev-parse"),
+            OsString::from("--verify"),
+            OsString::from("HEAD"),
         ],
         environment: git_noninteractive_environment(),
         current_dir: None,
@@ -413,7 +438,7 @@ impl LoopxWorkspaceService {
         // per repository, then add a linked worktree for this task. Older
         // per-task full clones on disk keep working (they take the reuse path
         // above); only brand-new workspaces get the shared bare repo.
-        if !tokio::fs::try_exists(&layout.bare_repo_path)
+        let bare_exists = tokio::fs::try_exists(&layout.bare_repo_path)
             .await
             .map_err(|error| {
                 host_error(
@@ -422,8 +447,76 @@ impl LoopxWorkspaceService {
                     format!("failed to probe shared bare repository: {error}"),
                     true,
                 )
-            })?
-        {
+            })?;
+        // A bare repository abandoned by an interrupted clone has no resolvable
+        // HEAD and would poison every task of this repository with
+        // "fatal: invalid reference: HEAD" at worktree add. Rebuild it from
+        // scratch, but only while no sibling task worktree still links into it:
+        // removing a shared object database out from under live worktrees would
+        // silently break them.
+        let bare_usable = if bare_exists {
+            let head_check = self
+                .run_git(
+                    &request.operation_id,
+                    plan_git_bare_head_check_command(&self.config.git_executable, &layout),
+                    self.config.command_deadline,
+                    cancellation.clone(),
+                )
+                .await;
+            match head_check {
+                Ok(_) => true,
+                Err(_) => {
+                    let linked_worktrees = self
+                        .run_git(
+                            &request.operation_id,
+                            plan_git_worktree_list_command(&self.config.git_executable, &layout),
+                            self.config.command_deadline,
+                            cancellation.clone(),
+                        )
+                        .await
+                        .map(|listing| {
+                            listing
+                                .stdout
+                                .lines()
+                                .filter(|line| line.starts_with("worktree "))
+                                .count()
+                                // The first porcelain entry is the bare
+                                // repository itself.
+                                .saturating_sub(1)
+                        })
+                        // An unlistable bare repository cannot serve any
+                        // worktree either; treat it as abandoned.
+                        .unwrap_or(0);
+                    if linked_worktrees > 0 {
+                        return Err(host_error(
+                            loopx_contract::LoopxHostPortErrorKind::Conflict,
+                            &request.operation_id,
+                            format!(
+                                "shared bare repository {} has no valid HEAD (an earlier clone was interrupted) but still hosts {linked_worktrees} task worktree(s); archive those tasks so it can be rebuilt",
+                                layout.bare_repo_path.display()
+                            ),
+                            false,
+                        ));
+                    }
+                    tokio::fs::remove_dir_all(&layout.bare_repo_path)
+                        .await
+                        .map_err(|error| {
+                            host_error(
+                                loopx_contract::LoopxHostPortErrorKind::Io,
+                                &request.operation_id,
+                                format!(
+                                    "failed to remove corrupt shared bare repository left by an interrupted clone: {error}"
+                                ),
+                                true,
+                            )
+                        })?;
+                    false
+                }
+            }
+        } else {
+            false
+        };
+        if !bare_usable {
             self.run_git(
                 &request.operation_id,
                 plan_git_bare_clone_command(&self.config.git_executable, &layout),
@@ -794,17 +887,137 @@ impl LoopxWorkspaceService {
                 false,
             ));
         }
-        tokio::fs::remove_dir_all(&canonical_root)
+        let parent = canonical_root
+            .parent()
+            .expect("validated workspace root parent");
+        let detached_root = parent.join(format!(".{root_name}.reset-{}", uuid::Uuid::new_v4()));
+        tokio::fs::rename(&canonical_root, &detached_root)
             .await
             .map_err(|error| {
                 host_error(
                     loopx_contract::LoopxHostPortErrorKind::Io,
                     &request.operation_id,
-                    format!("failed to remove LoopX workspace root: {error}"),
-                    false,
+                    format!("failed to detach LoopX workspace root for cleanup: {error}"),
+                    true,
                 )
             })?;
+        if let Err(error) = tokio::fs::create_dir_all(&canonical_root).await {
+            let _ = tokio::fs::rename(&detached_root, &canonical_root).await;
+            return Err(host_error(
+                loopx_contract::LoopxHostPortErrorKind::Io,
+                &request.operation_id,
+                format!("failed to recreate LoopX workspace root: {error}"),
+                true,
+            ));
+        }
+
+        let retained = self
+            .restore_bare_repository_caches(&detached_root, &canonical_root, &request.operation_id)
+            .await;
+        if let Err(error) = &retained {
+            log::warn!("LoopX repository cache retention failed during reset: {error}");
+        }
+        let prune_paths = retained.unwrap_or_default();
+        for bare_repo_path in prune_paths {
+            if let Err(error) = self
+                .run_git(
+                    &request.operation_id,
+                    git_worktree_prune_plan(&self.config.git_executable, &bare_repo_path),
+                    self.config.command_deadline,
+                    CancellationToken::new(),
+                )
+                .await
+            {
+                log::warn!(
+                    "Failed to prune retained LoopX worktree registrations: bare_repo={}, error={}",
+                    bare_repo_path.display(),
+                    error
+                );
+            }
+        }
+
+        tokio::spawn(async move {
+            match tokio::fs::remove_dir_all(&detached_root).await {
+                Ok(()) => log::info!(
+                    "Detached LoopX task workspaces were reclaimed in the background: path={}",
+                    detached_root.display()
+                ),
+                Err(error) => log::warn!(
+                    "Failed to reclaim detached LoopX task workspaces: path={}, error={}",
+                    detached_root.display(),
+                    error
+                ),
+            }
+        });
         Ok(loopx_contract::LoopxWorkspaceResetResult { removed: true })
+    }
+
+    async fn restore_bare_repository_caches(
+        &self,
+        detached_root: &Path,
+        fresh_root: &Path,
+        operation_id: &str,
+    ) -> loopx_contract::LoopxHostResult<Vec<PathBuf>> {
+        let mut retained = Vec::new();
+        let mut repositories = tokio::fs::read_dir(detached_root).await.map_err(|error| {
+            host_error(
+                loopx_contract::LoopxHostPortErrorKind::Io,
+                operation_id,
+                format!("failed to enumerate detached LoopX repositories: {error}"),
+                true,
+            )
+        })?;
+        while let Some(entry) = repositories.next_entry().await.map_err(|error| {
+            host_error(
+                loopx_contract::LoopxHostPortErrorKind::Io,
+                operation_id,
+                format!("failed to inspect detached LoopX repository: {error}"),
+                true,
+            )
+        })? {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if !is_repository_hash(name)
+                || !entry
+                    .file_type()
+                    .await
+                    .map(|kind| kind.is_dir())
+                    .unwrap_or(false)
+            {
+                continue;
+            }
+            let source = entry.path().join("bare.git");
+            let Ok(metadata) = tokio::fs::symlink_metadata(&source).await else {
+                continue;
+            };
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let destination_dir = fresh_root.join(name);
+            tokio::fs::create_dir_all(&destination_dir)
+                .await
+                .map_err(|error| {
+                    host_error(
+                        loopx_contract::LoopxHostPortErrorKind::Io,
+                        operation_id,
+                        format!("failed to recreate LoopX repository cache directory: {error}"),
+                        true,
+                    )
+                })?;
+            let destination = destination_dir.join("bare.git");
+            tokio::fs::rename(&source, &destination)
+                .await
+                .map_err(|error| {
+                    host_error(
+                        loopx_contract::LoopxHostPortErrorKind::Io,
+                        operation_id,
+                        format!("failed to retain LoopX bare repository cache: {error}"),
+                        true,
+                    )
+                })?;
+            retained.push(destination);
+        }
+        Ok(retained)
     }
 }
 
@@ -921,6 +1134,26 @@ fn git_version_plan(git: &Path) -> LoopxGitCommandPlan {
         environment: BTreeMap::new(),
         current_dir: None,
     }
+}
+
+fn git_worktree_prune_plan(git: &Path, bare_repo_path: &Path) -> LoopxGitCommandPlan {
+    LoopxGitCommandPlan {
+        executable: git.to_path_buf(),
+        args: vec![
+            OsString::from("--git-dir"),
+            bare_repo_path.as_os_str().to_owned(),
+            OsString::from("worktree"),
+            OsString::from("prune"),
+            OsString::from("--expire"),
+            OsString::from("now"),
+        ],
+        environment: git_noninteractive_environment(),
+        current_dir: None,
+    }
+}
+
+fn is_repository_hash(value: &str) -> bool {
+    value.len() == 20 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn git_repository_probe_plan(

@@ -9,13 +9,14 @@ pub use search::WebSearchTool;
 
 #[cfg(test)]
 mod tests {
-    use super::fetch::WebFetchTool;
+    use super::fetch::{handled_access_result, WebFetchTool};
     use super::readable::{
         extract_html_title, extract_markdown_with_text_fallback, html_to_text, is_html,
         looks_noisy, normalize_requested_format, RequestedFormat,
     };
     use super::search::{build_web_search_tool_result, WebSearchTool};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use bitfun_services_integrations::web_tools::WebToolNetworkError;
     use serde_json::json;
     use std::io::ErrorKind;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -187,6 +188,38 @@ mod tests {
         // other browsers may use a persistent managed profile.
         assert!(description.contains("current profile"));
         assert!(description.contains("managed profile"));
+        assert!(description.contains("Do not retry the same URL"));
+    }
+
+    #[test]
+    fn webfetch_github_rate_limit_is_a_structured_access_result() {
+        let result = handled_access_result(
+            "https://api.github.com/repos/owner/repo/issues/1",
+            &WebToolNetworkError::HttpStatus {
+                status_code: 403,
+                status: "403 Forbidden".to_string(),
+                reason: "Forbidden".to_string(),
+                retry_after: None,
+                rate_limit_remaining: Some("0".to_string()),
+                rate_limit_reset: Some("1234".to_string()),
+            },
+        )
+        .expect("rate limits should be handled");
+
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = result
+        else {
+            panic!("expected structured result");
+        };
+        assert_eq!(data["status"], "rate_limited");
+        assert_eq!(data["http_status"], 403);
+        assert_eq!(data["retry_same_url"], false);
+        assert!(result_for_assistant
+            .as_deref()
+            .is_some_and(|text| text.contains("Do not retry")));
     }
 
     #[test]

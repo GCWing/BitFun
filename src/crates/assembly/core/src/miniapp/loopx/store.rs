@@ -23,6 +23,8 @@ pub struct LoopxPersistedState {
     pub cursor: u64,
     pub revision: u64,
     pub environment: LoopxEnvironmentSnapshot,
+    /// Durable BitFun host jobs and the last read-only LoopX Goal projection.
+    /// LoopX registry state remains authoritative for Goal lifecycle facts.
     pub tasks: Vec<LoopxTaskSnapshot>,
     pub runtime: BTreeMap<String, LoopxTaskRuntimeRecord>,
     pub events: Vec<LoopxEvent>,
@@ -48,7 +50,7 @@ impl Default for LoopxPersistedState {
 }
 
 impl LoopxPersistedState {
-    pub fn new(now_ms: i64) -> Self {
+    pub fn new(_now_ms: i64) -> Self {
         Self {
             schema_version: LOOPX_STATE_SCHEMA_VERSION,
             stream_id: uuid::Uuid::new_v4().to_string(),
@@ -60,12 +62,6 @@ impl LoopxPersistedState {
             events: Vec::new(),
             processed_request_ids: Vec::new(),
         }
-        .with_generated_time(now_ms)
-    }
-
-    fn with_generated_time(mut self, now_ms: i64) -> Self {
-        self.environment.checked_at = (now_ms > 0).then_some(now_ms);
-        self
     }
 
     pub fn snapshot(
@@ -259,7 +255,7 @@ impl LoopxStateStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::miniapp::loopx::{LoopxTaskState, LoopxTaskSnapshot};
+    use bitfun_product_domains::miniapp::loopx::{LoopxTaskSnapshot, LoopxTaskState};
 
     #[tokio::test]
     async fn restart_requeues_pending_work_and_recovers_inflight_work() {

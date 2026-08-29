@@ -217,6 +217,14 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 
 > 维护者：以后若新增 `app.bitfun.*` / `app.workspace.*` 这类宿主直通通道，请同步更新本节，避免"文档说没有、代码偷偷加了"的不一致。
 
+### 内置产品私有扩展
+
+源码、来源和运行域都由宿主验证的内置产品界面可以获得私有 namespace，但它不属于
+MiniApp 公共 API，也不会注入普通、导入或市场 MiniApp。当前仅
+`builtin-bitfun-loopx` 使用私有 `app.loopx` 连接持久宿主控制器；每次调用仍由宿主
+复核原始 bundle、非 draft、非本地覆盖和本地执行域。生成 MiniApp 不得探测、声明或
+模拟这些私有 namespace；需要复用的能力必须先形成产品无关、带权限合同的公开 API。
+
 ## window.app 运行时 API
 
 MiniApp UI 内通过 **window.app** 访问：

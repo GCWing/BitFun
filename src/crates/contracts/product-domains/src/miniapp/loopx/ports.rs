@@ -1,7 +1,7 @@
 //! Narrow service boundary for the pinned LoopX CLI adapter.
 
 use super::types::{
-    LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey,
+    LoopxCliGoalState, LoopxEventCursor, LoopxIntakeCandidate, LoopxIntakeTarget, LoopxIssueKey,
     LoopxPermissionScope, LoopxRepositoryKey, LoopxTurnOutputEvent,
 };
 use serde::{Deserialize, Serialize};
@@ -261,23 +261,32 @@ pub struct LoopxCliCreateGoalResult {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliCreateUserGateRequest {
+    #[serde(flatten)]
+    pub context: LoopxCliGoalContext,
+    pub goal_id: String,
+    pub agent_id: String,
+    pub message: String,
+    pub action_kind: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliCreateUserGateResult {
+    pub goal_id: String,
+    pub gate_id: String,
+    pub created: bool,
+    pub durable_revision: String,
+    pub settlement_receipt_count: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LoopxCliInspectGoalRequest {
     #[serde(flatten)]
     pub context: LoopxCliGoalContext,
     pub goal_id: String,
     pub agent_id: String,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LoopxCliGoalState {
-    #[default]
-    Unknown,
-    Active,
-    WaitingForUser,
-    Completed,
-    Failed,
-    Archived,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -364,6 +373,8 @@ pub struct LoopxCliAnswerGateResult {
     pub gate_id: String,
     pub applied: bool,
     pub durable_revision: String,
+    pub goal_state: LoopxCliGoalState,
+    pub settlement_receipt_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -430,6 +441,26 @@ pub struct LoopxCliCancelResult {
     pub cancelled: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliResetGoalsRequest {
+    #[serde(flatten)]
+    pub call: LoopxCliCallContext,
+    pub goal_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LoopxCliResetGoalsResult {
+    pub requested_goal_ids: Vec<String>,
+    pub retired_goal_ids: Vec<String>,
+    pub already_absent_goal_ids: Vec<String>,
+    pub archived_goal_ids: Vec<String>,
+    pub missing_runtime_goal_ids: Vec<String>,
+    pub backup_paths: Vec<String>,
+    pub archive_paths: Vec<String>,
+}
+
 /// Typed LoopX operations. No caller can pass raw CLI arguments through this port.
 pub trait LoopxCliPort: Send + Sync {
     fn handshake<'a>(
@@ -461,6 +492,14 @@ pub trait LoopxCliPort: Send + Sync {
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliCreateGoalResult>;
 
+    /// Adds one typed, agent-scoped owner review gate. Implementations own the
+    /// CLI translation; callers cannot inject raw todo arguments.
+    fn create_user_gate<'a>(
+        &'a self,
+        request: LoopxCliCreateUserGateRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliCreateUserGateResult>;
+
     fn inspect_goal<'a>(
         &'a self,
         request: LoopxCliInspectGoalRequest,
@@ -479,11 +518,23 @@ pub trait LoopxCliPort: Send + Sync {
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliAnswerGateResult>;
 
-    fn settle_turn<'a>(
+    /// Finalize one external-host turn from LoopX-owned durable writeback.
+    /// Implementations may append the exact idempotent quota receipt required
+    /// by a matching typed settlement identity, but must never manufacture the
+    /// Agent's progress or durable writeback.
+    fn finalize_turn_settlement<'a>(
         &'a self,
         request: LoopxCliSettleTurnRequest,
         progress: &'a dyn LoopxCliProgressSink,
     ) -> LoopxCliFuture<'a, LoopxCliSettleTurnResult>;
+
+    /// Retires explicit global routes and archives their runtime state after
+    /// an explicit product reset has removed the corresponding workspaces.
+    fn reset_goals<'a>(
+        &'a self,
+        request: LoopxCliResetGoalsRequest,
+        progress: &'a dyn LoopxCliProgressSink,
+    ) -> LoopxCliFuture<'a, LoopxCliResetGoalsResult>;
 
     fn cancel<'a>(
         &'a self,
@@ -628,7 +679,8 @@ pub struct LoopxWorkspaceResetRequest {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LoopxWorkspaceResetResult {
-    /// The managed LoopX workspace root was removed from disk.
+    /// Task worktrees were detached from the active root. Implementations may
+    /// reclaim them asynchronously and retain verified bare Git object caches.
     pub removed: bool,
 }
 
@@ -664,8 +716,10 @@ pub trait LoopxWorkspacePort: Send + Sync {
 
     /// Removes every managed LoopX workspace and goal registry under the
     /// service-owned root. This is reserved for explicit full-reset actions.
-    fn reset(&self, request: LoopxWorkspaceResetRequest)
-        -> LoopxHostFuture<'_, LoopxWorkspaceResetResult>;
+    fn reset(
+        &self,
+        request: LoopxWorkspaceResetRequest,
+    ) -> LoopxHostFuture<'_, LoopxWorkspaceResetResult>;
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

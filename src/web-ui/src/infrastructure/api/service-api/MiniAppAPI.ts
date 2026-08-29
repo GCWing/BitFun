@@ -281,6 +281,14 @@ export type LoopxTaskState =
   | 'failed'
   | 'archived';
 
+export type LoopxGoalState =
+  | 'unknown'
+  | 'active'
+  | 'waiting_for_user'
+  | 'completed'
+  | 'failed'
+  | 'archived';
+
 export type LoopxPhase =
   | 'unknown'
   | 'validating_environment'
@@ -321,9 +329,15 @@ export interface LoopxTaskSnapshot {
   generation: number;
   revision: number;
   goalId: string | null;
+  /** Authoritative Goal lifecycle projected from LoopX. */
+  goalState: LoopxGoalState | null;
   agentId: string | null;
+  /** BitFun host-job lifecycle, not the Goal authority. */
   state: LoopxTaskState;
   phase: LoopxPhase;
+  pendingGateId?: string | null;
+  pendingGateMessage?: string | null;
+  pendingGateActionKind?: string | null;
   workspacePath: string | null;
   modelId: string | null;
   grantedScopes: LoopxPermissionScope[];
@@ -334,6 +348,8 @@ export interface LoopxTaskSnapshot {
   retryAt: number | null;
   error: string | null;
   settlement: LoopxSettlementSummary;
+  autonomousTurnsSinceReview?: number;
+  autonomyReviewBaselineReceipts?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -396,6 +412,7 @@ export interface LoopxEvent {
 export interface LoopxAttachRequest {
   knownStreamId?: string;
   afterCursor?: number;
+  resumeDetected?: boolean;
 }
 
 export interface LoopxAttachResponse {
@@ -1015,106 +1032,6 @@ export class MiniAppAPI {
       throw createTauriCommandError('miniapp_decline_builtin_update', error, {
         appId,
         builtinVersion,
-      });
-    }
-  }
-
-  // ─── LoopX controller commands ─────────────────────────────────────────────
-
-  async loopxAttach(appId: string, request: LoopxAttachRequest = {}): Promise<LoopxAttachResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_attach', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_attach', error, { appId });
-    }
-  }
-
-  async loopxListModels(appId: string): Promise<AiModelInfo[]> {
-    try {
-      return await api.invoke('miniapp_loopx_list_models', {
-        request: { appId },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_list_models', error, { appId });
-    }
-  }
-
-  async loopxResolveIntake(
-    appId: string,
-    request: LoopxResolveIntakeRequest,
-  ): Promise<LoopxResolveIntakeResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_resolve_intake', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_resolve_intake', error, { appId });
-    }
-  }
-
-  async loopxCreateTask(
-    appId: string,
-    request: LoopxCreateTaskRequest,
-  ): Promise<LoopxCreateTaskResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_create_task', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_create_task', error, {
-        appId,
-        clientRequestId: request.clientRequestId,
-      });
-    }
-  }
-
-  async loopxAction(appId: string, request: LoopxActionRequest): Promise<LoopxActionResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_action', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_action', error, {
-        appId,
-        action: request.action,
-        taskId: request.taskId,
-        clientRequestId: request.clientRequestId,
-      });
-    }
-  }
-
-  async loopxEventsSince(
-    appId: string,
-    request: LoopxEventsSinceRequest,
-  ): Promise<LoopxEventsSinceResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_events_since', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_events_since', error, {
-        appId,
-        streamId: request.streamId,
-        afterCursor: request.afterCursor,
-      });
-    }
-  }
-
-  async loopxTurnOutputSince(
-    appId: string,
-    request: LoopxTurnOutputSinceRequest,
-  ): Promise<LoopxTurnOutputSinceResponse> {
-    try {
-      return await api.invoke('miniapp_loopx_turn_output_since', {
-        request: { appId, ...request },
-      });
-    } catch (error) {
-      throw createTauriCommandError('miniapp_loopx_turn_output_since', error, {
-        appId,
-        taskId: request.taskId,
-        afterCursor: request.afterCursor,
       });
     }
   }

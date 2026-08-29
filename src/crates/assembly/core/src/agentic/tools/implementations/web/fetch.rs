@@ -7,7 +7,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_services_integrations::web_tools::WebToolNetworkProvider;
+use bitfun_services_integrations::web_tools::{WebToolNetworkError, WebToolNetworkProvider};
 use serde_json::{json, Value};
 
 /// WebFetch tool
@@ -41,6 +41,8 @@ Use this tool to:
 - Access online resources
 
 Best for static pages that need no login. For pages requiring the user's login session or JavaScript rendering, use ControlHub domain="browser" instead: connect -> navigate -> snapshot / read_article. Chrome 144+ and Edge can connect to the user's current profile after explicit approval, preserving tabs and login state; other supported Chromium browsers reuse a real-profile endpoint when available and otherwise use BitFun's persistent managed profile. (browser.fetch only works when a session is already connected and the current page is same-origin with the target URL — it runs inside that page and is subject to its CORS policy.)
+
+HTTP 401, 403, and 429 responses are returned as structured access restrictions, not readable page content. Do not retry the same URL in the same turn. For public GitHub API rate limits, use the public github.com page, WebSearch, or an authenticated Git/review provider. For login-gated pages, use the user's connected browser session.
 
 Supports different output formats:
 - raw: Raw response content (original HTML or text)
@@ -159,9 +161,15 @@ Example usage:
         let requested_format =
             normalize_requested_format(input.get("format").and_then(|v| v.as_str()))?;
 
-        let response = WebToolNetworkProvider::fetch_text(url)
-            .await
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let response = match WebToolNetworkProvider::fetch_text(url).await {
+            Ok(response) => response,
+            Err(error) => {
+                if let Some(result) = handled_access_result(url, &error) {
+                    return Ok(vec![result]);
+                }
+                return Err(BitFunError::tool(error.to_string()));
+            }
+        };
         let content_type = response.content_type;
         let content = response.content;
 
@@ -214,4 +222,60 @@ Example usage:
 
         Ok(vec![result])
     }
+}
+
+pub(super) fn handled_access_result(url: &str, error: &WebToolNetworkError) -> Option<ToolResult> {
+    let WebToolNetworkError::HttpStatus {
+        status_code,
+        status,
+        reason,
+        retry_after,
+        rate_limit_remaining,
+        rate_limit_reset,
+    } = error
+    else {
+        return None;
+    };
+    if !matches!(*status_code, 401 | 403 | 429) {
+        return None;
+    }
+
+    let github_rate_limited = url.starts_with("https://api.github.com/")
+        && (rate_limit_remaining.as_deref() == Some("0") || *status_code == 429);
+    let category = if github_rate_limited {
+        "rate_limited"
+    } else if *status_code == 401 {
+        "authentication_required"
+    } else if *status_code == 429 {
+        "rate_limited"
+    } else {
+        "access_denied"
+    };
+    let guidance = if github_rate_limited {
+        "Do not retry this GitHub API URL in this turn. Use the public github.com page, WebSearch, or an authenticated Git/review provider."
+    } else if *status_code == 401 {
+        "This page requires authentication. Use the user's connected browser session or an authenticated provider."
+    } else if *status_code == 429 {
+        "The server rate-limited direct fetching. Respect Retry-After when present and use another available source in this turn."
+    } else {
+        "The server denied direct fetching. Do not retry the same URL in this turn; use WebSearch or the user's connected browser session when appropriate."
+    };
+    let assistant_text =
+        format!("WebFetch access restriction: HTTP {status} ({reason}). {guidance}");
+
+    Some(ToolResult::Result {
+        data: json!({
+            "url": url,
+            "status": category,
+            "http_status": status_code,
+            "reason": reason,
+            "retry_after": retry_after,
+            "rate_limit_remaining": rate_limit_remaining,
+            "rate_limit_reset": rate_limit_reset,
+            "retry_same_url": false,
+            "guidance": guidance,
+        }),
+        result_for_assistant: Some(assistant_text),
+        image_attachments: None,
+    })
 }

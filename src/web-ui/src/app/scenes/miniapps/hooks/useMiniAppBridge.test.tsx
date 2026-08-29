@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   agentRun: vi.fn(),
   getCustomizationMetadata: vi.fn(),
   loopxAttach: vi.fn(),
+  loopxListModels: vi.fn(),
   loopxResolveIntake: vi.fn(),
   loopxCreateTask: vi.fn(),
   loopxAction: vi.fn(),
@@ -39,12 +40,18 @@ vi.mock('@/infrastructure/api/service-api/MiniAppAPI', () => ({
     agentEnsureSession: mocks.agentEnsureSession,
     agentRun: mocks.agentRun,
     getCustomizationMetadata: mocks.getCustomizationMetadata,
-    loopxAttach: mocks.loopxAttach,
-    loopxResolveIntake: mocks.loopxResolveIntake,
-    loopxCreateTask: mocks.loopxCreateTask,
-    loopxAction: mocks.loopxAction,
-    loopxEventsSince: mocks.loopxEventsSince,
-    loopxTurnOutputSince: mocks.loopxTurnOutputSince,
+  },
+}));
+
+vi.mock('@/infrastructure/api/service-api/LoopxAPI', () => ({
+  loopxAPI: {
+    attach: mocks.loopxAttach,
+    listModels: mocks.loopxListModels,
+    resolveIntake: mocks.loopxResolveIntake,
+    createTask: mocks.loopxCreateTask,
+    action: mocks.loopxAction,
+    eventsSince: mocks.loopxEventsSince,
+    turnOutputSince: mocks.loopxTurnOutputSince,
   },
 }));
 
@@ -446,12 +453,14 @@ describe('useMiniAppBridge LoopX controller routing', () => {
     await dispatchRpc(iframe, 1, 'loopx.attach', {
       knownStreamId: 'stream-1',
       afterCursor: 4,
+      resumeDetected: true,
     });
 
     expect(mocks.getCustomizationMetadata).toHaveBeenCalledWith('builtin-bitfun-loopx');
     expect(mocks.loopxAttach).toHaveBeenCalledWith('builtin-bitfun-loopx', {
       knownStreamId: 'stream-1',
       afterCursor: 4,
+      resumeDetected: true,
     });
 
     await dispatchRpc(iframe, 2, 'loopx.resolveIntake', {

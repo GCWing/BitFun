@@ -28,13 +28,15 @@
           name="intake"
           type="url"
           inputmode="url"
-          autocomplete="off"
+          autocomplete="url"
+          list="intake-history"
           spellcheck="false"
           maxlength="2048"
           required
           placeholder="https://github.com/owner/repo/issues/123"
           data-i18n-placeholder="intakePlaceholder"
         />
+        <datalist id="intake-history"></datalist>
         <span class="model-field" title="模型" data-i18n-title="model">
           <span class="model-field__label" data-i18n="model">模型</span>
           <select id="model-select" name="model" class="model-field__select">
@@ -48,13 +50,34 @@
       </form>
 
       <div class="header-actions">
+        <details id="environment-panel" class="environment-panel">
+          <summary title="环境状态" data-i18n-title="environment">
+            <span id="environment-dot" class="status-dot" aria-hidden="true"></span>
+            <span data-i18n="environment">环境</span>
+            <strong id="environment-status">--</strong>
+          </summary>
+          <div class="environment-body">
+            <div id="environment-checked" class="environment-checked"></div>
+            <section aria-labelledby="core-env-title">
+              <div class="section-heading">
+                <h2 id="core-env-title" data-i18n="coreEnvironment">核心环境</h2>
+                <span data-i18n="required">必需</span>
+              </div>
+              <div id="core-environment-list" class="environment-grid"></div>
+            </section>
+            <section aria-labelledby="optional-env-title">
+              <div class="section-heading">
+                <h2 id="optional-env-title" data-i18n="optionalEnvironment">增强能力</h2>
+                <span data-i18n="optional">可选</span>
+              </div>
+              <div id="optional-environment-list" class="environment-grid"></div>
+            </section>
+            <button id="retry-environment" class="text-button" type="button" data-i18n="retryEnvironment">重新检查环境</button>
+          </div>
+        </details>
         <button id="reset-loopx" class="icon-button" type="button" title="重置 LoopX" data-i18n-title="resetLoopx">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 14h10l1-14"/><path d="M10 11v6M14 11v6"/></svg>
           <span class="sr-only" data-i18n="resetLoopx">重置 LoopX</span>
-        </button>
-        <button id="sync-button" class="icon-button" type="button" title="刷新状态" data-i18n-title="refresh">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
-          <span class="sr-only" data-i18n="refresh">刷新状态</span>
         </button>
       </div>
     </header>
@@ -68,33 +91,17 @@
       </div>
     </div>
 
-    <details id="environment-panel" class="environment-panel">
-      <summary>
-        <span class="summary-title">
-          <span id="environment-dot" class="status-dot" aria-hidden="true"></span>
-          <span data-i18n="environment">环境</span>
-          <strong id="environment-status">--</strong>
-        </span>
-        <span id="environment-checked" class="summary-meta"></span>
-      </summary>
-      <div class="environment-body">
-        <section aria-labelledby="core-env-title">
-          <div class="section-heading">
-            <h2 id="core-env-title" data-i18n="coreEnvironment">核心环境</h2>
-            <span data-i18n="required">必需</span>
-          </div>
-          <div id="core-environment-list" class="environment-grid"></div>
-        </section>
-        <section aria-labelledby="optional-env-title">
-          <div class="section-heading">
-            <h2 id="optional-env-title" data-i18n="optionalEnvironment">增强能力</h2>
-            <span data-i18n="optional">可选</span>
-          </div>
-          <div id="optional-environment-list" class="environment-grid"></div>
-        </section>
-        <button id="retry-environment" class="text-button" type="button" data-i18n="retryEnvironment">重新检查环境</button>
+    <section id="approval-alert" class="approval-alert" role="alert" aria-labelledby="approval-alert-title" hidden>
+      <span class="approval-alert__signal" aria-hidden="true">!</span>
+      <button id="approval-alert-open" class="approval-alert__copy" type="button">
+        <strong id="approval-alert-title"></strong>
+        <p id="approval-alert-message"></p>
+      </button>
+      <div class="approval-alert__actions">
+        <button id="approval-alert-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
+        <button id="approval-alert-approve" class="primary-button" type="button" data-i18n="approve">批准</button>
       </div>
-    </details>
+    </section>
 
     <div class="workbench">
       <aside id="task-rail" class="task-rail" aria-label="LoopX 任务列表">
@@ -102,7 +109,6 @@
           <div>
             <h2 data-i18n="tasks">任务</h2>
             <span id="task-count" class="count-badge">0</span>
-            <span id="decision-count" class="count-badge count-badge--attention" role="status" aria-live="polite" hidden></span>
           </div>
           <button id="collapse-tasks" class="icon-button icon-button--small" type="button" aria-expanded="true" title="收起任务栏" data-i18n-title="collapseTasks">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -110,11 +116,11 @@
           </button>
         </div>
         <nav id="task-list" class="task-list" aria-label="LoopX 任务">
-          <div id="task-items"></div>
           <div id="repository-actions" class="repository-actions" hidden>
             <button id="resume-repository" class="primary-button" type="button"></button>
             <span id="repository-actions-meta" data-i18n="repositorySerial">同仓库串行执行</span>
           </div>
+          <div id="task-items"></div>
         </nav>
         <div id="task-empty" class="task-empty">
           <span aria-hidden="true">#</span>
@@ -124,62 +130,13 @@
 
       <div id="rail-splitter" class="rail-splitter" role="separator" aria-orientation="vertical" aria-label="调整任务栏宽度" title="调整任务栏宽度" data-i18n-title="resizeTasks" tabindex="0"></div>
 
-      <main class="log-workspace" aria-labelledby="log-title">
-        <header class="log-header">
+      <main class="log-workspace" aria-labelledby="activity-log-title">
+        <header class="log-header log-header--activity">
           <div class="log-title-block">
-            <div class="log-title-row">
-              <button id="show-all-events" class="icon-button icon-button--small task-back-button" type="button" hidden title="全部活动" data-i18n-title="allActivity">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-                <span class="sr-only" data-i18n="allActivity">全部活动</span>
-              </button>
-              <h1 id="log-title" data-i18n="activity">运行日志</h1>
-              <span id="selected-state" class="state-pill" hidden></span>
-              <div id="task-actions" class="task-actions"></div>
-            </div>
-            <p id="selected-summary" data-i18n="allTaskEvents">所有任务的实时日志和阶段进度</p>
-            <a id="liveness-item" class="liveness-item" hidden target="_blank" rel="noopener noreferrer"></a>
-          </div>
-          <div class="log-controls">
-            <div class="segmented" role="radiogroup" aria-label="日志视图">
-              <button id="mode-key" type="button" role="radio" aria-checked="false" data-i18n="keyEvents">关键事件</button>
-              <button id="mode-full" type="button" role="radio" aria-checked="true" class="is-active" data-i18n="fullLog">完整日志</button>
-              <button id="mode-output" type="button" role="radio" aria-checked="false" data-i18n="liveOutput">实时输出</button>
-            </div>
-            <label class="search-field" for="log-search">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-              <input id="log-search" type="search" autocomplete="off" placeholder="搜索日志" data-i18n-placeholder="searchLogs" />
-            </label>
-            <label class="toggle-field">
-              <input id="errors-only" type="checkbox" />
-              <span data-i18n="errorsOnly">仅错误</span>
-            </label>
-            <button id="export-logs" class="icon-button icon-button--small" type="button" title="导出日志" data-i18n-title="exportLogs">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-              <span class="sr-only" data-i18n="exportLogs">导出日志</span>
-            </button>
+            <h1 id="activity-log-title" data-i18n="liveOutput">模型实时输出</h1>
+            <p data-i18n="allTaskEvents">所有 Issue 的模型输出会按时间保留在这里</p>
           </div>
         </header>
-
-        <section id="liveness-panel" class="liveness-panel" aria-label="当前任务状态" hidden>
-          <div class="liveness-primary">
-            <span id="liveness-dot" class="status-dot" aria-hidden="true"></span>
-            <strong id="liveness-phase">--</strong>
-            <span id="liveness-since"></span>
-          </div>
-          <div class="liveness-details">
-            <span id="liveness-turn" hidden></span>
-            <span id="liveness-tool" hidden></span>
-            <span id="liveness-deadline" hidden></span>
-            <span id="liveness-goal" class="liveness-goal" hidden></span>
-            <span id="liveness-error" class="error-text" hidden></span>
-          </div>
-        </section>
-
-        <details id="issue-description-panel" class="issue-description-panel" hidden open>
-          <summary data-i18n="issueDescription">Issue 描述</summary>
-          <p id="liveness-description" class="liveness-description"></p>
-        </details>
-
         <div id="log-scroll" class="log-scroll">
           <div id="log-empty" class="log-empty">
             <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h12M4 18h8"/></svg>
@@ -187,11 +144,106 @@
           </div>
           <ol id="log-list" class="log-list" role="log" aria-live="off" aria-relevant="additions"></ol>
         </div>
-        <button id="new-events" class="new-events" type="button" hidden data-i18n="newEvents">查看新事件</button>
+        <button id="new-events" class="new-events" type="button" hidden title="滚动到最新输出" data-i18n-title="newEvents">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="sr-only" data-i18n="newEvents">滚动到最新输出</span>
+        </button>
 
       </main>
     </div>
   </div>
+
+  <dialog id="issue-detail-dialog" class="issue-detail-dialog" aria-labelledby="log-title">
+    <article class="issue-detail-sheet">
+      <header class="log-header issue-detail-header">
+        <button id="show-all-events" class="icon-button issue-detail-close" type="button" title="关闭详情" data-i18n-title="close">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          <span class="sr-only" data-i18n="close">关闭</span>
+        </button>
+        <div class="log-title-block">
+          <div class="log-title-row">
+            <h1 id="log-title"></h1>
+            <span id="selected-state" class="state-pill" hidden></span>
+            <div id="task-actions" class="task-actions"></div>
+          </div>
+          <p id="selected-summary" hidden></p>
+          <a id="issue-link" class="issue-link" hidden target="_blank" rel="noopener noreferrer"></a>
+        </div>
+      </header>
+
+      <div class="issue-detail-scroll">
+        <section id="issue-approval-panel" class="issue-approval-panel" aria-labelledby="issue-approval-title" hidden>
+          <div class="issue-approval-header">
+            <span class="issue-approval-signal" aria-hidden="true">!</span>
+            <div>
+              <span class="eyebrow" data-i18n="decisionRequired">需要你的决定</span>
+              <h2 id="issue-approval-title"></h2>
+              <p id="issue-approval-summary"></p>
+            </div>
+          </div>
+          <div class="issue-approval-effects">
+            <section data-tone="approve" aria-labelledby="issue-approval-approve-label">
+              <strong id="issue-approval-approve-label" data-i18n="afterApprove">批准后</strong>
+              <p id="issue-approval-approve-effect"></p>
+            </section>
+            <section data-tone="reject" aria-labelledby="issue-approval-reject-label">
+              <strong id="issue-approval-reject-label" data-i18n="afterReject">拒绝后</strong>
+              <p id="issue-approval-reject-effect"></p>
+            </section>
+          </div>
+          <p id="issue-approval-recommendation" class="issue-approval-recommendation"></p>
+          <label class="note-field issue-approval-note" for="issue-approval-note">
+            <span data-i18n="approvalNote">审批备注</span>
+            <textarea id="issue-approval-note" rows="2" maxlength="1000" data-i18n-placeholder="approvalNotePlaceholder"></textarea>
+          </label>
+          <div class="issue-approval-actions">
+            <button id="issue-approval-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
+            <button id="issue-approval-approve" class="primary-button" type="button" data-i18n="approve">批准</button>
+          </div>
+        </section>
+
+        <section id="issue-description-panel" class="issue-description-panel" aria-labelledby="issue-description-title" hidden>
+          <div class="issue-description-heading">
+            <h2 id="issue-description-title" data-i18n="issueDescription">Issue 描述</h2>
+            <span id="issue-number" class="issue-number"></span>
+          </div>
+          <div id="issue-description" class="issue-description markdown-body"></div>
+        </section>
+
+        <section id="issue-progress-panel" class="issue-progress-panel" aria-labelledby="issue-progress-title" hidden>
+          <div class="issue-progress-heading">
+            <h2 id="issue-progress-title" data-i18n="issueProgress">处理进度</h2>
+            <span id="issue-progress-meta"></span>
+          </div>
+          <div id="issue-stage-track" class="issue-stage-track">
+            <ol id="issue-stage-list" class="issue-stage-list"></ol>
+          </div>
+          <div class="issue-progress-grid">
+            <section aria-labelledby="issue-current-title">
+              <h3 id="issue-current-title" data-i18n="currentWork">当前</h3>
+              <strong id="issue-current-heading"></strong>
+              <p id="issue-current-detail"></p>
+            </section>
+            <section aria-labelledby="issue-evidence-title">
+              <h3 id="issue-evidence-title" data-i18n="evidenceAndOutputs">已完成的工作</h3>
+              <ul id="issue-evidence-list"></ul>
+            </section>
+            <section aria-labelledby="issue-next-title">
+              <h3 id="issue-next-title" data-i18n="nextAction">下一步</h3>
+              <p id="issue-next-action"></p>
+            </section>
+          </div>
+          <section id="issue-outcome-panel" class="issue-outcome-panel" aria-labelledby="issue-outcome-title" hidden>
+            <div class="issue-outcome-heading">
+              <h3 id="issue-outcome-title" data-i18n="latestOutcome">最近进展</h3>
+              <span id="issue-outcome-meta"></span>
+            </div>
+            <p id="issue-outcome" class="issue-outcome"></p>
+          </section>
+        </section>
+      </div>
+    </article>
+  </dialog>
 
   <dialog id="intake-dialog" class="dialog dialog--wide" aria-labelledby="intake-dialog-title">
     <form id="intake-confirm-form" method="dialog">
@@ -253,31 +305,6 @@
       <footer class="dialog__footer">
         <button id="retry-cancel" class="text-button" type="button" data-i18n="cancel">取消</button>
         <button id="retry-confirm" class="primary-button" type="submit" data-i18n="confirmNewAttempt">确认新尝试</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <dialog id="gate-dialog" class="dialog" aria-labelledby="gate-dialog-title">
-    <form id="gate-form" method="dialog">
-      <header class="dialog__header">
-        <div>
-          <span class="eyebrow" data-i18n="approvalGate">审批门禁</span>
-          <h2 id="gate-dialog-title"></h2>
-        </div>
-      </header>
-      <div class="dialog__body">
-        <p id="gate-message"></p>
-        <label class="note-field" for="gate-note">
-          <span data-i18n="approvalNote">审批备注</span>
-          <textarea id="gate-note" rows="3" maxlength="1000" data-i18n-placeholder="approvalNotePlaceholder"></textarea>
-        </label>
-      </div>
-      <footer class="dialog__footer dialog__footer--split">
-        <button id="gate-cancel" class="text-button" type="button" data-i18n="cancel">取消</button>
-        <div>
-          <button id="gate-reject" class="danger-button" type="button" data-i18n="reject">拒绝</button>
-          <button id="gate-approve" class="primary-button" type="submit" data-i18n="approve">批准</button>
-        </div>
       </footer>
     </form>
   </dialog>

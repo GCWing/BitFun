@@ -8,6 +8,7 @@ vi.mock('../errors/TauriCommandError', () => ({
 }));
 
 import { miniAppAPI } from './MiniAppAPI';
+import { loopxAPI } from './LoopxAPI';
 
 describe('MiniAppAPI agent bridge', () => {
   beforeEach(() => invoke.mockReset());
@@ -42,22 +43,23 @@ describe('MiniAppAPI agent bridge', () => {
   });
 });
 
-describe('MiniAppAPI LoopX controller bridge', () => {
+describe('LoopxAPI private built-in bridge', () => {
   beforeEach(() => invoke.mockReset());
 
   it('uses structured requests for attach and replay', async () => {
     invoke.mockResolvedValue({});
 
-    await miniAppAPI.loopxAttach('builtin-bitfun-loopx', {
+    await loopxAPI.attach('builtin-bitfun-loopx', {
       knownStreamId: 'stream-1',
       afterCursor: 7,
+      resumeDetected: true,
     });
-    await miniAppAPI.loopxEventsSince('builtin-bitfun-loopx', {
+    await loopxAPI.eventsSince('builtin-bitfun-loopx', {
       streamId: 'stream-1',
       afterCursor: 7,
       limit: 100,
     });
-    await miniAppAPI.loopxTurnOutputSince('builtin-bitfun-loopx', {
+    await loopxAPI.turnOutputSince('builtin-bitfun-loopx', {
       taskId: 'task-1',
       turnId: 'turn-1',
       streamId: 'stream-1',
@@ -70,6 +72,7 @@ describe('MiniAppAPI LoopX controller bridge', () => {
         appId: 'builtin-bitfun-loopx',
         knownStreamId: 'stream-1',
         afterCursor: 7,
+        resumeDetected: true,
       },
     });
     expect(invoke).toHaveBeenNthCalledWith(2, 'miniapp_loopx_events_since', {
@@ -100,11 +103,11 @@ describe('MiniAppAPI LoopX controller bridge', () => {
       number: 2382,
     };
 
-    await miniAppAPI.loopxResolveIntake('builtin-bitfun-loopx', {
+    await loopxAPI.resolveIntake('builtin-bitfun-loopx', {
       input: 'https://github.com/GCWing/BitFun/issues/2382',
       modelId: 'primary',
     });
-    await miniAppAPI.loopxCreateTask('builtin-bitfun-loopx', {
+    await loopxAPI.createTask('builtin-bitfun-loopx', {
       clientRequestId: 'request-1',
       previewFingerprint: 'preview-1',
       selectedItems: [item],
@@ -136,7 +139,7 @@ describe('MiniAppAPI LoopX controller bridge', () => {
   it('forwards only the typed action envelope', async () => {
     invoke.mockResolvedValue({});
 
-    await miniAppAPI.loopxAction('builtin-bitfun-loopx', {
+    await loopxAPI.action('builtin-bitfun-loopx', {
       taskId: 'task-1',
       action: 'approve',
       clientRequestId: 'request-2',
