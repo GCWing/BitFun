@@ -1,4 +1,5 @@
 import { categoryColor, usageColorSequence, toneColor } from './style';
+import { Alert as DesignAlert, Disclosure as DesignDisclosure } from '@bitfun/ui';
 import { useCanvasState } from './hooks';
 import { normalizeDiffLines } from './diffLines';
 import type {
@@ -41,16 +42,9 @@ export function Callout({ children, tone = 'info', title, style, ...props }: Can
 }
 
 function alertTone(type: CanvasAlertProps['type'], tone: CanvasAlertProps['tone']) {
-  if (tone) return tone;
-  if (type === 'error') return 'danger';
+  if (tone === 'danger' || tone === 'error') return 'error';
+  if (tone === 'success' || tone === 'warning' || tone === 'info') return tone;
   return type || 'info';
-}
-
-function alertIcon(type: CanvasAlertProps['type']) {
-  if (type === 'success') return '✓';
-  if (type === 'warning') return '!';
-  if (type === 'error') return '!';
-  return 'i';
 }
 
 export function Alert({
@@ -64,62 +58,17 @@ export function Alert({
   style,
   ...props
 }: CanvasAlertProps) {
-  const resolvedTone = alertTone(type, tone);
-  const color = toneColor(resolvedTone);
-
   return (
-    <div
+    <DesignAlert
       {...props}
-      role="alert"
-      aria-live={type === 'error' ? 'assertive' : 'polite'}
       className={['bf-alert', props.className].filter(Boolean).join(' ')}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: showIcon ? '18px minmax(0, 1fr)' : 'minmax(0, 1fr)',
-        gap: 9,
-        border: '1px solid var(--bf-appearance-token-border-subtle)',
-        borderLeft: `3px solid ${color}`,
-        borderRadius: 8,
-        padding: '10px 12px',
-        background: 'color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 78%, transparent)',
-        ...style,
-      }}
-    >
-      {showIcon ? (
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'grid',
-            placeItems: 'center',
-            width: 18,
-            height: 18,
-            borderRadius: 999,
-            color,
-            fontSize: 11,
-            fontWeight: 700,
-          }}
-        >
-          {alertIcon(type)}
-        </span>
-      ) : null}
-      <span style={{ minWidth: 0, display: 'grid', gap: 3 }}>
-        {title ? (
-          <strong style={{ color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 13, lineHeight: 1.35 }}>
-            {title}
-          </strong>
-        ) : null}
-        {message || children ? (
-          <span style={{ color: 'var(--bf-appearance-token-color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
-            {message ?? children}
-          </span>
-        ) : null}
-        {description ? (
-          <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12, overflowWrap: 'anywhere' }}>
-            {description}
-          </span>
-        ) : null}
-      </span>
-    </div>
+      description={description}
+      message={message ?? children ?? ''}
+      showIcon={showIcon}
+      style={style}
+      title={title}
+      tone={alertTone(type, tone)}
+    />
   );
 }
 
@@ -236,78 +185,29 @@ export function CollapsibleSection({
 }: CanvasCollapsibleSectionProps) {
   const [storedOpen, setStoredOpen] = useCanvasState(`collapsible:${String(title ?? '')}`, Boolean(defaultOpen));
   const isOpen = open ?? storedOpen;
-  const toggleOpen = () => {
-    const nextOpen = !isOpen;
+  const handleOpenChange = (nextOpen: boolean) => {
     setStoredOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
 
   return (
-    <section {...props} className={['bf-collapsible-section', props.className].filter(Boolean).join(' ')} style={style}>
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        onClick={toggleOpen}
-        style={{
-          width: '100%',
-          minHeight: 28,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          border: 0,
-          padding: '4px 0',
-          background: 'transparent',
-          color: 'var(--bf-appearance-token-color-text-primary)',
-          font: 'inherit',
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            flex: '0 0 auto',
-            width: 12,
-            height: 12,
-            display: 'inline-grid',
-            placeItems: 'center',
-            color: 'var(--bf-appearance-token-color-text-muted)',
-            transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 120ms ease',
-          }}
-        >
-          ›
-        </span>
-        {leading ? <span style={{ flex: '0 0 auto', display: 'inline-flex' }}>{leading}</span> : null}
-        <span
-          style={{
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            color: 'var(--bf-appearance-token-color-text-primary)',
-            fontSize: 13,
-            fontWeight: 650,
-          }}
-        >
+    <DesignDisclosure
+      {...props}
+      actions={trailing}
+      className={['bf-collapsible-section', props.className].filter(Boolean).join(' ')}
+      leading={leading}
+      onOpenChange={handleOpenChange}
+      open={isOpen}
+      style={style}
+      summary={(
+        <>
           {title}
-        </span>
-        {count !== undefined ? (
-          <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{count}</span>
-        ) : null}
-        <span style={{ flex: '1 1 auto', minWidth: 0 }} />
-        {trailing ? (
-          <span style={{ flex: '0 0 auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>
-            {trailing}
-          </span>
-        ) : null}
-      </button>
-      {isOpen ? (
-        <div style={{ marginLeft: 18, paddingTop: 6, paddingBottom: 4 }}>
-          {children}
-        </div>
-      ) : null}
-    </section>
+          {count !== undefined ? <span className="bf-collapsible-section__count">{count}</span> : null}
+        </>
+      )}
+    >
+      {children}
+    </DesignDisclosure>
   );
 }
 

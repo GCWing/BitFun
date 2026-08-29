@@ -1,15 +1,12 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Alert, Avatar, AvatarGroup, Button, Checkbox, Textarea } from '@bitfun/ui';
+import { Alert, Avatar, AvatarGroup, Button, Checkbox, StatusPill, TabGroup, Textarea } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
 import { Select } from '@components/Select';
 import { CubeLoading } from '@components/CubeLoading';
 import { Tooltip } from '@components/Tooltip';
-import { Tabs, TabPane } from '@components/Tabs';
-import { Tag } from '@components/Tag';
-import { Empty } from '@components/Empty';
 import { Markdown } from '@components/Markdown';
 import { CodeEditor } from '@components/CodeEditor';
 import { TodoWriteDisplay } from '@/flow_chat/tool-cards/TodoWriteDisplay';
@@ -84,21 +81,12 @@ export const componentRegistry: ComponentCategory[] = [
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Tag color="blue">Blue</Tag>
-              <Tag color="green">Green</Tag>
-              <Tag color="red">Red</Tag>
-              <Tag color="yellow">Yellow</Tag>
-              <Tag color="purple">Purple</Tag>
-              <Tag color="gray">Gray</Tag>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <Tag size="small">Small</Tag>
-              <Tag size="medium">Medium</Tag>
-              <Tag size="large">Large</Tag>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Tag color="blue" rounded>Rounded</Tag>
-              <Tag color="green" closable onClose={() => alert('Closed!')}>Closable</Tag>
+              <StatusPill tone="info">Info</StatusPill>
+              <StatusPill tone="success">Success</StatusPill>
+              <StatusPill tone="danger">Danger</StatusPill>
+              <StatusPill tone="warning">Warning</StatusPill>
+              <StatusPill tone="accent">Accent</StatusPill>
+              <StatusPill tone="neutral">Neutral</StatusPill>
             </div>
           </div>
         ),
@@ -711,35 +699,21 @@ console.log(user.greet());`);
         category: 'navigation',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <Tabs type="line" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Tab 1">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Tab 2">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容2</div>
-              </TabPane>
-              <TabPane tabKey="3" label="Tab 3">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容3</div>
-              </TabPane>
-            </Tabs>
-
-            <Tabs type="card" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Card 1">
-                <div style={{ padding: '16px' }}>Card 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Card 2">
-                <div style={{ padding: '16px' }}>Card 类型 - 内容2</div>
-              </TabPane>
-            </Tabs>
-
-            <Tabs type="pill" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Pill 1">
-                <div style={{ padding: '16px' }}>Pill 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Pill 2">
-                <div style={{ padding: '16px' }}>Pill 类型 - 内容2</div>
-              </TabPane>
-            </Tabs>
+            <TabGroup
+              defaultValue="1"
+              items={[
+                { value: '1', label: 'Tab 1' },
+                { value: '2', label: 'Tab 2' },
+                { value: '3', label: 'Tab 3' },
+              ]}
+            />
+            <TabGroup
+              defaultValue="1"
+              items={[
+                { value: '1', label: 'Card 1' },
+                { value: '2', label: 'Card 2' },
+              ]}
+            />
           </div>
         ),
       },

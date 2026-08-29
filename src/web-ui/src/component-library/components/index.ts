@@ -20,11 +20,8 @@ export { Textarea, type TextareaProps } from '@bitfun/ui';
 
 export * from './Tooltip';
 
-export * from './Tabs';
-
-export * from './Tag';
 export { Avatar, AvatarGroup, type AvatarGroupProps, type AvatarProps, type AvatarSize } from '@bitfun/ui';
-export * from './Empty';
+export { Empty, type EmptyMediaSize, type EmptyProps } from '@bitfun/ui';
 export * from './Markdown';
 export * from './Card';
 export * from './ConfigPage';

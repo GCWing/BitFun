@@ -2,15 +2,12 @@ import { cardAppearanceDescriptor } from '@/component-library/components/Card/ap
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
-import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
-import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
 import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';
-import { emptyAppearanceDescriptor } from '@/component-library/components/Empty/appearance';
 import { inputDialogAppearanceDescriptor } from '@/component-library/components/InputDialog/appearance';
 import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
@@ -265,15 +262,12 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
-    .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
-    .registerComponent(tagAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)
     .registerComponent(cubeLoadingAppearanceDescriptor)
     .registerComponent(dotMatrixLoaderAppearanceDescriptor)
-    .registerComponent(emptyAppearanceDescriptor)
     .registerComponent(inputDialogAppearanceDescriptor)
     .registerComponent(taskRunningIndicatorAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)
