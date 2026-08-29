@@ -1,7 +1,10 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useId,
+  useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEventHandler,
@@ -10,6 +13,8 @@ import {
 import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Textarea.module.css";
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export interface TextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> {
   autoResize?: boolean;
@@ -53,6 +58,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const resolvedId = id ?? `${generatedId}-textarea`;
   const supportId = `${generatedId}-support`;
   const compositionActiveRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [uncontrolledCount, setUncontrolledCount] = useState(() => String(props.defaultValue ?? "").length);
   const count = value === undefined ? uncontrolledCount : String(value).length;
   const resolvedInvalid = invalid || error || (ariaInvalid !== undefined && ariaInvalid !== false && ariaInvalid !== "false");
@@ -63,6 +69,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
   }, [autoResize]);
+
+  useImperativeHandle(ref, () => textareaRef.current as HTMLTextAreaElement);
+
+  useIsomorphicLayoutEffect(() => {
+    if (textareaRef.current) resize(textareaRef.current);
+  }, [resize, value]);
 
   const handleChange: ChangeEventHandler<HTMLTextAreaElement> = (event) => {
     setUncontrolledCount(event.currentTarget.value.length);
@@ -98,7 +110,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           }
           onKeyDown?.(event);
         }}
-        ref={ref}
+        ref={textareaRef}
         required={required}
         value={value}
       />
