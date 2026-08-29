@@ -11,7 +11,13 @@
   }
 
   .root[data-has-context="true"] {
-    background: var(--bf-color-surface-panel);
+    /* Keep the band opaque while moving it toward the foreground: lighter in
+       dark themes and darker in light themes. */
+    background: color-mix(
+      in srgb,
+      var(--bf-color-surface-panel) 94%,
+      var(--bf-color-content-primary) 6%
+    );
   }
 
   .context {
