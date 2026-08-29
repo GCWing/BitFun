@@ -93,7 +93,6 @@ export struct SettingsSheet {
           .fontColor(INK)
         Blank()
         SheetCloseButton({
-          controlSize: 48,
           onClose: (): void => {
             this.onClose();
           }
@@ -101,7 +100,7 @@ export struct SettingsSheet {
       }
       .width('100%')
       .height(84)
-      .padding({ left: 28, right: 16, top: 10 })
+      .padding({ left: 28, right: 8, top: 10 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor(PAGE_BG)
 

@@ -467,12 +467,11 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private CloseButton() {
     SheetCloseButton({
-      controlSize: 48,
       onClose: (): void => {
         this.onClose();
       }
     })
-    .margin({ top: 22, right: 18 })
+    .margin({ top: 7, right: 8 })
   }
 
   private isConnectedOrConnecting(): boolean {

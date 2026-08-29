@@ -79,7 +79,6 @@ export struct BitFunAccountLoginPage {
     Row() {
       Blank()
       SheetCloseButton({
-        controlSize: 48,
         onClose: (): void => {
           this.onClose();
         }
@@ -87,7 +86,7 @@ export struct BitFunAccountLoginPage {
     }
     .width('100%')
     .height(58)
-    .padding({ left: 16, right: 16 })
+    .padding({ left: 16, right: 8 })
     .alignItems(VerticalAlign.Center)
   }
 
