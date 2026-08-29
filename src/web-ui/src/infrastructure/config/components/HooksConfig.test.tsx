@@ -30,6 +30,7 @@ vi.mock('@bitfun/ui', () => ({
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
   ),
+  Icon: ({ name }: { name: string }) => <span aria-hidden="true" data-icon={name} />,
   ConfirmDialog: ({ confirmText, isOpen, message, onConfirm, title }: {
     confirmText?: string;
     isOpen: boolean;
