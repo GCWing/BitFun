@@ -365,6 +365,21 @@ async function waitForSettledSession(sessionId: string): Promise<void> {
   });
 }
 
+/**
+ * Delegation boundary between client-level Voice and workspace execution.
+ *
+ * This creates a regular `agentic` FlowChat session. That session follows the
+ * same product assembly, workspace adapters, tool registry, plugin/MCP setup,
+ * and permission flow as a task started from the normal UI. Voice supplies only
+ * the complete task intent and target workspace, then observes progress,
+ * cancellation, and the final public result.
+ *
+ * Do not copy the workspace Agent's tools into the Voice provider session and
+ * do not proxy individual Agent tool calls through this bridge. If a new
+ * workspace capability should be usable from Voice, implement it in the normal
+ * Agent execution path; delegated sessions will inherit it automatically. Only
+ * direct client-control operations need a new Voice function command.
+ */
 export async function runBitFunVoiceTask(
   task: string,
   options: RunVoiceTaskOptions,

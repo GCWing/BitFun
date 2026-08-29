@@ -36,6 +36,8 @@ function workspaceForSession(
  * Build a compact, public snapshot for the realtime model. This contains only
  * navigation/session facts already visible in the controller UI; it excludes
  * message contents, tool payloads, credentials, and private Agent reasoning.
+ * This is context data for the Voice control plane, not a workspace Agent tool
+ * registry. Do not add Agent tool schemas or execution capabilities here.
  */
 export function buildVoiceClientContext(voiceTask: VoiceOwnedTaskContext | null = null) {
   const workspaceState = workspaceManager.getState();
