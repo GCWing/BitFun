@@ -251,6 +251,43 @@
   color: var(--bf-color-content-primary);
 }
 
+[data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='bot'] {
+  grid-template-columns: 70px minmax(0, 1fr) minmax(112px, auto) 16px;
+
+  .bitfun-remote-connect__overview-action-icon {
+    width: 70px;
+    background: transparent;
+  }
+}
+
+.bitfun-remote-connect__chat-brand-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.bitfun-remote-connect__chat-brand-item {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-secondary);
+
+  &[data-connected='true'] {
+    background: color-mix(
+      in srgb,
+      var(--bf-color-accent-default) 12%,
+      var(--bf-color-surface-panel)
+    );
+    color: var(--bf-color-accent-default);
+  }
+}
+
 [data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='account'] {
   .bitfun-remote-connect__overview-action-icon {
     background: color-mix(
@@ -347,6 +384,13 @@
   min-width: 0;
   align-items: center;
   gap: var(--bf-space-1);
+}
+
+.bitfun-remote-connect__tab-brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: currentColor;
 }
 
 .bitfun-remote-connect__dot-sm {
@@ -791,6 +835,103 @@
   );
 }
 
+.bitfun-remote-connect__connected--bot {
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: var(--bf-color-surface-panel);
+}
+
+.bitfun-remote-connect__connected-app {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+}
+
+.bitfun-remote-connect__connected-app-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--bf-radius-lg);
+  background: color-mix(
+    in srgb,
+    var(--bf-color-accent-default) 10%,
+    var(--bf-color-surface-panel)
+  );
+  color: var(--bf-color-accent-default);
+}
+
+.bitfun-remote-connect__connected-app-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  strong {
+    color: var(--bf-color-content-primary);
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: 1.4;
+  }
+
+  > span {
+    max-width: 470px;
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-font-size-caption);
+    line-height: 1.5;
+  }
+}
+
+.bitfun-remote-connect__connected-notice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin: 16px 20px 0;
+  padding: 13px 14px;
+  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-radius: var(--bf-radius-base);
+  background: var(--bf-color-surface-subtle);
+  color: var(--bf-color-content-muted);
+
+  svg {
+    margin-top: 2px;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--bf-font-size-caption);
+    line-height: 1.6;
+  }
+}
+
+.bitfun-remote-connect__connected-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 16px 20px 0;
+  padding: 12px 14px;
+  border-radius: var(--bf-radius-base);
+  background: color-mix(
+    in srgb,
+    var(--bf-color-surface-subtle) 72%,
+    var(--bf-color-surface-panel)
+  );
+}
+
+.bitfun-remote-connect__connected-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px 20px;
+}
+
 .bitfun-remote-connect__hint,
 .bitfun-remote-connect__description {
   width: 100%;
@@ -843,6 +984,10 @@
     color: var(--bf-color-content-primary);
     font-weight: var(--bf-font-weight-semibold);
   }
+}
+
+.bitfun-remote-connect__mode-divider {
+  color: var(--bf-color-border-default);
 }
 
 .bitfun-remote-connect__weixin-qr {
@@ -994,6 +1139,14 @@
     height: 48px;
   }
 
+  [data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='bot'] {
+    grid-template-columns: 70px minmax(0, 1fr) 16px;
+
+    .bitfun-remote-connect__overview-action-icon {
+      width: 70px;
+    }
+  }
+
   .bitfun-remote-connect__overview-action-status {
     grid-column: 2;
     justify-content: flex-start;
@@ -1041,6 +1194,34 @@
 
   .bitfun-remote-connect__bot-identity-description {
     max-width: 360px;
+  }
+
+  .bitfun-remote-connect__connected--bot {
+    margin: 20px 24px 24px;
+  }
+
+  .bitfun-remote-connect__connected-app {
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding: 18px;
+  }
+
+  .bitfun-remote-connect__connected-app-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .bitfun-remote-connect__connected-app .bitfun-remote-connect__status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .bitfun-remote-connect__connected-notice,
+  .bitfun-remote-connect__connected-setting {
+    margin-inline: 18px;
+  }
+
+  .bitfun-remote-connect__connected-actions {
+    padding-inline: 18px;
   }
 }
 

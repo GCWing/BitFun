@@ -1009,6 +1009,7 @@
     "botWeixinPolling": "等待掃碼確認…",
     "botVerboseMode": "詳細模式",
     "botConciseMode": "簡潔模式",
+    "botConnectedDescription": "目前工作區已可透過此聊天應用程式收發訊息。",
     "openNgrokSetup": "開啟 ngrok 安裝與設定頁面",
     "disclaimerTitle": "遠程連接免責聲明",
     "disclaimerIntro": "啟用遠程連接前，請確認你已理解並接受以下事項：",

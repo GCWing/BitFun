@@ -1009,6 +1009,7 @@
     "botWeixinPolling": "Waiting for scan…",
     "botVerboseMode": "Verbose Mode",
     "botConciseMode": "Concise Mode",
+    "botConnectedDescription": "This workspace can now send and receive messages through this chat app.",
     "openNgrokSetup": "Open ngrok setup page",
     "disclaimerTitle": "Remote Connect Disclaimer",
     "disclaimerIntro": "Before enabling Remote Connect, please read and accept the following:",

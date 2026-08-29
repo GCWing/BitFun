@@ -8,6 +8,10 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { useNotification } from '@/shared/notification-system';
 import {
+  ChatAppBrandIcon,
+  chatAppBrandFromIdentity,
+} from '../../RemoteConnectDialog/ChatAppBrandIcon';
+import {
   selectActivityFacts,
   selectAttachedGroups,
   type DeviceOverviewActivityFact,
@@ -23,15 +27,26 @@ interface DeviceStatusControlProps {
   onManageDevices: () => void;
 }
 
-function DeviceIcon({ kind, size = 17 }: { kind: DeviceOverviewDeviceKind; size?: number }) {
+function DeviceIcon({
+  identity,
+  kind,
+  size = 17,
+}: {
+  identity?: string | null;
+  kind: DeviceOverviewDeviceKind;
+  size?: number;
+}) {
   const catalogSize = size <= 11 ? '2xs' : size <= 13 ? 'xs' : size <= 15 ? 'sm' : size <= 17 ? 'md' : 'lg';
   switch (kind) {
     case 'mobile':
       return <Smartphone size={size} aria-hidden="true" />;
     case 'execution-host':
       return <Server size={size} aria-hidden="true" />;
-    case 'message-app':
+    case 'message-app': {
+      const chatApp = chatAppBrandFromIdentity(identity);
+      if (chatApp) return <ChatAppBrandIcon app={chatApp} size={size} />;
       return <Icon name="side-chat" size={catalogSize} aria-hidden="true" />;
+    }
     default:
       return <Monitor size={size} aria-hidden="true" />;
   }
@@ -131,6 +146,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     [activityFactSentence, overview],
   );
   const attachedGroups = useMemo(() => selectAttachedGroups(overview), [overview]);
+  const attachedMessageAppIdentity = useMemo(() => (
+    overview.connectedDevices.find(device => device.kind === 'message-app')?.name
+  ), [overview.connectedDevices]);
   const accessibleSummary = [overview.currentWorkDeviceName, ...activityLines].join(' · ');
 
   const deviceActivity = useCallback((device: DeviceOverviewDevice) => {
@@ -147,6 +165,16 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
       }));
     }
     return parts.join(' · ');
+  }, [t]);
+
+  const deviceDisplayName = useCallback((device: DeviceOverviewDevice) => {
+    const chatApp = device.kind === 'message-app'
+      ? chatAppBrandFromIdentity(`${device.id} ${device.name}`)
+      : null;
+    if (chatApp === 'telegram') return 'Telegram';
+    if (chatApp === 'feishu') return t('remoteConnect.feishu');
+    if (chatApp === 'weixin') return t('remoteConnect.weixin');
+    return device.name;
   }, [t]);
 
   const serviceContent = useMemo(() => {
@@ -196,9 +224,14 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             {attachedGroups.map(group => (
               <span
                 className="bitfun-nav-panel__footer-device-status-attached-group"
+                data-bf-device-kind={group.kind}
                 key={group.kind}
               >
-                <DeviceIcon kind={group.kind} size={13} />
+                <DeviceIcon
+                  identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
+                  kind={group.kind}
+                  size={13}
+                />
                 {group.count > 1 && (
                   <span className="bitfun-nav-panel__footer-device-status-attached-count">
                     {group.count}
@@ -238,9 +271,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             }}
           >
             <CardHeader
-              align="center"
               className="bitfun-device-overview__header"
-              contentAlign="center"
               title={<h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
             />
             <ScrollArea className="bitfun-device-overview__scroll">
@@ -250,7 +281,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   className="bitfun-device-overview__local-device"
                   data-testid="nav-device-status-summary"
                 >
-                  <DeviceIcon kind={overview.primaryDevice.kind} size={19} />
+                  <span className="bitfun-device-overview__device-icon" aria-hidden="true">
+                    <DeviceIcon
+                      identity={`${overview.primaryDevice.id} ${overview.primaryDevice.name}`}
+                      kind={overview.primaryDevice.kind}
+                      size={17}
+                    />
+                  </span>
                   <strong>{overview.currentWorkDeviceName}</strong>
                 </div>
               ) : (
@@ -258,7 +295,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   <section className="bitfun-device-overview__device-group is-primary">
                     <h3>{t('deviceOverview.currentUse')}</h3>
                     <div className="bitfun-device-overview__device-row">
-                      <DeviceIcon kind={overview.primaryDevice.kind} />
+                      <span className="bitfun-device-overview__device-icon" aria-hidden="true">
+                        <DeviceIcon
+                          identity={`${overview.primaryDevice.id} ${overview.primaryDevice.name}`}
+                          kind={overview.primaryDevice.kind}
+                          size={16}
+                        />
+                      </span>
                       <strong>{overview.primaryDevice.name}</strong>
                       {overview.primaryDevice.activities.includes('background-execution') && (
                         <span>{deviceActivity(overview.primaryDevice)}</span>
@@ -278,8 +321,14 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                           data-bf-device-kind={device.kind}
                           data-bf-activities={device.activities.join(' ')}
                         >
-                          <DeviceIcon kind={device.kind} />
-                          <strong>{device.name}</strong>
+                          <span className="bitfun-device-overview__device-icon" aria-hidden="true">
+                            <DeviceIcon
+                              identity={`${device.id} ${device.name}`}
+                              kind={device.kind}
+                              size={16}
+                            />
+                          </span>
+                          <strong>{deviceDisplayName(device)}</strong>
                           <span>{deviceActivity(device)}</span>
                         </div>
                       ))}
@@ -321,9 +370,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
             <CardFooter align="center" className="bitfun-device-overview__actions">
               <Button
-                variant="fill"
+                variant="outline"
                 size="sm"
-                leadingIcon={<Icon name="link" size="lg" />}
+                leadingIcon={<Icon name="link" size="md" />}
                 onClick={handleManageDevices}
                 data-testid="nav-device-status-manage"
               >

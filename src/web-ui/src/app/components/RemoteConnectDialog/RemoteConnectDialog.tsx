@@ -1199,41 +1199,63 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const renderBotContent = () => {
     if (isBotConnected && connectedBotTab === botTab) {
+      const connectedLabel = botLabel(botTab) ?? botTab;
+      const connectedDescription = t('remoteConnect.botConnectedDescription');
       return (
         <div
           data-bf-component="remote-connect-dialog"
           data-bf-part="body"
           data-bf-state="connected"
-          className="bitfun-remote-connect__connected"
+          className="bitfun-remote-connect__connected bitfun-remote-connect__connected--bot"
         >
-          {botTab === 'weixin' && renderInfoCard(
-            <p className="bitfun-remote-connect__info-text">
-              {t('remoteConnect.botWeixinRestriction')}
-            </p>,
-          )}
-          <div className="bitfun-remote-connect__status" data-bf-component="remote-connect-dialog" data-bf-part="status" data-bf-state="connected">
-            <StatusPill tone="success">{t('remoteConnect.stateConnected')}</StatusPill>
-          </div>
-          <div className="bitfun-remote-connect__mode-setting">
-            <span data-active={!botVerboseMode ? 'true' : undefined}>
-              {t('remoteConnect.botConciseMode')}
+          <div className="bitfun-remote-connect__connected-app">
+            <span className="bitfun-remote-connect__connected-app-icon" aria-hidden="true">
+              <ChatAppBrandIcon app={botTab} size={25} />
             </span>
+            <span className="bitfun-remote-connect__connected-app-copy">
+              <strong>{connectedLabel}</strong>
+              <span>{connectedDescription}</span>
+            </span>
+            <div
+              className="bitfun-remote-connect__status"
+              data-bf-component="remote-connect-dialog"
+              data-bf-part="status"
+              data-bf-state="connected"
+            >
+              <StatusPill tone="success">{t('remoteConnect.stateConnected')}</StatusPill>
+            </div>
+          </div>
+          {botTab === 'weixin' && (
+            <div className="bitfun-remote-connect__connected-notice">
+              <Icon name="info" size="md" aria-hidden="true" />
+              <p>{t('remoteConnect.botWeixinRestriction')}</p>
+            </div>
+          )}
+          <div className="bitfun-remote-connect__connected-setting">
+            <div className="bitfun-remote-connect__mode-setting">
+              <span data-active={!botVerboseMode ? 'true' : undefined}>
+                {t('remoteConnect.botConciseMode')}
+              </span>
+              <span className="bitfun-remote-connect__mode-divider" aria-hidden="true">/</span>
+              <span data-active={botVerboseMode ? 'true' : undefined}>
+                {t('remoteConnect.botVerboseMode')}
+              </span>
+            </div>
             <Switch
               aria-label={`${t('remoteConnect.botConciseMode')} / ${t('remoteConnect.botVerboseMode')}`}
               checked={botVerboseMode}
               onCheckedChange={(checked) => void handleBotVerboseModeChange(checked)}
             />
-            <span data-active={botVerboseMode ? 'true' : undefined}>
-              {t('remoteConnect.botVerboseMode')}
-            </span>
           </div>
-          <Button
-            variant="outline"
-            size="md"
-            onClick={handleDisconnectBot}
-          >
-            {t('remoteConnect.disconnect')}
-          </Button>
+          <div className="bitfun-remote-connect__connected-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDisconnectBot}
+            >
+              {t('remoteConnect.disconnect')}
+            </Button>
+          </div>
         </div>
       );
     }
@@ -1622,7 +1644,19 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
           {renderOverviewAction({
             view: 'bot',
-            icon: <Icon name="side-chat" size="lg" />,
+            icon: (
+              <span className="bitfun-remote-connect__chat-brand-group">
+                {BOT_TABS.map(tab => (
+                  <span
+                    className="bitfun-remote-connect__chat-brand-item"
+                    data-connected={isBotConnected && connectedBotTab === tab.id ? 'true' : undefined}
+                    key={tab.id}
+                  >
+                    <ChatAppBrandIcon app={tab.id} size={15} />
+                  </span>
+                ))}
+              </span>
+            ),
             title: t('remoteConnect.chatAppsTitle'),
             description: t('remoteConnect.chatAppsDescription'),
             statusLabel: !hasWorkspace
@@ -1683,10 +1717,19 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     );
   };
 
-  const renderConnectionTabLabel = (label: string, connected: boolean) => (
+  const renderConnectionTabLabel = (
+    label: string,
+    connected: boolean,
+    brand?: BotTab,
+  ) => (
     <span className="bitfun-remote-connect__tab-label">
-      {connected && <span className="bitfun-remote-connect__dot-sm" aria-hidden="true" />}
+      {brand && (
+        <span className="bitfun-remote-connect__tab-brand" aria-hidden="true">
+          <ChatAppBrandIcon app={brand} size={15} />
+        </span>
+      )}
       <span>{label}</span>
+      {connected && <span className="bitfun-remote-connect__dot-sm" aria-hidden="true" />}
       {connected && (
         <span className="bitfun-remote-connect__visually-hidden">
           {` · ${t('remoteConnect.stateConnected')}`}
@@ -1711,6 +1754,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     label: renderConnectionTabLabel(
       botLabel(tab.id) ?? tab.label,
       isBotConnected && connectedBotTab === tab.id,
+      tab.id,
     ),
     panelId: 'remote-connect-bot-tabpanel',
     value: tab.id,
