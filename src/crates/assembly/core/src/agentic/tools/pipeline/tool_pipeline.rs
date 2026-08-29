@@ -4742,7 +4742,9 @@ mod tests {
         assert!(result.result.result["provided_arguments"].is_null());
         assert_eq!(
             result.result.result_for_assistant.as_deref(),
-            Some("Tool 'Git' failed (invalid_arguments): Validation error: operation is not supported")
+            Some(
+                "Tool 'Worktree' failed (invalid_arguments): Validation error: operation is not supported"
+            )
         );
     }
 

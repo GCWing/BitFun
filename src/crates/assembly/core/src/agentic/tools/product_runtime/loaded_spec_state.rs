@@ -235,7 +235,7 @@ mod tests {
 
         assert_eq!(
             loaded_specs,
-            vec![loaded_spec("Worktree"), loaded_spec("WebFetch")]
+            vec![loaded_spec("WebFetch"), loaded_spec("Worktree")]
         );
     }
 

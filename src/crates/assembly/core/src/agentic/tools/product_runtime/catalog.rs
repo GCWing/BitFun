@@ -1202,10 +1202,16 @@ mod tests {
             "Worktree".to_string(),
         ];
 
+        let mut context = tool_context(Some("test-agent"));
+        context.workspace = Some(crate::agentic::WorkspaceBinding::new(
+            None,
+            std::env::current_dir().expect("absolute test workspace root"),
+        ));
+
         let manifest = resolve_product_resolved_tool_manifest(
             &allowed_tools,
             &AgentToolPolicyOverrides::default(),
-            &tool_context(Some("test-agent")),
+            &context,
         )
         .await;
 

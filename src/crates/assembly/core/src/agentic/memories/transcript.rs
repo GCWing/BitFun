@@ -536,7 +536,7 @@ mod tests {
                 .unwrap();
 
         assert!(transcript.contains("\"function\":{\"name\":\"GetToolSpec\""));
-        assert!(transcript.contains("\\\"tool_name\\\":\\\"Git\\\""));
+        assert!(transcript.contains("\\\"tool_name\\\":\\\"Worktree\\\""));
         assert!(transcript.contains("\"name\":\"GetToolSpec\""));
         assert!(transcript.contains("\"content\":\"[cleared]\""));
         assert!(!transcript.contains("full schema definition"));
