@@ -2163,6 +2163,27 @@ const AGENT_MODE_ORDER: AgentMode[] = ['agentic', 'Plan', 'debug'];
 
 // ─── ChatPage ───────────────────────────────────────────────────────────────
 
+/**
+ * A settled (completed/failed/cancelled) active turn is a fallback projection
+ * rendered until the durable transcript delivers the final assistant message.
+ * Once that message is present in the persisted list, drawing the turn bubble
+ * again would show the same reply twice, so the overlay is suppressed.
+ */
+function isActiveTurnCoveredByMessages(
+  turn: ActiveTurnSnapshot,
+  messages: ChatMessage[],
+): boolean {
+  if (turn.status === 'active') return false;
+  const turnText = (turn.text || '').trim();
+  return messages.some((message) => {
+    if (message.role !== 'assistant') return false;
+    if (message.id === `${turn.turn_id}_assistant`) return true;
+    const messageText = (message.content || '').trim();
+    return turnText.length > 0 && turnText === messageText;
+  });
+}
+
+
 const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName, onBack, autoFocus }) => {
   const { t } = useI18n();
   const {
@@ -3176,7 +3197,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         })()}
 
         {/* Active turn overlay (streaming or completed-pending-persist) */}
-        {activeTurn && (() => {
+          {activeTurn && !isActiveTurnCoveredByMessages(activeTurn, messages) && (() => {
           const turn = activeTurn;
           const turnIsActive = turn.status === 'active';
 
