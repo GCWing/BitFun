@@ -1485,6 +1485,40 @@
     "copy": "复制",
     "copied": "已复制"
   },
+  "deepResearchProtocol": {
+    "phaseProgress": "{{current}} / {{total}}",
+    "phases": {
+      "orient": "理解问题并制定研究计划",
+      "specialists": "并行采集多方证据",
+      "citations": "建立可信来源清单",
+      "debateRound1": "交叉质疑证据 · 第一轮",
+      "debateRound2": "交叉质疑证据 · 第二轮",
+      "factCheck": "核查冲突与存疑事实",
+      "arbitration": "综合证据并作出裁决",
+      "report": "撰写深度研究报告",
+      "complete": "深度研究已完成"
+    },
+    "subquestions": {
+      "title": "研究问题",
+      "count": "{{count}} 项"
+    },
+    "citations": {
+      "title": "已登记可信来源",
+      "count": "{{count}} 条",
+      "corroborated": "{{count}} 条已交叉验证"
+    },
+    "verdicts": {
+      "title": "证据结论",
+      "count": "{{count}} 项",
+      "confidence": "置信度 {{value}}",
+      "status": {
+        "decided": "证据支持",
+        "contested": "仍有争议",
+        "gap": "证据缺口",
+        "tentative": "暂定结论"
+      }
+    }
+  },
   "modelRound": {
     "copyDialog": "复制对话",
     "copiedDialog": "已复制!",

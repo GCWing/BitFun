@@ -1485,6 +1485,40 @@
     "copy": "Copy",
     "copied": "Copied"
   },
+  "deepResearchProtocol": {
+    "phaseProgress": "{{current}} / {{total}}",
+    "phases": {
+      "orient": "Understand the question and plan the research",
+      "specialists": "Gather evidence in parallel",
+      "citations": "Build the source registry",
+      "debateRound1": "Challenge the evidence · Round 1",
+      "debateRound2": "Challenge the evidence · Round 2",
+      "factCheck": "Verify conflicts and uncertain claims",
+      "arbitration": "Weigh the evidence and decide",
+      "report": "Write the research report",
+      "complete": "Deep research complete"
+    },
+    "subquestions": {
+      "title": "Research questions",
+      "count": "{{count}} questions"
+    },
+    "citations": {
+      "title": "Sources registered",
+      "count": "{{count}} sources",
+      "corroborated": "{{count}} cross-checked"
+    },
+    "verdicts": {
+      "title": "Evidence conclusions",
+      "count": "{{count}} conclusions",
+      "confidence": "{{value}} confidence",
+      "status": {
+        "decided": "Supported",
+        "contested": "Contested",
+        "gap": "Evidence gap",
+        "tentative": "Tentative"
+      }
+    }
+  },
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",

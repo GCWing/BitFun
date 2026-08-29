@@ -1485,6 +1485,40 @@
     "copy": "複製",
     "copied": "已複製"
   },
+  "deepResearchProtocol": {
+    "phaseProgress": "{{current}} / {{total}}",
+    "phases": {
+      "orient": "理解問題並制定研究計畫",
+      "specialists": "並行蒐集多方證據",
+      "citations": "建立可信來源清單",
+      "debateRound1": "交叉質疑證據 · 第一輪",
+      "debateRound2": "交叉質疑證據 · 第二輪",
+      "factCheck": "核查衝突與存疑事實",
+      "arbitration": "綜合證據並作出裁決",
+      "report": "撰寫深度研究報告",
+      "complete": "深度研究已完成"
+    },
+    "subquestions": {
+      "title": "研究問題",
+      "count": "{{count}} 項"
+    },
+    "citations": {
+      "title": "已登記可信來源",
+      "count": "{{count}} 條",
+      "corroborated": "{{count}} 條已交叉驗證"
+    },
+    "verdicts": {
+      "title": "證據結論",
+      "count": "{{count}} 項",
+      "confidence": "信心度 {{value}}",
+      "status": {
+        "decided": "證據支持",
+        "contested": "仍有爭議",
+        "gap": "證據缺口",
+        "tentative": "暫定結論"
+      }
+    }
+  },
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",

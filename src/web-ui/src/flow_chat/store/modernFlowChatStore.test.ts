@@ -152,6 +152,42 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
   });
 
+  it('keeps Deep Research progress visible after its exploration tool settles', () => {
+    const session = makeSession({
+      sessionId: 'deep-research-progress',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'deep-research-progress',
+        userMessage: {
+          id: 'user-1',
+          content: 'Research this topic',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({
+          items: [
+            makeTextItem('phase-marker', '[[PHASE:phase-0-orient]]'),
+            makeTool('orientation-search', 'WebSearch'),
+          ],
+        })],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
+    expect(items[1]).toMatchObject({
+      type: 'model-round',
+      data: {
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'phase-marker' }),
+          expect.objectContaining({ id: 'orientation-search' }),
+        ]),
+      },
+    });
+  });
+
   it.each([
     'WebFetch',
     'GetFileDiff',

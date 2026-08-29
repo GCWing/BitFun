@@ -19,6 +19,7 @@ import { sessionUsagePanelAppearanceDescriptor } from '@/flow_chat/components/us
 import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTextInput.appearance';
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
+import { deepResearchProtocolAppearanceDescriptor } from '@/flow_chat/deep-research/DeepResearchProtocolGroup.appearance';
 import { modelSelectorAppearanceDescriptor } from '@/flow_chat/components/ModelSelector.appearance';
 import { reasoningPresetSelectorAppearanceDescriptor } from '@/flow_chat/components/ReasoningPresetSelector.appearance';
 import { acpModeSelectorAppearanceDescriptor } from '@/flow_chat/components/AcpModeSelector.appearance';
@@ -278,6 +279,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(richTextInputAppearanceDescriptor)
     .registerComponent(modelRoundItemAppearanceDescriptor)
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
+    .registerComponent(deepResearchProtocolAppearanceDescriptor)
     .registerComponent(modelSelectorAppearanceDescriptor)
     .registerComponent(reasoningPresetSelectorAppearanceDescriptor)
     .registerComponent(acpModeSelectorAppearanceDescriptor)

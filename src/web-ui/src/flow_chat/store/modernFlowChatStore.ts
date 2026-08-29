@@ -21,6 +21,7 @@ import {
   type TurnCompletionNotice,
 } from '../utils/turnCompletionNotice';
 import { createAbsoluteSessionTurnIndexResolver } from '../utils/flowChatTurnOrdinal';
+import { parseDeepResearchContent } from '../deep-research/deepResearchProtocol';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -160,6 +161,16 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   }
 
   if (hasTrailingVisibleText(round)) {
+    return false;
+  }
+
+  // Deep Research markers are user-visible progress, not narrative attached to
+  // an exploration tool. Keep their round stable and outside collapsed explore
+  // groups after the tool settles. Check this after trailing text so ordinary
+  // final responses stay on the existing constant-time path.
+  if (round.items.some(item => (
+    item.type === 'text' && parseDeepResearchContent(item.content).hasProtocol
+  ))) {
     return false;
   }
   

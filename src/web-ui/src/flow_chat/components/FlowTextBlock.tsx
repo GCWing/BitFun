@@ -4,7 +4,7 @@
  * batched EventBatcher text updates. Supports a streaming cursor indicator.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MarkdownRenderer } from '@/component-library';
 import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
@@ -12,6 +12,8 @@ import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
+import { DeepResearchProtocolGroup } from '../deep-research/DeepResearchProtocolGroup';
+import { parseDeepResearchContent } from '../deep-research/deepResearchProtocol';
 import './FlowTextBlock.scss';
 
 // Idle timeout (ms) after content stops growing.
@@ -138,6 +140,54 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   // typewriter is still revealing leftover characters.
   const isActivelyStreaming = (isStreaming && isContentGrowing) || isRevealing;
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
+  const parsedContent = useMemo(
+    () => parseDeepResearchContent(displayContent),
+    [displayContent],
+  );
+
+  const renderMarkdown = (markdownContent: string, key?: React.Key) => (
+    <MarkdownRenderer
+      key={key}
+      content={markdownContent}
+      basePath={markdownBasePath}
+      remoteConnectionId={markdownRemoteConnectionId}
+      // Prefer deferred visual streaming so Prism upgrade does not share a
+      // frame with footer insertion / list scroll settlement.
+      isStreaming={markdownStreaming}
+      onFileViewRequest={onFileViewRequest}
+      onTabOpen={onTabOpen}
+      onHttpLinkClick={onHttpLinkClick}
+      onOpenVisualization={handleOpenVisualization}
+      traceContext={markdownTraceContext}
+    />
+  );
+
+  const renderStructuredContent = () => (
+    <div className="deep-research-protocol" data-bf-component="flow-text-block" data-bf-part="protocol">
+      {parsedContent.segments.map((segment, index) => (
+        segment.type === 'protocol'
+          ? (
+              <DeepResearchProtocolGroup
+                key={`protocol:${index}`}
+                kind={segment.kind}
+                markers={segment.markers}
+              />
+            )
+          : textItem.isMarkdown
+            ? renderMarkdown(segment.content, `markdown:${index}`)
+            : (
+                <div
+                  className="text-content"
+                  data-bf-component="flow-text-block"
+                  data-bf-part="protocolTextContent"
+                  key={`text:${index}`}
+                >
+                  {segment.content}
+                </div>
+              )
+      ))}
+    </div>
+  );
 
   return (
     <div data-bf-component="flow-text-block" data-bf-part="root" data-bf-mode={textItem.isMarkdown ? 'markdown' : 'text'} data-bf-state={isActivelyStreaming ? 'streaming' : ''}
@@ -148,20 +198,10 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       data-streaming={isVisuallyStreaming ? 'true' : 'false'}
       {...testAttributes}
     >
-      {textItem.isMarkdown ? (
-        <MarkdownRenderer
-          content={displayContent}
-          basePath={markdownBasePath}
-          remoteConnectionId={markdownRemoteConnectionId}
-          // Prefer deferred visual streaming so Prism upgrade does not share a
-          // frame with footer insertion / list scroll settlement.
-          isStreaming={markdownStreaming}
-          onFileViewRequest={onFileViewRequest}
-          onTabOpen={onTabOpen}
-          onHttpLinkClick={onHttpLinkClick}
-          onOpenVisualization={handleOpenVisualization}
-          traceContext={markdownTraceContext}
-        />
+      {parsedContent.hasProtocol ? (
+        renderStructuredContent()
+      ) : textItem.isMarkdown ? (
+        renderMarkdown(displayContent)
       ) : (
         <div data-bf-component="flow-text-block" data-bf-part="textContent" className="text-content">
           {displayContent}
