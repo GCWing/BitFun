@@ -30,6 +30,7 @@ test("registry exposes only the formal stable components", () => {
       "ContextCompressionToolCard",
       "DefaultToolCard",
       "Disclosure",
+      "Empty",
       "DirectoryListToolCard",
       "Field",
       "FieldGroup",

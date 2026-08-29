@@ -35,6 +35,7 @@ import {
   Composer,
   ComposerToolbar,
   Disclosure,
+  Empty,
   Field,
   FieldGroup,
   FieldRow,
@@ -312,6 +313,13 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Disclosure defaultOpen summary={t("components.preview.appearance")}>
           <span>{t("components.preview.appearanceDescription")}</span>
         </Disclosure>
+      );
+    case "Empty":
+      return (
+        <Empty
+          description={t("components.preview.cardDescription")}
+          title={t("components.preview.cardTitle")}
+        />
       );
     case "Composer":
       return (

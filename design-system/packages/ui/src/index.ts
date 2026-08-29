@@ -160,6 +160,7 @@ export {
 export { Switch, type SwitchProps } from "./components/Switch";
 export { Textarea, type TextareaProps } from "./components/Textarea";
 export { Disclosure, type DisclosureProps } from "./components/Disclosure";
+export { Empty, type EmptyMediaSize, type EmptyProps } from "./components/Empty";
 export {
   TabGroup,
   type TabGroupItem,

@@ -9,6 +9,7 @@ import { cardMeta } from "./components/Card/Card.meta";
 import { composerMeta } from "./components/Composer/Composer.meta";
 import { confirmDialogMeta } from "./components/ConfirmDialog/ConfirmDialog.meta";
 import { disclosureMeta } from "./components/Disclosure/Disclosure.meta";
+import { emptyMeta } from "./components/Empty/Empty.meta";
 import { fieldMeta } from "./components/Field/Field.meta";
 import { fieldGroupMeta } from "./components/FieldGroup/FieldGroup.meta";
 import { iconMeta } from "./components/Icon/Icon.meta";
@@ -91,6 +92,7 @@ export const componentRegistry = [
   contextCompressionToolCardMeta,
   defaultToolCardMeta,
   disclosureMeta,
+  emptyMeta,
   directoryListToolCardMeta,
   fieldMeta,
   fieldGroupMeta,
