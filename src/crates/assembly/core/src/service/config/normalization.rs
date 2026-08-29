@@ -344,6 +344,24 @@ pub fn reconcile_model_references(config: &mut GlobalConfig) -> ModelReferenceRe
         );
     }
 
+    if let std::collections::hash_map::Entry::Vacant(entry) = config
+        .ai
+        .agent_model_defaults
+        .subagents
+        .builtin
+        .entry("ResearchSpecialist".to_string())
+    {
+        entry.insert(SubagentModelSelection::Inherit);
+        result.agent_model_defaults_changed = true;
+        result.diagnostics.push(ConfigDiagnostic {
+            path: "ai.agent_model_defaults.subagents.builtin.ResearchSpecialist".to_string(),
+            message: "Configured ResearchSpecialist to inherit the parent model so DeepResearch does not depend on an unrelated fast-model endpoint".to_string(),
+            code: "RESEARCH_SPECIALIST_MODEL_DEFAULT_MIGRATED".to_string(),
+            severity: ConfigDiagnosticSeverity::Warning,
+            recoverability: ConfigDiagnosticRecoverability::AutoFix,
+        });
+    }
+
     config
         .ai
         .agent_model_defaults
@@ -605,6 +623,56 @@ mod tests {
         assert!(result
             .invalidated_model_ids
             .contains(&"missing".to_string()));
+    }
+
+    #[test]
+    fn legacy_research_specialist_default_migrates_to_parent_inheritance() {
+        let mut config = GlobalConfig::default();
+        config
+            .ai
+            .agent_model_defaults
+            .subagents
+            .builtin
+            .remove("ResearchSpecialist");
+
+        let result = reconcile_model_references(&mut config);
+
+        assert!(result.agent_model_defaults_changed);
+        assert_eq!(
+            config
+                .ai
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .get("ResearchSpecialist"),
+            Some(&SubagentModelSelection::Inherit)
+        );
+        assert!(result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| { diagnostic.code == "RESEARCH_SPECIALIST_MODEL_DEFAULT_MIGRATED" }));
+    }
+
+    #[test]
+    fn explicit_research_specialist_model_override_is_preserved() {
+        let mut config = GlobalConfig::default();
+        config.ai.agent_model_defaults.subagents.builtin.insert(
+            "ResearchSpecialist".to_string(),
+            SubagentModelSelection::fixed("fast"),
+        );
+
+        let result = reconcile_model_references(&mut config);
+
+        assert!(!result.agent_model_defaults_changed);
+        assert_eq!(
+            config
+                .ai
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .get("ResearchSpecialist"),
+            Some(&SubagentModelSelection::fixed("fast"))
+        );
     }
 
     #[tokio::test]

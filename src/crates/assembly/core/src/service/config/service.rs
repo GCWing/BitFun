@@ -1400,7 +1400,13 @@ mod tests {
             defaults.subagents.default_selection,
             SubagentModelSelection::fixed("fast")
         );
-        assert!(defaults.subagents.builtin.is_empty());
+        assert_eq!(
+            defaults.subagents.builtin,
+            HashMap::from([(
+                "ResearchSpecialist".to_string(),
+                SubagentModelSelection::Inherit,
+            )])
+        );
         assert_eq!(defaults.subagents.fork, SubagentModelSelection::Inherit);
     }
 

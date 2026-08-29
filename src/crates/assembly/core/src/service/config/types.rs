@@ -733,10 +733,16 @@ impl Default for SubagentModelDefaultsConfig {
     fn default() -> Self {
         Self {
             default_selection: default_subagent_model_selection(),
-            builtin: HashMap::from([(
-                "GeneralPurpose".to_string(),
-                SubagentModelSelection::fixed("primary"),
-            )]),
+            builtin: HashMap::from([
+                (
+                    "GeneralPurpose".to_string(),
+                    SubagentModelSelection::fixed("primary"),
+                ),
+                (
+                    "ResearchSpecialist".to_string(),
+                    SubagentModelSelection::Inherit,
+                ),
+            ]),
             fork: SubagentModelSelection::Inherit,
         }
     }
@@ -2694,6 +2700,14 @@ mod tests {
             Some(&SubagentModelSelection::fixed("primary"))
         );
         assert_eq!(
+            config
+                .agent_model_defaults
+                .subagents
+                .builtin
+                .get("ResearchSpecialist"),
+            Some(&SubagentModelSelection::Inherit)
+        );
+        assert_eq!(
             config.agent_model_defaults.subagents.fork,
             SubagentModelSelection::Inherit
         );
@@ -2740,6 +2754,25 @@ mod tests {
         );
         assert_eq!(
             defaults.builtin_subagent_selection("GeneralPurpose"),
+            SubagentModelSelection::fixed("fast")
+        );
+    }
+
+    #[test]
+    fn research_specialist_inherits_parent_unless_explicitly_overridden() {
+        let mut defaults = AgentModelDefaultsConfig::default();
+
+        assert_eq!(
+            defaults.builtin_subagent_selection("ResearchSpecialist"),
+            SubagentModelSelection::Inherit
+        );
+
+        defaults.subagents.builtin.insert(
+            "ResearchSpecialist".to_string(),
+            SubagentModelSelection::fixed("fast"),
+        );
+        assert_eq!(
+            defaults.builtin_subagent_selection("ResearchSpecialist"),
             SubagentModelSelection::fixed("fast")
         );
     }

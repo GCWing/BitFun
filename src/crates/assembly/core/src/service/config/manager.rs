@@ -1042,7 +1042,8 @@ mod tests {
         assert_eq!(
             normalized["ai"]["agent_model_defaults"]["subagents"]["builtin"],
             serde_json::json!({
-                "GeneralPurpose": { "kind": "fixed", "model_id": "primary" }
+                "GeneralPurpose": { "kind": "fixed", "model_id": "primary" },
+                "ResearchSpecialist": { "kind": "inherit" }
             })
         );
         assert_eq!(
