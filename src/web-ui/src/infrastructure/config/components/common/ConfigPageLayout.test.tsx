@@ -120,7 +120,7 @@ describe('ConfigPageLayout', () => {
     expect(row?.querySelector('.bitfun-config-page-row__control')).toBeNull();
   });
 
-  it('forwards feature-owned layout contracts without replacing design-system section ownership', () => {
+  it('forwards feature-owned layout contracts while preserving nested design-system ownership', () => {
     act(() => {
       root.render(
         <ConfigPageLayout

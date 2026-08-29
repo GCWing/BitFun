@@ -1,5 +1,7 @@
+export type ChatAppBrand = 'telegram' | 'feishu' | 'weixin';
+
 interface ChatAppBrandIconProps {
-  app: 'telegram' | 'feishu' | 'weixin';
+  app: ChatAppBrand;
   size?: number;
 }
 
