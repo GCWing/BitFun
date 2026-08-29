@@ -26,7 +26,7 @@
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run --maxWorkers=50%"
   },
   "dependencies": {
     "@bitfun/design-tokens": "workspace:^",
