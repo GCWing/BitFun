@@ -66,7 +66,6 @@ const PRODUCT_TOOL_REGISTRATION_ORDER: &[&str] = &[
     "ListMCPPrompts",
     "GetMCPPrompt",
     "GenerativeUI",
-    "Git",
     "Worktree",
     "ReviewPlatform",
     "InitMiniApp",
@@ -170,8 +169,6 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "GetMCPPrompt" => Some(Arc::new(GetMCPPromptTool::new())),
             #[cfg(feature = "tools-miniapp")]
             "GenerativeUI" => Some(Arc::new(GenerativeUITool::new())),
-            #[cfg(feature = "tools-git")]
-            "Git" => Some(Arc::new(GitTool::new())),
             #[cfg(feature = "tools-git")]
             "Worktree" => Some(Arc::new(WorktreeTool::new())),
             #[cfg(feature = "tools-git")]

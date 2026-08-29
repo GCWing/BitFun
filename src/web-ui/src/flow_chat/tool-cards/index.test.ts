@@ -52,12 +52,9 @@ describe('tool card registry', () => {
       'GetToolSpec',
       'Skill',
       'ReviewSessionSummary',
-      'Git',
       'GetFileDiff',
-      'TerminalControl',
       'SessionControl',
       'SessionMessage',
-      'Bash',
       'RunCode',
       'ExecCommand',
       'WriteStdin',
@@ -85,6 +82,14 @@ describe('tool card registry', () => {
       Object.keys(TOOL_CARD_COMPONENTS).sort(),
     );
   });
+
+  it.each(['Bash', 'TerminalControl', 'Git'])(
+    'does not register a dedicated %s card after the legacy tool is removed',
+    (toolName) => {
+      expect(TOOL_CARD_COMPONENTS).not.toHaveProperty(toolName);
+      expect(DEDICATED_TOOL_CARD_NAMES).not.toContain(toolName);
+    },
+  );
 
   it.each(['ControlHub', 'FinalizeMiniApp', 'PublishMiniApp', 'PublishAppearance'])(
     'treats %s as a default-card explore tool',

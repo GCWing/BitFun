@@ -40,7 +40,6 @@ impl ClawMode {
                 "create_goal".to_string(),
                 "update_goal".to_string(),
                 "Skill".to_string(),
-                "Git".to_string(),
                 "SessionControl".to_string(),
                 "SessionMessage".to_string(),
                 "SessionHistory".to_string(),

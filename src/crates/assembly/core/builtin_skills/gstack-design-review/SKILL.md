@@ -693,7 +693,7 @@ which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 
 **If a suitable BitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
 
-1. **outside-voice sub-agent design voice** (via Bash):
+1. **outside-voice sub-agent design voice** (via ExecCommand):
 ```bash
 TMPERR_DESIGN=$(mktemp /tmp/codex-design-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }

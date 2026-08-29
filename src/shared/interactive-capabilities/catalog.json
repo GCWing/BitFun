@@ -1788,15 +1788,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git 的 status 与 diff 检查当前工作树、暂存区和目标文件差异"
+              "在当前工作区通过 ExecCommand 运行 git status 与 git diff",
+              "检查当前工作树、暂存区和目标文件差异"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git status and diff to inspect the working tree, index, and selected file changes"
+              "Run git status and git diff through ExecCommand in the current workspace",
+              "Inspect the working tree, index, and selected file changes"
             ]
           },
           "evidence": [
@@ -1815,15 +1815,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git 的 add、restore 或 reset 完成暂存、取消暂存和选定提交重置；危险参数仍经过权限与安全检查"
+              "通过 ExecCommand 运行 git add、git restore 或 git reset",
+              "完成暂存、取消暂存和选定提交重置；危险参数仍经过权限与安全检查"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git add, restore, or reset to stage, unstage, or reset to a selected commit; risky arguments still pass permission and safety checks"
+              "Run git add, git restore, or git reset through ExecCommand",
+              "Stage, unstage, or reset to a selected commit; risky arguments still pass permission and safety checks"
             ]
           },
           "evidence": [
@@ -1839,15 +1839,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "先检查 status/diff，再用 Git commit 创建经用户确认的提交"
+              "通过 ExecCommand 先运行 git status 与 git diff",
+              "再运行 git commit 创建经用户确认的提交"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Inspect status/diff first, then create the user-approved commit with Git commit"
+              "Run git status and git diff through ExecCommand first",
+              "Then run git commit to create the user-approved commit"
             ]
           },
           "evidence": [
@@ -1863,15 +1863,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git pull 或 push 同步远端；强制推送等高风险参数仍会被拦截或要求确认"
+              "通过 ExecCommand 运行 git pull 或 git push 同步远端",
+              "强制推送等高风险参数仍会被拦截或要求确认"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git pull or push to synchronize remotes; high-risk arguments such as force push remain blocked or require confirmation"
+              "Run git pull or git push through ExecCommand to synchronize remotes",
+              "High-risk arguments such as force push remain blocked or require confirmation"
             ]
           },
           "evidence": [
@@ -1886,15 +1886,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git branch 查看、创建或删除分支，使用 switch/checkout 切换分支"
+              "通过 ExecCommand 运行 git branch 查看、创建或删除分支",
+              "运行 git switch 或 git checkout 切换分支"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git branch to list, create, or delete branches and switch/checkout to change branches"
+              "Run git branch through ExecCommand to list, create, or delete branches",
+              "Run git switch or git checkout to change branches"
             ]
           },
           "evidence": [
@@ -1912,14 +1912,14 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再用 log/show 读取提交图谱与历史",
+              "通过 ExecCommand 运行 git log 或 git show 读取提交图谱与历史",
               "界面的最近访问记录仍由 Git 场景保存；Agent 读取历史不会伪装成修改该 UI 状态"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec, then inspect the commit graph and history with log or show",
+              "Run git log or git show through ExecCommand to inspect the commit graph and history",
               "Recent-history UI state remains owned by the Git surface; reading history does not pretend to mutate that presentation state"
             ]
           },
@@ -1937,15 +1937,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git show 解析 revision 并读取指定提交中的对象或文件内容"
+              "通过 ExecCommand 运行 git show",
+              "解析 revision 并读取指定提交中的对象或文件内容"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git show to resolve a revision and inspect objects or file content from a selected commit"
+              "Run git show through ExecCommand",
+              "Resolve a revision and inspect objects or file content from a selected commit"
             ]
           },
           "evidence": [
@@ -1960,15 +1960,15 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "Git"
+              "ExecCommand"
             ],
             "workflowZh": [
-              "若 Git 是延迟工具，先用 GetToolSpec 加载其契约，再按返回的 operation/args 结构调用",
-              "使用 Git cherry-pick 启动，并通过 --continue 或 --abort 继续或中止流程"
+              "通过 ExecCommand 运行 git cherry-pick",
+              "使用 --continue 或 --abort 继续或中止流程"
             ],
             "workflowEn": [
-              "If Git is deferred, load its contract with GetToolSpec first, then call it with the returned operation/args shape",
-              "Use Git cherry-pick to start, then --continue or --abort to continue or cancel the operation"
+              "Run git cherry-pick through ExecCommand",
+              "Use --continue or --abort to continue or cancel the operation"
             ]
           },
           "evidence": [

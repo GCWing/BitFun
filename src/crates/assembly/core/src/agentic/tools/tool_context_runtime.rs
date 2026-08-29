@@ -95,8 +95,8 @@ impl ToolUseContext {
         self.workspace.as_ref().map(|binding| binding.root_path())
     }
 
-    /// Main project root used by project-scoped orchestration tools. File,
-    /// terminal, and Git tools must continue to use [`Self::workspace_root`].
+    /// Main project root used by project-scoped orchestration tools. File and
+    /// command tools must continue to use [`Self::workspace_root`].
     pub fn project_workspace_root(&self) -> Option<&Path> {
         self.workspace
             .as_ref()
@@ -599,8 +599,8 @@ impl ToolUseContext {
         )?;
 
         // Remote SSH workspaces stay contained to the opened project tree. Local desktop
-        // sessions may use any host path the OS user can access (Bash already has the same
-        // reach); optional `path_policy` roots still apply via `enforce_path_operation`.
+        // sessions may use any host path the OS user can access (ExecCommand already has the
+        // same reach); optional `path_policy` roots still apply via `enforce_path_operation`.
         if self.is_remote()
             && !is_remote_posix_path_within_root(&resolved_path, &workspace_root_owned)
         {
@@ -846,7 +846,7 @@ mod context_facts_tests {
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string()]),
-                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_names: BTreeSet::from(["ExecCommand".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
                 miniapp_context_scope: None,
@@ -863,7 +863,9 @@ mod context_facts_tests {
         assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
         assert_eq!(facts.workspace_root.as_deref(), Some("/repo/project"));
         assert!(facts.runtime_tool_restrictions.is_tool_allowed("Read"));
-        assert!(!facts.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert!(!facts
+            .runtime_tool_restrictions
+            .is_tool_allowed("ExecCommand"));
 
         let value = serde_json::to_value(&facts).expect("serialize context facts");
         assert!(value.get("unlockedCollapsedTools").is_none());
@@ -886,13 +888,13 @@ mod context_facts_tests {
             session_id: Some("session-runtime".to_string()),
             dialog_turn_id: Some("turn-runtime".to_string()),
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/runtime"))),
-            loaded_deferred_tool_specs: vec![loaded_spec("WebFetch"), loaded_spec("Git")],
+            loaded_deferred_tool_specs: vec![loaded_spec("WebFetch"), loaded_spec("Worktree")],
             primary_model_facts: PrimaryModelFacts::default(),
             custom_data,
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string(), "GetToolSpec".to_string()]),
-                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_names: BTreeSet::from(["ExecCommand".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
                 miniapp_context_scope: None,
@@ -912,7 +914,9 @@ mod context_facts_tests {
         assert!(facts
             .runtime_tool_restrictions
             .is_tool_allowed("GetToolSpec"));
-        assert!(!facts.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert!(!facts
+            .runtime_tool_restrictions
+            .is_tool_allowed("ExecCommand"));
 
         let value = serde_json::to_value(&facts).expect("serialize runtime context facts");
         for runtime_only_field in [
@@ -1594,7 +1598,7 @@ mod task_context_tests {
                 allowed_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
-                    denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                    denied_tool_names: BTreeSet::from(["ExecCommand".to_string()]),
                     denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
                     miniapp_context_scope: None,
@@ -1626,7 +1630,9 @@ mod task_context_tests {
         assert!(context
             .runtime_tool_restrictions
             .is_tool_allowed("WebFetch"));
-        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert!(!context
+            .runtime_tool_restrictions
+            .is_tool_allowed("ExecCommand"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(context.primary_model_facts().model_id, "primary-model");
         assert_eq!(context.primary_model_facts().api_format, "openai");

@@ -451,7 +451,7 @@ impl ContextHealthSnapshot {
             return None;
         };
 
-        if !matches!(tool_name.as_str(), "Bash" | "Git") {
+        if tool_name != "ExecCommand" {
             return None;
         }
 
@@ -6286,7 +6286,7 @@ mod tests {
                 parameters: json!({}),
             },
             ToolDefinition {
-                name: "Bash".to_string(),
+                name: "ExecCommand".to_string(),
                 description: String::new(),
                 parameters: json!({}),
             },
@@ -6294,7 +6294,7 @@ mod tests {
 
         assert_eq!(
             ExecutionEngine::finalize_tool_names(Some(&tools)),
-            vec!["Read".to_string(), "Bash".to_string()]
+            vec!["Read".to_string(), "ExecCommand".to_string()]
         );
     }
 
@@ -6322,11 +6322,11 @@ mod tests {
 
         let restrictions = ExecutionEngine::finalize_runtime_tool_restrictions(
             &context,
-            &["Read".to_string(), "Bash".to_string()],
+            &["Read".to_string(), "ExecCommand".to_string()],
         );
 
         assert!(restrictions.denied_tool_names.contains("Read"));
-        assert!(restrictions.denied_tool_names.contains("Bash"));
+        assert!(restrictions.denied_tool_names.contains("ExecCommand"));
         assert_eq!(
             restrictions.denied_tool_messages.get("Read"),
             Some(&ExecutionEngine::FINALIZE_TOOL_DENIED_MESSAGE.to_string())
@@ -6551,9 +6551,9 @@ mod tests {
     #[test]
     fn context_health_snapshot_scores_repeated_tool_signatures() {
         let signatures = vec![
-            r#"Bash:{"command":"cargo test"}"#.to_string(),
-            r#"Bash:{"command":"cargo test"}"#.to_string(),
-            r#"Bash:{"command":"cargo test"}"#.to_string(),
+            r#"ExecCommand:{"cmd":"cargo test"}"#.to_string(),
+            r#"ExecCommand:{"cmd":"cargo test"}"#.to_string(),
+            r#"ExecCommand:{"cmd":"cargo test"}"#.to_string(),
         ];
 
         let snapshot =
@@ -6569,9 +6569,9 @@ mod tests {
     #[test]
     fn context_health_snapshot_counts_consecutive_failed_commands() {
         let messages = vec![
-            command_result("Bash", true, Some(0)),
-            command_result("Bash", false, Some(1)),
-            command_result("Git", false, Some(128)),
+            command_result("ExecCommand", true, Some(0)),
+            command_result("ExecCommand", false, Some(1)),
+            command_result("ExecCommand", false, Some(128)),
         ];
 
         let snapshot = ContextHealthSnapshot::from_runtime_observations(0.44, 0, 2, &[], &messages);

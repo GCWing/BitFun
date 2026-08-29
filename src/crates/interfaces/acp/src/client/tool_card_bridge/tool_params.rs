@@ -8,15 +8,15 @@ pub(super) fn normalize_tool_params(
 
     let mut normalized = object.clone();
     match tool_name {
-        "Bash" => {
-            if !normalized.contains_key("command") {
-                if let Some(value) = normalized.get("cmd").cloned() {
-                    normalized.insert("command".to_string(), value);
+        "ExecCommand" => {
+            if !normalized.contains_key("cmd") {
+                if let Some(value) = normalized.get("command").cloned() {
+                    normalized.insert("cmd".to_string(), value);
                 }
             }
-            if let Some(value) = normalized.get("command").cloned() {
+            if let Some(value) = normalized.get("cmd").cloned() {
                 normalized.insert(
-                    "command".to_string(),
+                    "cmd".to_string(),
                     serde_json::Value::String(command_value_to_display_text(&value)),
                 );
             }

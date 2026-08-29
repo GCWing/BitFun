@@ -240,7 +240,7 @@ impl Tool for ReviewPlatformTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Read and operate on hosted pull requests / merge requests.
 
-Use this for remote review-platform operations such as discovering remotes, loading the workspace PR snapshot, counting pull requests, listing pull requests, opening full or paginated pull request detail, loading CI logs, creating a pull request, replying to review threads, submitting a comment review, approving, revoking approval, requesting changes, or resolving a review thread. Use the Git tool for local repository state and branch/commit/push operations.
+Use this for remote review-platform operations such as discovering remotes, loading the workspace PR snapshot, counting pull requests, listing pull requests, opening full or paginated pull request detail, loading CI logs, creating a pull request, replying to review threads, submitting a comment review, approving, revoking approval, requesting changes, or resolving a review thread. Use ExecCommand for local repository state and branch/commit/push operations.
 
 GitHub authentication is owned by the local `gh` CLI and must never use token actions. Authentication-token actions are only for GitLab and GitCode when the user explicitly provides a token or asks to clear a stored token. Never guess or expose token values.
 

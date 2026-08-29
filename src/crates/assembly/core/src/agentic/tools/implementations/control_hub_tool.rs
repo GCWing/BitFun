@@ -2772,11 +2772,11 @@ Branch on `ok` and `error.code`, not on English messages.
         &self,
         action: &str,
         params: &Value,
-        context: &ToolUseContext,
+        _context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         // Phase 4: enumerate live terminal sessions so the model can resolve
         // a `terminal_session_id` *before* attempting `kill` / `interrupt`.
-        // Previously this required digging through earlier `Bash` results.
+        // Previously this required digging through earlier command results.
         if action == "list_sessions" {
             let api = crate::service::terminal::api::TerminalApi::from_singleton()
                 .map_err(|e| BitFunError::tool(format!("TerminalApi unavailable: {}", e)))?;
@@ -2805,7 +2805,7 @@ Branch on `ok` and `error.code`, not on English messages.
 
         // UX shortcut: when there is exactly one live terminal session,
         // make `terminal_session_id` optional. The 95th-percentile flow is
-        // "Bash launched a long-running command, please interrupt it" and
+        // "A long-running command needs to be interrupted" and
         // the user has no other terminals open — forcing a `list_sessions`
         // round-trip just to copy the only id back wastes a turn.
         let resolved_id: String = match params.get("terminal_session_id").and_then(|v| v.as_str()) {
@@ -2836,7 +2836,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             "No live terminal sessions to target",
                         )
                         .with_hint(
-                            "Use the Bash tool to start a command, then this action becomes meaningful",
+                            "Use ExecCommand to start a command, then this action becomes meaningful",
                         ),
                     ));
                 } else {
@@ -2858,14 +2858,66 @@ Branch on `ok` and `error.code`, not on English messages.
             }
         };
 
-        let mut input = params.clone();
-        if let Value::Object(ref mut map) = input {
-            map.insert("action".to_string(), json!(action));
-            map.insert("terminal_session_id".to_string(), json!(resolved_id));
-        }
+        let terminal_api = crate::service::terminal::TerminalApi::from_singleton()
+            .map_err(|error| BitFunError::tool(format!("Terminal not initialized: {error}")))?;
 
-        let tool = super::terminal_control_tool::TerminalControlTool::new();
-        tool.call_impl(&input, context).await
+        match action {
+            "interrupt" => {
+                terminal_api
+                    .signal(crate::service::terminal::SignalRequest {
+                        session_id: resolved_id.clone(),
+                        signal: "SIGINT".to_string(),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!("Failed to interrupt terminal session: {error}"))
+                    })?;
+
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "success": true,
+                        "terminal_session_id": resolved_id,
+                        "action": "interrupt",
+                    }),
+                    Some("Sent interrupt (SIGINT) to the terminal session.".to_string()),
+                )])
+            }
+            "kill" => {
+                let binding = terminal_api.session_manager().binding();
+                let is_primary = binding
+                    .get(&resolved_id)
+                    .map(|bound_id| bound_id == resolved_id)
+                    .unwrap_or(false);
+
+                if is_primary {
+                    binding.remove(&resolved_id).await.map_err(|error| {
+                        BitFunError::tool(format!("Failed to close terminal session: {error}"))
+                    })?;
+                } else {
+                    terminal_api
+                        .close_session(crate::service::terminal::CloseSessionRequest {
+                            session_id: resolved_id.clone(),
+                            immediate: Some(true),
+                        })
+                        .await
+                        .map_err(|error| {
+                            BitFunError::tool(format!("Failed to close terminal session: {error}"))
+                        })?;
+                }
+
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "success": true,
+                        "terminal_session_id": resolved_id,
+                        "action": "kill",
+                    }),
+                    Some("Closed the terminal session.".to_string()),
+                )])
+            }
+            _ => Err(BitFunError::tool(format!(
+                "Unknown terminal action: '{action}'. Must be 'kill' or 'interrupt'."
+            ))),
+        }
     }
 }
 

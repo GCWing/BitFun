@@ -626,7 +626,7 @@ mod tests {
         let event = EvidenceLedgerEvent::new(
             "session-a",
             "turn-a",
-            "Bash",
+            "ExecCommand",
             EvidenceLedgerTargetKind::Command,
             "cargo test",
             EvidenceLedgerEventStatus::Succeeded,
@@ -652,7 +652,7 @@ mod tests {
         let turn_a = EvidenceLedgerEvent::new(
             "session-a",
             "turn-a",
-            "Bash",
+            "ExecCommand",
             EvidenceLedgerTargetKind::Command,
             "cargo test",
             EvidenceLedgerEventStatus::Succeeded,
@@ -661,7 +661,7 @@ mod tests {
         let turn_b = EvidenceLedgerEvent::new(
             "session-a",
             "turn-b",
-            "Bash",
+            "ExecCommand",
             EvidenceLedgerTargetKind::Command,
             "cargo check",
             EvidenceLedgerEventStatus::Failed,
@@ -730,7 +730,7 @@ mod tests {
         mismatched.events.push(EvidenceLedgerEvent::new(
             "session-b",
             "turn-a",
-            "Bash",
+            "ExecCommand",
             EvidenceLedgerTargetKind::Command,
             "cargo test",
             EvidenceLedgerEventStatus::Succeeded,
@@ -750,7 +750,7 @@ mod tests {
                 "event_id": "event-a",
                 "session_id": "session-a",
                 "turn_id": "turn-a",
-                "tool_name": "Bash",
+                "tool_name": "ExecCommand",
                 "target_kind": "command",
                 "target": "cargo test",
                 "status": "succeeded",
@@ -953,7 +953,7 @@ mod tests {
             EvidenceLedgerEvent::new(
                 "session-a",
                 "turn-a",
-                "Bash",
+                "ExecCommand",
                 EvidenceLedgerTargetKind::Command,
                 "cargo test",
                 EvidenceLedgerEventStatus::Failed,

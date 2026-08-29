@@ -724,7 +724,7 @@ SKILL.md frontmatter (YAML between --- markers):
 - argument-hint: optional; e.g. "[branch]" or "[path] [mode]"
 - disable-model-invocation: true for workflows with side effects (push/deploy/delete/etc.)
 - user-invocable: false for background/reference-only skills
-- allowed-tools: optional; list what the skill needs (e.g., Read, Grep, Glob, Bash)
+- allowed-tools: optional; list what the skill needs (e.g., Read, Grep, Glob, ExecCommand)
 - context / agent / model: optional; use only when truly needed (e.g., context: fork)
 
 SKILL.md content expectations:

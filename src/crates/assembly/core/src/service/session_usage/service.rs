@@ -1864,8 +1864,8 @@ mod tests {
         incomplete.model_rounds[0].end_time = Some(181_000);
         incomplete.model_rounds[0].duration_ms = Some(59_000);
         incomplete.model_rounds[0].tool_items = vec![test_tool_item_with_input(
-            "slow-bash",
-            "Bash",
+            "slow-command",
+            "ExecCommand",
             Some(true),
             120_000,
             serde_json::json!({
@@ -2381,7 +2381,7 @@ mod tests {
         let request = test_request(None);
         let mut slow = test_tool_item_with_input(
             "tool-slow",
-            "Bash",
+            "ExecCommand",
             Some(false),
             95_000,
             serde_json::json!({
@@ -2461,7 +2461,7 @@ mod tests {
         let request = test_request(None);
         let slow_command = test_tool_item_with_input(
             "tool-secret-command",
-            "Bash",
+            "ExecCommand",
             Some(true),
             95_000,
             serde_json::json!({
@@ -2645,7 +2645,13 @@ mod tests {
                     100,
                     "D:/workspace/bitfun/src/main.rs",
                 ),
-                test_tool_item("tool-2", "Bash", Some(false), 120, "D:/workspace/bitfun"),
+                test_tool_item(
+                    "tool-2",
+                    "ExecCommand",
+                    Some(false),
+                    120,
+                    "D:/workspace/bitfun",
+                ),
             ],
         );
         failed_turn.status = TurnStatus::Error;
@@ -2663,7 +2669,11 @@ mod tests {
                 .iter()
                 .map(|example| (example.label.as_str(), example.count))
                 .collect::<Vec<_>>(),
-            vec![("Model/runtime turn errors", 1), ("Bash", 1), ("Write", 1),]
+            vec![
+                ("Model/runtime turn errors", 1),
+                ("ExecCommand", 1),
+                ("Write", 1),
+            ]
         );
     }
 

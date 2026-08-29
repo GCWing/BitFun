@@ -1940,9 +1940,9 @@ fn prompt_visible_manifest_builder_omits_deferred_tools_from_provider_manifest()
             json!({ "type": "object", "properties": { "path": { "type": "string" } } }),
         )),
         PromptVisibleToolManifestItem::Direct(ToolManifestDefinition::new(
-            "Bash",
+            "ExecCommand",
             "Run shell commands.",
-            json!({ "type": "object", "properties": { "command": { "type": "string" } } }),
+            json!({ "type": "object", "properties": { "cmd": { "type": "string" } } }),
         )),
     ]);
 
@@ -1951,11 +1951,11 @@ fn prompt_visible_manifest_builder_omits_deferred_tools_from_provider_manifest()
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Bash", "Read"]
+        vec!["ExecCommand", "Read"]
     );
     assert_eq!(definitions[0].description, "Run shell commands.");
     assert_eq!(
-        definitions[0].parameters["properties"]["command"]["type"],
+        definitions[0].parameters["properties"]["cmd"]["type"],
         json!("string")
     );
 }

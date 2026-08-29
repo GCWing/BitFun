@@ -2,7 +2,7 @@
 name: find-skills
 description: Discover and install reusable agent skills when users ask for capabilities, workflows, or domain-specific help that may already exist as an installable skill.
 description_zh: 当用户询问能力、工作流或领域化需求时，帮助发现并安装可复用的技能，而不是从零实现。
-allowed-tools: Bash(npx -y skills:*), Bash(npx skills:*), Bash(skills:*)
+allowed-tools: ExecCommand(npx -y skills:*), ExecCommand(npx skills:*), ExecCommand(skills:*)
 ---
 
 # Find and Install Skills

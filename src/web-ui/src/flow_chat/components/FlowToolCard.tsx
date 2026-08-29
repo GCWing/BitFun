@@ -52,7 +52,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   const interruptionNote = getToolInterruptionNote(effectiveToolItem, t);
   const cardHandlesInterruptionNote = effectiveToolItem.toolName === 'Task';
   const toolCardTestId =
-    effectiveToolItem.toolName === 'Bash'
+    effectiveToolItem.toolName === 'ExecCommand'
       ? 'chat-shell-tool-card'
       : effectiveToolItem.toolName === 'WebFetch'
         ? 'chat-browser-tool-card'

@@ -67,11 +67,11 @@ fn custom_subagent_defaults_match_existing_front_matter_contract() {
 
 #[test]
 fn custom_subagent_tool_front_matter_keeps_existing_comma_format() {
-    let tools = custom_subagent_tools_from_front_matter(Some("Read, Grep, Bash"));
-    assert_eq!(tools, ["Read", "Grep", "Bash"]);
+    let tools = custom_subagent_tools_from_front_matter(Some("Read, Grep, ExecCommand"));
+    assert_eq!(tools, ["Read", "Grep", "ExecCommand"]);
     assert_eq!(
         custom_subagent_tools_to_front_matter(&tools),
-        Some("Read, Grep, Bash".to_string())
+        Some("Read, Grep, ExecCommand".to_string())
     );
 }
 

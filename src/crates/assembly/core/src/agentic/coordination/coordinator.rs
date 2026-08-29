@@ -15858,7 +15858,7 @@ mod tests {
     #[test]
     fn transient_session_runtime_restrictions_deny_out_of_band_session_tools() {
         let mut base = crate::agentic::tools::ToolRuntimeRestrictions::default();
-        base.denied_tool_names.insert("Bash".to_string());
+        base.denied_tool_names.insert("ExecCommand".to_string());
 
         let transient = runtime_tool_restrictions_for_session_lifetime(base.clone(), true);
         for tool_name in [
@@ -15873,7 +15873,7 @@ mod tests {
                 "{tool_name} must not cross a connection-scoped Session boundary"
             );
         }
-        assert!(!transient.is_tool_allowed("Bash"));
+        assert!(!transient.is_tool_allowed("ExecCommand"));
         assert!(transient.is_tool_allowed("Read"));
 
         let durable = runtime_tool_restrictions_for_session_lifetime(base, false);
@@ -15886,7 +15886,7 @@ mod tests {
         ] {
             assert!(durable.is_tool_allowed(tool_name));
         }
-        assert!(!durable.is_tool_allowed("Bash"));
+        assert!(!durable.is_tool_allowed("ExecCommand"));
     }
 
     #[test]

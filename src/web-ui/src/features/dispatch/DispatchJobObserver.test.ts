@@ -220,7 +220,7 @@ function installProcessingProjection(): void {
           {
             id: 'tool-1',
             type: 'tool',
-            toolName: 'Bash',
+            toolName: 'ExecCommand',
             toolCall: {
               id: 'tool-1',
               input: {},

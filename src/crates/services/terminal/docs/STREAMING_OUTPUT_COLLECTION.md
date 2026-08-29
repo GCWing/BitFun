@@ -10,8 +10,8 @@ Output collection involves two independent layers:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  bash_tool.rs                                                │
-│  Consumes CommandStream, accumulates output for tool result  │
+│  Terminal command client                                     │
+│  Consumes CommandStream and accumulates command output       │
 └────────────────────────┬─────────────────────────────────────┘
                          │ CommandStream (mpsc channel)
                          │   Started / Output / Completed / Error
@@ -179,14 +179,14 @@ can still be collected before the stream completes as `TimedOut`.
 
 ## Interaction Between Layers
 
-A typical bash tool execution timeline:
+A typical streamed terminal command timeline:
 
 ```
 Time   PTY Data Stream              integration.rs              manager.rs
 ─────  ─────────────────────────    ─────────────────────────   ──────────────────
  0ms   633;A                        state → Prompt
  2ms   633;B                        state → Input
- 4ms   (bash_tool writes cmd+\n)
+ 4ms   (caller writes cmd+\n)
  6ms   633;E;ls                     record command text
  8ms   633;C                        state → Executing            poll: Executing
                                     output_buffer.clear()

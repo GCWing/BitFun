@@ -3393,39 +3393,11 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/tool-execution/src/shell/mod.rs',
     reason:
-      'tool-runtime must own reusable Bash shell execution policy, rendering, and background-result text helpers',
+      'tool-runtime must own the shared noninteractive terminal environment used by agent-managed sessions',
     patterns: [
       {
-        regex: /\bpub fn banned_shell_command\b/,
-        message: 'missing Bash banned-command policy owner',
-      },
-      {
-        regex: /\bpub fn detect_osascript_keystroke_non_ascii\b/,
-        message: 'missing Bash osascript keystroke guard owner',
-      },
-      {
-        regex: /\bpub fn detect_osascript_im_app\b/,
-        message: 'missing Bash IM AppleScript guard owner',
-      },
-      {
-        regex: /\bpub fn command_for_working_directory\b/,
-        message: 'missing Bash working-directory command wrapper owner',
-      },
-      {
-        regex: /\bpub fn bash_noninteractive_env\b/,
-        message: 'missing Bash noninteractive environment owner',
-      },
-      {
-        regex: /\bpub fn render_local_shell_result\b/,
-        message: 'missing local shell result rendering owner',
-      },
-      {
-        regex: /\bpub fn render_remote_shell_result\b/,
-        message: 'missing remote shell result rendering owner',
-      },
-      {
-        regex: /\bpub fn format_background_command_delivery_text\b/,
-        message: 'missing background command delivery text owner',
+        regex: /\bpub fn noninteractive_terminal_env\b/,
+        message: 'missing noninteractive terminal environment owner',
       },
     ],
   },
@@ -3510,19 +3482,11 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/tool-execution/tests/tool_io_contracts.rs',
     reason:
-      'tool-runtime shell owner must keep focused behavior-equivalence contracts for Bash execution helpers',
+      'tool-runtime shell owner must keep the agent-managed terminal environment contract covered',
     patterns: [
       {
-        regex: /\bbash_shell_owner_preserves_command_wrapping_and_env\b/,
-        message: 'missing Bash command/env owner regression',
-      },
-      {
-        regex: /\bbash_shell_owner_preserves_guard_and_result_rendering\b/,
-        message: 'missing Bash guard/rendering owner regression',
-      },
-      {
-        regex: /\bbash_shell_owner_preserves_background_delivery_texts\b/,
-        message: 'missing Bash background-result text owner regression',
+        regex: /\bnoninteractive_terminal_env_preserves_agent_session_contract\b/,
+        message: 'missing noninteractive terminal environment regression',
       },
     ],
   },

@@ -49,7 +49,6 @@ impl CoworkMode {
                 "Delete".to_string(),
                 // Utilities
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
                 "ExecCommand".to_string(),
                 "WriteStdin".to_string(),
                 "ExecControl".to_string(),

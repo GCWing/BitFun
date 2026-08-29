@@ -6,7 +6,7 @@ export const REVIEW_SUBAGENT_RECOMMENDED_TOOLS = [
   'Glob',
   'LS',
 ] as const;
-export const REVIEW_SUBAGENT_OPTIONAL_TOOLS = ['Git'] as const;
+export const REVIEW_SUBAGENT_OPTIONAL_TOOLS = [] as const;
 
 export type ReviewSubagentToolReadiness = 'ready' | 'degraded' | 'invalid';
 

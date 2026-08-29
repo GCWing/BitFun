@@ -4607,7 +4607,11 @@ mod tests {
                 text_items: vec![],
                 tool_items: vec![
                     tool_item("Read", json!({ "content": "abc" }), Some("assistant")),
-                    tool_item("Bash", json!({ "output": "x".repeat(20) }), Some("short")),
+                    tool_item(
+                        "ExecCommand",
+                        json!({ "output": "x".repeat(20) }),
+                        Some("short"),
+                    ),
                 ],
                 thinking_items: vec![],
                 start_time: 1,
@@ -4645,7 +4649,7 @@ mod tests {
         assert_eq!(stats.result_for_assistant_chars, 14);
         assert_eq!(stats.largest_raw_result_chars, 20);
         assert_eq!(stats.top_raw_results.len(), 2);
-        assert_eq!(stats.top_raw_results[0].tool_name, "Bash");
+        assert_eq!(stats.top_raw_results[0].tool_name, "ExecCommand");
         assert_eq!(stats.top_raw_results[0].raw_result_string_chars, 20);
         assert_eq!(stats.top_raw_results[0].result_for_assistant_chars, 5);
         assert_eq!(stats.top_raw_results[1].tool_name, "Read");
@@ -4691,7 +4695,7 @@ mod tests {
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
-                    "Bash",
+                    "ExecCommand",
                     json!({ "output": "visible output" }),
                     Some("assistant-only payload"),
                 )],
@@ -4758,7 +4762,7 @@ mod tests {
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
-                    "Bash",
+                    "ExecCommand",
                     json!({ "output": large_output, "exit_code": 0 }),
                     Some("assistant-only payload"),
                 )],

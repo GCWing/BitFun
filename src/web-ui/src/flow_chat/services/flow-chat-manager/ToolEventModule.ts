@@ -903,11 +903,9 @@ export function handleToolExecutionProgress(
           : [];
         const lastLog = existingLogs.length > 0 ? existingLogs[existingLogs.length - 1] : undefined;
         const isTerminalLikeProgress =
-          tool_name === 'Bash' ||
           tool_name === 'ExecCommand' ||
           tool_name === 'WriteStdin' ||
           tool_name === 'ExecControl' ||
-          (toolItem as any).toolName === 'Bash' ||
           (toolItem as any).toolName === 'ExecCommand' ||
           (toolItem as any).toolName === 'WriteStdin' ||
           (toolItem as any).toolName === 'ExecControl';

@@ -14947,10 +14947,10 @@ mod tests {
             text_items: vec![],
             tool_items: vec![ToolItemData {
                 id: "tool-1".to_string(),
-                tool_name: "Bash".to_string(),
+                tool_name: "ExecCommand".to_string(),
                 tool_call: ToolCallData {
                     id: "call-1".to_string(),
-                    input: json!({ "command": "printf output" }),
+                    input: json!({ "cmd": "printf output" }),
                 },
                 tool_result: Some(ToolResultData {
                     result: json!({

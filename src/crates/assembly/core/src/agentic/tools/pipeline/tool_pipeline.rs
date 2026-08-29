@@ -4698,7 +4698,7 @@ mod tests {
 
     #[test]
     fn error_result_preserves_full_raw_arguments_for_unparseable_calls() {
-        let mut task = test_tool_task("tool_1", "Git");
+        let mut task = test_tool_task("tool_1", "Worktree");
         task.tool_call.arguments = json!({});
         task.tool_call.is_error = true;
         let raw_arguments = format!("{{\"operation\":\"{}", "log".repeat(512));
@@ -4730,7 +4730,7 @@ mod tests {
 
     #[test]
     fn error_result_omits_arguments_for_parsed_validation_errors() {
-        let mut task = test_tool_task("tool_1", "Git");
+        let mut task = test_tool_task("tool_1", "Worktree");
         task.tool_call.raw_arguments = Some(r#"{\"operation\":\"log\"}"#.to_string());
 
         let result = build_error_execution_result(
@@ -5055,8 +5055,8 @@ mod tests {
                 image_attachments: None,
             },
             "tool_1",
-            "Bash",
-            "Bash",
+            "ExecCommand",
+            "ExecCommand",
         );
 
         let assistant_text = result.result_for_assistant.unwrap_or_default();
@@ -5130,7 +5130,7 @@ mod tests {
         task.context.loaded_deferred_tool_specs = vec![loaded_spec("WebFetch", 0)];
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
-            denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
+            denied_tool_names: ["ExecCommand"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
             miniapp_context_scope: None,
@@ -5150,7 +5150,9 @@ mod tests {
         assert!(context
             .runtime_tool_restrictions
             .is_tool_allowed("WebFetch"));
-        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert!(!context
+            .runtime_tool_restrictions
+            .is_tool_allowed("ExecCommand"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert!(!context.custom_data.contains_key("primary_model_provider"));
         assert!(!context

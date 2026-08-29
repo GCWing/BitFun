@@ -227,10 +227,10 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 - All 10 review sections: run fully, auto-decide each issue, log every decision.
 - Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
   Run them sequentially in foreground. First the independent subagent (Task tool,
-  foreground — do NOT use run_in_background), then outside-voice sub-agent (Bash). Both must
+  foreground — do NOT use run_in_background), then outside-voice sub-agent (ExecCommand). Both must
   complete before building the consensus table.
 
-  **outside-voice sub-agent CEO voice** (via Bash):
+  **outside-voice sub-agent CEO voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
@@ -278,7 +278,7 @@ Step 0 (0A-0F) — run each sub-step and produce:
 - 0F: Mode selection confirmation
 
 Step 0.5 (Dual Voices): Run independent subagent (foreground Task tool) first, then
-outside-voice sub-agent (Bash). Present outside-voice sub-agent output under CODEX SAYS (CEO — strategy challenge)
+outside-voice sub-agent (ExecCommand). Present outside-voice sub-agent output under CODEX SAYS (CEO — strategy challenge)
 header. Present subagent output under INDEPENDENT SUBAGENT (CEO — strategic independence)
 header. Produce CEO consensus table:
 
@@ -341,7 +341,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 - Design system alignment: auto-fix if DESIGN.md exists and fix is obvious
 - Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **outside-voice sub-agent design voice** (via Bash):
+  **outside-voice sub-agent design voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
@@ -416,7 +416,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 - Scope challenge: never reduce (P2)
 - Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **outside-voice sub-agent eng voice** (via Bash):
+  **outside-voice sub-agent eng voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
@@ -531,7 +531,7 @@ Log: "Phase 3.5 skipped — no developer-facing scope detected."
 - DX taste decisions (e.g., opinionated defaults vs flexibility): mark TASTE DECISION
 - Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **outside-voice sub-agent DX voice** (via Bash):
+  **outside-voice sub-agent DX voice** (via ExecCommand):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.

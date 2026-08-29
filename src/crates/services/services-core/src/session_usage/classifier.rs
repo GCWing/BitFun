@@ -37,7 +37,14 @@ fn is_file_tool(tool_name: &str) -> bool {
 fn is_shell_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "shell" | "terminal" | "run_command" | "execute_command" | "bash" | "powershell"
+        "shell"
+            | "terminal"
+            | "run_command"
+            | "execute_command"
+            | "execcommand"
+            | "exec_command"
+            | "bash"
+            | "powershell"
     )
 }
 
@@ -70,7 +77,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn classify_dedicated_git_tool_as_git() {
+    fn classify_legacy_dedicated_git_tool_as_git() {
         assert_eq!(
             classify_tool_usage("git_status", None),
             UsageToolCategory::Git
@@ -83,6 +90,16 @@ mod tests {
 
         assert_eq!(
             classify_tool_usage("execute_command", Some(&input)),
+            UsageToolCategory::Git
+        );
+    }
+
+    #[test]
+    fn classify_exec_command_git_executable_as_git() {
+        let input = serde_json::json!({ "cmd": "git status --short" });
+
+        assert_eq!(
+            classify_tool_usage("ExecCommand", Some(&input)),
             UsageToolCategory::Git
         );
     }

@@ -358,7 +358,7 @@ pub fn get_tool_spec_input_schema() -> Value {
         "properties": {
             "tool_name": {
                 "type": "string",
-                "description": "Exact deferred tool name to load, using the tool's canonical casing from the catalog (for example, \"Git\"). Do not pass a command such as \"git status\" or an operation such as \"status\" here."
+                "description": "Exact deferred tool name to load, using the tool's canonical casing from the catalog (for example, \"WebFetch\"). Do not pass a URL or an operation name here."
             }
         }
     })
@@ -639,8 +639,7 @@ fn escape_get_tool_spec_xml_text(value: &str) -> String {
 pub fn tool_manifest_sort_rank(tool_name: &str) -> usize {
     match tool_name {
         "Task" => 1,
-        "Bash" => 2,
-        "TerminalControl" => 3,
+        "ExecCommand" => 2,
         "Glob" => 4,
         "Grep" => 5,
         "Read" => 6,
@@ -2672,7 +2671,7 @@ mod tests {
     fn get_tool_spec_catalog_description_keeps_builtin_summaries_optional() {
         let description = build_get_tool_spec_catalog_description(&[
             GetToolSpecDeferredToolSummary {
-                name: "Git".to_string(),
+                name: "Worktree".to_string(),
                 short_description: Some("Inspect repository state.".to_string()),
             },
             GetToolSpecDeferredToolSummary {
@@ -2682,9 +2681,9 @@ mod tests {
         ])
         .expect("catalog description");
 
-        assert!(description.contains("- Git"));
+        assert!(description.contains("- Worktree"));
         assert!(description.contains("- WebFetch"));
-        assert!(description.contains("- Git: Inspect repository state."));
+        assert!(description.contains("- Worktree: Inspect repository state."));
         assert!(!description.contains("Fetch a URL."));
     }
 

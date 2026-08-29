@@ -206,7 +206,7 @@ Team Mode is a **virtual team**, not a single specialist running serially. Paral
 **Concurrency safety:**
 
 - `Skill`, `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`, and read-only `Task` calls are concurrency-safe and will run in parallel inside one batch.
-- `Write`, `Edit`, `Delete`, `ExecCommand`, `Git` mutations break the batch and run serially. Do **not** mix them into a fan-out batch.
+- `Write`, `Edit`, `Delete`, and `ExecCommand` mutations break the batch and run serially. Do **not** mix them into a fan-out batch.
 
 # Review Synthesis Template
 

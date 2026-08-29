@@ -721,7 +721,7 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo"
 Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
-Set the Bash tool's `timeout` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. After the command completes, read stderr:
+Set ExecCommand's `yield_time_ms` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. After the command completes, read stderr:
 ```bash
 cat "$TMPERR_ADV"
 ```
@@ -750,7 +750,7 @@ cd "$_REPO_ROOT"
 Use the BitFun Task tool to dispatch a suitable independent read-only structured review sub-agent over the diff.
 ```
 
-Set the Bash tool's `timeout` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. Present output under `CODEX SAYS (code review):` header.
+Set ExecCommand's `yield_time_ms` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. Present output under `CODEX SAYS (code review):` header.
 Check for `[P1]` markers: found → `GATE: FAIL`, not found → `GATE: PASS`.
 
 If GATE is FAIL, use AskUserQuestion:

@@ -461,8 +461,8 @@ mod tests {
 
     fn tool_event(id: &str) -> AcpClientStreamEvent {
         AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-            identity: bitfun_events::ToolEventIdentity::direct(id, "Bash"),
-            params: json!({ "command": "echo ok" }),
+            identity: bitfun_events::ToolEventIdentity::direct(id, "ExecCommand"),
+            params: json!({ "cmd": "echo ok" }),
             timeout_seconds: None,
         })
     }

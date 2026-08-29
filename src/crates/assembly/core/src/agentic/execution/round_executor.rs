@@ -2011,7 +2011,7 @@ mod tests {
             hidden_text_blocks: Vec::new(),
             tool_calls: vec![ToolCall {
                 tool_id: "tool-1".to_string(),
-                tool_name: "Bash".to_string(),
+                tool_name: "ExecCommand".to_string(),
                 arguments: json!({}),
                 raw_arguments: Some("{\"command\":".to_string()),
                 is_error: true,
@@ -2070,7 +2070,7 @@ mod tests {
             trace.tool_calls,
             Some(json!([{
                 "tool_id": "tool-1",
-                "tool_name": "Bash",
+                "tool_name": "ExecCommand",
                 "arguments": {},
                 "raw_arguments": "{\"command\":",
                 "is_error": true,
@@ -2088,7 +2088,7 @@ mod tests {
             None,
             &[ToolCall {
                 tool_id: "tool-1".to_string(),
-                tool_name: "Bash".to_string(),
+                tool_name: "ExecCommand".to_string(),
                 arguments: json!({}),
                 raw_arguments: Some("{\"command\":".to_string()),
                 is_error: true,

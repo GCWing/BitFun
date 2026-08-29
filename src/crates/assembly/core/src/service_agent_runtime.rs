@@ -2409,9 +2409,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                         working_directory: workspace,
                         session_id: Some(sid.clone()),
                         session_name: Some(name),
-                        env: Some(
-                            crate::agentic::tools::implementations::bash_tool::BashTool::noninteractive_env(),
-                        ),
+                        env: Some(tool_runtime::shell::noninteractive_terminal_env()),
                         source: Some(SessionSource::Agent),
                         ..Default::default()
                     },
