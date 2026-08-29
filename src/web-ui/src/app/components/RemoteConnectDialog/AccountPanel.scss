@@ -27,7 +27,7 @@
     background: var(--bf-color-surface-panel);
   }
 
-  &__error-alert.alert {
+  &__error-alert[data-bf-component='alert'] {
     padding: 9px 11px;
     align-items: center;
   }

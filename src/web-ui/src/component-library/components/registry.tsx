@@ -1,16 +1,14 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Button, Checkbox, Textarea } from '@bitfun/ui';
+import { Alert, Avatar, AvatarGroup, Button, Checkbox, Textarea } from '@bitfun/ui';
 import { IconButton } from '@components/IconButton';
 import { WindowControls } from '@components/WindowControls';
 import { Select } from '@components/Select';
 import { CubeLoading } from '@components/CubeLoading';
-import { Alert } from '@components/Alert';
 import { Tooltip } from '@components/Tooltip';
 import { Tabs, TabPane } from '@components/Tabs';
 import { Tag } from '@components/Tag';
-import { Avatar, AvatarGroup } from '@components/Avatar';
 import { Empty } from '@components/Empty';
 import { Markdown } from '@components/Markdown';
 import { CodeEditor } from '@components/CodeEditor';

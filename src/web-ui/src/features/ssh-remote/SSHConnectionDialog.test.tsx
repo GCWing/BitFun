@@ -52,6 +52,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Alert: () => null,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Modal: ({
     isOpen,
@@ -185,7 +186,6 @@ vi.mock('@/component-library', () => ({
       ))}
     </select>
   ),
-  Alert: () => null,
 }));
 
 describe('SSHConnectionDialog', () => {

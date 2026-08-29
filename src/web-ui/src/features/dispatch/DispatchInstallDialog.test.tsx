@@ -64,6 +64,7 @@ vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Button: ({
@@ -97,10 +98,6 @@ vi.mock('@bitfun/ui', () => ({
     };
     return isOpen ? <div>{children}</div> : null;
   },
-}));
-
-vi.mock('@/component-library', () => ({
-  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
 }));
 
 function createDeferred<T>() {

@@ -46,6 +46,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Avatar: ({ src, alt }: any) => <img src={src} alt={alt} />,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Menu: ({ children, ...props }: any) => <div role="menu" {...props}>{children}</div>,
@@ -55,10 +56,6 @@ vi.mock('@bitfun/ui', () => ({
   Modal: ({ isOpen, title, children }: any) => isOpen ? (
     <section role="dialog" aria-label={title}>{children}</section>
   ) : null,
-}));
-
-vi.mock('@/component-library', () => ({
-  Avatar: ({ src, alt }: any) => <img src={src} alt={alt} />,
 }));
 
 describe('MarketAccountControls', () => {

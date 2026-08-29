@@ -11,7 +11,7 @@ export * from './PresenceBoundary';
 export * from './ViewTransitionBoundary';
 export * from './InputDialog';
 
-export * from './Alert';
+export { Alert, type AlertProps, type AlertTone } from '@bitfun/ui';
 
 export { NumberInput, type NumberInputProps } from '@bitfun/ui';
 export * from './Select';
@@ -23,7 +23,7 @@ export * from './Tooltip';
 export * from './Tabs';
 
 export * from './Tag';
-export * from './Avatar';
+export { Avatar, AvatarGroup, type AvatarGroupProps, type AvatarProps, type AvatarSize } from '@bitfun/ui';
 export * from './Empty';
 export * from './Markdown';
 export * from './Card';

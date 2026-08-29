@@ -1,6 +1,5 @@
-import { Button, Modal, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { GitCommitHorizontal, Loader2 } from 'lucide-react';

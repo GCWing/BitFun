@@ -4,9 +4,7 @@ import { iconButtonAppearanceDescriptor } from '@/component-library/components/I
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
 import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
-import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
 import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appearance';
-import { avatarAppearanceDescriptor } from '@/component-library/components/Avatar/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
@@ -269,9 +267,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(popupCloseButtonAppearanceDescriptor)
     .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
-    .registerComponent(alertAppearanceDescriptor)
     .registerComponent(tagAppearanceDescriptor)
-    .registerComponent(avatarAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)

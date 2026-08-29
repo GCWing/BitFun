@@ -1,8 +1,5 @@
-import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { Loader2, RefreshCw } from 'lucide-react';

@@ -19,7 +19,7 @@
     background: var(--bf-appearance-token-color-bg-primary);
   }
 
-  &__error-alert.alert {
+  &__error-alert[data-bf-component='alert'] {
     padding: 8px 10px;
     align-items: center;
   }
