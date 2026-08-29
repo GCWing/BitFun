@@ -28,6 +28,7 @@ import {
   Card,
   CardHeader,
   ChangeCount,
+  Checkbox,
   Composer,
   ComposerToolbar,
   Disclosure,
@@ -45,6 +46,7 @@ import {
   NavigationPanel,
   NavigationPanelItem,
   NavigationPanelSection,
+  NumberInput,
   PageHeader,
   ScrollArea,
   SearchField,
@@ -54,6 +56,7 @@ import {
   StatusPill,
   Switch,
   TabGroup,
+  Textarea,
   ThemeRoot,
   Toolbar,
   ToolbarBadge,
@@ -264,6 +267,25 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Button leadingIcon={<AppWindow aria-hidden="true" />} size="sm" variant="fill">
           {t("components.preview.confirmDelete")}
         </Button>
+      );
+    case "Checkbox":
+      return (
+        <Checkbox
+          defaultChecked
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          tabIndex={-1}
+        />
+      );
+    case "NumberInput":
+      return <NumberInput onChange={() => undefined} value={8} />;
+    case "Textarea":
+      return (
+        <Textarea
+          aria-label={t("components.preview.inputLabel")}
+          defaultValue={t("components.preview.fieldValue")}
+          showCount
+        />
       );
     case "Disclosure":
       return (

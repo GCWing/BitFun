@@ -21,6 +21,7 @@ export {
   type ChangeCountProps,
 } from "./components/ActivityItem";
 export { Button, type ButtonProps } from "./components/Button";
+export { Checkbox, type CheckboxProps, type CheckboxSize } from "./components/Checkbox";
 export {
   Card,
   CardBody,
@@ -89,6 +90,7 @@ export {
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
+export { NumberInput, type NumberInputProps } from "./components/NumberInput";
 export {
   Menu,
   MenuItem,
@@ -154,6 +156,7 @@ export {
   type StatusPillTone,
 } from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
+export { Textarea, type TextareaProps } from "./components/Textarea";
 export { Disclosure, type DisclosureProps } from "./components/Disclosure";
 export {
   TabGroup,

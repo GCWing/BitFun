@@ -1,0 +1,100 @@
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
+import { classNames } from "../../internal/classNames";
+import styles from "./Checkbox.module.css";
+
+export type CheckboxSize = "sm" | "md" | "lg" | "small" | "medium" | "large";
+
+export interface CheckboxProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "children" | "size" | "type"> {
+  children?: ReactNode;
+  description?: ReactNode;
+  error?: boolean;
+  indeterminate?: boolean;
+  invalid?: boolean;
+  label?: ReactNode;
+  onCheckedChange?: (checked: boolean) => void;
+  size?: CheckboxSize;
+}
+
+function normalizeSize(size: CheckboxSize): "sm" | "md" | "lg" {
+  if (size === "small") return "sm";
+  if (size === "large") return "lg";
+  if (size === "medium") return "md";
+  return size;
+}
+
+export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({
+  checked,
+  children,
+  className,
+  defaultChecked,
+  description,
+  disabled = false,
+  error = false,
+  indeterminate = false,
+  invalid = false,
+  label,
+  onChange,
+  onCheckedChange,
+  size = "md",
+  ...props
+}, forwardedRef) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(forwardedRef, () => inputRef.current as HTMLInputElement);
+
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  const resolvedInvalid = error || invalid;
+  const hasContent = label !== undefined || description !== undefined || children !== undefined;
+
+  return (
+    <label
+      className={classNames(styles.root, className)}
+      data-bf-component="checkbox"
+      data-disabled={disabled ? "true" : "false"}
+      data-indeterminate={indeterminate ? "true" : "false"}
+      data-invalid={resolvedInvalid ? "true" : "false"}
+      data-size={normalizeSize(size)}
+    >
+      <span className={styles.control} data-bf-part="control">
+        <input
+          {...props}
+          aria-invalid={resolvedInvalid || undefined}
+          checked={checked}
+          className={styles.input}
+          defaultChecked={defaultChecked}
+          disabled={disabled}
+          onChange={(event) => {
+            onChange?.(event);
+            if (!event.defaultPrevented) onCheckedChange?.(event.currentTarget.checked);
+          }}
+          ref={inputRef}
+          type="checkbox"
+        />
+        <span aria-hidden="true" className={styles.box} data-bf-part="box">
+          <svg className={styles.icon} viewBox="0 0 16 16">
+            {indeterminate
+              ? <path d="M4 8h8" />
+              : <path d="m3.5 8 3 3 6-6" />}
+          </svg>
+        </span>
+      </span>
+      {hasContent && (
+        <span className={styles.content} data-bf-part="content">
+          {label !== undefined && <span className={styles.label}>{label}</span>}
+          {description !== undefined && <span className={styles.description}>{description}</span>}
+          {children}
+        </span>
+      )}
+    </label>
+  );
+});
