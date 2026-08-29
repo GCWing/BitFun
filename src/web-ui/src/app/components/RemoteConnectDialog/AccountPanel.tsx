@@ -15,11 +15,10 @@
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
-import { Button, Field, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Field, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { Alert } from '@/component-library';
 import {
   confirmDanger,
   confirmWarning,

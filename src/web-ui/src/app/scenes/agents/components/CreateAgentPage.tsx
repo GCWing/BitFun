@@ -1,4 +1,4 @@
-import { Button, Icon, Input, ScrollArea, Switch, Tooltip, type IconName, type IconSize } from '@bitfun/ui';
+import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconName, type IconSize } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
@@ -7,7 +7,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Textarea } from '@/component-library';
 import {
   CustomAgentAPI,
   type CustomAgentKind,

@@ -254,7 +254,7 @@
   }
 
   &__path-input[data-bf-component='input'],
-  &__description .bitfun-textarea__field {
+  &__description [data-bf-component='textarea'] > [data-bf-part='input'] {
     border-radius: 8px;
   }
 
@@ -267,7 +267,7 @@
     min-width: 84px;
   }
 
-  &__description .bitfun-textarea__field {
+  &__description [data-bf-component='textarea'] > [data-bf-part='input'] {
     min-height: 64px;
     padding: 10px 12px;
     background: transparent;

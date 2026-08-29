@@ -1,19 +1,11 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Button } from '@bitfun/ui';
-import { IconButton } from '@components/IconButton';
+import { Alert, Avatar, AvatarGroup, Button, Checkbox, IconButton, StatusPill, TabGroup, Textarea } from '@bitfun/ui';
 import { WindowControls } from '@components/WindowControls';
 import { Select } from '@components/Select';
-import { Checkbox } from '@components/Checkbox';
-import { Textarea } from '@components/Textarea';
 import { CubeLoading } from '@components/CubeLoading';
-import { Alert } from '@components/Alert';
 import { Tooltip } from '@components/Tooltip';
-import { Tabs, TabPane } from '@components/Tabs';
-import { Tag } from '@components/Tag';
-import { Avatar, AvatarGroup } from '@components/Avatar';
-import { Empty } from '@components/Empty';
 import { Markdown } from '@components/Markdown';
 import { CodeEditor } from '@components/CodeEditor';
 import { TodoWriteDisplay } from '@/flow_chat/tool-cards/TodoWriteDisplay';
@@ -88,21 +80,12 @@ export const componentRegistry: ComponentCategory[] = [
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Tag color="blue">Blue</Tag>
-              <Tag color="green">Green</Tag>
-              <Tag color="red">Red</Tag>
-              <Tag color="yellow">Yellow</Tag>
-              <Tag color="purple">Purple</Tag>
-              <Tag color="gray">Gray</Tag>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <Tag size="small">Small</Tag>
-              <Tag size="medium">Medium</Tag>
-              <Tag size="large">Large</Tag>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Tag color="blue" rounded>Rounded</Tag>
-              <Tag color="green" closable onClose={() => alert('Closed!')}>Closable</Tag>
+              <StatusPill tone="info">Info</StatusPill>
+              <StatusPill tone="success">Success</StatusPill>
+              <StatusPill tone="danger">Danger</StatusPill>
+              <StatusPill tone="warning">Warning</StatusPill>
+              <StatusPill tone="accent">Accent</StatusPill>
+              <StatusPill tone="neutral">Neutral</StatusPill>
             </div>
           </div>
         ),
@@ -114,39 +97,28 @@ export const componentRegistry: ComponentCategory[] = [
         category: 'basic',
         component: () => (
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <IconButton variant="default" aria-label="Search">
+            <IconButton variant="quiet" aria-label="Search" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="2"/>
                 <path d="M11 11L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
-            </IconButton>
-            <IconButton variant="primary" aria-label="Star">
+            } />
+            <IconButton variant="primary" aria-label="Star" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L10 6L14 6.5L11 9.5L12 14L8 11.5L4 14L5 9.5L2 6.5L6 6L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
-            </IconButton>
-            <IconButton variant="ghost" aria-label="Settings">
+            } />
+            <IconButton variant="fill" aria-label="Settings" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="2"/>
                 <path d="M8 1V3M8 13V15M15 8H13M3 8H1M13.5 2.5L12 4M4 12L2.5 13.5M13.5 13.5L12 12M4 4L2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
-            </IconButton>
-            <IconButton variant="danger" aria-label="Delete">
+            } />
+            <IconButton tone="danger" aria-label="Delete" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M3 4H13M5 4V3C5 2.5 5.5 2 6 2H10C10.5 2 11 2.5 11 3V4M6 7V12M10 7V12M4 4L5 14H11L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </IconButton>
-            <IconButton variant="success" aria-label="Check">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8L6 11L13 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </IconButton>
-            <IconButton variant="warning" aria-label="Warning">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L14 14H2L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
-                <path d="M8 6V9M8 11V11.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </IconButton>
+            } />
           </div>
         ),
       },
@@ -157,21 +129,21 @@ export const componentRegistry: ComponentCategory[] = [
         category: 'basic',
         component: () => (
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <IconButton size="small" variant="primary" aria-label="Small">
+            <IconButton size="xs" variant="primary" aria-label="Small" icon={
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L10 6L14 6.5L11 9.5L12 14L8 11.5L4 14L5 9.5L2 6.5L6 6L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
-            </IconButton>
-            <IconButton size="medium" variant="primary" aria-label="Medium">
+            } />
+            <IconButton size="sm" variant="primary" aria-label="Medium" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L10 6L14 6.5L11 9.5L12 14L8 11.5L4 14L5 9.5L2 6.5L6 6L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
-            </IconButton>
-            <IconButton size="large" variant="primary" aria-label="Large">
+            } />
+            <IconButton size="lg" variant="primary" aria-label="Large" icon={
               <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L10 6L14 6.5L11 9.5L12 14L8 11.5L4 14L5 9.5L2 6.5L6 6L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
-            </IconButton>
+            } />
           </div>
         ),
       },
@@ -182,16 +154,16 @@ export const componentRegistry: ComponentCategory[] = [
         category: 'basic',
         component: () => (
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <IconButton shape="square" variant="primary" aria-label="Square">
+            <IconButton shape="square" variant="primary" aria-label="Square" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <rect x="3" y="3" width="10" height="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
-            </IconButton>
-            <IconButton shape="circle" variant="primary" aria-label="Circle">
+            } />
+            <IconButton shape="circle" variant="primary" aria-label="Circle" icon={
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="2"/>
               </svg>
-            </IconButton>
+            } />
           </div>
         ),
       },
@@ -715,35 +687,21 @@ console.log(user.greet());`);
         category: 'navigation',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <Tabs type="line" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Tab 1">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Tab 2">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容2</div>
-              </TabPane>
-              <TabPane tabKey="3" label="Tab 3">
-                <div style={{ padding: '16px' }}>Line 类型 - 内容3</div>
-              </TabPane>
-            </Tabs>
-
-            <Tabs type="card" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Card 1">
-                <div style={{ padding: '16px' }}>Card 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Card 2">
-                <div style={{ padding: '16px' }}>Card 类型 - 内容2</div>
-              </TabPane>
-            </Tabs>
-
-            <Tabs type="pill" defaultActiveKey="1">
-              <TabPane tabKey="1" label="Pill 1">
-                <div style={{ padding: '16px' }}>Pill 类型 - 内容1</div>
-              </TabPane>
-              <TabPane tabKey="2" label="Pill 2">
-                <div style={{ padding: '16px' }}>Pill 类型 - 内容2</div>
-              </TabPane>
-            </Tabs>
+            <TabGroup
+              defaultValue="1"
+              items={[
+                { value: '1', label: 'Tab 1' },
+                { value: '2', label: 'Tab 2' },
+                { value: '3', label: 'Tab 3' },
+              ]}
+            />
+            <TabGroup
+              defaultValue="1"
+              items={[
+                { value: '1', label: 'Card 1' },
+                { value: '2', label: 'Card 2' },
+              ]}
+            />
           </div>
         ),
       },

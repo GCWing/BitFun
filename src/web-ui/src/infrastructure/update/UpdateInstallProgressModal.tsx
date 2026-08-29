@@ -2,9 +2,8 @@
  * Full-screen style modal showing download progress for in-app updates.
  */
 
-import { Button, Modal } from '@bitfun/ui';
+import { Alert, Button, Modal } from '@bitfun/ui';
 import React, { useMemo } from 'react';
-import { Alert } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import type { UpdateDownloadProgressPayload } from './installUpdateWithProgress';
 import { formatUpdateInstallError } from './updateErrorMessage';

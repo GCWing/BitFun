@@ -212,7 +212,7 @@
 
   > [data-bf-component='input'],
   > .select,
-  > .bitfun-number-input {
+  > [data-bf-component='number-input'] {
     width: 100%;
     min-width: 0;
   }
@@ -224,20 +224,20 @@
    */
   > div:has(> .select),
   > div:has(> [data-bf-component='input']),
-  > div:has(> .bitfun-number-input) {
+  > div:has(> [data-bf-component='number-input']) {
     width: 100%;
     min-width: 0;
 
     > .select,
     > [data-bf-component='input'],
-    > .bitfun-number-input {
+    > [data-bf-component='number-input'] {
       width: 100%;
       min-width: 0;
     }
   }
 
-  > .bitfun-number-input .bitfun-number-input__input,
-  > div:has(> .bitfun-number-input) > .bitfun-number-input .bitfun-number-input__input {
+  > [data-bf-component='number-input'] [data-bf-part='input'],
+  > div:has(> [data-bf-component='number-input']) > [data-bf-component='number-input'] [data-bf-part='input'] {
     text-align: left;
   }
 }

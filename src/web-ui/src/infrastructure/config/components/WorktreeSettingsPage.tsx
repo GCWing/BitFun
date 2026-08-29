@@ -1,4 +1,4 @@
-import { Button, ConfirmDialog, Icon, IconButton, Input, Switch, Tooltip } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@bitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -15,7 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
-import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton, NumberInput } from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton } from '@/component-library';
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';

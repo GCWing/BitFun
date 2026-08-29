@@ -314,6 +314,17 @@
       "footerHeight": { "$value": "40px" },
       "footerPadding": { "$value": "{space.2}" }
     },
+    "disclosure": {
+      "triggerMinBlockSize": { "$value": "30px" },
+      "triggerPaddingBlock": { "$value": "{space.1}" },
+      "triggerPaddingInline": { "$value": "{space.2}" },
+      "triggerGap": { "$value": "{space.2}" },
+      "triggerRadius": { "$value": "{radius.base}" },
+      "indicatorSize": { "$value": "14px" },
+      "actionsGap": { "$value": "{space.1}" },
+      "contentPaddingBlock": { "$value": "{space.3}" },
+      "contentPaddingInline": { "$value": "{space.8}" }
+    },
     "splitView": {
       "contentPanelRadius": {
         "$description": "Corner radius for the content panel where it meets a companion navigation panel.",

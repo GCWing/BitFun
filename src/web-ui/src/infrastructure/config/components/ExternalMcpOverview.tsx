@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Icon, Button, IconButton, ScrollArea, Tooltip } from '@bitfun/ui';
+import { Icon, Button, Checkbox, IconButton, ScrollArea, Tooltip } from '@bitfun/ui';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -495,28 +495,30 @@ const ExternalMcpOverview: React.FC = () => {
                   const candidateScopeLabel = scopeLabel(source?.record.scope);
                   return (
                     <li key={item.candidateId}>
-                      <label className="bitfun-mcp-tools__import-option" data-bf-component="external-mcp-overview" data-bf-part="importOption">
-                        <input
-                          type="checkbox"
+                      <div className="bitfun-mcp-tools__import-option" data-bf-component="external-mcp-overview" data-bf-part="importOption">
+                        <Checkbox
+                          className="bitfun-mcp-tools__import-control"
                           checked={selectedImportCandidateIds.has(item.candidateId)}
                           disabled={importBusy}
-                          onChange={() => toggleImportCandidate(item.candidateId)}
+                          onCheckedChange={() => toggleImportCandidate(item.candidateId)}
                           aria-label={`${item.displayName}, ${ecosystemLabel}, ${candidateScopeLabel}`}
+                          label={(
+                            <span className="bitfun-mcp-tools__import-option-content" data-bf-component="external-mcp-overview" data-bf-part="importOptionContent">
+                              <span>
+                                {item.displayName} → {item.proposedNativeId}
+                              </span>
+                              <span className="bitfun-mcp-tools__import-option-meta" data-bf-component="external-mcp-overview" data-bf-part="importOptionMeta">
+                                <span className="bitfun-collection-item__badge bitfun-mcp-tools__external-source-badge">
+                                  {ecosystemLabel}
+                                </span>
+                                <span className="bitfun-collection-item__badge">
+                                  {candidateScopeLabel}
+                                </span>
+                              </span>
+                            </span>
+                          )}
                         />
-                        <span className="bitfun-mcp-tools__import-option-content" data-bf-component="external-mcp-overview" data-bf-part="importOptionContent">
-                          <span>
-                            {item.displayName} → {item.proposedNativeId}
-                          </span>
-                          <span className="bitfun-mcp-tools__import-option-meta" data-bf-component="external-mcp-overview" data-bf-part="importOptionMeta">
-                            <span className="bitfun-collection-item__badge bitfun-mcp-tools__external-source-badge">
-                              {ecosystemLabel}
-                            </span>
-                            <span className="bitfun-collection-item__badge">
-                              {candidateScopeLabel}
-                            </span>
-                          </span>
-                        </span>
-                      </label>
+                      </div>
                     </li>
                   );
                 })}

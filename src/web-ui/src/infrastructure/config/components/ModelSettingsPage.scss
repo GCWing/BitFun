@@ -1003,7 +1003,7 @@
       }
 
       > [data-bf-component='switch'],
-      > .bitfun-checkbox {
+      > [data-bf-component='checkbox'] {
         width: auto;
         max-width: none;
         flex: 0 0 auto;
@@ -1028,7 +1028,7 @@
     margin-bottom: $size-gap-4;
 
     
-    > label:not(.bitfun-checkbox):not(.bitfun-radio-label) {
+    > label:not([data-bf-component='checkbox']):not(.bitfun-radio-label) {
       display: block;
       margin-bottom: $size-gap-2;
       font-size: var(--bf-appearance-token-font-size-sm);
@@ -1037,7 +1037,7 @@
     }
 
     
-    > .bitfun-checkbox {
+    > [data-bf-component='checkbox'] {
       margin-bottom: 0;
     }
 
@@ -1091,7 +1091,7 @@
     }
 
     
-    .bitfun-number-input {
+    [data-bf-component='number-input'] {
       width: 100%;
     }
   }
@@ -1146,7 +1146,7 @@
   &__form--modal {
     [data-bf-component='input'],
     .select__trigger,
-    .bitfun-number-input__container,
+    [data-bf-component='number-input'] > [data-bf-part='control'],
     .resolved-url__value {
       min-height: 35px;
       border-radius: var(--bf-appearance-token-size-radius-sm);
@@ -1161,7 +1161,7 @@
 
     [data-bf-component='input'],
     .select,
-    .bitfun-number-input,
+    [data-bf-component='number-input'],
     .bitfun-model-settings__resolved-url {
       width: 100%;
       min-width: 0;
@@ -1452,7 +1452,7 @@
     border-top: 1px dashed var(--bf-appearance-token-border-subtle);
 
     .select__trigger,
-    .bitfun-number-input__container {
+    [data-bf-component='number-input'] > [data-bf-part='control'] {
       min-height: 32px;
       border-color: color-mix(
         in srgb,
@@ -1464,7 +1464,7 @@
     .select__value,
     .select__placeholder,
     .select__value-label,
-    .bitfun-number-input__input {
+    [data-bf-component='number-input'] [data-bf-part='input'] {
       font-size: 12px;
       line-height: 1.4;
     }
@@ -1487,16 +1487,16 @@
     }
 
     > .select,
-    .bitfun-number-input {
+    [data-bf-component='number-input'] {
       width: 100%;
       min-width: 0;
     }
 
-    .bitfun-number-input__value-area {
+    [data-bf-component='number-input'] > [data-bf-part='control'] {
       justify-content: flex-start;
     }
 
-    .bitfun-number-input__input {
+    [data-bf-component='number-input'] [data-bf-part='input'] {
       text-align: left;
       font-size: 12px;
     }
@@ -2224,7 +2224,7 @@
     &__form-field {
       margin-bottom: $size-gap-3;
       
-      > label:not(.bitfun-checkbox):not(.bitfun-radio-label) {
+      > label:not([data-bf-component='checkbox']):not(.bitfun-radio-label) {
         font-size: var(--bf-appearance-token-font-size-xs);
         margin-bottom: $size-gap-1;
       }

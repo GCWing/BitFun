@@ -90,6 +90,11 @@
     min-width: 0;
   }
 
+  &__path-input-field {
+    display: block;
+    width: 100%;
+  }
+
   &__path-display,
   &__path-input {
     width: 100%;

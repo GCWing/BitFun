@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, EyeOff, Loader2, RefreshCw, Send, Trash2 } from 'lucide-react';
 
@@ -455,9 +455,9 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
 
       <label className="miniapp-customize-panel__request" data-bf-component="miniapp-customize-panel" data-bf-part="request">
         <span>{t('customize.requestLabel')}</span>
-        <textarea
+        <Textarea
           value={userRequest}
-          onChange={(event) => setUserRequest(event.target.value)}
+          onValueChange={setUserRequest}
           onKeyDown={(event) => {
             if (!shouldSubmitMiniAppCustomizationRequest(event)) {
               return;

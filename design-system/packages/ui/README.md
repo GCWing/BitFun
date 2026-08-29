@@ -18,6 +18,11 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+`Disclosure` is the shared expandable-content primitive. It owns controlled or
+uncontrolled open state, trigger/region accessibility wiring, focus exclusion
+while collapsed, reduced-motion behavior, and independent header actions.
+Product copy and the revealed content remain consumer-owned.
+
 ## FlowChat tool cards
 
 FlowChat frameworks use an attention model rather than a size or border model:

@@ -160,7 +160,8 @@ test("FlowChat gallery renders only the real migrated tool-card components", asy
 
 test("CommandToolCard previews follow the runtime command-state presentation", async () => {
   const preview = await readFile(flowChatPreviewSource, "utf8");
-  const commandPreview = /function CommandPreview[\s\S]*?\r?\n}\r?\n\r?\nfunction resolveFileOperation/.exec(preview)?.[0];
+  const commandPreview =
+    /function CommandPreview[\s\S]*?\r?\n}\r?\n\r?\nfunction resolveFileOperation/.exec(preview)?.[0];
 
   assert.ok(commandPreview);
   assert.match(

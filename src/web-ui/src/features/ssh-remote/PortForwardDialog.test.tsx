@@ -57,6 +57,16 @@ vi.mock('@bitfun/ui', () => ({
       {children}
     </button>
   ),
+  Checkbox: ({ checked, onChange, label }: {
+    checked?: boolean;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+    label?: React.ReactNode;
+  }) => (
+    <label>
+      <input type="checkbox" checked={checked} onChange={onChange} />
+      {label}
+    </label>
+  ),
   IconButton: ({
     children,
     onClick,
@@ -106,23 +116,6 @@ vi.mock('@bitfun/ui', () => ({
     <section {...props}>{title}{actions}{children}</section>
   ),
   FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
-}));
-
-vi.mock('@/component-library', () => ({
-  Checkbox: ({
-    checked,
-    onChange,
-    label,
-  }: {
-    checked?: boolean;
-    onChange?: React.ChangeEventHandler<HTMLInputElement>;
-    label?: React.ReactNode;
-  }) => (
-    <label>
-      <input type="checkbox" checked={checked} onChange={onChange} />
-      {label}
-    </label>
-  ),
 }));
 
 function makeForward(overrides: Partial<PortForward> = {}): PortForward {

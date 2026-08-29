@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CircleAlert,
@@ -1074,18 +1074,16 @@ const AssistantDefaultsPage: React.FC = () => {
               </div>
 
               <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-bf-component="assistant-defaults-page" data-bf-part="filters">
-                <label className="assistant-defaults-search">
-                  <Icon name="search" size="md" />
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder={t('nursery.template.searchPlaceholder')}
-                  />
-                  {searchQuery ? (
-                    <button type="button" onClick={() => setSearchQuery('')} aria-label={t('nursery.template.clearSearch')}><Icon name="xmark" size="sm" /></button>
-                  ) : null}
-                </label>
+                <SearchField
+                  className="assistant-defaults-search"
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  onClear={searchQuery ? () => setSearchQuery('') : undefined}
+                  clearLabel={searchQuery ? t('nursery.template.clearSearch') : undefined}
+                  leadingIcon={<Icon name="search" size="md" />}
+                  placeholder={t('nursery.template.searchPlaceholder')}
+                  aria-label={t('nursery.template.filterLabel')}
+                />
                 <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>
                   {statusFilters.map((filter) => (
                     <button

@@ -59,6 +59,12 @@ vi.mock('@/component-library', () => ({
     </button>
   ),
   ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
+}));
+
+vi.mock('@bitfun/ui', () => ({
+  Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" disabled={disabled} onClick={onClick}>{children}</button>
+  ),
   NumberInput: ({
     disabled,
     value,

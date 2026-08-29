@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Icon, ScrollArea } from '@bitfun/ui';
+import { Icon, ScrollArea, SearchField } from '@bitfun/ui';
 import { Loader2 } from 'lucide-react';
 import { type GitBranch as GitBranchType } from '../../../../infrastructure/api/service-api/GitAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -242,19 +242,20 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       onKeyDown={handleKeyDown}
     >
       <div data-bf-component="branch-quick-switch" data-bf-part="search" className="branch-quick-switch__search">
-        <input
+        <SearchField
           ref={inputRef}
-          type="text"
+          className="branch-quick-switch__input-field"
+          inputClassName="branch-quick-switch__input"
+          leadingIcon={<Icon name="search" size="sm" />}
           placeholder={t('quickSwitch.searchPlaceholder')}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onValueChange={setSearchTerm}
           onCompositionStart={() => {
             inputCompositionActiveRef.current = true;
           }}
           onCompositionEnd={() => {
             inputCompositionActiveRef.current = false;
           }}
-          className="branch-quick-switch__input"
           data-bf-component="branch-quick-switch"
           data-bf-part="input"
         />

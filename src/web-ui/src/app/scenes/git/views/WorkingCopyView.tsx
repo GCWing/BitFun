@@ -2,7 +2,7 @@
  * WorkingCopyView — Git working copy: commit bar + file list + diff area (ContentCanvas mode=git).
  */
 
-import { Button, Icon, IconButton, SearchField, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,6 @@ import {
   Square,
   FileCode2,
 } from 'lucide-react';
-import { Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { ContentCanvas } from '@/app/components/panels/content-canvas';
 import { CanvasStoreModeContext } from '@/app/components/panels/content-canvas/stores';

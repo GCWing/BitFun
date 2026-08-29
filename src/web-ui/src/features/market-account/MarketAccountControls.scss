@@ -25,7 +25,7 @@
     font-size: var(--bf-appearance-token-font-size-sm);
     cursor: pointer;
 
-    > span:not(.bitfun-avatar) {
+    > span:not([data-bf-component='avatar']) {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;

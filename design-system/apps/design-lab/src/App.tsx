@@ -20,6 +20,7 @@ import {
   MousePointerClick,
   Palette,
   PanelTop,
+  PanelsTopLeft,
   Search,
   Settings2,
   SquareTerminal,
@@ -49,6 +50,7 @@ import { ComponentsPage } from "./pages/ComponentsPage";
 import { ComponentDetailPage } from "./pages/ComponentDetailPage";
 import { GettingStartedPage } from "./pages/GettingStartedPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { PatternsPage } from "./pages/PatternsPage";
 import { ColorsPage } from "./pages/ColorsPage";
 import {
   colorTokenCatalog,
@@ -72,6 +74,7 @@ type LabRoute =
   | { page: "overview" }
   | { page: "getting-started" }
   | { page: "components" }
+  | { page: "patterns" }
   | { page: "flow-chat" }
   | { page: "colors" }
   | { page: "resources" }
@@ -128,6 +131,9 @@ function parseRoute(hash: string): LabRoute {
   }
   if (route === "components") {
     return { page: "components" };
+  }
+  if (route === "patterns") {
+    return { page: "patterns" };
   }
   if (route === "flow-chat") {
     return { page: "flow-chat" };
@@ -214,6 +220,13 @@ export function App() {
       keywords: `component library catalog ${t("nav.components")}`,
       label: t("nav.components"),
       route: { page: "components" },
+    },
+    {
+      detail: t("search.patternsDetail"),
+      icon: PanelsTopLeft,
+      keywords: `patterns recipes settings navigation search device ${t("nav.patterns")}`,
+      label: t("nav.patterns"),
+      route: { page: "patterns" },
     },
     {
       detail: t("search.flowChatDetail", { count: flowChatComponents.length }),
@@ -456,6 +469,17 @@ export function App() {
             <Blocks aria-hidden="true" size={17} />
             <span>{t("nav.components")}</span>
           </a>
+          <a
+            aria-current={route.page === "patterns" ? "page" : undefined}
+            href="#patterns"
+            onClick={(event) => {
+              event.preventDefault();
+              navigate({ page: "patterns" });
+            }}
+          >
+            <PanelsTopLeft aria-hidden="true" size={17} />
+            <span>{t("nav.patterns")}</span>
+          </a>
           <div className="lab-component-links">
             {standardComponents.map((component) => {
               const Icon = componentIcons[component.name] ?? Blocks;
@@ -697,6 +721,15 @@ export function App() {
               density={density}
               onInspectTokens={() => openTokenPage()}
               onOpenComponent={(name) => navigate({ componentName: name, page: "component" })}
+              tokenOverrides={tokenOverrides}
+            />
+          )}
+
+          {route.page === "patterns" && (
+            <PatternsPage
+              colorScheme={colorScheme}
+              contrast={contrast}
+              density={density}
               tokenOverrides={tokenOverrides}
             />
           )}

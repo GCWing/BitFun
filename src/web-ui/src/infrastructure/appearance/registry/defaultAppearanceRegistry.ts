@@ -1,21 +1,12 @@
 import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
-import { iconButtonAppearanceDescriptor } from '@/component-library/components/IconButton/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
-import { checkboxAppearanceDescriptor } from '@/component-library/components/Checkbox/appearance';
-import { textareaAppearanceDescriptor } from '@/component-library/components/Textarea/appearance';
-import { numberInputAppearanceDescriptor } from '@/component-library/components/NumberInput/appearance';
-import { tabsAppearanceDescriptor } from '@/component-library/components/Tabs/appearance';
 import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
-import { alertAppearanceDescriptor } from '@/component-library/components/Alert/appearance';
-import { tagAppearanceDescriptor } from '@/component-library/components/Tag/appearance';
-import { avatarAppearanceDescriptor } from '@/component-library/components/Avatar/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
 import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';
-import { emptyAppearanceDescriptor } from '@/component-library/components/Empty/appearance';
 import { inputDialogAppearanceDescriptor } from '@/component-library/components/InputDialog/appearance';
 import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
 import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
@@ -268,22 +259,13 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
   return new AppearanceRegistry()
     .registerComponent(cardAppearanceDescriptor)
     .registerComponent(tooltipAppearanceDescriptor)
-    .registerComponent(iconButtonAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
-    .registerComponent(checkboxAppearanceDescriptor)
-    .registerComponent(textareaAppearanceDescriptor)
-    .registerComponent(numberInputAppearanceDescriptor)
-    .registerComponent(tabsAppearanceDescriptor)
     .registerComponent(selectAppearanceDescriptor)
-    .registerComponent(alertAppearanceDescriptor)
-    .registerComponent(tagAppearanceDescriptor)
-    .registerComponent(avatarAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)
     .registerComponent(cubeLoadingAppearanceDescriptor)
     .registerComponent(dotMatrixLoaderAppearanceDescriptor)
-    .registerComponent(emptyAppearanceDescriptor)
     .registerComponent(inputDialogAppearanceDescriptor)
     .registerComponent(taskRunningIndicatorAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)

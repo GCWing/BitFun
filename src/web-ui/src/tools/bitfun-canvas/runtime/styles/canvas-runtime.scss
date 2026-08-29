@@ -369,8 +369,7 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 .bf-input,
-.bf-textarea,
-.bf-select {
+.bf-textarea {
   width: 100%;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 6px;
@@ -381,7 +380,10 @@ html[data-bitfun-canvas-design-mode] body {
 }
 
 .bf-input:focus,
-.bf-textarea:focus,
-.bf-select:focus {
+.bf-textarea:focus {
   border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, var(--bf-appearance-token-border-base));
+}
+
+.bf-select {
+  width: 100%;
 }

@@ -1,0 +1,33 @@
+@layer bf.components {
+  .root { display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--bf-space-2); color: var(--bf-color-content-primary); font-family: var(--bf-font-family-control); }
+  .label { font-size: var(--bf-font-size-small); font-weight: var(--bf-font-weight-medium); line-height: var(--bf-line-height-tight); }
+  .required, .error { color: var(--bf-color-status-danger-content); }
+  .textarea {
+    min-block-size: calc(var(--bf-control-height-lg) * 2);
+    inline-size: 100%;
+    margin: 0;
+    padding: var(--bf-space-3);
+    resize: vertical;
+    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
+    border-radius: var(--bf-radius-base);
+    outline: 0;
+    caret-color: var(--bf-color-accent-default);
+    color: var(--bf-color-content-primary);
+    background: var(--bf-color-field-background);
+    font: inherit;
+    font-size: var(--bf-font-size-small);
+    line-height: var(--bf-line-height-base);
+    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+  .root[data-auto-resize="true"] .textarea { overflow: hidden; resize: none; }
+  .root[data-variant="filled"] .textarea { border-color: transparent; }
+  .textarea:hover:not(:disabled) { border-color: var(--bf-color-field-border-hover); background: var(--bf-color-field-background-hover); }
+  .textarea:focus { border-color: var(--bf-color-field-border-focus); box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring); }
+  .root[data-invalid="true"] .textarea { border-color: var(--bf-color-status-danger-border); }
+  .textarea:disabled { color: var(--bf-color-content-disabled); cursor: not-allowed; }
+  .textarea::placeholder, .hint, .count { color: var(--bf-color-content-muted); }
+  .support { display: flex; justify-content: space-between; gap: var(--bf-space-3); font-size: var(--bf-font-size-caption); line-height: var(--bf-line-height-tight); }
+  .count { margin-inline-start: auto; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .textarea { transition: none; } }
+  @media (forced-colors: active) { .textarea { border-color: ButtonText; } .textarea:focus { border-color: Highlight; box-shadow: 0 0 0 var(--bf-focus-width) Highlight; } }
+}

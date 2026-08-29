@@ -15,9 +15,8 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import { Button, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
+import { Button, Checkbox, FieldGroup, FormSection, Icon, IconButton, Input, Modal, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from '../Alert';
+import { Alert } from '@bitfun/ui';
 import './ConfigPage.scss';
 
 export interface ConfigPageMessageData {

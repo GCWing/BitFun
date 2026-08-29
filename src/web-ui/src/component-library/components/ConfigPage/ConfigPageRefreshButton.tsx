@@ -1,9 +1,9 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
-import { IconButton } from '../IconButton';
+import { IconButton, Tooltip } from '@bitfun/ui';
 
 export interface ConfigPageRefreshButtonProps {
-  tooltip: React.ReactNode;
+  tooltip: string;
   onClick: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -18,17 +18,18 @@ export const ConfigPageRefreshButton: React.FC<ConfigPageRefreshButtonProps> = (
   className = '',
 }) => {
   return (
-    <IconButton
-      variant="ghost"
-      size="small"
-      tooltip={tooltip}
-      onClick={onClick}
-      disabled={disabled}
-      isLoading={loading}
-      className={className}
-    >
-      <RefreshCw size={14} />
-    </IconButton>
+    <Tooltip content={tooltip} disabled={disabled}>
+      <IconButton
+        aria-label={tooltip}
+        variant="quiet"
+        size="sm"
+        onClick={onClick}
+        disabled={disabled}
+        loading={loading}
+        className={className}
+        icon={<RefreshCw size={14} />}
+      />
+    </Tooltip>
   );
 };
 

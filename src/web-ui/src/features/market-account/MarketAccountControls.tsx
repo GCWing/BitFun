@@ -1,8 +1,7 @@
-import { Button, Icon, Menu, MenuItem, Modal } from '@bitfun/ui';
+import { Avatar, Button, Icon, Menu, MenuItem, Modal } from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Github, Loader2, LogOut } from 'lucide-react';
-import { Avatar} from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import {

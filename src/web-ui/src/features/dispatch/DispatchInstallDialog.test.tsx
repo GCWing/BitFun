@@ -64,8 +64,38 @@ vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Input: ({ onChange, onValueChange, ...props }: React.InputHTMLAttributes<HTMLInputElement> & {
+    onValueChange?: (value: string) => void;
+  }) => (
+    <input
+      {...props}
+      onChange={(event) => {
+        onChange?.(event);
+        onValueChange?.(event.currentTarget.value);
+      }}
+    />
+  ),
+  Checkbox: ({ description, label, onChange, onCheckedChange, ...props }: React.InputHTMLAttributes<HTMLInputElement> & {
+    description?: React.ReactNode;
+    label?: React.ReactNode;
+    onCheckedChange?: (checked: boolean) => void;
+  }) => (
+    <label>
+      <input
+        {...props}
+        type="checkbox"
+        onChange={(event) => {
+          onChange?.(event);
+          onCheckedChange?.(event.currentTarget.checked);
+        }}
+      />
+      <span>{label}</span>
+      <small>{description}</small>
+    </label>
+  ),
   Button: ({
     children,
     disabled,
@@ -97,10 +127,6 @@ vi.mock('@bitfun/ui', () => ({
     };
     return isOpen ? <div>{children}</div> : null;
   },
-}));
-
-vi.mock('@/component-library', () => ({
-  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
 }));
 
 function createDeferred<T>() {

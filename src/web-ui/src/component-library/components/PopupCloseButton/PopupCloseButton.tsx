@@ -1,15 +1,16 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import type { IconButtonProps } from '../IconButton';
 import { Tooltip } from '../Tooltip';
-import '../IconButton/IconButton.scss';
 import './PopupCloseButton.scss';
 
 export interface PopupCloseButtonProps extends Omit<
-  IconButtonProps,
-  'children' | 'isLoading' | 'shape' | 'size' | 'type' | 'variant'
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children' | 'size' | 'type'
 > {
   'aria-label': string;
+  tooltip?: React.ReactNode;
+  tooltipPlacement?: 'top' | 'bottom' | 'left' | 'right';
+  tooltipFollowCursor?: boolean;
 }
 
 /**
@@ -37,9 +38,6 @@ export const PopupCloseButton = React.forwardRef<
       type="button"
       disabled={disabled}
       className={[
-        'icon-btn',
-        'icon-btn--medium',
-        'icon-btn--ghost',
         'popup-close-button',
         className,
       ].filter(Boolean).join(' ')}

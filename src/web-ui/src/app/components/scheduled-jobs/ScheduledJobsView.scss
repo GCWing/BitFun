@@ -404,14 +404,14 @@
     position: relative;
     gap: 0;
 
-    .bitfun-textarea__field {
+    > [data-bf-part='input'] {
       min-height: 92px;
       padding: 10px 12px 24px;
       border-radius: $size-radius-base;
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 82%, transparent);
     }
 
-    .bitfun-textarea__footer {
+    > [data-bf-part='support'] {
       position: absolute;
       right: 10px;
       bottom: 6px;
@@ -420,11 +420,11 @@
       pointer-events: none;
     }
 
-    .bitfun-textarea__hint-wrapper {
+    [data-bf-part='message'] {
       display: none;
     }
 
-    .bitfun-textarea__count {
+    [data-bf-part='count'] {
       padding: 1px 5px;
       border-radius: $size-radius-sm;
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 88%, transparent);

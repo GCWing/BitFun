@@ -1,12 +1,13 @@
-import { Checkbox as BitFunCheckbox } from '@/component-library/components/Checkbox/Checkbox';
 import {
+  Checkbox as BitFunCheckbox,
   Field as DesignField,
   IconButton as BitFunIconButton,
   Input as DesignInput,
+  Select as BitFunSelect,
   Switch as BitFunSwitch,
+  Textarea as BitFunTextarea,
   Tooltip as BitFunTooltip,
 } from '@bitfun/ui';
-import { Textarea as BitFunTextarea } from '@/component-library/components/Textarea/Textarea';
 import type {
   CanvasCheckboxProps,
   CanvasIconButtonProps,
@@ -39,10 +40,6 @@ function designSystemIconButtonStyle(
   if (variant === 'primary' || variant === 'ai') return { variant: 'primary' };
   if (variant === 'success' || variant === 'warning') return { variant: 'fill' };
   return { variant: 'quiet' };
-}
-
-function selectSizeClass(size: CanvasSelectProps['size']) {
-  return `bf-select--${controlSize(size)}`;
 }
 
 function normalizeOption(option: string | number | CanvasSelectOption): CanvasSelectOption {
@@ -109,29 +106,29 @@ export function Select({
   placeholder,
   onChange,
   className,
+  children: _children,
+  defaultValue,
   size,
   ...props
 }: CanvasSelectProps) {
   const normalizedOptions = options.map(normalizeOption);
-  const selectClassName = ['bf-select', selectSizeClass(size), className].filter(Boolean).join(' ');
+  const selectClassName = ['bf-select', className].filter(Boolean).join(' ');
+  const normalizedDefaultValue = Array.isArray(defaultValue) ? defaultValue[0] : defaultValue;
 
   return (
-    <select
+    <BitFunSelect
       {...props}
       className={selectClassName}
-      onChange={event => onChange?.(event.target.value)}
-    >
-      {placeholder ? <option value="">{placeholder}</option> : null}
-      {normalizedOptions.map(option => (
-        <option
-          key={option.value}
-          value={option.value}
-          disabled={option.disabled}
-        >
-          {option.label ?? option.value}
-        </option>
-      ))}
-    </select>
+      defaultValue={normalizedDefaultValue}
+      onValueChange={value => onChange?.(String(value))}
+      options={normalizedOptions.map(option => ({
+        disabled: option.disabled,
+        label: typeof option.label === 'string' ? option.label : String(option.value),
+        value: option.value,
+      }))}
+      placeholder={placeholder === undefined ? undefined : String(placeholder)}
+      size={designSystemControlSize(size)}
+    />
   );
 }
 

@@ -3,6 +3,7 @@ import {
   ArrowUp,
   ArrowRight,
   Check,
+  ChevronRight,
   Command,
   Eye,
   Heading,
@@ -23,12 +24,18 @@ import {
   ActionCard,
   ActionItem,
   ActivityItem,
+  Alert,
+  Avatar,
+  AvatarGroup,
   Button,
   Card,
   CardHeader,
   ChangeCount,
+  Checkbox,
   Composer,
   ComposerToolbar,
+  Disclosure,
+  Empty,
   Field,
   FieldGroup,
   FieldRow,
@@ -43,7 +50,9 @@ import {
   NavigationPanel,
   NavigationPanelItem,
   NavigationPanelSection,
+  NumberInput,
   PageHeader,
+  Radio,
   ScrollArea,
   SearchField,
   SegmentedControl,
@@ -52,6 +61,7 @@ import {
   StatusPill,
   Switch,
   TabGroup,
+  Textarea,
   ThemeRoot,
   Toolbar,
   ToolbarBadge,
@@ -108,6 +118,7 @@ const componentIcons = {
   Select: List,
   StatusPill: Check,
   Switch: ToggleLeft,
+  Disclosure: ChevronRight,
   TabGroup: PanelTop,
   Toolbar: PanelTop,
   Tooltip: MessageCircle,
@@ -261,6 +272,65 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Button leadingIcon={<AppWindow aria-hidden="true" />} size="sm" variant="fill">
           {t("components.preview.confirmDelete")}
         </Button>
+      );
+    case "Alert":
+      return (
+        <Alert
+          message={t("components.preview.fieldDescription")}
+          title={t("components.preview.notifications")}
+          tone="info"
+        />
+      );
+    case "Avatar":
+      return (
+        <AvatarGroup maxCount={3}>
+          <Avatar>BF</Avatar>
+          <Avatar>UI</Avatar>
+          <Avatar>DS</Avatar>
+          <Avatar>+1</Avatar>
+        </AvatarGroup>
+      );
+    case "Checkbox":
+      return (
+        <Checkbox
+          defaultChecked
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.notifications")}
+          tabIndex={-1}
+        />
+      );
+    case "NumberInput":
+      return <NumberInput onChange={() => undefined} value={8} />;
+    case "Radio":
+      return (
+        <Radio
+          defaultChecked
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.fieldValue")}
+          name="component-preview-radio"
+          tabIndex={-1}
+        />
+      );
+    case "Textarea":
+      return (
+        <Textarea
+          aria-label={t("components.preview.inputLabel")}
+          defaultValue={t("components.preview.fieldValue")}
+          showCount
+        />
+      );
+    case "Disclosure":
+      return (
+        <Disclosure defaultOpen summary={t("components.preview.appearance")}>
+          <span>{t("components.preview.appearanceDescription")}</span>
+        </Disclosure>
+      );
+    case "Empty":
+      return (
+        <Empty
+          description={t("components.preview.cardDescription")}
+          title={t("components.preview.cardTitle")}
+        />
       );
     case "Composer":
       return (

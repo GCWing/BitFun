@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton, Input } from '@bitfun/ui';
 import { AlertTriangle, ChevronLeft, RefreshCw, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
@@ -194,11 +194,12 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           data-testid="browser-refresh-button"
         />
         <div data-bf-component="browser-panel" data-bf-part="address" className="browser-panel__address">
-          <Icon name="browser" size="md" />
-          <input
+          <Input
+            className="browser-panel__address-field"
             type="text"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onValueChange={setInputValue}
+            leading={<Icon name="browser" size="md" />}
             placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
             data-testid="browser-url-input"

@@ -3,14 +3,14 @@
  * Supports selecting existing branches or creating new branches
  */
 
-import { Button, Icon, IconButton, Input, ScrollArea, Tooltip } from '@bitfun/ui';
+import { Button, Checkbox, Icon, IconButton, Input, ScrollArea, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 ;
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Checkbox, PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';

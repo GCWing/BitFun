@@ -81,25 +81,6 @@ vi.mock('@/component-library', () => ({
   }: {
     onClick: () => void;
   }) => <button type="button" onClick={onClick}>refresh</button>,
-  NumberInput: ({
-    disabled,
-    label,
-    onChange,
-    value,
-  }: {
-    disabled?: boolean;
-    label?: string;
-    onChange: (value: number) => void;
-    value: number;
-  }) => (
-    <input
-      aria-label={label}
-      disabled={disabled}
-      type="number"
-      value={value}
-      onChange={event => onChange(Number(event.currentTarget.value))}
-    />
-  ),
 }));
 
 vi.mock('@bitfun/ui', () => ({
@@ -149,6 +130,20 @@ vi.mock('@bitfun/ui', () => ({
     </button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  NumberInput: ({ disabled, label, onChange, value }: {
+    disabled?: boolean;
+    label?: string;
+    onChange: (value: number) => void;
+    value: number;
+  }) => (
+    <input
+      aria-label={label}
+      disabled={disabled}
+      type="number"
+      value={value}
+      onChange={event => onChange(Number(event.currentTarget.value))}
+    />
+  ),
   Switch: ({ checked, disabled, onChange }: {
     checked: boolean;
     disabled?: boolean;

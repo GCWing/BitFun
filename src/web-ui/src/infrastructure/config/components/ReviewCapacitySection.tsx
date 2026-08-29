@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button, NumberInput } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
-import { ConfigPageLoading, NumberInput } from '@/component-library';
+import { ConfigPageLoading } from '@/component-library';
 import { ConfigPageRow, ConfigPageSection } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isTauriRuntime } from '@/infrastructure/runtime';

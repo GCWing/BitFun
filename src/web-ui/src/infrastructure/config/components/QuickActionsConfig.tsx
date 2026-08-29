@@ -1,8 +1,8 @@
-import { Button, Icon, IconButton, Input, Modal, Switch, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Modal, Switch, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, GitCommitHorizontal, GitPullRequest, Trash2 } from 'lucide-react';
-import { ConfigPageLoading, Textarea } from '@/component-library';
+import { ConfigPageLoading } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,

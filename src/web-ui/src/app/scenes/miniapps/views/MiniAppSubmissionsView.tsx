@@ -1,4 +1,4 @@
-import { Button, Field, Icon, Input, Select, StatusPill } from '@bitfun/ui';
+import { Button, Field, Icon, Input, Select, StatusPill, Textarea } from '@bitfun/ui';
 import React, { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -327,12 +327,12 @@ const MiniAppSubmissionsView: React.FC = () => {
 
           <label className="miniapp-submissions__field">
             <span>{t('market.submissions.description')}</span>
-            <textarea
+            <Textarea
               value={draft.description}
               maxLength={500}
               required
               disabled={busy}
-              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+              onValueChange={(description) => setDraft({ ...draft, description })}
             />
           </label>
 
@@ -477,12 +477,12 @@ const MiniAppSubmissionsView: React.FC = () => {
 
               <label className="miniapp-submissions__field">
                 <span>{t('market.submissions.changelog')}</span>
-                <textarea
+                <Textarea
                   value={draft.changelog}
                   maxLength={4000}
                   placeholder={t('market.submissions.changelogPlaceholder')}
                   disabled={busy}
-                  onChange={(event) => setDraft({ ...draft, changelog: event.target.value })}
+                  onValueChange={(changelog) => setDraft({ ...draft, changelog })}
                 />
               </label>
 

@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, Select, Switch, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -7,7 +7,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select as LegacySelect, Textarea, type SelectOption } from '@/component-library';
+import { Select as LegacySelect } from '@/component-library';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,

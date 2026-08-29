@@ -31,7 +31,6 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'modelOption' },
     { id: 'modelSelection' },
     { id: 'modelSelectionOption' },
-    { id: 'modelSelectionInput' },
     { id: 'modelSelectionLabel' },
     { id: 'modelSelectionDropdown' },
     { id: 'pageHeaderInner' },

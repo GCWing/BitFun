@@ -14,18 +14,23 @@ test("registry exposes only the formal stable components", () => {
       "ActionCard",
       "ActionItem",
       "ActivityItem",
+      "Alert",
       "AgentControlToolCard",
       "AgentWaitToolCard",
       "AmbientToolCard",
       "AskUser",
+      "Avatar",
       "Button",
       "Card",
+      "Checkbox",
       "ChatComposer",
       "CommandToolCard",
       "Composer",
       "ConfirmDialog",
       "ContextCompressionToolCard",
       "DefaultToolCard",
+      "Disclosure",
+      "Empty",
       "DirectoryListToolCard",
       "Field",
       "FieldGroup",
@@ -42,8 +47,10 @@ test("registry exposes only the formal stable components", () => {
       "Menu",
       "Modal",
       "NavigationPanel",
+      "NumberInput",
       "PageDeployToolCard",
       "PageHeader",
+      "Radio",
       "PagePublishToolCard",
       "ProminentToolCard",
       "ReadFileToolCard",
@@ -59,6 +66,7 @@ test("registry exposes only the formal stable components", () => {
       "StatusPill",
       "Switch",
       "TabGroup",
+      "Textarea",
       "TerminalControlToolCard",
       "TodoToolCard",
       "Toolbar",
@@ -85,6 +93,7 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("color.") ||
           token.startsWith("control.") ||
           token.startsWith("font.") ||
+          token.startsWith("lineHeight.") ||
           token.startsWith("layout.") ||
           token.startsWith("lineHeight.") ||
           token.startsWith("overlay.") ||

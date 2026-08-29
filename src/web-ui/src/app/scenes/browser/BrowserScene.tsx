@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton, Input } from '@bitfun/ui';
 import { AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
@@ -72,11 +72,12 @@ const BrowserScene: React.FC = () => {
           data-testid="browser-refresh-button"
         />
         <div className="browser-scene__address">
-          <Icon name="browser" size="md" />
-          <input
+          <Input
+            className="browser-scene__address-field"
             type="text"
             value={browser.inputValue}
-            onChange={(event) => browser.setInputValue(event.target.value)}
+            onValueChange={browser.setInputValue}
+            leading={<Icon name="browser" size="md" />}
             placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
             data-testid="browser-url-input"

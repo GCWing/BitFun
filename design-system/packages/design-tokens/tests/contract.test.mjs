@@ -209,6 +209,19 @@ test("NavigationPanel tokens preserve the grouped sidebar composition contract",
   assert.equal(systemDocument.layout.navigationPanel.itemRadius.$value, "{radius.base}");
 });
 
+test("Disclosure tokens preserve the compact reference row and nested content rhythm", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(tokens["layout.disclosure.triggerMinBlockSize"], "30px");
+  assert.equal(tokens["layout.disclosure.triggerPaddingBlock"], "4px");
+  assert.equal(tokens["layout.disclosure.triggerPaddingInline"], "8px");
+  assert.equal(tokens["layout.disclosure.triggerGap"], "8px");
+  assert.equal(tokens["layout.disclosure.indicatorSize"], "14px");
+  assert.equal(tokens["layout.disclosure.contentPaddingBlock"], "12px");
+  assert.equal(tokens["layout.disclosure.contentPaddingInline"], "32px");
+  assert.equal(systemDocument.layout.disclosure.triggerRadius.$value, "{radius.base}");
+});
+
 test("Card tokens preserve raised, compact, and media surface compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

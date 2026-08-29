@@ -10,10 +10,9 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, Select, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Field, Icon, IconButton, Input as DesignInput, Modal, Select, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Alert } from '@/component-library';
 import {
   Server,
   Lock,

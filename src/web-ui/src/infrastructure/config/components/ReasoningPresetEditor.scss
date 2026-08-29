@@ -429,7 +429,7 @@
 
   &__action > .select,
   &__action > [data-bf-component='input'],
-  &__action > .bitfun-number-input {
+  &__action > [data-bf-component='number-input'] {
     min-width: 0;
   }
 
@@ -439,7 +439,7 @@
   }
 
   &__action > [data-bf-component='input'],
-  &__action > .bitfun-number-input {
+  &__action > [data-bf-component='number-input'] {
     flex: 1 1 160px;
   }
 
@@ -493,7 +493,7 @@
     flex: 1 1 100%;
   }
 
-  .bitfun-textarea__field {
+  [data-bf-component='textarea'] > [data-bf-part='input'] {
     min-height: 92px;
     font-family: $font-family-mono;
     font-size: var(--bf-appearance-token-font-size-2xs);
@@ -531,7 +531,7 @@
 
     &__action > .select:first-child,
     &__action > [data-bf-component='input'],
-    &__action > .bitfun-number-input,
+    &__action > [data-bf-component='number-input'],
     &__effort-control,
     &__action > .bitfun-reasoning-preset-editor__json {
       flex: 1 1 100%;

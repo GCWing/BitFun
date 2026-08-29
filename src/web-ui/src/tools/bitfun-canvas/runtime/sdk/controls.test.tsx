@@ -11,7 +11,7 @@ import {
 } from './controls';
 
 describe('BitFun Canvas control adapters', () => {
-  it('renders toggle through the design system and checkbox through the legacy controls', () => {
+  it('renders toggle and checkbox through the design system', () => {
     const markup = renderToStaticMarkup(
       <>
         <Toggle checked label="Enabled" />
@@ -20,7 +20,7 @@ describe('BitFun Canvas control adapters', () => {
     );
 
     expect(markup).toContain('data-bf-component="switch"');
-    expect(markup).toContain('bitfun-checkbox');
+    expect(markup).toContain('data-bf-component="checkbox"');
     expect(markup).toContain('Enabled');
     expect(markup).toContain('Reviewed');
   });
@@ -38,8 +38,9 @@ describe('BitFun Canvas control adapters', () => {
       />,
     );
 
-    expect(markup).toContain('class="bf-select bf-select--medium"');
-    expect(markup).toContain('<option value="">Choose</option>');
+    expect(markup).toContain('data-bf-component="select"');
+    expect(markup).toContain('data-size="md"');
+    expect(markup).toContain('<option disabled="" value="">Choose</option>');
     expect(markup).toContain('<option value="beta" selected="">Beta</option>');
     expect(markup).toContain('disabled=""');
   });
@@ -54,7 +55,7 @@ describe('BitFun Canvas control adapters', () => {
     );
 
     expect(markup).toContain('data-bf-component="input"');
-    expect(markup).toContain('bitfun-textarea');
+    expect(markup).toContain('data-bf-component="textarea"');
     expect(markup).toContain('data-bf-component="icon-button"');
     expect(markup).toContain('Refresh');
   });

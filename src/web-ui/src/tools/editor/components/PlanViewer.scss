@@ -266,6 +266,11 @@
         }
       }
 
+      .todo-content-input-field {
+        flex: 1;
+        min-width: 0;
+      }
+
       // Status styles
       &.status-pending {
         .todo-content {

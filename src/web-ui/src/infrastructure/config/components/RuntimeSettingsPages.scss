@@ -79,10 +79,6 @@
     min-width: 0;
   }
 
-  &__pet-select .select__trigger {
-    min-height: 38px;
-  }
-
   &__pet-actions {
     display: flex;
     align-items: center;
@@ -284,10 +280,6 @@
     animation: bitfun-config-pet-preview 1.2s steps(6) infinite;
   }
 
-}
-
-.bitfun-runtime-settings__pet-select-dropdown {
-  max-height: min(320px, calc(100vh - 16px));
 }
 
 @media (prefers-reduced-motion: reduce) {

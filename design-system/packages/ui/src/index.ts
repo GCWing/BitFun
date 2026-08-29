@@ -20,7 +20,10 @@ export {
   type ActivityItemProps,
   type ChangeCountProps,
 } from "./components/ActivityItem";
+export { Alert, type AlertProps, type AlertTone } from "./components/Alert";
+export { Avatar, AvatarGroup, type AvatarGroupProps, type AvatarProps, type AvatarSize } from "./components/Avatar";
 export { Button, type ButtonProps } from "./components/Button";
+export { Checkbox, type CheckboxProps, type CheckboxSize } from "./components/Checkbox";
 export {
   Card,
   CardBody,
@@ -89,6 +92,7 @@ export {
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
+export { NumberInput, type NumberInputProps } from "./components/NumberInput";
 export {
   Menu,
   MenuItem,
@@ -129,6 +133,7 @@ export {
   type NavigationPanelSeparatorProps,
 } from "./components/NavigationPanel";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
+export { Radio, type RadioProps, type RadioSize } from "./components/Radio";
 export {
   ScrollArea,
   type ScrollAreaOrientation,
@@ -154,6 +159,9 @@ export {
   type StatusPillTone,
 } from "./components/StatusPill";
 export { Switch, type SwitchProps } from "./components/Switch";
+export { Textarea, type TextareaProps } from "./components/Textarea";
+export { Disclosure, type DisclosureProps } from "./components/Disclosure";
+export { Empty, type EmptyMediaSize, type EmptyProps } from "./components/Empty";
 export {
   TabGroup,
   type TabGroupItem,

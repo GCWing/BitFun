@@ -6,11 +6,13 @@ import test from "node:test";
 import { Icon, iconNames } from "../dist/index.js";
 
 test("Icon exposes the complete named catalog without duplicate names", () => {
-  assert.equal(iconNames.length, 54);
+  assert.equal(iconNames.length, 56);
   assert.equal(new Set(iconNames).size, iconNames.length);
   assert.ok(iconNames.includes("search"));
   assert.ok(iconNames.includes("commit"));
   assert.ok(iconNames.includes("sidebar-right"));
+  assert.ok(iconNames.includes("chevron-up"));
+  assert.ok(iconNames.includes("refresh"));
 });
 
 test("Icon is decorative by default and owns its exact asset source", () => {

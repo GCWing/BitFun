@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, Select, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,7 +11,6 @@ import {
   Save,
   Server,
 } from 'lucide-react';
-import { Textarea } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,

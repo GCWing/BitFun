@@ -17,7 +17,7 @@
       box-shadow $motion-fast $easing-standard,
       transform $motion-fast $easing-standard;
 
-    &:hover:not(:has(.bitfun-textarea__field:disabled)) {
+    &:hover:not(:has([data-bf-component='textarea'] > [data-bf-part='input']:disabled)) {
       transform: translateY(-2px);
       border-color: var(--bf-appearance-token-border-strong);
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 90%, transparent);
@@ -36,16 +36,12 @@
     }
   }
 
-  // Textarea from component library — borderless inside composite box
-  &__embed.bitfun-textarea {
+  // Design-system Textarea — borderless inside composite box
+  &__embed[data-bf-component='textarea'] {
     gap: 0;
     width: 100%;
 
-    .bitfun-textarea__wrapper {
-      width: 100%;
-    }
-
-    .bitfun-textarea__field {
+    > [data-bf-part='input'] {
       width: 100%;
       min-height: 72px;
       max-height: 220px;

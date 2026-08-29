@@ -20,6 +20,7 @@ import {
   Modal,
   PageHeader,
   ScrollArea,
+  Select,
   StatusPill,
   Switch,
   TabGroup,
@@ -30,7 +31,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Monitor, MonitorSmartphone, Radar, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { Select } from '@/component-library';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -1114,13 +1114,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     </span>
                     <Select
                       className="bitfun-remote-connect__lan-ip-dropdown"
-                      size="small"
+                      size="sm"
                       value={selectedLanIp}
-                      onChange={(v) => setSelectedLanIp(String(v))}
+                      onValueChange={(v) => setSelectedLanIp(String(v))}
                       options={lanNetworkInfo.availableIps.map(e => ({
-                        label: e.ip,
+                        label: `${e.ip} — ${e.interface_name}`,
                         value: e.ip,
-                        description: e.interface_name,
                       }))}
                     />
                   </div>

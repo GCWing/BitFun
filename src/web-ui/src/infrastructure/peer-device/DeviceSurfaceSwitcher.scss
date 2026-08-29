@@ -28,12 +28,16 @@
   transition: background $motion-fast $easing-standard,
               color $motion-fast $easing-standard;
 
+  &__trigger {
+    inline-size: 100%;
+  }
+
   &:hover {
     color: var(--bf-appearance-token-color-text-primary);
     background: var(--bf-appearance-token-element-bg-soft);
   }
 
-  &[data-bf-state='remote'] {
+  &.is-remote {
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
     color: var(--bf-appearance-token-color-text-primary);
 
@@ -114,51 +118,25 @@
     gap: $size-gap-1;
     border-radius: $size-radius-sm;
 
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
     &.is-offline {
       opacity: 0.45;
     }
   }
 
   &__item-main {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
     flex: 1 1 auto;
+    inline-size: 0;
     min-width: 0;
-    height: 30px;
-    padding: 0 $size-gap-2;
-    border: none;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    text-align: left;
-
-    &:disabled {
-      cursor: default;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: -1px;
-    }
   }
 
   &__item.is-current &__item-main {
     color: var(--bf-appearance-token-color-text-primary);
   }
 
-  &__item-label {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  &__item-metadata {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
   }
 
   &__dot {

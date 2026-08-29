@@ -1,10 +1,15 @@
 import { actionItemMeta } from "./components/ActionItem/ActionItem.meta";
 import { actionCardMeta } from "./components/ActionCard/ActionCard.meta";
 import { activityItemMeta } from "./components/ActivityItem/ActivityItem.meta";
+import { alertMeta } from "./components/Alert/Alert.meta";
+import { avatarMeta } from "./components/Avatar/Avatar.meta";
 import { buttonMeta } from "./components/Button/Button.meta";
+import { checkboxMeta } from "./components/Checkbox/Checkbox.meta";
 import { cardMeta } from "./components/Card/Card.meta";
 import { composerMeta } from "./components/Composer/Composer.meta";
 import { confirmDialogMeta } from "./components/ConfirmDialog/ConfirmDialog.meta";
+import { disclosureMeta } from "./components/Disclosure/Disclosure.meta";
+import { emptyMeta } from "./components/Empty/Empty.meta";
 import { fieldMeta } from "./components/Field/Field.meta";
 import { fieldGroupMeta } from "./components/FieldGroup/FieldGroup.meta";
 import { iconMeta } from "./components/Icon/Icon.meta";
@@ -14,13 +19,16 @@ import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
 import { menuMeta } from "./components/Menu/Menu.meta";
 import { modalMeta } from "./components/Modal/Modal.meta";
 import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
+import { numberInputMeta } from "./components/NumberInput/NumberInput.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
+import { radioMeta } from "./components/Radio/Radio.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { segmentedControlMeta } from "./components/SegmentedControl/SegmentedControl.meta";
 import { selectMeta } from "./components/Select/Select.meta";
 import { statusPillMeta } from "./components/StatusPill/StatusPill.meta";
 import { switchMeta } from "./components/Switch/Switch.meta";
+import { textareaMeta } from "./components/Textarea/Textarea.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import { toolbarMeta } from "./components/Toolbar/Toolbar.meta";
 import { tooltipMeta } from "./components/Tooltip/Tooltip.meta";
@@ -69,18 +77,23 @@ export const componentRegistry = [
   actionCardMeta,
   actionItemMeta,
   activityItemMeta,
+  alertMeta,
   agentControlToolCardMeta,
   agentWaitToolCardMeta,
   ambientToolCardMeta,
   askUserMeta,
+  avatarMeta,
   buttonMeta,
   cardMeta,
+  checkboxMeta,
   chatComposerMeta,
   commandToolCardMeta,
   composerMeta,
   confirmDialogMeta,
   contextCompressionToolCardMeta,
   defaultToolCardMeta,
+  disclosureMeta,
+  emptyMeta,
   directoryListToolCardMeta,
   fieldMeta,
   fieldGroupMeta,
@@ -97,8 +110,10 @@ export const componentRegistry = [
   menuMeta,
   modalMeta,
   navigationPanelMeta,
+  numberInputMeta,
   pageDeployToolCardMeta,
   pageHeaderMeta,
+  radioMeta,
   pagePublishToolCardMeta,
   prominentToolCardMeta,
   readFileToolCardMeta,
@@ -114,6 +129,7 @@ export const componentRegistry = [
   statusPillMeta,
   switchMeta,
   tabGroupMeta,
+  textareaMeta,
   terminalControlToolCardMeta,
   todoToolCardMeta,
   toolbarMeta,
