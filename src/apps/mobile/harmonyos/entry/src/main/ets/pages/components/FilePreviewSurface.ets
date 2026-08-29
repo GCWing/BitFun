@@ -13,6 +13,7 @@ import {
   FilePreviewState
 } from '../state/FilePreviewState';
 import { MarkdownContent } from './MarkdownContent';
+import { NavigationBackButton } from './NavigationBackButton';
 import {
   CARD,
   CODE_COMMENT,
@@ -70,16 +71,11 @@ export struct FilePreviewSurface {
   @Builder
   Header() {
     Row({ space: 10 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(22)
-          .fontColor([INK])
-      }
-      .width(44)
-      .height(44)
-      .accessibilityText(RemoteI18n.t('common.close'))
-      .onClick(() => {
-        this.onClose();
+      NavigationBackButton({
+        controlSize: 44,
+        onBack: (): void => {
+          this.onClose();
+        }
       })
 
       Column({ space: 2 }) {

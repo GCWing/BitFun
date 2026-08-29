@@ -3,6 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ConnectAccountDevicePage } from './ConnectAccountDevicePage';
 import { ConnectManualPairingOverlay } from './ConnectManualPairingOverlay';
+import { NavigationBackButton } from './NavigationBackButton';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../state/AppShellState';
 import {
   ConnectSheetLandingPolicy,
@@ -262,29 +263,18 @@ export struct ConnectView {
 
   @Builder
   BackButton() {
-    Stack() {
-      this.BackGlyph()
-    }
-      .width(48)
-      .height(48)
-      .backgroundColor(SOFT)
-      .borderRadius(24)
-      .position({ x: 28, y: 18 })
-      .onClick(() => {
+    NavigationBackButton({
+      controlSize: 48,
+      onBack: (): void => {
         if (this.openIntent !== CONNECT_INTENT_SCAN &&
           this.currentStep() === ConnectSheetStep.Scan && this.remoteUrl.trim().length === 0 && !this.showManualPairing) {
           this.pairingStep = this.isAccountAuthenticated() ? ConnectSheetStep.Account : ConnectSheetStep.Intro;
           return;
         }
         this.onBack();
-      })
-  }
-
-  @Builder
-  BackGlyph() {
-    SymbolGlyph($r('sys.symbol.chevron_left'))
-      .fontSize(21)
-      .fontColor([INK])
+      }
+    })
+      .position({ x: 28, y: 18 })
   }
 
   @Builder

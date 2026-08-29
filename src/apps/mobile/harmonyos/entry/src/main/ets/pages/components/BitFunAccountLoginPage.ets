@@ -1,8 +1,21 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { DEFAULT_CLOUD_RELAY_URL } from '../../services/CloudAccountClient';
-import { CARD, INK, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SUBTLE } from './Theme';
-import { TemplateIcon } from './TemplateIcon';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  PAGE_BG_FADE,
+  PRIMARY_ACTION,
+  PRIMARY_ACTION_TEXT,
+  RED,
+  SUBTLE
+} from './Theme';
+import { NavigationBackButton } from './NavigationBackButton';
+
+const LOGIN_CONTENT_MAX_WIDTH: number = 520;
+const CREDENTIAL_ROW_HEIGHT: number = 60;
 
 @ComponentV2
 export struct BitFunAccountLoginPage {
@@ -22,113 +35,40 @@ export struct BitFunAccountLoginPage {
       this.NavigationHeader()
 
       Scroll() {
-        Column({ space: 0 }) {
-          Text(RemoteI18n.t('remote.settings.accountLoginBody'))
-            .fontSize(MobileDesignTypography.bodyLarge.size)
-            .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
-            .fontColor(MUTED)
-            .width('100%')
-            .margin({ top: 12, bottom: 42 })
-
-          TextInput({ placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'), text: this.username })
-            .height(58)
-            .fontSize(MobileDesignTypography.bodyLarge.size)
-            .fontColor(INK)
-            .placeholderColor(SUBTLE)
-            .backgroundColor(CARD)
-            .borderRadius(18)
-            .padding({ left: 20, right: 20 })
-            .onChange((value: string) => { this.username = value; })
-
-          TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.password })
-            .height(58)
-            .fontSize(MobileDesignTypography.bodyLarge.size)
-            .fontColor(INK)
-            .placeholderColor(SUBTLE)
-            .backgroundColor(CARD)
-            .borderRadius(18)
-            .padding({ left: 20, right: 20 })
-            .margin({ top: 14 })
-            .type(InputType.Password)
-            .onChange((value: string) => { this.password = value; })
-
-          Row() {
-            Text(RemoteI18n.t('sheet.advancedOptions'))
-              .fontSize(MobileDesignTypography.bodySmall.size)
-              .fontColor(MUTED)
-            Blank()
-            if (this.showAdvanced) {
-              SymbolGlyph($r('sys.symbol.chevron_up'))
-                .fontSize(12)
-                .fontColor([MUTED])
-            } else {
-              SymbolGlyph($r('sys.symbol.chevron_down'))
-                .fontSize(12)
-                .fontColor([MUTED])
-            }
-          }
-          .width('100%')
-          .height(44)
-          .padding({ left: 4, right: 4 })
-          .margin({ top: 12 })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.showAdvanced = !this.showAdvanced;
-          })
-
-          if (this.showAdvanced) {
-            Text(RemoteI18n.t('remote.settings.loginServer'))
-              .fontSize(MobileDesignTypography.bodySmall.size)
-              .fontColor(MUTED)
-              .width('100%')
-              .margin({ left: 4, top: 8, bottom: 8 })
-
-            TextInput({ placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'), text: this.relayUrl })
-              .height(52)
-              .fontSize(MobileDesignTypography.bodyMedium.size)
-              .fontColor(INK)
-              .placeholderColor(SUBTLE)
-              .backgroundColor(CARD)
-              .borderRadius(16)
-              .padding({ left: 18, right: 18 })
-              .onChange((value: string) => { this.relayUrl = value; })
-          }
-
-          if (this.errorText.length > 0) {
-            Text(this.errorText)
-              .fontSize(MobileDesignTypography.bodySmall.size)
-              .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-              .fontColor(RED)
-              .width('100%')
-              .margin({ top: 12 })
-          }
+        Column() {
+          this.LoginForm()
         }
         .width('100%')
-        .padding({ left: 28, right: 28, top: 24, bottom: 18 })
-        .alignItems(HorizontalAlign.Start)
+        .padding({ left: 24, right: 24, top: 0, bottom: 18 })
+        .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
 
-      Row() {
-        Button(this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
-          RemoteI18n.t('remote.settings.accountSignIn'))
-          .height(56)
-          .layoutWeight(1)
-          .fontSize(MobileDesignTypography.labelLarge.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(PRIMARY_ACTION_TEXT)
-          .backgroundColor(PRIMARY_ACTION)
-          .borderRadius(18)
-          .opacity(this.canSubmit() ? 1 : 0.28)
-          .enabled(this.canSubmit())
-          .onClick(async () => {
-            await this.submit();
-          })
+      Column() {
+        Row() {
+          Button(this.isBusy ? RemoteI18n.t('remote.settings.accountSigningIn') :
+            RemoteI18n.t('remote.settings.accountSignIn'))
+            .height(54)
+            .layoutWeight(1)
+            .fontSize(MobileDesignTypography.labelLarge.size)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(PRIMARY_ACTION_TEXT)
+            .backgroundColor(PRIMARY_ACTION)
+            .borderRadius(27)
+            .opacity(this.canSubmit() ? 1 : 0.32)
+            .enabled(this.canSubmit())
+            .onClick(async () => {
+              await this.submit();
+            })
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: LOGIN_CONTENT_MAX_WIDTH })
       }
       .width('100%')
-      .padding({ left: 28, right: 28, top: 12, bottom: 28 })
+      .padding({ left: 24, right: 24, top: 10, bottom: 24 })
+      .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
     .height('100%')
@@ -137,34 +77,184 @@ export struct BitFunAccountLoginPage {
   @Builder
   private NavigationHeader() {
     Row() {
-      Button() {
-        TemplateIcon({
-          src: $r('app.media.remote_ref_back'),
-          iconWidth: 15,
-          iconHeight: 23
-        })
-      }
-      .width(44)
-      .height(44)
-      .padding(0)
-      .type(ButtonType.Circle)
-      .backgroundColor('#00000000')
-      .accessibilityText(RemoteI18n.t('common.back'))
-      .onClick(() => {
-        this.onBack();
+      NavigationBackButton({
+        controlSize: 48,
+        onBack: (): void => {
+          this.onBack();
+        }
       })
-
-      Text(RemoteI18n.t('remote.settings.accountLoginTitle'))
-        .fontSize(MobileDesignTypography.headlineMedium.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-        .layoutWeight(1)
-        .margin({ left: 10 })
     }
     .width('100%')
-    .height(72)
-    .padding({ left: 18, right: 18 })
+    .height(58)
+    .padding({ left: 16, right: 16 })
     .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  private LoginForm() {
+    Column({ space: 0 }) {
+      Text(RemoteI18n.t('remote.settings.accountLoginTitle'))
+        .fontSize(MobileDesignTypography.displayMedium.size)
+        .lineHeight(MobileDesignTypography.displayMedium.lineHeight)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(INK)
+        .width('100%')
+        .textAlign(TextAlign.Center)
+
+      Text(RemoteI18n.t('remote.settings.accountLoginBody'))
+        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
+        .fontColor(MUTED)
+        .width('100%')
+        .textAlign(TextAlign.Center)
+        .margin({ top: 8, bottom: 24 })
+
+      this.CredentialCard()
+      this.AdvancedCard()
+
+      if (this.errorText.length > 0) {
+        Text(this.errorText)
+          .fontSize(MobileDesignTypography.bodySmall.size)
+          .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
+          .fontColor(RED)
+          .width('100%')
+          .margin({ top: 12, left: 4, right: 4 })
+      }
+    }
+    .width('100%')
+    .constraintSize({ maxWidth: LOGIN_CONTENT_MAX_WIDTH })
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  private CredentialCard() {
+    Column() {
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.person'))
+          .fontSize(21)
+          .fontColor([MUTED])
+          .width(24)
+          .height(24)
+        TextInput({
+          placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'),
+          text: this.username
+        })
+          .height(CREDENTIAL_ROW_HEIGHT)
+          .layoutWeight(1)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
+          .fontColor(INK)
+          .placeholderColor(SUBTLE)
+          .backgroundColor(PAGE_BG_FADE)
+          .padding({ left: 0, right: 4 })
+          .onChange((value: string) => { this.username = value; })
+      }
+      .width('100%')
+      .height(CREDENTIAL_ROW_HEIGHT)
+      .padding({ left: 18, right: 12 })
+      .alignItems(VerticalAlign.Center)
+
+      Divider()
+        .strokeWidth(1)
+        .color(LINE)
+        .margin({ left: 54, right: 16 })
+
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.lock'))
+          .fontSize(20)
+          .fontColor([MUTED])
+          .width(24)
+          .height(24)
+        TextInput({
+          placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'),
+          text: this.password
+        })
+          .height(CREDENTIAL_ROW_HEIGHT)
+          .layoutWeight(1)
+          .fontSize(MobileDesignTypography.bodyLarge.size)
+          .fontColor(INK)
+          .placeholderColor(SUBTLE)
+          .backgroundColor(PAGE_BG_FADE)
+          .padding({ left: 0, right: 4 })
+          .type(InputType.Password)
+          .showPasswordIcon(true)
+          .onChange((value: string) => { this.password = value; })
+      }
+      .width('100%')
+      .height(CREDENTIAL_ROW_HEIGHT)
+      .padding({ left: 18, right: 12 })
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%')
+    .backgroundColor(CARD)
+    .border({ width: 1, color: LINE })
+    .borderRadius(24)
+    .clip(true)
+  }
+
+  @Builder
+  private AdvancedCard() {
+    Column() {
+      Row({ space: 14 }) {
+        SymbolGlyph($r('sys.symbol.gearshape'))
+          .fontSize(21)
+          .fontColor([MUTED])
+          .width(24)
+          .height(24)
+        Text(RemoteI18n.t('sheet.advancedOptions'))
+          .fontSize(MobileDesignTypography.titleSmall.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(INK)
+          .layoutWeight(1)
+        SymbolGlyph(this.showAdvanced ?
+          $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize(13)
+          .fontColor([MUTED])
+      }
+      .width('100%')
+      .height(58)
+      .padding({ left: 18, right: 18 })
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.showAdvanced = !this.showAdvanced;
+      })
+
+      if (this.showAdvanced) {
+        Divider()
+          .strokeWidth(1)
+          .color(LINE)
+          .margin({ left: 18, right: 18 })
+
+        Column({ space: 8 }) {
+          Text(RemoteI18n.t('remote.settings.loginServer'))
+            .fontSize(MobileDesignTypography.labelSmall.size)
+            .fontColor(MUTED)
+            .width('100%')
+
+          TextInput({
+            placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'),
+            text: this.relayUrl
+          })
+            .height(48)
+            .fontSize(MobileDesignTypography.bodyMedium.size)
+            .fontColor(INK)
+            .placeholderColor(SUBTLE)
+            .backgroundColor(PAGE_BG_FADE)
+            .border({ width: 1, color: LINE })
+            .borderRadius(14)
+            .padding({ left: 14, right: 14 })
+            .onChange((value: string) => { this.relayUrl = value; })
+        }
+        .width('100%')
+        .padding({ left: 18, right: 18, top: 14, bottom: 18 })
+        .alignItems(HorizontalAlign.Start)
+      }
+    }
+    .width('100%')
+    .backgroundColor(CARD)
+    .border({ width: 1, color: LINE })
+    .borderRadius(20)
+    .clip(true)
+    .margin({ top: 14 })
   }
 
   private canSubmit(): boolean {

@@ -4,6 +4,7 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
 import { CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
+import { NavigationBackButton } from './NavigationBackButton';
 
 /** Account identity and device management shared by Settings and account entry. */
 @ComponentV2
@@ -115,18 +116,10 @@ export struct AccountProfilePanel {
   @Builder
   private NavigationHeader() {
     Row() {
-      Button() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(23)
-          .fontColor([INK])
-      }
-      .width(44)
-      .height(44)
-      .padding(0)
-      .type(ButtonType.Circle)
-      .backgroundColor(CARD)
-      .accessibilityText(RemoteI18n.t('common.back'))
-      .onClick(() => this.onBack())
+      NavigationBackButton({
+        controlSize: 44,
+        onBack: (): void => this.onBack()
+      })
       Text(RemoteI18n.t('remote.settings.profile'))
         .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Bold)

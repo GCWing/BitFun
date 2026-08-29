@@ -3,6 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PAGE_BG, RED, SOFT } from './Theme';
 import { AccountDeviceSelectionPolicy } from '../policy/AccountDeviceSelectionPolicy';
+import { NavigationBackButton } from './NavigationBackButton';
 
 @ComponentV2
 export struct ConnectAccountDevicePage {
@@ -27,18 +28,10 @@ export struct ConnectAccountDevicePage {
   build() {
     Column() {
       Row({ space: 16 }) {
-        Stack() {
-          // No .width/.height here on purpose. A chevron's natural advance box
-          // is about half as wide as it is tall, and SymbolGlyph draws the glyph
-          // left-anchored inside a box you force wider than that — so forcing a
-          // square 26vp box pushed this arrow ~7vp left of the circle's centre.
-          // Left unsized, the Stack centres the natural box and the arrow sits
-          // where the circle says it should.
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(23).fontColor([INK])
-        }
-        .width(48).height(48).backgroundColor(SOFT).borderRadius(24)
-        .onClick(() => this.onBack())
+        NavigationBackButton({
+          controlSize: 48,
+          onBack: (): void => this.onBack()
+        })
         Column({ space: 4 }) {
           Text(RemoteI18n.t('connect.accountDevicesTitle'))
             .fontSize(MobileDesignTypography.headlineLarge.size).fontWeight(FontWeight.Bold).fontColor(INK).width('100%')
@@ -230,4 +223,3 @@ export struct ConnectAccountDevicePage {
     return presence;
   }
 }
-
