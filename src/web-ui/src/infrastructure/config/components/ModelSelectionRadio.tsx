@@ -1,6 +1,6 @@
 import React, { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@bitfun/ui';
+import { Radio, Select } from '@bitfun/ui';
 import type { AIModelConfig } from '../types';
 import { getModelDisplayName } from '../services/modelConfigs';
 import './ModelSelectionRadio.scss';
@@ -65,67 +65,55 @@ export const ModelSelectionRadio: React.FC<ModelSelectionRadioProps> = ({
       data-bf-component="config"
       data-bf-part="modelSelection"
     >
-      <label
+      <div
         className={`model-selection-radio__option ${selectionType === 'primary' ? 'model-selection-radio__option--selected' : ''}`}
         data-bf-component="config"
         data-bf-part="modelSelectionOption"
       >
-        <input
-          type="radio"
+        <Radio
+          className="model-selection-radio__choice"
           name={radioName}
           value="primary"
           checked={selectionType === 'primary'}
-          onChange={() => handleSelectionChange('primary')}
+          onCheckedChange={(checked) => checked && handleSelectionChange('primary')}
           disabled={disabled}
-          className="model-selection-radio__input"
-          data-bf-component="config"
-          data-bf-part="modelSelectionInput"
+          size={size}
+          label={<span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">{t('selection.primary')}</span>}
         />
-        <span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">
-          {t('selection.primary')}
-        </span>
-      </label>
+      </div>
 
-      <label
+      <div
         className={`model-selection-radio__option ${selectionType === 'fast' ? 'model-selection-radio__option--selected' : ''}`}
         data-bf-component="config"
         data-bf-part="modelSelectionOption"
       >
-        <input
-          type="radio"
+        <Radio
+          className="model-selection-radio__choice"
           name={radioName}
           value="fast"
           checked={selectionType === 'fast'}
-          onChange={() => handleSelectionChange('fast')}
+          onCheckedChange={(checked) => checked && handleSelectionChange('fast')}
           disabled={disabled}
-          className="model-selection-radio__input"
-          data-bf-component="config"
-          data-bf-part="modelSelectionInput"
+          size={size}
+          label={<span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">{t('selection.fast')}</span>}
         />
-        <span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">
-          {t('selection.fast')}
-        </span>
-      </label>
+      </div>
 
-      <label
+      <div
         className={`model-selection-radio__option model-selection-radio__option--custom ${selectionType === 'custom' ? 'model-selection-radio__option--selected' : ''}`}
         data-bf-component="config"
         data-bf-part="modelSelectionOption"
       >
-        <input
-          type="radio"
+        <Radio
+          className="model-selection-radio__choice"
           name={radioName}
           value="custom"
           checked={selectionType === 'custom'}
-          onChange={() => handleSelectionChange('custom')}
+          onCheckedChange={(checked) => checked && handleSelectionChange('custom')}
           disabled={disabled}
-          className="model-selection-radio__input"
-          data-bf-component="config"
-          data-bf-part="modelSelectionInput"
+          size={size}
+          label={<span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">{t('selection.custom')}</span>}
         />
-        <span className="model-selection-radio__label" data-bf-component="config" data-bf-part="modelSelectionLabel">
-          {t('selection.custom')}
-        </span>
 
         {selectionType === 'custom' && (
           <div className="model-selection-radio__dropdown" data-bf-component="config" data-bf-part="modelSelectionDropdown">
@@ -142,7 +130,7 @@ export const ModelSelectionRadio: React.FC<ModelSelectionRadioProps> = ({
             />
           </div>
         )}
-      </label>
+      </div>
     </div>
   );
 };
