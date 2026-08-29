@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  FolderGit2,
   Laptop,
   Loader2,
   MonitorSmartphone,
@@ -36,6 +37,13 @@ interface DispatchTargetPickerProps {
   sourceWorkspacePath?: string;
   locked: boolean;
   disabled?: boolean;
+  localWorktreeControl?: {
+    enabled: boolean;
+    locked: boolean;
+    label: string;
+    description: string;
+    onChange: (enabled: boolean) => void;
+  };
   onSelectLocal?: () => void;
   onSelectTarget: (selection: DispatchSelection) => void;
 }
@@ -49,6 +57,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   sourceWorkspacePath,
   locked,
   disabled = false,
+  localWorktreeControl,
   onSelectLocal,
   onSelectTarget,
 }) => {
@@ -72,8 +81,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     layoutRevision: `${targets.length}:${loading}:${error ?? ''}`,
   });
 
+  const localDisplayLabel = localWorktreeControl?.enabled
+    ? localWorktreeControl.label
+    : t('chatInput.dispatch.local');
   const displayLabel = target.kind === 'local'
-    ? t('chatInput.dispatch.local')
+    ? localDisplayLabel
     : target.displayName;
   const tooltip = locked
     ? t('chatInput.dispatch.locked', { target: displayLabel })
@@ -116,6 +128,22 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     [targets],
   );
 
+  const selectLocalMode = (worktreeEnabled: boolean) => {
+    setOpen(false);
+    onSelectLocal?.();
+    if (
+      localWorktreeControl
+      && localWorktreeControl.enabled !== worktreeEnabled
+    ) {
+      localWorktreeControl.onChange(worktreeEnabled);
+    }
+  };
+
+  const localDirectorySelected =
+    target.kind === 'local' && !localWorktreeControl?.enabled;
+  const localWorktreeSelected =
+    target.kind === 'local' && !!localWorktreeControl?.enabled;
+
   const menu = open ? (
     <ScrollArea
       ref={menuRef}
@@ -143,22 +171,41 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         <button
           type="button"
           role="menuitemradio"
-          aria-checked={target.kind === 'local'}
+          aria-checked={localDirectorySelected}
           className="dispatch-target-picker__option"
           data-bf-component="dispatch-target-picker"
           data-bf-part="option"
-          onClick={() => {
-            setOpen(false);
-            onSelectLocal?.();
-          }}
+          data-testid="dispatch-target-local-option"
+          disabled={localWorktreeControl?.locked}
+          onClick={() => selectLocalMode(false)}
         >
           <Laptop size={15} aria-hidden />
           <span>
             <strong>{t('chatInput.dispatch.local')}</strong>
             <small>{t('chatInput.dispatch.localDescription')}</small>
           </span>
-          {target.kind === 'local' ? <Icon name="check-line" size="sm" aria-hidden /> : null}
+          {localDirectorySelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
         </button>
+        {localWorktreeControl ? (
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={localWorktreeSelected}
+            className="dispatch-target-picker__option"
+            data-bf-component="dispatch-target-picker"
+            data-bf-part="option"
+            data-testid="dispatch-target-new-worktree-option"
+            disabled={localWorktreeControl.locked}
+            onClick={() => selectLocalMode(true)}
+          >
+            <FolderGit2 size={15} aria-hidden />
+            <span>
+              <strong>{localWorktreeControl.label}</strong>
+              <small>{localWorktreeControl.description}</small>
+            </span>
+            {localWorktreeSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
+          </button>
+        ) : null}
       </div>
 
       <div className="dispatch-target-picker__divider" role="separator" />
@@ -312,14 +359,13 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             }}
           >
             {target.kind === 'local'
-              ? <Laptop size={12} />
+              ? localWorktreeControl?.enabled
+                ? <FolderGit2 size={12} />
+                : <Laptop size={12} />
               : target.kind === 'device'
                 ? <MonitorSmartphone size={12} />
                 : <Server size={12} />}
             <span>{displayLabel}</span>
-            {!locked ? (
-              <Icon name="chevron-down" size="2xs" className="dispatch-target-picker__chevron" aria-hidden />
-            ) : null}
           </button>
         </Tooltip>
         {menu && createPortal(menu, getAppearanceOverlayHost())}

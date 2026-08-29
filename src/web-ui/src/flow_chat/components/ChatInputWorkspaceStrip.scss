@@ -79,9 +79,8 @@ $track-item-gap: 10px;
     opacity: 0.55;
   }
 
-  // One glyph size for the whole track, enforced here so a component that
-  // ships its own `size` prop (the dispatch picker's chevron) still lands on
-  // it without the strip reaching into that component.
+  // One glyph size for the whole track, enforced here so component-owned
+  // icons land on the same rhythm without the strip reaching into them.
   > svg {
     flex: none;
     width: 12px;
@@ -138,15 +137,6 @@ $track-item-gap: 10px;
         overflow: hidden;
         padding-bottom: 1px;
         text-overflow: ellipsis;
-      }
-
-      // The chevron is punctuation, not one of the track's semantic glyphs.
-      // At the shared 12px it outweighed the mark that says which host this
-      // is, which is the thing worth reading.
-      .dispatch-target-picker__chevron {
-        width: 10px;
-        height: 10px;
-        opacity: 0.55;
       }
     }
   }
@@ -686,11 +676,6 @@ $track-item-gap: 10px;
     overflow: hidden;
     text-overflow: ellipsis;
     padding-bottom: 1px;
-  }
-
-  &__workspace-chevron {
-    flex: none;
-    opacity: 0.55;
   }
 
   // Only the interactive form answers a click — the hover fill is the whole

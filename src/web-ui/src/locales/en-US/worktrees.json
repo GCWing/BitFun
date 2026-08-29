@@ -4,6 +4,7 @@
   },
   "strip": {
     "toggleLabel": "worktree",
+    "newWorktree": "New Worktree",
     "toggleOffDescription": "Run this session in its own Git worktree so parallel agents do not disturb each other.",
     "toggleOnDescription": "Running in an isolated worktree at {{path}}. Turn off to run in the project directory.",
     "togglePendingOnDescription": "Worktree isolation is armed. The worktree will be created after you send the first message.",

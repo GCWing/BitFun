@@ -1,9 +1,10 @@
 /**
  * Two fixed rails in the composer's upper context band.
  *
- * The left rail is the situation the session is in — where it runs, on which
- * branch, and whether that branch is isolated in a worktree. The right rail is
- * the contract for the next turn — how much confirmation it asks for and how
+ * The left rail is the situation the session is in — its workspace and branch,
+ * followed by the local/remote execution target. Worktree isolation is a local
+ * target mode. The right rail is the contract for the next turn — how much
+ * confirmation it asks for and how
  * much context is left. Nothing is centered and no column template is
  * conditional, so a control appearing or disappearing cannot move the rest of
  * the track.
@@ -14,7 +15,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Check,
-  ChevronDown,
   Circle,
   EyeOff,
   GitBranch,
@@ -95,7 +95,7 @@ export interface ChatInputWorkspaceStripProps {
   /** Resolved target bound to the active session. */
   executionTarget?: SessionExecutionTarget;
   /**
-   * Per-session worktree isolation, rendered next to the branch for Git workspaces.
+   * Per-session worktree isolation, exposed as a local execution-target mode.
    * Omitted when the session cannot host a worktree at all (remote, no session).
    */
   worktreeControl?: {
@@ -402,18 +402,25 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const usageTooltip = `${formatCompactTokenCount(usageCurrentTokens)}/${formatCompactTokenCount(usageMaxTokens)} ${usagePercentage}%`;
   const usageDash = `${((usagePercentage / 100) * 62.83).toFixed(2)} 62.83`;
 
-  const handleWorktreeToggle = () => {
+  const handleWorktreeChange = (enabled: boolean) => {
     if (!worktreeControl || worktreeToggleDisabled) {
       return;
     }
-    const nextEnabled = !worktreeEnabledRef.current;
-    worktreeEnabledRef.current = nextEnabled;
-    worktreeControl.onChange(nextEnabled);
+    if (worktreeEnabledRef.current === enabled) {
+      return;
+    }
+    worktreeEnabledRef.current = enabled;
+    worktreeControl.onChange(enabled);
+  };
+
+  const handleWorktreeToggle = () => {
+    handleWorktreeChange(!worktreeEnabledRef.current);
   };
 
   // The branch reports where the session sits; it is a fact, not a control.
-  // Isolation is the control, and it says so with a checkbox of its own rather
-  // than hiding a switch under a label that reads as a breadcrumb.
+  // Isolation is selected from the local destination menu when that picker is
+  // present; the checkbox below remains a fallback for embedded surfaces that
+  // do not expose dispatch targets.
   const renderBranchChip = () => (
     <Tooltip content={branchTooltipContent} placement="top">
       <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
@@ -460,11 +467,6 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             }}
           >
             <span className="bitfun-chat-input-workspace-strip__workspace-name">{label}</span>
-            <ChevronDown
-              className="bitfun-chat-input-workspace-strip__workspace-chevron"
-              size={10}
-              aria-hidden
-            />
           </button>
         </Tooltip>
         {workspaceMenuOpen ? createPortal(
@@ -548,10 +550,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     </Tooltip>
   ) : null);
 
-  // A hairline between segments that are not part of the same thought — the
-  // host picker, the location phrase and the isolation switch are three
-  // separate statements and the row reads calmer when they part on a rule
-  // instead of running together.
+  // A hairline parts the workspace/branch coordinate from the execution
+  // destination. Worktree isolation belongs inside the local destination
+  // menu, so it no longer creates a third statement on this rail.
   const renderDivider = (key: string) => (
     <span
       key={key}
@@ -572,28 +573,33 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         data-bf-part="context"
         className="bitfun-chat-input-workspace-strip__context"
       >
-        {showDispatchPicker && dispatchControl ? (
-          <>
-            <DispatchTargetPicker
-              target={dispatchControl.target}
-              sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
-              locked={dispatchPickerLocked}
-              onSelectLocal={dispatchControl.onSelectLocal}
-              onSelectTarget={dispatchControl.onSelectTarget}
-            />
-          </>
-        ) : null}
-        {showDispatchPicker && label ? renderDivider('context-host') : null}
         {label ? (
-          <>
-            <span className="bitfun-chat-input-workspace-strip__location">
-              {renderWorkspaceControl()}
-              {renderBranchChip()}
-            </span>
-            {showWorktreeToggle ? renderDivider('context-isolation') : null}
-            {renderWorktreeToggle()}
-          </>
+          <span className="bitfun-chat-input-workspace-strip__location">
+            {renderWorkspaceControl()}
+            {renderBranchChip()}
+          </span>
         ) : null}
+        {showDispatchPicker && label ? renderDivider('context-target') : null}
+        {showDispatchPicker && dispatchControl ? (
+          <DispatchTargetPicker
+            target={dispatchControl.target}
+            sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
+            locked={dispatchPickerLocked}
+            localWorktreeControl={showWorktreeToggle && worktreeControl ? {
+              enabled: worktreeEnabled,
+              locked: worktreeToggleDisabled,
+              label: tWorktrees('strip.newWorktree'),
+              description: worktreeTooltip,
+              onChange: handleWorktreeChange,
+            } : undefined}
+            onSelectLocal={dispatchControl.onSelectLocal}
+            onSelectTarget={dispatchControl.onSelectTarget}
+          />
+        ) : null}
+        {!showDispatchPicker && showWorktreeToggle
+          ? renderDivider('context-isolation')
+          : null}
+        {!showDispatchPicker ? renderWorktreeToggle() : null}
       </div>
 
       <div
