@@ -1,8 +1,8 @@
-import { Button, Icon, IconButton, Modal, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { NumberInput, ConfigPageLoading, Select as LegacySelect, type SelectOption } from '@/component-library';
+import { ConfigPageLoading, Select as LegacySelect, type SelectOption } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';

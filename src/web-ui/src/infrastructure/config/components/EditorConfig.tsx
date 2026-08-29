@@ -1,9 +1,9 @@
  
 
-import { Button, Select, Switch } from '@bitfun/ui';
+import { Button, NumberInput, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage } from '@/component-library';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';

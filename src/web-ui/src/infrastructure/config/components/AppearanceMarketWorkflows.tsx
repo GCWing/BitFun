@@ -1,7 +1,6 @@
-import { Button, Field, Icon, Input, Select, ScrollArea } from '@bitfun/ui';
+import { Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@bitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Inbox, RefreshCw, ShieldCheck } from 'lucide-react';
-import { Textarea } from '@/component-library';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
   appearanceMarketAPI,

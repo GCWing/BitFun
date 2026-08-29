@@ -51,6 +51,7 @@ vi.mock('@bitfun/ui', () => ({
     <button type="button" {...props}>{children}</button>
   ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  NumberInput: () => <input type="number" />,
   Switch: () => <input type="checkbox" />,
   Select: (props: SelectSpyProps) => {
     const label = props['aria-label'] ?? '';
@@ -68,6 +69,7 @@ vi.mock('@bitfun/ui', () => ({
       </select>
     );
   },
+  Textarea: () => <textarea />,
 }));
 
 vi.mock('@/component-library', () => ({
@@ -101,8 +103,6 @@ vi.mock('@/component-library', () => ({
   },
   Switch: () => <input type="checkbox" />,
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-  NumberInput: () => <input type="number" />,
-  Textarea: () => <textarea />,
 }));
 
 const modelsDevReasoningCatalog: ModelsDevReasoningCatalog = {
