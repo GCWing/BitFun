@@ -273,19 +273,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-surface-subtle);
-  color: var(--bf-color-content-secondary);
-
-  &[data-connected='true'] {
-    background: color-mix(
-      in srgb,
-      var(--bf-color-accent-default) 12%,
-      var(--bf-color-surface-panel)
-    );
-    color: var(--bf-color-accent-default);
-  }
+  border: 0;
+  background: transparent;
+  color: var(--bf-color-content-primary);
 }
 
 [data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='account'] {
@@ -632,13 +622,7 @@
   width: 60px;
   height: 60px;
   margin-bottom: 16px;
-  border-radius: var(--bf-radius-pill);
-  background: color-mix(
-    in srgb,
-    var(--bf-color-accent-default) 10%,
-    var(--bf-color-surface-panel)
-  );
-  color: var(--bf-color-accent-default);
+  color: var(--bf-color-content-primary);
 }
 
 .bitfun-remote-connect__bot-identity-title {
@@ -858,13 +842,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--bf-radius-lg);
-  background: color-mix(
-    in srgb,
-    var(--bf-color-accent-default) 10%,
-    var(--bf-color-surface-panel)
-  );
-  color: var(--bf-color-accent-default);
+  color: var(--bf-color-content-primary);
 }
 
 .bitfun-remote-connect__connected-app-copy {
