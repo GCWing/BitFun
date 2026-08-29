@@ -50,6 +50,7 @@ test("registry exposes only the formal stable components", () => {
       "NumberInput",
       "PageDeployToolCard",
       "PageHeader",
+      "Radio",
       "PagePublishToolCard",
       "ProminentToolCard",
       "ReadFileToolCard",

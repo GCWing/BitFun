@@ -21,6 +21,7 @@ import { modalMeta } from "./components/Modal/Modal.meta";
 import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
 import { numberInputMeta } from "./components/NumberInput/NumberInput.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
+import { radioMeta } from "./components/Radio/Radio.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { segmentedControlMeta } from "./components/SegmentedControl/SegmentedControl.meta";
@@ -112,6 +113,7 @@ export const componentRegistry = [
   numberInputMeta,
   pageDeployToolCardMeta,
   pageHeaderMeta,
+  radioMeta,
   pagePublishToolCardMeta,
   prominentToolCardMeta,
   readFileToolCardMeta,

@@ -52,6 +52,7 @@ import {
   NavigationPanelSection,
   NumberInput,
   PageHeader,
+  Radio,
   ScrollArea,
   SearchField,
   SegmentedControl,
@@ -300,6 +301,16 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "NumberInput":
       return <NumberInput onChange={() => undefined} value={8} />;
+    case "Radio":
+      return (
+        <Radio
+          defaultChecked
+          description={t("components.preview.fieldDescription")}
+          label={t("components.preview.fieldValue")}
+          name="component-preview-radio"
+          tabIndex={-1}
+        />
+      );
     case "Textarea":
       return (
         <Textarea

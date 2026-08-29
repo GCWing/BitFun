@@ -133,6 +133,7 @@ export {
   type NavigationPanelSeparatorProps,
 } from "./components/NavigationPanel";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
+export { Radio, type RadioProps, type RadioSize } from "./components/Radio";
 export {
   ScrollArea,
   type ScrollAreaOrientation,
