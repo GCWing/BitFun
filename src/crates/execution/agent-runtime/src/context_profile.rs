@@ -38,7 +38,7 @@ impl ModelCapabilityProfile {
             return Self::Standard;
         };
         let normalized = model_id.to_ascii_lowercase();
-        if matches!(normalized.as_str(), "auto" | "fast" | "primary") {
+        if matches!(normalized.as_str(), "fast" | "primary") {
             return Self::Standard;
         }
 

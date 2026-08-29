@@ -87,7 +87,9 @@ const RAW_EVENT_NAMES: Record<string, string> = {
   ContextCompressionFailed: 'agentic://context-compression-failed',
   ThreadGoalUpdated: 'agentic://thread-goal-updated',
   DeepReviewQueueStateChanged: 'agentic://deep-review-queue-state-changed',
-  SessionModelAutoMigrated: 'agentic://session-model-auto-migrated',
+  // Upgrade-only raw variant alias from pre-removal targets.
+  SessionModelAutoMigrated: 'agentic://session-model-fallback-applied',
+  SessionModelFallbackApplied: 'agentic://session-model-fallback-applied',
   SessionReasoningPresetAutoCleared: 'agentic://session-reasoning-preset-auto-cleared',
   UserSteeringInjected: 'agentic://user-steering-injected',
 };
@@ -155,6 +157,12 @@ export function projectDispatchAgentEvent(
   }
   if (rawType === 'SessionTitleGenerated' && payload.timestamp === undefined) {
     payload.timestamp = Date.now();
+  }
+  if (
+    rawType === 'SessionModelAutoMigrated'
+    && (payload.newModelId === 'auto' || payload.newModelId === 'default')
+  ) {
+    payload.newModelId = 'primary';
   }
   return {
     eventName,

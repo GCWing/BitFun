@@ -177,7 +177,7 @@ export interface InsightsProgressEvent {
 export const insightsApi = {
   async generateInsights(days?: number, modelId?: string): Promise<InsightsReport> {
     return api.invoke('generate_insights', {
-      request: { days: days ?? 30, modelId: modelId || 'auto' },
+      request: { days: days ?? 30, modelId: modelId || 'primary' },
     });
   },
 

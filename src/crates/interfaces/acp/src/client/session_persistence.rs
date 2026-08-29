@@ -57,7 +57,7 @@ impl AcpSessionPersistence {
             session_id.clone(),
             session_name.clone(),
             agent_type.clone(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.workspace_path = Some(workspace_path.to_string());
         metadata.custom_metadata = Some(json!({

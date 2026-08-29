@@ -117,7 +117,7 @@ impl Default for CustomMode {
             String::new(),
             false,
             String::new(),
-            "auto".to_string(),
+            "primary".to_string(),
             default_custom_agent_user_context_policy(CustomAgentKind::Mode),
         )
     }

@@ -4985,7 +4985,7 @@ mod sync_state_tests {
             "session".to_string(),
             "Session".to_string(),
             "agentic".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.turn_count = 2;
 
@@ -5015,7 +5015,7 @@ mod sync_state_tests {
             "session".to_string(),
             "Session".to_string(),
             "agentic".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.turn_count = 3;
 

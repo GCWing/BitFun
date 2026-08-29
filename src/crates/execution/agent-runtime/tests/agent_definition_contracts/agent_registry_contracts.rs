@@ -237,7 +237,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
         .visibility_policy
         .can_access_from_parent(Some("agentic")));
     assert!(!code_review.visibility_policy.show_in_global_registry);
-    assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
+    assert_eq!(default_model_id_for_builtin_agent("agentic"), "primary");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(
         default_model_id_for_builtin_agent("GeneralPurpose"),
@@ -258,7 +258,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
     assert_eq!(default_model_id_for_builtin_agent("ReviewGeneral"), "fast");
     assert_eq!(default_model_id_for_builtin_agent("ReviewWorker"), "fast");
-    assert_eq!(default_model_id_for_builtin_agent("Ultra"), "auto");
+    assert_eq!(default_model_id_for_builtin_agent("Ultra"), "primary");
     assert_eq!(
         default_model_id_for_builtin_agent("SwarmPlanner"),
         "primary"

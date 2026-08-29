@@ -66,7 +66,7 @@ describe('sessionTitle', () => {
       sessionId: 'session-1',
       sessionName: 'New Code Session 3',
       agentType: 'agentic',
-      modelName: 'auto',
+      modelName: 'primary',
       createdAt: 1,
       lastActiveAt: 2,
       turnCount: 0,

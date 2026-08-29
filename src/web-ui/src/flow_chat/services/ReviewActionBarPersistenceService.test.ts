@@ -27,7 +27,7 @@ function createMetadata(overrides: Record<string, unknown> = {}) {
     sessionId: 'session-1',
     sessionName: 'Test Session',
     agentType: 'agentic',
-    modelName: 'auto',
+    modelName: 'primary',
     createdAt: 1000,
     lastActiveAt: 1000,
     turnCount: 1,
@@ -45,7 +45,7 @@ function createStoreSession(overrides: Record<string, unknown> = {}) {
     title: 'Test Session',
     dialogTurns: [],
     status: 'idle',
-    config: { agentType: 'agentic', modelName: 'auto' },
+    config: { agentType: 'agentic', modelName: 'primary' },
     createdAt: 1000,
     lastActiveAt: 1000,
     error: null,
@@ -155,7 +155,7 @@ describe('ReviewActionBarPersistenceService', () => {
       expect(metadata.sessionId).toBe('session-1');
       expect(metadata.sessionName).toBe('Existing Session');
       expect(metadata.agentType).toBe('agentic');
-      expect(metadata.modelName).toBe('auto');
+      expect(metadata.modelName).toBe('primary');
       expect(metadata.reviewActionState).toEqual({
         version: 1,
         phase: 'review_completed',
@@ -210,7 +210,7 @@ describe('ReviewActionBarPersistenceService', () => {
         sessionId: 'session-1',
         sessionName: 'Fresh Review',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         status: 'active',
         reviewActionState: {
           version: 1,

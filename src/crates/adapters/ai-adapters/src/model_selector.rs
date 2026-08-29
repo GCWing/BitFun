@@ -30,7 +30,7 @@ impl std::error::Error for ModelSelectorError {}
 pub fn classify_model_selector(model_id: &str) -> ModelSelectorKind {
     let trimmed = model_id.trim();
     match trimmed {
-        "" | "auto" | "default" | "primary" => ModelSelectorKind::Primary,
+        "" | "default" | "primary" => ModelSelectorKind::Primary,
         "fast" => ModelSelectorKind::Fast,
         _ => ModelSelectorKind::Explicit(trimmed.to_string()),
     }

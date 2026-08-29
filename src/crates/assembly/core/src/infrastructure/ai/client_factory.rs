@@ -713,12 +713,12 @@ mod tests {
     #[test]
     fn concrete_reserved_model_ids_remain_exact_config_references() {
         let mut config = GlobalConfig::default();
-        config.ai.models = ["inherit", "primary", "fast", "auto", "default"]
+        config.ai.models = ["inherit", "primary", "fast", "default"]
             .into_iter()
             .map(|id| build_model(id, id, &format!("runtime-{id}")))
             .collect();
 
-        for id in ["inherit", "primary", "fast", "auto", "default"] {
+        for id in ["inherit", "primary", "fast", "default"] {
             assert_eq!(
                 config.ai.resolve_model_reference(id),
                 Some(id.to_string()),
@@ -742,8 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_model_selectors_normalize_to_primary_for_client_lookup() {
-        assert_eq!(classify_model_selector("auto"), ModelSelectorKind::Primary);
+    fn default_and_empty_selectors_normalize_to_primary_for_client_lookup() {
         assert_eq!(
             classify_model_selector(" default "),
             ModelSelectorKind::Primary

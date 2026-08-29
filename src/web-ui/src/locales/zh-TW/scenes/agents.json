@@ -117,7 +117,6 @@
       "inherit": "繼承父會話",
       "fast": "快速模型",
       "primary": "主力模型",
-      "auto": "自動選擇",
       "updateFailed": "更新 Sub-Agent 模型失敗"
     }
   },
@@ -329,7 +328,7 @@
       "promptRequired": "系統提示詞不能為空",
       "readonly": "只讀模式",
       "model": "模型",
-      "modelPlaceholder": "可填寫 inherit、auto、fast 或具體模型 ID",
+      "modelPlaceholder": "可填寫 inherit、primary、fast 或具體模型 ID",
       "modelRequired": "模型不能為空",
       "tools": "工具",
       "toolsOptional": "可選",

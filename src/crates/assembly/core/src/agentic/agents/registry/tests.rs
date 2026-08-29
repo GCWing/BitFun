@@ -240,7 +240,7 @@ fn top_level_modes_default_to_auto() {
         "DeepResearch",
         "Ultra",
     ] {
-        assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
+        assert_eq!(default_model_id_for_builtin_agent(agent_type), "primary");
     }
 }
 
@@ -1019,7 +1019,7 @@ async fn custom_mode_does_not_appear_in_subagent_list() {
         "Planner Plus",
         vec!["Read".to_string()],
         UserContextPolicy::empty().with_workspace_instructions(),
-        "auto",
+        "primary",
         false,
     );
     write_user_custom_subagent(&env.user_agents_dir.join("helper.md"), "Helper");
@@ -1110,7 +1110,7 @@ async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
         "Planner Plus",
         vec!["Read".to_string()],
         UserContextPolicy::empty().with_workspace_instructions(),
-        "auto",
+        "primary",
         false,
     );
 
@@ -1157,7 +1157,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
         "Planner Plus",
         vec!["Read".to_string()],
         UserContextPolicy::empty().with_workspace_instructions(),
-        "auto",
+        "primary",
         false,
     );
 

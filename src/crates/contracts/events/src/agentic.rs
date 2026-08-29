@@ -1,11 +1,23 @@
 //! Agentic Events Definition
 pub use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
 use bitfun_core_types::{ReasoningContentKind, SessionExecutionTarget, ToolImageAttachment};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::time::SystemTime;
 
 fn context_compression_applied_by_default() -> bool {
     true
+}
+
+fn deserialize_session_model_fallback_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let model_id = String::deserialize(deserializer)?;
+    if matches!(model_id.trim(), "auto" | "default") {
+        Ok("primary".to_string())
+    } else {
+        Ok(model_id)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -385,18 +397,20 @@ pub enum AgenticEvent {
         display_content: String,
     },
 
-    /// A session's bound model has been automatically migrated because the
-    /// previously bound model became unavailable (disabled or deleted).
+    /// A mutable session's bound model fell back because the previous model
+    /// became unavailable (disabled or deleted).
     /// The frontend should refresh its model selector for the session and
     /// surface a non-blocking notice so the user knows what happened.
-    SessionModelAutoMigrated {
+    #[serde(alias = "SessionModelAutoMigrated")]
+    SessionModelFallbackApplied {
         session_id: String,
-        /// The model id the session was using before the migration.
+        /// The model id the session was using before the fallback.
         previous_model_id: String,
-        /// The model id (or selector such as `"auto"`) the session is now bound
-        /// to. This is what `SessionConfig.model_id` was rewritten to.
+        /// The model id or selector the session is now bound to. This is what
+        /// `SessionConfig.model_id` was rewritten to.
+        #[serde(deserialize_with = "deserialize_session_model_fallback_id")]
         new_model_id: String,
-        /// Why the migration happened, e.g. `"model_disabled"` or
+        /// Why the fallback happened, e.g. `"model_disabled"` or
         /// `"model_deleted"`.
         reason: String,
     },
@@ -663,7 +677,7 @@ impl AgenticEvent {
             | Self::ToolEvent { session_id, .. }
             | Self::UserSteeringInjected { session_id, .. }
             | Self::DeepReviewQueueStateChanged { session_id, .. }
-            | Self::SessionModelAutoMigrated { session_id, .. }
+            | Self::SessionModelFallbackApplied { session_id, .. }
             | Self::SessionReasoningPresetAutoCleared { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
@@ -708,7 +722,7 @@ impl AgenticEvent {
             Self::SessionStateChanged { .. }
             | Self::SessionHistoryChanged { .. }
             | Self::SessionTitleGenerated { .. }
-            | Self::SessionModelAutoMigrated { .. }
+            | Self::SessionModelFallbackApplied { .. }
             | Self::SessionReasoningPresetAutoCleared { .. }
             | Self::SubagentSessionLinked { .. }
             | Self::DeepReviewQueueStateChanged { .. }
@@ -866,6 +880,34 @@ mod tests {
             event,
             AgenticEvent::ContextCompressionCompleted { applied: true, .. }
         ));
+    }
+
+    #[test]
+    fn legacy_model_auto_migration_event_reads_as_canonical_fallback_event() {
+        let event: AgenticEvent = serde_json::from_value(json!({
+            "type": "SessionModelAutoMigrated",
+            "session_id": "session-1",
+            "previous_model_id": "removed-model",
+            "new_model_id": "auto",
+            "reason": "model_deleted"
+        }))
+        .expect("legacy model migration event");
+
+        assert!(matches!(
+            event,
+            AgenticEvent::SessionModelFallbackApplied {
+                ref session_id,
+                ref previous_model_id,
+                ref new_model_id,
+                ..
+            } if session_id == "session-1"
+                && previous_model_id == "removed-model"
+                && new_model_id == "primary"
+        ));
+        assert_eq!(
+            serde_json::to_value(&event).expect("canonical event")["type"],
+            "SessionModelFallbackApplied"
+        );
     }
 
     #[test]

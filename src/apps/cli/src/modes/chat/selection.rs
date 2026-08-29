@@ -164,7 +164,7 @@ fn apply_session_rename_feedback(
     }
 }
 
-fn apply_session_model_migration(
+fn apply_session_model_fallback(
     chat_state: &mut ChatState,
     event_session_id: &str,
     previous_model_id: &str,
@@ -173,7 +173,7 @@ fn apply_session_model_migration(
 ) -> bool {
     if event_session_id != chat_state.core_session_id {
         tracing::debug!(
-            "Ignoring model migration for another session: current_session_id={}, event_session_id={}",
+            "Ignoring model fallback for another session: current_session_id={}, event_session_id={}",
             chat_state.core_session_id,
             event_session_id
         );
@@ -181,7 +181,7 @@ fn apply_session_model_migration(
     }
     if chat_state.current_model_id.as_deref() != Some(previous_model_id) {
         tracing::debug!(
-            "Ignoring stale model migration: session_id={}, current_model_id={:?}, previous_model_id={}",
+            "Ignoring stale model fallback: session_id={}, current_model_id={:?}, previous_model_id={}",
             event_session_id,
             chat_state.current_model_id,
             previous_model_id

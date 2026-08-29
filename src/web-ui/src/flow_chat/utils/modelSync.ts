@@ -25,18 +25,20 @@ function normalizeModelSelection(
   defaultModels: DefaultModelsConfig,
 ): string {
   const value = modelId?.trim();
-  if (!value || value === 'auto') return 'auto';
+  if (!value || value === 'primary') return 'primary';
 
-  if (value === 'primary' || value === 'fast') {
-    const resolvedDefaultId = value === 'primary' ? defaultModels.primary : defaultModels.fast;
-    const matchedModel = models.find(model => model.id === resolvedDefaultId);
-    return matchedModel ? value : 'auto';
+  if (value === 'fast') {
+    const matchedModel = models.find(
+      model => model.enabled !== false && model.id === defaultModels.fast,
+    );
+    return matchedModel ? value : 'primary';
   }
 
   const matchedModel = models.find(model =>
-    model.id === value || model.name === value || model.model_name === value,
+    model.enabled !== false
+    && (model.id === value || model.name === value || model.model_name === value),
   );
-  return matchedModel ? value : 'auto';
+  return matchedModel?.id || 'primary';
 }
 
 export async function syncSessionModelSelection(
@@ -50,46 +52,26 @@ export async function syncSessionModelSelection(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const sessionModelId = session.config.modelName?.trim();
-
-  // Any stored selector, including "auto", belongs to the session. Still sync
-  // it to the backend in case the restored runtime session lost that state.
-  if (sessionModelId) {
-    const desiredMaxContextTokens = await getModelMaxTokens(sessionModelId, agentType);
-    surfaceScope.assertCurrent('resolve session model context window');
-    if (session.maxContextTokens !== desiredMaxContextTokens) {
-      context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
-    }
-    await agentAPI.updateSessionModel({
-      sessionId,
-      modelName: sessionModelId,
-      reasoningPreset: session.config.reasoningPreset ?? null,
-      workspacePath: sessionProjectWorkspacePath(session),
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
-      includeInternal: session.sessionKind === 'subagent',
-    });
-    surfaceScope.assertCurrent('synchronize session model');
-    return;
-  }
-
-  const configData = await configManager.getConfigs([
+  const configData = (await configManager.getConfigs([
     'ai.agent_model_defaults',
     'ai.models',
     'ai.default_models',
-  ]);
+  ])) ?? {};
   surfaceScope.assertCurrent('load session model configuration');
   const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
   const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
   const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
 
-  const desiredModelId = normalizeModelSelection(agentModelDefaults?.mode, allModels, defaultModels);
-  const shouldForceAutoSync = desiredModelId === 'auto';
+  const sessionModelId = session.config.modelName?.trim();
+  const requestedModelId = sessionModelId || agentModelDefaults?.mode;
+  const desiredModelId = normalizeModelSelection(requestedModelId, allModels, defaultModels);
   const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
   surfaceScope.assertCurrent('resolve session model context window');
   const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;
 
-  context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
+  if (sessionModelId !== desiredModelId) {
+    context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
+  }
   if (shouldSyncContextWindow) {
     context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
   }
@@ -107,8 +89,8 @@ export async function syncSessionModelSelection(
   log.info('Session model synchronized before send', {
     sessionId,
     agentType,
-    previousModelId: null,
+    previousModelId: sessionModelId ?? null,
     nextModelId: desiredModelId,
-    forcedAutoSync: shouldForceAutoSync,
+    fallbackApplied: Boolean(requestedModelId?.trim() && requestedModelId.trim() !== desiredModelId),
   });
 }

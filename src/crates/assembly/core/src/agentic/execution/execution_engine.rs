@@ -1173,12 +1173,15 @@ impl ExecutionEngine {
         model_id: &str,
     ) -> String {
         let trimmed = model_id.trim();
-        if trimmed.is_empty() || trimmed == "auto" || trimmed == "default" {
-            return "auto".to_string();
-        }
+        let selector = if trimmed.is_empty() || trimmed == "default" {
+            "primary"
+        } else {
+            trimmed
+        };
         ai_config
-            .resolve_model_selection(trimmed)
-            .unwrap_or_else(|| "auto".to_string())
+            .resolve_model_selection(selector)
+            .or_else(|| ai_config.resolve_model_selection("primary"))
+            .unwrap_or_else(|| selector.to_string())
     }
 
     fn resolve_model_id_for_turn_selection(
@@ -1199,20 +1202,20 @@ impl ExecutionEngine {
                 });
         }
 
-        let resolved_configured_model_id =
-            Self::resolve_configured_model_id(ai_config, configured_model_id);
-        if configured_model_id == "auto"
-            || configured_model_id == "default"
-            || resolved_configured_model_id == "auto"
-        {
-            ai_config.resolve_model_selection("primary").ok_or_else(|| {
+        let configured_model_id = configured_model_id.trim();
+        let selector = if configured_model_id.is_empty() || configured_model_id == "default" {
+            "primary"
+        } else {
+            configured_model_id
+        };
+        ai_config
+            .resolve_model_selection(selector)
+            .or_else(|| ai_config.resolve_model_selection("primary"))
+            .ok_or_else(|| {
                 BitFunError::AIClient(
-                    "Auto dialog turn model could not resolve a concrete primary model".to_string(),
+                    "Dialog turn model could not resolve a concrete primary model".to_string(),
                 )
             })
-        } else {
-            Ok(resolved_configured_model_id)
-        }
     }
 
     fn validate_frozen_reasoning_contract(
@@ -1905,14 +1908,6 @@ impl ExecutionEngine {
             info!(
                 "Using frozen dialog turn model: session_id={}, turn_index={}, resolved_model_id={}",
                 session.session_id, turn_index, model_id
-            );
-        } else if configured_model_id == "auto" || configured_model_id == "default" {
-            info!(
-                "Auto model resolved without locking session: session_id={}, turn_index={}, user_input_chars={}, strategy=primary, resolved_model_id={}",
-                session.session_id,
-                turn_index,
-                original_user_input.chars().count(),
-                model_id
             );
         }
 
@@ -5944,7 +5939,7 @@ mod tests {
     }
 
     #[test]
-    fn frozen_turn_model_wins_when_the_auto_default_changes() {
+    fn frozen_turn_model_wins_when_the_primary_default_changes() {
         let mut ai_config = AIConfig {
             models: vec![
                 build_model("model-original", "Original", "claude-sonnet-4.5"),
@@ -5957,7 +5952,7 @@ mod tests {
         assert_eq!(
             ExecutionEngine::resolve_model_id_for_turn_selection(
                 &ai_config,
-                "auto",
+                "primary",
                 Some("model-original"),
             )
             .expect("the original resolved model remains available"),
@@ -5966,11 +5961,12 @@ mod tests {
     }
 
     #[test]
-    fn auto_turn_model_must_resolve_to_a_concrete_model_before_persistence() {
+    fn primary_turn_model_must_resolve_to_a_concrete_model_before_persistence() {
         let ai_config = AIConfig::default();
 
-        let error = ExecutionEngine::resolve_model_id_for_turn_selection(&ai_config, "auto", None)
-            .expect_err("a symbolic selector cannot become the frozen Turn model");
+        let error =
+            ExecutionEngine::resolve_model_id_for_turn_selection(&ai_config, "primary", None)
+                .expect_err("a symbolic selector cannot become the frozen Turn model");
 
         assert!(error.to_string().contains("primary model"), "{error}");
     }
@@ -5986,7 +5982,7 @@ mod tests {
 
         let error = ExecutionEngine::resolve_model_id_for_turn_selection(
             &ai_config,
-            "auto",
+            "primary",
             Some("model-original"),
         )
         .expect_err("a disabled frozen model cannot execute another generation");

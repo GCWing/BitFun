@@ -1737,8 +1737,6 @@ const SparklesIcon: React.FC<{ className?: string; size?: number }> = ({ classNa
   </svg>
 );
 
-type ModelSelectionValue = 'auto' | 'primary' | 'fast' | string;
-
 function formatProviderName(provider: string): string {
   const normalized = provider.trim();
   if (!normalized) return 'Unknown';
@@ -1765,14 +1763,12 @@ function normalizeSelectedModelId(
   catalog: RemoteModelCatalog | null,
 ): string {
   const value = selectedModelId?.trim();
-  if (!value || value === 'auto' || value === 'default') return 'auto';
-  if (value === 'primary' || value === 'fast') {
-    const defaultId = value === 'primary'
-      ? catalog?.default_models?.primary
-      : catalog?.default_models?.fast;
-    return defaultId && resolveModelSelection(defaultId, catalog) ? value : 'auto';
+  if (!value || value === 'primary') return 'primary';
+  if (value === 'fast') {
+    const defaultId = catalog?.default_models?.fast;
+    return defaultId && resolveModelSelection(defaultId, catalog) ? value : 'primary';
   }
-  return resolveModelSelection(value, catalog) ? value : 'auto';
+  return resolveModelSelection(value, catalog) ? value : 'primary';
 }
 
 function loadLastSelectedModelId(): string | null {
@@ -1794,17 +1790,16 @@ function persistLastSelectedModelId(modelId: string): void {
 function resolvePreferredModelSelection(
   preferredModelId: string | null,
   catalog: RemoteModelCatalog | null,
-): { modelId: string | null; fellBackToAuto: boolean } {
+): { modelId: string | null; fallbackApplied: boolean } {
   const value = preferredModelId?.trim();
   if (!value) {
-    return { modelId: null, fellBackToAuto: false };
+    return { modelId: null, fallbackApplied: false };
   }
 
   const normalizedModelId = normalizeSelectedModelId(value, catalog);
-  const fellBackToAuto = normalizedModelId === 'auto' && value !== 'auto' && value !== 'default';
   return {
     modelId: normalizedModelId,
-    fellBackToAuto,
+    fallbackApplied: normalizedModelId !== value,
   };
 }
 
@@ -1821,7 +1816,7 @@ function resolveConcreteModelSelection(
   catalog: RemoteModelCatalog | null,
 ): RemoteModelConfig | null {
   const normalizedModelId = normalizeSelectedModelId(modelId, catalog);
-  if (normalizedModelId === 'auto' || normalizedModelId === 'primary') {
+  if (normalizedModelId === 'primary') {
     return resolveModelSelection(catalog?.default_models?.primary || '', catalog);
   }
   if (normalizedModelId === 'fast') {
@@ -1864,23 +1859,12 @@ function getSelectedModelInfo(
   enableThinking: boolean;
   reasoningEffort?: string;
 } {
-  if (selectedModelId === 'auto') {
-    const resolved = resolveConcreteModelSelection(selectedModelId, catalog);
-    return {
-      label: t('chat.modelAuto'),
-      meta: t('chat.modelAutoDesc'),
-      enableThinking: resolved?.reasoning?.status === 'known',
-      reasoningEffort: selectedReasoningLabel(resolved, catalog),
-    };
-  }
-
   if (selectedModelId === 'primary' || selectedModelId === 'fast') {
     const resolved = resolveConcreteModelSelection(selectedModelId, catalog);
     return {
-      label: resolved
-        ? (selectedModelId === 'primary' ? t('chat.modelPrimary') : t('chat.modelFast'))
-        : t('chat.modelAuto'),
-      meta: buildModelProviderMeta(resolved) || t('chat.modelAutoDesc'),
+      label: selectedModelId === 'primary' ? t('chat.modelPrimary') : t('chat.modelFast'),
+      meta: buildModelProviderMeta(resolved)
+        || t(selectedModelId === 'primary' ? 'chat.modelPrimaryDesc' : 'chat.modelFastDesc'),
       enableThinking: resolved?.reasoning?.status === 'known',
       reasoningEffort: selectedReasoningLabel(resolved, catalog),
     };
@@ -1889,8 +1873,8 @@ function getSelectedModelInfo(
   const resolved = resolveModelSelection(selectedModelId, catalog);
   if (!resolved) {
     return {
-      label: t('chat.modelAuto'),
-      meta: t('chat.modelAutoDesc'),
+      label: t('chat.modelPrimary'),
+      meta: t('chat.modelPrimaryDesc'),
       enableThinking: false,
     };
   }
@@ -1989,16 +1973,6 @@ const ModelSelectorPill: React.FC<{
         <div className="chat-model-selector__dropdown">
           <div className="chat-model-selector__header">{t('chat.modelSelection')}</div>
           <button
-            className={`chat-model-selector__option${normalizedSelectedModelId === 'auto' ? ' is-selected' : ''}`}
-            type="button"
-            onClick={() => void handleSelect('auto')}
-          >
-            <span className="chat-model-selector__option-main">
-              <span className="chat-model-selector__option-name">{t('chat.modelAuto')}</span>
-              <span className="chat-model-selector__option-meta">{t('chat.modelAutoDesc')}</span>
-            </span>
-          </button>
-          <button
             className={`chat-model-selector__option${normalizedSelectedModelId === 'primary' ? ' is-selected' : ''}`}
             type="button"
             onClick={() => void handleSelect('primary')}
@@ -2007,10 +1981,10 @@ const ModelSelectorPill: React.FC<{
               <span className="chat-model-selector__option-name">{t('chat.modelPrimary')}</span>
               <span className="chat-model-selector__option-meta chat-model-selector__option-meta--stacked">
                 <span className="chat-model-selector__option-meta-line">
-                  {getModelDisplayName(resolvedPrimaryModel) || t('chat.modelAuto')}
+                  {getModelDisplayName(resolvedPrimaryModel) || t('chat.modelPrimary')}
                 </span>
                 <span className="chat-model-selector__option-meta-line">
-                  {buildModelProviderMeta(resolvedPrimaryModel) || t('chat.modelAutoDesc')}
+                  {buildModelProviderMeta(resolvedPrimaryModel) || t('chat.modelPrimaryDesc')}
                 </span>
               </span>
             </span>
@@ -2024,10 +1998,10 @@ const ModelSelectorPill: React.FC<{
               <span className="chat-model-selector__option-name">{t('chat.modelFast')}</span>
               <span className="chat-model-selector__option-meta chat-model-selector__option-meta--stacked">
                 <span className="chat-model-selector__option-meta-line">
-                  {getModelDisplayName(resolvedFastModel) || t('chat.modelAuto')}
+                  {getModelDisplayName(resolvedFastModel) || t('chat.modelFast')}
                 </span>
                 <span className="chat-model-selector__option-meta-line">
-                  {buildModelProviderMeta(resolvedFastModel) || t('chat.modelAutoDesc')}
+                  {buildModelProviderMeta(resolvedFastModel) || t('chat.modelFastDesc')}
                 </span>
               </span>
             </span>
@@ -2177,7 +2151,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const [input, setInput] = useState('');
   const [liveTitle, setLiveTitle] = useState(sessionName);
   const [modelCatalog, setModelCatalog] = useState<RemoteModelCatalog | null>(null);
-  const [selectedModelId, setSelectedModelId] = useState<string>('auto');
+  const [selectedModelId, setSelectedModelId] = useState<string>('primary');
   const [modelUpdating, setModelUpdating] = useState(false);
   const [pendingImages, setPendingImages] = useState<{ name: string; dataUrl: string }[]>([]);
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
@@ -2274,7 +2248,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setOptimisticMsg(null);
       modelSelectionInitializedRef.current = false;
       setModelCatalog(null);
-      setSelectedModelId('auto');
+      setSelectedModelId('primary');
       setMessages(sessionId, []);
       setMenuMessage(null);
       setDeletingMsg(false);
@@ -2380,7 +2354,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setModelCatalog(catalog);
       if (!modelSelectionInitializedRef.current) {
         const preferredSelection = resolvePreferredModelSelection(loadLastSelectedModelId(), catalog);
-        const sessionModelId = normalizeSelectedModelId(catalog.session_model_id || 'auto', catalog);
+        const sessionModelId = normalizeSelectedModelId(catalog.session_model_id, catalog);
         const nextModelId = preferredSelection.modelId || sessionModelId;
 
         if (preferredSelection.modelId && preferredSelection.modelId !== sessionModelId) {
@@ -2394,20 +2368,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             requestSeq !== modelCatalogRequestSeqRef.current
             || !isChatTargetCurrent(targetEpoch)
           ) return null;
-          const normalizedModelId = selection.model_id;
-          setSelectedModelId(normalizedModelId || 'auto');
+          const normalizedModelId = normalizeSelectedModelId(selection.model_id, catalog);
+          setSelectedModelId(normalizedModelId);
           setModelCatalog(current => current ? {
             ...current,
             session_model_id: normalizedModelId,
             session_reasoning_preset: selection.reasoning_preset,
           } : current);
-          if (preferredSelection.fellBackToAuto && (!normalizedModelId || normalizedModelId === 'auto')) {
-            persistLastSelectedModelId('auto');
+          if (preferredSelection.fallbackApplied) {
+            persistLastSelectedModelId(normalizedModelId);
           }
         } else {
-          setSelectedModelId(nextModelId || 'auto');
-          if (preferredSelection.fellBackToAuto && nextModelId === 'auto') {
-            persistLastSelectedModelId('auto');
+          setSelectedModelId(nextModelId);
+          if (preferredSelection.fallbackApplied) {
+            persistLastSelectedModelId(nextModelId);
           }
         }
         modelSelectionInitializedRef.current = true;
@@ -2435,20 +2409,20 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             reasoning_preset: null,
           };
       if (!isChatTargetCurrent(targetEpoch)) return;
-      const normalizedModelId = selection.model_id;
-      setSelectedModelId(normalizedModelId || 'auto');
+      const normalizedModelId = normalizeSelectedModelId(selection.model_id, modelCatalog);
+      setSelectedModelId(normalizedModelId);
       setModelCatalog(current => current ? {
         ...current,
         session_model_id: normalizedModelId,
         session_reasoning_preset: selection.reasoning_preset,
       } : current);
-      persistLastSelectedModelId(normalizedModelId || 'auto');
+      persistLastSelectedModelId(normalizedModelId);
     } catch (err) {
       reportRemoteSessionError(err, setError);
     } finally {
       if (isChatTargetCurrent(targetEpoch)) setModelUpdating(false);
     }
-  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog?.reasoning_preset_selection_supported, modelUpdating, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog, modelUpdating, sessionId, sessionMgr, setError]);
 
   const handleSelectReasoningPreset = useCallback(async (reasoningPreset: string | null) => {
     if (
@@ -2467,10 +2441,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         reasoningPreset,
       );
       if (!isChatTargetCurrent(targetEpoch)) return;
-      setSelectedModelId(selection.model_id || 'auto');
+      const normalizedModelId = normalizeSelectedModelId(selection.model_id, modelCatalog);
+      setSelectedModelId(normalizedModelId);
       setModelCatalog(current => current ? {
         ...current,
-        session_model_id: selection.model_id,
+        session_model_id: normalizedModelId,
         session_reasoning_preset: selection.reasoning_preset,
       } : current);
     } catch (err) {
@@ -2478,7 +2453,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     } finally {
       if (isChatTargetCurrent(targetEpoch)) setModelUpdating(false);
     }
-  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog?.reasoning_preset_selection_supported, modelUpdating, selectedModelId, sessionId, sessionMgr, setError]);
+  }, [captureChatTargetEpoch, imageAnalyzing, isChatTargetCurrent, isStreaming, modelCatalog, modelUpdating, selectedModelId, sessionId, sessionMgr, setError]);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -2676,7 +2651,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     setHasMore(true);
     setIsLoadingMore(false);
     setModelCatalog(null);
-    setSelectedModelId('auto');
+    setSelectedModelId('primary');
   }, [sessionId]);
 
   useEffect(() => {
@@ -2727,7 +2702,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         if (resp.model_catalog) {
           setModelCatalog(resp.model_catalog);
           setSelectedModelId(normalizeSelectedModelId(
-            resp.model_catalog.session_model_id || 'auto',
+            resp.model_catalog.session_model_id,
             resp.model_catalog,
           ));
         }

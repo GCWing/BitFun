@@ -207,6 +207,11 @@ fn trimmed_model_id(value: Option<&str>) -> Option<String> {
 
 fn snapshot_normal_session_model(config: &mut SessionConfig, defaults: &AgentModelDefaultsConfig) {
     config.model_id = trimmed_model_id(config.model_id.as_deref())
+        // Upgrade-only compatibility: old clients sent `auto` to mean the
+        // product default. Never persist the retired selector into new state.
+        .filter(|model_id| {
+            !model_id.eq_ignore_ascii_case("auto") && !model_id.eq_ignore_ascii_case("default")
+        })
         .or_else(|| trimmed_model_id(Some(defaults.mode.as_str())))
         .or_else(|| Some(AgentModelDefaultsConfig::default().mode));
 }
@@ -244,7 +249,9 @@ tokio::task_local! {
 async fn normalize_model_selection(model_id: &str) -> BitFunResult<String> {
     let requested_model_id = model_id.trim();
     match requested_model_id {
-        "" | "auto" | "default" => Ok("auto".to_string()),
+        // Upgrade-only compatibility for clients predating removal of the
+        // Auto model selector. Current catalogs expose only `primary`/`fast`.
+        "" | "auto" | "default" => Ok("primary".to_string()),
         "primary" | "fast" => Ok(requested_model_id.to_string()),
         model_config_id => {
             let config_service = get_global_config_service().await.map_err(|error| {
@@ -6234,9 +6241,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         // Resolve and freeze the concrete model before the Turn becomes
-        // visible. Symbolic selectors such as `auto` may change between
-        // generations; a recovered generation must keep the model selected
-        // for the first generation.
+        // visible. Default selectors may resolve differently after a config
+        // change; a recovered generation must keep the model selected for the
+        // first generation.
         let (resolved_model_id, resolved_model_binding_fingerprint) = self
             .execution_engine
             .resolve_model_id_for_turn(
@@ -12620,20 +12627,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await;
     }
 
-    /// Emit a `SessionModelAutoMigrated` event with `High` priority so the
+    /// Emit a `SessionModelFallbackApplied` event with `High` priority so the
     /// frontend can refresh its model selector and surface a notice promptly.
     ///
     /// Callers (e.g. `SessionManager`) reach this method via
     /// [`get_global_coordinator`] so they don't need to thread an
     /// `Arc<EventQueue>` through every constructor.
-    pub async fn emit_session_model_auto_migrated(
+    pub async fn emit_session_model_fallback_applied(
         &self,
         session_id: &str,
         previous_model_id: &str,
         new_model_id: &str,
         reason: &str,
     ) {
-        let event = AgenticEvent::SessionModelAutoMigrated {
+        let event = AgenticEvent::SessionModelFallbackApplied {
             session_id: session_id.to_string(),
             previous_model_id: previous_model_id.to_string(),
             new_model_id: new_model_id.to_string(),
@@ -14813,13 +14820,14 @@ mod tests {
         external_delegation_agent_id, lineage_active_turn_after_transcript,
         lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
-        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
-        permission_mode_from_metadata, resolve_agent_session_create_created_by,
-        resolve_agent_submission_turn_id, resolve_subagent_model_selection,
-        resolve_submission_permission_mode, revoke_interrupted_turn_intent_or_observe_commit,
-        runtime_port_error_preserving_message, runtime_session_summary,
-        runtime_tool_restrictions_for_session_lifetime, runtime_transcript_messages_from_turns,
-        session_storage_workspace_locator, turn_review_manifest_for_agent,
+        merge_prepended_messages_for_turn, normalize_model_selection,
+        normalize_subagent_max_concurrency, permission_mode_from_metadata,
+        resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
+        resolve_subagent_model_selection, resolve_submission_permission_mode,
+        revoke_interrupted_turn_intent_or_observe_commit, runtime_port_error_preserving_message,
+        runtime_session_summary, runtime_tool_restrictions_for_session_lifetime,
+        runtime_transcript_messages_from_turns, session_storage_workspace_locator,
+        snapshot_normal_session_model, turn_review_manifest_for_agent,
         validate_required_lineage_turns_settled, ActiveSubagentExecution,
         BackgroundSubagentWaitMode, ContextCompactionOutcome, ConversationCoordinator,
         DialogSubmissionPolicy, DialogTriggerSource, InterruptedTurnIntentState,
@@ -14980,13 +14988,23 @@ mod tests {
         apply_primary_agent_model_default(&mut omitted, Some(&fixed));
         assert_eq!(omitted.model_id.as_deref(), Some("provider/profile-model"));
 
-        let mut automatic = SessionConfig {
+        let mut defaulted = SessionConfig {
+            model_id: Some("default".to_string()),
+            ..SessionConfig::default()
+        };
+        apply_primary_agent_model_default(&mut defaulted, Some(&fixed));
+        assert_eq!(
+            defaulted.model_id.as_deref(),
+            Some("provider/profile-model")
+        );
+
+        let mut legacy_auto = SessionConfig {
             model_id: Some("auto".to_string()),
             ..SessionConfig::default()
         };
-        apply_primary_agent_model_default(&mut automatic, Some(&fixed));
+        apply_primary_agent_model_default(&mut legacy_auto, Some(&fixed));
         assert_eq!(
-            automatic.model_id.as_deref(),
+            legacy_auto.model_id.as_deref(),
             Some("provider/profile-model")
         );
 
@@ -15003,6 +15021,32 @@ mod tests {
             Some(&ExternalSubagentModelBinding::InheritParent),
         );
         assert_eq!(inherited.model_id, None);
+    }
+
+    #[tokio::test]
+    async fn retired_auto_model_input_is_canonicalized_to_primary() {
+        assert_eq!(
+            normalize_model_selection(" auto ")
+                .await
+                .expect("legacy selector should remain upgrade-compatible"),
+            "primary"
+        );
+    }
+
+    #[test]
+    fn retired_auto_model_input_is_not_snapshotted_into_new_sessions() {
+        let mut config = SessionConfig {
+            model_id: Some("auto".to_string()),
+            ..SessionConfig::default()
+        };
+        let defaults = AgentModelDefaultsConfig {
+            mode: "configured-default".to_string(),
+            ..AgentModelDefaultsConfig::default()
+        };
+
+        snapshot_normal_session_model(&mut config, &defaults);
+
+        assert_eq!(config.model_id.as_deref(), Some("configured-default"));
     }
 
     #[test]
@@ -15956,7 +16000,7 @@ mod tests {
             &coordinator,
             AgentSessionModelUpdateRequest {
                 session_id: "missing-session".to_string(),
-                model_id: "auto".to_string(),
+                model_id: "primary".to_string(),
             },
         )
         .await
@@ -16179,7 +16223,7 @@ mod tests {
                 .get_session(&session.session_id)
                 .and_then(|session| session.config.model_id.clone())
                 .as_deref(),
-            Some("auto")
+            Some("primary")
         );
         let _ = std::fs::remove_dir_all(workspace_path);
     }
@@ -20328,9 +20372,13 @@ mod tests {
             "configured-model"
         );
         assert_eq!(
-            resolve_subagent_model_selection(None, &SubagentModelSelection::Inherit, Some("auto"),)
-                .expect("inherit should preserve the parent selector"),
-            "auto"
+            resolve_subagent_model_selection(
+                None,
+                &SubagentModelSelection::Inherit,
+                Some("primary"),
+            )
+            .expect("inherit should preserve the parent selector"),
+            "primary"
         );
         assert!(
             resolve_subagent_model_selection(None, &SubagentModelSelection::Inherit, None,)

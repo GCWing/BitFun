@@ -156,7 +156,7 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
         Some("Custom planning mode"),
         Some(vec!["Read".to_string(), "Grep".to_string()]),
         Some(true),
-        Some("primary"),
+        Some("fast"),
         Some(policy.clone()),
         CustomAgentLevel::User,
     ))
@@ -167,7 +167,7 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
 
     let saved = fs::read_to_string(&path).expect("saved mode should be readable");
     assert!(saved.contains("readonly: true"));
-    assert!(saved.contains("model: primary"));
+    assert!(saved.contains("model: fast"));
     assert!(saved.contains("user_context_policy:"));
     assert!(saved.contains("- workspace_instructions"));
     assert!(saved.contains("- Read"));
@@ -305,7 +305,7 @@ fn custom_agent_validation_filters_invalid_tools_and_falls_back_model() {
         CustomAgentValidationContext {
             valid_tools: &["Read".to_string(), "Grep".to_string()],
             readonly_tools: &["Read".to_string()],
-            valid_models: &["auto".to_string(), "primary".to_string()],
+            valid_models: &["primary".to_string()],
         },
     );
 

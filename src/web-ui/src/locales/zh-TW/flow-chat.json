@@ -2428,13 +2428,16 @@
   "modelSelector": {
     "model": "模型",
     "modelExplanation": "模型說明",
+    "modelSettings": "模型設定",
     "modelSelection": "選擇模型",
-    "autoModel": "Auto",
-    "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
+    "primaryModelDesc": "使用已設定的主力模型",
     "fastModel": "Fast 模型",
+    "fastModelDesc": "使用已設定的快速模型",
     "providerModelCount": "{{total}} 個模型",
     "backToProviders": "返回供應商列表",
+    "backToSettings": "返回模型設定",
+    "resetToDefaults": "重設為預設設定",
     "fastMode": "Fast 模式",
     "fastModeDescription": "1.5 倍速度，消耗更多額度",
     "acpMode": "模式",
@@ -2470,11 +2473,11 @@
     "xhighDesc": "最大推理深度（較慢）"
   },
   "reasoningSelector": {
-    "title": "思考強度",
+    "title": "推理強度",
     "auto": "自動",
     "modelDefault": "模型預設值",
-    "current": "思考強度：{{preset}}",
-    "currentAuto": "思考強度：自動（{{preset}}）",
+    "current": "推理強度：{{preset}}",
+    "currentAuto": "推理強度：自動（{{preset}}）",
     "updateFailed": "更新思考預設失敗",
     "levels": {
       "off": "關閉",

@@ -37,7 +37,7 @@ pub(crate) fn resolve_tui_model_id(
         .filter(|selector| !selector.is_empty());
     match selector {
         None => catalog.mode_default_model_id.clone(),
-        Some("auto" | "default" | "primary") => catalog.primary_model_id.clone(),
+        Some("default" | "primary") => catalog.primary_model_id.clone(),
         Some("fast") => catalog
             .fast_model_id
             .clone()
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn resolves_symbolic_and_explicit_mode_defaults_for_cli_display() {
         assert_eq!(
-            resolve_mode_model_id(&config_with_selector("auto")).as_deref(),
+            resolve_mode_model_id(&config_with_selector("primary")).as_deref(),
             Some("primary-model")
         );
         assert_eq!(
@@ -196,10 +196,6 @@ mod tests {
     fn resolves_runtime_session_selectors_to_the_effective_catalog_model() {
         let config = config_with_selector("fast");
 
-        assert_eq!(
-            resolve_session_model_display_id(&config, Some("auto")).as_deref(),
-            Some("primary-model")
-        );
         assert_eq!(
             resolve_session_model_display_id(&config, Some("primary")).as_deref(),
             Some("primary-model")

@@ -316,18 +316,21 @@ fn model_selection_view(
     let mut items = Vec::new();
     let mut body = String::new();
 
-    // Option 1: Auto (default).
-    let auto_is_current = current_model_id
+    // Option 1: configured primary model.
+    let primary_is_current = current_model_id
         .as_deref()
-        .map(|m| m.is_empty() || m == "auto")
+        .map(|m| m.is_empty() || m == "primary")
         .unwrap_or(true);
-    let auto_marker = if auto_is_current {
+    let primary_marker = if primary_is_current {
         s.current_marker
     } else {
         ""
     };
-    body.push_str(&format!("1. {}{}\n", s.switch_model_auto, auto_marker));
-    items.push(MenuItem::default(s.switch_model_auto, "auto"));
+    body.push_str(&format!(
+        "1. {}{}\n",
+        s.switch_model_primary, primary_marker
+    ));
+    items.push(MenuItem::default(s.switch_model_primary, "primary"));
 
     // Remaining options: each enabled model.
     for (i, (model_id, model_name)) in options.iter().enumerate() {
@@ -2266,7 +2269,7 @@ async fn route_pending(
                 }
                 Some(1) => {
                     state.clear_pending();
-                    select_model(state, "auto", s.switch_model_auto, s).await
+                    select_model(state, "primary", s.switch_model_primary, s).await
                 }
                 Some(n) if n >= 2 && n <= options.len() + 1 => {
                     state.clear_pending();

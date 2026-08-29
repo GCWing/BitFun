@@ -54,7 +54,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   generating: false,
   progress: { ...defaultProgress },
   selectedDays: 30,
-  selectedModel: 'auto',
+  selectedModel: 'primary',
   error: '',
   loadingMetas: false,
   activeGenerationRunId: null,

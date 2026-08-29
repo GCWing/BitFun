@@ -151,13 +151,13 @@ describe('tokenUsageDisplay', () => {
     }).warning).toBeUndefined();
   });
 
-  it('keeps the Auto tooltip to the configuration name when no concrete model is resolved', () => {
+  it('keeps the Primary tooltip to the configuration name when no concrete model is resolved', () => {
     expect(buildModelSelectorTooltipDetails({
-      configName: 'Auto',
+      configName: 'Primary model',
       t,
     })).toEqual({
       rows: [
-        { key: 'configName', label: 'Configuration', value: 'Auto' },
+        { key: 'configName', label: 'Configuration', value: 'Primary model' },
       ],
       warning: undefined,
     });

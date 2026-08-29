@@ -276,17 +276,24 @@ describe('ModelSelector external transport reuse', () => {
           currentMode="agentic"
           sessionId="miniapp-session"
           persistSharedModeDefault={false}
+          reasoningTriggerPresentation="label"
         />,
       );
       await Promise.resolve();
     });
-    // Thinking strength belongs to the model that does the thinking, so it
-    // renders beside the model trigger instead of being relocated elsewhere.
+    expect(
+      container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]'),
+    ).not.toBeNull();
     expect(
       container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]'),
-    ).not.toBeNull();
+    ).toBeNull();
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-settings-model"]',
+      )?.click();
     });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(
@@ -309,8 +316,11 @@ describe('ModelSelector external transport reuse', () => {
     }));
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>(
-        '[data-testid="chat-reasoning-preset-selector-btn"]',
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-settings-reasoning"]',
       )?.click();
     });
     await act(async () => {
@@ -361,7 +371,15 @@ describe('ModelSelector external transport reuse', () => {
       await Promise.resolve();
     });
     expect(catalogUpdated).toBeTypeOf('function');
-    expect(container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')).toBeNull();
+    expect(container.querySelector(
+      '[data-testid="chat-model-selector-trigger-reasoning"]',
+    )).toBeNull();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.click();
+    });
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
+    )).toBeNull();
 
     await act(async () => {
       catalogUpdated?.();
@@ -369,7 +387,12 @@ describe('ModelSelector external transport reuse', () => {
     });
 
     expect(aiApiMocks.getModelCatalog).toHaveBeenCalledTimes(2);
-    expect(container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')).not.toBeNull();
+    expect(container.querySelector(
+      '[data-testid="chat-model-selector-trigger-reasoning"]',
+    )).not.toBeNull();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
+    )).not.toBeNull();
   });
 
   it('renders the target catalog through the shared selector and applies a choice', async () => {
@@ -637,11 +660,11 @@ describe('ModelSelector external transport reuse', () => {
       trigger?.click();
     });
 
-    const auto = document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-option"][data-model-id="auto"]',
+    const primary = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-option"][data-model-id="primary"]',
     );
     await act(async () => {
-      auto?.click();
+      primary?.click();
       await Promise.resolve();
     });
     expect(configManager.setConfig).not.toHaveBeenCalled();

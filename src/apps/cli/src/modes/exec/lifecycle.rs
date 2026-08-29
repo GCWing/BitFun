@@ -1312,7 +1312,7 @@ impl ExecMode {
 
     async fn record_resolved_model_config_id(&self, session_id: &str, model_config_id: &str) {
         let trimmed = model_config_id.trim();
-        if trimmed.is_empty() || matches!(trimmed, "auto" | "default" | "primary" | "fast") {
+        if trimmed.is_empty() || matches!(trimmed, "default" | "primary" | "fast") {
             return;
         }
 

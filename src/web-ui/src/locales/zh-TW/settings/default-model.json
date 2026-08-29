@@ -42,8 +42,7 @@
     },
     "notConfigured": "未設定",
     "notSet": "不設置",
-    "selectModel": "選擇模型",
-    "autoSelect": "自動選擇"
+    "selectModel": "選擇模型"
   },
   "selection": {
     "primary": "主力模型",

@@ -19,8 +19,7 @@ fn resolve_reference(model_ref: &str) -> Option<String> {
 }
 
 #[test]
-fn classifies_auto_default_and_empty_as_primary() {
-    assert_eq!(classify_model_selector("auto"), ModelSelectorKind::Primary);
+fn classifies_default_and_empty_as_primary() {
     assert_eq!(
         classify_model_selector(" default "),
         ModelSelectorKind::Primary
@@ -29,6 +28,10 @@ fn classifies_auto_default_and_empty_as_primary() {
     assert_eq!(
         classify_model_selector("model-primary"),
         ModelSelectorKind::Explicit("model-primary".to_string())
+    );
+    assert_eq!(
+        classify_model_selector("auto"),
+        ModelSelectorKind::Explicit("auto".to_string())
     );
 }
 

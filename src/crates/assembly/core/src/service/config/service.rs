@@ -1395,7 +1395,7 @@ mod tests {
             .get_config(Some("ai.agent_model_defaults"))
             .await
             .expect("agent model defaults should load");
-        assert_eq!(defaults.mode, "auto");
+        assert_eq!(defaults.mode, "primary");
         assert_eq!(
             defaults.subagents.default_selection,
             SubagentModelSelection::fixed("fast")

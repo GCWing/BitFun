@@ -770,7 +770,7 @@ impl AgentModelDefaultsConfig {
 impl Default for AgentModelDefaultsConfig {
     fn default() -> Self {
         Self {
-            mode: "auto".to_string(),
+            mode: "primary".to_string(),
             subagents: SubagentModelDefaultsConfig::default(),
         }
     }
@@ -2680,7 +2680,7 @@ mod tests {
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
         assert_eq!(config.review_team_rate_limit_status, serde_json::json!({}));
-        assert_eq!(config.agent_model_defaults.mode, "auto");
+        assert_eq!(config.agent_model_defaults.mode, "primary");
         assert_eq!(
             config.agent_model_defaults.subagents.default_selection,
             SubagentModelSelection::fixed("fast")

@@ -478,7 +478,7 @@ async fn acp_stdio_preserves_mode_and_history_across_restart_then_closes_active_
         .request(
             23,
             "session/set_model",
-            json!({ "sessionId": session_id, "modelId": "auto" }),
+            json!({ "sessionId": session_id, "modelId": "primary" }),
         )
         .await;
     assert_eq!(

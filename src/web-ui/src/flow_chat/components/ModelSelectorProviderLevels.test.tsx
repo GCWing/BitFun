@@ -119,10 +119,19 @@ describe('ModelSelector provider levels', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  const openMenu = async () => {
+  const openSettingsMenu = async () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>(
         '[data-testid="chat-model-selector-btn"]',
+      )?.click();
+    });
+  };
+
+  const openMenu = async () => {
+    await openSettingsMenu();
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-settings-model"]',
       )?.click();
     });
   };
@@ -135,7 +144,11 @@ describe('ModelSelector provider levels', () => {
     });
   };
 
-  const renderSelector = async (models: unknown[] = CATALOG_MODELS, modeModel = 'auto') => {
+  const renderSelector = async (
+    models: unknown[] = CATALOG_MODELS,
+    modeModel = 'primary',
+    sessionId?: string,
+  ) => {
     vi.mocked(configManager.getConfigs).mockResolvedValue({
       'ai.models': models,
       'ai.default_models': { primary: 'acme-fast', fast: 'umbra-main' },
@@ -143,7 +156,13 @@ describe('ModelSelector provider levels', () => {
     });
 
     await act(async () => {
-      root.render(<ModelSelector currentMode="agentic" />);
+      root.render(
+        <ModelSelector
+          currentMode="agentic"
+          sessionId={sessionId}
+          reasoningTriggerPresentation="label"
+        />,
+      );
       await Promise.resolve();
     });
   };
@@ -183,15 +202,123 @@ describe('ModelSelector provider levels', () => {
     vi.clearAllMocks();
   });
 
+  it('opens with model and reasoning settings, omits speed, and can restore defaults', async () => {
+    flowChatStoreMocks.sessions.set('session-a', {
+      config: {
+        agentType: 'agentic',
+        modelName: 'umbra-main',
+        reasoningPreset: 'high',
+      },
+    });
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1,
+      default_models: { primary: 'acme-fast' },
+      models: [{
+        id: 'umbra-main',
+        reasoning: {
+          status: 'known',
+          default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    });
+
+    await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
+    await openSettingsMenu();
+
+    const settings = document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    );
+    expect(settings).not.toBeNull();
+    expect(settings?.querySelector(
+      '[data-testid="chat-model-selector-settings-model"]',
+    )?.textContent).toContain('umbra-main-native');
+    expect(settings?.querySelector(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
+    )?.textContent).toContain('reasoningSelector.levels.high');
+    expect(settings?.querySelectorAll('button[role="menuitem"]')).toHaveLength(3);
+    expect(settings?.textContent).not.toContain('modelSelector.fastMode');
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    );
+    const reasoningSummary = trigger?.querySelector(
+      '[data-testid="chat-model-selector-trigger-reasoning"]',
+    );
+    const dropdownIndicator = trigger?.querySelector(
+      '[data-testid="chat-model-selector-dropdown-indicator"]',
+    );
+    expect(reasoningSummary?.textContent).toContain('reasoningSelector.levels.high');
+    expect(reasoningSummary?.nextElementSibling).toBe(dropdownIndicator);
+    expect(
+      container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      settings?.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-settings-reset"]',
+      )?.click();
+      await Promise.resolve();
+    });
+
+    expect(configManager.setConfig).toHaveBeenCalledWith(
+      'ai.agent_model_defaults.mode',
+      'primary',
+    );
+    expect(flowChatStoreMocks.store.updateSessionReasoningPreset)
+      .toHaveBeenCalledWith('session-a', undefined);
+  });
+
+  it('opens the reasoning presets from the settings summary', async () => {
+    flowChatStoreMocks.sessions.set('session-a', {
+      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+    });
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1,
+      default_models: { primary: 'acme-fast' },
+      models: [{
+        id: 'umbra-main',
+        reasoning: {
+          status: 'known',
+          default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    });
+
+    await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
+    await openSettingsMenu();
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-settings-reasoning"]',
+      )?.click();
+    });
+
+    const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-reasoning-option"]',
+    ));
+    expect(options.map(option => option.dataset.presetId))
+      .toEqual(['auto', 'medium', 'high']);
+    expect(options.find(option => option.dataset.presetId === 'high')?.getAttribute('aria-checked'))
+      .toBe('true');
+  });
+
   it('offers providers first and keeps the symbolic selectors on that level', async () => {
     await renderSelector();
     await openMenu();
 
     expect(providerRows().map(row => row.dataset.providerKey))
       .toEqual(['provider-acme', 'provider-umbra']);
-    expect(modelOption('auto')).not.toBeNull();
     expect(modelOption('primary')).not.toBeNull();
     expect(modelOption('fast')).not.toBeNull();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-provider-selected-model"]',
+    )).toBeNull();
     // A concrete model is only reachable through its provider now.
     expect(modelOption('acme-deep')).toBeNull();
     expect(modelOption('umbra-main')).toBeNull();
@@ -208,7 +335,7 @@ describe('ModelSelector provider levels', () => {
     expect(modelOption('acme-deep')).not.toBeNull();
     expect(modelOption('umbra-main')).toBeNull();
     // The symbolic selectors belong to the provider level and are not repeated.
-    expect(modelOption('auto')).toBeNull();
+    expect(modelOption('primary')).toBeNull();
 
     await act(async () => {
       modelOption('acme-deep')?.click();
@@ -221,7 +348,7 @@ describe('ModelSelector provider levels', () => {
     );
   });
 
-  it('marks the provider that owns the pinned model', async () => {
+  it('marks the provider that owns the pinned model and shows that model beneath it', async () => {
     await renderSelector(CATALOG_MODELS, 'umbra-main');
     await openMenu();
 
@@ -229,6 +356,22 @@ describe('ModelSelector provider levels', () => {
       .filter(row => row.dataset.selected === 'true')
       .map(row => row.dataset.providerKey);
     expect(selectedKeys).toEqual(['provider-umbra']);
+
+    const selectedProvider = providerRows().find(
+      row => row.dataset.providerKey === 'provider-umbra',
+    );
+    const selectedModel = selectedProvider?.querySelector<HTMLElement>(
+      '[data-testid="chat-model-selector-provider-selected-model"]',
+    );
+    expect(selectedModel?.dataset.modelId).toBe('umbra-main');
+    expect(selectedModel?.textContent).toBe('umbra-main-native');
+    expect(selectedModel?.lastElementChild?.getAttribute('data-testid'))
+      .toBe('chat-model-selector-provider-selected-check');
+    expect(
+      providerRows()
+        .find(row => row.dataset.providerKey === 'provider-acme')
+        ?.querySelector('[data-testid="chat-model-selector-provider-selected-model"]'),
+    ).toBeNull();
   });
 
   it('returns to the provider level from the back control and on reopen', async () => {
@@ -247,14 +390,17 @@ describe('ModelSelector provider levels', () => {
     await openProvider('provider-acme');
     expect(modelOption('acme-deep')).not.toBeNull();
 
-    // Closing and reopening starts over at the provider level.
+    // Closing and reopening starts over at the settings summary.
     await act(async () => {
       container.querySelector<HTMLButtonElement>(
         '[data-testid="chat-model-selector-btn"]',
       )?.click();
     });
-    await openMenu();
-    expect(providerRows()).toHaveLength(2);
+    await openSettingsMenu();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+    expect(providerRows()).toHaveLength(0);
     expect(modelOption('acme-deep')).toBeNull();
   });
 
@@ -275,6 +421,12 @@ describe('ModelSelector provider levels', () => {
     const menu = document.body.querySelector('[data-testid="chat-model-selector-menu"]');
     expect(menu?.getAttribute('data-open')).toBe('true');
     expect(providerRows()).toHaveLength(2);
+
+    await pressEscape();
+    expect(document.body.querySelector(
+      '[data-testid="chat-model-selector-settings"]',
+    )).not.toBeNull();
+    expect(menu?.getAttribute('data-open')).toBe('true');
 
     await pressEscape();
     expect(

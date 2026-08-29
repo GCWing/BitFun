@@ -110,7 +110,7 @@ vi.mock('../../../shared/notification-system', () => ({
 
 vi.mock('./SessionModule', () => ({
   ensureBackendSession: (...args: unknown[]) => mockEnsureBackendSession(...args),
-  getModelMaxTokens: vi.fn(async (modelId: string) => modelId === 'auto' ? 32000 : 64000),
+  getModelMaxTokens: vi.fn(async (modelId: string) => modelId === 'primary' ? 32000 : 64000),
   retryCreateBackendSession: vi.fn(),
 }));
 
@@ -177,7 +177,7 @@ describe('MessageModule session writer conflict', () => {
       sessionId,
       mode: 'agentic',
       dialogTurns: [] as any[],
-      config: { modelName: 'auto' },
+      config: { modelName: 'primary' },
       titleStatus: 'generated',
       maxContextTokens: 32000,
     };
@@ -626,7 +626,7 @@ describe('MessageModule cancellation', () => {
         finishReason: 'interrupted',
         recovery: { status: 'interrupted', executionGeneration: 0 },
       }],
-      config: { modelName: 'auto' },
+      config: { modelName: 'primary' },
       maxContextTokens: 32_000,
     };
     const context: any = {
@@ -922,11 +922,11 @@ describe('MessageModule model synchronization', () => {
     mockUpdateSessionModel.mockResolvedValue(undefined);
   });
 
-  it('keeps an explicit auto selector when synchronizing before send', async () => {
+  it('keeps an explicit primary selector when synchronizing before send', async () => {
     const session = {
-      sessionId: 'session-auto',
+      sessionId: 'session-primary',
       config: {
-        modelName: 'auto',
+        modelName: 'primary',
         reasoningPreset: 'high',
         workspacePath: '/remote/repo',
       },
@@ -940,19 +940,19 @@ describe('MessageModule model synchronization', () => {
     const context: any = {
       flowChatStore: {
         getSurfaceGeneration: () => 0,
-        getState: () => ({ sessions: new Map([['session-auto', session]]) }),
+        getState: () => ({ sessions: new Map([['session-primary', session]]) }),
         updateSessionModelName,
         updateSessionMaxContextTokens,
       },
     };
 
-    await syncSessionModelSelection(context, 'session-auto', 'agentic');
+    await syncSessionModelSelection(context, 'session-primary', 'agentic');
 
     expect(updateSessionModelName).not.toHaveBeenCalled();
-    expect(updateSessionMaxContextTokens).toHaveBeenCalledWith('session-auto', 32000);
+    expect(updateSessionMaxContextTokens).toHaveBeenCalledWith('session-primary', 32000);
     expect(mockUpdateSessionModel).toHaveBeenCalledWith({
-      sessionId: 'session-auto',
-      modelName: 'auto',
+      sessionId: 'session-primary',
+      modelName: 'primary',
       reasoningPreset: 'high',
       workspacePath: '/remote/repo',
       remoteConnectionId: 'ssh-1',
@@ -1007,7 +1007,7 @@ describe('MessageModule device surface switch', () => {
       sessionId,
       mode: 'agentic',
       dialogTurns: [] as any[],
-      config: { modelName: 'auto', workspacePath: '/repo' },
+      config: { modelName: 'primary', workspacePath: '/repo' },
       titleStatus: 'generated',
       maxContextTokens: 32000,
     };

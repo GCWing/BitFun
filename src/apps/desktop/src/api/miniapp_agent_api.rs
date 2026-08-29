@@ -212,8 +212,8 @@ pub struct MiniAppAgentRunRequest {
     /// instead of the user's workspace. Must be a clean relative path.
     #[serde(default)]
     pub app_data_workspace: Option<String>,
-    /// Optional model selector for the hidden Cowork session (`auto`,
-    /// `primary`, `fast`, or a concrete model config id). Applied when the
+    /// Optional model selector for the hidden Cowork session (`primary`,
+    /// `fast`, or a concrete model config id). Applied when the
     /// session is created, and also when an existing session is reused so the
     /// MiniApp can switch models mid-task.
     #[serde(default)]

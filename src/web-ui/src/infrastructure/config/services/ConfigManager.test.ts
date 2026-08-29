@@ -367,7 +367,7 @@ describe('ConfigManager', () => {
       'ai.models': [],
       'ai.default_models': {},
       'ai.agent_model_defaults': {
-        mode: 'auto',
+        mode: 'primary',
         subagents: {
           default: { kind: 'fixed', model_id: 'fast' },
           builtin: {
@@ -387,7 +387,7 @@ describe('ConfigManager', () => {
     configApiMocks.getConfig.mockRejectedValueOnce(new Error('read failed'));
 
     await expect(configManager.getConfig('ai.agent_model_defaults')).resolves.toEqual({
-      mode: 'auto',
+      mode: 'primary',
       subagents: {
         default: { kind: 'fixed', model_id: 'fast' },
         builtin: {
@@ -402,7 +402,7 @@ describe('ConfigManager', () => {
     configApiMocks.getConfigs.mockResolvedValueOnce({
       'ai.models': [],
       'ai.agent_model_defaults': {
-        mode: 'auto',
+        mode: 'primary',
         subagents: {
           default: { kind: 'fixed', model_id: 'fast' },
           builtin: {

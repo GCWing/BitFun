@@ -398,13 +398,13 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "settledTurnId": settled_turn_id,
             }),
         )),
-        AgenticEvent::SessionModelAutoMigrated {
+        AgenticEvent::SessionModelFallbackApplied {
             session_id,
             previous_model_id,
             new_model_id,
             reason,
         } => Some(AgenticFrontendEvent::new(
-            "agentic://session-model-auto-migrated",
+            "agentic://session-model-fallback-applied",
             json!({
                 "sessionId": session_id,
                 "previousModelId": previous_model_id,

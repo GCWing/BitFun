@@ -89,6 +89,8 @@ export function getModelDisplayName(config: ProviderConfigLike): string {
   return `${providerName}/${modelName}`;
 }
 
+// Keep the retired `auto` selector reserved so legacy session data can never
+// become ambiguous with a newly allocated concrete model config ID.
 const RESERVED_MODEL_CONFIG_IDS = new Set(['primary', 'fast', 'auto', 'default']);
 
 /** Allocate a readable config ID for a newly created model. */

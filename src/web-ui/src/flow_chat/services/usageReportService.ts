@@ -296,7 +296,6 @@ function getInferableSessionModelId(session: Session): string | undefined {
   }
   const normalizedModelId = modelId.toLowerCase();
   if (
-    normalizedModelId === 'auto' ||
     normalizedModelId === 'default' ||
     normalizedModelId === 'primary' ||
     normalizedModelId === 'fast' ||

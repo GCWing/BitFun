@@ -233,7 +233,7 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
   行为或能力变化重新确认。与 builtin/user/project 或其他 provider 同名时保持不可用，直到用户选择；候选变化后
   旧选择失效，即使只剩一个候选也不静默回退。
 - BitFun 模型配置变化会在后台为后续调用生成新版本；审批绑定具体配置 ID 和运行配置内容摘要，同一 ID 下的 provider、
-  模型名或 endpoint 变化也要求重新确认。已绑定 ID 不再解释为 `inherit/primary/fast/auto/default` 选择器；已开始调用继续保留
+  模型名或 endpoint 变化也要求重新确认。已绑定 ID 不再解释为 `inherit/primary/fast/default` 选择器；已开始调用继续保留
   旧绑定事实，若执行时配置已不一致则安全失败，不静默切换模型。
 - 新 Task 在进入调度前取得现有 Subagent 运行租约，固定 `runtime_agent_key` 和模型绑定，并持有到完成、取消、超时或提交失败；来源稳定
   删除、显式停用或抑制会立即阻止新调用，短暂读取失败最多在有界窗口内沿用 exact last-valid。

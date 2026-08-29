@@ -1640,7 +1640,7 @@ impl CoreServiceAgentRuntime {
                 .as_ref()
                 .ok_or_else(|| "Config service not available".to_string())?;
             let concrete_model_id = match normalized_model_id.as_str() {
-                "auto" | "primary" => ai_config.resolve_model_selection("primary"),
+                "primary" => ai_config.resolve_model_selection("primary"),
                 "fast" => ai_config.resolve_model_selection("fast"),
                 model_id => ai_config.resolve_model_reference(model_id),
             }
@@ -1711,7 +1711,8 @@ impl CoreServiceAgentRuntime {
                 .map_err(Self::runtime_error_message)?;
         }
 
-        let model_changed = previous_model_id.as_deref().unwrap_or("auto") != normalized_model_id;
+        let model_changed =
+            previous_model_id.as_deref().unwrap_or("primary") != normalized_model_id;
         if model_changed
             && coordinator
                 .get_session_manager()
@@ -3283,15 +3284,15 @@ mod tests {
     fn core_service_agent_runtime_owner_normalizes_remote_session_model_ids() {
         assert_eq!(
             normalize_remote_session_model_id(None),
-            Some("auto".to_string())
+            Some("primary".to_string())
         );
         assert_eq!(
             normalize_remote_session_model_id(Some("")),
-            Some("auto".to_string())
+            Some("primary".to_string())
         );
         assert_eq!(
             normalize_remote_session_model_id(Some("  default  ")),
-            Some("auto".to_string())
+            Some("primary".to_string())
         );
         assert_eq!(
             normalize_remote_session_model_id(Some(" model-1 ")),
@@ -3302,12 +3303,8 @@ mod tests {
     #[test]
     fn core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases() {
         assert_eq!(
-            normalize_remote_model_selection("auto", None).unwrap(),
-            "auto"
-        );
-        assert_eq!(
             normalize_remote_model_selection("default", None).unwrap(),
-            "auto"
+            "primary"
         );
         assert_eq!(
             normalize_remote_model_selection("primary", None).unwrap(),

@@ -2428,13 +2428,16 @@
   "modelSelector": {
     "model": "Model",
     "modelExplanation": "Model explanation",
+    "modelSettings": "Model settings",
     "modelSelection": "Select Model",
-    "autoModel": "Auto",
-    "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
+    "primaryModelDesc": "Uses the configured primary model",
     "fastModel": "Fast Model",
+    "fastModelDesc": "Uses the configured fast model",
     "providerModelCount": "{{total}} models",
     "backToProviders": "Back to providers",
+    "backToSettings": "Back to model settings",
+    "resetToDefaults": "Restore default settings",
     "fastMode": "Fast mode",
     "fastModeDescription": "1.5x speed with higher credit usage",
     "acpMode": "Mode",
@@ -2470,11 +2473,11 @@
     "xhighDesc": "Maximum reasoning depth (slower)"
   },
   "reasoningSelector": {
-    "title": "Reasoning",
+    "title": "Reasoning effort",
     "auto": "Auto",
     "modelDefault": "model default",
-    "current": "Reasoning: {{preset}}",
-    "currentAuto": "Reasoning: Auto ({{preset}})",
+    "current": "Reasoning effort: {{preset}}",
+    "currentAuto": "Reasoning effort: Auto ({{preset}})",
     "updateFailed": "Failed to update reasoning preset",
     "levels": {
       "off": "Off",

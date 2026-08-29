@@ -15,7 +15,7 @@ pub fn resolve_selector(ai: &AIConfig, selector: &Option<String>) -> Option<Stri
 
 pub fn resolve_model_selector(ai: &AIConfig, selector: &str) -> Option<String> {
     match selector.trim() {
-        "" | "auto" | "default" => ai.resolve_model_selection("primary"),
+        "" | "default" => ai.resolve_model_selection("primary"),
         selector => ai.resolve_model_selection(selector),
     }
 }

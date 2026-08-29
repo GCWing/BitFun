@@ -110,6 +110,15 @@ impl GenerationUsageTracker {
 
 pub struct InsightsService;
 
+fn normalize_insights_model_selector(model_selector: Option<&str>) -> &str {
+    match model_selector.map(str::trim).unwrap_or_default() {
+        // Upgrade-only input compatibility for UI payloads created before the
+        // Auto selector was removed. New callers send `primary` directly.
+        "" | "auto" | "default" => "primary",
+        selector => selector,
+    }
+}
+
 impl InsightsService {
     fn validate_days(days: u32) -> BitFunResult<()> {
         if (1..=3650).contains(&days) {
@@ -205,51 +214,28 @@ impl InsightsService {
 
         Self::check_cancelled(token)?;
 
-        // Stage 2: Parallel Facet Extraction (fast model)
+        // Stage 2: Parallel Facet Extraction
         let ai_factory = get_global_ai_client_factory()
             .await
             .map_err(|e| BitFunError::service(format!("Failed to get AI client factory: {}", e)))?;
-        let explicit_model = model_selector
-            .map(str::trim)
-            .filter(|selector| !selector.is_empty() && *selector != "auto");
-        let (ai_client_fast, ai_client_primary) = if let Some(selector) = explicit_model {
-            let client = ai_factory
-                .get_client_resolved(selector)
-                .await
-                .map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to resolve selected insights model '{}': {}",
-                        selector, e
-                    ))
-                })?;
-            (client.clone(), client)
-        } else {
-            let fast = ai_factory.get_client_resolved("fast").await.map_err(|e| {
-                BitFunError::service(format!("Failed to resolve fast model: {}", e))
+        let selected_model = normalize_insights_model_selector(model_selector);
+        let ai_client = ai_factory
+            .get_client_resolved(selected_model)
+            .await
+            .map_err(|e| {
+                BitFunError::service(format!(
+                    "Failed to resolve selected insights model '{}': {}",
+                    selected_model, e
+                ))
             })?;
 
-            // Primary model for analysis stages — falls back to fast if not configured.
-            let primary = match ai_factory.get_client_resolved("primary").await {
-                Ok(client) => client,
-                Err(_) => {
-                    warn!("Primary model not configured, falling back to fast model for analysis");
-                    fast.clone()
-                }
-            };
-            (fast, primary)
-        };
-
-        let mut generation_models = vec![ai_client_fast.config.model.clone()];
-        if ai_client_primary.config.model != ai_client_fast.config.model {
-            generation_models.push(ai_client_primary.config.model.clone());
-        }
+        let generation_models = vec![ai_client.config.model.clone()];
 
         let usage_tracker = GenerationUsageTracker::default();
-        let ai_client_fast = TrackedAIClient::new(ai_client_fast, usage_tracker.clone());
-        let ai_client_primary = TrackedAIClient::new(ai_client_primary, usage_tracker.clone());
+        let ai_client = TrackedAIClient::new(ai_client, usage_tracker.clone());
 
         let facets =
-            Self::extract_facets_adaptive(&ai_client_fast, &transcripts, &lang_instruction, token)
+            Self::extract_facets_adaptive(&ai_client, &transcripts, &lang_instruction, token)
                 .await?;
 
         info!("Extracted facets for {} sessions", facets.len());
@@ -262,20 +248,19 @@ impl InsightsService {
 
         Self::check_cancelled(token)?;
 
-        // Stage 4a: Parallel analysis (primary model) — 7 independent tasks
+        // Stage 4a: Parallel analysis — 7 independent tasks
         Self::emit_progress("Analyzing patterns...", "analysis", 0, 0).await;
 
         let (suggestions, areas, wins_friction, interaction, horizon, fun_ending) =
-            Self::generate_analysis_parallel(&ai_client_primary, &aggregate, &lang_instruction)
-                .await;
+            Self::generate_analysis_parallel(&ai_client, &aggregate, &lang_instruction).await;
 
         Self::check_cancelled(token)?;
 
-        // Stage 4b: Synthesis (primary model) — at_a_glance depends on 4a results
+        // Stage 4b: Synthesis — at_a_glance depends on 4a results
         Self::emit_progress("Writing summary...", "synthesis", 0, 0).await;
 
         let at_a_glance = Self::generate_synthesis(
-            &ai_client_primary,
+            &ai_client,
             &aggregate,
             &suggestions,
             &areas,
@@ -1796,6 +1781,16 @@ fn json_value_to_string(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_auto_insights_input_is_canonicalized_to_primary() {
+        assert_eq!(normalize_insights_model_selector(Some(" auto ")), "primary");
+        assert_eq!(normalize_insights_model_selector(None), "primary");
+        assert_eq!(
+            normalize_insights_model_selector(Some("configured-model")),
+            "configured-model"
+        );
+    }
 
     #[test]
     fn generation_usage_tracker_aggregates_reported_calls_and_preserves_coverage() {

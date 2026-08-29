@@ -2714,26 +2714,30 @@ fn remote_connect_model_catalog_delta_preserves_poll_invalidation_policy() {
 fn remote_connect_model_selection_policy_owns_alias_and_config_reference_rules() {
     assert_eq!(
         normalize_remote_session_model_id(None),
-        Some("auto".to_string())
+        Some("primary".to_string())
     );
     assert_eq!(
         normalize_remote_session_model_id(Some("  default  ")),
-        Some("auto".to_string())
+        Some("primary".to_string())
+    );
+    assert_eq!(
+        normalize_remote_session_model_id(Some("  auto  ")),
+        Some("primary".to_string())
     );
     assert_eq!(
         normalize_remote_session_model_id(Some(" model-1 ")),
         Some("model-1".to_string())
     );
 
-    assert!(!remote_model_selection_needs_config("auto"));
     assert!(!remote_model_selection_needs_config("default"));
     assert!(!remote_model_selection_needs_config("primary"));
     assert!(!remote_model_selection_needs_config("fast"));
+    assert!(!remote_model_selection_needs_config("auto"));
     assert!(remote_model_selection_needs_config("custom-alias"));
 
     assert_eq!(
         normalize_remote_model_selection("default", |_| None).unwrap(),
-        "auto"
+        "primary"
     );
     assert_eq!(
         normalize_remote_model_selection("primary", |_| None).unwrap(),
@@ -2745,6 +2749,10 @@ fn remote_connect_model_selection_policy_owns_alias_and_config_reference_rules()
         })
         .unwrap(),
         "model-1"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("auto", |_| None).unwrap(),
+        "primary"
     );
     assert_eq!(
         normalize_remote_model_selection("unknown", |_| None).unwrap_err(),
