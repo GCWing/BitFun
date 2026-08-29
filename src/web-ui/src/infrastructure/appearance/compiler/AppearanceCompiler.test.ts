@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bitfunDarkPalette, builtinAppearancePalettes } from '../builtins/palettes';
 import { buildBuiltinAppearance } from '../builtins/buildBuiltinAppearance';
 import { composeAppearancePackage } from '../builtins/composeAppearancePackage';
+import { AppearanceRegistry } from '../registry/AppearanceRegistry';
 import { createDefaultAppearanceRegistry } from '../registry/defaultAppearanceRegistry';
 import { AppearancePackageValidationError } from '../schema/AppearancePackageValidationError';
 import type { AppearancePackage } from '../types';
@@ -530,6 +531,20 @@ describe('AppearanceCompiler', () => {
   });
 
   it('compiles ancestor-owned state selectors for descendant parts', () => {
+    const registry = new AppearanceRegistry()
+      .registerComponent({
+        id: 'checkbox',
+        parts: [{ id: 'root' }, { id: 'box' }],
+        states: [{
+          id: 'checked',
+          selector: {
+            kind: 'ancestorPart',
+            part: 'root',
+            suffix: ':has(input:checked)',
+          },
+        }],
+      })
+      .freeze();
     const pkg: AppearancePackage = {
       schema: 'bitfun.appearance',
       schemaVersion: 1,
@@ -550,7 +565,7 @@ describe('AppearanceCompiler', () => {
       },
     };
 
-    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+    const snapshot = new AppearanceCompiler(registry).compile(pkg, 1);
     expect(snapshot.cssText).toContain(
       '[data-bf-component="checkbox"][data-bf-part="root"]:has(input:checked) [data-bf-component="checkbox"][data-bf-part="box"]',
     );
