@@ -24,6 +24,9 @@ import {
   ActionCard,
   ActionItem,
   ActivityItem,
+  Alert,
+  Avatar,
+  AvatarGroup,
   Button,
   Card,
   CardHeader,
@@ -267,6 +270,23 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
         <Button leadingIcon={<AppWindow aria-hidden="true" />} size="sm" variant="fill">
           {t("components.preview.confirmDelete")}
         </Button>
+      );
+    case "Alert":
+      return (
+        <Alert
+          message={t("components.preview.fieldDescription")}
+          title={t("components.preview.notifications")}
+          tone="info"
+        />
+      );
+    case "Avatar":
+      return (
+        <AvatarGroup maxCount={3}>
+          <Avatar>BF</Avatar>
+          <Avatar>UI</Avatar>
+          <Avatar>DS</Avatar>
+          <Avatar>+1</Avatar>
+        </AvatarGroup>
       );
     case "Checkbox":
       return (

@@ -1,6 +1,8 @@
 import { actionItemMeta } from "./components/ActionItem/ActionItem.meta";
 import { actionCardMeta } from "./components/ActionCard/ActionCard.meta";
 import { activityItemMeta } from "./components/ActivityItem/ActivityItem.meta";
+import { alertMeta } from "./components/Alert/Alert.meta";
+import { avatarMeta } from "./components/Avatar/Avatar.meta";
 import { buttonMeta } from "./components/Button/Button.meta";
 import { checkboxMeta } from "./components/Checkbox/Checkbox.meta";
 import { cardMeta } from "./components/Card/Card.meta";
@@ -73,10 +75,12 @@ export const componentRegistry = [
   actionCardMeta,
   actionItemMeta,
   activityItemMeta,
+  alertMeta,
   agentControlToolCardMeta,
   agentWaitToolCardMeta,
   ambientToolCardMeta,
   askUserMeta,
+  avatarMeta,
   buttonMeta,
   cardMeta,
   checkboxMeta,
