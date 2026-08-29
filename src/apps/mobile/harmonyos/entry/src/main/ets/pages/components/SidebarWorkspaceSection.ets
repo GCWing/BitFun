@@ -72,9 +72,12 @@ export struct SidebarWorkspaceSection {
         if (this.visibleDeviceCount < this.deviceEntries().length) {
           this.MoreDevicesRow()
         }
-        if (this.selectedEntry()) {
-          this.WorkspaceSection(this.selectedEntry() as DeviceDirectoryEntry)
-        }
+        // The workspace tree owns projection caches and local disclosure state.
+        // Key the single visible tree by device so switching the flat selector
+        // cannot reuse the outgoing device's component instance and projection.
+        ForEach(this.selectedEntries(), (entry: DeviceDirectoryEntry) => {
+          this.WorkspaceSection(entry)
+        }, (entry: DeviceDirectoryEntry): string => entry.deviceId)
       }
     }
     .width('100%')
@@ -330,6 +333,11 @@ export struct SidebarWorkspaceSection {
       return undefined;
     }
     return entries.find((entry: DeviceDirectoryEntry): boolean => entry.deviceId === selectedId);
+  }
+
+  private selectedEntries(): DeviceDirectoryEntry[] {
+    const selected = this.selectedEntry();
+    return selected ? [selected] : [];
   }
 
   private isSelected(entry: DeviceDirectoryEntry): boolean {

@@ -388,6 +388,7 @@ export abstract class AppRootRuntimeComposition {
       this.workspaceCoordinator,
       {
         isRemoteAvailable: (): boolean => this.remoteConnectionController.ensureAvailable(),
+        remoteTargetId: (): string => this.remotePageState.controlTargetDeviceId,
         isBusy: (): boolean => this.remotePageState.isBusy,
         onBusy: (isBusy: boolean): void => {
           this.remotePageState.setBusy(isBusy);
@@ -784,7 +785,7 @@ export abstract class AppRootRuntimeComposition {
             this.captureLiveControlTarget();
           },
           onControlTargetChanged: (): void => {
-            this.captureLiveControlTarget();
+            this.activateLiveControlTarget();
           }
         }
       }
@@ -1024,6 +1025,15 @@ export abstract class AppRootRuntimeComposition {
   private captureLiveControlTarget(): void {
     const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
     this.deviceDirectoryViewModel.captureLive(
+      deviceId,
+      this.remotePageState.recentWorkspaces,
+      this.remotePageState.sessions
+    );
+  }
+
+  private activateLiveControlTarget(): void {
+    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    this.deviceDirectoryViewModel.activateLive(
       deviceId,
       this.remotePageState.recentWorkspaces,
       this.remotePageState.sessions

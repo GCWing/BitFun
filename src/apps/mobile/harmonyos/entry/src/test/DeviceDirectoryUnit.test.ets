@@ -472,6 +472,28 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-a')?.workspaces.length).assertEqual(1);
     });
 
+    it('replaces a stale catalog when a device becomes the live target', 0, () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'desk-b',
+        activeDeviceConnected: () => true
+      });
+      viewModel.syncDevices([
+        { deviceId: 'desk-b', deviceName: 'Beta', online: true }
+      ]);
+      viewModel.captureLive('desk-b', [workspace('/wrong', 'Wrong')], [
+        sessionOn('desk-b', 'cached', 'Cached')
+      ]);
+
+      viewModel.activateLive('desk-b', [], [sessionOn('desk-b', 'fresh', 'Fresh')]);
+
+      expect(state.find('desk-b')?.workspaces.length).assertEqual(0);
+      expect(state.find('desk-b')?.sessions.some((item: RemoteSession): boolean => item.id === 'fresh')).assertTrue();
+      expect(state.find('desk-b')?.sessions.some((item: RemoteSession): boolean => item.id === 'cached')).assertFalse();
+      expect(state.find('desk-b')?.status).assertEqual('idle');
+    });
+
     it('refreshes one live workspace without dropping cached siblings', 0, () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {

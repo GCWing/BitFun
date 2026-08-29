@@ -99,6 +99,38 @@ export class DeviceDirectoryViewModel {
     }
   }
 
+  /**
+   * Starts the directory projection for a newly activated control target.
+   *
+   * This is deliberately different from `captureLive`: the outgoing snapshot
+   * ignores empty teardown values, while an incoming empty catalog is real and
+   * must replace whatever was cached for this row. Conflating the two lifecycle
+   * edges is what allowed one desktop's workspaces to be stamped onto another.
+   */
+  activateLive(
+    deviceId: string,
+    workspaces: RecentWorkspaceEntry[],
+    sessions: RemoteSession[]
+  ): void {
+    const target = deviceId.trim();
+    if (target.length === 0) {
+      return;
+    }
+    const entry = this.state.find(target);
+    if (!entry) {
+      return;
+    }
+    entry.workspaces = workspaces.slice();
+    // The handshake is the authoritative snapshot for the incoming target.
+    // Merging the row's old cache here makes any historical cross-device
+    // misattribution immortal, because those stale sessions never disappear.
+    entry.sessions = stampRemoteSessionsDevice(sessions, target);
+    // An empty activation snapshot means the target-scoped catalog has been
+    // cleared and is about to load, not that an empty catalog was confirmed.
+    entry.status = workspaces.length > 0 ? 'ready' : 'idle';
+    entry.errorText = '';
+  }
+
   syncDevices(devices: CloudAccountDevice[]): void {
     const activeId = this.hooks.activeDeviceId();
     const activeConnected = this.hooks.activeDeviceConnected();

@@ -6,6 +6,8 @@ import { RemotePageState } from '../state/RemotePageState';
 
 export interface RemoteWorkspaceViewModelHooks {
   readonly isRemoteAvailable: () => boolean;
+  /** Stable owner of the current remote catalog; empty while no target owns it. */
+  readonly remoteTargetId: () => string;
   readonly isBusy: () => boolean;
   readonly onBusy: (isBusy: boolean) => void;
   readonly onStatus: (statusText: string) => void;
@@ -19,6 +21,7 @@ export class RemoteWorkspaceViewModel {
   private readonly pageState: RemotePageState;
   private readonly coordinator: RemoteWorkspaceCoordinator;
   private readonly hooks: RemoteWorkspaceViewModelHooks;
+  private catalogLoadVersion: number = 0;
 
   constructor(
     pageState: RemotePageState,
@@ -59,9 +62,17 @@ export class RemoteWorkspaceViewModel {
   }
 
   async loadRecentWorkspacesInBackground(): Promise<void> {
+    const loadVersion = ++this.catalogLoadVersion;
+    const targetId = this.hooks.remoteTargetId();
     try {
       const recent = await this.coordinator.recentWorkspaces();
+      if (!this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        return;
+      }
       const assistants = await this.coordinator.assistants();
+      if (!this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        return;
+      }
       const assistantWorkspaces: RecentWorkspaceEntry[] = [];
       assistants.forEach((item) => {
         assistantWorkspaces.push({
@@ -78,6 +89,9 @@ export class RemoteWorkspaceViewModel {
         }
       });
       this.pageState.setRecentWorkspaces(allWorkspaces);
+      RemoteLogger.info(
+        `workspace catalog loaded target=${targetId} count=${allWorkspaces.length} first=${allWorkspaces.length > 0 ? allWorkspaces[0].path : ''}`
+      );
     } catch (err) {
       RemoteLogger.warn(`background recent workspace load failed: ${String(err)}`);
     }
@@ -87,35 +101,59 @@ export class RemoteWorkspaceViewModel {
     if (!this.hooks.isRemoteAvailable()) {
       return;
     }
+    const loadVersion = ++this.catalogLoadVersion;
+    const targetId = this.hooks.remoteTargetId();
     try {
       this.hooks.onBusy(true);
       this.hooks.onStatus(RemoteI18n.t('status.loadingRecentWorkspaces'));
       const recent = await this.coordinator.recentWorkspaces();
+      if (!this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        return;
+      }
       this.pageState.setRecentWorkspaces(recent);
       this.hooks.onStatus(recent.length > 0 ?
         RemoteI18n.t('status.chooseWorkspace') : RemoteI18n.t('status.noRecentWorkspaces'));
     } catch (err) {
-      this.hooks.onConnectionFailure(err);
+      if (this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        this.hooks.onConnectionFailure(err);
+      }
     } finally {
-      this.hooks.onBusy(false);
+      if (this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        this.hooks.onBusy(false);
+      }
     }
+  }
+
+  private isCurrentCatalogLoad(loadVersion: number, targetId: string): boolean {
+    return targetId.length > 0 &&
+      loadVersion === this.catalogLoadVersion &&
+      targetId === this.hooks.remoteTargetId();
   }
 
   private async loadAssistants(): Promise<void> {
     if (!this.hooks.isRemoteAvailable()) {
       return;
     }
+    const loadVersion = ++this.catalogLoadVersion;
+    const targetId = this.hooks.remoteTargetId();
     try {
       this.hooks.onBusy(true);
       this.hooks.onStatus(RemoteI18n.t('status.loadingAssistants'));
       const assistants = await this.coordinator.assistants();
+      if (!this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        return;
+      }
       this.pageState.setAssistants(assistants);
       this.hooks.onStatus(assistants.length > 0 ?
         RemoteI18n.t('status.chooseAssistant') : RemoteI18n.t('status.noAssistants'));
     } catch (err) {
-      this.hooks.onConnectionFailure(err);
+      if (this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        this.hooks.onConnectionFailure(err);
+      }
     } finally {
-      this.hooks.onBusy(false);
+      if (this.isCurrentCatalogLoad(loadVersion, targetId)) {
+        this.hooks.onBusy(false);
+      }
     }
   }
 

@@ -87,6 +87,7 @@ import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageSta
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import { ConversationController } from '../main/ets/pages/viewmodel/ConversationController';
+import { RemoteWorkspaceViewModel } from '../main/ets/pages/viewmodel/RemoteWorkspaceViewModel';
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
@@ -1464,6 +1465,35 @@ export default function conversationStateUnitTest() {
   });
 
   describe('RemoteWorkspaceCoordinator', () => {
+    it('does not publish a workspace catalog after its target changes', 0, async () => {
+      const source = new FakeRemoteWorkspaceDataSource();
+      source.recent = [{
+        path: '/desk-a', name: 'Desk A', lastOpened: '', workspaceKind: 'normal'
+      }];
+      const state = new RemotePageState();
+      let targetId = 'desk-a';
+      const viewModel = new RemoteWorkspaceViewModel(
+        state,
+        new RemoteWorkspaceCoordinator(source),
+        {
+          isRemoteAvailable: (): boolean => true,
+          remoteTargetId: (): string => targetId,
+          isBusy: (): boolean => false,
+          onBusy: (_busy: boolean): void => {},
+          onStatus: (_status: string): void => {},
+          onWorkspaceSelected: (_workspace: WorkspaceInfo): void => {},
+          onRefreshSessions: async (): Promise<void> => {},
+          onConnectionFailure: (_error: Object): void => {}
+        }
+      );
+
+      const loading = viewModel.loadRecentWorkspacesInBackground();
+      targetId = 'desk-b';
+      await loading;
+
+      expect(state.recentWorkspaces.length).assertEqual(0);
+    });
+
     it('deduplicates sessions discovered across recent workspaces', 0, async () => {
       const source = new FakeRemoteWorkspaceDataSource();
       source.sessionsByPath.set('/one', [

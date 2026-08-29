@@ -574,6 +574,9 @@ export class SettingsController {
         RemoteLogger.info(`stale device switch completion ignored device=${deviceId}`);
         return;
       }
+      RemoteLogger.info(
+        `account device sync device=${deviceId} workspace=${initialSync.workspace.path} sessions=${initialSync.sessions.length}`
+      );
       cloud.remoteState.setControlTarget('account_device', deviceId, device.deviceName);
       cloud.remoteState.setDesktopIdentity(device.deviceName, deviceId);
       cloud.remoteState.setWorkspace(
@@ -838,6 +841,11 @@ export class SettingsController {
     cloud.remoteState.setLoadingHome(true);
     cloud.remoteState.clearControlTarget();
     cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
+    // The workspace catalog belongs to the control target, just like the
+    // workspace and session projection above. Keeping it alive across this
+    // boundary makes the outgoing desktop's catalog look like the incoming
+    // desktop's while the latter is still connecting.
+    cloud.remoteState.clearWorkspaceActions();
     cloud.remoteState.setBusy(true);
     cloud.remoteState.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
     cloud.remoteState.clearActiveSession();
@@ -858,6 +866,7 @@ export class SettingsController {
     if (clearWorkspace) {
       cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
       cloud.remoteState.setAuthenticatedUserId('');
+      cloud.remoteState.clearWorkspaceActions();
     }
     cloud.remoteState.clearControlTarget();
     cloud.remoteState.setConnectionState('disconnected');

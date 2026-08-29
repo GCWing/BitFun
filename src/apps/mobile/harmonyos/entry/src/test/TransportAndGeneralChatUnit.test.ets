@@ -447,6 +447,7 @@ class AccountDeviceSwitchHarness {
   cachedRemoteClears: number = 0;
   settingsClosings: number = 0;
   readonly accountDeviceSnapshots: CloudAccountDevice[][] = [];
+  readonly changedWorkspaceSnapshots: string[][] = [];
   readonly controller: SettingsController;
 
   constructor(
@@ -474,7 +475,11 @@ class AccountDeviceSwitchHarness {
         this.accountDeviceSnapshots.push(devices.slice());
       },
       onBeforeControlTargetChange: (): void => {},
-      onControlTargetChanged: (): void => {}
+      onControlTargetChanged: (): void => {
+        this.changedWorkspaceSnapshots.push(
+          this.remoteState.recentWorkspaces.map((item: RecentWorkspaceEntry): string => item.path)
+        );
+      }
     };
     const cloud: CloudAccountSettingsDependencies = {
       client,
@@ -1336,6 +1341,20 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.remoteState.connectionState).assertEqual('connected');
       expect(harness.heartbeatStarts).assertEqual(heartbeatsAfterFirst + 1);
       expect(harness.sessionManager.dialled.join(',')).assertEqual('desk-a,desk-b,desk-a');
+    });
+
+    it('ends the outgoing workspace catalog before activating another desktop', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+      harness.remoteState.setRecentWorkspaces([{
+        path: '/desk-a-only', name: 'Desk A', lastOpened: '', workspaceKind: 'normal'
+      }]);
+
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-b'), false);
+
+      expect(harness.remoteState.recentWorkspaces.length).assertEqual(0);
+      expect(harness.changedWorkspaceSnapshots.length).assertEqual(2);
+      expect(harness.changedWorkspaceSnapshots[1].length).assertEqual(0);
     });
 
     it('gives up rather than looping when the desktop to restore is gone too', 0, async () => {
