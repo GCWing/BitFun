@@ -1,4 +1,4 @@
-import { Button, Modal, ScrollArea } from '@bitfun/ui';
+import { Button, Modal, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -160,12 +160,13 @@ export const MCPInteractionDialog: React.FC = () => {
 
           <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
             <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Response JSON</div>
-            <textarea
-              className="mcp-interaction-dialog__editor"
+            <Textarea
+              className="mcp-interaction-dialog__editor-field"
+              textareaClassName="mcp-interaction-dialog__editor"
               data-bf-component="mcp-interaction-dialog"
               data-bf-part="editor"
               value={editorValue}
-              onChange={(e) => setEditorValue(e.target.value)}
+              onValueChange={setEditorValue}
               placeholder="{}"
               spellCheck={false}
             />

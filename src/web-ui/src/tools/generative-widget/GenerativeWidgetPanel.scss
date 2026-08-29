@@ -91,10 +91,14 @@
   color: var(--bf-appearance-token-color-text-primary);
 }
 
-.bitfun-generative-widget-panel__editor {
+.bitfun-generative-widget-panel__editor-field {
   flex: 1;
   width: 100%;
   min-height: 0;
+}
+
+.bitfun-generative-widget-panel__editor {
+  height: 100%;
   resize: none;
   border: 0;
   outline: none;

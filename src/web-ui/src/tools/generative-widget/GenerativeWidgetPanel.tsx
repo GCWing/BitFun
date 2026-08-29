@@ -1,4 +1,4 @@
-import { Button } from '@bitfun/ui';
+import { Button, Textarea } from '@bitfun/ui';
 import React from 'react';
 import { Code2, RotateCcw, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -144,13 +144,14 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
               <span>{t('toolCards.generativeUI.source')}</span>
             </span>
           </div>
-          <textarea
-            className="bitfun-generative-widget-panel__editor"
+          <Textarea
+            className="bitfun-generative-widget-panel__editor-field"
+            textareaClassName="bitfun-generative-widget-panel__editor"
             data-bf-component="generative-widget"
             data-bf-part="editor"
             value={draftCode}
-            onChange={(event) => {
-              setDraftCode(event.target.value);
+            onValueChange={(value) => {
+              setDraftCode(value);
               if (saveState === 'error') {
                 setSaveState('unsaved');
                 setSaveError(null);
