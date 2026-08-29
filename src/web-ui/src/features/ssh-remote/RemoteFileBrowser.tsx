@@ -3,7 +3,7 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button, ConfirmDialog, Icon, IconButton, ScrollArea } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -407,11 +407,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         {/* Path Breadcrumb / Input */}
         <div className="remote-file-browser__breadcrumb" data-bf-component="ssh-remote" data-bf-part="breadcrumb">
           {isEditingPath ? (
-            <input
+            <Input
               ref={pathInputRef}
-              className="remote-file-browser__path-input"
+              className="remote-file-browser__path-input-field"
+              inputClassName="remote-file-browser__path-input"
               value={pathInputValue}
-              onChange={(e) => setPathInputValue(e.target.value)}
+              onValueChange={setPathInputValue}
               onKeyDown={handlePathInputKeyDown}
               onCompositionStart={() => {
                 textInputCompositionActiveRef.current = true;
@@ -636,11 +637,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           <div className="remote-file-browser__dialog-overlay">
             <div className="remote-file-browser__dialog">
               <h3 className="remote-file-browser__dialog-title">{t('ssh.remote.rename')}</h3>
-              <input
+              <Input
                 type="text"
                 value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                className="remote-file-browser__dialog-input"
+                onValueChange={setRenameValue}
+                className="remote-file-browser__dialog-input-field"
+                inputClassName="remote-file-browser__dialog-input"
                 autoFocus
                 onKeyDown={(e) => {
                   if (

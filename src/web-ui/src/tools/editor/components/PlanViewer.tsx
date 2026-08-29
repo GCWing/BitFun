@@ -1,6 +1,6 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
-import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Loader2, AlertCircle, FileText, Trash2 } from 'lucide-react';
 import yaml from 'yaml';
@@ -655,15 +655,16 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
                 {getTodoIcon(todo.status)}
                 {isPanelEditing ? (
                   <>
-                    <input
-                      className="todo-content-input"
+                    <Input
+                      className="todo-content-input-field"
+                      inputClassName="todo-content-input"
                       value={panelDrafts[todo.id || String(index)] ?? todo.content}
-                      onChange={(e) => {
+                      onValueChange={(value) => {
                         const key = todo.id || String(index);
                         if (isInline) {
-                          setInlineTodoDrafts(prev => ({ ...prev, [key]: e.target.value }));
+                          setInlineTodoDrafts(prev => ({ ...prev, [key]: value }));
                         } else {
-                          setTrailingTodoDrafts(prev => ({ ...prev, [key]: e.target.value }));
+                          setTrailingTodoDrafts(prev => ({ ...prev, [key]: value }));
                         }
                       }}
                     />

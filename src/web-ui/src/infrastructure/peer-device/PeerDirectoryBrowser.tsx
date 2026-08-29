@@ -3,7 +3,7 @@
  * Lists directories on the peer via HostInvoke FS APIs.
  */
 
-import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -264,38 +264,42 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             data-bf-part="path"
           >
             {isEditingPath ? (
-              <input
-                ref={pathInputRef}
-                className="peer-directory-browser__path-input"
-                value={pathInputValue}
-                onChange={(event) => setPathInputValue(event.target.value)}
-                onBlur={handleCommitPathInput}
+              <span
+                className="peer-directory-browser__path-input-field"
                 data-bf-component="peer-device"
                 data-bf-part="pathInput"
-                onKeyDown={(event) => {
-                  if (
-                    (event.key === 'Enter' || event.key === 'Escape')
-                    && isImeOwnedKeyboardEvent(event, pathInputCompositionActiveRef.current)
-                  ) {
-                    event.stopPropagation();
-                    return;
-                  }
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    handleCommitPathInput();
-                  } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setPathInputValue(currentPath);
-                    setIsEditingPath(false);
-                  }
-                }}
-                onCompositionStart={() => {
-                  pathInputCompositionActiveRef.current = true;
-                }}
-                onCompositionEnd={() => {
-                  pathInputCompositionActiveRef.current = false;
-                }}
-              />
+              >
+                <Input
+                  ref={pathInputRef}
+                  inputClassName="peer-directory-browser__path-input"
+                  value={pathInputValue}
+                  onValueChange={setPathInputValue}
+                  onBlur={handleCommitPathInput}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.key === 'Enter' || event.key === 'Escape')
+                      && isImeOwnedKeyboardEvent(event, pathInputCompositionActiveRef.current)
+                    ) {
+                      event.stopPropagation();
+                      return;
+                    }
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleCommitPathInput();
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setPathInputValue(currentPath);
+                      setIsEditingPath(false);
+                    }
+                  }}
+                  onCompositionStart={() => {
+                    pathInputCompositionActiveRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    pathInputCompositionActiveRef.current = false;
+                  }}
+                />
+              </span>
             ) : (
               <button
                 type="button"

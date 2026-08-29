@@ -118,6 +118,11 @@
     }
   }
 
+  &__path-input-field {
+    flex: 1;
+    min-width: 0;
+  }
+
   &__breadcrumb-btn {
     display: inline-flex;
     align-items: center;
@@ -505,6 +510,10 @@
     &:focus {
       border-color: var(--bf-appearance-token-color-accent-500);
     }
+  }
+
+  &__dialog-input-field {
+    width: 100%;
   }
 
   &__dialog-actions {
