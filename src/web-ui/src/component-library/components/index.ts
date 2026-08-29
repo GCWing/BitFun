@@ -3,7 +3,7 @@
  * Export all previewable components here
  */
 
-export * from './IconButton';
+export { IconButton, type IconButtonProps } from '../compatibility/IconButton';
 export * from './PopupCloseButton';
 export * from './WindowControls';
 

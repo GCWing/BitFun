@@ -1,5 +1,9 @@
-.popup-close-button.icon-btn {
+.popup-close-button {
   box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 32px;
   width: 32px;
   min-width: 32px;
@@ -9,6 +13,14 @@
   border-radius: 8px;
   background: transparent;
   color: var(--bf-appearance-token-color-text-muted);
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  transition:
+    background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+    color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
   svg {
     width: 16px;
@@ -27,12 +39,24 @@
       transparent
     );
   }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+    pointer-events: none;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .popup-close-button.icon-btn:hover:not(:disabled) {
+  .popup-close-button:hover:not(:disabled) {
     border-color: var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-close-button {
+    transition: none;
   }
 }
