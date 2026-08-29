@@ -5,3 +5,4 @@ export * from './PushButton';
 export * from './GitDiffEditor';
 export * from './GitGraphView';
 export * from './GitBranchHistoryView';
+export * from './BranchQuickSwitch';

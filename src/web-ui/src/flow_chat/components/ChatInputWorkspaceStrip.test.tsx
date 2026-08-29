@@ -67,6 +67,21 @@ vi.mock('@/tools/git/hooks/useGitState', () => ({
   useGitState: mocks.useGitState,
 }));
 
+vi.mock('@/tools/git/components/BranchQuickSwitch', () => ({
+  BranchQuickSwitch: ({
+    currentBranch,
+    isOpen,
+  }: {
+    currentBranch: string;
+    isOpen: boolean;
+  }) => isOpen ? (
+    <div
+      data-testid="branch-quick-switch"
+      data-current-branch={currentBranch}
+    />
+  ) : null,
+}));
+
 // The real picker pulls in account state, SSH dialogs and a lazy remote-connect
 // route. This suite observes the strip-to-picker contract through a lightweight
 // stand-in; picker behavior itself stays covered in its focused suite.
@@ -194,6 +209,34 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     const workspace = container.querySelector('[data-bf-part="workspace"]');
     expect(workspace?.tagName).toBe('SPAN');
     expect(container.querySelector('[data-testid="chat-input-workspace-trigger"]')).toBeNull();
+  });
+
+  it('opens the branch picker from the ordinary workspace branch chip', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-branch-trigger"]',
+    );
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => {
+      trigger?.click();
+    });
+
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      container.querySelector('[data-testid="branch-quick-switch"]')
+        ?.getAttribute('data-current-branch'),
+    ).toBe('main');
   });
 
   it('switches the active workspace from the strip menu when several are open', async () => {
@@ -837,6 +880,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     const toggle = container.querySelector<HTMLButtonElement>('[data-testid="chat-input-worktree-toggle"]');
     expect(toggle?.dataset.worktreeEnabled).toBe('true');
     expect(container.textContent).toContain('bitfun/isolated');
+    expect(container.querySelector('[data-testid="chat-input-branch-trigger"]')).toBeNull();
 
     await act(async () => {
       toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -976,6 +1020,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
 
     expect(container.textContent).toContain('bitfun/dispatch/job-1');
     expect(container.textContent).not.toContain('main');
+    expect(container.querySelector('[data-testid="chat-input-branch-trigger"]')).toBeNull();
   });
 
   it('keeps the local execution breadcrumb visible but locked outside a Git workspace', async () => {

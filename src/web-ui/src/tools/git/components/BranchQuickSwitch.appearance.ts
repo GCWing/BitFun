@@ -1,4 +1,5 @@
 import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+
 export const branchQuickSwitchAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'branch-quick-switch',
   parts: [

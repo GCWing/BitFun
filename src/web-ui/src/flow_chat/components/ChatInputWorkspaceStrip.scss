@@ -6,16 +6,14 @@
  * appears or disappears grows or shrinks its own rail and cannot reflow the
  * other one.
  *
- * The track has exactly two species and shape tells them apart. A *fact* — the
- * workspace name, the branch — is bare text with a muted 12px glyph and no
- * body, so it never invites a click it cannot answer. A *control* is the pill
- * below: one height, one radius, one hover fill, one glyph size, for every
- * item on the track that does something. Both species speak at one size — the
- * ladder's meta step, a quiet footnote under the capsule above — and in one
- * muted ink, so the row reads as a single hushed line of text and only shape
- * and fill say what can be clicked. State is carried by color, never by an
- * outline, because one bordered item in a borderless row reads as an error
- * rather than a mode.
+ * The track has exactly two species and shape tells them apart. A *fact* is
+ * bare text with a muted 12px glyph and no hover body; an available workspace
+ * or branch switcher takes the same pill control as the rest of the track.
+ * Both species speak at one size — the ladder's meta step, a quiet footnote
+ * under the capsule above — and in one muted ink, so the row reads as a single
+ * hushed line of text and only shape and fill say what can be clicked. State
+ * is carried by color, never by an outline, because one bordered item in a
+ * borderless row reads as an error rather than a mode.
  *
  * Segments part on a hairline divider — a 10px vertical rule that groups
  * without claiming anything about what sits either side of it. A slash stays
@@ -604,13 +602,29 @@ $track-item-gap: 10px;
     &--branch {
       flex: 0 1 auto;
       max-width: 112px;
-      // Wears the buttons' pill so the three left-rail segments read at one
-      // rhythm. Still inert for now — the branch picker and its
-      // uncommitted-changes guard are a follow-up — so no hover fill and the
-      // cursor stays the default.
+      // The managed-worktree and dispatch variants remain inert facts, while
+      // the ordinary workspace variant adds the switchable modifier below.
       height: 18px;
       padding: 0 7px;
       border-radius: 999px;
+    }
+
+    &--branch-switchable {
+      cursor: pointer;
+      transition:
+        background-color $motion-fast $easing-standard,
+        color $motion-fast $easing-standard;
+
+      &:hover:not(:disabled),
+      &[aria-expanded='true']:not(:disabled) {
+        background: var(--bf-appearance-token-element-bg-soft);
+        color: var(--bf-appearance-token-color-text-secondary);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--bf-appearance-token-color-accent-500);
+        outline-offset: 1px;
+      }
     }
   }
 
@@ -824,6 +838,12 @@ $track-item-gap: 10px;
     &__worktree-toggle {
       width: 18px;
       padding: 0;
+    }
+
+    &__chip--branch-switchable {
+      width: 18px;
+      padding: 0;
+      justify-content: center;
     }
   }
 }

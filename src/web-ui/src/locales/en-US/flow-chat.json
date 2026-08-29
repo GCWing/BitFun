@@ -583,6 +583,7 @@
     }
   },
   "workspaceStrip": {
+    "branchSwitchLabel": "Switch branch. Current branch: {{branch}}",
     "branchTooltipUnavailable": "Not a git repository or no current branch",
     "branchTooltipUntrusted": "Git will not read this repository because the folder is owned by another user. Trust the folder to see the branch."
   },
