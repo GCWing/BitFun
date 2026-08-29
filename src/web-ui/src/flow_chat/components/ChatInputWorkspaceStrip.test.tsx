@@ -32,6 +32,7 @@ vi.mock('react-i18next', () => ({
       'deepReviewConsent.strategyLabels.normal': 'Standard',
       'reasoningSelector.auto': 'Auto',
       'chatInput.permissionMode.ask.label': 'Ask',
+      'strip.newWorktree': 'New Worktree',
     } as Record<string, string>)[key] ?? options?.defaultValue ?? key,
   }),
 }));
@@ -67,10 +68,38 @@ vi.mock('@/tools/git/hooks/useGitState', () => ({
 }));
 
 // The real picker pulls in account state, SSH dialogs and a lazy remote-connect
-// route. This suite only asserts whether the strip mounts it at all.
+// route. This suite observes the strip-to-picker contract through a lightweight
+// stand-in; picker behavior itself stays covered in its focused suite.
 vi.mock('@/features/dispatch/DispatchTargetPicker', () => ({
-  DispatchTargetPicker: ({ locked }: { locked: boolean }) => (
-    <div data-testid="chat-input-dispatch-trigger" data-locked={locked ? 'true' : 'false'} />
+  DispatchTargetPicker: ({
+    locked,
+    localWorktreeControl,
+  }: {
+    locked: boolean;
+    localWorktreeControl?: {
+      enabled: boolean;
+      locked: boolean;
+      label: string;
+      onChange: (enabled: boolean) => void;
+    };
+  }) => (
+    <div
+      data-testid="chat-input-dispatch-trigger"
+      data-locked={locked ? 'true' : 'false'}
+      data-worktree-enabled={localWorktreeControl?.enabled ? 'true' : 'false'}
+      data-worktree-label={localWorktreeControl?.label}
+    >
+      {localWorktreeControl ? (
+        <button
+          type="button"
+          data-testid="dispatch-target-new-worktree-option"
+          disabled={localWorktreeControl.locked}
+          onClick={() => localWorktreeControl.onChange(true)}
+        >
+          {localWorktreeControl.label}
+        </button>
+      ) : null}
+    </div>
   ),
 }));
 
@@ -881,13 +910,14 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
   });
 
-  it('shows the dispatch picker and the worktree toggle together in a Git workspace', async () => {
+  it('orders workspace and branch before the target and nests worktree under local', async () => {
+    const onChange = vi.fn();
     await act(async () => {
       root.render(
         <ChatInputWorkspaceStrip
           repositoryPath="/repo"
           workspaceLabel="repo"
-          worktreeControl={{ enabled: false, locked: false, onChange: vi.fn() }}
+          worktreeControl={{ enabled: false, locked: false, onChange }}
           dispatchControl={{
             target: { kind: 'local' },
             locked: false,
@@ -897,8 +927,24 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="chat-input-dispatch-trigger"]')).not.toBeNull();
+    const context = container.querySelector<HTMLElement>('[data-bf-part="context"]');
+    const location = context?.querySelector('.bitfun-chat-input-workspace-strip__location');
+    const dispatchTrigger = context?.querySelector<HTMLElement>(
+      '[data-testid="chat-input-dispatch-trigger"]',
+    );
+    expect(context).not.toBeNull();
+    expect(location).not.toBeNull();
+    expect(dispatchTrigger).not.toBeNull();
+    expect(Array.from(context?.children ?? []).indexOf(location as Element))
+      .toBeLessThan(Array.from(context?.children ?? []).indexOf(dispatchTrigger as Element));
+    expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
+    expect(dispatchTrigger?.dataset.worktreeEnabled).toBe('false');
+    expect(dispatchTrigger?.dataset.worktreeLabel).toBe('New Worktree');
+
+    await act(async () => container.querySelector<HTMLButtonElement>(
+      '[data-testid="dispatch-target-new-worktree-option"]',
+    )?.click());
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it('shows the dispatched branch instead of the source branch once dispatch is locked', async () => {

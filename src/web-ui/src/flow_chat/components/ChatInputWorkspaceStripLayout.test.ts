@@ -10,6 +10,10 @@ function readLocalFile(name: string): string {
 const readWorkspaceStripStylesheet = () => readLocalFile('ChatInputWorkspaceStrip.scss');
 const readChatInputStylesheet = () => readLocalFile('ChatInput.scss');
 const readWorkspaceStripComponent = () => readLocalFile('ChatInputWorkspaceStrip.tsx');
+const readDispatchTargetPickerComponent = () => readFileSync(
+  fileURLToPath(new URL('../../features/dispatch/DispatchTargetPicker.tsx', import.meta.url)),
+  'utf8',
+).replace(/\r\n/g, '\n');
 
 describe('composer context track layout', () => {
   it('is two fixed rails rather than a conditional column template', () => {
@@ -158,14 +162,21 @@ describe('composer context track layout', () => {
     const stylesheet = readWorkspaceStripStylesheet();
     const contextIndex = component.indexOf('data-bf-part="context"');
     const nextIndex = component.indexOf('data-bf-part="next"');
+    const contextMarkup = component.slice(contextIndex, nextIndex);
+    const locationIndex = contextMarkup.indexOf('__location');
+    const targetIndex = contextMarkup.indexOf('<DispatchTargetPicker');
 
     expect(contextIndex).toBeGreaterThan(-1);
     expect(nextIndex).toBeGreaterThan(contextIndex);
-    // Situation: destination, workspace, branch, and whether it is isolated.
+    // Situation reads in geographic order: workspace and branch first, then
+    // the execution target. Worktree is a local target mode rather than a
+    // third standalone segment.
     expect(component).toContain('<DispatchTargetPicker');
     expect(component).toContain('__location');
     expect(component).toContain('__chip--branch');
-    expect(component).toContain('data-testid="chat-input-worktree-toggle"');
+    expect(locationIndex).toBeGreaterThan(-1);
+    expect(targetIndex).toBeGreaterThan(locationIndex);
+    expect(contextMarkup).toContain('localWorktreeControl=');
     // The workspace doubles as the rail's switcher once more than one is
     // open; the menu lists every open workspace and marks the active one.
     expect(component).toContain('data-testid="chat-input-workspace-trigger"');
@@ -436,20 +447,27 @@ describe('composer context track layout', () => {
     expect(stylesheet).toMatch(
       /@media \(max-width: 460px\)[\s\S]*?__worktree-label \{\n {6}display: none;/,
     );
-    // …while the isolation checkbox, the permission shield, and the context
-    // ring stay.
+    // …while the embedded-surface isolation fallback, the permission shield,
+    // and the context ring stay.
     expect(stylesheet).not.toMatch(/@media[\s\S]*?__worktree-toggle \{\n {6}display: none;/);
     expect(stylesheet).not.toMatch(/@media[\s\S]*?__usage-ring \{\n {6}display: none;/);
     expect(stylesheet).not.toMatch(/@media[\s\S]*?__permission-overview-icon \{\n {6}display: none;/);
   });
 
-  it('states worktree isolation as a checkbox rather than hiding it on the branch', () => {
+  it('nests worktree isolation in the local target and keeps an embedded fallback', () => {
     const component = readWorkspaceStripComponent();
+    const targetPicker = readDispatchTargetPickerComponent();
     const stylesheet = readWorkspaceStripStylesheet();
 
-    // The branch is a fact and the isolation is a control. Folding the switch
-    // into the branch label left the composer with no visible way to say the
-    // session can run somewhere else.
+    // The normal composer offers both local modes in one target menu. A rare
+    // embedded surface without that picker retains the standalone switch so
+    // it does not lose worktree capability.
+    expect(component).toContain('localWorktreeControl={showWorktreeToggle && worktreeControl ? {');
+    expect(component).toContain('!showDispatchPicker ? renderWorktreeToggle() : null');
+    expect(targetPicker).toContain('data-testid="dispatch-target-local-option"');
+    expect(targetPicker).toContain('data-testid="dispatch-target-new-worktree-option"');
+    expect(targetPicker).toContain('<strong>{localWorktreeControl.label}</strong>');
+    expect(targetPicker).toContain('role="menuitemradio"');
     expect(component).toContain('role="switch"');
     expect(component).toContain('__worktree-toggle');
     expect(component).not.toContain('__chip--branch-toggle');
@@ -460,6 +478,18 @@ describe('composer context track layout', () => {
       /&--on \{\n\s*color: var\(--bf-appearance-token-color-accent-500\);/,
     );
     expect(stylesheet).not.toMatch(/&__worktree-toggle \{[\s\S]*?border: 1px/);
+  });
+
+  it('removes down chevrons from the clickable workspace and target labels', () => {
+    const component = readWorkspaceStripComponent();
+    const targetPicker = readDispatchTargetPickerComponent();
+    const stylesheet = readWorkspaceStripStylesheet();
+
+    expect(component).not.toContain('ChevronDown');
+    expect(component).not.toContain('__workspace-chevron');
+    expect(targetPicker).not.toContain('chevron-down');
+    expect(targetPicker).not.toContain('__chevron');
+    expect(stylesheet).not.toContain('__workspace-chevron');
   });
 
   it('answers a blocked turn from the composer stack, not from over the transcript', () => {
@@ -523,5 +553,6 @@ describe('composer context track layout', () => {
       'const dispatchPickerLocked = !!dispatchControl && (dispatchControl.locked || !isGitWorkspace);',
     );
     expect(component).toContain('locked={dispatchPickerLocked}');
+    expect(component).toContain('localWorktreeControl={showWorktreeToggle && worktreeControl ? {');
   });
 });
