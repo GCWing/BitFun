@@ -9,6 +9,19 @@ const agentRuntimeRootUnexpectedLine = new RegExp(
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/assembly/core/src/plugin_capability_publication.rs',
+    reason:
+      'generic plugin capability publication consumes provider-neutral product contracts and must not absorb ecosystem config, Host wire, or adapter lifecycle',
+    patterns: [
+      {
+        regex:
+          /\b(?:OpenCode|DeepSeek|HookFunction|serde_json|bitfun_[a-z0-9_]+_adapter)\b/,
+        message:
+          'plugin capability publication must not depend on ecosystem adapters, raw config, or Host runtime contracts',
+      },
+    ],
+  },
+  {
     path: 'Cargo.toml',
     reason:
       'workspace Rustls owns only the compatible version; concrete provider features belong to services-core',
@@ -4150,7 +4163,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/assembly/core/src/external_sources.rs',
           'src/crates/assembly/core/src/external_hooks.rs',
           'src/crates/assembly/core/src/instruction_sources.rs',
-          'src/crates/assembly/core/src/plugin_config_publication.rs',
+          'src/crates/assembly/core/src/plugin_host.rs',
         ],
         message:
           'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',

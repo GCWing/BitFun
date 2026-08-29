@@ -356,6 +356,19 @@ Node 进程永久累积；这不是 package-plugin 的 workspace-scoped runtime 
 执行版本记录不是源码备份。软件包或文件的完整旧版本副本仍在且摘要匹配时可以重建；本地原位源码已变化、
 旧 worker 又丢失时不能从当前来源重建后仍称为旧版本。此时只允许准备当前来源或等待用户恢复源码。
 
+### 4.4 能力投影与多生态边界
+
+OpenCode 的 Config Hook、contributor 归属和 Tool registration 仍由 OpenCode adapter 解释。adapter 只把已经验证的
+Agent、Tool 引用和 workspace Skill 根转换成 `product-domains` 的生态无关贡献；Core 的能力发布模块负责选择原生 Tool
+基线、生成 runtime/route identity、原子替换 Agent route，并按 `(workspace, publication owner)` 保存 Skill generation。
+因此一个生态更新或撤销时不会覆盖另一个生态的 Skill 贡献。
+
+这条公共边界只覆盖当前已经存在的能力提交语义。DeepSeek Harness 当前仍是静态投影，不执行 Cordis 插件；后续增加
+可执行适配时，可以为已经验证过 BitFun owner 语义的能力输出同一贡献类型，但必须保留独立的 Cordis 来源解析、Host
+协议、执行句柄和生命周期，也不得进入 OpenCode 的 Config Hook、Hook dispatch 或 Plugin Host 组装路径。当前配置型
+Skill 根的扫描、优先级锚点和合并仍属于 OpenCode consumer；DeepSeek Harness 的 Skill 发布要等真实来源与优先级语义确定后
+再扩展该 owner。本边界不定义统一 Plugin Host、统一插件协议或跨生态配置模型。
+
 ## 5. 大类风险
 
 | 大类 | 整体风险 | 主要控制点 |

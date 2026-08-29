@@ -25,9 +25,7 @@ pub use hook_source::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
 pub use instruction_source::{load_opencode_user_instructions, OpenCodeInstructionSourceOptions};
 pub use mcp_source::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
 pub use plugin_config_projection::{
-    project_plugin_config, OpenCodePluginAgentProjection, OpenCodePluginConfigProjection,
-    OpenCodePluginConfigProjectionError, OpenCodePluginContributor,
-    OpenCodePluginSkillRootProjection, OpenCodePluginToolRef,
+    project_plugin_config, project_plugin_tool_ref, OpenCodePluginConfigProjectionError,
 };
 pub use reference_source::{
     OpenCodeWorkspaceReferenceProvider, OpenCodeWorkspaceReferenceProviderOptions,

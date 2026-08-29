@@ -653,7 +653,9 @@ flowchart LR
   但不能访问内部状态、绕过既有编排或复制业务规则。任何入口都不直接调用 Plugin Host。
 - 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
 - 当前 package-plugin 路径由 Core 持有 workspace 逻辑实例和贡献代际，沿类型化 `HookFunctionRuntime` 调用
-  OpenCode adapter；adapter 持有共享 Bun Plugin Host 的 wire、连接和物理生命周期，并复用 services 的进程树原语。
+  OpenCode adapter；adapter 解释 OpenCode Config/Contributor/Tool 形态后输出生态无关的 Agent、Tool 引用和 Skill 根贡献，
+  Core 的通用发布模块只把这些贡献提交给既有能力 owner。OpenCode 专属组装路径仍持有 Config 调用和 Tool registration
+  转换；adapter 持有共享 Bun Plugin Host 的 wire、连接和物理生命周期，并复用 services 的进程树原语。
   legacy managed-package 请求可靠性仍由 `PluginRuntimeClient` 承担，standalone `.js` Tool worker 仍由
   `ScriptToolRuntime` 承担。三者不共享生命周期对象，也不能互相外推已交付能力。
 - 外部来源的 Command、Tool、Subagent、MCP 仍保留能力专属 DTO 和 owner，但它们的发现调度统一由
@@ -662,7 +664,8 @@ flowchart LR
   注入 management owner 后可以调用。通用 Server `/ws` 当前没有绑定可信工作区的 management owner，因此返回类型化 `unsupported`；只有注入 Host 持有的作用域化 owner 并通过 WebSocket round-trip 后，Server 才交付该共享边界。
 - 每个生态适配层独立保留该生态的外部格式、来源顺序和调用语义，并映射到 BitFun 归属模块；它本身不成为新的
   业务归属模块，也不能依赖或修改兄弟生态 adapter。通用目录、`ExternalSourceControlPlane` 和能力归属模块只依赖开放生态 ID、
-  来源限定身份与能力专属 provider 契约，不按 OpenCode、Codex 或 Claude Code 分支行为。
+  来源限定身份与能力专属 provider 契约，不按 OpenCode、Codex、Claude Code 或 DeepSeek Harness 分支行为。不同生态
+  可以复用已存在的中立贡献 DTO 与发布动作，但不因此共享配置解析、Host 协议、执行句柄或生命周期。
 - 产品组装是组装根，只在组装期选择能力、服务实现、插件运行时绑定和降级策略。
 - 对外能力接口只提供现有归属模块的窄用例、只读状态、事件和明确错误；它不是第二个 Agent Runtime、通用服务
   定位器或插件 Host。外部产品扩展、外部 SDK 控制端和“使用外部 Runtime 组装新产品”是三种不同交付路径，

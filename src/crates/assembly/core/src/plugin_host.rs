@@ -61,6 +61,26 @@ impl CapturedPluginGeneration {
 
 const BUN_HOST_ENTRY_ENV: &str = "BITFUN_OPENCODE_BUN_HOST_ENTRY";
 const BUN_COMMAND_ENV: &str = "BITFUN_BUN_COMMAND";
+const OPENCODE_PLUGIN_ECOSYSTEM: &str = "opencode";
+const OPENCODE_PLUGIN_RUNTIME_NAMESPACE: &str = "opencode-plugin";
+const OPENCODE_PLUGIN_ROUTE_OWNER: &str = "opencode-plugin-config";
+
+fn opencode_plugin_publication_identity(
+) -> crate::plugin_capability_publication::PluginPublicationIdentity {
+    crate::plugin_capability_publication::PluginPublicationIdentity::new(
+        OPENCODE_PLUGIN_ECOSYSTEM,
+        OPENCODE_PLUGIN_RUNTIME_NAMESPACE,
+        OPENCODE_PLUGIN_ROUTE_OWNER,
+    )
+}
+
+pub(crate) fn is_opencode_plugin_agent_runtime_key(runtime_agent_key: &str) -> bool {
+    crate::plugin_capability_publication::is_agent_runtime_key_for_namespace(
+        runtime_agent_key,
+        OPENCODE_PLUGIN_RUNTIME_NAMESPACE,
+    )
+}
+
 static PLUGIN_HOST: OnceCell<Mutex<Option<PluginHost>>> = OnceCell::const_new();
 static PLUGIN_HOST_LIFECYCLE_LOCK: OnceCell<Mutex<()>> = OnceCell::const_new();
 static PLUGIN_HOST_SHUTDOWN_REPORT: OnceCell<Mutex<Option<PluginHostShutdownReport>>> =
@@ -531,19 +551,29 @@ pub async fn ensure_configured_plugin_instance(
             })
     };
     if let Some(instance) = reusable_instance {
-        if crate::plugin_config_publication::active_generation_key(&canonical_directory).as_deref()
+        if crate::plugin_capability_publication::active_generation_key(
+            &canonical_directory,
+            OPENCODE_PLUGIN_ROUTE_OWNER,
+        )
+        .as_deref()
             != Some(instance.generation_key.as_str())
         {
-            let publication = crate::plugin_config_publication::prepare(
+            let registration_batch = instance.registration_batch.as_ref().ok_or_else(|| {
+                crate::BitFunError::ProcessError(
+                    "Reusable plugin instance is missing its typed registration batch".to_string(),
+                )
+            })?;
+            let projection = bitfun_opencode_adapter::project_plugin_config(
+                &canonical_directory,
+                &initial_config,
+                registration_batch,
+            )
+            .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
+            let publication = crate::plugin_capability_publication::prepare(
                 &canonical_directory,
                 &instance.generation_key,
-                &initial_config,
-                instance.registration_batch.as_ref().ok_or_else(|| {
-                    crate::BitFunError::ProcessError(
-                        "Reusable plugin instance is missing its typed registration batch"
-                            .to_string(),
-                    )
-                })?,
+                opencode_plugin_publication_identity(),
+                projection,
             )?;
             crate::plugin_hook_bridge::commit_plugin_generation(
                 &crate::native_hooks::plugin_hook_registry(&comparable_directory),
@@ -704,12 +734,20 @@ pub async fn ensure_configured_plugin_instance(
             return Err(error);
         }
     };
-    let config_publication = match crate::plugin_config_publication::prepare(
+    let projected_config = bitfun_opencode_adapter::project_plugin_config(
         &canonical_directory,
-        &generation_key,
         &initial_config,
         &registration_batch,
-    ) {
+    )
+    .map_err(|error| crate::BitFunError::Validation(error.to_string()));
+    let config_publication = match projected_config.and_then(|projection| {
+        crate::plugin_capability_publication::prepare(
+            &canonical_directory,
+            &generation_key,
+            opencode_plugin_publication_identity(),
+            projection,
+        )
+    }) {
         Ok(publication) => publication,
         Err(error) => {
             discard_opening_plugin_instance(
@@ -937,7 +975,7 @@ async fn withdraw_configured_plugin_workspace(directory: &Path) {
 async fn withdraw_configured_plugin_workspace_locked(canonical: &Path, workspace_scope: &str) {
     let registry = crate::native_hooks::plugin_hook_registry(&workspace_scope);
     crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
-    crate::plugin_config_publication::release_workspace(canonical);
+    crate::plugin_capability_publication::release_workspace(canonical, OPENCODE_PLUGIN_ROUTE_OWNER);
     let Some(instances) = PLUGIN_HOST_INSTANCES.get() else {
         crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
         return;
@@ -1038,10 +1076,17 @@ async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_gene
             &instance.generation_key,
         )
         .await;
-        if crate::plugin_config_publication::active_generation_key(&instance.directory).as_deref()
+        if crate::plugin_capability_publication::active_generation_key(
+            &instance.directory,
+            OPENCODE_PLUGIN_ROUTE_OWNER,
+        )
+        .as_deref()
             == Some(instance.generation_key.as_str())
         {
-            crate::plugin_config_publication::release_workspace(&instance.directory);
+            crate::plugin_capability_publication::release_workspace(
+                &instance.directory,
+                OPENCODE_PLUGIN_ROUTE_OWNER,
+            );
         }
         if let Some(bridge) = crate::plugin_host_http::plugin_host_backend_bridge() {
             bridge.cancel_instance_streams(&instance.instance_id).await;
@@ -1061,7 +1106,10 @@ async fn withdraw_faulted_plugin_host_generation(directory: &Path, expected_gene
     });
     if !has_replacement {
         crate::plugin_hook_bridge::withdraw_plugin_workspace(&registry, &workspace_scope);
-        crate::plugin_config_publication::release_workspace(&canonical);
+        crate::plugin_capability_publication::release_workspace(
+            &canonical,
+            OPENCODE_PLUGIN_ROUTE_OWNER,
+        );
         crate::native_hooks::clear_plugin_hook_workspace(&workspace_scope);
     }
 }
@@ -1205,8 +1253,11 @@ fn schedule_plugin_instance_retirement(
                 }
                 instance.clone()
             };
-            if crate::plugin_config_publication::active_generation_key(&snapshot.directory)
-                .as_deref()
+            if crate::plugin_capability_publication::active_generation_key(
+                &snapshot.directory,
+                OPENCODE_PLUGIN_ROUTE_OWNER,
+            )
+            .as_deref()
                 == Some(snapshot.generation_key.as_str())
             {
                 if let Some(instance) = instances.lock().await.get_mut(&instance_key) {
@@ -1278,8 +1329,9 @@ async fn retire_plugin_instance(
     };
     close_plugin_host_ptys(&instance.instance_id).await;
     if closed {
-        crate::plugin_config_publication::release_workspace_generation(
+        crate::plugin_capability_publication::release_workspace_generation(
             &instance.directory,
+            OPENCODE_PLUGIN_ROUTE_OWNER,
             &instance.generation_key,
         );
     }
@@ -1702,7 +1754,10 @@ pub async fn shutdown_configured_plugin_host(
                 &instance.generation_key,
             )
             .await;
-            crate::plugin_config_publication::release_workspace(&instance.directory);
+            crate::plugin_capability_publication::release_workspace(
+                &instance.directory,
+                OPENCODE_PLUGIN_ROUTE_OWNER,
+            );
         }
         let workspaces = instances
             .values()
@@ -1745,7 +1800,7 @@ async fn register_plugin_tools(
     revision: &str,
     config_fingerprint: &str,
     registration_batch: &HookFunctionRegistrationBatch,
-    projection: &crate::plugin_config_publication::PluginConfigPublicationPlan,
+    projection: &crate::plugin_capability_publication::PluginCapabilityPublicationPlan,
 ) -> crate::BitFunResult<Vec<String>> {
     let tools = &registration_batch.tools;
     if tools.is_empty() {
@@ -1765,7 +1820,9 @@ async fn register_plugin_tools(
     let mut prepared = Vec::new();
     let mut seen_ids = std::collections::BTreeSet::new();
     for tool in tools {
-        let allowed_runtime_agent_keys = projection.allowed_runtime_agent_keys_for_tool(tool)?;
+        let tool_ref = bitfun_opencode_adapter::project_plugin_tool_ref(tool)
+            .map_err(|error| crate::BitFunError::Validation(error.to_string()))?;
+        let allowed_runtime_agent_keys = projection.allowed_runtime_agent_keys_for_tool(&tool_ref);
         if !seen_ids.insert(tool.id.clone()) {
             return Err(crate::BitFunError::Validation(format!(
                 "Plugin tool id is duplicated in the registration batch: {}",

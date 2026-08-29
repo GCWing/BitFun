@@ -84,8 +84,11 @@ Product-source boundary:
   relative paths only from an explicit workspace context.
 - Managed Plugin Host Config projection validates contributor attribution and
   maps only the currently consumed Agent, permission, Plugin Tool, and workspace
-  Skill fields. It must not create Agent runtime keys, select native Tool
-  baselines, mutate product registries, or grow into a generic Config platform.
+  Skill fields into the provider-neutral plugin capability contract. OpenCode
+  contributor parsing and Tool registration conversion stay here; adapter-owned
+  DTOs must not leak into generic publication. This projection must not create
+  Agent runtime keys, select native Tool baselines, mutate product registries,
+  or grow into a generic Config platform.
 - Current source inspection recognizes only the tested declarative subset. The
   adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
   projection, but it is not a general JavaScript/TypeScript semantic analyzer or
@@ -113,7 +116,8 @@ Product-source boundary:
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
   such as `bitfun-core/plugin_runtime`, `bitfun-core/external_sources`,
-  `bitfun-core/instruction_sources`, or `bitfun-core/plugin_config_publication`; boundary
+  `bitfun-core/instruction_sources`, or the OpenCode-specific
+  `bitfun-core/plugin_host` composition path; boundary
   guards and focused assembly-path tests must change with any additional consumer.
 - This crate must not depend on Codex, Claude Code, or another ecosystem adapter.
   New ecosystems are sibling adapters registered by Product Assembly, not modes of

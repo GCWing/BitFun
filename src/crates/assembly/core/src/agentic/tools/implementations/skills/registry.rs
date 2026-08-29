@@ -1249,18 +1249,18 @@ impl SkillRegistry {
     ) -> Vec<SkillCandidate> {
         #[cfg(feature = "opencode-plugin-host")]
         {
-            let plugin_roots =
-                crate::plugin_config_publication::skill_roots_for_agent(workspace_root, agent_type)
-                    .into_iter()
-                    .map(|root| {
-                        LocalConfiguredSkillRootContribution {
+            let plugin_roots = crate::plugin_capability_publication::skill_roots_for_agent(
+                workspace_root,
+                agent_type,
+            )
+            .into_iter()
+            .map(|root| LocalConfiguredSkillRootContribution {
                 path: root.path,
                 scope:
                     bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal,
                 precedence: root.precedence,
-            }
-                    })
-                    .collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
             if !plugin_roots.is_empty() {
                 let existing_paths = candidates
                     .iter()
