@@ -815,6 +815,20 @@ export default function conversationStateUnitTest() {
   });
 
   describe('MarkdownParser', () => {
+    it('parses document-leading YAML frontmatter without rendering its markers as dividers', 0, () => {
+      const blocks = MarkdownParser.parse(
+        '---\nname: BitFun\nvibe: calm\n---\n\n# Identity\n\nBody\n\n---\n\nTail'
+      );
+
+      expect(blocks.length).assertEqual(5);
+      expect(blocks[0].type).assertEqual('frontmatter');
+      expect(blocks[0].text).assertEqual('name: BitFun\nvibe: calm');
+      expect(blocks[1].type).assertEqual('heading');
+      expect(blocks[2].type).assertEqual('paragraph');
+      expect(blocks[3].type).assertEqual('divider');
+      expect(blocks[4].type).assertEqual('paragraph');
+    });
+
     it('parses common markdown blocks into stable block types', 0, () => {
       const blocks = MarkdownParser.parse('# Title\n\n- first\n- **second**\n\n> quote\n\n```ts\nconst value = 1;\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |');
 

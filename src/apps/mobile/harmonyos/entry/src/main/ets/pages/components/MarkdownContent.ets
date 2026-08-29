@@ -34,6 +34,8 @@ export struct MarkdownContent {
   MarkdownBlockView(block: ParsedMarkdownBlock) {
     if (block.type === 'code') {
       this.CodeBlock(block.language, block.text)
+    } else if (block.type === 'frontmatter') {
+      this.FrontmatterBlock(block.text)
     } else if (block.type === 'heading') {
       this.InlineText(block.inlines, this.headingFontSize(block.level), this.headingLineHeight(block.level), INK, true)
     } else if (block.type === 'quote') {
@@ -67,6 +69,17 @@ export struct MarkdownContent {
         false
       )
     }
+  }
+
+  @Builder
+  FrontmatterBlock(body: string) {
+    Text(body)
+      .width('100%')
+      .fontSize(MobileDesignTypography.bodySmall.size)
+      .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
+      .fontColor(MUTED)
+      .fontFamily('monospace')
+      .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
   }
 
   @Builder
