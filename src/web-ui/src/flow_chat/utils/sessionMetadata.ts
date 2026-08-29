@@ -381,7 +381,7 @@ export function buildSessionMetadata(
       existingMetadata?.agentType ||
       'agentic',
     modelName:
-      session.config.modelName || existingMetadata?.modelName || 'auto',
+      session.config.modelName || existingMetadata?.modelName || 'primary',
     createdAt: existingMetadata?.createdAt ?? session.createdAt,
     lastActiveAt: Date.now(),
     lastFinishedAt: session.lastFinishedAt ?? null,

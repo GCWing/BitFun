@@ -30,7 +30,7 @@ pub const DEFAULT_CUSTOM_SUBAGENT_TOOLS: &[&str] = &["LS", "Read", "Glob", "Grep
 pub const DEFAULT_CUSTOM_MODE_READONLY: bool = false;
 pub const DEFAULT_CUSTOM_SUBAGENT_READONLY: bool = true;
 pub const DEFAULT_CUSTOM_SUBAGENT_REVIEW: bool = false;
-pub const DEFAULT_CUSTOM_MODE_MODEL: &str = "auto";
+pub const DEFAULT_CUSTOM_MODE_MODEL: &str = "primary";
 pub const DEFAULT_CUSTOM_SUBAGENT_MODEL: &str = "fast";
 // Only BitFun custom agents are loaded. Unlike skills, custom subagents from
 // different vendors do not share a stable schema or compatible tool contract.
@@ -800,7 +800,7 @@ mod tests {
             readonly: false,
             review: false,
             level: CustomAgentLevel::User,
-            model: "auto".to_string(),
+            model: "primary".to_string(),
             model_is_explicit: false,
             user_context_policy: UserContextPolicy::empty()
                 .with_workspace_context()

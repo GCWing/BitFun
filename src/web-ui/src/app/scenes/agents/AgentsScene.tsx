@@ -445,7 +445,6 @@ const AgentsHomeView: React.FC = () => {
     { label: t('agentCard.modelSelector.inherit'), value: 'inherit' },
     { label: t('agentCard.modelSelector.fast'), value: 'fast' },
     { label: t('agentCard.modelSelector.primary'), value: 'primary' },
-    { label: t('agentCard.modelSelector.auto'), value: 'auto' },
     ...configuredModels
       .filter((model): model is typeof model & { id: string } => (
         typeof model.id === 'string'

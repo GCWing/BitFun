@@ -41,10 +41,6 @@ function resolveModelForContextWindow(
     return findEnabledModel(models, defaultModels.fast) ?? findEnabledModel(models, defaultModels.primary);
   }
 
-  if (value === 'auto' || value === 'default') {
-    return null;
-  }
-
   return findEnabledModel(models, value);
 }
 
@@ -67,7 +63,7 @@ export async function getModelMaxTokens(modelName?: string, agentType?: string):
     }
 
     // Only legacy sessions without a model selector inherit the current mode
-    // default. Explicit symbolic selectors such as "auto" remain session-owned.
+    // default. Session-owned selectors are resolved above.
     if (!normalizedModelName) {
       const modeModel = resolveModelForContextWindow(
         agentModelDefaults?.mode,
@@ -97,11 +93,15 @@ export async function resolveReasoningPresetForSessionCreation(
 ): Promise<string | undefined> {
   try {
     const catalog = await aiApi.getModelCatalog();
-    const concreteModelId = modelName === 'auto' || modelName === 'primary'
+    const selectedModelId = modelName === 'primary'
       ? catalog.default_models.primary ?? undefined
       : modelName === 'fast'
         ? catalog.default_models.fast ?? catalog.default_models.primary ?? undefined
         : modelName;
+    const concreteModelId = selectedModelId
+      && catalog.models.some(model => model.id === selectedModelId)
+      ? selectedModelId
+      : catalog.default_models.primary ?? undefined;
     if (!concreteModelId) return undefined;
     const projection = catalog.models.find(model => model.id === concreteModelId)?.reasoning;
     if (projection?.status !== 'known') return undefined;

@@ -42,8 +42,7 @@
     },
     "notConfigured": "Not configured",
     "notSet": "Not set",
-    "selectModel": "Select model",
-    "autoSelect": "Auto select"
+    "selectModel": "Select model"
   },
   "selection": {
     "primary": "Primary",

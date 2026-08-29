@@ -4453,7 +4453,7 @@ mod tests {
             "review_child_request-1".to_string(),
             "Review fixes".to_string(),
             "CodeReview".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.relationship = request.relationship.clone();
         let relationship = metadata.relationship.as_mut().expect("relationship");
@@ -4476,7 +4476,7 @@ mod tests {
             "review_child_request-1".to_string(),
             "Other session".to_string(),
             "DeepReview".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.relationship = request.relationship.clone();
 
@@ -4493,7 +4493,7 @@ mod tests {
             "review_child_request-1".to_string(),
             "Review fixes".to_string(),
             "CodeReview".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         let mut relationship = request.relationship.clone().expect("relationship");
         relationship.parent_request_id = Some("request-2".to_string());
@@ -4510,7 +4510,7 @@ mod tests {
             "review_child_request-1".to_string(),
             "Review fixes".to_string(),
             "CodeReview".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.relationship = request.relationship.clone();
         metadata.review_target_evidence = Some(json!({ "fingerprint": "existing" }));
@@ -4526,7 +4526,7 @@ mod tests {
             "review_child_request-1".to_string(),
             "Review fixes".to_string(),
             "CodeReview".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         metadata.relationship = request.relationship.clone();
 

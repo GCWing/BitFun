@@ -122,8 +122,8 @@ export interface AgentRunOptions {
    */
   appDataWorkspace?: string;
   /**
-   * Model selector for the hidden Cowork session (`auto` / `primary` / `fast`
-   * or a concrete model config id). Applied on create and on session reuse.
+   * Model selector for the hidden Cowork session (`primary`, `fast`, or a
+   * concrete model config id). Applied on create and on session reuse.
    */
   model?: string;
   /**

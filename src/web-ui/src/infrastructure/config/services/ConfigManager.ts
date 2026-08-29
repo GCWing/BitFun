@@ -398,7 +398,7 @@ class ConfigManagerImpl implements IConfigManager {
       return {
         hasFallback: true,
         value: {
-          mode: 'auto',
+          mode: 'primary',
           subagents: {
             default: { kind: 'fixed', model_id: 'fast' },
             builtin: {
@@ -463,7 +463,7 @@ class ConfigManagerImpl implements IConfigManager {
       }
       if (path === 'ai.agent_model_defaults') {
         return {
-          mode: 'auto',
+          mode: 'primary',
           subagents: {
             default: { kind: 'fixed', model_id: 'fast' },
             builtin: {

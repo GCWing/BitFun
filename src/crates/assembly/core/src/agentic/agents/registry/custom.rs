@@ -188,7 +188,6 @@ impl AgentRegistry {
             };
         valid_models.push("primary".to_string());
         valid_models.push("fast".to_string());
-        valid_models.push("auto".to_string());
         valid_models.push("inherit".to_string());
         valid_models
     }

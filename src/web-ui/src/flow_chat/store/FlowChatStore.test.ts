@@ -1245,16 +1245,16 @@ describe('FlowChatStore session model selection', () => {
     resetStore();
   });
 
-  it('stores an explicit auto selector on a legacy session without a model', () => {
+  it('stores the primary selector on a legacy session without a model', () => {
     const session = createSession({ config: { agentType: 'agentic' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
     }));
 
-    flowChatStore.updateSessionModelName(session.sessionId, 'auto');
+    flowChatStore.updateSessionModelName(session.sessionId, 'primary');
 
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
   it('sets and clears the session reasoning preset independently of the model', () => {
@@ -1277,7 +1277,7 @@ describe('FlowChatStore session model selection', () => {
       .toBeUndefined();
   });
 
-  it('applies an auto-migration notice that matches the stored model', () => {
+  it('applies a model fallback notice that matches the stored model', () => {
     const session = createSession({
       config: { agentType: 'agentic', modelName: 'removed-model' },
     });
@@ -1286,35 +1286,35 @@ describe('FlowChatStore session model selection', () => {
       activeSessionId: session.sessionId,
     }));
 
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(true);
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
-  it('applies an auto-migration notice when the session has no stored model yet', () => {
+  it('applies a model fallback notice when the session has no stored model yet', () => {
     const session = createSession({ config: { agentType: 'agentic' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
     }));
 
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(true);
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
-  it('ignores a stale auto-migration notice that would revert a newer selection', () => {
-    // Restore-time migration races the explicit update that triggered the
+  it('ignores a stale model fallback notice that would revert a newer selection', () => {
+    // Restore-time fallback races the explicit update that triggered the
     // restore: the composer already stored the picked model when the notice
     // for the old one lands.
     const session = createSession({
@@ -1326,10 +1326,10 @@ describe('FlowChatStore session model selection', () => {
     }));
 
     flowChatStore.updateSessionModelName(session.sessionId, 'deepseek-v4-flash');
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(false);
@@ -1338,9 +1338,9 @@ describe('FlowChatStore session model selection', () => {
     );
   });
 
-  it('ignores an auto-migration notice for an unknown session', () => {
+  it('ignores a model fallback notice for an unknown session', () => {
     expect(
-      flowChatStore.applySessionModelAutoMigration('missing-session', 'removed-model', 'auto'),
+      flowChatStore.applySessionModelFallback('missing-session', 'removed-model', 'primary'),
     ).toBe(false);
   });
 
@@ -1418,7 +1418,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
       },
@@ -2999,7 +2999,7 @@ describe('FlowChatStore historical session hydration state', () => {
           sessionId: 'history-1',
           title: 'Saved session',
           agentType: 'agentic',
-          modelName: 'auto',
+          modelName: 'primary',
           createdAt: 10,
           lastActiveAt: 20,
           workspaceHostname: 'localhost',
@@ -6516,7 +6516,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6547,7 +6547,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved ACP session',
         agentType: 'acp:test',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6572,7 +6572,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6597,7 +6597,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {

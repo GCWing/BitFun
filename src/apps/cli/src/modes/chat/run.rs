@@ -991,14 +991,14 @@ impl ChatMode {
                 tracing::debug!("Processing core event: {:?}", event);
 
                 match event {
-                    AgenticEvent::SessionModelAutoMigrated {
+                    AgenticEvent::SessionModelFallbackApplied {
                         session_id,
                         previous_model_id,
                         new_model_id,
                         reason,
                         ..
                     } => {
-                        if apply_session_model_migration(
+                        if apply_session_model_fallback(
                             &mut chat_state,
                             session_id,
                             previous_model_id,

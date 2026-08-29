@@ -35,7 +35,7 @@ import type {
   ModelRoundAttemptSupersededEvent,
   OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
-  SessionModelAutoMigratedEvent,
+  SessionModelFallbackAppliedEvent,
   SessionReasoningPresetAutoClearedEvent,
   SubagentSessionLinkedEvent,
   RecoverInterruptedDialogTurnResponse,
@@ -885,8 +885,8 @@ export async function initializeEventListeners(
     onSessionTitleGenerated: (event) => {
       handleSessionTitleGenerated(event);
     },
-    onSessionModelAutoMigrated: (event) => {
-      handleSessionModelAutoMigrated(event);
+    onSessionModelFallbackApplied: (event) => {
+      handleSessionModelFallbackApplied(event);
     },
     onSessionReasoningPresetAutoCleared: (event) => {
       handleSessionReasoningPresetAutoCleared(event);
@@ -1273,18 +1273,18 @@ function handleSessionTitleGenerated(event: any): void {
   reconcileBackgroundSubagentSession(sessionId);
 }
 
-function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
+function handleSessionModelFallbackApplied(event: SessionModelFallbackAppliedEvent): void {
   const { sessionId, previousModelId, newModelId, reason } = event;
   if (!sessionId || !newModelId) return;
 
   const store = FlowChatStore.getInstance();
-  const applied = store.applySessionModelAutoMigration(
+  const applied = store.applySessionModelFallback(
     sessionId,
     previousModelId ?? '',
     newModelId,
   );
   if (!applied) {
-    log.debug('Ignoring stale session model migration', {
+    log.debug('Ignoring stale session model fallback', {
       sessionId,
       previousModelId,
       newModelId,

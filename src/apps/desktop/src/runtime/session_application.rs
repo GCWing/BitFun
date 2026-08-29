@@ -1490,7 +1490,7 @@ mod tests {
             "session".to_string(),
             "Current".to_string(),
             "agentic".to_string(),
-            "auto".to_string(),
+            "primary".to_string(),
         );
         current.review_action_state = Some(json!({ "phase": "review_completed" }));
         current.unread_completion = Some("completed".to_string());

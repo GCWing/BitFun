@@ -61,7 +61,7 @@ pub(crate) fn normalize_legacy_agent_model_defaults_config_value(mut config: Val
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|model| !model.is_empty())
-            .unwrap_or("auto")
+            .unwrap_or("primary")
             .to_string();
 
         let defaults = AgentModelDefaultsConfig {

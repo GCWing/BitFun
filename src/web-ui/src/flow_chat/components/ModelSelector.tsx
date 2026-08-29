@@ -5,14 +5,14 @@
  * Config linkage:
  * - Model selection is shared across all future mode sessions through
  *   ai.agent_model_defaults.mode. Delegated subagents keep separate defaults.
- * - Supports 'auto' | 'primary' | 'fast' | specific model IDs
+ * - Supports 'primary' | 'fast' | specific model IDs
  */
 
-import { Switch } from '@bitfun/ui';
+import { MenuItem, MenuSeparator, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useId, useRef, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { ChevronDown, ChevronLeft, ChevronRight, Check, Zap } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Check, RotateCcw, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -48,7 +48,14 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
 import { AcpModeSelector } from './AcpModeSelector';
-import { ReasoningPresetSelector } from './ReasoningPresetSelector';
+import {
+  ReasoningIntensityMark,
+  ReasoningPresetSelector,
+  presetDisplayLabel,
+  presetModeLabel,
+  presetSourceLabel,
+  reasoningIntensityLevel,
+} from './ReasoningPresetSelector';
 import {
   getRecentReasoningPreset,
   setRecentReasoningPreset,
@@ -153,15 +160,15 @@ const ModelSelectorTooltipContent: React.FC<{ details: ModelSelectorTooltipDetai
 );
 
 // Helper: identify special model IDs.
-const isSpecialModel = (value: string): value is 'auto' | 'primary' | 'fast' => {
-  return value === 'auto' || value === 'primary' || value === 'fast';
+const isSpecialModel = (value: string): value is 'primary' | 'fast' => {
+  return value === 'primary' || value === 'fast';
 };
 
 function resolveConcreteModelId(
   modelId: string,
   defaultModels: DefaultModelsConfig,
 ): string | undefined {
-  if (modelId === 'auto' || modelId === 'primary') return defaultModels.primary ?? undefined;
+  if (modelId === 'primary') return defaultModels.primary ?? undefined;
   if (modelId === 'fast') return defaultModels.fast ?? defaultModels.primary ?? undefined;
   return modelId || undefined;
 }
@@ -209,21 +216,22 @@ const getModelDisplayLabel = (model: ModelInfo | null, fallback: string): string
 
 const getModelTooltipText = (model: ModelInfo | null, fallback: string): string => {
   if (!model) return fallback;
-  if (model.id === 'auto') return model.providerName;
   if (isSpecialModel(model.id)) {
     return buildResolvedModelTooltipText(model.modelName, model, fallback);
   }
   return buildModelMetaText(model);
 };
 
-const buildAutoModelInfo = (
+const buildSymbolicModelInfo = (
+  modelId: 'primary' | 'fast',
   t: (key: string) => string,
 ): ModelInfo => ({
-  id: 'auto',
-  configName: t('modelSelector.autoModel'),
-  modelName: t('modelSelector.autoModel'),
-  providerName: t('modelSelector.autoModelDesc'),
-  provider: 'auto',
+  id: modelId,
+  configName: t(modelId === 'primary' ? 'modelSelector.primaryModel' : 'modelSelector.fastModel'),
+  displayName: t(modelId === 'primary' ? 'modelSelector.primaryModel' : 'modelSelector.fastModel'),
+  modelName: t(modelId === 'primary' ? 'modelSelector.primaryModel' : 'modelSelector.fastModel'),
+  providerName: t(modelId === 'primary' ? 'modelSelector.primaryModelDesc' : 'modelSelector.fastModelDesc'),
+  provider: 'symbolic',
 });
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -273,12 +281,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
   const [modelCatalog, setModelCatalog] = useState<AIModelCatalog | null>(null);
   const [defaultModels, setDefaultModels] = useState<DefaultModelsConfig>({});
-  const [modeModel, setModeModel] = useState('auto');
+  const [modeModel, setModeModel] = useState('primary');
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [keyboardNavigationOpen, setKeyboardNavigationOpen] = useState(false);
   /** Provider whose models the menu is currently showing; null is the provider level. */
   const [activeProviderKey, setActiveProviderKey] = useState<string | null>(null);
+  /** Summary, model browsing, or reasoning selection in the native model menu. */
+  const [nativeMenuLevel, setNativeMenuLevel] = useState<'settings' | 'models' | 'reasoning'>('settings');
   /** Which way the last level step went, so the incoming level animates with it. */
   const [levelDirection, setLevelDirection] = useState<'none' | 'forward' | 'back'>('none');
   const [loading, setLoading] = useState(false);
@@ -343,7 +353,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       setAllModels(models);
       setDefaultModels(defaultModelsData);
-      setModeModel(agentModelDefaults?.mode?.trim() || 'auto');
+      setModeModel(agentModelDefaults?.mode?.trim() || 'primary');
       await loadModelCatalog();
 
       log.debug('Configuration loaded', {
@@ -656,49 +666,41 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const sessionModelName = activeSession?.config.modelName?.trim();
     if (sessionModelName) {
       if (isSpecialModel(sessionModelName)) {
-        if (sessionModelName === 'auto') {
-          return 'auto';
-        }
-        const actualModelId = defaultModels[sessionModelName];
-        return allModels.some(model => model.id === actualModelId)
+        const actualModelId = resolveConcreteModelId(sessionModelName, defaultModels);
+        return allModels.some(model => model.enabled !== false && model.id === actualModelId)
           ? sessionModelName
-          : 'auto';
+          : 'primary';
       }
-      return allModels.some(model => model.id === sessionModelName)
+      return allModels.some(model => model.enabled !== false && model.id === sessionModelName)
         ? sessionModelName
-        : 'auto';
+        : 'primary';
     }
 
     if (targetIsSubagent) {
-      return 'auto';
+      return 'primary';
     }
 
     // Legacy sessions created without a model selector fall back to the current
     // mode default until they are migrated by the send path.
     const configuredModelId = modeDefaultModelId?.trim() || modeModel;
-    if (configuredModelId === 'auto') return 'auto';
     if (configuredModelId === 'primary' || configuredModelId === 'fast') {
-      const actualModelId = defaultModels[configuredModelId];
-      const model = allModels.find(m => m.id === actualModelId);
-      return model ? configuredModelId : 'auto';
+      const actualModelId = resolveConcreteModelId(configuredModelId, defaultModels);
+      const model = allModels.find(m => m.enabled !== false && m.id === actualModelId);
+      return model ? configuredModelId : 'primary';
     }
-    const model = allModels.find(m => m.id === configuredModelId);
-    return model ? configuredModelId : 'auto';
+    const model = allModels.find(m => m.enabled !== false && m.id === configuredModelId);
+    return model ? configuredModelId : 'primary';
   }, [allModels, modeDefaultModelId, modeModel, defaultModels, activeSession?.config.modelName, targetIsSubagent]);
 
   const currentModel = useMemo((): ModelInfo | null => {
     const modelId = getCurrentModelId();
 
-    if (modelId === 'auto') {
-      return buildAutoModelInfo(t);
-    }
-
     if (modelId === 'primary' || modelId === 'fast') {
-      const actualModelId = defaultModels[modelId];
-      if (!actualModelId) return buildAutoModelInfo(t);
+      const actualModelId = resolveConcreteModelId(modelId, defaultModels);
+      if (!actualModelId) return buildSymbolicModelInfo(modelId, t);
 
       const model = allModels.find(m => m.id === actualModelId);
-      if (!model) return buildAutoModelInfo(t);
+      if (!model) return buildSymbolicModelInfo(modelId, t);
 
       return {
         id: modelId,
@@ -713,7 +715,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
 
     const model = allModels.find(m => m.id === modelId);
-    if (!model) return buildAutoModelInfo(t);
+    if (!model) return buildSymbolicModelInfo('primary', t);
 
     return {
       id: model.id || '',
@@ -778,6 +780,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     ? providerGroups.find(group => group.key === activeProviderKey) ?? null
     : null;
 
+  const openNativeModelLevel = useCallback(() => {
+    setActiveProviderKey(null);
+    setNativeMenuLevel('models');
+    setLevelDirection('forward');
+  }, []);
+
+  const openNativeReasoningLevel = useCallback(() => {
+    setActiveProviderKey(null);
+    setNativeMenuLevel('reasoning');
+    setLevelDirection('forward');
+  }, []);
+
+  const closeNativeDetailLevel = useCallback(() => {
+    setActiveProviderKey(null);
+    setNativeMenuLevel('settings');
+    setLevelDirection('back');
+  }, []);
+
   const openProviderLevel = useCallback((providerKey: string) => {
     setActiveProviderKey(providerKey);
     setLevelDirection('forward');
@@ -788,12 +808,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     setLevelDirection('back');
   }, []);
 
-  // Reopening the menu should always start at the provider level, and a
+  // Reopening the menu should always start at the settings summary, and a
   // provider removed in settings while the menu is open must not leave the
   // menu stuck on a level that no longer has anything to show.
   useEffect(() => {
     if (!dropdownOpen) {
       setActiveProviderKey(null);
+      setNativeMenuLevel('settings');
       setLevelDirection('none');
       return;
     }
@@ -819,6 +840,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     && currentReasoningProjection.presets?.some(preset => preset.id === sessionReasoningPreset)
     ? sessionReasoningPreset
     : undefined;
+  const orderedReasoningPresets = useMemo(
+    () => currentReasoningProjection?.status === 'known'
+      ? [...(currentReasoningProjection.presets ?? [])].sort((left, right) => left.order - right.order)
+      : [],
+    [currentReasoningProjection],
+  );
+  const selectedReasoningDescriptor = orderedReasoningPresets.find(
+    preset => preset.id === selectedReasoningPreset,
+  );
+  const defaultReasoningDescriptor = orderedReasoningPresets.find(
+    preset => preset.id === currentReasoningProjection?.default_preset,
+  );
+  const effectiveReasoningDescriptor = selectedReasoningDescriptor ?? defaultReasoningDescriptor;
+  const currentReasoningLabel = effectiveReasoningDescriptor
+    ? presetDisplayLabel(effectiveReasoningDescriptor, orderedReasoningPresets, t)
+    : t('reasoningSelector.auto');
+  const reasoningPresetLabels = orderedReasoningPresets.map(preset => (
+    presetDisplayLabel(preset, orderedReasoningPresets, t)
+  ));
+  const reasoningLabelCounts = new Map<string, number>();
+  reasoningPresetLabels.forEach((label) => {
+    const normalizedLabel = label.trim().toLowerCase();
+    reasoningLabelCounts.set(
+      normalizedLabel,
+      (reasoningLabelCounts.get(normalizedLabel) ?? 0) + 1,
+    );
+  });
+  const hasNativeReasoningSettings = Boolean(sessionId && orderedReasoningPresets.length > 0);
+  const nativeSettingsAreDefault = currentNativeModelId === 'primary' && !selectedReasoningPreset;
 
   useEffect(() => {
     if (
@@ -841,7 +891,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       : undefined;
   }, [defaultModels, modelCatalog]);
   
-  const handleSelectModel = useCallback(async (modelId: string) => {
+  const handleSelectModel = useCallback(async (
+    modelId: string,
+    options?: { resetReasoning?: boolean },
+  ) => {
     if (disabled || loading || reasoningLoading) return;
 
     if (portalDropdownRef.current?.contains(document.activeElement)) {
@@ -860,7 +913,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const previousReasoningPreset = sessionId
       ? store.getState().sessions.get(sessionId)?.config.reasoningPreset
       : undefined;
-    const nextReasoningPreset = recentPresetForModel(modelId);
+    const nextReasoningPreset = options?.resetReasoning
+      ? undefined
+      : recentPresetForModel(modelId);
     let sessionModelWrittenOptimistically = false;
 
     try {
@@ -928,8 +983,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     } catch (error) {
       log.error('Failed to switch model', error);
       // Only a previously pinned selection can be restored: the store has no
-      // way to express "never pinned", and forcing 'auto' there would claim a
-      // binding the session does not have either.
+      // way to express "never pinned" without claiming a session binding.
       if (sessionId && sessionModelWrittenOptimistically && previousSessionModelName) {
         store.updateSessionModelName(sessionId, previousSessionModelName);
       }
@@ -958,6 +1012,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     sessionId,
     t,
     targetIsSubagent,
+  ]);
+
+  const handleResetNativeSettings = useCallback(() => {
+    if (nativeSettingsAreDefault || disabled || loading || reasoningLoading) return;
+    void handleSelectModel('primary', { resetReasoning: true });
+  }, [
+    disabled,
+    handleSelectModel,
+    loading,
+    nativeSettingsAreDefault,
+    reasoningLoading,
   ]);
 
   const handleSelectReasoningPreset = useCallback(async (presetId: string | null) => {
@@ -1025,6 +1090,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     t,
     targetIsSubagent,
   ]);
+
+  const handleSelectReasoningPresetFromMenu = useCallback((presetId: string | null) => {
+    if (portalDropdownRef.current?.contains(document.activeElement)) {
+      triggerRef.current?.focus();
+    }
+    setDropdownOpen(false);
+    void handleSelectReasoningPreset(presetId);
+  }, [handleSelectReasoningPreset]);
 
   const handleSetAcpFastMode = useCallback(async (enabled: boolean) => {
     if (disabled || loading || !acpFastMode || !acpClientId || !sessionId) return;
@@ -1153,12 +1226,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   }, [dropdownOpen, isAcpSession, loadAcpOptions]);
 
   const handleDropdownKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return;
+
     if (event.key === 'Escape') {
       event.preventDefault();
-      // Inside a provider, Escape steps back out of it; the whole menu closes
-      // only from the provider level.
       if (activeProviderKey) {
         closeProviderLevel();
+        return;
+      }
+      if (!externalSelection && !isAcpSession && nativeMenuLevel !== 'settings') {
+        closeNativeDetailLevel();
         return;
       }
       triggerRef.current?.focus();
@@ -1166,15 +1243,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return;
     }
 
-    if (event.key === 'ArrowLeft' && activeProviderKey) {
-      event.preventDefault();
-      closeProviderLevel();
-      return;
+    if (event.key === 'ArrowLeft') {
+      if (activeProviderKey) {
+        event.preventDefault();
+        closeProviderLevel();
+        return;
+      }
+      if (!externalSelection && !isAcpSession && nativeMenuLevel !== 'settings') {
+        event.preventDefault();
+        closeNativeDetailLevel();
+        return;
+      }
     }
 
     if (event.key === 'ArrowRight' && !activeProviderKey) {
-      const focusedProviderKey = (document.activeElement as HTMLElement | null)
-        ?.dataset?.providerKey;
+      const focusedElement = document.activeElement as HTMLElement | null;
+      const focusedTarget = focusedElement?.dataset?.modelMenuTarget;
+      if (!externalSelection && !isAcpSession && nativeMenuLevel === 'settings') {
+        if (focusedTarget === 'models') {
+          event.preventDefault();
+          openNativeModelLevel();
+          return;
+        }
+        if (focusedTarget === 'reasoning') {
+          event.preventDefault();
+          openNativeReasoningLevel();
+          return;
+        }
+      }
+      const focusedProviderKey = focusedElement?.dataset?.providerKey;
       if (focusedProviderKey) {
         event.preventDefault();
         openProviderLevel(focusedProviderKey);
@@ -1201,7 +1298,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
     if (event.key === 'ArrowUp') nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
     items[nextIndex]?.focus();
-  }, [activeProviderKey, closeProviderLevel, openProviderLevel]);
+  }, [
+    activeProviderKey,
+    closeNativeDetailLevel,
+    closeProviderLevel,
+    externalSelection,
+    isAcpSession,
+    nativeMenuLevel,
+    openNativeModelLevel,
+    openNativeReasoningLevel,
+    openProviderLevel,
+  ]);
 
   useEffect(() => {
     if (!dropdownOpen || !keyboardNavigationOpen) return;
@@ -1212,7 +1319,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         'button[role="menuitemradio"][aria-checked="true"], button[role="menuitem"][data-selected="true"]',
       );
       const firstItem = menu?.querySelector<HTMLButtonElement>(
-        'button[role="menuitemradio"]:not(:disabled)',
+        'button[role="menuitemradio"]:not(:disabled), button[role="menuitem"]:not(:disabled)',
       );
       (selectedItem ?? firstItem)?.focus();
     });
@@ -1220,14 +1327,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     return () => window.cancelAnimationFrame(frameId);
   }, [dropdownOpen, keyboardNavigationOpen]);
 
-  // Entering or leaving a provider replaces the focused row, so focus has to be
-  // handed to the new level explicitly. Without it a mouse-driven step lands
-  // focus on the document body, and arrow keys and Escape stop reaching the menu.
-  const previousProviderKeyRef = useRef<string | null>(null);
+  // Every forward/back step replaces the focused row, so hand focus to the
+  // corresponding item in the incoming level.
+  const activeNativeMenuFocusKey = activeProviderKey
+    ? `provider:${activeProviderKey}`
+    : nativeMenuLevel;
+  const previousNativeMenuFocusKeyRef = useRef(activeNativeMenuFocusKey);
   useEffect(() => {
-    const previousProviderKey = previousProviderKeyRef.current;
-    previousProviderKeyRef.current = activeProviderKey;
-    if (!dropdownOpen || previousProviderKey === activeProviderKey) return;
+    const previousFocusKey = previousNativeMenuFocusKeyRef.current;
+    previousNativeMenuFocusKeyRef.current = activeNativeMenuFocusKey;
+    if (!dropdownOpen || previousFocusKey === activeNativeMenuFocusKey) return;
 
     const frameId = window.requestAnimationFrame(() => {
       const menu = portalDropdownRef.current;
@@ -1244,17 +1353,49 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         return;
       }
 
-      const providerRows = Array.from(
-        menu.querySelectorAll<HTMLButtonElement>('button[data-provider-key]'),
+      if (nativeMenuLevel === 'models') {
+        const providerRows = Array.from(
+          menu.querySelectorAll<HTMLButtonElement>('button[data-provider-key]'),
+        );
+        const previousProviderKey = previousFocusKey.startsWith('provider:')
+          ? previousFocusKey.slice('provider:'.length)
+          : selectedProviderKey;
+        const targetRow = providerRows.find(
+          row => row.dataset.providerKey === previousProviderKey,
+        );
+        (targetRow ?? providerRows[0])?.focus();
+        return;
+      }
+
+      if (nativeMenuLevel === 'reasoning') {
+        const selectedReasoning = menu.querySelector<HTMLButtonElement>(
+          'button[role="menuitemradio"][aria-checked="true"]',
+        );
+        const firstReasoning = menu.querySelector<HTMLButtonElement>(
+          'button[role="menuitemradio"]:not(:disabled)',
+        );
+        (selectedReasoning ?? firstReasoning)?.focus();
+        return;
+      }
+
+      const returnTarget = previousFocusKey === 'reasoning' ? 'reasoning' : 'models';
+      const summaryRow = menu.querySelector<HTMLButtonElement>(
+        `button[data-model-menu-target="${returnTarget}"]`,
       );
-      const previousRow = providerRows.find(
-        row => row.dataset.providerKey === previousProviderKey,
+      const firstSummaryRow = menu.querySelector<HTMLButtonElement>(
+        'button[role="menuitem"]:not(:disabled)',
       );
-      (previousRow ?? providerRows[0])?.focus();
+      (summaryRow ?? firstSummaryRow)?.focus();
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [activeProviderKey, dropdownOpen]);
+  }, [
+    activeNativeMenuFocusKey,
+    activeProviderKey,
+    dropdownOpen,
+    nativeMenuLevel,
+    selectedProviderKey,
+  ]);
 
   useEffect(() => {
     if (!dropdownOpen && keyboardNavigationOpen) {
@@ -1611,14 +1752,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const currentModelId = currentNativeModelId;
 
-  const fallbackTooltip = t('modelSelector.autoModelDesc');
-  const isAutoModel = currentModel?.id === 'auto';
+  const fallbackTooltip = t('modelSelector.primaryModelDesc');
   const tooltipDetails = buildModelSelectorTooltipDetails({
     configName: currentModel?.configName ?? fallbackTooltip,
-    modelName: isAutoModel ? undefined : currentModel?.modelName,
-    contextWindow: isAutoModel ? undefined : currentModel?.contextWindow,
-    configuredMaxOutputTokens: isAutoModel ? undefined : currentModel?.maxOutputTokens,
-    usage: isAutoModel ? undefined : {
+    modelName: currentModel?.modelName,
+    contextWindow: currentModel?.contextWindow,
+    configuredMaxOutputTokens: currentModel?.maxOutputTokens,
+    usage: {
       current: currentTokens,
       max: maxTokens,
       source: resolvedContextUsageSource,
@@ -1654,23 +1794,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           disabled={disabled || loading || reasoningLoading}
          data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
           <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
-            {getModelDisplayLabel(currentModel, t('modelSelector.autoModel'))}
+            {getModelDisplayLabel(currentModel, t('modelSelector.primaryModel'))}
           </span>
-          <ChevronDown size={10} className="bitfun-model-selector__chevron" />
+          {hasNativeReasoningSettings && (
+            <span
+              className="bitfun-model-selector__trigger-reasoning"
+              data-testid="chat-model-selector-trigger-reasoning"
+              data-bf-component="model-selector"
+              data-bf-part="reasoningSummary"
+            >
+              {reasoningTriggerPresentation === 'label' ? (
+                currentReasoningLabel
+              ) : (
+                <ReasoningIntensityMark
+                  level={reasoningIntensityLevel(
+                    effectiveReasoningDescriptor,
+                    orderedReasoningPresets,
+                  )}
+                  compact
+                />
+              )}
+            </span>
+          )}
+          <ChevronDown
+            size={10}
+            className="bitfun-model-selector__chevron"
+            data-testid="chat-model-selector-dropdown-indicator"
+          />
         </button>
       </Tooltip>
-
-      {sessionId ? (
-        <ReasoningPresetSelector
-          projection={currentReasoningProjection}
-          selectedPreset={selectedReasoningPreset}
-          triggerPresentation={reasoningTriggerPresentation}
-          disabled={disabled || loading}
-          loading={reasoningLoading}
-          dropdownPlacement={dropdownPlacement}
-          onSelect={handleSelectReasoningPreset}
-        />
-      ) : null}
 
       {tokenPercentage > 0 && (
         <Tooltip content={tooltipContent}>
@@ -1693,22 +1845,172 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
           data-placement={resolvedDropdownPlacement}
           data-open={dropdownOpen ? 'true' : 'false'}
+          data-menu-level={activeProviderGroup ? 'provider' : nativeMenuLevel}
           aria-hidden={!dropdownOpen}
           {...(!dropdownOpen ? { inert: '' } : {})}
           role="menu"
           aria-label={activeProviderGroup
             ? activeProviderGroup.providerName
-            : t('modelSelector.modelSelection')}
+            : nativeMenuLevel === 'settings'
+              ? t('modelSelector.modelSettings')
+              : nativeMenuLevel === 'reasoning'
+                ? t('reasoningSelector.title')
+                : t('modelSelector.modelSelection')}
           onKeyDown={handleDropdownKeyDown}
         >
           <div
-            key={activeProviderGroup ? `provider:${activeProviderGroup.key}` : 'providers'}
+            key={activeProviderGroup ? `provider:${activeProviderGroup.key}` : nativeMenuLevel}
             className="bitfun-model-selector__level"
             data-bf-component="model-selector"
             data-bf-part="level"
             data-direction={levelDirection}
           >
-          {activeProviderGroup ? (
+          {nativeMenuLevel === 'settings' ? (
+            <div
+              className="bitfun-model-selector__settings-list"
+              data-testid="chat-model-selector-settings"
+            >
+              <MenuItem
+                className="bitfun-model-selector__settings-item"
+                data-testid="chat-model-selector-settings-model"
+                data-model-menu-target="models"
+                metadata={(
+                  <span className="bitfun-model-selector__settings-value">
+                    {getModelDisplayLabel(currentModel, t('modelSelector.primaryModel'))}
+                  </span>
+                )}
+                onClick={openNativeModelLevel}
+                shortcut={<ChevronRight size={14} />}
+              >
+                {t('modelSelector.model')}
+              </MenuItem>
+
+              {hasNativeReasoningSettings && (
+                <MenuItem
+                  className="bitfun-model-selector__settings-item"
+                  data-testid="chat-model-selector-settings-reasoning"
+                  data-model-menu-target="reasoning"
+                  metadata={(
+                    <span className="bitfun-model-selector__settings-value">
+                      {currentReasoningLabel}
+                    </span>
+                  )}
+                  onClick={openNativeReasoningLevel}
+                  shortcut={<ChevronRight size={14} />}
+                >
+                  {t('reasoningSelector.title')}
+                </MenuItem>
+              )}
+
+              <MenuSeparator className="bitfun-model-selector__settings-separator" />
+
+              <MenuItem
+                className="bitfun-model-selector__settings-item bitfun-model-selector__settings-reset"
+                data-testid="chat-model-selector-settings-reset"
+                disabled={nativeSettingsAreDefault || disabled || loading || reasoningLoading}
+                onClick={handleResetNativeSettings}
+                shortcut={<RotateCcw size={14} />}
+              >
+                {t('modelSelector.resetToDefaults')}
+              </MenuItem>
+            </div>
+          ) : nativeMenuLevel === 'reasoning' ? (
+            <>
+              <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="chat-model-selector-back-to-settings"
+                  className="bitfun-model-selector__back"
+                  data-bf-component="model-selector"
+                  data-bf-part="back"
+                  aria-label={t('modelSelector.backToSettings')}
+                  onClick={closeNativeDetailLevel}
+                >
+                  <ChevronLeft size={12} className="bitfun-model-selector__back-icon" />
+                  <span className="bitfun-model-selector__back-label">
+                    {t('reasoningSelector.title')}
+                  </span>
+                </button>
+              </div>
+
+              <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={!selectedReasoningDescriptor}
+                  data-testid="chat-model-selector-reasoning-option"
+                  data-preset-id="auto"
+                  className={`bitfun-model-selector__option bitfun-model-selector__option--special ${!selectedReasoningDescriptor ? 'bitfun-model-selector__option--selected' : ''}`}
+                  data-bf-component="model-selector"
+                  data-bf-part="option"
+                  data-bf-state={!selectedReasoningDescriptor ? 'selected' : undefined}
+                  onClick={() => handleSelectReasoningPresetFromMenu(null)}
+                >
+                  {defaultReasoningDescriptor && (
+                    <ReasoningIntensityMark
+                      level={reasoningIntensityLevel(defaultReasoningDescriptor, orderedReasoningPresets)}
+                    />
+                  )}
+                  <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
+                    <span className="bitfun-model-selector__option-name">
+                      {t('reasoningSelector.auto')}
+                    </span>
+                    {defaultReasoningDescriptor && (
+                      <span className="bitfun-model-selector__option-desc">
+                        {presetDisplayLabel(defaultReasoningDescriptor, orderedReasoningPresets, t)}
+                      </span>
+                    )}
+                  </div>
+                  {!selectedReasoningDescriptor && (
+                    <Check size={14} className="bitfun-model-selector__option-check" />
+                  )}
+                </button>
+
+                {orderedReasoningPresets.map((preset, index) => {
+                  const isSelected = selectedReasoningDescriptor?.id === preset.id;
+                  const label = reasoningPresetLabels[index]
+                    ?? presetDisplayLabel(preset, orderedReasoningPresets, t);
+                  const hasDuplicateLabel = (
+                    reasoningLabelCounts.get(label.trim().toLowerCase()) ?? 0
+                  ) > 1;
+
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      data-testid="chat-model-selector-reasoning-option"
+                      data-preset-id={preset.id}
+                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      data-bf-component="model-selector"
+                      data-bf-part="option"
+                      data-bf-state={isSelected ? 'selected' : undefined}
+                      onClick={() => handleSelectReasoningPresetFromMenu(preset.id)}
+                    >
+                      <ReasoningIntensityMark
+                        level={reasoningIntensityLevel(preset, orderedReasoningPresets)}
+                      />
+                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
+                        <span className="bitfun-model-selector__option-name">
+                          {label}
+                        </span>
+                        <span className="bitfun-model-selector__option-desc">
+                          {hasDuplicateLabel
+                            ? presetSourceLabel(preset.source, t)
+                            : presetModeLabel(preset, orderedReasoningPresets, t)}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <Check size={14} className="bitfun-model-selector__option-check" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : activeProviderGroup ? (
             <>
               <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
                 <button
@@ -1764,33 +2066,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </>
           ) : (
             <>
-              <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-                <span>{t('modelSelector.modelSelection')}</span>
-              </div>
-
-              <Tooltip content={t('modelSelector.autoModelDesc')} placement="right">
+              <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
                 <button
                   type="button"
-                  role="menuitemradio"
-                  aria-checked={currentModelId === 'auto'}
-                  data-testid="chat-model-selector-option"
-                  data-model-id="auto"
-                  data-model-name="auto"
-                  data-selected={currentModelId === 'auto' ? 'true' : 'false'}
-                  className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'auto' ? 'bitfun-model-selector__option--selected' : ''}`}
+                  role="menuitem"
+                  data-testid="chat-model-selector-back-to-settings"
+                  className="bitfun-model-selector__back"
                   data-bf-component="model-selector"
-                  data-bf-part="option"
-                  data-bf-state={currentModelId === 'auto' ? 'selected' : undefined}
-                  onClick={() => handleSelectModel('auto')}
+                  data-bf-part="back"
+                  aria-label={t('modelSelector.backToSettings')}
+                  onClick={closeNativeDetailLevel}
                 >
-                  <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                    <span className="bitfun-model-selector__option-name">{t('modelSelector.autoModel')}</span>
-                  </div>
-                  {currentModelId === 'auto' && (
-                    <Check size={14} className="bitfun-model-selector__option-check" />
-                  )}
+                  <ChevronLeft size={12} className="bitfun-model-selector__back-icon" />
+                  <span className="bitfun-model-selector__back-label">
+                    {t('modelSelector.model')}
+                  </span>
                 </button>
-              </Tooltip>
+              </div>
 
               {(() => {
                 const primaryModel = allModels.find(m => m.id === defaultModels.primary);
@@ -1798,8 +2090,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   ? buildResolvedModelTooltipText(primaryModel.model_name, {
                     providerName: getProviderDisplayName(primaryModel),
                     contextWindow: primaryModel.context_window
-                  }, t('modelSelector.autoModelDesc'))
-                  : t('modelSelector.autoModelDesc');
+                  }, t('modelSelector.primaryModelDesc'))
+                  : t('modelSelector.primaryModelDesc');
                 return (
                   <Tooltip content={primaryTooltip} placement="right">
                     <button
@@ -1833,8 +2125,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   ? buildResolvedModelTooltipText(fastModel.model_name, {
                     providerName: getProviderDisplayName(fastModel),
                     contextWindow: fastModel.context_window
-                  }, t('modelSelector.autoModelDesc'))
-                  : t('modelSelector.autoModelDesc');
+                  }, t('modelSelector.fastModelDesc'))
+                  : t('modelSelector.fastModelDesc');
                 return (
                   <Tooltip content={fastTooltip} placement="right">
                     <button
@@ -1867,6 +2159,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
                 {providerGroups.map(group => {
                   const isSelected = selectedProviderKey === group.key;
+                  const selectedModel = isSelected
+                    ? group.models.find(model => model.id === currentModelId) ?? null
+                    : null;
 
                   return (
                     <Tooltip
@@ -1892,6 +2187,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                           <span className="bitfun-model-selector__option-name">
                             {group.providerName}
                           </span>
+                          {selectedModel && (
+                            <span
+                              className="bitfun-model-selector__option-desc bitfun-model-selector__option-desc--selected-model"
+                              data-testid="chat-model-selector-provider-selected-model"
+                              data-model-id={selectedModel.id}
+                            >
+                              <span className="bitfun-model-selector__option-desc-label">
+                                {selectedModel.modelName}
+                              </span>
+                              <Check
+                                size={11}
+                                aria-hidden="true"
+                                className="bitfun-model-selector__option-selected-check"
+                                data-testid="chat-model-selector-provider-selected-check"
+                              />
+                            </span>
+                          )}
                         </div>
                         <span className="bitfun-model-selector__option-count">
                           {group.models.length}

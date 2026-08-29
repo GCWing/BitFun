@@ -30,7 +30,7 @@ export interface SessionTitleGeneratedEvent {
   timestamp: number;
 }
 
-export interface SessionModelAutoMigratedEvent {
+export interface SessionModelFallbackAppliedEvent {
   sessionId: string;
   previousModelId: string;
   newModelId: string;
@@ -1374,11 +1374,11 @@ export class AgentAPI {
     return api.listen<AgenticEvent>('agentic://session-history-changed', callback);
   }
 
-  onSessionModelAutoMigrated(
-    callback: (event: SessionModelAutoMigratedEvent) => void
+  onSessionModelFallbackApplied(
+    callback: (event: SessionModelFallbackAppliedEvent) => void
   ): () => void {
-    return api.listen<SessionModelAutoMigratedEvent>(
-      'agentic://session-model-auto-migrated',
+    return api.listen<SessionModelFallbackAppliedEvent>(
+      'agentic://session-model-fallback-applied',
       callback
     );
   }

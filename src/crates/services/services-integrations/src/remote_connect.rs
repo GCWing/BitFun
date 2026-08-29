@@ -1777,13 +1777,13 @@ pub fn normalize_remote_session_model_id(model_id: Option<&str>) -> Option<Strin
     match model_id {
         Some(value) => {
             let trimmed = value.trim();
-            if trimmed.is_empty() || trimmed == "default" {
-                Some("auto".to_string())
+            if matches!(trimmed, "" | "auto" | "default") {
+                Some("primary".to_string())
             } else {
                 Some(trimmed.to_string())
             }
         }
-        None => Some("auto".to_string()),
+        None => Some("primary".to_string()),
     }
 }
 
@@ -1802,9 +1802,11 @@ pub fn normalize_remote_model_selection(
         return Err("model_id is required".to_string());
     }
 
+    // `auto` is accepted only as an upgrade alias for older Remote Connect
+    // clients. It is never returned by the current catalog or session state.
     if matches!(requested_model_id, "auto" | "default" | "primary" | "fast") {
-        return Ok(if requested_model_id == "default" {
-            "auto".to_string()
+        return Ok(if matches!(requested_model_id, "auto" | "default") {
+            "primary".to_string()
         } else {
             requested_model_id.to_string()
         });

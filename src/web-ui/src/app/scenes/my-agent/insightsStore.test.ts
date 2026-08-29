@@ -113,7 +113,7 @@ describe('insightsStore generation lifecycle', () => {
       activeGenerationRunId: null,
       progress: { stage: '', message: '', current: 0, total: 0, isRetrying: false },
       selectedDays: 30,
-      selectedModel: 'auto',
+      selectedModel: 'primary',
       error: '',
       loadingMetas: false,
     });

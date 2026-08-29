@@ -179,10 +179,10 @@ const InsightsScene: React.FC = () => {
       setAvailableModels(enabledChatModels);
       const currentSelection = useInsightsStore.getState().selectedModel;
       if (
-        currentSelection !== 'auto'
+        currentSelection !== 'primary'
         && !enabledChatModels.some((model) => model.id === currentSelection)
       ) {
-        setSelectedModel('auto');
+        setSelectedModel('primary');
       }
     }).catch((error) => {
       log.warn('Failed to load models for insights', error);
@@ -194,11 +194,11 @@ const InsightsScene: React.FC = () => {
 
   const modelOptions = useMemo<InsightsModelOption[]>(() => [
     {
-      value: 'auto',
-      label: t('insights.modelAuto'),
-      description: t('insights.modelAutoDescription'),
-      modelName: t('insights.modelAuto'),
-      meta: t('insights.modelAutoDescription'),
+      value: 'primary',
+      label: t('insights.modelPrimary'),
+      description: t('insights.modelPrimaryDescription'),
+      modelName: t('insights.modelPrimary'),
+      meta: t('insights.modelPrimaryDescription'),
     },
     ...availableModels.map((model) => ({
       value: model.id || '',

@@ -80,23 +80,43 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
     use BuiltinAgentCategory::{Hidden, Mode, SubAgent};
 
     vec![
-        builtin_agent_spec("minimal", Mode, "auto", SubagentVisibilityPolicy::default()),
-        builtin_agent_spec("agentic", Mode, "auto", SubagentVisibilityPolicy::default()),
-        builtin_agent_spec("Cowork", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "minimal",
+            Mode,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec(
+            "agentic",
+            Mode,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec(
+            "Cowork",
+            Mode,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
         builtin_agent_spec(
             "Creative",
             Mode,
-            "auto",
+            "primary",
             SubagentVisibilityPolicy::default(),
         ),
-        builtin_agent_spec("Claw", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("Claw", Mode, "primary", SubagentVisibilityPolicy::default()),
         builtin_agent_spec(
             "DeepResearch",
             Mode,
-            "auto",
+            "primary",
             SubagentVisibilityPolicy::default(),
         ),
-        builtin_agent_spec("Ultra", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "Ultra",
+            Mode,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
         builtin_agent_spec(
             "SwarmPlanner",
             SubAgent,
@@ -118,7 +138,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
         builtin_agent_spec(
             "ComputerUse",
             SubAgent,
-            "auto",
+            "primary",
             SubagentVisibilityPolicy::restricted(["Claw"]),
         ),
         builtin_agent_spec(
@@ -187,7 +207,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
 pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
         "minimal" | "agentic" | "Cowork" | "Creative" | "ComputerUse" | "Claw" | "DeepResearch"
-        | "Ultra" => "auto",
+        | "Ultra" => "primary",
         "Explore" | "CodeReview" | "GeneralPurpose" | "MemoryPhase2" | "SwarmPlanner"
         | "SwarmWorker" => "primary",
         "GenerateDoc"

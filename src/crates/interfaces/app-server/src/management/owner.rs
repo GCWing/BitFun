@@ -1300,7 +1300,7 @@ impl AppManagementService {
                 .config
                 .set_config(
                     "ai.agent_model_defaults.mode",
-                    request.model_id.as_deref().unwrap_or("auto"),
+                    request.model_id.as_deref().unwrap_or("primary"),
                 )
                 .await
                 .map_err(core_error)?,

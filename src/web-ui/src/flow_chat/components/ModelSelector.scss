@@ -83,7 +83,21 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  
+
+  &__trigger-reasoning {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 72px;
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: flow-type.$control-size;
+    font-weight: 400;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__fast-icon {
     color: var(--bf-appearance-token-color-warning);
     flex-shrink: 0;
@@ -319,6 +333,37 @@
     margin: 4px 12px;
   }
 
+  &__settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: var(--bf-overlay-menu-surface-padding);
+  }
+
+  &__settings-item {
+    width: 100%;
+  }
+
+  &__settings-value {
+    display: block;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__settings-item [data-bf-part='shortcut'] {
+    color: var(--bf-color-content-muted);
+  }
+
+  &__settings-reset {
+    color: var(--bf-color-content-muted);
+  }
+
+  &__settings-separator {
+    margin-block: var(--bf-space-1);
+  }
+
   &__config-row {
     display: flex;
     align-items: center;
@@ -445,6 +490,23 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    &--selected-model {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+
+  &__option-desc-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__option-selected-check {
+    flex-shrink: 0;
+    color: var(--bf-color-status-success-content);
   }
 
   &__option-provider {

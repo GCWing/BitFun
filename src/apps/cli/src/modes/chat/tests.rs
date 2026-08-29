@@ -4,7 +4,7 @@ mod tests {
 
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
-        apply_model_selection_feedback, apply_session_model_migration,
+        apply_model_selection_feedback, apply_session_model_fallback,
         apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_error,
         builtin_arguments_route, builtin_command_reconfirmation,
         clear_selected_native_command_prefill, cli_native_prompt_command_descriptors,
@@ -1630,7 +1630,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_model_migration_replaces_the_visible_session_model_and_explains_why() {
+    fn runtime_model_fallback_replaces_the_visible_session_model_and_explains_why() {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
@@ -1640,7 +1640,7 @@ mod tests {
         state.current_model_id = Some("removed-model".to_string());
         state.current_model_name = "Removed model".to_string();
 
-        assert!(apply_session_model_migration(
+        assert!(apply_session_model_fallback(
             &mut state,
             "session",
             "removed-model",
@@ -1650,9 +1650,9 @@ mod tests {
 
         assert_eq!(state.current_model_id.as_deref(), Some("replacement-model"));
         assert_eq!(state.current_model_name, "replacement-model");
-        let notice = state.messages.last().expect("migration notice");
+        let notice = state.messages.last().expect("fallback notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
-            panic!("migration notice must be text");
+            panic!("fallback notice must be text");
         };
         assert!(content.contains("removed-model"));
         assert!(content.contains("replacement-model"));
@@ -1660,7 +1660,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_model_migration_ignores_another_session() {
+    fn runtime_model_fallback_ignores_another_session() {
         let mut state = ChatState::new(
             "current-session".to_string(),
             "Session".to_string(),
@@ -1670,7 +1670,7 @@ mod tests {
         state.current_model_id = Some("removed-model".to_string());
         state.current_model_name = "Removed model".to_string();
 
-        assert!(!apply_session_model_migration(
+        assert!(!apply_session_model_fallback(
             &mut state,
             "other-session",
             "removed-model",
@@ -1682,7 +1682,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_model_migration_ignores_a_stale_previous_selector() {
+    fn runtime_model_fallback_ignores_a_stale_previous_selector() {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
@@ -1692,11 +1692,11 @@ mod tests {
         state.current_model_id = Some("newer-explicit-model".to_string());
         state.current_model_name = "Newer explicit model".to_string();
 
-        assert!(!apply_session_model_migration(
+        assert!(!apply_session_model_fallback(
             &mut state,
             "session",
             "removed-model",
-            "auto",
+            "primary",
             "model_deleted",
         ));
         assert_eq!(

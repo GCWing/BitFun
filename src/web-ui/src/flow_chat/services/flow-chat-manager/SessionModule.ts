@@ -1210,7 +1210,7 @@ export async function ensureBackendSession(
       deepReviewRunManifest: latestSession.deepReviewRunManifest,
       reviewTargetEvidence: latestSession.reviewTargetEvidence,
       config: {
-        modelName: latestSession.config.modelName || 'auto',
+        modelName: latestSession.config.modelName || 'primary',
         enableTools: true,
         safeMode: true,
         remoteConnectionId: effectiveConnectionId,
@@ -1262,7 +1262,7 @@ export async function retryCreateBackendSession(
     deepReviewRunManifest: session.deepReviewRunManifest,
     reviewTargetEvidence: session.reviewTargetEvidence,
     config: {
-      modelName: session.config.modelName || 'auto',
+      modelName: session.config.modelName || 'primary',
       enableTools: true,
       safeMode: true,
       remoteConnectionId: session.remoteConnectionId,

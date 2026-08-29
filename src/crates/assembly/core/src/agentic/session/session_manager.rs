@@ -213,38 +213,48 @@ impl Default for SessionManagerConfig {
     }
 }
 
-fn should_auto_migrate_session_model(
+fn should_apply_session_model_fallback(
     binding_policy: SessionModelBindingPolicy,
     current_model_id: &str,
     invalidated_model_ids: &HashSet<&str>,
 ) -> bool {
-    session_model_allows_automatic_migration(binding_policy)
+    session_model_allows_fallback(binding_policy)
         && invalidated_model_ids.contains(current_model_id)
 }
 
-fn session_model_allows_automatic_migration(binding_policy: SessionModelBindingPolicy) -> bool {
+fn session_model_allows_fallback(binding_policy: SessionModelBindingPolicy) -> bool {
     binding_policy == SessionModelBindingPolicy::Mutable
+}
+
+fn effective_session_model_selector<'a>(
+    ai_config: &'a crate::service::config::types::AIConfig,
+    session: &'a Session,
+) -> &'a str {
+    session
+        .config
+        .model_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|model_id| !model_id.is_empty())
+        .or_else(|| {
+            (session.kind != SessionKind::Subagent)
+                .then_some(ai_config.agent_model_defaults.mode.trim())
+                .filter(|model_id| !model_id.is_empty())
+        })
+        .unwrap_or("primary")
 }
 
 fn concrete_model_for_session_selection<'a>(
     ai_config: &'a crate::service::config::types::AIConfig,
     session: &Session,
 ) -> Option<&'a crate::service::config::types::AIModelConfig> {
-    let configured_model_id = session
-        .config
-        .model_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|model_id| !model_id.is_empty())
-        .unwrap_or("auto");
+    let configured_model_id = effective_session_model_selector(ai_config, session);
 
     let resolved_model_id = if matches!(
         session.config.model_binding_policy,
         SessionModelBindingPolicy::ApprovedImmutable
     ) {
         ai_config.resolve_model_reference(configured_model_id)
-    } else if SessionManager::is_auto_model_selector(configured_model_id) {
-        ai_config.resolve_model_selection("primary")
     } else {
         ai_config.resolve_model_selection(configured_model_id)
     }?;
@@ -767,20 +777,11 @@ impl SessionManager {
         ))
     }
 
-    fn is_auto_model_selector(model_id: &str) -> bool {
-        let trimmed = model_id.trim();
-        trimmed.is_empty() || trimmed == "auto" || trimmed == "default"
-    }
-
     fn context_window_for_model_selection(
         ai_config: &crate::service::config::types::AIConfig,
         model_id: &str,
     ) -> Option<usize> {
         let trimmed = model_id.trim();
-        if Self::is_auto_model_selector(trimmed) {
-            return None;
-        }
-
         let resolved_model_id = ai_config.resolve_model_selection(trimmed)?;
         ai_config
             .models
@@ -794,26 +795,10 @@ impl SessionManager {
         session: &Session,
         ai_config: &crate::service::config::types::AIConfig,
     ) -> Option<usize> {
-        let configured_model_id = session
-            .config
-            .model_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|model_id| !model_id.is_empty())
-            .unwrap_or("auto");
-
-        if !Self::is_auto_model_selector(configured_model_id) {
-            return Self::context_window_for_model_selection(ai_config, configured_model_id);
-        }
-
-        let fallback_model_id = (session.kind != SessionKind::Subagent)
-            .then(|| ai_config.agent_model_defaults.mode.trim().to_string())
-            .filter(|model_id| !Self::is_auto_model_selector(model_id));
-
-        fallback_model_id
-            .as_deref()
-            .and_then(|model_id| Self::context_window_for_model_selection(ai_config, model_id))
-            .or_else(|| Self::context_window_for_model_selection(ai_config, "primary"))
+        Self::context_window_for_model_selection(
+            ai_config,
+            effective_session_model_selector(ai_config, session),
+        )
     }
 
     fn sync_session_context_window_from_ai_config(
@@ -2343,7 +2328,7 @@ impl SessionManager {
     /// Decide whether the given session model id is still usable.
     ///
     /// `model_id` is treated as "usable" when:
-    /// - it is a special selector (`auto` / `primary` / `fast` / `default` /
+    /// - it is a special selector (`primary` / `fast` /
     ///   empty) — these are evaluated again at request time against
     ///   `default_models`, so their long-term validity is governed elsewhere;
     /// - it resolves to a model that exists AND is enabled.
@@ -2352,22 +2337,16 @@ impl SessionManager {
         model_id: &str,
     ) -> bool {
         let trimmed = model_id.trim();
-        if trimmed.is_empty()
-            || trimmed == "auto"
-            || trimmed == "default"
-            || trimmed == "primary"
-            || trimmed == "fast"
-        {
+        if trimmed.is_empty() || trimmed == "primary" || trimmed == "fast" {
             return true;
         }
         ai_config.is_model_reference_active(trimmed)
     }
 
-    /// Reset every active session whose bound model id is in
-    /// `invalidated_model_ids` back to `"auto"`. Persists the change and emits
-    /// `AgenticEvent::SessionModelAutoMigrated` for every migrated session so
-    /// the UI can refresh its model selector and surface a notice.
-    async fn migrate_sessions_off_invalidated_models(
+    /// Reset every active mutable session whose bound model was invalidated to
+    /// the configured primary selector. Persists the change and emits a model
+    /// fallback event so surfaces can refresh their session-owned selection.
+    async fn apply_fallback_to_invalidated_session_models(
         &self,
         invalidated_model_ids: &[String],
         reason: &'static str,
@@ -2387,8 +2366,8 @@ impl SessionManager {
                 let current = session.config.model_id.as_deref()?.trim().to_string();
                 // External generations pin the model that the user approved.
                 // If that model disappears, execution must fail closed instead
-                // of silently changing the approved behavior to `auto`.
-                if should_auto_migrate_session_model(
+                // of silently changing the approved behavior.
+                if should_apply_session_model_fallback(
                     session.config.model_binding_policy,
                     current.as_str(),
                     &invalid,
@@ -2405,24 +2384,24 @@ impl SessionManager {
         }
 
         for (session_id, previous_model_id) in affected {
-            if let Err(e) = self.update_session_model_id(&session_id, "auto").await {
+            if let Err(e) = self.update_session_model_id(&session_id, "primary").await {
                 warn!(
-                    "Failed to auto-migrate session model after reconcile: session_id={}, previous={}, error={}",
+                    "Failed to apply session model fallback after reconcile: session_id={}, previous={}, error={}",
                     session_id, previous_model_id, e
                 );
                 continue;
             }
             info!(
-                "Session model auto-migrated to 'auto': session_id={}, previous_model_id={}, reason={}",
+                "Session model fell back to primary: session_id={}, previous_model_id={}, reason={}",
                 session_id, previous_model_id, reason
             );
 
             if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
                 coordinator
-                    .emit_session_model_auto_migrated(
+                    .emit_session_model_fallback_applied(
                         &session_id,
                         &previous_model_id,
-                        "auto",
+                        "primary",
                         reason,
                     )
                     .await;
@@ -2636,7 +2615,7 @@ impl SessionManager {
                     }) => {
                         Self::invalidate_ai_clients_for_models(&invalidated_model_ids).await;
                         manager
-                            .migrate_sessions_off_invalidated_models(
+                            .apply_fallback_to_invalidated_session_models(
                                 &invalidated_model_ids,
                                 "model_reconciled",
                             )
@@ -5899,7 +5878,7 @@ impl SessionManager {
 
         let ai_config_for_restore = Self::load_ai_config_for_model_resolution().await;
         let mut should_persist_restored_session = false;
-        let mut auto_migrated_model_id = None;
+        let mut fallback_previous_model_id = None;
         let mut auto_cleared_reasoning_preset = None;
 
         if !include_internal {
@@ -5991,14 +5970,13 @@ impl SessionManager {
             }
         }
 
-        // Lazy migration: if the persisted model_id is no longer usable
-        // (model deleted or disabled while the session was on disk), repoint
-        // it to "auto" before the session re-enters memory. The next request
-        // will pick a model via the normal auto/agent/default pipeline.
+        // Restore fallback: if the persisted model_id is no longer usable
+        // (model deleted, disabled, or from a retired selector), repoint it to
+        // the primary selector before the session re-enters memory.
         if let Some(persisted_model_id) = session.config.model_id.as_deref() {
             let trimmed = persisted_model_id.trim();
-            let needs_migration = if trimmed.is_empty()
-                || !session_model_allows_automatic_migration(session.config.model_binding_policy)
+            let needs_fallback = if trimmed.is_empty()
+                || !session_model_allows_fallback(session.config.model_binding_policy)
             {
                 false
             } else if let Some(ai_config) = ai_config_for_restore.as_ref() {
@@ -6007,15 +5985,15 @@ impl SessionManager {
                 false
             };
 
-            if needs_migration {
+            if needs_fallback {
                 warn!(
-                    "Session restore detected stale model_id; migrating to auto: session_id={}, previous_model_id={}",
+                    "Session restore detected stale model_id; falling back to primary: session_id={}, previous_model_id={}",
                     session_id, trimmed
                 );
                 let previous_model_id = trimmed.to_string();
-                session.config.model_id = Some("auto".to_string());
+                session.config.model_id = Some("primary".to_string());
                 should_persist_restored_session = true;
-                auto_migrated_model_id = Some(previous_model_id);
+                fallback_previous_model_id = Some(previous_model_id);
             }
         }
 
@@ -6237,13 +6215,13 @@ impl SessionManager {
         // Finish async notifications before publishing runtime state. If restore is
         // cancelled or times out before publication, the temporary write lock drops
         // together with this future and no writable in-memory Session remains.
-        if let Some(previous_model_id) = auto_migrated_model_id {
+        if let Some(previous_model_id) = fallback_previous_model_id {
             if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
                 coordinator
-                    .emit_session_model_auto_migrated(
+                    .emit_session_model_fallback_applied(
                         session_id,
                         &previous_model_id,
-                        "auto",
+                        "primary",
                         "model_unavailable_on_restore",
                     )
                     .await;
@@ -9403,12 +9381,8 @@ impl SessionManager {
                 };
                 let configured_model_id = explicit_model_id
                     .or(fallback_model_id.as_deref())
-                    .unwrap_or("auto");
-                let selector = if Self::is_auto_model_selector(configured_model_id) {
-                    "primary"
-                } else {
-                    configured_model_id
-                };
+                    .unwrap_or("primary");
+                let selector = configured_model_id;
                 let resolved_model_id =
                     ai_config.resolve_model_selection(selector).ok_or_else(|| {
                         BitFunError::AIClient(format!(
@@ -9690,7 +9664,7 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        should_auto_migrate_session_model, CoreSessionStorePort, PermissionMode,
+        should_apply_session_model_fallback, CoreSessionStorePort, PermissionMode,
         SessionExecutionBindingError, SessionExecutionBindingUpdate, SessionManager,
         SessionManagerConfig, TurnAdmissionSessionFacts, TEST_MODEL_RESOLUTION_AI_CONFIG,
     };
@@ -9802,20 +9776,20 @@ mod tests {
     }
 
     #[test]
-    fn invalidated_model_migration_preserves_approved_external_generation_binding() {
+    fn invalidated_model_fallback_preserves_approved_external_generation_binding() {
         let invalidated = HashSet::from(["removed-model"]);
 
-        assert!(should_auto_migrate_session_model(
+        assert!(should_apply_session_model_fallback(
             SessionModelBindingPolicy::Mutable,
             "removed-model",
             &invalidated,
         ));
-        assert!(!should_auto_migrate_session_model(
+        assert!(!should_apply_session_model_fallback(
             SessionModelBindingPolicy::ApprovedImmutable,
             "removed-model",
             &invalidated,
         ));
-        assert!(!should_auto_migrate_session_model(
+        assert!(!should_apply_session_model_fallback(
             SessionModelBindingPolicy::Mutable,
             "active-model",
             &invalidated,
@@ -11386,7 +11360,7 @@ mod tests {
                 "Recovery restart".to_string(),
                 "agentic".to_string(),
                 SessionConfig {
-                    model_id: Some("auto".to_string()),
+                    model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
                 },
@@ -12539,7 +12513,7 @@ mod tests {
             .expect("session should create");
 
         manager
-            .update_session_model_id(&session.session_id, "auto")
+            .update_session_model_id(&session.session_id, "fast")
             .await
             .expect("model update should persist");
         manager.evict_loaded_session_for_test(&session.session_id);
@@ -12548,7 +12522,56 @@ mod tests {
             .restore_session(workspace.path(), &session.session_id)
             .await
             .expect("session should restore from persistence");
-        assert_eq!(restored.config.model_id.as_deref(), Some("auto"));
+        assert_eq!(restored.config.model_id.as_deref(), Some("fast"));
+    }
+
+    #[tokio::test]
+    async fn restore_rewrites_retired_auto_model_selector_to_primary() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Legacy model selector".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                model_id: Some("auto".to_string()),
+                ..Default::default()
+            },
+        );
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("legacy session fixture should persist");
+        let manager = test_manager(persistence_manager.clone());
+        let mut ai_config = ServiceAIConfig {
+            models: vec![test_model("primary-model", 512_000)],
+            ..Default::default()
+        };
+        ai_config.default_models.primary = Some("primary-model".to_string());
+
+        let restored = TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                ai_config,
+                manager.restore_session(workspace.path(), &session_id),
+            )
+            .await
+            .expect("legacy session should restore");
+
+        assert_eq!(restored.config.model_id.as_deref(), Some("primary"));
+        assert_eq!(
+            persistence_manager
+                .load_session(workspace.path(), &session_id)
+                .await
+                .expect("rewritten session should persist")
+                .config
+                .model_id
+                .as_deref(),
+            Some("primary")
+        );
     }
 
     #[tokio::test]
@@ -13718,7 +13741,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_session_context_window_resolves_auto_through_mode_default_then_primary() {
+    fn sync_session_context_window_resolves_missing_selection_through_mode_default_then_primary() {
         let mut ai_config = ServiceAIConfig {
             models: vec![
                 test_model("primary-model", 512_000),
@@ -13730,11 +13753,11 @@ mod tests {
         ai_config.agent_model_defaults.mode = "agent-model".to_string();
 
         let mut session = Session::new_with_id(
-            "session-auto".to_string(),
-            "Auto session".to_string(),
+            "session-default".to_string(),
+            "Default session".to_string(),
             "agentic".to_string(),
             SessionConfig {
-                model_id: Some("auto".to_string()),
+                model_id: None,
                 max_context_tokens: 256_000,
                 ..Default::default()
             },
@@ -13746,7 +13769,7 @@ mod tests {
         assert_eq!(resolved, Some(1_000_000));
         assert_eq!(session.config.max_context_tokens, 1_000_000);
 
-        ai_config.agent_model_defaults.mode = "auto".to_string();
+        ai_config.agent_model_defaults.mode = "primary".to_string();
         session.config.max_context_tokens = 256_000;
 
         let resolved =
@@ -13757,7 +13780,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_session_context_window_resolves_subagent_auto_through_primary() {
+    fn sync_session_context_window_resolves_missing_subagent_selection_through_primary() {
         let mut ai_config = ServiceAIConfig {
             models: vec![
                 test_model("primary-model", 512_000),
@@ -13769,11 +13792,11 @@ mod tests {
         ai_config.agent_model_defaults.mode = "mode-model".to_string();
 
         let mut session = Session::new_with_id(
-            "subagent-auto".to_string(),
-            "Auto subagent".to_string(),
+            "subagent-default".to_string(),
+            "Default subagent".to_string(),
             "Explore".to_string(),
             SessionConfig {
-                model_id: Some("auto".to_string()),
+                model_id: None,
                 max_context_tokens: 256_000,
                 ..Default::default()
             },

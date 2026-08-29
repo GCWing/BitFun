@@ -387,6 +387,32 @@ describe('DispatchJobObserver', () => {
     });
   });
 
+  it('canonicalizes legacy model migration events from older targets', () => {
+    expect(projectDispatchAgentEvent({
+      type: 'agentEvent',
+      timestamp: '2026-07-28T00:00:00Z',
+      event: {
+        id: 'event-model-fallback',
+        event: {
+          type: 'SessionModelAutoMigrated',
+          session_id: 'session-1',
+          previous_model_id: 'removed-model',
+          new_model_id: 'auto',
+          reason: 'model_deleted',
+        },
+      },
+    })).toEqual({
+      eventName: 'agentic://session-model-fallback-applied',
+      envelopeId: 'event-model-fallback',
+      payload: {
+        sessionId: 'session-1',
+        previousModelId: 'removed-model',
+        newModelId: 'primary',
+        reason: 'model_deleted',
+      },
+    });
+  });
+
   it('projects subagent links so child sessions render under the projection', () => {
     // Child ownership is driver-resolved through the parent chain, so the
     // link event flows into the normal pipeline like any other event.

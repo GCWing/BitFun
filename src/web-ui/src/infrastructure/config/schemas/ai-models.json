@@ -475,14 +475,6 @@
         {
           "type": "switch",
           "dataType": "boolean",
-          "key": "autoSwitchModel",
-          "title": "智能模型切换",
-          "description": "根据任务类型自动选择合适的模型",
-          "default": false
-        },
-        {
-          "type": "switch",
-          "dataType": "boolean",
           "key": "enableModelFallback",
           "title": "启用模型降级",
           "description": "当主模型不可用时自动切换到备用模型",

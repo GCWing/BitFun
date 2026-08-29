@@ -14,7 +14,7 @@ function createDeepReviewSession(overrides: Partial<Session> = {}): Session {
     dialogTurns: [],
     status: 'idle',
     config: {
-      modelName: 'auto',
+      modelName: 'primary',
       agentType: 'DeepReview',
     },
     createdAt: 1,

@@ -51,9 +51,14 @@ describe('reasoning preset session creation resolution', () => {
     });
   });
 
-  it('resolves Auto through the concrete primary model and restores its recent preset', async () => {
+  it('resolves Primary through the concrete primary model and restores its recent preset', async () => {
     setRecentReasoningPreset('model-primary', 'high');
-    await expect(resolveReasoningPresetForSessionCreation('auto')).resolves.toBe('high');
+    await expect(resolveReasoningPresetForSessionCreation('primary')).resolves.toBe('high');
+  });
+
+  it('falls back to Primary when a stale selector is restored', async () => {
+    setRecentReasoningPreset('model-primary', 'high');
+    await expect(resolveReasoningPresetForSessionCreation('removed-model')).resolves.toBe('high');
   });
 
   it('fails closed when the concrete model does not expose a known preset', async () => {

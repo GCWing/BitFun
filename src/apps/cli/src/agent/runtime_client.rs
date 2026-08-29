@@ -2729,7 +2729,7 @@ mod tests {
             ..session_summary("model-migration")
         };
         let restored = AgentSessionSummary {
-            model_id: Some("auto".to_string()),
+            model_id: Some("primary".to_string()),
             ..session_summary("model-migration")
         };
 
@@ -2739,7 +2739,7 @@ mod tests {
             notices,
             vec![SessionMigrationNotice::Model {
                 previous_id: "removed-model".to_string(),
-                restored_id: "auto".to_string(),
+                restored_id: "primary".to_string(),
             }]
         );
         assert!(notices[0].user_message().contains("unavailable"));

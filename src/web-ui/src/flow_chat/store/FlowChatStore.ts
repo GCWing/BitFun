@@ -4382,7 +4382,7 @@ export class FlowChatStore {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
-      const normalizedModelName = modelName.trim() || 'auto';
+      const normalizedModelName = modelName.trim() || 'primary';
       if (session.config.modelName?.trim() === normalizedModelName) {
         return prev;
       }
@@ -4429,7 +4429,7 @@ export class FlowChatStore {
   }
 
   /**
-   * Apply a backend `SessionModelAutoMigrated` notice as a compare-and-swap.
+   * Apply a backend `SessionModelFallbackApplied` notice as a compare-and-swap.
    *
    * The backend emits this while restoring a session whose persisted model is
    * gone. That restore is frequently triggered by the very model update the
@@ -4437,13 +4437,13 @@ export class FlowChatStore {
    * the newly picked model. Applying it blindly reverts the user's choice, and
    * the reverted value is what the next send pushes back to the backend.
    *
-   * Only migrate while the session still holds the model the backend migrated
-   * away from (or holds no selection yet). Mirrors the CLI guard in
+   * Only apply the fallback while the session still holds the model the backend
+   * replaced (or holds no selection yet). Mirrors the CLI guard in
    * `src/apps/cli/src/modes/chat/selection.rs`.
    *
-   * Returns whether the migration was applied.
+   * Returns whether the fallback was applied.
    */
-  public applySessionModelAutoMigration(
+  public applySessionModelFallback(
     sessionId: string,
     previousModelId: string,
     newModelId: string,

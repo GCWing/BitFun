@@ -865,7 +865,7 @@ describe('L1 Chat Scroll Whitespace (#1176)', () => {
 
       flowChatStore.createSession(
         newSessionId,
-        { workspacePath: wsPath, modelName: 'auto' },
+        { workspacePath: wsPath, modelName: 'primary' },
         undefined,
         'E2E Switch Test',
         128128,

@@ -435,7 +435,7 @@ mod tests {
             bitfun_session_id: "bitfun-session".to_string(),
             cwd: "/workspace".to_string(),
             mode_id: "agentic".to_string(),
-            model_id: "auto".to_string(),
+            model_id: "primary".to_string(),
             mcp_server_ids: Vec::new(),
             lifecycle: std::sync::Arc::new(tokio::sync::Mutex::new(())),
         }

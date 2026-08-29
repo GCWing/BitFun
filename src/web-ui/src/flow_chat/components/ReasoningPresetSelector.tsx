@@ -33,7 +33,7 @@ function presetLabel(
   return t(`reasoningEffort.${preset.id}`, { defaultValue: preset.label || preset.id });
 }
 
-function presetSourceLabel(
+export function presetSourceLabel(
   source: ReasoningPresetDescriptor['source'],
   t: ReturnType<typeof useTranslation>['t'],
 ): string {
@@ -61,7 +61,7 @@ function presetSourceTooltip(
   }
 }
 
-function presetDisplayLabel(
+export function presetDisplayLabel(
   preset: ReasoningPresetDescriptor,
   orderedPresets: ReasoningPresetDescriptor[],
   t: ReturnType<typeof useTranslation>['t'],
@@ -73,7 +73,7 @@ function presetDisplayLabel(
     : fallback;
 }
 
-function presetModeLabel(
+export function presetModeLabel(
   preset: ReasoningPresetDescriptor,
   orderedPresets: ReasoningPresetDescriptor[],
   t: ReturnType<typeof useTranslation>['t'],
@@ -151,7 +151,7 @@ function presetDisablesReasoning(preset: ReasoningPresetDescriptor): boolean {
   ));
 }
 
-function reasoningIntensityLevel(
+export function reasoningIntensityLevel(
   preset: ReasoningPresetDescriptor | undefined,
   orderedPresets: ReasoningPresetDescriptor[],
 ): ReasoningIntensityLevel {
@@ -202,7 +202,7 @@ interface ReasoningIntensityMarkProps {
   compact?: boolean;
 }
 
-const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
+export const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
   level,
   compact = false,
 }) => {
