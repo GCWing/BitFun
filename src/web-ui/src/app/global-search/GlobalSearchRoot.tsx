@@ -411,48 +411,38 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
               />
             </div>
           ) : (
-            <div className="global-search__query" data-bf-component="global-search" data-bf-part="query">
-              <Icon name="search" size="lg" aria-hidden="true" className="global-search__query-icon" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setDrilldownGroup(null);
-                }}
-                onKeyDown={handleInputKeyDown}
-                onCompositionStart={() => {
-                  inputCompositionActiveRef.current = true;
-                }}
-                onCompositionEnd={() => {
-                  inputCompositionActiveRef.current = false;
-                }}
-                placeholder={tCommon('nav.search.inputPlaceholder')}
-                aria-label={tCommon('nav.search.inputLabel')}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded="true"
-                aria-controls={resultsId}
-                aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
-                maxLength={SEARCH_QUERY_MAX_LENGTH}
-                autoFocus={autoFocus}
-              />
-              {query ? (
-                <button
-                  type="button"
-                  className="global-search__clear"
-                  onClick={() => {
-                    setQuery('');
-                    setDrilldownGroup(null);
-                    inputRef.current?.focus();
-                  }}
-                  aria-label={tCommon('nav.search.clear')}
-                >
-                  <Icon name="xmark" size="sm" aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
+            <SearchField
+              ref={inputRef}
+              className="global-search__query"
+              value={query}
+              onValueChange={(nextQuery) => {
+                setQuery(nextQuery);
+                setDrilldownGroup(null);
+              }}
+              onKeyDown={handleInputKeyDown}
+              onCompositionStart={() => {
+                inputCompositionActiveRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                inputCompositionActiveRef.current = false;
+              }}
+              onClear={query ? () => {
+                setQuery('');
+                setDrilldownGroup(null);
+                inputRef.current?.focus();
+              } : undefined}
+              clearLabel={query ? tCommon('nav.search.clear') : undefined}
+              leadingIcon={<Icon name="search" size="lg" />}
+              placeholder={tCommon('nav.search.inputPlaceholder')}
+              aria-label={tCommon('nav.search.inputLabel')}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="true"
+              aria-controls={resultsId}
+              aria-activedescendant={activeId ? `${instanceId}-option-${activeId}` : undefined}
+              maxLength={SEARCH_QUERY_MAX_LENGTH}
+              autoFocus={autoFocus}
+            />
           )}
 
           <div className="global-search__scope-bar" data-bf-component="global-search" data-bf-part="scopeBar">

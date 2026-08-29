@@ -1,7 +1,7 @@
  
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Icon, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, ScrollArea, SearchField } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { FileText, FileImage, FileJson, FileCode } from 'lucide-react';
 import MCPAPI, { MCPResource } from '../../api/service-api/MCPAPI';
@@ -149,12 +149,13 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
       </div>
 
       <div data-bf-component="mcp-resource-browser" data-bf-part="search" className="browser-search">
-        <input
-          type="text"
+        <SearchField
+          className="browser-search-field"
+          inputClassName="search-input"
+          leadingIcon={<Icon name="search" size="sm" />}
           placeholder={t('resourceBrowser.search.placeholder')}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="search-input"
+          onValueChange={setSearchQuery}
         />
       </div>
 

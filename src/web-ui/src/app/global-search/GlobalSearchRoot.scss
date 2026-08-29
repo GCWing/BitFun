@@ -89,38 +89,6 @@
     }
   }
 
-  &__query-icon {
-    box-sizing: content-box;
-    flex: 0 0 auto;
-    padding-right: 8px;
-    border-right: 1px solid var(--bf-appearance-token-border-subtle);
-    color: var(--bf-appearance-token-color-text-secondary);
-  }
-
-  &__clear {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--bf-appearance-token-color-accent-500);
-      outline-offset: 1px;
-    }
-  }
-
   &__scope-bar {
     display: flex;
     align-items: center;

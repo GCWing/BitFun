@@ -30,6 +30,10 @@
     padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
+    .browser-search-field {
+      width: 100%;
+    }
+
     .search-input {
       width: 100%;
       padding: 0.5rem 0.75rem;
