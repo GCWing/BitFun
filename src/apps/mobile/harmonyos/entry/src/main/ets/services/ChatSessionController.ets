@@ -88,7 +88,7 @@ export class ChatSessionController {
     };
     this.activeTurn = activeTurn && activeTurn.id.length > 0 ? activeTurn : undefined;
     this.hasActiveRunningTurn = this.isRunningTurn(this.activeTurn);
-    this.awaitingPersistedTurnId = this.isCompletedTurn(this.activeTurn) ?
+    this.awaitingPersistedTurnId = this.isRunningTurn(this.activeTurn) || this.isCompletedTurn(this.activeTurn) ?
       this.turnId(this.activeTurn) : '';
     this.turnJustEndedAt = 0;
     this.stopped = false;
@@ -225,7 +225,7 @@ export class ChatSessionController {
 
     if (result.activeTurn && result.activeTurn.id.length > 0) {
       this.activeTurn = result.activeTurn;
-      if (this.isCompletedTurn(result.activeTurn)) {
+      if (this.isRunningTurn(result.activeTurn) || this.isCompletedTurn(result.activeTurn)) {
         this.awaitingPersistedTurnId = this.turnId(result.activeTurn);
       }
     } else if (result.changed && (hasAssistantMessage || this.shouldClearMissingActiveTurn(result))) {

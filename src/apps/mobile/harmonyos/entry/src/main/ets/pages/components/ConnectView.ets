@@ -3,6 +3,14 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
 import { ConnectAccountDevicePage } from './ConnectAccountDevicePage';
 import { ConnectManualPairingOverlay } from './ConnectManualPairingOverlay';
+import { NavigationBackButton } from './NavigationBackButton';
+import { SheetActionFooter } from './SheetActionFooter';
+import { SheetCloseHeader } from './SheetCloseHeader';
+import {
+  SHEET_CONTENT_BOTTOM_PADDING,
+  SHEET_CONTENT_MAX_WIDTH,
+  SHEET_HORIZONTAL_PADDING
+} from './SheetLayout';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../state/AppShellState';
 import {
   ConnectSheetLandingPolicy,
@@ -12,8 +20,13 @@ import {
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { InlineQrScanner } from './platform/InlineQrScanner';
 import { CARD, CONNECT_HERO_ACCENT, CONNECT_HERO_BG, CONNECT_HERO_SECONDARY,
-  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PRIMARY_ACTION, PRIMARY_ACTION_TEXT, RED, SOFT,
-  SUBTLE } from './Theme';
+  CONNECT_HERO_SURFACE, CONNECT_SCAN_ACCENT, GREEN, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION,
+  PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
+
+const SCAN_FRAME_SIZE: number = 248;
+const SCAN_CORNER_SIZE: number = 56;
+const SCAN_CORNER_INSET: number = 20;
+
 @ComponentV2
 export struct ConnectView {
   @Param remoteUrl: string = '';
@@ -175,55 +188,77 @@ export struct ConnectView {
   @Builder
   ScanPairingPage() {
     Column() {
-      Stack() {
-        this.HeroWash()
-        this.BackButton()
-      }
-      .width('100%')
-      .height(252)
-
-      Column({ space: 22 }) {
-        this.CameraFrame()
-        Text(RemoteI18n.t('connect.scanPairCode'))
-          .fontSize(MobileDesignTypography.displayLarge.size)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(INK)
-          .textAlign(TextAlign.Center)
-          .width('100%')
-        if (this.shouldShowStatusStrip()) {
-          this.StatusStrip()
+      SheetCloseHeader({
+        onClose: (): void => {
+          this.onBack();
         }
-        if (this.inlineScanError.length > 0) {
-          Text(this.inlineScanError)
-            .fontSize(MobileDesignTypography.bodySmall.size)
-            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
+      })
+
+      Scroll() {
+        Column({ space: 0 }) {
+          Text(RemoteI18n.t('connect.scanTitle'))
+            .fontSize(MobileDesignTypography.displayMedium.size)
+            .lineHeight(MobileDesignTypography.displayMedium.lineHeight)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(INK)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+
+          Text(RemoteI18n.t('connect.scanBody'))
+            .fontSize(MobileDesignTypography.bodyMedium.size)
+            .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
             .fontColor(MUTED)
             .textAlign(TextAlign.Center)
-            .width('78%')
-        }
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Center)
-      .margin({ top: -50 })
+            .width('100%')
+            .margin({ top: 8, bottom: 24 })
 
-      Button(RemoteI18n.t('connect.switchManualPair'))
-        .width('78%')
-        .height(58)
-        .fontSize(MobileDesignTypography.labelLarge.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(INK)
-        .backgroundColor(CARD)
-        .borderRadius(35)
-        .border({ width: 1.5, color: LINE })
-        .onClick(() => {
+          this.CameraFrame()
+
+          if (this.shouldShowStatusStrip()) {
+            Column() {
+              this.StatusStrip()
+            }
+            .width('100%')
+            .margin({ top: 18 })
+          }
+          if (this.inlineScanError.length > 0) {
+            Text(this.inlineScanError)
+              .fontSize(MobileDesignTypography.bodySmall.size)
+              .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
+              .fontColor(MUTED)
+              .textAlign(TextAlign.Center)
+              .width('100%')
+              .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+              .backgroundColor(SOFT)
+              .borderRadius(16)
+              .margin({ top: 14 })
+          }
+        }
+        .width('100%')
+        .constraintSize({ maxWidth: SHEET_CONTENT_MAX_WIDTH })
+        .alignItems(HorizontalAlign.Center)
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .padding({
+        left: SHEET_HORIZONTAL_PADDING,
+        right: SHEET_HORIZONTAL_PADDING,
+        bottom: SHEET_CONTENT_BOTTOM_PADDING
+      })
+
+      SheetActionFooter({
+        label: RemoteI18n.t('connect.switchManualPair'),
+        onAction: (): void => {
           this.showManualPairing = true;
           this.onRemoteUrlInputVisibleChange(true);
-        })
+        }
+      })
     }
     .width('100%')
     .height('100%')
-    .padding({ bottom: 34 })
-    .backgroundColor(CARD)
+    .backgroundColor(PAGE_BG)
+    .alignItems(HorizontalAlign.Center)
   }
 
   @Builder
@@ -262,29 +297,18 @@ export struct ConnectView {
 
   @Builder
   BackButton() {
-    Stack() {
-      this.BackGlyph()
-    }
-      .width(48)
-      .height(48)
-      .backgroundColor(SOFT)
-      .borderRadius(24)
-      .position({ x: 28, y: 18 })
-      .onClick(() => {
+    NavigationBackButton({
+      controlSize: 48,
+      onBack: (): void => {
         if (this.openIntent !== CONNECT_INTENT_SCAN &&
           this.currentStep() === ConnectSheetStep.Scan && this.remoteUrl.trim().length === 0 && !this.showManualPairing) {
           this.pairingStep = this.isAccountAuthenticated() ? ConnectSheetStep.Account : ConnectSheetStep.Intro;
           return;
         }
         this.onBack();
-      })
-  }
-
-  @Builder
-  BackGlyph() {
-    SymbolGlyph($r('sys.symbol.chevron_left'))
-      .fontSize(21)
-      .fontColor([INK])
+      }
+    })
+      .position({ x: 28, y: 18 })
   }
 
   @Builder
@@ -311,6 +335,7 @@ export struct ConnectView {
   CameraFrame() {
     Stack() {
       InlineQrScanner({
+        scannerSize: SCAN_FRAME_SIZE,
         paused: this.showManualPairing,
         restartRevision: this.scanRestartRevision,
         onDetected: (value: string) => this.handleScannedRemoteUrl(value),
@@ -322,37 +347,55 @@ export struct ConnectView {
         }
       })
       Text('')
-        .width(282)
-        .height(282)
+        .width(SCAN_FRAME_SIZE)
+        .height(SCAN_FRAME_SIZE)
         .backgroundColor('#18000000')
-        .borderRadius(40)
-      this.ScanCorner(32, 32, true, true)
-      this.ScanCorner(204, 32, false, true)
-      this.ScanCorner(32, 204, true, false)
-      this.ScanCorner(204, 204, false, false)
+        .borderRadius(28)
+      this.ScanCorner(SCAN_CORNER_INSET, SCAN_CORNER_INSET, true, true)
+      this.ScanCorner(
+        SCAN_FRAME_SIZE - SCAN_CORNER_INSET - SCAN_CORNER_SIZE,
+        SCAN_CORNER_INSET,
+        false,
+        true
+      )
+      this.ScanCorner(
+        SCAN_CORNER_INSET,
+        SCAN_FRAME_SIZE - SCAN_CORNER_INSET - SCAN_CORNER_SIZE,
+        true,
+        false
+      )
+      this.ScanCorner(
+        SCAN_FRAME_SIZE - SCAN_CORNER_INSET - SCAN_CORNER_SIZE,
+        SCAN_FRAME_SIZE - SCAN_CORNER_INSET - SCAN_CORNER_SIZE,
+        false,
+        false
+      )
     }
-    .width(282)
-    .height(282)
+    .width(SCAN_FRAME_SIZE)
+    .height(SCAN_FRAME_SIZE)
+    .border({ width: 1, color: LINE })
+    .borderRadius(28)
+    .clip(true)
   }
 
   @Builder
   ScanCorner(x: number, y: number, isLeft: boolean, isTop: boolean) {
     Stack() {
       Text('')
-        .width(42)
+        .width(36)
         .height(4)
         .borderRadius(2)
         .backgroundColor(CONNECT_SCAN_ACCENT)
-        .position({ x: isLeft ? 0 : 22, y: isTop ? 0 : 60 })
+        .position({ x: isLeft ? 0 : 20, y: isTop ? 0 : 52 })
       Text('')
         .width(4)
-        .height(42)
+        .height(36)
         .borderRadius(2)
         .backgroundColor(CONNECT_SCAN_ACCENT)
-        .position({ x: isLeft ? 0 : 60, y: isTop ? 0 : 22 })
+        .position({ x: isLeft ? 0 : 52, y: isTop ? 0 : 20 })
     }
-    .width(64)
-    .height(64)
+    .width(SCAN_CORNER_SIZE)
+    .height(SCAN_CORNER_SIZE)
     .position({ x, y })
   }
 

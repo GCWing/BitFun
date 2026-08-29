@@ -4,6 +4,7 @@ import {
   RemotePermissionMode,
   RemoteQuestionAnswerPayload,
   RemoteSession,
+  RecentWorkspaceEntry,
   SelectedImageAttachment,
   SessionSummary,
   WorkspaceInfo
@@ -144,6 +145,7 @@ export abstract class AppRootRuntimeComposition {
   abstract reconcileCreatedRemoteSession(session: SessionSummary): Promise<void>;
   abstract reconnect(): Promise<void>;
   abstract reconnectActiveRemote(): Promise<void>;
+  abstract retryDirectoryDevice(deviceId: string): Promise<void>;
   abstract selectDirectoryDevice(deviceId: string): Promise<void>;
   abstract selectAssistant(path: string): Promise<void>;
   abstract selectWorkspace(path: string): Promise<void>;
@@ -388,6 +390,7 @@ export abstract class AppRootRuntimeComposition {
       this.workspaceCoordinator,
       {
         isRemoteAvailable: (): boolean => this.remoteConnectionController.ensureAvailable(),
+        remoteTargetId: (): string => this.remotePageState.controlTargetDeviceId,
         isBusy: (): boolean => this.remotePageState.isBusy,
         onBusy: (isBusy: boolean): void => {
           this.remotePageState.setBusy(isBusy);
@@ -398,6 +401,15 @@ export abstract class AppRootRuntimeComposition {
         onWorkspaceSelected: (workspace: WorkspaceInfo): void => {
           this.remoteConnectionController.applyWorkspace(workspace);
           this.remoteSessionController.clearSessions();
+        },
+        onCatalogLoading: (targetId: string): void => {
+          this.deviceDirectoryViewModel.beginLiveCatalog(targetId);
+        },
+        onCatalogLoaded: (targetId: string, workspaces: RecentWorkspaceEntry[]): void => {
+          this.deviceDirectoryViewModel.completeLiveCatalog(targetId, workspaces);
+        },
+        onCatalogFailed: (targetId: string): void => {
+          this.deviceDirectoryViewModel.failLiveCatalog(targetId);
         },
         onRefreshSessions: async (): Promise<void> => {
           await this.remoteSessionViewModel.refreshSessions();
@@ -783,8 +795,11 @@ export abstract class AppRootRuntimeComposition {
           onBeforeControlTargetChange: (): void => {
             this.captureLiveControlTarget();
           },
+          onControlTargetLoading: (deviceId: string): void => {
+            this.deviceDirectoryViewModel.beginLiveCatalog(deviceId);
+          },
           onControlTargetChanged: (): void => {
-            this.captureLiveControlTarget();
+            this.activateLiveControlTarget();
           }
         }
       }
@@ -930,7 +945,7 @@ export abstract class AppRootRuntimeComposition {
         void this.openWorkspacePickerOnDevice(deviceId);
       },
       retryDirectoryDevice: (deviceId: string): void => {
-        void this.deviceDirectoryViewModel.retryDevice(deviceId);
+        void this.retryDirectoryDevice(deviceId);
       },
       loadWorkspaceSessions: async (deviceId: string, path: string): Promise<void> => {
         await this.loadWorkspaceSessionsOnDevice(deviceId, path);
@@ -1024,6 +1039,15 @@ export abstract class AppRootRuntimeComposition {
   private captureLiveControlTarget(): void {
     const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
     this.deviceDirectoryViewModel.captureLive(
+      deviceId,
+      this.remotePageState.recentWorkspaces,
+      this.remotePageState.sessions
+    );
+  }
+
+  private activateLiveControlTarget(): void {
+    const deviceId = this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
+    this.deviceDirectoryViewModel.activateLive(
       deviceId,
       this.remotePageState.recentWorkspaces,
       this.remotePageState.sessions

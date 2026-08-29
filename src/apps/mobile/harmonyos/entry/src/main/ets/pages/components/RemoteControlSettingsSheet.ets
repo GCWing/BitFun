@@ -6,6 +6,7 @@ import { RemotePermissionMode } from '../../model/RemoteModels';
 import { DefaultAccountAvatar } from './DefaultAccountAvatar';
 import { BitFunAccountLoginPage } from './BitFunAccountLoginPage';
 import { AccountProfilePanel } from './AccountProfilePanel';
+import { SheetCloseButton } from './SheetCloseButton';
 import {
   RemoteControlSettingsPage,
   RemoteControlSettingsPagePolicy
@@ -430,7 +431,7 @@ export struct RemoteControlSettingsSheet {
   private LoginPage() {
     BitFunAccountLoginPage({
       cloudLogin: this.cloudLogin,
-      onBack: (): void => this.leaveAccountPage(),
+      onClose: (): void => this.leaveAccountPage(),
       onLoginSuccess: (): void => {
         this.showLogin = false;
         this.showProfile = true;
@@ -465,21 +466,12 @@ export struct RemoteControlSettingsSheet {
 
   @Builder
   private CloseButton() {
-    Button() {
-      SymbolGlyph($r('sys.symbol.xmark'))
-        .fontSize(21)
-        .fontColor([INK])
-    }
-    .width(50)
-    .height(50)
-    .padding(0)
-    .type(ButtonType.Circle)
-    .backgroundColor(CARD)
-    .shadow({ radius: 16, color: '#10000000', offsetY: 7 })
-    .margin({ top: 22, right: 18 })
-    .onClick(() => {
-      this.onClose();
+    SheetCloseButton({
+      onClose: (): void => {
+        this.onClose();
+      }
     })
+    .margin({ top: 7, right: 8 })
   }
 
   private isConnectedOrConnecting(): boolean {

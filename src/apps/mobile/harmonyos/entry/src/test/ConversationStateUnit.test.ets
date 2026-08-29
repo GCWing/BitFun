@@ -87,6 +87,7 @@ import { GeneralChatPageState } from '../main/ets/pages/state/GeneralChatPageSta
 import { RemotePageState } from '../main/ets/pages/state/RemotePageState';
 import { ConversationViewState } from '../main/ets/pages/state/ConversationViewState';
 import { ConversationController } from '../main/ets/pages/viewmodel/ConversationController';
+import { RemoteWorkspaceViewModel } from '../main/ets/pages/viewmodel/RemoteWorkspaceViewModel';
 import {
   GENERAL_CHAT_COMPOSER_CAPABILITIES,
   REMOTE_CHAT_COMPOSER_CAPABILITIES
@@ -815,6 +816,20 @@ export default function conversationStateUnitTest() {
   });
 
   describe('MarkdownParser', () => {
+    it('parses document-leading YAML frontmatter without rendering its markers as dividers', 0, () => {
+      const blocks = MarkdownParser.parse(
+        '---\nname: BitFun\nvibe: calm\n---\n\n# Identity\n\nBody\n\n---\n\nTail'
+      );
+
+      expect(blocks.length).assertEqual(5);
+      expect(blocks[0].type).assertEqual('frontmatter');
+      expect(blocks[0].text).assertEqual('name: BitFun\nvibe: calm');
+      expect(blocks[1].type).assertEqual('heading');
+      expect(blocks[2].type).assertEqual('paragraph');
+      expect(blocks[3].type).assertEqual('divider');
+      expect(blocks[4].type).assertEqual('paragraph');
+    });
+
     it('parses common markdown blocks into stable block types', 0, () => {
       const blocks = MarkdownParser.parse('# Title\n\n- first\n- **second**\n\n> quote\n\n```ts\nconst value = 1;\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |');
 
@@ -1450,6 +1465,38 @@ export default function conversationStateUnitTest() {
   });
 
   describe('RemoteWorkspaceCoordinator', () => {
+    it('does not publish a workspace catalog after its target changes', 0, async () => {
+      const source = new FakeRemoteWorkspaceDataSource();
+      source.recent = [{
+        path: '/desk-a', name: 'Desk A', lastOpened: '', workspaceKind: 'normal'
+      }];
+      const state = new RemotePageState();
+      let targetId = 'desk-a';
+      const viewModel = new RemoteWorkspaceViewModel(
+        state,
+        new RemoteWorkspaceCoordinator(source),
+        {
+          isRemoteAvailable: (): boolean => true,
+          remoteTargetId: (): string => targetId,
+          isBusy: (): boolean => false,
+          onBusy: (_busy: boolean): void => {},
+          onStatus: (_status: string): void => {},
+          onWorkspaceSelected: (_workspace: WorkspaceInfo): void => {},
+          onCatalogLoading: (_targetId: string): void => {},
+          onCatalogLoaded: (_targetId: string, _workspaces: RecentWorkspaceEntry[]): void => {},
+          onCatalogFailed: (_targetId: string): void => {},
+          onRefreshSessions: async (): Promise<void> => {},
+          onConnectionFailure: (_error: Object): void => {}
+        }
+      );
+
+      const loading = viewModel.loadRecentWorkspacesInBackground();
+      targetId = 'desk-b';
+      await loading;
+
+      expect(state.recentWorkspaces.length).assertEqual(0);
+    });
+
     it('deduplicates sessions discovered across recent workspaces', 0, async () => {
       const source = new FakeRemoteWorkspaceDataSource();
       source.sessionsByPath.set('/one', [

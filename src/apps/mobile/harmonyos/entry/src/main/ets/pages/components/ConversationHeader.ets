@@ -2,6 +2,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { ACCENT, CARD, INK, LINE, MUTED, PAGE_BG, PRIMARY_ACTION_TEXT, SOFT } from './Theme';
 import { CompactMenuButton } from './CompactMenuButton';
+import { NavigationBackButton } from './NavigationBackButton';
 import { TemplateIcon } from './TemplateIcon';
 import { SidebarToggleButton } from './SidebarToggleButton';
 
@@ -100,22 +101,11 @@ export struct ConversationHeader {
         onToggle: this.onRestoreSidebar
       })
     } else if (this.showBackButton) {
-      Stack({ alignContent: Alignment.Center }) {
-        TemplateIcon({
-          src: $r('app.media.remote_ref_back'),
-          iconWidth: 15,
-          iconHeight: 23
-        })
-      }
-      .width(MobileDesignGeometry.controlTouchSize)
-      .height(MobileDesignGeometry.controlTouchSize)
-      .backgroundColor(CARD)
-      .border({ width: 1, color: LINE })
-      .borderRadius(MobileDesignGeometry.controlTouchSize / 2)
-      .shadow({ radius: 10, color: LINE, offsetY: 3 })
-      .accessibilityText(RemoteI18n.t('common.back'))
-      .onClick(() => {
-        this.onBack();
+      NavigationBackButton({
+        controlSize: MobileDesignGeometry.controlTouchSize,
+        onBack: (): void => {
+          this.onBack();
+        }
       })
     } else if (this.showSidebarButton) {
       CompactMenuButton({

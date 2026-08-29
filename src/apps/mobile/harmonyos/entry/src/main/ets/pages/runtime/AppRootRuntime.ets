@@ -288,6 +288,14 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }
   }
 
+  async retryDirectoryDevice(deviceId: string): Promise<void> {
+    if (this.isConnectedDirectoryTarget(deviceId)) {
+      await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
+      return;
+    }
+    await this.deviceDirectoryViewModel.retryDevice(deviceId);
+  }
+
   async loadWorkspaceSessionsOnDevice(deviceId: string, path: string): Promise<void> {
     const targetDeviceId = deviceId.trim();
     const targetPath = path.trim();

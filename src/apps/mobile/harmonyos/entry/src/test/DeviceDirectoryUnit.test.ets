@@ -472,6 +472,79 @@ export default function deviceDirectoryUnitTest() {
       expect(state.find('desk-a')?.workspaces.length).assertEqual(1);
     });
 
+    it('replaces a stale catalog when a device becomes the live target', 0, () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => 'desk-b',
+        activeDeviceConnected: () => true
+      });
+      viewModel.syncDevices([
+        { deviceId: 'desk-b', deviceName: 'Beta', online: true }
+      ]);
+      viewModel.captureLive('desk-b', [workspace('/wrong', 'Wrong')], [
+        sessionOn('desk-b', 'cached', 'Cached')
+      ]);
+
+      viewModel.activateLive('desk-b', [], [sessionOn('desk-b', 'fresh', 'Fresh')]);
+
+      expect(state.find('desk-b')?.workspaces.length).assertEqual(0);
+      expect(state.find('desk-b')?.sessions.some((item: RemoteSession): boolean => item.id === 'fresh')).assertTrue();
+      expect(state.find('desk-b')?.sessions.some((item: RemoteSession): boolean => item.id === 'cached')).assertFalse();
+      expect(state.find('desk-b')?.status).assertEqual('loading');
+    });
+
+    it('keeps an empty incoming catalog loading until the live request completes', 0, async () => {
+      const source = new FakeAccountDeviceDirectory();
+      const state = new DeviceDirectoryState();
+      let activeId = 'desk-a';
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => activeId,
+        activeDeviceConnected: () => true
+      }, undefined, source);
+      viewModel.syncDevices([
+        { deviceId: 'desk-a', deviceName: 'Alpha', online: true },
+        { deviceId: 'desk-b', deviceName: 'Beta', online: true }
+      ]);
+
+      // A completed side-channel lookup may legitimately be empty, but it is
+      // not the authoritative catalog of the target that is about to connect.
+      await viewModel.selectDevice('desk-b');
+      expect(state.find('desk-b')?.status).assertEqual('ready');
+      expect(state.find('desk-b')?.workspaces.length).assertEqual(0);
+
+      viewModel.beginLiveCatalog('desk-b');
+      activeId = 'desk-b';
+      viewModel.activateLive('desk-b', [], [sessionOn('desk-b', 'fresh', 'Fresh')]);
+      expect(state.find('desk-b')?.status).assertEqual('loading');
+
+      viewModel.completeLiveCatalog('desk-b', [workspace('/mac/BitFun', 'BitFun')]);
+      expect(state.find('desk-b')?.status).assertEqual('ready');
+      expect(state.find('desk-b')?.workspaces[0].path).assertEqual('/mac/BitFun');
+    });
+
+    it('releases the abandoned loading owner during rapid target switches', 0, () => {
+      const state = new DeviceDirectoryState();
+      const viewModel = new DeviceDirectoryViewModel(state, {
+        credentials: () => undefined,
+        activeDeviceId: () => '',
+        activeDeviceConnected: () => false
+      });
+      viewModel.syncDevices([
+        { deviceId: 'desk-a', deviceName: 'Alpha', online: true },
+        { deviceId: 'desk-b', deviceName: 'Beta', online: true }
+      ]);
+      viewModel.captureLive('desk-a', [workspace('/a', 'A')], []);
+
+      viewModel.beginLiveCatalog('desk-a');
+      expect(state.find('desk-a')?.status).assertEqual('loading');
+      viewModel.beginLiveCatalog('desk-b');
+
+      expect(state.find('desk-a')?.status).assertEqual('cached');
+      expect(state.find('desk-b')?.status).assertEqual('loading');
+    });
+
     it('refreshes one live workspace without dropping cached siblings', 0, () => {
       const state = new DeviceDirectoryState();
       const viewModel = new DeviceDirectoryViewModel(state, {

@@ -9,6 +9,7 @@ export struct InlineQrScanner {
   private scanStartRetryCount: number = 0;
   private generation: number = 0;
   private cameraPermissionReady: boolean = false;
+  @Param scannerSize: number = 248;
   @Param paused: boolean = false;
   @Param restartRevision: number = 0;
   @Event onDetected: (value: string) => void = (_value: string) => {};
@@ -32,9 +33,9 @@ export struct InlineQrScanner {
 
   build() {
     XComponent({ id: 'remote-scan-preview', type: XComponentType.SURFACE, controller: this.scannerController })
-      .width(282)
-      .height(282)
-      .borderRadius(40)
+      .width(this.scannerSize)
+      .height(this.scannerSize)
+      .borderRadius(28)
       .onLoad(() => {
         void this.start();
       })

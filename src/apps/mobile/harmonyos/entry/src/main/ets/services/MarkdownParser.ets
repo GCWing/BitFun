@@ -60,6 +60,18 @@ export class MarkdownParser {
     const lines = text.replace(/\r\n/g, '\n').split('\n');
     const blocks: ParsedMarkdownBlock[] = [];
     let index = 0;
+    const frontmatterEnd = MarkdownParser.frontmatterEnd(lines);
+    if (frontmatterEnd > 0) {
+      MarkdownParser.pushBlock(
+        blocks,
+        'frontmatter',
+        0,
+        '',
+        lines.slice(1, frontmatterEnd).join('\n').replace(/\s+$/, ''),
+        []
+      );
+      index = frontmatterEnd + 1;
+    }
 
     while (index < lines.length) {
       const raw = lines[index];
@@ -513,6 +525,19 @@ export class MarkdownParser {
 
   private static shouldParseInline(type: string): boolean {
     return type === 'paragraph' || type === 'heading' || type === 'quote';
+  }
+
+  private static frontmatterEnd(lines: string[]): number {
+    if (lines.length < 3 || lines[0].trim() !== '---') {
+      return -1;
+    }
+    for (let index = 1; index < lines.length; index += 1) {
+      const marker = lines[index].trim();
+      if (marker === '---' || marker === '...') {
+        return index > 1 ? index : -1;
+      }
+    }
+    return -1;
   }
 
   private static isHeading(line: string): boolean {

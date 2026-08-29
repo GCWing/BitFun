@@ -6,6 +6,7 @@ import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/General
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
 import { ACCENT, CARD, GREEN, INK, LINE, MUTED, PRIMARY_ACTION_TEXT, RED, SOFT, SUBTLE } from './Theme';
+import { NavigationBackButton } from './NavigationBackButton';
 
 @ComponentV2
 export struct ModelServiceSettingsPanel {
@@ -94,20 +95,12 @@ export struct ModelServiceSettingsPanel {
   Header() {
     Row() {
       if (this.sheetPage() !== 'overview') {
-        Stack({ alignContent: Alignment.Center }) {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(20)
-            .fontColor([INK])
-        }
-        .width(42)
-        .height(42)
-        .margin({ right: 8 })
-        .accessibilityText(RemoteI18n.t('common.back'))
-        .onClick(() => {
-          if (!this.isSaving && !this.isTesting) {
-            this.onClose();
-          }
+        NavigationBackButton({
+          controlSize: 44,
+          isEnabled: !this.isSaving && !this.isTesting,
+          onBack: this.onClose
         })
+        .margin({ right: 8 })
       }
       Text(this.headerTitle())
         .fontSize(MobileDesignTypography.headlineSmall.size)

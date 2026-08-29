@@ -293,7 +293,7 @@ struct SidebarWorkspaceGroup {
  *
  * The projection cache is a single slot whose key includes the current
  * workspace path, so one instance cannot serve two devices without missing
- * every rebuild. This component exists so each desktop keeps its own cache.
+ * every rebuild. Its parent therefore keys this component boundary by device.
  */
 @ComponentV2
 export struct SidebarDeviceGroup {

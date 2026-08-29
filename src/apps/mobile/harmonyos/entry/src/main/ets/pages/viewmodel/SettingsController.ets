@@ -51,6 +51,8 @@ export interface CloudAccountSettingsHooks {
   readonly onAccountDevices: (devices: CloudAccountDevice[]) => void;
   /** Snapshot the outgoing live device before teardown clears its lists. */
   readonly onBeforeControlTargetChange: () => void;
+  /** The incoming device owns a catalog request from the start of its switch. */
+  readonly onControlTargetLoading: (deviceId: string) => void;
   readonly onControlTargetChanged: () => void;
 }
 
@@ -562,7 +564,7 @@ export class SettingsController {
     // Taken before the teardown, which is the last moment the outgoing device
     // is still readable off the page state.
     const previousTarget = this.restorableControlTarget();
-    this.prepareAccountDeviceConnection();
+    this.prepareAccountDeviceConnection(deviceId);
     try {
       const initialSync = await cloud.sessionManager.connectAccountDevice(
         cloud.client,
@@ -574,6 +576,9 @@ export class SettingsController {
         RemoteLogger.info(`stale device switch completion ignored device=${deviceId}`);
         return;
       }
+      RemoteLogger.info(
+        `account device sync device=${deviceId} workspace=${initialSync.workspace.path} sessions=${initialSync.sessions.length}`
+      );
       cloud.remoteState.setControlTarget('account_device', deviceId, device.deviceName);
       cloud.remoteState.setDesktopIdentity(device.deviceName, deviceId);
       cloud.remoteState.setWorkspace(
@@ -826,7 +831,7 @@ export class SettingsController {
     cloud.remoteState.setAccountUsername('');
   }
 
-  private prepareAccountDeviceConnection(): void {
+  private prepareAccountDeviceConnection(deviceId: string): void {
     const cloud = this.requireCloud();
     cloud.hooks.onBeforeControlTargetChange();
     cloud.hooks.invalidatePreview();
@@ -838,6 +843,12 @@ export class SettingsController {
     cloud.remoteState.setLoadingHome(true);
     cloud.remoteState.clearControlTarget();
     cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
+    // The workspace catalog belongs to the control target, just like the
+    // workspace and session projection above. Keeping it alive across this
+    // boundary makes the outgoing desktop's catalog look like the incoming
+    // desktop's while the latter is still connecting.
+    cloud.remoteState.clearWorkspaceActions();
+    cloud.hooks.onControlTargetLoading(deviceId);
     cloud.remoteState.setBusy(true);
     cloud.remoteState.setStatusText(RemoteI18n.t('remote.settings.deviceConnecting'));
     cloud.remoteState.clearActiveSession();
@@ -858,6 +869,7 @@ export class SettingsController {
     if (clearWorkspace) {
       cloud.remoteState.setWorkspace(RemoteI18n.t('status.notConnected'), '', '', '', 'normal');
       cloud.remoteState.setAuthenticatedUserId('');
+      cloud.remoteState.clearWorkspaceActions();
     }
     cloud.remoteState.clearControlTarget();
     cloud.remoteState.setConnectionState('disconnected');

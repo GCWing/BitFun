@@ -3397,6 +3397,43 @@ export default function remoteControllersUnitTest() {
       expect(snapshots[0].messageSnapshot ? snapshots[0].messageSnapshot.length : 0).assertEqual(1);
     });
 
+    it('recognizes persisted completion when running turn transitions directly to idle', 0, async () => {
+      const manager = new FakePollSessionManager();
+      const snapshots: ChatSessionSnapshot[] = [];
+      const persistedAssistant = chatMessage('turn-4-assistant', 'assistant', 'Final text');
+      persistedAssistant.turnId = 'turn-4';
+      manager.results = [pollResult({
+        version: 4,
+        changed: true,
+        sessionState: 'idle',
+        title: 'Session',
+        newMessages: [persistedAssistant],
+        messageSnapshot: [
+          chatMessage('turn-4-user', 'user', 'Question'),
+          persistedAssistant
+        ],
+        totalMessageCount: 2
+      })];
+      const controller = new ChatSessionController(manager, {
+        onSnapshot: (snapshot: ChatSessionSnapshot) => snapshots.push(snapshot),
+        onError: (_error: Object) => {},
+        canPoll: (_sessionId: string) => true
+      });
+
+      controller.start('session-4', {
+        pollVersion: 3,
+        knownMessageCount: 1,
+        knownModelCatalogVersion: 0
+      }, activeChatMessage('turn-4', '', 'active'));
+      await delay(20);
+      controller.stop(false);
+
+      expect(snapshots.length).assertEqual(1);
+      expect(snapshots[0].sessionState).assertEqual('idle');
+      expect(snapshots[0].activeTurn ? snapshots[0].activeTurn.id : '').assertEqual('');
+      expect(snapshots[0].completedTurnId).assertEqual('turn-4');
+    });
+
     it('resyncs when a completed assistant message is updated during the settle window', 0, async () => {
       const manager = new FakePollSessionManager();
       const snapshots: ChatSessionSnapshot[] = [];
