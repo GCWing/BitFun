@@ -21,6 +21,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import DeviceStatusControl from './DeviceStatusControl';
+import AppearanceQuickSwitchMenuItem from './AppearanceQuickSwitchMenuItem';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
 const AboutDialog = lazy(() =>
@@ -49,6 +50,7 @@ const PersistentFooterActions: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
+  const [appearanceSubmenuOpen, setAppearanceSubmenuOpen] = useState(false);
   const [deviceOverviewOpen, setDeviceOverviewOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
@@ -84,6 +86,7 @@ const PersistentFooterActions: React.FC = () => {
   }, []);
 
   const closeMenu = useCallback(() => {
+    setAppearanceSubmenuOpen(false);
     setMenuClosing(true);
     setTimeout(() => {
       setMenuOpen(false);
@@ -96,6 +99,7 @@ const PersistentFooterActions: React.FC = () => {
       closeMenu();
     } else {
       setDeviceOverviewOpen(false);
+      setAppearanceSubmenuOpen(false);
       setMenuOpen(true);
     }
   };
@@ -112,7 +116,7 @@ const PersistentFooterActions: React.FC = () => {
     void activateProductAction('settings.open');
   }, [closeMenu]);
 
-  const handleOpenThemeConfiguration = useCallback(() => {
+  const handleOpenAppearanceSettings = useCallback(() => {
     closeMenu();
     useSettingsStore.getState().openPage('application.appearance');
     void activateProductAction('settings.open');
@@ -212,6 +216,16 @@ const PersistentFooterActions: React.FC = () => {
                   className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
                   aria-label={t('shared:features.settings')}
                   data-testid="nav-settings-menu"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    if (appearanceSubmenuOpen) {
+                      setAppearanceSubmenuOpen(false);
+                    } else {
+                      closeMenu();
+                      menuTriggerRef.current?.focus();
+                    }
+                  }}
                   style={{
                     top: `${menuLayout?.top ?? 0}px`,
                     left: `${menuLayout?.left ?? 0}px`,
@@ -226,13 +240,12 @@ const PersistentFooterActions: React.FC = () => {
                     {t('nav.settingsMenu.floatingWindow')}
                   </MenuItem>
                   <NotificationButton menuItem onActivate={closeMenu} />
-                  <MenuItem
-                    leading={<Icon name="palette" size="sm" aria-hidden="true" />}
-                    onClick={handleOpenThemeConfiguration}
-                    data-testid="nav-settings-theme-item"
-                  >
-                    {t('nav.settingsMenu.themeConfiguration')}
-                  </MenuItem>
+                  <AppearanceQuickSwitchMenuItem
+                    open={appearanceSubmenuOpen}
+                    onOpenChange={setAppearanceSubmenuOpen}
+                    onCloseParentMenu={closeMenu}
+                    onOpenAppearanceSettings={handleOpenAppearanceSettings}
+                  />
                   <MenuSeparator />
                   <MenuItem
                     leading={<Icon name="settings" size="sm" aria-hidden="true" />}

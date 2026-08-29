@@ -2,7 +2,7 @@
  * MainNav — primary product navigation sidebar.
  *
  * Layout (top to bottom):
- *   1. Search and client voice assistant
+ *   1. Search and New Session
  *   2. AI Assistant, Task Board, Mini Apps, then Extensions & Compatibility
  *   3. Unified Sessions (all or grouped by project / assistant)
  *
@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import { Icon, KeyHint, Menu, MenuItem, MenuSection, MenuSeparator, NavigationPanel, ScrollArea, Tooltip } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { FolderOpen, FolderPlus, History, Users, Network, CalendarClock } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Users, Network, CalendarClock } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import {
   BITFUN_ICON_SIZE,
@@ -48,7 +48,6 @@ import {
   subscribeGlobalSearchShortcut,
 } from '@/app/global-search/globalSearchShortcut';
 import { useExternalAppAwareness } from '@/infrastructure/config/components/external-sources/useExternalAppAwareness';
-import { RealtimeVoiceCallButton } from '@/flow_chat/components/voice/RealtimeVoiceCallButton';
 
 import './NavPanel.scss';
 
@@ -245,6 +244,10 @@ const MainNav: React.FC<MainNavProps> = ({
     };
   }, [workspaceMenuOpen, updateWorkspaceMenuPos]);
 
+  const handleCreateSession = useCallback(() => {
+    void activateProductAction('session.new');
+  }, []);
+
   const handleOpenAgents = useCallback(() => {
     void activateProductAction('surface.agents.open');
   }, []);
@@ -360,6 +363,7 @@ const MainNav: React.FC<MainNavProps> = ({
     getAppearanceOverlayHost()
   ) : null;
 
+  const createSessionLabel = t('nav.sessions.newSession');
   const addSessionGroupTooltip = t('nav.tooltips.addSessionGroup');
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
@@ -410,7 +414,20 @@ const MainNav: React.FC<MainNavProps> = ({
               </button>
             </Tooltip>
           </div>
-          <RealtimeVoiceCallButton />
+          <Tooltip content={createSessionLabel} placement="right" followCursor>
+            <button
+              type="button"
+              className="bitfun-nav-panel__utility-action"
+              data-bf-component="nav-panel"
+              data-bf-part="topAction"
+              data-bf-action="new-session"
+              onClick={handleCreateSession}
+              aria-label={createSessionLabel}
+              data-testid="nav-new-session-btn"
+            >
+              <Plus size={15} aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
       </div>
       )}

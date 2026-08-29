@@ -1,6 +1,6 @@
 import { IconButton } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Bot, Loader2, Mic, MicOff, PhoneCall, PhoneOff, Settings2, User } from 'lucide-react';
+import { Bot, Loader2, Mic, MicOff, PhoneOff, Settings2, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -18,23 +18,36 @@ export function RealtimeVoiceCallButton() {
     <>
       <Tooltip
         content={active ? t('voiceCall.call.title') : t('voiceCall.call.button')}
-        placement="right"
+        placement="top"
       >
         <button
           type="button"
-          className={`bitfun-nav-panel__utility-action bitfun-nav-panel__voice-call${active ? ' is-active' : ''}`}
+          className={`bitfun-realtime-call__launcher${active ? ' is-active' : ''}`}
           aria-label={t('voiceCall.call.button')}
           aria-pressed={active}
           onClick={active ? undefined : controller.start}
-          data-testid="nav-realtime-voice"
+          data-testid="realtime-voice-launcher"
           data-bf-component="realtime-voice-call"
           data-bf-part="trigger"
           data-bf-state={controller.phase}
         >
-          {controller.phase === 'connecting' || controller.phase === 'ending'
-            ? <Loader2 size={15} className="bitfun-realtime-call__spinner" aria-hidden="true" />
-            : <PhoneCall size={15} aria-hidden="true" />}
-          {active ? <span className="bitfun-nav-panel__voice-call-dot" aria-hidden="true" /> : null}
+          {connecting
+            ? (
+              <Loader2
+                size={13}
+                className="bitfun-realtime-call__launcher-icon bitfun-realtime-call__spinner"
+                aria-hidden="true"
+              />
+            )
+            : (
+              <Mic
+                size={13}
+                strokeWidth={1.6}
+                className="bitfun-realtime-call__launcher-icon"
+                aria-hidden="true"
+              />
+            )}
+          <span>{t('voiceCall.call.launcherLabel')}</span>
         </button>
       </Tooltip>
 

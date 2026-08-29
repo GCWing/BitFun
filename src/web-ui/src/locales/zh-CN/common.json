@@ -242,6 +242,7 @@
     },
     "sessions": {
       "newSession": "新建会话",
+      "acpSessions": "ACP 会话",
       "dispatchRunningOn": "在 {{target}} 上运行（{{state}}）",
       "dispatchUnreachable": "连接中断",
       "dispatchUnreachableDetails": "暂时无法连接 {{target}}。任务可能仍在该设备上运行。",
@@ -640,7 +641,9 @@
     "notifications": "通知",
     "settingsMenu": {
       "floatingWindow": "悬浮窗",
+      "theme": "主题",
       "themeConfiguration": "主题配置",
+      "appearanceSwitchFailed": "主题切换失败，请重试。",
       "openSettings": "打开设置",
       "about": "关于"
     }

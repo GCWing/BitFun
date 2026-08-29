@@ -69,7 +69,7 @@ describe('FlowChat semantic typography roles', () => {
     expectRole(model, '&__trigger {', 'control');
     expectRole(model, '&__option-name {', 'control');
     expectRole(reasoning, '&__title {', 'control');
-    expectRole(reasoning, 'strong {', 'control');
+    expectRole(reasoning, '&__option-label {', 'control');
     expectRole(workspaceStrip, '&__permission-option-label {', 'control');
   });
 

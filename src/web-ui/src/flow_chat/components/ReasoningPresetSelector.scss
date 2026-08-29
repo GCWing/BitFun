@@ -147,7 +147,6 @@
   &__auto {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
     min-width: 0;
     min-height: 22px;
     padding: 2px 5px;
@@ -169,15 +168,6 @@
       color: var(--bf-appearance-token-color-text-primary);
     }
 
-    small {
-      color: var(--bf-appearance-token-color-text-muted);
-      font-size: inherit;
-    }
-  }
-
-  &__auto-check {
-    flex: none;
-    color: var(--bf-appearance-token-color-accent-500);
   }
 
   &__options {
@@ -187,16 +177,12 @@
   }
 
   &__option {
-    position: relative;
     display: flex;
-    flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
-    gap: 7px;
     width: 100%;
     min-width: 0;
-    min-height: 38px;
-    padding: 4px 6px;
+    min-height: 30px;
+    padding: 5px 8px;
     border: 0;
     border-radius: var(--bf-appearance-token-size-radius-base);
     background: transparent;
@@ -215,61 +201,18 @@
       color: var(--bf-appearance-token-color-text-primary);
     }
 
-    strong,
-    small {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      letter-spacing: 0;
-    }
   }
 
-  &__option-copy {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+  &__option-label {
     flex: 1;
-    gap: 1px;
-    width: 100%;
     min-width: 0;
-
-    strong,
-    small {
-      display: block;
-      max-width: 100%;
-    }
-
-    strong {
-      color: var(--bf-appearance-token-color-text-primary);
-      font-size: flow-type.$control-size;
-      font-weight: 500;
-      line-height: 1.25;
-    }
-
-    small {
-      color: var(--bf-appearance-token-color-text-muted);
-      font-size: flow-type.$support-size;
-      line-height: 1.25;
-    }
-  }
-
-  &__option-check {
-    flex: none;
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-}
-
-@media (max-width: 360px) {
-  .bitfun-reasoning-preset-selector {
-    &__menu {
-      padding: 5px;
-    }
-
-    &__option {
-      min-height: 38px;
-      padding-inline: 5px;
-    }
+    overflow: hidden;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: flow-type.$control-size;
+    font-weight: 500;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

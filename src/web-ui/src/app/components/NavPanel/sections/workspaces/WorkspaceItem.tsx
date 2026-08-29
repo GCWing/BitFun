@@ -1,7 +1,7 @@
 import { Button, ConfirmDialog, Icon, Menu, MenuItem, MenuSeparator, Modal, Tooltip } from '@bitfun/ui';
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, FolderSearch, Trash2, RotateCcw, FileText, Bot, ListChecks, Loader2, ShieldCheck, Network } from 'lucide-react';
+import { FolderOpen, FolderSearch, Trash2, RotateCcw, FileText, ListChecks, ShieldCheck, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { InputDialog, PresenceBoundary, BITFUN_ICON_SIZE, SessionGroupAssistantIcon, SessionGroupAssistantSelectedIcon, SessionGroupRemoteWorkspaceIcon, SessionGroupRemoteWorkspaceSelectedIcon, SessionGroupWorkspaceIcon, SessionGroupWorkspaceSelectedIcon } from '@/component-library';
 
@@ -25,6 +25,7 @@ import {
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
+import WorkspaceAcpSessionSubmenu from './WorkspaceAcpSessionSubmenu';
 import SessionsSection from '../sessions/SessionsSection';
 import { useWorkspaceSessionViewStore } from '../../workspaceSessionView';
 import {
@@ -129,6 +130,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
+  const acpSubmenuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const isDefaultAssistantWorkspace =
@@ -437,7 +439,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       const target = event.target as Node;
       const isInsideTriggerArea = menuRef.current?.contains(target);
       const isInsidePopover = menuPopoverRef.current?.contains(target);
-      if (!isInsideTriggerArea && !isInsidePopover) {
+      const isInsideAcpSubmenu = acpSubmenuRef.current?.contains(target);
+      if (!isInsideTriggerArea && !isInsidePopover && !isInsideAcpSubmenu) {
         setMenuOpen(false);
       }
     };
@@ -1359,25 +1362,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 >
                   {t('nav.sessions.newSession')}
                 </MenuItem>
-                {acpClients.map(client => {
-                  const label = client.name || client.id;
-                  return (
-                    <MenuItem
-                      key={client.id}
-                      leading={<Bot size={13} />}
-                      onClick={() => { void handleCreateAcpSession(client); }}
-                      data-testid="nav-workspace-menu-create-acp-session"
-                      data-acp-client-id={client.id}
-                    >
-                      {t('nav.sessions.newExternalAgentSessionShort', { agentName: label })}
-                    </MenuItem>
-                  );
-                })}
-                {acpClientsLoading ? (
-                  <MenuItem leading={<Loader2 size={13} />} disabled>
-                    {t('app.loading')}
-                  </MenuItem>
-                ) : null}
+                <WorkspaceAcpSessionSubmenu
+                  ref={acpSubmenuRef}
+                  clients={acpClients}
+                  loading={acpClientsLoading}
+                  onSelect={client => { void handleCreateAcpSession(client); }}
+                />
                 <MenuItem
                   leading={<FileText size={13} />}
                   onClick={() => { void handleCreateInitSession(); }}

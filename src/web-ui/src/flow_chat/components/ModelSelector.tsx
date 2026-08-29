@@ -52,8 +52,6 @@ import {
   ReasoningIntensityMark,
   ReasoningPresetSelector,
   presetDisplayLabel,
-  presetModeLabel,
-  presetSourceLabel,
   reasoningIntensityLevel,
 } from './ReasoningPresetSelector';
 import {
@@ -859,14 +857,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const reasoningPresetLabels = orderedReasoningPresets.map(preset => (
     presetDisplayLabel(preset, orderedReasoningPresets, t)
   ));
-  const reasoningLabelCounts = new Map<string, number>();
-  reasoningPresetLabels.forEach((label) => {
-    const normalizedLabel = label.trim().toLowerCase();
-    reasoningLabelCounts.set(
-      normalizedLabel,
-      (reasoningLabelCounts.get(normalizedLabel) ?? 0) + 1,
-    );
-  });
   const hasNativeReasoningSettings = Boolean(sessionId && orderedReasoningPresets.length > 0);
   const nativeSettingsAreDefault = currentNativeModelId === 'primary' && !selectedReasoningPreset;
 
@@ -1947,33 +1937,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-bf-state={!selectedReasoningDescriptor ? 'selected' : undefined}
                   onClick={() => handleSelectReasoningPresetFromMenu(null)}
                 >
-                  {defaultReasoningDescriptor && (
-                    <ReasoningIntensityMark
-                      level={reasoningIntensityLevel(defaultReasoningDescriptor, orderedReasoningPresets)}
-                    />
-                  )}
                   <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                     <span className="bitfun-model-selector__option-name">
                       {t('reasoningSelector.auto')}
                     </span>
-                    {defaultReasoningDescriptor && (
-                      <span className="bitfun-model-selector__option-desc">
-                        {presetDisplayLabel(defaultReasoningDescriptor, orderedReasoningPresets, t)}
-                      </span>
-                    )}
                   </div>
-                  {!selectedReasoningDescriptor && (
-                    <Check size={14} className="bitfun-model-selector__option-check" />
-                  )}
                 </button>
 
                 {orderedReasoningPresets.map((preset, index) => {
                   const isSelected = selectedReasoningDescriptor?.id === preset.id;
                   const label = reasoningPresetLabels[index]
                     ?? presetDisplayLabel(preset, orderedReasoningPresets, t);
-                  const hasDuplicateLabel = (
-                    reasoningLabelCounts.get(label.trim().toLowerCase()) ?? 0
-                  ) > 1;
 
                   return (
                     <button
@@ -1989,22 +1963,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       data-bf-state={isSelected ? 'selected' : undefined}
                       onClick={() => handleSelectReasoningPresetFromMenu(preset.id)}
                     >
-                      <ReasoningIntensityMark
-                        level={reasoningIntensityLevel(preset, orderedReasoningPresets)}
-                      />
                       <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                         <span className="bitfun-model-selector__option-name">
                           {label}
                         </span>
-                        <span className="bitfun-model-selector__option-desc">
-                          {hasDuplicateLabel
-                            ? presetSourceLabel(preset.source, t)
-                            : presetModeLabel(preset, orderedReasoningPresets, t)}
-                        </span>
                       </div>
-                      {isSelected && (
-                        <Check size={14} className="bitfun-model-selector__option-check" />
-                      )}
                     </button>
                   );
                 })}

@@ -696,6 +696,7 @@
       }
     },
     "harness": {
+      "menuLabel": "Agent Harness",
       "selectorTooltip": "目前執行：{{name}}",
       "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
       "activateBalanced": "切換到標準 Harness",
@@ -799,6 +800,7 @@
     "boostNewSession": "新建會話",
     "boostAddContext": "引用檔案或資料夾",
     "boostSkills": "Skills",
+    "boostAdditionalModes": "附加模式",
     "boostSkillsLoading": "正在載入 Skills…",
     "boostSkillsLoadFailed": "Skills 載入失敗，點擊重試",
     "boostSkillsEmpty": "暫無已啟用的 Skill",
@@ -2489,28 +2491,6 @@
       "high": "高",
       "xhigh": "極高",
       "max": "最高"
-    },
-    "modes": {
-      "off": "關閉思考",
-      "on": "開啟思考",
-      "none": "關閉思考",
-      "minimal": "極速模式",
-      "low": "快速模式",
-      "medium": "常規模式",
-      "high": "深度模式",
-      "xhigh": "極致模式",
-      "max": "最高強度",
-      "custom": "模型預設"
-    },
-    "source": {
-      "models_dev": "models.dev",
-      "adapter_fallback": "內置",
-      "model_config": "自定義"
-    },
-    "sourceTooltip": {
-      "models_dev": "根據 models.dev 的模型中繼資料自動產生",
-      "adapter_fallback": "BitFun 為此模型適配器內置的預設",
-      "model_config": "在此模型的自定義設定中定義"
     }
   },
   "coworkScope": {

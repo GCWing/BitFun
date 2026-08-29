@@ -1897,6 +1897,37 @@ $_section-header-height: 22px;
   }
 }
 
+.bitfun-nav-panel__appearance-menu-trigger {
+  &.is-open {
+    background: var(--bf-color-action-neutral-surface);
+  }
+}
+
+.bitfun-nav-panel__appearance-menu-current {
+  display: block;
+  max-width: 82px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Positioning and open-state composition only; the design-system Menu owns chrome. */
+.bitfun-nav-panel__appearance-submenu {
+  position: fixed;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  z-index: 10000;
+  animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+
+  &[data-placement='right'] {
+    transform-origin: top left;
+  }
+
+  &[data-placement='left'] {
+    transform-origin: top right;
+  }
+}
+
 // ──────────────────────────────────────────────
 // Device overview — one compact model, local and connected states
 // ──────────────────────────────────────────────
@@ -3153,6 +3184,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel__workspace-menu,
 .bitfun-nav-panel__mode-dropdown,
 .bitfun-nav-panel__footer-menu,
+.bitfun-nav-panel__appearance-submenu,
 .bitfun-nav-panel__footer-multimodal-menu {
   animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
@@ -3243,6 +3275,7 @@ $_section-header-height: 22px;
   .bitfun-nav-panel__workspace-menu,
   .bitfun-nav-panel__mode-dropdown,
   .bitfun-nav-panel__footer-menu,
+  .bitfun-nav-panel__appearance-submenu,
   .bitfun-nav-panel__footer-multimodal-menu,
   .bitfun-device-overview {
     animation: none;

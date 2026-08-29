@@ -52,7 +52,7 @@
     "title": "即時語音通話",
     "enabled": {
       "label": "啟用客戶端語音助理",
-      "description": "從客戶端左下角與火山引擎端到端即時語音模型通話，並允許它理解工作區狀態和啟動 BitFun 任務。"
+      "description": "從客戶端右下角與火山引擎端到端即時語音模型通話，並允許它理解工作區狀態和啟動 BitFun 任務。"
     },
     "apiKey": {
       "label": "火山引擎 API Key",
@@ -65,7 +65,7 @@
     },
     "status": {
       "label": "連線設定",
-      "description": "儲存後，客戶端左下角的電話按鈕即可建立全雙工語音通話。"
+      "description": "儲存後，客戶端右下角的 Hello 入口即可建立全雙工語音通話。"
     },
     "save": "儲存即時語音",
     "messages": {
@@ -76,6 +76,7 @@
     "call": {
       "title": "BitFun 即時通話",
       "button": "開始即時語音通話",
+      "launcherLabel": "Hello",
       "empty": "直接說話即可。需要做事時，我會啟動一個新的 BitFun 會話。",
       "mute": "將麥克風靜音",
       "unmute": "取消靜音",

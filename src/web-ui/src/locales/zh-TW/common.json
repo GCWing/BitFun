@@ -242,6 +242,7 @@
     },
     "sessions": {
       "newSession": "新增會話",
+      "acpSessions": "ACP 會話",
       "dispatchRunningOn": "在 {{target}} 上執行（{{state}}）",
       "dispatchUnreachable": "連線中斷",
       "dispatchUnreachableDetails": "暫時無法連線 {{target}}。任務可能仍在該裝置上執行。",
@@ -640,7 +641,9 @@
     "notifications": "通知",
     "settingsMenu": {
       "floatingWindow": "懸浮窗",
+      "theme": "主題",
       "themeConfiguration": "主題配置",
+      "appearanceSwitchFailed": "主題切換失敗，請重試。",
       "openSettings": "開啟設定",
       "about": "關於"
     }

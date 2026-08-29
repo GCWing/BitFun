@@ -1099,7 +1099,7 @@
     opacity: 0.88;
   }
 
-  // Skills row: hover opens secondary panel (similar to @ mention flyout)
+  // Nested add-menu rows share one secondary-panel interaction contract.
   &__boost-submenu-host {
     position: relative;
     border-radius: 4px;
@@ -1291,6 +1291,7 @@
   }
 
   &__boost-submenu-item-name {
+    flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
