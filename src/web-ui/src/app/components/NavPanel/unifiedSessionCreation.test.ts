@@ -69,7 +69,7 @@ describe('unified project session creation', () => {
     expect(mainNav).not.toContain("activateProductAction('settings.external-sources.open')");
   });
 
-  it('opens the footer utility list from Settings without More or Insights', () => {
+  it('opens the footer utility list from Settings without Star, More, or Insights', () => {
     const footerActions = source('./components/PersistentFooterActions.tsx');
     const floatingIndex = footerActions.indexOf('data-testid="nav-settings-floating-item"');
     const notificationIndex = footerActions.indexOf('<NotificationButton menuItem');
@@ -85,6 +85,8 @@ describe('unified project session creation', () => {
     expect(openSettingsIndex).toBeGreaterThan(themeIndex);
     expect(aboutIndex).toBeGreaterThan(openSettingsIndex);
     expect(footerActions).toContain("useSettingsStore.getState().openPage('application.appearance')");
+    expect(footerActions).not.toContain('GithubStarButton');
+    expect(footerActions).not.toContain('nav-footer-github-star-btn');
     expect(footerActions).not.toContain('data-testid="nav-footer-more-btn"');
     expect(footerActions).not.toContain("activateProductAction('surface.insights.open')");
   });

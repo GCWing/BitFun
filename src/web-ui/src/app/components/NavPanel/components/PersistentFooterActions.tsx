@@ -12,7 +12,6 @@ import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/Toolb
 import { useNotification } from '@/shared/notification-system';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
-import GithubStarButton from './GithubStarButton';
 import { RemoteConnectDisclaimerContent } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
 import {
   getRemoteConnectDisclaimerAgreed,
@@ -177,7 +176,6 @@ const PersistentFooterActions: React.FC = () => {
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
-          <GithubStarButton />
           <div className="bitfun-nav-panel__footer-menu-wrap">
             <Tooltip
               content={t('shared:features.settings')}

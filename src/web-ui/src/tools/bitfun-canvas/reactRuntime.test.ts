@@ -250,9 +250,10 @@ window.BitfunCanvasRuntime.mount(Canvas);
       expect(dom.window.document.querySelector('.bf-chart')).toBeTruthy();
       expect(dom.window.document.querySelector('.bf-collapsible-section')).toBeTruthy();
       expect(dom.window.document.querySelector('.bf-diagram')).toBeTruthy();
-      expect(dom.window.document.querySelector('.bitfun-tabs')).toBeTruthy();
+      expect(dom.window.document.querySelector('.bitfun-canvas-adapter-tabs')).toBeTruthy();
+      expect(dom.window.document.querySelector('[data-bf-component="tab-group"]')).toBeTruthy();
       expect(dom.window.document.querySelector('[data-bf-component="input"]')).toBeTruthy();
-      expect(dom.window.document.querySelector('.bitfun-empty')).toBeTruthy();
+      expect(dom.window.document.querySelector('[data-bf-component="empty"]')).toBeTruthy();
     } finally {
       dom.window.close();
     }

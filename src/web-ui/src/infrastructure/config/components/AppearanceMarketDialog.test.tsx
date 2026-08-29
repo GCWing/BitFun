@@ -41,7 +41,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('@bitfun/ui', () => ({
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
-  Button: ({ children, isLoading: _isLoading, iconOnly: _iconOnly, ...props }: any) => (
+  Button: ({ children, isLoading: _isLoading, loading: _loading, iconOnly: _iconOnly, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
   Modal: ({ isOpen, title, titleExtra, children }: any) => isOpen ? (
@@ -55,7 +55,6 @@ vi.mock('@bitfun/ui', () => ({
       onKeyDown={event => event.key === 'Enter' && onSearch(event.currentTarget.value)}
     />
   ),
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   Select: ({ options, onValueChange, ...props }: any) => (
     <select {...props} onChange={event => onValueChange?.(event.target.value)}>
       {options.map((option: any) => (
@@ -64,8 +63,31 @@ vi.mock('@bitfun/ui', () => ({
     </select>
   ),
   Field: ({ label, children }: any) => <label>{label}{children}</label>,
-  Input: ({ leading, trailing, ...props }: any) => (
-    <span>{leading}<input {...props} />{trailing}</span>
+  Input: ({ leading, trailing, onChange, onValueChange, ...props }: any) => (
+    <span>
+      {leading}
+      <input
+        {...props}
+        onChange={event => {
+          onChange?.(event);
+          onValueChange?.(event.currentTarget.value);
+        }}
+      />
+      {trailing}
+    </span>
+  ),
+  Textarea: ({ label, hint, errorMessage, showCount: _showCount, onChange, onValueChange, ...props }: any) => (
+    <label>
+      {label}
+      <textarea
+        {...props}
+        onChange={event => {
+          onChange?.(event);
+          onValueChange?.(event.currentTarget.value);
+        }}
+      />
+      {hint ?? errorMessage}
+    </label>
   ),
   Tooltip: ({ children }: any) => <>{children}</>,
 }));
