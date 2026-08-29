@@ -3295,6 +3295,8 @@ export default function remoteControllersUnitTest() {
     it('keeps completed active turn until final assistant message arrives', 0, async () => {
       const manager = new FakePollSessionManager();
       const snapshots: ChatSessionSnapshot[] = [];
+      const persistedAssistant = chatMessage('assistant-final-1', 'assistant', 'Final text');
+      persistedAssistant.turnId = 'turn-2';
       const controller = new ChatSessionController(manager, {
         onSnapshot: (snapshot: ChatSessionSnapshot) => {
           snapshots.push(snapshot);
@@ -3310,13 +3312,13 @@ export default function remoteControllersUnitTest() {
         title: 'Session',
         newMessages: [],
         totalMessageCount: 1,
-        activeTurn: chatMessage('active-turn-2', 'assistant', 'Final text', 'completed')
+        activeTurn: activeChatMessage('turn-2', 'Final text', 'completed')
       })];
       controller.start('session-1', {
         pollVersion: 1,
         knownMessageCount: 1,
         knownModelCatalogVersion: 0
-      }, chatMessage('active-turn-2', 'assistant', 'Final text', 'active'));
+      }, activeChatMessage('turn-2', 'Final text', 'active'));
       await delay(20);
 
       manager.results = [pollResult({
@@ -3334,9 +3336,7 @@ export default function remoteControllersUnitTest() {
         changed: true,
         sessionState: 'idle',
         title: 'Session',
-        newMessages: [
-          chatMessage('assistant-final-1', 'assistant', 'Final text')
-        ],
+        newMessages: [persistedAssistant],
         totalMessageCount: 2
       })];
       await controller.pollNow();
@@ -3344,8 +3344,44 @@ export default function remoteControllersUnitTest() {
 
       expect(snapshots.length).assertEqual(3);
       expect(snapshots[0].activeTurn ? snapshots[0].activeTurn.status : '').assertEqual('completed');
+      expect(snapshots[0].completedTurnId).assertEqual('');
       expect(snapshots[1].activeTurn ? snapshots[1].activeTurn.id : '').assertEqual('active-turn-2');
       expect(snapshots[2].activeTurn ? snapshots[2].activeTurn.id : '').assertEqual('');
+      expect(snapshots[2].completedTurnId).assertEqual('turn-2');
+    });
+
+    it('recognizes a durable final assistant from the full message snapshot', 0, async () => {
+      const manager = new FakePollSessionManager();
+      const snapshots: ChatSessionSnapshot[] = [];
+      const persistedAssistant = chatMessage('assistant-final-3', 'assistant', 'Final text');
+      persistedAssistant.turnId = 'turn-3';
+      manager.results = [pollResult({
+        version: 3,
+        changed: true,
+        sessionState: 'idle',
+        title: 'Session',
+        newMessages: [],
+        messageSnapshot: [persistedAssistant],
+        totalMessageCount: 2,
+        activeTurn: activeChatMessage('turn-3', 'Final text', 'completed')
+      })];
+      const controller = new ChatSessionController(manager, {
+        onSnapshot: (snapshot: ChatSessionSnapshot) => snapshots.push(snapshot),
+        onError: (_error: Object) => {},
+        canPoll: (_sessionId: string) => true
+      });
+
+      controller.start('session-3', {
+        pollVersion: 2,
+        knownMessageCount: 1,
+        knownModelCatalogVersion: 0
+      }, activeChatMessage('turn-3', 'Final text', 'active'));
+      await delay(20);
+      controller.stop(false);
+
+      expect(snapshots.length).assertEqual(1);
+      expect(snapshots[0].completedTurnId).assertEqual('turn-3');
+      expect(snapshots[0].messageSnapshot ? snapshots[0].messageSnapshot.length : 0).assertEqual(1);
     });
 
     it('resyncs when a completed assistant message is updated during the settle window', 0, async () => {

@@ -255,7 +255,7 @@ export class RemoteTranscriptController {
     }
     runtime.timeline.applySnapshot(snapshot);
     this.syncRemoteTimeline();
-    if (snapshot.newMessages.length > 0) {
+    if (snapshot.newMessages.length > 0 || snapshot.messageSnapshot !== undefined) {
       this.cacheRemoteTranscript(snapshot.sessionId);
     }
     this.knownPollVersionValue = snapshot.cursor.pollVersion;

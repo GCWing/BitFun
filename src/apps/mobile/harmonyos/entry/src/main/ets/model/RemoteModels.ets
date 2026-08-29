@@ -445,6 +445,7 @@ export interface PollSessionResponse extends CommandStatusResponse {
   title?: string;
   new_messages?: ChatMessageResponse[];
   total_msg_count?: number;
+  message_snapshot?: ChatMessageResponse[];
   active_turn?: ActiveTurnSnapshotResponse;
   model_catalog?: RemoteModelCatalog;
 }
@@ -456,6 +457,7 @@ export interface PollSessionResult {
   title: string;
   newMessages: ChatMessage[];
   totalMessageCount: number;
+  messageSnapshot?: ChatMessage[];
   activeTurn?: ChatMessage;
   modelCatalog?: RemoteModelCatalog;
 }

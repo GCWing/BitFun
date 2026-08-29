@@ -21,6 +21,9 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['common.running', 'Running'],
   ['common.waiting', 'Waiting'],
 
+  ['notification.taskCompletedTitle', 'Task completed'],
+  ['notification.taskCompletedBody', 'Your BitFun task is ready. Tap to open BitFun and view the result.'],
+
   ['chatHome.prompt', 'What do you want to do today?'],
   ['chatHome.placeholder', 'Ask BitFun'],
   ['chatHome.localHint', 'This chat stays on the phone. Switch to Remote to read and write projects on your computer.'],

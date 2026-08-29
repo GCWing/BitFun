@@ -157,6 +157,12 @@ export class RemoteActivityViewModel {
     this.stopHeartbeat();
   }
 
+  /** Keeps only the active-turn poll alive during a transient background window. */
+  suspendKeepingActiveTurnPoll(): void {
+    this.gate.invalidate();
+    this.stopHeartbeat();
+  }
+
   private async reconnect(token: number): Promise<void> {
     const shouldRestore = this.hooks.isRemoteChat() && this.hooks.activeSession().sessionId.length > 0;
     const session = this.hooks.activeSession();
