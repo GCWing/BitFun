@@ -11,7 +11,7 @@
   }
 
   .root[data-has-context="true"] {
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-panel);
   }
 
   .context {

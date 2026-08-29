@@ -22,7 +22,6 @@ export const chatComposerMeta = {
     "color.border.default",
     "color.content.primary",
     "color.surface.panel",
-    "color.surface.subtle",
     "control.chatComposer.compactGap",
     "control.chatComposer.compactHeight",
     "control.chatComposer.compactPaddingBlock",
