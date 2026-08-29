@@ -3596,33 +3596,50 @@ pub fn remote_persisted_poll_response(
     message_snapshot: Option<Vec<ChatMessage>>,
     model_catalog: Option<RemoteModelCatalog>,
 ) -> RemoteResponse {
-    let turn_finished = tracker.is_turn_finished();
-    let has_assistant_msg = new_messages
-        .iter()
-        .any(|message| message.role == "assistant");
+    let finished_turn = tracker
+        .is_turn_finished()
+        .then(|| tracker.snapshot_active_turn())
+        .flatten();
+    let has_persisted_terminal_assistant = finished_turn.as_ref().is_some_and(|turn| {
+        new_messages
+            .iter()
+            .chain(message_snapshot.iter().flat_map(|messages| messages.iter()))
+            .any(|message| {
+                message.role == "assistant"
+                    && message.turn_id.as_deref() == Some(turn.turn_id.as_str())
+                    && matches!(message.status.as_deref(), Some("done") | Some("completed"))
+            })
+    });
+    let completed_turn_waiting_for_assistant = finished_turn
+        .as_ref()
+        .is_some_and(|turn| turn.status == "completed" && !has_persisted_terminal_assistant);
 
-    let active_turn = if turn_finished && has_assistant_msg {
-        tracker.finalize_completed_turn();
-        None
-    } else if turn_finished {
-        let status = tracker.turn_status();
-        if status == "completed" {
-            tracker.snapshot_active_turn()
-        } else {
+    let active_turn = match finished_turn {
+        Some(turn) if turn.status == "completed" && has_persisted_terminal_assistant => {
+            tracker.finalize_completed_turn();
+            None
+        }
+        Some(turn) if turn.status == "completed" => Some(turn),
+        Some(_) => {
             tracker.finalize_completed_turn();
             tracker.mark_persistence_clean_if_version(version);
             None
         }
-    } else {
-        tracker.snapshot_active_turn()
+        None => tracker.snapshot_active_turn(),
     };
 
     let (send_messages, send_total, send_snapshot) = if let Some(snapshot) = message_snapshot {
-        tracker.mark_persistence_clean_if_version(version);
+        // A history fence may race the final Turn write. Keep polling until
+        // this exact completed Turn has a durable assistant projection instead
+        // of clearing the dirty bit after a snapshot that only contains older
+        // assistant messages.
+        if !completed_turn_waiting_for_assistant {
+            tracker.mark_persistence_clean_if_version(version);
+        }
         // Keep the additive delta for older clients that do not know the
         // optional replacement field yet.
         (Some(new_messages), Some(total_msg_count), Some(snapshot))
-    } else if turn_finished && !has_assistant_msg {
+    } else if completed_turn_waiting_for_assistant {
         (None, None, None)
     } else {
         if !new_messages.is_empty() || active_turn.is_none() {
@@ -4066,6 +4083,23 @@ mod tests {
         history_read_count: Arc<AtomicUsize>,
     }
 
+    fn poll_test_message(id: &str, role: &str, turn_id: &str, status: Option<&str>) -> ChatMessage {
+        ChatMessage {
+            id: id.to_string(),
+            role: role.to_string(),
+            content: format!("{role} content"),
+            timestamp: "1".to_string(),
+            metadata: None,
+            turn_id: Some(turn_id.to_string()),
+            status: status.map(str::to_string),
+            error: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: None,
+        }
+    }
+
     #[async_trait::async_trait]
     impl RemotePollRuntimeHost for FakePollHost {
         fn ensure_tracker(&self, _session_id: &str) -> Arc<RemoteSessionStateTracker> {
@@ -4255,6 +4289,162 @@ mod tests {
         );
         assert!(!tracker.is_persistence_dirty());
         assert!(!tracker.is_history_snapshot_required());
+    }
+
+    #[tokio::test]
+    async fn completed_turn_finalizes_when_its_assistant_only_exists_in_replacement_snapshot() {
+        let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-current".to_string(),
+            turn_index: 1,
+            user_input: "hello".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnCompleted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-current".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 1,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("complete".to_string()),
+            has_final_response: Some(true),
+        });
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-current".to_string()),
+        });
+        let version = tracker.version();
+        let assistant = poll_test_message(
+            "turn-current-assistant",
+            "assistant",
+            "turn-current",
+            Some("done"),
+        );
+        let host = FakePollHost {
+            tracker: tracker.clone(),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![assistant.clone()],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: version,
+                // The controller already counted the streaming assistant, so
+                // completion only changes its persisted content/status.
+                known_msg_count: 1,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        let RemoteResponse::SessionPoll {
+            active_turn,
+            message_snapshot,
+            ..
+        } = response
+        else {
+            panic!("expected session poll response");
+        };
+        assert!(active_turn.is_none());
+        assert_eq!(message_snapshot, Some(vec![assistant]));
+        assert!(tracker.snapshot_active_turn().is_none());
+        assert!(!tracker.is_persistence_dirty());
+    }
+
+    #[tokio::test]
+    async fn completed_turn_ignores_older_assistant_and_retries_until_its_result_is_persisted() {
+        let tracker = Arc::new(RemoteSessionStateTracker::new("session-a".to_string()));
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-current".to_string(),
+            turn_index: 1,
+            user_input: "hello".to_string(),
+            original_user_input: None,
+            user_message_metadata: None,
+        });
+        tracker.handle_agentic_event(&AgenticEvent::DialogTurnCompleted {
+            session_id: "session-a".to_string(),
+            turn_id: "turn-current".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 1,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("complete".to_string()),
+            has_final_response: Some(true),
+        });
+        tracker.handle_agentic_event(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session-a".to_string(),
+            settled_turn_id: Some("turn-current".to_string()),
+        });
+        let version = tracker.version();
+        let older_assistant = poll_test_message(
+            "turn-older-assistant",
+            "assistant",
+            "turn-older",
+            Some("done"),
+        );
+        let first_host = FakePollHost {
+            tracker: tracker.clone(),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![older_assistant.clone()],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+
+        let first_response = handle_remote_poll_command(
+            &first_host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: version,
+                known_msg_count: 1,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+        let RemoteResponse::SessionPoll { active_turn, .. } = first_response else {
+            panic!("expected session poll response");
+        };
+        assert_eq!(
+            active_turn.as_ref().map(|turn| turn.turn_id.as_str()),
+            Some("turn-current")
+        );
+        assert!(tracker.is_persistence_dirty());
+
+        let current_assistant = poll_test_message(
+            "turn-current-assistant",
+            "assistant",
+            "turn-current",
+            Some("done"),
+        );
+        let retry_host = FakePollHost {
+            tracker: tracker.clone(),
+            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            messages: vec![older_assistant, current_assistant],
+            history_read_count: Arc::new(AtomicUsize::new(0)),
+        };
+        let retry_response = handle_remote_poll_command(
+            &retry_host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: version,
+                known_msg_count: 1,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+        let RemoteResponse::SessionPoll { active_turn, .. } = retry_response else {
+            panic!("expected session poll response");
+        };
+        assert!(active_turn.is_none());
+        assert!(tracker.snapshot_active_turn().is_none());
+        assert!(!tracker.is_persistence_dirty());
     }
 
     #[test]
