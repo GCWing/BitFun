@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useId, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
 
 interface ChatInputBoostSubmenuProps {
   label: string;
@@ -23,48 +24,46 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
   const [openLeft, setOpenLeft] = useState(false);
   const [openUp, setOpenUp] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
-  const closeTimerRef = useRef<number | null>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
+  const setActiveSubmenu = useCallback((id: 'submenu' | null) => {
+    if (id !== null) {
+      const host = hostRef.current;
+      if (host) {
+        const bounds = host.getBoundingClientRect();
+        setOpenLeft(bounds.right + estimatedPanelWidth > window.innerWidth - 8);
+        setOpenUp(bounds.top + estimatedPanelHeight > window.innerHeight - 8);
+      }
     }
-  }, []);
+    setOpen(id !== null);
+  }, [estimatedPanelHeight, estimatedPanelWidth]);
+
+  const {
+    requestChange,
+    requestClose,
+    keepOpen,
+    openNow,
+    closeNow: closeImmediately,
+  } = useSubmenuIntent<'submenu'>({
+    activeId: open ? 'submenu' : null,
+    onActiveIdChange: setActiveSubmenu,
+    parentRef: hostRef,
+    submenuRef,
+    openDelayMs: 0,
+    closeDelayMs: 180,
+  });
 
   const openFlyout = useCallback(() => {
-    clearCloseTimer();
-    const host = hostRef.current;
-    if (host) {
-      const bounds = host.getBoundingClientRect();
-      setOpenLeft(bounds.right + estimatedPanelWidth > window.innerWidth - 8);
-      setOpenUp(bounds.top + estimatedPanelHeight > window.innerHeight - 8);
-    }
-    setOpen(true);
-  }, [clearCloseTimer, estimatedPanelHeight, estimatedPanelWidth]);
-
-  const closeFlyout = useCallback(() => {
-    clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      setOpen(false);
-    }, 150);
-  }, [clearCloseTimer]);
-
-  const closeImmediately = useCallback(() => {
-    clearCloseTimer();
-    setOpen(false);
-  }, [clearCloseTimer]);
-
-  useEffect(() => clearCloseTimer, [clearCloseTimer]);
+    openNow('submenu');
+  }, [openNow]);
 
   return (
     <div
       ref={hostRef}
       className="bitfun-chat-input__boost-submenu-host"
-      onMouseEnter={openFlyout}
-      onMouseLeave={closeFlyout}
+      onPointerEnter={event => requestChange('submenu', event)}
+      onPointerLeave={requestClose}
       data-testid={testId}
     >
       <div
@@ -106,6 +105,9 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
         />
       </div>
       <div
+        ref={submenuRef}
+        onPointerEnter={keepOpen}
+        onPointerLeave={requestClose}
         className={[
           'bitfun-chat-input__boost-submenu-shell',
           open ? 'bitfun-chat-input__boost-submenu-shell--open' : '',

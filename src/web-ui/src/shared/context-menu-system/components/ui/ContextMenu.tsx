@@ -3,40 +3,21 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useCallback, useState } from 'react';
 import { ContextMenuProps, ContextMenuItem } from './types';
 import { createLogger } from '@/shared/utils/logger';
+import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
 import './ContextMenu.scss';
 
 const log = createLogger('ContextMenu');
 
 
-const SUBMENU_OPEN_DELAY = 150;   
-const SUBMENU_CLOSE_DELAY = 300;  
-const SAFE_TRIANGLE_TOLERANCE = 50; 
+const SUBMENU_OPEN_DELAY = 150;
+const SUBMENU_CLOSE_DELAY = 300;
+const SUBMENU_SWITCH_DELAY = 300;
+const SAFE_TRIANGLE_TOLERANCE = 50;
 const CONTEXT_MENU_EXIT_DURATION_MS = 100;
 
 interface InternalContextMenuProps extends ContextMenuProps {
   autoFocusOnOpen?: boolean;
   onKeyboardBack?: () => void;
-}
-
- 
-function isPointInTriangle(
-  px: number, py: number,
-  x1: number, y1: number,
-  x2: number, y2: number,
-  x3: number, y3: number
-): boolean {
-  const sign = (p1x: number, p1y: number, p2x: number, p2y: number, p3x: number, p3y: number) => {
-    return (p1x - p3x) * (p2y - p3y) - (p2x - p3x) * (p1y - p3y);
-  };
-
-  const d1 = sign(px, py, x1, y1, x2, y2);
-  const d2 = sign(px, py, x2, y2, x3, y3);
-  const d3 = sign(px, py, x3, y3, x1, y1);
-
-  const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-  const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-
-  return !(hasNeg && hasPos);
 }
 
 export const ContextMenu: React.FC<InternalContextMenuProps> = ({
@@ -60,11 +41,26 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
   const [motionPhase, setMotionPhase] = useState<'entering' | 'entered' | 'exiting'>(
     visible ? 'entering' : 'exiting',
   );
-  
-  
   const [activeSubmenuId, setActiveSubmenuId] = useState<string | null>(null);
-  const submenuOpenTimerRef = useRef<number | null>(null);
-  const submenuCloseTimerRef = useRef<number | null>(null);
+  const activeSubmenuRef = useRef<HTMLDivElement>(null);
+  const {
+    requestChange: requestSubmenuChange,
+    requestClose: requestSubmenuClose,
+    keepOpen: keepSubmenuOpen,
+    openNow: openSubmenuNow,
+    closeNow: closeSubmenuNow,
+    cancelPending: cancelPendingSubmenuIntent,
+  } = useSubmenuIntent<string>({
+    activeId: activeSubmenuId,
+    onActiveIdChange: setActiveSubmenuId,
+    parentRef: menuRef,
+    submenuRef: activeSubmenuRef,
+    enabled: visible,
+    openDelayMs: SUBMENU_OPEN_DELAY,
+    closeDelayMs: SUBMENU_CLOSE_DELAY,
+    switchDelayMs: SUBMENU_SWITCH_DELAY,
+    tolerance: SAFE_TRIANGLE_TOLERANCE,
+  });
   const focusableItemIndices = useMemo(
     () => items.reduce<number[]>((indices, item, index) => {
       if (!item.separator && !item.disabled) {
@@ -77,24 +73,6 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
   const [focusedItemIndex, setFocusedItemIndex] = useState(
     () => focusableItemIndices[0] ?? -1,
   );
-  
-  
-  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
-  const menuItemRectRef = useRef<DOMRect | null>(null);
-  const submenuRectRef = useRef<DOMRect | null>(null);
-
-  
-  const clearAllTimers = useCallback(() => {
-    if (submenuOpenTimerRef.current) {
-      clearTimeout(submenuOpenTimerRef.current);
-      submenuOpenTimerRef.current = null;
-    }
-    if (submenuCloseTimerRef.current) {
-      clearTimeout(submenuCloseTimerRef.current);
-      submenuCloseTimerRef.current = null;
-    }
-  }, []);
-
   const restorePreviousFocus = useCallback(() => {
     const previousFocus = previousFocusRef.current;
     if (previousFocus?.isConnected && !previousFocus.matches(':disabled')) {
@@ -188,146 +166,14 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
   }, [visible]);
 
   
-  const handleMenuItemMouseEnter = useCallback((
+  const handleMenuItemPointerEnter = useCallback((
     item: ContextMenuItem,
     index: number,
-    event: React.MouseEvent
-  ) => {
-    
-    clearAllTimers();
-
-    
-    const target = event.currentTarget as HTMLElement;
-    menuItemRectRef.current = target.getBoundingClientRect();
-
-    const itemId = item.id || `item-${index}`;
-
-    
-    if (item.submenu && item.submenu.length > 0) {
-      
-      if (activeSubmenuId === itemId) {
-        return;
-      }
-
-      
-      if (activeSubmenuId) {
-        setActiveSubmenuId(null);
-      }
-
-      
-      submenuOpenTimerRef.current = window.setTimeout(() => {
-        setActiveSubmenuId(itemId);
-      }, SUBMENU_OPEN_DELAY);
-    } else {
-      
-      if (activeSubmenuId) {
-        setActiveSubmenuId(null);
-      }
-    }
-  }, [activeSubmenuId, clearAllTimers]);
-
-  
-  const handleMenuItemMouseLeave = useCallback((
-    item: ContextMenuItem,
-    index: number,
-    event: React.MouseEvent
+    event: React.PointerEvent<HTMLDivElement>,
   ) => {
     const itemId = item.id || `item-${index}`;
-    
-    
-    if (activeSubmenuId !== itemId) {
-      if (submenuOpenTimerRef.current) {
-        clearTimeout(submenuOpenTimerRef.current);
-        submenuOpenTimerRef.current = null;
-      }
-      return;
-    }
-
-    
-    if (item.submenu && item.submenu.length > 0 && menuItemRectRef.current) {
-      const mouseX = event.clientX;
-      const mouseY = event.clientY;
-      
-      
-      lastMousePosRef.current = { x: mouseX, y: mouseY };
-
-      
-      const submenuContainer = event.currentTarget.querySelector('.context-menu-submenu');
-      if (submenuContainer) {
-        submenuRectRef.current = submenuContainer.getBoundingClientRect();
-      }
-
-      
-      submenuCloseTimerRef.current = window.setTimeout(() => {
-        setActiveSubmenuId(null);
-      }, SUBMENU_CLOSE_DELAY);
-    }
-  }, [activeSubmenuId]);
-
-  
-  const handleSubmenuMouseEnter = useCallback(() => {
-    if (submenuCloseTimerRef.current) {
-      clearTimeout(submenuCloseTimerRef.current);
-      submenuCloseTimerRef.current = null;
-    }
-  }, []);
-
-  
-  const handleSubmenuMouseLeave = useCallback(() => {
-    submenuCloseTimerRef.current = window.setTimeout(() => {
-      setActiveSubmenuId(null);
-    }, SUBMENU_CLOSE_DELAY);
-  }, []);
-
-  
-  useEffect(() => {
-    if (!activeSubmenuId || !visible) return;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const mouseX = event.clientX;
-      const mouseY = event.clientY;
-
-      
-      if (lastMousePosRef.current && submenuRectRef.current && menuItemRectRef.current) {
-        const itemRect = menuItemRectRef.current;
-        const submenuRect = submenuRectRef.current;
-
-        
-        const isInSafeZone = isPointInTriangle(
-          mouseX, mouseY,
-          lastMousePosRef.current.x, lastMousePosRef.current.y,
-          submenuRect.left, submenuRect.top - SAFE_TRIANGLE_TOLERANCE,
-          submenuRect.left, submenuRect.bottom + SAFE_TRIANGLE_TOLERANCE
-        );
-
-        
-        const isInMenuItem = (
-          mouseX >= itemRect.left && mouseX <= itemRect.right &&
-          mouseY >= itemRect.top && mouseY <= itemRect.bottom
-        );
-        const isInSubmenu = (
-          mouseX >= submenuRect.left - 10 && mouseX <= submenuRect.right &&
-          mouseY >= submenuRect.top && mouseY <= submenuRect.bottom
-        );
-
-        
-        if (isInSafeZone || isInMenuItem || isInSubmenu) {
-          if (submenuCloseTimerRef.current) {
-            clearTimeout(submenuCloseTimerRef.current);
-            submenuCloseTimerRef.current = null;
-          }
-        }
-      }
-
-      
-      lastMousePosRef.current = { x: mouseX, y: mouseY };
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [activeSubmenuId, visible]);
+    requestSubmenuChange(item.submenu?.length ? itemId : null, event);
+  }, [requestSubmenuChange]);
 
   
   const activateItem = useCallback(async (item: ContextMenuItem, restoreFocusAfter = false) => {
@@ -370,8 +216,7 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
       return;
     }
 
-    clearAllTimers();
-    setActiveSubmenuId(item.id || `item-${index}`);
+    openSubmenuNow(item.id || `item-${index}`);
     if (submenuFocusFrameRef.current !== null) {
       window.cancelAnimationFrame(submenuFocusFrameRef.current);
     }
@@ -382,7 +227,7 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
       firstSubmenuItem?.focus();
       submenuFocusFrameRef.current = null;
     });
-  }, [clearAllTimers]);
+  }, [openSubmenuNow]);
 
   
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -544,17 +389,10 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
   
   useEffect(() => {
     if (!visible) {
-      clearAllTimers();
+      cancelPendingSubmenuIntent();
       setActiveSubmenuId(null);
-      lastMousePosRef.current = null;
-      menuItemRectRef.current = null;
-      submenuRectRef.current = null;
     }
-    
-    return () => {
-      clearAllTimers();
-    };
-  }, [visible, clearAllTimers]);
+  }, [cancelPendingSubmenuIntent, visible]);
 
   
   const adjustPosition = useCallback(() => {
@@ -626,8 +464,8 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
         key={itemId}
         className={`context-menu-item ${item.disabled ? 'disabled' : ''} ${isSubmenuActive ? 'submenu-active' : ''}`}
         onClick={(event) => handleItemClick(item, event)}
-        onMouseEnter={(event) => handleMenuItemMouseEnter(item, index, event)}
-        onMouseLeave={(event) => handleMenuItemMouseLeave(item, index, event)}
+        onPointerEnter={(event) => handleMenuItemPointerEnter(item, index, event)}
+        onPointerLeave={requestSubmenuClose}
         onContextMenu={(event) => event.preventDefault()}
         data-bf-component="context-menu"
         data-bf-part="item"
@@ -656,9 +494,10 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
           <>
             <span className="context-menu-submenu-arrow" data-bf-component="context-menu" data-bf-part="submenuArrow">▶</span>
             <div 
+              ref={isSubmenuActive ? activeSubmenuRef : undefined}
               className={`context-menu-submenu ${isSubmenuActive ? 'visible' : ''}`}
-              onMouseEnter={handleSubmenuMouseEnter}
-              onMouseLeave={handleSubmenuMouseLeave}
+              onPointerEnter={keepSubmenuOpen}
+              onPointerLeave={requestSubmenuClose}
               data-bf-component="context-menu"
               data-bf-part="submenu"
             >
@@ -671,7 +510,7 @@ export const ContextMenu: React.FC<InternalContextMenuProps> = ({
                 onItemClick={onItemClick}
                 autoFocusOnOpen={false}
                 onKeyboardBack={() => {
-                  setActiveSubmenuId(null);
+                  closeSubmenuNow();
                   focusItemAtIndex(index);
                 }}
               />
