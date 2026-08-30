@@ -37,3 +37,20 @@ test("Patterns remain responsive and consume theme contracts", async () => {
   assert.match(styles, /\.pattern-settings \[data-bf-component="field"\]\[data-orientation="horizontal"\]\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
   assert.doesNotMatch(styles.match(/\/\* Patterns \*\/[\s\S]*?\/\* Component reference page \*\//)?.[0] ?? "", /#[0-9a-f]{3,8}/i);
 });
+
+test("Reference patterns use real provider controls, scene tabs and nested popovers", async () => {
+  const page = await readFile(pageSource, "utf8");
+  const recipes = await readFile(new URL("../src/pages/ReferencePatterns.tsx", import.meta.url), "utf8");
+  for (const name of ["ProviderConfigurationPattern", "SceneToolbarPattern", "NestedMenuPattern"]) {
+    assert.match(page, new RegExp(`<${name}`));
+  }
+  for (const name of ["Modal", "Combobox", "Disclosure", "NumberInput", "Textarea", "FieldGroup", "Toolbar", "TabGroup", "MenuPopover"]) {
+    assert.match(recipes, new RegExp(`<${name}\\b`));
+  }
+  assert.match(recipes, /className="pattern-demo-actions"/);
+  assert.doesNotMatch(recipes, /<a\b|node-id=/);
+  assert.match(recipes, /onContextMenu=/);
+  assert.match(recipes, /role: "menuitemcheckbox"/);
+  assert.match(recipes, /submenu: \[/);
+  assert.doesNotMatch(recipes, /from ["']@\/|FlowChat|ChatComposer|fetch\(/);
+});

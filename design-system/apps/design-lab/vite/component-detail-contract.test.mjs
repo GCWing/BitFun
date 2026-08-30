@@ -553,3 +553,11 @@ test("Toolbar preview keeps leading, centered, trailing, and overflow compositio
   assert.match(detail, /setToolbarSize/);
   assert.match(styles, /\.component-toolbar-example\s*\{[^}]*max-inline-size:\s*760px/s);
 });
+
+test("Combobox details render their own live state and menus include nested interaction", async () => {
+  const detail = await readFile(detailSource, "utf8");
+  assert.match(detail, /data-component="combobox"/);
+  assert.match(detail, /defaultOpen=\{state === "open" \|\| state === "searching"\}/);
+  assert.match(detail, /defaultSearchValue=\{state === "searching"/);
+  assert.match(detail, /<NestedMenuPattern/);
+});

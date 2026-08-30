@@ -7,7 +7,7 @@ A fully custom, branded installer for BitFun — built with **Tauri 2 + React** 
 Instead of relying on the generic NSIS wizard UI from Tauri's built-in bundler, this project provides:
 
 - **100% custom UI** — React-based, with smooth animations, dark theme, and brand consistency
-- **Modern experience** — Similar to Discord, Figma, and VS Code installers
+- **Modern experience** — Similar to Discord and VS Code installers
 - **Full control** — Custom installation logic, right-click context menu, PATH integration
 - **Cross-platform potential** — Same codebase can target Windows, macOS, and Linux
 

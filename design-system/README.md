@@ -18,6 +18,17 @@ Design Lab exposes an Overview, a searchable component catalog with interactive 
 
 `@bitfun/ui/registry` is the component source of truth. Design Lab derives its component navigation, counts, token scopes, and detail routes from that package export; adding Lab copy or a preview cannot publish a component or keep a removed component alive.
 
+The **Patterns** page composes public controls into settings, navigation,
+search/actions, device cards, provider configuration, scene toolbars, and nested
+command menus. The provider specimen includes an actual modal interaction demo,
+model multi-selection/custom values and expandable detail cards. The toolbar
+supports tab selection, closing and addition; the command menu supports both
+button and right-click entry with nested keyboard and pointer navigation.
+These are local interaction previews: they do not call product APIs or save
+credentials.
+Review these manually in light/dark, high-contrast and density modes; build and
+interaction checks do not establish pixel-level visual fidelity.
+
 The same entry publishes `ChatComposer`, the shared context-band and
 compact/expanded input anatomy used by product composers without importing
 their stores, localized menus, editor, model, voice, or host actions.
