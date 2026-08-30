@@ -1935,7 +1935,7 @@ $_section-header-height: 22px;
 .bitfun-device-overview {
   position: fixed;
   z-index: 9999;
-  width: min(320px, calc(100vw - 16px));
+  width: min(280px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   display: flex;
   flex-direction: column;
@@ -2081,20 +2081,28 @@ $_section-header-height: 22px;
 }
 
 .bitfun-device-overview__notice {
-  width: 100%;
-  margin-top: 20px;
+  width: calc(100% - var(--bf-space-5) * 2);
+  margin: var(--bf-space-4) var(--bf-space-5) 0;
+  height: auto;
+  min-height: var(--bf-control-height-sm);
   justify-content: flex-start;
   text-align: left;
+  white-space: normal;
 }
 
 .bitfun-device-overview__actions {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-1;
-  padding: 0 $size-gap-1;
+  flex-shrink: 0;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-5);
 
   > [data-bf-component='button'] {
     width: 100%;
+    height: auto;
+    min-height: var(--bf-control-height-sm);
+    font-size: var(--bf-font-size-small);
+    white-space: normal;
   }
 
   &:focus-visible {
@@ -2114,23 +2122,18 @@ $_section-header-height: 22px;
   }
 }
 
-// Device overview v2: separate the device roles from the connection service.
-.bitfun-device-overview {
-  width: min(336px, calc(100vw - 16px));
-}
-
 .bitfun-device-overview__header {
-  min-height: 24px;
-  padding: 1px 4px 2px;
+  flex-shrink: 0;
+  padding: var(--bf-space-5) var(--bf-space-5) var(--bf-space-1);
 
   .bitfun-device-overview__title {
-    overflow: hidden;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 600;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--bf-color-content-primary);
+    font-family: var(--bf-font-family-control);
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
+    text-align: center;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -2138,37 +2141,69 @@ $_section-header-height: 22px;
   min-width: 0;
 }
 
-.bitfun-device-overview__local-device {
+.bitfun-device-overview__summary {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 4px 6px;
-  border-radius: $size-radius-sm;
-  background: var(--bf-appearance-token-element-bg-subtle);
+  min-width: 0;
+  text-align: center;
+}
 
-  svg {
-    flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-primary);
-  }
+.bitfun-device-overview__artwork {
+  display: grid;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  flex-shrink: 0;
+  overflow: hidden;
+  place-items: center;
+  background: var(--bf-color-surface-raised);
+  isolation: isolate;
 
-  strong {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  > img {
+    position: absolute;
+    width: 202px;
+    height: 202px;
+    max-width: none;
+    object-fit: contain;
+    mix-blend-mode: multiply;
   }
 }
 
-.bitfun-device-overview__device-group {
-  margin-top: 16px;
+.bitfun-device-overview__artwork-glyph {
+  width: 58.333333%;
+  aspect-ratio: 140 / 78;
+  background: var(--bf-color-content-primary);
+  mask: url('./assets/device.svg') center / contain no-repeat;
+}
 
-  &.is-primary {
-    margin-top: 2px;
-  }
+.bitfun-device-overview__artwork[data-artwork='server'] .bitfun-device-overview__artwork-glyph {
+  width: 38.11849%;
+  aspect-ratio: 91.484375 / 70.7421875;
+  mask-image: url('./assets/server.svg');
+}
+
+.bitfun-device-overview__device-name {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-inline: var(--bf-space-5);
+  color: var(--bf-color-content-secondary);
+  font-family: var(--bf-font-family-control);
+  font-size: var(--bf-font-size-meta);
+  line-height: var(--bf-line-height-base);
+  overflow-wrap: anywhere;
+}
+
+.bitfun-device-overview__activity {
+  padding: var(--bf-space-1) var(--bf-space-5) 0;
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-meta);
+  line-height: var(--bf-line-height-base);
+  overflow-wrap: anywhere;
+}
+
+.bitfun-device-overview__device-group {
+  margin: var(--bf-space-4) var(--bf-space-5) 0;
 
   h3 {
     margin: 0 6px 7px;
@@ -2187,16 +2222,13 @@ $_section-header-height: 22px;
 
 .bitfun-device-overview__device-row {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  column-gap: var(--bf-space-2);
+  row-gap: var(--bf-space-1);
   min-height: 42px;
   padding: 4px 6px;
   border-radius: $size-radius-sm;
-
-  .is-primary & {
-    background: var(--bf-appearance-token-element-bg-subtle);
-  }
 
   &[data-bf-device-kind='message-app'] .bitfun-device-overview__device-icon {
     background: transparent;
@@ -2213,14 +2245,12 @@ $_section-header-height: 22px;
     white-space: nowrap;
   }
 
-  > span {
-    max-width: 128px;
-    overflow: hidden;
+  > span:not(.bitfun-device-overview__device-icon) {
+    grid-column: 2;
     color: var(--bf-appearance-token-color-text-muted);
     font-size: 10px;
     font-weight: 550;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 
     // Green dot plus muted label, the live-state pairing the workspace list
     // already teaches in this panel. Colouring the text as well would make one
@@ -2239,6 +2269,7 @@ $_section-header-height: 22px;
 }
 
 .bitfun-device-overview__device-icon {
+  grid-row: 1 / span 2;
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -2256,11 +2287,11 @@ $_section-header-height: 22px;
 
 .bitfun-device-overview__service {
   display: grid;
-  grid-template-columns: 16px auto minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   min-height: 34px;
-  margin-top: 18px;
+  margin: var(--bf-space-4) var(--bf-space-5) 0;
   padding: 5px 8px;
   border-radius: $size-radius-sm;
   background: var(--bf-appearance-token-element-bg-subtle);
@@ -2268,12 +2299,13 @@ $_section-header-height: 22px;
   font-size: 10px;
 
   strong {
+    grid-column: 2;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
     font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: 550;
-    text-align: right;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2284,19 +2316,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
     font-size: 9px;
-    text-align: right;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-}
-
-.bitfun-device-overview__actions {
-  margin-top: 2px;
-  padding: 12px 4px 0;
-  border-top: 1px solid var(--bf-appearance-token-border-subtle);
-
-  > [data-bf-component='button'] {
-    min-height: 34px;
   }
 }
 
