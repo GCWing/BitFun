@@ -26,6 +26,9 @@ import {
   ActionCard,
   ActionItem,
   ActivityItem,
+  Alert,
+  Avatar,
+  AvatarGroup,
   Button,
   Card,
   CardBody,
@@ -33,6 +36,7 @@ import {
   CardHeader,
   CardMedia,
   ChangeCount,
+  Checkbox,
   Composer,
   Combobox,
   ComposerContextBar,
@@ -40,6 +44,7 @@ import {
   ComposerToolbar,
   ConfirmDialog,
   Disclosure,
+  Empty,
   Field,
   FieldGroup,
   FieldRow,
@@ -58,7 +63,9 @@ import {
   NavigationPanelItem,
   NavigationPanelSection,
   NavigationPanelSeparator,
+  NumberInput,
   PageHeader,
+  Radio,
   ScrollArea,
   SearchField,
   SegmentedControl,
@@ -66,6 +73,7 @@ import {
   StatusPill,
   Switch,
   TabGroup,
+  Textarea,
   ThemeRoot,
   Toolbar,
   ToolbarBadge,
@@ -89,6 +97,7 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
+import previewImage from "../assets/design-system-hero.webp";
 import { NestedMenuPattern } from "./ReferencePatterns";
 import { useI18n, type MessageKey } from "../i18n";
 import {
@@ -169,6 +178,8 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   custom: "detail.option.custom",
   empty: "detail.option.empty",
   pending: "detail.option.pending",
+  plain: "detail.option.plain",
+  divided: "detail.option.divided",
   md: "detail.option.md",
   none: "detail.option.none",
   off: "detail.option.off",
@@ -215,7 +226,7 @@ function InspectorSelect({
       <select onChange={(event) => onChange(event.target.value)} value={value}>
         {options.map((option) => (
           <option key={option} value={option}>
-            {translateOptions ? t(optionLabelKeys[option] ?? "detail.option.default") : option}
+            {translateOptions && optionLabelKeys[option] ? t(optionLabelKeys[option]) : option}
           </option>
         ))}
       </select>
@@ -244,6 +255,20 @@ function InspectorToggle({
   );
 }
 
+function NumberInputPreview({ state }: { state: string }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(8);
+  return (
+    <NumberInput
+      aria-label={t("components.preview.inputLabel")}
+      className={`component-number-input-example lab-state-${state}`}
+      disabled={state === "disabled"}
+      onChange={setValue}
+      value={value}
+    />
+  );
+}
+
 export function ComponentDetailPage({
   colorScheme,
   component,
@@ -254,6 +279,7 @@ export function ComponentDetailPage({
   tokenOverrides,
 }: ComponentDetailPageProps) {
   const { t } = useI18n();
+  const stateLabel = (state: string) => optionLabelKeys[state] ? t(optionLabelKeys[state]) : state;
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [iconName, setIconName] = useState<IconName>("search");
@@ -294,7 +320,7 @@ export function ComponentDetailPage({
           ? "auto"
         : component.name === "Tooltip"
           ? "top"
-        : "default",
+        : component.states[0] ?? "default",
   );
   const [inspectorDisabled, setInspectorDisabled] = useState(false);
   const [inspectorLoading, setInspectorLoading] = useState(false);
@@ -363,8 +389,10 @@ export function ComponentDetailPage({
         return ["top", "bottom", "left", "right"] as const;
       case "Combobox":
         return component.states;
-      default:
+      case "Switch":
         return ["off", "on", "focus-visible", "disabled"] as const;
+      default:
+        return component.states;
     }
   }, [component.name, component.states, flowChatPreview]);
   const inspectorStates = component.name === "Button" || component.name === "IconButton"
@@ -372,6 +400,12 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "Textarea") return `import { Textarea } from "@bitfun/ui";\n\n<Textarea\n  label="${t("components.preview.inputLabel")}"\n  defaultValue="${t("components.preview.fieldValue")}"\n  hint="${t("components.preview.fieldDescription")}"\n  maxLength={200}\n  rows={3}\n  showCount\n/>`;
+    if (component.name === "Alert") return `import { Alert } from "@bitfun/ui";\n\n<Alert tone="info" title="${t("components.preview.notifications")}" message="${t("components.preview.fieldDescription")}" />`;
+    if (component.name === "Avatar") return 'import { Avatar } from "@bitfun/ui";\n\n<Avatar>BF</Avatar>';
+    if (component.name === "Checkbox" || component.name === "Radio") return `import { ${component.name} } from "@bitfun/ui";\n\n<${component.name} label="${t("components.preview.notifications")}" defaultChecked />`;
+    if (component.name === "NumberInput") return 'import { useState } from "react";\nimport { NumberInput } from "@bitfun/ui";\n\nfunction Example() {\n  const [value, setValue] = useState(8);\n  return <NumberInput value={value} onChange={setValue} />;\n}';
+    if (component.name === "Empty") return `import { Empty } from "@bitfun/ui";\n\n<Empty title="${t("components.preview.cardTitle")}" description="${t("components.preview.cardDescription")}" />`;
     if (component.name === "Combobox") return 'import { Combobox } from "@bitfun/ui";\n\n<Combobox label="Models" multiple searchable allowCustomValue options={[{ label: "OpenBitFun", value: "openbitfun" }]} />';
     if (flowChatPreview) {
       return flowChatPreview.codeSample(t);
@@ -503,6 +537,7 @@ export function ComponentDetailPage({
     if (component.name === "Toolbar") {
       return `import { ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\nimport { MoreHorizontal, Search } from "lucide-react";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Search />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />\n  </ToolbarGroup>}\n/>`;
     }
+    if (component.name !== "Switch") return `// ${t("detail.previewUnavailable")}: ${component.name}`;
     const stateProps = previewState === "on"
       ? " defaultChecked"
       : previewState === "disabled"
@@ -734,6 +769,64 @@ export function ComponentDetailPage({
 
     if (component.name === "Icon") {
       return <Icon name={iconName} size={iconSize} tone={iconTone} />;
+    }
+
+    if (component.name === "Textarea") {
+      return (
+        <Textarea
+          className={`component-textarea-example lab-state-${state}`}
+          defaultValue={t("components.preview.fieldValue")}
+          disabled={state === "disabled"}
+          errorMessage={t("components.preview.inputError")}
+          hint={t("components.preview.fieldDescription")}
+          invalid={state === "invalid"}
+          key={state}
+          label={t("components.preview.inputLabel")}
+          maxLength={200}
+          rows={3}
+          showCount
+        />
+      );
+    }
+
+    if (component.name === "Alert") {
+      const tone = state === "success" || state === "warning" || state === "error" ? state : "info";
+      return (
+        <Alert
+          message={t("components.preview.fieldDescription")}
+          title={t("components.preview.notifications")}
+          tone={tone}
+        />
+      );
+    }
+    if (component.name === "Avatar") {
+      return state === "grouped"
+        ? <AvatarGroup><Avatar>BF</Avatar><Avatar>UI</Avatar><Avatar>DS</Avatar></AvatarGroup>
+        : <Avatar alt="BitFun" key={state} src={state === "image" ? previewImage : undefined}>BF</Avatar>;
+    }
+    if (component.name === "Checkbox" || component.name === "Radio") {
+      const Control = component.name === "Checkbox" ? Checkbox : Radio;
+      return (
+        <Control
+          className={`component-choice-example lab-state-${state}`}
+          defaultChecked={state === "checked"}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          key={state}
+          label={t("components.preview.notifications")}
+          {...(component.name === "Checkbox" ? { indeterminate: state === "indeterminate" } : {})}
+        />
+      );
+    }
+    if (component.name === "NumberInput") return <NumberInputPreview key={state} state={state} />;
+    if (component.name === "Empty") {
+      return (
+        <Empty
+          actions={state === "with-actions" ? <Button>{t("components.preview.add")}</Button> : undefined}
+          description={t("components.preview.cardDescription")}
+          title={state === "with-title" ? t("components.preview.cardTitle") : undefined}
+        />
+      );
     }
 
     if (component.name === "Disclosure") {
@@ -1477,6 +1570,7 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name !== "Switch") return <p role="status">{t("detail.previewUnavailable")}: {component.name}</p>;
     return (
       <Switch
         aria-label={t("components.preview.notifications")}
@@ -1531,11 +1625,14 @@ export function ComponentDetailPage({
               contrast={contrast}
               density={density}
               tokenOverrides={tokenOverrides}
+              tabIndex={0}
+              role="region"
+              aria-label={t("detail.preview")}
             >
               {component.name === "ConfirmDialog" ? (
                 <div className="component-confirm-dialog-preview-stage">
                   <span className="component-confirm-dialog-preview-stage__label">
-                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                    {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
                 </div>
@@ -1552,35 +1649,47 @@ export function ComponentDetailPage({
               ) : component.name === "Card" ? (
                 <div className="component-card-preview-stage">
                   <span className="component-card-preview-stage__label">
-                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                    {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
                 </div>
               ) : component.name === "ActivityItem" ? (
                 <div className="component-activity-item-preview-stage">
                   <span className="component-activity-item-preview-stage__label">
-                    {t(optionLabelKeys[activityItemAppearance] ?? "detail.option.default")} · {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                    {stateLabel(activityItemAppearance)} · {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
                 </div>
               ) : component.name === "Composer" ? (
                 <div className="component-composer-preview-stage">
                   <span className="component-composer-preview-stage__label">
-                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                    {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
                 </div>
               ) : component.name === "Toolbar" ? (
                 <div className="component-toolbar-preview-stage">
                   <span className="component-toolbar-preview-stage__label">
-                    {t(optionLabelKeys[previewState] ?? "detail.option.default")}
+                    {stateLabel(previewState)}
                   </span>
                   {renderPreview(previewState)}
                 </div>
               ) : component.name === "Combobox" ? (
                 <div className="component-combobox-preview" data-component="combobox">
-                  <span>{t(optionLabelKeys[previewState] ?? "detail.option.default")}</span>
+                  <span>{stateLabel(previewState)}</span>
                   {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Menu" || component.name === "NavigationPanel" || component.name === "FieldGroup" ? (
+                <div className="component-surface-state-list" data-component={component.name}>
+                  {states.map((state) => (
+                    <section className="component-surface-state-list__item" key={state}>
+                      <header className="flow-chat-state-list__heading">
+                        <strong>{stateLabel(state)}</strong>
+                        <code>{state}</code>
+                      </header>
+                      <div className="component-surface-state-list__preview">{renderPreview(state)}</div>
+                    </section>
+                  ))}
                 </div>
               ) : isFlowChatComponent ? (
                 <div
@@ -1594,7 +1703,7 @@ export function ComponentDetailPage({
                       key={state}
                     >
                       <header className="flow-chat-state-list__heading">
-                        <strong>{t(optionLabelKeys[state] ?? "detail.option.default")}</strong>
+                        <strong>{stateLabel(state)}</strong>
                         <code>{state}</code>
                       </header>
                       <div
@@ -1619,13 +1728,13 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {stateLabel(state)}
                     </span>
                   ))}
                   {buttonVariants.map((matrixVariant) => (
                     <Fragment key={matrixVariant}>
                       <span className="component-preview-matrix__row-label">
-                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                        {stateLabel(matrixVariant)}
                       </span>
                       {states.map((state) => (
                         <div
@@ -1661,13 +1770,13 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {stateLabel(state)}
                     </span>
                   ))}
                   {iconButtonVariants.map((matrixVariant) => (
                     <Fragment key={matrixVariant}>
                       <span className="component-preview-matrix__row-label">
-                        {t(optionLabelKeys[matrixVariant] ?? "detail.option.default")}
+                        {stateLabel(matrixVariant)}
                       </span>
                       {states.map((state) => (
                         <div
@@ -1722,7 +1831,7 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {stateLabel(state)}
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">{component.name}</span>
@@ -1749,7 +1858,7 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {stateLabel(state)}
                     </span>
                   ))}
                   <span className="component-preview-matrix__row-label">TabGroup</span>
@@ -1766,7 +1875,7 @@ export function ComponentDetailPage({
               ) : (
                 <div
                   className="component-preview-matrix"
-                  data-component="switch"
+                  data-component={component.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()}
                   data-state-count={states.length}
                 >
                   <span className="component-preview-matrix__corner" />
@@ -1776,10 +1885,10 @@ export function ComponentDetailPage({
                       data-last={index === states.length - 1 || undefined}
                       key={state}
                     >
-                      {t(optionLabelKeys[state] ?? "detail.option.default")}
+                      {stateLabel(state)}
                     </span>
                   ))}
-                  <span className="component-preview-matrix__row-label">Switch</span>
+                  <span className="component-preview-matrix__row-label">{component.name}</span>
                   {states.map((state) => (
                     <div
                       className="component-preview-matrix__cell"
