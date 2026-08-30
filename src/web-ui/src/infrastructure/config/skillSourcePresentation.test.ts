@@ -7,6 +7,7 @@ import {
   formatSkillOrigin,
   getModeSkillRuntimeStatus,
   getSkillSourceLabel,
+  getSkillSourceLabelFromIdentity,
 } from './skillSourcePresentation';
 
 function skill(overrides: Partial<SkillInfo> = {}): SkillInfo {
@@ -44,6 +45,7 @@ describe('skill source presentation', () => {
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'home.codex' }))).toBe('Codex');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'bitfun-system' }))).toBe('BitFun');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'future' }), '其他来源')).toBe('其他来源');
+    expect(getSkillSourceLabelFromIdentity('', '', 'home.codex')).toBe('Codex');
   });
 
   it('only allows BitFun-owned non-builtin skills to be deleted', () => {

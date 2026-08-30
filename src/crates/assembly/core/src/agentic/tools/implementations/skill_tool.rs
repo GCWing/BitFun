@@ -313,6 +313,8 @@ impl Tool for SkillTool {
                 "skill_name": skill_data.name,
                 "skill_key": skill_data.key,
                 "source_slot": skill_data.source_slot,
+                "source_id": skill_data.source_id,
+                "source_label": skill_data.source_label,
                 "description": skill_data.description,
                 "location": location_str,
                 "content": skill_data.content,
@@ -541,6 +543,75 @@ Use the remote project skill.
     }
 
     #[tokio::test]
+    async fn explicit_skill_call_returns_original_name_and_source_metadata() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".codex/skills/deep-research");
+        fs::create_dir_all(skill_dir.join("agents")).expect("skill agents directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: deep-research\ndescription: Academic research workflow.\n---\n\nResearch the topic.\n",
+        )
+        .expect("skill markdown");
+        fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "interface:\n  display_name: \"Academic Deep Research\"\npolicy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("skill interface metadata");
+        let mut context = local_context(temp.path().to_path_buf());
+        context.agent_type = Some("DeepResearch".to_string());
+
+        let results = SkillTool::new()
+            .call_impl(&json!({ "command": "deep-research" }), &context)
+            .await
+            .expect("explicit-only skill should remain directly loadable");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result payload");
+        };
+        assert_eq!(data["skill_name"], "deep-research");
+        assert!(data.get("skill_display_name").is_none());
+        assert_eq!(data["source_slot"], "codex");
+        assert_eq!(data["source_id"], "codex");
+        assert_eq!(data["source_label"], "Codex");
+    }
+
+    #[tokio::test]
+    async fn native_deep_research_omits_same_named_skill_only_from_implicit_catalog() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".codex/skills/deep-research");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: deep-research\ndescription: Research workflow.\n---\n\nResearch the topic.\n",
+        )
+        .expect("skill markdown");
+        let registry = SkillRegistry::global();
+        let resolved = registry
+            .get_resolved_skills_for_workspace(Some(temp.path()), Some("DeepResearch"))
+            .await;
+        let skill = resolved
+            .iter()
+            .find(|skill| skill.name == "deep-research")
+            .expect("same-named skill should remain enabled and discoverable");
+        assert!(skill.allow_implicit_invocation);
+        let implicit = registry
+            .get_implicitly_invocable_skills_for_workspace(Some(temp.path()), Some("DeepResearch"))
+            .await;
+        assert!(!implicit.iter().any(|skill| skill.name == "deep-research"));
+
+        let loaded = registry
+            .find_and_load_skill_by_key_for_workspace(
+                &skill.key,
+                Some(temp.path()),
+                Some("DeepResearch"),
+            )
+            .await
+            .expect("native DeepResearch should still allow explicit stable-key invocation");
+        assert_eq!(loaded.name, "deep-research");
+        assert_eq!(loaded.source_label, "Codex");
+    }
+
+    #[tokio::test]
     async fn local_claude_skill_uses_source_semantics_for_discovery_load_and_arguments() {
         let temp = tempfile::tempdir().expect("tempdir");
         let skill_dir = temp.path().join(".claude/skills/deploy-service");
@@ -595,7 +666,21 @@ Use the remote project skill.
             .await
             .expect("remote Claude skill should load with the discovery dialect");
         assert_eq!(loaded.name, "remote-review");
+        assert_eq!(loaded.source_id, "claude-code");
+        assert_eq!(loaded.source_label, "Claude Code");
         assert_eq!(loaded.argument_names, ["target", "focus"]);
+
+        let loaded_by_key = registry
+            .find_and_load_skill_by_key_for_remote_workspace(
+                &loaded.key,
+                &ClaudeRemoteFs,
+                "/remote/project",
+                None,
+            )
+            .await
+            .expect("remote skill should retain source metadata when loaded by key");
+        assert_eq!(loaded_by_key.source_id, loaded.source_id);
+        assert_eq!(loaded_by_key.source_label, loaded.source_label);
     }
 
     #[tokio::test]
@@ -733,6 +818,8 @@ Use the remote project skill.
         assert_eq!(data["skill_name"], "ppt-design");
         assert_eq!(data["skill_key"], "user::bitfun-system::ppt-design");
         assert_eq!(data["source_slot"], "bitfun-system");
+        assert_eq!(data["source_id"], "bitfun");
+        assert_eq!(data["source_label"], "BitFun");
         assert!(data["content"]
             .as_str()
             .unwrap_or_default()
