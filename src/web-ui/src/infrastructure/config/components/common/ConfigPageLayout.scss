@@ -210,7 +210,7 @@
   justify-self: stretch;
 
   > [data-bf-component='input'],
-  > .select,
+  > :is([data-bf-component='combobox'], [data-bf-component='select']),
   > [data-bf-component='number-input'] {
     width: 100%;
     min-width: 0;
@@ -221,13 +221,13 @@
    * unstyled wrapper is a flex item, so it would shrink to content width and
    * that row's dropdown would render narrower than every other row's.
    */
-  > div:has(> .select),
+  > div:has(> :is([data-bf-component='combobox'], [data-bf-component='select'])),
   > div:has(> [data-bf-component='input']),
   > div:has(> [data-bf-component='number-input']) {
     width: 100%;
     min-width: 0;
 
-    > .select,
+    > :is([data-bf-component='combobox'], [data-bf-component='select']),
     > [data-bf-component='input'],
     > [data-bf-component='number-input'] {
       width: 100%;

@@ -34,6 +34,7 @@ import {
   CardMedia,
   ChangeCount,
   Composer,
+  Combobox,
   ComposerContextBar,
   ComposerDivider,
   ComposerToolbar,
@@ -355,6 +356,8 @@ export function ComponentDetailPage({
         return ["default", "with-center", "overflow"] as const;
       case "Tooltip":
         return ["top", "bottom", "left", "right"] as const;
+      case "Combobox":
+        return component.states;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
@@ -364,6 +367,7 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "Combobox") return 'import { Combobox } from "@bitfun/ui";\n\n<Combobox label="Models" multiple searchable allowCustomValue options={[{ label: "OpenBitFun", value: "openbitfun" }]} />';
     if (flowChatPreview) {
       return flowChatPreview.codeSample(t);
     }
@@ -776,6 +780,9 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "Combobox") {
+      return <Combobox label={t("components.preview.modalProviderName")} multiple={state === "multiple"} allowCustomValue={state === "custom"} disabled={state === "disabled"} error={state === "invalid"} loading={state === "loading"} options={state === "empty" || state === "loading" ? [] : [{ value: "openbitfun", label: "OpenBitFun", group: "API" }, { value: "custom", label: t("components.preview.add"), group: "API" }]} />;
+    }
     if (component.name === "Select") {
       return (
         <Select

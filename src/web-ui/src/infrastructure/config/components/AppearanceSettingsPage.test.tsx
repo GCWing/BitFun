@@ -12,6 +12,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@bitfun/ui', () => ({
+  Combobox: ({ triggerTestId }: { triggerTestId?: string }) => (
+    <button type="button" data-testid={triggerTestId} />
+  ),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   FormSection: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => <section {...props}>{children}</section>,
   FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,

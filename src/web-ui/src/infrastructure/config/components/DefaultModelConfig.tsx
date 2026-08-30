@@ -1,9 +1,10 @@
+import { Combobox } from '@bitfun/ui';
  
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Layers } from 'lucide-react';
-import { Select, CubeLoading } from '@/component-library';
+import { CubeLoading } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
 import { configManager } from '../services/ConfigManager';
 import type {
@@ -182,7 +183,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.primary.description')}
         align="center"
       >
-        <Select
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="primaryModel"
           value={defaultModels.primary || ''}
@@ -203,7 +204,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.fast.description')}
         align="center"
       >
-        <Select
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="lightweightModel"
           value={defaultModels.fast || ''}
@@ -226,7 +227,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('optional.capabilities.image_understanding.description')}
         align="center"
       >
-        <Select
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="embeddingModel"
           value={defaultModels.image_understanding || ''}
@@ -249,7 +250,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('optional.capabilities.speech_recognition.description')}
         align="center"
       >
-        <Select
+        <Combobox
           value={defaultModels.speech_recognition || ''}
           onChange={(value) => handleDefaultModelChange('speech_recognition', normalizeSelectValue(value))}
           placeholder={t('optional.notSet')}

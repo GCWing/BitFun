@@ -1,8 +1,9 @@
+import { Combobox, type ComboboxOption } from '@bitfun/ui';
 import { Button, Card, Icon, IconButton, Input, Modal, SearchField, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Wifi, Loader, RefreshCw, AlertTriangle, EyeOff, ChevronUp, Brain, FolderOpen } from 'lucide-react';
-import { Select as LegacySelect, NumberInput, Textarea, type SelectOption } from '@/component-library';
+import { NumberInput, Textarea } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -233,7 +234,7 @@ function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): Sel
 
 /**
  * Compute the stored request URL from a base URL and provider format.
- * For gemini, stores the bare base (no /v1beta/models/... suffix) —
+ * For gemini, stores the bare base (no /v1beta/models/... suffix) ï¿½
  * the backend dynamically appends /v1beta/models/{model}:streamGenerateContent?alt=sse.
  */
 function resolveRequestUrl(baseUrl: string, provider: string, _modelName = ''): string {
@@ -455,7 +456,7 @@ const ModelSettingsPage: React.FC = () => {
     [requestFormatOptions]
   );
 
-  const categoryOptions = useMemo<SelectOption[]>(
+  const categoryOptions = useMemo<ComboboxOption[]>(
     () => [
       { label: t('category.general_chat'), value: 'general_chat' },
       { label: t('category.multimodal'), value: 'multimodal' },
@@ -2080,7 +2081,7 @@ const ModelSettingsPage: React.FC = () => {
           || normalizedEndpoint.startsWith(`${normalizedEditingBaseUrl}/`)
           || normalizedEditingBaseUrl.startsWith(`${normalizedEndpoint}/`);
       })?.id;
-    const catalogModelOptions: SelectOption[] = (catalogProvider?.models || [])
+    const catalogModelOptions: ComboboxOption[] = (catalogProvider?.models || [])
       .filter(model => (
         !selectedEndpointId
         || !model.endpoint_ids?.length
@@ -2097,7 +2098,7 @@ const ModelSettingsPage: React.FC = () => {
           'data-model-source': model.source,
         },
       }));
-    const fetchedOrPresetModelOptions: SelectOption[] = remoteModelOptions.length > 0
+    const fetchedOrPresetModelOptions: ComboboxOption[] = remoteModelOptions.length > 0
       ? remoteModelOptions.map(model => ({
           label: model.display_name || model.id,
           value: model.id,
@@ -2119,7 +2120,7 @@ const ModelSettingsPage: React.FC = () => {
             'data-model-name': model,
           },
         }));
-    const selectedModelOptions: SelectOption[] = selectedModelDrafts.map(draft => ({
+    const selectedModelOptions: ComboboxOption[] = selectedModelDrafts.map(draft => ({
       label: draft.modelName,
       value: draft.modelName,
       testId: 'settings-model-option',
@@ -2128,7 +2129,7 @@ const ModelSettingsPage: React.FC = () => {
         'data-model-name': draft.modelName,
       },
     }));
-    const availableModelOptions: SelectOption[] = Array.from(
+    const availableModelOptions: ComboboxOption[] = Array.from(
       new Map(
         [...fetchedOrPresetModelOptions, ...selectedModelOptions]
           .map(option => [String(option.value), option] as const)
@@ -2146,7 +2147,7 @@ const ModelSettingsPage: React.FC = () => {
               ? t('providerSelection.noPresetModels')
               : null;
     const selectedModelValues = selectedModelDrafts.map(draft => draft.modelName);
-    const renderModelPickerValue = (option?: SelectOption | SelectOption[]) => {
+    const renderModelPickerValue = (option?: ComboboxOption | ComboboxOption[]) => {
       const selectedOptions = Array.isArray(option) ? option : option ? [option] : [];
 
       if (selectedOptions.length === 0) {
@@ -2306,9 +2307,9 @@ const ModelSettingsPage: React.FC = () => {
                     <div className="bitfun-model-settings__selected-model-head-bottom">
                       <span className="bitfun-model-settings__selected-model-summary">
                         {categoryLabel}
-                        {' · '}
+                        {' ï¿½ '}
                         {formatTokenCountShort(draft.contextWindow)} ctx
-                        {' · '}
+                        {' ï¿½ '}
                         {formatReasoningSummary(draft, reasoningProjection)}
                       </span>
                     </div>
@@ -2318,7 +2319,7 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="bitfun-model-settings__selected-model-grid">
                     <div className="bitfun-model-settings__selected-model-field">
                       <span>{t('category.label')}</span>
-                      <LegacySelect
+                      <Combobox
                         value={draft.category}
                         onChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
                         options={categoryOptions}
@@ -2411,7 +2412,7 @@ const ModelSettingsPage: React.FC = () => {
         ? `subscription:opencode:${selectedOpenCodePlan || 'zen'}`
         : `subscription:${selectedSubscriptionProvider || 'codex'}`
       : 'api_key';
-    const authOptions: SelectOption[] = [
+    const authOptions: ComboboxOption[] = [
       { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
@@ -2525,7 +2526,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-model-settings__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
-                      <LegacySelect
+                      <Combobox
                         value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
                         onChange={(value) => {
                           const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
@@ -2539,7 +2540,7 @@ const ModelSettingsPage: React.FC = () => {
                           }));
                         }}
                         placeholder={t('form.baseUrl')}
-                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
+                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} ï¿½ ${opt.note}` }))}
                         size="small"
                       />
                     )}
@@ -2593,7 +2594,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <LegacySelect
+                      <Combobox
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
@@ -2614,6 +2615,7 @@ const ModelSettingsPage: React.FC = () => {
                         size="small"
                         onOpenChange={handleModelSelectionOpenChange}
                         renderValue={renderModelPickerValue}
+                        indicator={selectedModelValues.length > 0 ? <Icon name="plus" size="sm" /> : undefined}
                         className={selectedModelValues.length > 0 ? 'bitfun-model-settings__model-picker-select bitfun-model-settings__model-picker-select--has-value' : 'bitfun-model-settings__model-picker-select'}
                       />
                     </div>
@@ -2711,7 +2713,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <LegacySelect
+                      <Combobox
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
@@ -3652,7 +3654,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="bitfun-model-settings__catalog-path">
-              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
+              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || 'ï¿½'}</code>
               <Tooltip content={t('modelsDevCatalog.reveal')}>
                 <IconButton
                   aria-label={t('modelsDevCatalog.reveal')}
@@ -3670,7 +3672,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.revision')} align="center">
             <code className="bitfun-model-settings__catalog-revision" title={modelsDevStatus?.revision}>
-              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}…` : '—'}
+              {modelsDevStatus?.revision ? `${modelsDevStatus.revision.slice(0, 12)}ï¿½` : 'ï¿½'}
             </code>
           </ConfigPageRow>
           <div className="bitfun-model-settings__catalog-offline-help" role="note">
@@ -3746,7 +3748,7 @@ const ModelSettingsPage: React.FC = () => {
             <ScrollArea className="bitfun-model-settings__subscription-logout-list">
               <ul>
                 {subscriptionLogoutRequest.affectedModels.map((model) => (
-                  <li key={model.id}>{model.name} · {model.model_name}</li>
+                  <li key={model.id}>{model.name} ï¿½ {model.model_name}</li>
                 ))}
               </ul>
             </ScrollArea>

@@ -742,7 +742,7 @@
     margin-bottom: $size-gap-4;
 
     > .search,
-    > .select {
+    > :is([data-bf-component='combobox'], [data-bf-component='select']) {
       width: 100%;
       min-width: 0;
     }

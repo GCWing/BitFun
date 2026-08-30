@@ -1,3 +1,4 @@
+import { Combobox } from '@bitfun/ui';
 /**
  * ScheduledJobsView — inline view for managing scheduled jobs.
  *
@@ -8,7 +9,7 @@
 import { Button, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { Select as LegacySelect } from '@/component-library';
+
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,
@@ -907,7 +908,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LegacySelect
+              <Combobox
                 size="small"
                 options={sessionOptions}
                 value={draft.sessionId}
@@ -931,7 +932,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.agentType')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LegacySelect
+              <Combobox
                 size="small"
                 options={workspaceAgentOptions}
                 value={draft.agentType}
@@ -962,7 +963,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <LegacySelect
+              <Combobox
                 size="small"
                 options={sessionOptions}
                 value={draft.sessionId}

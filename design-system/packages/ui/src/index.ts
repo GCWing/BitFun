@@ -201,3 +201,4 @@ export {
   type TokenOverrideName,
   type TokenOverrides,
 } from "./primitives/ThemeRoot";
+export { Combobox, ComboboxProvider, type ComboboxProps, type ComboboxOption, type ComboboxValue, type ComboboxLabels } from "./components/Combobox";

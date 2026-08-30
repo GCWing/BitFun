@@ -1,3 +1,4 @@
+import { Combobox } from '@bitfun/ui';
 /**
  * Create / edit form for a Todo.
  *
@@ -9,7 +10,7 @@
 import { Button, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
-import { Select as LegacySelect } from '@/component-library';
+
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -236,7 +237,7 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 <Icon name="folder" size="md" aria-hidden="true" />
                 {t('shared:features.workspace')}
               </span>
-              <LegacySelect
+              <Combobox
                 size="medium"
                 className="bf-todos__field-control"
                 options={workspaceSelectOptions}

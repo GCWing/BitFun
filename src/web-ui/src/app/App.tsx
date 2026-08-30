@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
-import { ConfirmDialogProvider, ModalProvider, TooltipProvider } from '@bitfun/ui';
+import { ComboboxProvider, ConfirmDialogProvider, ModalProvider, TooltipProvider } from '@bitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
@@ -971,6 +971,15 @@ function App() {
       portalContainer={getAppearanceOverlayHost}
     >
       <TooltipProvider portalContainer={getAppearanceOverlayHost}>
+      <ComboboxProvider portalContainer={getAppearanceOverlayHost} labels={{
+        placeholder: tComponents('select.placeholder'),
+        search: tComponents('select.search'),
+        empty: tComponents('select.emptyText'),
+        loading: tComponents('select.loading'),
+        clear: tComponents('search.clear'),
+        selectAll: tComponents('select.selectAll'),
+        create: tComponents('select.customValueHint'),
+      }}>
       <ConfirmDialogProvider
         cancelLabel={tComponents('dialog.confirm.cancel')}
         confirmLabel={tComponents('dialog.confirm.ok')}
@@ -1018,6 +1027,7 @@ function App() {
         </ViewModeProvider>
         </ChatProvider>
       </ConfirmDialogProvider>
+      </ComboboxProvider>
       </TooltipProvider>
     </ModalProvider>
   );

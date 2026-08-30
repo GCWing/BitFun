@@ -1,9 +1,10 @@
+import { Combobox } from '@bitfun/ui';
 import { Button, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Trash2, Wrench, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Select as LegacySelect } from '@/component-library';
+
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';
@@ -1282,7 +1283,7 @@ const AgentsHomeView: React.FC = () => {
                 {currentCapabilityTab === 'model'
                 && selectedAgent.agentKind === 'subagent'
                 && !selectedAgentIsExternal ? (
-                  <LegacySelect
+                  <Combobox
                     size="small"
                     searchable
                     className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
