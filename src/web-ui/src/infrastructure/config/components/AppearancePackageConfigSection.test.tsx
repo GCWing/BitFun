@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -67,14 +69,50 @@ describe('AppearancePackageConfigSection', () => {
     expect(html).not.toContain('.bitfun-skin');
   });
 
-  it('uses the supplied BitFun default artwork for the built-in package card', () => {
+  it('uses high-density artwork and a separate selection mark for the built-in package card', () => {
     appearanceStateMock.selectedAppearanceId = 'system';
 
     const html = renderToStaticMarkup(<AppearancePackageConfigSection />);
 
-    expect(html).toContain('src="/assets/appearance/bitfun-default-preview.png"');
+    expect(html).toContain('src="/assets/appearance/bitfun-default-preview@4x.png"');
+    expect(html).toContain('appearance-package-config__card-preview--builtin');
+    expect(html.match(/class="appearance-package-config__selected-mark"/g)).toHaveLength(1);
     expect(html).toContain('package.nativeName');
     expect(html).toContain('package.nativeDescription');
+
+    const imageSrc = html.match(/<img[^>]+src="([^"]+)"/)?.[1];
+    expect(imageSrc).toBeDefined();
+    const artwork = readFileSync(resolve(process.cwd(), 'public', imageSrc!.slice(1)));
+    expect(artwork.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    // Keep enough source pixels for the 240px card at high display scaling.
+    expect(artwork.readUInt32BE(16)).toBeGreaterThanOrEqual(240 * 4);
+    expect(artwork.readUInt32BE(20)).toBeGreaterThanOrEqual(120 * 4);
+  });
+
+  it('reuses the built-in high-density artwork in the hover preview without requesting a package asset', async () => {
+    appearanceStateMock.selectedAppearanceId = 'system';
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(<AppearancePackageConfigSection />);
+      });
+
+      const preview = container.querySelector<HTMLImageElement>('.appearance-package-config__card-preview img');
+      await act(async () => {
+        preview?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 220));
+      });
+
+      const largerPreview = document.querySelector<HTMLImageElement>(
+        '[data-testid="appearance-package-preview-popover"] img',
+      );
+      expect(largerPreview?.getAttribute('src')).toBe('/assets/appearance/bitfun-default-preview@4x.png');
+      expect(getPreviewAssetMock).not.toHaveBeenCalled();
+    } finally {
+      act(() => root.unmount());
+    }
   });
 
   it('renders stored preview assets and releases their object URLs', async () => {
@@ -100,6 +138,8 @@ describe('AppearancePackageConfigSection', () => {
     expect(preview?.src).toBe('blob:appearance-preview');
     expect(preview?.alt).toBe('');
     expect(preview?.closest('article')?.getAttribute('aria-label')).toBe('Sample Appearance');
+    expect(container.querySelectorAll('.appearance-package-config__selected-mark')).toHaveLength(1);
+    expect(container.querySelector('.appearance-package-config__card-preview--builtin')).toBeNull();
     expect(createObjectURL).toHaveBeenCalledOnce();
 
     await act(async () => {
