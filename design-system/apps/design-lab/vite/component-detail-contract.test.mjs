@@ -27,19 +27,19 @@ test("preview matrices define horizontal columns for every registered state coun
   );
   assert.match(
     source,
-    /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(244px, 1fr\)\)/s,
+    /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(280px, max-content\)\)/s,
   );
   assert.match(
     source,
-    /\.component-preview-matrix\[data-state-count="4"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(124px, 1fr\)\)/s,
+    /\.component-preview-matrix\[data-state-count="4"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(4, minmax\(280px, max-content\)\)/s,
   );
   assert.match(
     source,
-    /\.component-preview-matrix\[data-state-count="5"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(5, minmax\(144px, 1fr\)\)/s,
+    /\.component-preview-matrix\[data-state-count="5"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(5, minmax\(280px, max-content\)\)/s,
   );
   assert.match(
     source,
-    /\.component-preview-matrix\[data-state-count="6"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(6, minmax\(260px, 1fr\)\)/s,
+    /\.component-preview-matrix\[data-state-count="6"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(6, minmax\(280px, max-content\)\)/s,
   );
 });
 
@@ -560,4 +560,16 @@ test("Combobox details render their own live state and menus include nested inte
   assert.match(detail, /defaultOpen=\{state === "open" \|\| state === "searching"\}/);
   assert.match(detail, /defaultSearchValue=\{state === "searching"/);
   assert.match(detail, /<NestedMenuPattern/);
+});
+
+test("wide surfaces stack independently and compact pickers do not reserve empty canvas", async () => {
+  const [detail, styles] = await Promise.all([readFile(detailSource, "utf8"), readFile(stylesSource, "utf8")]);
+  assert.match(detail, /component.name === "Menu" \|\| component.name === "NavigationPanel" \? \(/);
+  assert.match(detail, /className="component-surface-state-list__preview"/);
+  assert.match(styles, /\.component-surface-state-list\s*\{[^}]*display: grid/);
+  assert.match(styles, /\.component-surface-state-list__preview\s*\{[^}]*overflow: auto/);
+  const picker = styles.match(/\.component-combobox-preview\s*\{[^}]*\}/)?.[0] ?? "";
+  assert.match(picker, /padding:/);
+  assert.doesNotMatch(picker, /min-block-size: 280px/);
+  assert.match(styles, /\.component-inspector-preview\s*\{[^}]*overflow: auto/);
 });

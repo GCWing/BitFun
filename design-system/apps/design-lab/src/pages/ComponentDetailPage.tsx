@@ -1531,6 +1531,9 @@ export function ComponentDetailPage({
               contrast={contrast}
               density={density}
               tokenOverrides={tokenOverrides}
+              tabIndex={0}
+              role="region"
+              aria-label={t("detail.preview")}
             >
               {component.name === "ConfirmDialog" ? (
                 <div className="component-confirm-dialog-preview-stage">
@@ -1581,6 +1584,18 @@ export function ComponentDetailPage({
                 <div className="component-combobox-preview" data-component="combobox">
                   <span>{t(optionLabelKeys[previewState] ?? "detail.option.default")}</span>
                   {renderPreview(previewState)}
+                </div>
+              ) : component.name === "Menu" || component.name === "NavigationPanel" ? (
+                <div className="component-surface-state-list" data-component={component.name}>
+                  {states.map((state) => (
+                    <section className="component-surface-state-list__item" key={state}>
+                      <header className="flow-chat-state-list__heading">
+                        <strong>{t(optionLabelKeys[state] ?? "detail.option.default")}</strong>
+                        <code>{state}</code>
+                      </header>
+                      <div className="component-surface-state-list__preview">{renderPreview(state)}</div>
+                    </section>
+                  ))}
                 </div>
               ) : isFlowChatComponent ? (
                 <div
