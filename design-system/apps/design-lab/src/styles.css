@@ -3915,7 +3915,29 @@ input.lab-force-focus {
 
 .component-field-group-example {
   inline-size: 100%;
+  min-inline-size: 440px;
   max-inline-size: 760px;
+}
+
+.component-textarea-example {
+  inline-size: 280px;
+  max-inline-size: 100%;
+}
+
+.component-textarea-example.lab-state-hover textarea,
+.component-number-input-example.lab-state-hover > [data-bf-part="control"],
+.component-choice-example.lab-state-hover [data-bf-part="box"],
+.component-choice-example.lab-state-hover [data-bf-part="circle"] {
+  border-color: var(--bf-color-field-border-hover);
+  background-color: var(--bf-color-field-background-hover);
+}
+
+.component-textarea-example.lab-state-focus-visible textarea,
+.component-number-input-example.lab-state-focus-visible > [data-bf-part="control"],
+.component-choice-example.lab-state-focus-visible [data-bf-part="box"],
+.component-choice-example.lab-state-focus-visible [data-bf-part="circle"] {
+  border-color: var(--bf-color-field-border-focus);
+  box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
 }
 
 .component-icon-catalog {
@@ -3983,6 +4005,11 @@ input.lab-force-focus {
   grid-template-columns: 96px repeat(6, minmax(280px, max-content));
   grid-template-rows: 50px minmax(190px, 1fr);
   min-width: 1656px;
+}
+
+.component-preview-matrix[data-state-count="7"] {
+  grid-template-columns: 96px repeat(7, minmax(280px, max-content));
+  grid-template-rows: 50px minmax(190px, 1fr);
 }
 
 .component-preview-matrix[data-component="action-card"] [data-bf-component="action-card"] {
