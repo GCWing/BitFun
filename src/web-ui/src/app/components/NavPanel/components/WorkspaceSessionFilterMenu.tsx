@@ -6,6 +6,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { Icon, Tooltip } from '@bitfun/ui';
+import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
 import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
@@ -54,6 +55,18 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
+  const {
+    requestChange: requestSubmenuChange,
+    requestClose: requestSubmenuClose,
+    keepOpen: keepSubmenuOpen,
+    openNow: openSubmenuNow,
+  } = useSubmenuIntent<Submenu>({
+    activeId: activeSubmenu,
+    onActiveIdChange: setActiveSubmenu,
+    parentRef: menuRef,
+    submenuRef,
+    enabled: open,
+  });
 
   const isCustomized = view.ordering !== DEFAULT_WORKSPACE_SESSION_VIEW.ordering
     || view.show !== DEFAULT_WORKSPACE_SESSION_VIEW.show
@@ -130,9 +143,10 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
       role="menuitem"
       aria-haspopup="menu"
       aria-expanded={activeSubmenu === submenu}
-      onMouseEnter={() => setActiveSubmenu(submenu)}
-      onFocus={() => setActiveSubmenu(submenu)}
-      onClick={() => setActiveSubmenu(submenu)}
+      onPointerEnter={event => requestSubmenuChange(submenu, event)}
+      onPointerLeave={requestSubmenuClose}
+      onFocus={() => openSubmenuNow(submenu)}
+      onClick={() => openSubmenuNow(submenu)}
     >
       <span>{t(`nav.sessions.viewMenu.${submenu}.label`)}</span>
       <span className="bitfun-nav-panel__session-filter-menu-value">
@@ -184,7 +198,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           className={view.filters.hideArchived ? 'is-filtered' : ''}
           role="menuitemcheckbox"
           aria-checked={!view.filters.hideArchived}
-          onMouseEnter={() => setActiveSubmenu(null)}
+          onPointerEnter={event => requestSubmenuChange(null, event)}
           onClick={view.toggleArchived}
         >
           <span>{t('nav.sessions.viewMenu.archived')}</span>
@@ -196,7 +210,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
             type="button"
             role="menuitem"
             data-testid="nav-session-collapse-all"
-            onMouseEnter={() => setActiveSubmenu(null)}
+            onPointerEnter={event => requestSubmenuChange(null, event)}
             onClick={() => { view.requestCollapseAll(); close(); }}
           >
             <span>{t('nav.sessions.viewMenu.collapseAll')}</span>
@@ -205,7 +219,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
         <button
           type="button"
           role="menuitem"
-          onMouseEnter={() => setActiveSubmenu(null)}
+          onPointerEnter={event => requestSubmenuChange(null, event)}
           onClick={() => {
             for (const session of flowChatStore.getState().sessions.values()) {
               if (session.hasUnreadCompletion) flowChatStore.clearSessionUnreadCompletion(session.sessionId);
@@ -228,6 +242,8 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           role="menu"
           aria-label={t(`nav.sessions.viewMenu.${activeSubmenu}.label`)}
           data-testid={`nav-session-filter-${activeSubmenu}-menu`}
+          onPointerEnter={keepSubmenuOpen}
+          onPointerLeave={requestSubmenuClose}
         >
           {definition.options.map(option => {
             const selected = definition.kind === 'single'

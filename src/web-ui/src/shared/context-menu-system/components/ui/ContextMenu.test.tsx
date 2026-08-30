@@ -157,6 +157,48 @@ describe('ContextMenu presence', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('keeps the nested submenu open while pausing in the gap in either direction', () => {
+    act(() => root.render(
+      <ContextMenu
+        items={[{ id: 'share', label: 'Share', submenu: [{ id: 'email', label: 'Email' }] }]}
+        position={{ x: 0, y: 0 }}
+        visible
+        onClose={vi.fn()}
+      />,
+    ));
+    const parentItem = container.querySelector<HTMLElement>('[role="menuitem"]')!;
+    act(() => parentItem.dispatchEvent(new window.MouseEvent('pointerover', {
+      bubbles: true, clientX: 150, clientY: 40,
+    })));
+    act(() => vi.advanceTimersByTime(150));
+
+    const parent = container.querySelector<HTMLElement>('[role="menu"]')!;
+    const submenu = container.querySelector<HTMLElement>('.context-menu-submenu.visible')!;
+    parent.getBoundingClientRect = () => new window.DOMRect(0, 20, 215, 200);
+    submenu.getBoundingClientRect = () => new window.DOMRect(220, 20, 220, 200);
+
+    for (const element of [parentItem, submenu]) {
+      act(() => element.dispatchEvent(new window.MouseEvent('pointerout', {
+        bubbles: true, relatedTarget: document.body, clientX: 218, clientY: 80,
+      })));
+      act(() => vi.advanceTimersByTime(1000));
+      expect(parentItem.getAttribute('aria-expanded')).toBe('true');
+
+      act(() => submenu.dispatchEvent(new window.MouseEvent('pointerover', {
+        bubbles: true, relatedTarget: document.body, clientX: 225, clientY: 80,
+      })));
+    }
+
+    act(() => document.dispatchEvent(new window.MouseEvent('pointermove', {
+      bubbles: true, clientX: 218, clientY: 80,
+    })));
+    act(() => document.dispatchEvent(new window.MouseEvent('pointermove', {
+      bubbles: true, clientX: 218, clientY: 400,
+    })));
+    act(() => vi.advanceTimersByTime(300));
+    expect(parentItem.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('opens a submenu from the keyboard and keeps keyboard handling in the owning menu', () => {
     const items: ContextMenuItem[] = [{
       id: 'share',
