@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
 
 function readRelative(filename: string): string {
@@ -8,6 +9,8 @@ function readRelative(filename: string): string {
     'utf8',
   ).replace(/\r\n/g, '\n');
 }
+
+const cardCss = compile(fileURLToPath(new URL('./MiniAppCard.scss', import.meta.url))).css;
 
 describe('Mini App card presentation', () => {
   it('bounds the card without coupling its height to its width', () => {
@@ -37,6 +40,44 @@ describe('Mini App card presentation', () => {
       /@media \(max-width: 480px\) \{[\s\S]*?\.miniapp-card,[\s\S]*?\.gallery-skeleton-card \{\s+max-width: 100%;/,
     );
     expect(stylesheet).not.toContain('aspect-ratio: 12 / 5;');
+  });
+
+  it('lets actions move to a new line instead of squeezing tags into the remaining width', () => {
+    const footer = cardCss.match(/\.miniapp-card__footer \{([^}]+)\}/)?.[1];
+    const actions = cardCss.match(/\.miniapp-card__actions \{([^}]+)\}/)?.[1];
+
+    expect(footer).toContain('display: flex;');
+    expect(footer).toContain('flex-wrap: wrap;');
+    expect(footer).not.toContain('grid-template-columns:');
+    expect(actions).toContain('margin-inline-start: auto;');
+    expect(actions).toContain('flex-shrink: 0;');
+    expect(actions).not.toContain('grid-column:');
+  });
+
+  it('wraps whole tag pills and applies ellipsis in a block formatting context', () => {
+    const tags = cardCss.match(/\.miniapp-card__tags \{([^}]+)\}/)?.[1];
+    const tag = cardCss.match(/\.miniapp-card__tag \{([^}]+)\}/)?.[1];
+    const sharedTag = cardCss.match(/\.miniapp-card__tag,\s*\.miniapp-card__tag-overflow \{([^}]+)\}/)?.[1];
+
+    expect(tags).toContain('flex: 1 1 auto;');
+    expect(tags).toContain('flex-wrap: wrap;');
+    expect(tags).toContain('max-width: 100%;');
+    expect(tags).not.toContain('overflow: hidden;');
+    expect(tag).toContain('display: block;');
+    expect(tag).toContain('flex: 0 0 auto;');
+    expect(tag).toContain('box-sizing: border-box;');
+    expect(tag).toContain('max-width: min(100%, 16ch);');
+    expect(sharedTag).toContain('white-space: nowrap;');
+    expect(sharedTag).toContain('overflow: hidden;');
+    expect(sharedTag).toContain('text-overflow: ellipsis;');
+  });
+
+  it('keeps the overflow count intact and retains the compact tag summary', () => {
+    const overflow = cardCss.match(/(?:^|\})\s*\.miniapp-card__tag-overflow \{([^}]+)\}/)?.[1];
+
+    expect(overflow).toContain('flex: 0 0 auto;');
+    expect(cardCss).toMatch(/@container miniapp-card \(max-width: 519px\) \{\s*\.miniapp-card__tag--compact-hidden,\s*\.miniapp-card__tag-overflow--wide \{\s*display: none;/);
+    expect(cardCss).toMatch(/@container miniapp-card[\s\S]*?\.miniapp-card__tag-overflow--compact \{\s*display: inline-flex;/);
   });
 
   it('bounds market cards while preserving the media preview ratio', () => {
