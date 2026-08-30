@@ -206,6 +206,7 @@ const SettingsNav: React.FC = () => {
   return (
     <NavigationPanel
       className="bitfun-settings-nav"
+      contentClassName="bitfun-settings-nav__content"
       data-testid="settings-nav"
       data-bf-component="settings-nav"
       data-bf-part="root"
@@ -269,7 +270,6 @@ const SettingsNav: React.FC = () => {
                   data-bf-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
                   className={[
                     'bitfun-settings-nav__search-result-item',
-                    active && 'is-active',
                     selected && 'is-highlighted',
                   ].filter(Boolean).join(' ')}
                   onClick={() => activate(row.destination, true)}
@@ -319,10 +319,7 @@ const SettingsNav: React.FC = () => {
               data-bf-component="settings-nav"
               data-bf-part="item"
               data-bf-state={activePageId === page.id ? 'active' : undefined}
-              className={[
-                'bitfun-settings-nav__item',
-                activePageId === page.id && 'is-active',
-              ].filter(Boolean).join(' ')}
+              className="bitfun-settings-nav__item"
               selected={activePageId === page.id}
               onClick={() => activate({ pageId: page.id })}
               onPointerEnter={() => preload(page.id)}
