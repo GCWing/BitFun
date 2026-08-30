@@ -98,9 +98,16 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
   useEffect(() => {
     const root = rootRef.current.node;
     if (!root) return;
+    if (!autoFocusFirstItem) hasAutoFocusedRef.current = false;
 
     const items = getEnabledItems(root);
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      if (autoFocusFirstItem && !hasAutoFocusedRef.current) {
+        hasAutoFocusedRef.current = true;
+        root.focus();
+      }
+      return;
+    }
 
     const activeIndex = Math.max(items.findIndex((item) => item.tabIndex === 0), 0);
     setActiveItem(items, activeIndex, false);

@@ -67,4 +67,22 @@ describe('public MenuPopover', () => {
     act(() => document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
     expect(close).toHaveBeenCalledOnce();
   });
+  it('retains exit geometry and focuses the first item when reopened during exit', () => {
+    const trigger = open();
+    const menu = host.querySelector<HTMLElement>('[role="menu"]')!;
+    const left = menu.style.left;
+    key('Escape');
+    expect(menu.style.left).toBe(left);
+    expect(menu.style.visibility).not.toBe('hidden');
+    act(() => trigger.click());
+    expect(document.activeElement?.textContent).toBe('Copy');
+    expect(menu.getAttribute('aria-hidden')).toBeNull();
+  });
+  it('allows Escape from an empty menu', () => {
+    const close = vi.fn();
+    act(() => root.render(<MenuPopover items={[]} open onClose={close} position={{ x: 20, y: 20 }} />));
+    expect(document.activeElement?.getAttribute('role')).toBe('menu');
+    key('Escape');
+    expect(close).toHaveBeenCalledOnce();
+  });
 });

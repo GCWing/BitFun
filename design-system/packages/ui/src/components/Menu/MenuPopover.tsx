@@ -150,7 +150,8 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
   const [activeId, setActiveId] = useState<string | null>(null);
   const submenuId = useId();
   const intent = useSubmenuIntent({ activeId, onActiveIdChange: setActiveId, parentRef: menuRef, submenuRef, enabled: open, openDelayMs: 150, closeDelayMs: 300, switchDelayMs: 300, tolerance: 50 });
-  const layout = useAnchoredLayer({ open, anchorRef, layerRef: menuRef, placement, point: position });
+  // Keep geometry until presence unmounts the menu, including its exit transition.
+  const layout = useAnchoredLayer({ open: true, anchorRef, layerRef: menuRef, placement, point: position });
   const activeEntry = items.find(item => item.id === activeId && !item.disabled && item.submenu?.length);
   const openSubmenu = (item: MenuEntry, trigger: HTMLElement, keyboard: boolean) => {
     if (item.disabled || !item.submenu?.length) return;
@@ -214,7 +215,7 @@ function MenuLevel({ items, open, phase, treeId, onClose, onBack, anchorRef, pos
     onPointerEnter={intent.keepOpen} onPointerLeave={intent.requestClose} /></SubmenuBoundary> : null;
 
   return <>
-    <MenuSurface {...props} ref={node => { (menuRef as { current: HTMLDivElement | null }).current = node; }} className={classNames(styles.popup, className)} autoFocusFirstItem={autoFocusFirstItem && Boolean(layout)} tabIndex={-1}
+    <MenuSurface {...props} ref={node => { (menuRef as { current: HTMLDivElement | null }).current = node; }} className={classNames(styles.popup, className)} autoFocusFirstItem={open && autoFocusFirstItem && Boolean(layout)} tabIndex={-1}
       style={{ ...layout?.style, ...style, visibility: layout ? undefined : "hidden" }} data-bf-menu-tree={treeId} data-placement={layout?.placement ?? placement} data-state={phase}
       aria-hidden={!open || undefined} {...(!open ? { inert: "" } : {})} onContextMenu={event => event.preventDefault()}>
       {items.map(item => item.separator ? <Separator key={item.id} /> : <Item key={item.id} data-menu-id={item.id} leading={item.icon ? <Leading>{item.icon}</Leading> : undefined} shortcut={item.shortcut ? <Shortcut>{item.shortcut}</Shortcut> : undefined} tone={item.tone} role={item.role} checked={item.checked}
