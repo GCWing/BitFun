@@ -1,8 +1,8 @@
-import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea, type ComboboxOption } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { ConfigPageLoading, type SelectOption } from '@/component-library';
+import { ConfigPageLoading } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -502,7 +502,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     }
   };
 
-  const companionPetOptions: SelectOption[] = companionPets.map(pet => {
+  const companionPetOptions: ComboboxOption[] = companionPets.map(pet => {
     const displayName = pet.source === 'preset' && pet.id === 'blue-golden'
       ? t('features.pet.presets.blueGolden.name')
       : pet.displayName;
@@ -515,7 +515,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     };
   });
 
-  const companionDisplayModeOptions: SelectOption[] = [
+  const companionDisplayModeOptions: ComboboxOption[] = [
     {
       value: 'desktop',
       label: t('features.pet.displayDesktop'),
@@ -528,7 +528,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     },
   ];
 
-  const subagentBatchExecutionPolicyOptions: SelectOption[] = [
+  const subagentBatchExecutionPolicyOptions: ComboboxOption[] = [
     {
       value: 'safe_only',
       label: tTools('config.subagentBatchPolicy.safeOnly'),
@@ -843,7 +843,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
       : browserReady
         ? t('browserControl.readyNotConnected')
         : t('browserControl.notConnected');
-  const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
+  const browserSelectOptions: ComboboxOption[] = browserOptions.map((option) => ({
     value: option.value,
     label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
     disabled: !option.installed,

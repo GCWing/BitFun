@@ -30,6 +30,10 @@ multiple selection with removable tags, custom values and async loading states.
 `value` is authoritative when controlled; option discovery remains host-owned.
 Wrap consumers in `ComboboxProvider` to supply translated labels and the host's
 overlay container. Explicit `portalContainer` overrides that default.
+The Web UI's legacy Select implementation is retired. Like retired Button and
+Switch overrides, legacy `components.select` Appearance rules are ignored at
+the existing read-only migration boundary; original packages are not rewritten.
+Selection visuals now come from the public field/menu semantic tokens.
 
 `Menu` remains composable inline anatomy. `MenuPopover` composes it into a
 controlled anchored or coordinate popup. Pass `items`, `open`, `onClose` and

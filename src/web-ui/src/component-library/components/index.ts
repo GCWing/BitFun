@@ -14,7 +14,6 @@ export * from './InputDialog';
 export { Alert, type AlertProps, type AlertTone } from '@bitfun/ui';
 
 export { NumberInput, type NumberInputProps } from '@bitfun/ui';
-export * from './Select';
 export { Checkbox, type CheckboxProps, type CheckboxSize } from '@bitfun/ui';
 export { Textarea, type TextareaProps } from '@bitfun/ui';
 

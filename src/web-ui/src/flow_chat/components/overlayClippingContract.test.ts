@@ -8,7 +8,6 @@ function readSource(relativePath: string): string {
 }
 
 const ANCHORED_OVERLAYS = [
-  { name: 'shared Select', path: '../../component-library/components/Select/Select.tsx' },
   { name: 'chat input pickers', path: './ChatInput.tsx' },
   { name: 'file mention picker', path: './FileMentionPicker.tsx' },
   { name: 'permission menu', path: './ChatInputWorkspaceStrip.tsx' },
@@ -25,6 +24,21 @@ const ANCHORED_OVERLAYS = [
   { name: 'shell creation menu', path: '../../app/scenes/shell/ShellNav.tsx' },
   { name: 'navigation footer menu', path: '../../app/components/NavPanel/components/PersistentFooterActions.tsx' },
 ];
+
+describe('shared Combobox clipping contract', () => {
+  it('uses the public portal positioner and the product overlay host', () => {
+    const source = readSource('../../../../../design-system/packages/ui/src/components/Combobox/Combobox.tsx');
+    const positioner = readSource('../../../../../design-system/packages/ui/src/internal/useAnchoredLayer.ts');
+    const app = readSource('../../app/App.tsx');
+    expect(source).toContain('createPortal');
+    expect(source).toContain('resolveLayerPortal');
+    expect(source).toContain('useAnchoredLayer');
+    expect(positioner).toContain('getBoundingClientRect');
+    expect(positioner).toContain('view.addEventListener("scroll", update, true)');
+    expect(app).toContain('ComboboxProvider');
+    expect(app).toContain('portalContainer={getAppearanceOverlayHost}');
+  });
+});
 
 describe.each(ANCHORED_OVERLAYS)('$name clipping contract', ({ path }) => {
   const source = readSource(path);

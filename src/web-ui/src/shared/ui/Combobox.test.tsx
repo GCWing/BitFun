@@ -14,7 +14,7 @@ describe('public Combobox product integration', () => {
   const input = () => document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
   const type = (value: string) => act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input(), value); input().dispatchEvent(new Event('input', { bubbles: true })); });
   beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host); change.mockClear(); });
-  afterEach(() => { act(() => root.unmount()); host.remove(); });
+  afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); });
 
   it('navigates grouped options in DOM order and skips disabled entries', () => {
     render(); key(trigger(), 'ArrowDown'); key(input(), 'ArrowDown'); key(input(), 'Enter');
@@ -74,5 +74,25 @@ describe('public Combobox product integration', () => {
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(1);
     expect(document.querySelector('[role="option"]')?.textContent).toBe('Gamma');
     expect(document.activeElement).toBe(input());
+  });
+  it('flips at the bottom edge and repositions after ancestor scrolling', () => {
+    let top = window.innerHeight - 48;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.bfComponent === 'combobox-popup') return new DOMRect(0, 0, 240, 180);
+      return new DOMRect(40, top, 240, 40);
+    });
+    render(); act(() => trigger().click());
+    const popup = document.querySelector<HTMLElement>('[data-bf-component="combobox-popup"]')!;
+    expect(popup.dataset.placement).toBe('top');
+    top = 20;
+    act(() => host.dispatchEvent(new Event('scroll', { bubbles: true })));
+    expect(popup.dataset.placement).toBe('bottom');
+    expect(popup.style.top).toBe('64px');
+    expect(popup.style.width).toBe('240px');
+  });
+  it('keeps explicit inline popups in the local component tree', () => {
+    render({ dropdownMode: 'inline' }); act(() => trigger().click());
+    expect(host.querySelector('[data-bf-component="combobox"] [role="listbox"]')).not.toBeNull();
+    expect(host.querySelector<HTMLElement>('[data-bf-component="combobox-popup"]')?.style.position).toBe('');
   });
 });
