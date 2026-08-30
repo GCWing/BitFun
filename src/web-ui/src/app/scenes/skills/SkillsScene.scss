@@ -791,7 +791,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: $font-weight-semibold;
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: $line-height-tight;
+  line-height: $line-height-base;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -801,7 +801,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   font-size: 11px;
   color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.82;
-  line-height: 1.35;
+  line-height: $line-height-base;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

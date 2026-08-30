@@ -85,6 +85,7 @@
 
   .label {
     min-inline-size: 0;
+    line-height: var(--bf-line-height-base);
     overflow: hidden;
     text-overflow: ellipsis;
   }

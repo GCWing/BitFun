@@ -147,7 +147,7 @@
     font-family: var(--bf-font-family-control);
     font-size: var(--bf-overlay-modal-title-font-size);
     font-weight: var(--bf-overlay-modal-title-font-weight);
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
