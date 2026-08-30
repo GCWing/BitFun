@@ -190,12 +190,12 @@
 
   &__tags {
     display: flex;
-    grid-column: 1;
+    flex: 1 1 auto;
     align-items: center;
     min-width: 0;
-    flex-wrap: nowrap;
+    max-width: 100%;
+    flex-wrap: wrap;
     gap: $size-gap-1;
-    overflow: hidden;
   }
 
   &__tag,
@@ -217,7 +217,11 @@
   }
 
   &__tag {
-    flex: 0 1 auto;
+    // Keep pills from shrinking; bound long labels and ellipsize their text.
+    display: block;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    max-width: min(100%, 16ch);
   }
 
   &__tag-overflow {
@@ -229,9 +233,10 @@
   }
 
   &__footer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    // Let actions wrap instead of taking width away from the tag labels.
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: $size-gap-2;
     width: 100%;
     padding-top: $size-gap-2;
@@ -245,7 +250,7 @@
 
   &__actions {
     display: flex;
-    grid-column: 2;
+    margin-inline-start: auto;
     align-items: center;
     gap: $size-gap-1;
     flex-shrink: 0;
