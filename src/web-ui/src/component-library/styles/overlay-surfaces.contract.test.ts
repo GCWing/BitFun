@@ -223,8 +223,6 @@ describe('overlay surface contracts', () => {
   });
 
   it.each([
-    'component-library/components/Select/Select.scss',
-    'shared/context-menu-system/components/ui/ContextMenu.scss',
     'flow_chat/components/modern/SessionTreePopover.scss',
     'flow_chat/components/ChatInput.scss',
     'flow_chat/components/ModelSelector.scss',
@@ -232,6 +230,30 @@ describe('overlay surface contracts', () => {
     'app/layout/FloatingMiniChat.scss',
   ])('%s consumes FloatingSurface instead of owning popup chrome', (path) => {
     expect(readSource(path)).toContain('@include surfaces.floating-surface');
+  });
+
+  it('retires the legacy Select after all consumers use public selection components', () => {
+    expect(existsSync(join(SOURCE_ROOT, 'component-library/components/Select'))).toBe(false);
+    expect(readSource('component-library/components/index.ts')).not.toContain("./Select");
+    expect(readSource('component-library/preview/PreviewApp.tsx')).toContain('<Combobox');
+    const styles = readRepositorySource('design-system/packages/ui/src/components/Combobox/Combobox.module.css');
+    expect(styles).toContain('var(--bf-color-surface-panel)');
+    expect(styles).toContain('var(--bf-shadow-menu)');
+  });
+
+  it('delegates context menu surface, items and positioning to the public menu owner', () => {
+    const adapter = readSource('shared/context-menu-system/components/ui/ContextMenu.tsx');
+    const menu = readRepositorySource('design-system/packages/ui/src/components/Menu/MenuPopover.tsx');
+    const styles = readRepositorySource('design-system/packages/ui/src/components/Menu/Menu.module.css');
+    expect(adapter).toContain('<MenuPopover');
+    expect(adapter).toContain('portalContainer={getAppearanceOverlayHost}');
+    expect(adapter).not.toContain('ContextMenu.scss');
+    expect(menu).toContain('parts?.root ?? Menu');
+    expect(menu).toContain('parts?.item ?? MenuItem');
+    expect(menu).toContain('useAnchoredLayer');
+    expect(styles).toContain('var(--bf-shadow-menu)');
+    expect(styles).toContain('var(--bf-color-surface-panel)');
+    expect(existsSync(join(SOURCE_ROOT, 'shared/context-menu-system/components/ui/ContextMenu.scss'))).toBe(false);
   });
 
   it.each([

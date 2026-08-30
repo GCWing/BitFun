@@ -1145,7 +1145,7 @@
   &__form,
   &__form--modal {
     [data-bf-component='input'],
-    .select__trigger,
+    [data-bf-component='combobox'] [data-bf-part='trigger'],
     [data-bf-component='number-input'] > [data-bf-part='control'],
     .resolved-url__value {
       min-height: 35px;
@@ -1154,13 +1154,13 @@
     }
 
     [data-bf-component='input'],
-    .select__trigger,
+    [data-bf-component='combobox'] [data-bf-part='trigger'],
     .resolved-url__value {
       padding-inline: 12px;
     }
 
     [data-bf-component='input'],
-    .select,
+    :is([data-bf-component='combobox'], [data-bf-component='select']),
     [data-bf-component='number-input'],
     .bitfun-model-settings__resolved-url {
       width: 100%;
@@ -1169,9 +1169,9 @@
 
     [data-bf-component='input'],
     [data-bf-component='input'] input,
-    .select__value,
-    .select__placeholder,
-    .select__value-label,
+    [data-bf-component='combobox'] [data-bf-part='value'],
+    [data-bf-part='value'][data-placeholder='true'],
+    [data-bf-component='combobox'] [data-bf-part='value'],
     .resolved-url__value,
     .bitfun-model-settings__selected-models-empty {
       font-size: 13px;
@@ -1187,7 +1187,7 @@
     width: 100%;
     align-items: stretch;
 
-    > .select,
+    > :is([data-bf-component='combobox'], [data-bf-component='select']),
     > [data-bf-component='input'] {
       width: 100%;
       min-width: 0;
@@ -1198,40 +1198,40 @@
       align-self: flex-end;
     }
 
-    .select--multiple {
-      .select__trigger {
+    [data-bf-component='combobox'][data-multiple='true'] {
+      [data-bf-part='trigger'] {
         flex-wrap: nowrap;
         overflow: hidden;
       }
 
-      .select__tags {
+      [data-bf-part='tags'] {
         flex-wrap: nowrap;
         min-width: 0;
         overflow: hidden;
       }
 
-      .select__tag {
+      [data-bf-part='tag'] {
         background: var(--bf-appearance-token-element-bg-subtle);
         border: none;
         color: var(--bf-appearance-token-color-text-secondary);
         max-width: none;
       }
 
-      .select__tag:hover {
+      [data-bf-part='tag']:hover {
         background: var(--bf-appearance-token-element-bg-medium);
         border-color: transparent;
       }
 
-      .select__tag-label {
+      [data-bf-part='tag'] > span {
         overflow: visible;
         text-overflow: clip;
       }
 
-      .select__tag-remove {
+      [data-bf-part='tag'] button {
         color: var(--bf-appearance-token-color-text-muted);
       }
 
-      .select__tag-remove:hover {
+      [data-bf-part='tag'] button:hover {
         background: var(--bf-appearance-token-element-bg-base);
         color: var(--bf-appearance-token-color-text-primary);
       }
@@ -1259,33 +1259,6 @@
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
-  }
-
-  &__model-picker-select {
-    &--has-value {
-      .select__arrow {
-        width: 12px;
-        height: 12px;
-        color: var(--bf-appearance-token-color-text-muted);
-        transform: none;
-
-        &::before {
-          content: '+';
-          font-size: 16px;
-          line-height: 1;
-          font-weight: 400;
-        }
-
-        svg {
-          display: none;
-        }
-
-        &.select__arrow--open {
-          transform: none;
-          color: var(--bf-appearance-token-color-text-muted);
-        }
-      }
-    }
   }
 
   &__manual-model-entry {
@@ -1451,7 +1424,7 @@
     padding-top: $size-gap-2;
     border-top: 1px dashed var(--bf-appearance-token-border-subtle);
 
-    .select__trigger,
+    [data-bf-component='combobox'] [data-bf-part='trigger'],
     [data-bf-component='number-input'] > [data-bf-part='control'] {
       min-height: 32px;
       border-color: color-mix(
@@ -1461,9 +1434,9 @@
       );
     }
 
-    .select__value,
-    .select__placeholder,
-    .select__value-label,
+    [data-bf-component='combobox'] [data-bf-part='value'],
+    [data-bf-part='value'][data-placeholder='true'],
+    [data-bf-component='combobox'] [data-bf-part='value'],
     [data-bf-component='number-input'] [data-bf-part='input'] {
       font-size: 12px;
       line-height: 1.4;
@@ -1486,7 +1459,7 @@
       line-height: 1.3;
     }
 
-    > .select,
+    > :is([data-bf-component='combobox'], [data-bf-component='select']),
     [data-bf-component='number-input'] {
       width: 100%;
       min-width: 0;
@@ -2057,11 +2030,11 @@
   min-width: min(176px, calc(100vw - 16px));
   max-width: min(240px, calc(100vw - 16px));
 
-  .select__option-text {
+  [data-bf-part='option']-text {
     min-width: max-content;
   }
 
-  .select__option-label {
+  [data-bf-part='option']-label {
     overflow: visible;
     text-overflow: clip;
   }

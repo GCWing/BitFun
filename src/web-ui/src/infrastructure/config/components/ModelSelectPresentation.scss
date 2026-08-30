@@ -2,15 +2,15 @@
 
 .model-select-presentation {
   &__select {
-    .select__trigger {
+    [data-bf-component='combobox'] [data-bf-part='trigger'] {
       min-height: 48px;
       align-items: flex-start;
       padding-top: 8px;
       padding-bottom: 8px;
     }
 
-    .select__placeholder,
-    .select__suffix {
+    [data-bf-part='value'][data-placeholder='true'],
+    [data-bf-part='indicator'] {
       align-self: center;
     }
 
@@ -74,7 +74,7 @@
   }
 }
 
-.model-select-presentation__dropdown .select__option {
+.model-select-presentation__dropdown [data-bf-part='option'] {
   padding: 8px 10px;
   border-radius: 6px;
 }

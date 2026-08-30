@@ -3,7 +3,7 @@ import React from 'react';
 import type { ComponentCategory } from '../types';
 import { Alert, Avatar, AvatarGroup, Button, Checkbox, IconButton, StatusPill, TabGroup, Textarea } from '@bitfun/ui';
 import { WindowControls } from '@components/WindowControls';
-import { Select } from '@components/Select';
+import { Combobox } from '@bitfun/ui';
 import { CubeLoading } from '@components/CubeLoading';
 import { Tooltip } from '@components/Tooltip';
 import { Markdown } from '@components/Markdown';
@@ -281,7 +281,7 @@ export const componentRegistry: ComponentCategory[] = [
     components: [
       {
         id: 'select-basic',
-        name: 'Select - 基础选择',
+        name: 'Combobox - 基础选择',
         description: '基础单选和多选示例',
         category: 'form',
         component: () => {
@@ -290,7 +290,7 @@ export const componentRegistry: ComponentCategory[] = [
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '400px' }}>
-              <Select
+              <Combobox
                 label="Select"
                 options={[
                   { label: 'Option 1', value: '1' },
@@ -304,7 +304,7 @@ export const componentRegistry: ComponentCategory[] = [
                 clearable
               />
 
-              <Select
+              <Combobox
                 label="Multiple"
                 multiple
                 showSelectAll
@@ -322,7 +322,7 @@ export const componentRegistry: ComponentCategory[] = [
               />
 
               <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-                <Select
+                <Combobox
                   size="small"
                   options={[
                     { label: 'Small', value: 's1' },
@@ -330,7 +330,7 @@ export const componentRegistry: ComponentCategory[] = [
                   ]}
                   placeholder="Small size"
                 />
-                <Select
+                <Combobox
                   size="large"
                   options={[
                     { label: 'Large', value: 'l1' },
@@ -345,7 +345,7 @@ export const componentRegistry: ComponentCategory[] = [
       },
       {
         id: 'select-searchable',
-        name: 'Select - Demo',
+        name: 'Combobox - Demo',
         description: '可搜索的选择器示例',
         category: 'form',
         component: () => {
@@ -366,7 +366,7 @@ export const componentRegistry: ComponentCategory[] = [
 
           return (
             <div style={{ maxWidth: '400px' }}>
-              <Select
+              <Combobox
                 label="Country"
                 searchable
                 searchPlaceholder="Search..."
@@ -382,7 +382,7 @@ export const componentRegistry: ComponentCategory[] = [
       },
       {
         id: 'select-grouped',
-        name: 'Select - 分组选择',
+        name: 'Combobox - 分组选择',
         description: '带分组的选择器',
         category: 'form',
         component: () => {
@@ -402,7 +402,7 @@ export const componentRegistry: ComponentCategory[] = [
 
           return (
             <div style={{ maxWidth: '400px' }}>
-              <Select
+              <Combobox
                 label="选择框架"
                 searchable
                 options={options}
@@ -417,7 +417,7 @@ export const componentRegistry: ComponentCategory[] = [
       },
       {
         id: 'select-with-icons',
-        name: 'Select - Demo',
+        name: 'Combobox - Demo',
         description: '带图标的选择器',
         category: 'form',
         component: () => {
@@ -458,7 +458,7 @@ export const componentRegistry: ComponentCategory[] = [
 
           return (
             <div style={{ maxWidth: '400px' }}>
-              <Select
+              <Combobox
                 label="Language"
                 searchable
                 options={options}
@@ -473,7 +473,7 @@ export const componentRegistry: ComponentCategory[] = [
       },
       {
         id: 'select-advanced',
-        name: 'Select - Demo',
+        name: 'Combobox - Demo',
         description: '加载、错误和禁用状态',
         category: 'form',
         component: () => {
@@ -488,7 +488,7 @@ export const componentRegistry: ComponentCategory[] = [
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '400px' }}>
-              <Select
+              <Combobox
                 label="Loading"
                 loading
                 options={options}
@@ -497,7 +497,7 @@ export const componentRegistry: ComponentCategory[] = [
                 onChange={(v) => setValue1(v as string | number)}
               />
 
-              <Select
+              <Combobox
                 label="Error"
                 error
                 errorMessage="Error message"
@@ -507,7 +507,7 @@ export const componentRegistry: ComponentCategory[] = [
                 onChange={(v) => setValue2(v as string | number)}
               />
 
-              <Select
+              <Combobox
                 label="Disabled"
                 disabled
                 options={options}

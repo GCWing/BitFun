@@ -1,3 +1,4 @@
+import { Combobox } from '@bitfun/ui';
 import { Button, Icon, IconButton, Input, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,7 +8,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Select as LegacySelect } from '@/component-library';
+
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -358,7 +359,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             <span className="bitfun-reasoning-preset-editor__primary-setting-label">
               {t('reasoningPresets.catalogSource')}
             </span>
-            <LegacySelect
+            <Combobox
               value={catalog.source}
               disabled={disabled}
               size="small"
@@ -511,7 +512,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
-              <LegacySelect
+              <Combobox
                 size="small"
                 triggerAriaLabel={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
@@ -532,7 +533,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
-              <LegacySelect
+              <Combobox
                 size="small"
                 triggerAriaLabel={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
@@ -799,7 +800,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         />
                         {action.type === 'effort' && (
                           <div className="bitfun-reasoning-preset-editor__effort-control">
-                            <LegacySelect
+                            <Combobox
                               size="small"
                               value={action.value}
                               disabled={disabled}

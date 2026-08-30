@@ -178,16 +178,23 @@ describe('AppearanceCompiler', () => {
       components: {
         button: { parts: { root: { base: { opacity: visible } } } },
         switch: { parts: { root: { base: { opacity: visible } } } },
+        select: { parts: { dropdown: { base: { opacity: visible } } } },
         card: { parts: { root: { base: { opacity: visible } } } },
       },
     };
 
+    const original = JSON.stringify(pkg);
     const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
     expect(snapshot.cssText).toContain('[data-bf-component="card"][data-bf-part="root"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="button"]');
     expect(snapshot.cssText).not.toContain('[data-bf-component="switch"]');
     expect(snapshot.components).not.toHaveProperty('button');
     expect(snapshot.components).not.toHaveProperty('switch');
+    expect(snapshot.components).not.toHaveProperty('select');
+    expect(JSON.stringify(pkg)).toBe(original);
+    const roundTrip = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(JSON.parse(original), 2);
+    expect(roundTrip.components).not.toHaveProperty('select');
+    expect(roundTrip.components).toHaveProperty('card');
   });
 
   it('compiles canonical Settings surface ids', () => {

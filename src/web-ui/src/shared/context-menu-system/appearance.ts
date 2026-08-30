@@ -2,6 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const contextMenuAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'context-menu',
+  componentAttribute: 'data-bf-product-component',
   parts: [
     { id: 'root' },
     { id: 'item' },

@@ -1,7 +1,8 @@
+import { Combobox, type ComboboxOption } from '@bitfun/ui';
 import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
-import { MarkdownRenderer, Select, type SelectOption } from '@/component-library';
+import { MarkdownRenderer } from '@/component-library';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -730,7 +731,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const pagedChangedFiles = changedFiles;
   const pagedCommits = commits;
   const pagedReviewThreads = reviewThreads;
-  const remoteOptions = useMemo<SelectOption[]>(
+  const remoteOptions = useMemo<ComboboxOption[]>(
     () => snapshot.remotes.map(remote => ({
       value: remote.id,
       label: remoteLabel(remote),
@@ -1849,7 +1850,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           <div className="review-platform__topbar-actions" data-bf-component="review-platform" data-bf-part="actions">
             <div className="review-platform__remote-select">
-              <Select
+              <Combobox
                 size="small"
                 value={selectedRemoteId ?? ''}
                 options={remoteOptions}

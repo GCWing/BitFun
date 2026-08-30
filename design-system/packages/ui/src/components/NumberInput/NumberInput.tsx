@@ -10,7 +10,7 @@ import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./NumberInput.module.css";
 
-export interface NumberInputProps {
+export interface NumberInputProps extends Pick<InputHTMLAttributes<HTMLInputElement>, "id" | "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid" | "required"> {
   className?: string;
   decrementLabel?: string;
   disabled?: boolean;
@@ -52,6 +52,12 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   unit,
   value,
   variant = "default",
+  id,
+  required,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }, ref) {
   const format = useCallback((next: number) => precision > 0 ? next.toFixed(precision) : String(Math.round(next)), [precision]);
   const clamp = useCallback((next: number) => Math.min(max, Math.max(min, next)), [max, min]);
@@ -88,8 +94,13 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
         }}
       >
         <input
+          id={id}
+          required={required}
+          aria-labelledby={ariaLabelledBy}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           {...inputProps}
-          aria-label={inputProps?.["aria-label"] ?? label}
+          aria-label={inputProps?.["aria-label"] ?? ariaLabel ?? label}
           className={styles.input}
           data-bf-part="input"
           disabled={disabled}

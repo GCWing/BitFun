@@ -34,6 +34,7 @@ import {
   CardMedia,
   ChangeCount,
   Composer,
+  Combobox,
   ComposerContextBar,
   ComposerDivider,
   ComposerToolbar,
@@ -88,6 +89,7 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
+import { NestedMenuPattern } from "./ReferencePatterns";
 import { useI18n, type MessageKey } from "../i18n";
 import {
   getComponentCategoryLabel,
@@ -162,6 +164,10 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   left: "detail.option.left",
   lg: "detail.option.lg",
   loading: "detail.option.loading",
+  multiple: "detail.option.multiple",
+  searching: "detail.option.searching",
+  custom: "detail.option.custom",
+  empty: "detail.option.empty",
   pending: "detail.option.pending",
   md: "detail.option.md",
   none: "detail.option.none",
@@ -355,6 +361,8 @@ export function ComponentDetailPage({
         return ["default", "with-center", "overflow"] as const;
       case "Tooltip":
         return ["top", "bottom", "left", "right"] as const;
+      case "Combobox":
+        return component.states;
       default:
         return ["off", "on", "focus-visible", "disabled"] as const;
     }
@@ -364,6 +372,7 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "Combobox") return 'import { Combobox } from "@bitfun/ui";\n\n<Combobox label="Models" multiple searchable allowCustomValue options={[{ label: "OpenBitFun", value: "openbitfun" }]} />';
     if (flowChatPreview) {
       return flowChatPreview.codeSample(t);
     }
@@ -776,6 +785,9 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "Combobox") {
+      return <Combobox key={state} label={t("components.preview.modalSelectModels")} multiple={state === "multiple"} defaultValue={state === "multiple" ? ["glm-5.2", "openbitfun"] : undefined} defaultOpen={state === "open" || state === "searching"} defaultSearchValue={state === "searching" ? "glm" : ""} allowCustomValue={state === "custom"} disabled={state === "disabled"} error={state === "invalid"} loading={state === "loading"} options={state === "empty" || state === "loading" ? [] : [{ value: "glm-5.2", label: "GLM 5.2", group: "API" }, { value: "openbitfun", label: "OpenBitFun", group: "API" }]} />;
+    }
     if (component.name === "Select") {
       return (
         <Select
@@ -1565,6 +1577,11 @@ export function ComponentDetailPage({
                   </span>
                   {renderPreview(previewState)}
                 </div>
+              ) : component.name === "Combobox" ? (
+                <div className="component-combobox-preview" data-component="combobox">
+                  <span>{t(optionLabelKeys[previewState] ?? "detail.option.default")}</span>
+                  {renderPreview(previewState)}
+                </div>
               ) : isFlowChatComponent ? (
                 <div
                   className="flow-chat-state-list"
@@ -1774,6 +1791,7 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               )}
+              {component.name === "Menu" && <div className="component-menu-interaction"><NestedMenuPattern /></div>}
             </ThemeRoot>
           </section>
 

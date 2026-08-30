@@ -1,9 +1,10 @@
+import { Combobox } from '@bitfun/ui';
 import { Button, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
-import { ConfigPageLoading, Select as LegacySelect } from '@/component-library';
+import { ConfigPageLoading } from '@/component-library';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
@@ -2712,7 +2713,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       align="center"
                     >
                       {canEdit ? (
-                        <LegacySelect
+                        <Combobox
                           size="small"
                           value={selectedKey}
                           triggerAriaLabel={t('agentModelBindings.selectLabel', {

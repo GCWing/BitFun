@@ -70,6 +70,18 @@ vi.mock('@bitfun/ui', () => ({
     );
   },
   Textarea: () => <textarea />,
+  Combobox: (props: SelectSpyProps) => {
+    const label = props.triggerAriaLabel ?? '';
+    selectProps[label] = props;
+    return (
+      <select aria-label={label} value={typeof props.value === 'string' ? props.value : ''}
+        disabled={props.disabled} onChange={(event) => props.onChange?.(event.target.value)}>
+        {props.options?.map(option => (
+          <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+        ))}
+      </select>
+    );
+  },
 }));
 
 vi.mock('@/component-library', () => ({

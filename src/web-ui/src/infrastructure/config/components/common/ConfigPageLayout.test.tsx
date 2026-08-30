@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { ConfigPageHeader } from './ConfigPageHeader';
 import {
   ConfigPageLayout,
   ConfigPageContent,
@@ -58,6 +59,15 @@ describe('ConfigPageLayout', () => {
     expect(contentInner?.firstElementChild).toBe(stack);
     expect(stack?.classList.contains('bitfun-config-page-section-stack')).toBe(true);
     expect(stack?.querySelectorAll(':scope > .bitfun-config-page-section')).toHaveLength(2);
+  });
+
+  it('uses the public PageHeader while preserving appearance extension targets', () => {
+    act(() => root.render(<ConfigPageHeader title="Models" subtitle="Provider configuration" extra={<button>Import</button>} />));
+    const header = container.querySelector('[data-bf-component="page-header"]');
+    expect(header?.querySelector('h2')?.textContent).toBe('Models');
+    expect(header?.querySelector('[data-bf-part="pageHeaderTitle"]')?.textContent).toBe('Models');
+    expect(header?.querySelector('[data-bf-part="pageHeaderSubtitle"]')?.textContent).toBe('Provider configuration');
+    expect(container.querySelector('[data-bf-part="pageHeaderExtra"] button')?.textContent).toBe('Import');
   });
 
   it('keeps the compact 680px settings geometry from the shared layout contract', () => {

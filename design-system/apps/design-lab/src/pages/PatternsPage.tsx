@@ -31,6 +31,7 @@ import {
   type TokenOverrides,
 } from "@bitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
+import { NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern } from "./ReferencePatterns";
 
 interface PatternsPageProps {
   colorScheme: ColorScheme;
@@ -161,6 +162,15 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
             <CardBody><StatusPill leading={<Icon name="circle" />} tone="success">{t("patterns.device.online")}</StatusPill></CardBody>
             <Button leadingIcon={<Icon name="link" />} size="sm" variant="fill">{t("patterns.device.connect")}</Button>
           </Card>
+        </PatternSection>
+        <PatternSection description={t("patterns.provider.description")} index="05" title={t("patterns.provider.title")}>
+          <ProviderConfigurationPattern />
+        </PatternSection>
+        <PatternSection description={t("patterns.toolbar.description")} index="06" title={t("patterns.toolbar.title")}>
+          <SceneToolbarPattern />
+        </PatternSection>
+        <PatternSection description={t("patterns.menu.description")} index="07" title={t("patterns.menu.title")}>
+          <NestedMenuPattern />
         </PatternSection>
       </main>
     </ThemeRoot>

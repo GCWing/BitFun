@@ -95,6 +95,10 @@ export { KeyHint, type KeyHintProps } from "./components/KeyHint";
 export { NumberInput, type NumberInputProps } from "./components/NumberInput";
 export {
   Menu,
+  MenuPopover,
+  type MenuPopoverProps,
+  type MenuPopoverParts,
+  type MenuEntry,
   MenuItem,
   MenuSection,
   MenuSeparator,
@@ -105,6 +109,7 @@ export {
   type MenuSectionProps,
   type MenuSeparatorProps,
 } from "./components/Menu";
+export { useSubmenuIntent, isPointInSubmenuBridge, isPointerMovingTowardSubmenu, type SubmenuIntentPoint, type SubmenuIntentRect, type UseSubmenuIntentOptions, type SubmenuIntentControls } from "./internal/useSubmenuIntent";
 export {
   Modal,
   ModalProvider,
@@ -201,3 +206,4 @@ export {
   type TokenOverrideName,
   type TokenOverrides,
 } from "./primitives/ThemeRoot";
+export { Combobox, ComboboxProvider, type ComboboxProps, type ComboboxOption, type ComboboxValue, type ComboboxLabels } from "./components/Combobox";

@@ -1,8 +1,9 @@
+import { Combobox } from '@bitfun/ui';
 import { Select } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useTranslation } from 'react-i18next';
-import { Select as LegacySelect } from '@/component-library';
+
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -191,7 +192,7 @@ function AppearanceSelectionSection() {
                 data-bf-component="appearance-settings"
                 data-bf-part="paletteSelect"
               >
-                <LegacySelect
+                <Combobox
                   size="small"
                   value={selectedAppearanceId}
                   onChange={(value) => handleAppearanceChange(value as string)}

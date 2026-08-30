@@ -1,10 +1,11 @@
+import { Combobox, type ComboboxOption } from '@bitfun/ui';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
 import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge, Brain } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
-import { Select, type SelectOption } from '@/component-library';
+
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import type { AIModelConfig } from '@/infrastructure/config/types';
@@ -81,7 +82,7 @@ interface GenerationProgress {
   isRetrying: boolean;
 }
 
-interface InsightsModelOption extends SelectOption {
+interface InsightsModelOption extends ComboboxOption {
   modelName: string;
   meta: string;
 }
@@ -209,7 +210,7 @@ const InsightsScene: React.FC = () => {
     })),
   ], [availableModels, t]);
 
-  const renderModelValue = useCallback((option?: SelectOption | SelectOption[]) => {
+  const renderModelValue = useCallback((option?: ComboboxOption | ComboboxOption[]) => {
     const selected = (Array.isArray(option) ? option[0] : option) as InsightsModelOption | undefined;
     if (!selected) return null;
     const fullLabel = selected.meta ? `${selected.modelName} · ${selected.meta}` : selected.modelName;
@@ -221,7 +222,7 @@ const InsightsScene: React.FC = () => {
     );
   }, []);
 
-  const renderModelOption = useCallback((option: SelectOption) => {
+  const renderModelOption = useCallback((option: ComboboxOption) => {
     const model = option as InsightsModelOption;
     const fullLabel = model.meta ? `${model.modelName} · ${model.meta}` : model.modelName;
     return (
@@ -246,7 +247,7 @@ const InsightsScene: React.FC = () => {
         <div className="insights-scene__header-actions">
           <div className="insights-scene__model-control">
             <span className="insights-scene__control-label">{t('insights.modelLabel')}</span>
-            <Select
+            <Combobox
               className="insights-scene__model-select"
               dropdownClassName="insights-scene__model-select-dropdown"
               dropdownMatchTriggerWidth={false}

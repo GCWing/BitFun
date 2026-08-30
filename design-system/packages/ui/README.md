@@ -23,7 +23,34 @@ uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
 Product copy and the revealed content remain consumer-owned.
 
+## Advanced selection and menus
+
+Use native `Select` for simple options. `Combobox` adds search, grouped options,
+multiple selection with removable tags, custom values and async loading states.
+`value` is authoritative when controlled; option discovery remains host-owned.
+Wrap consumers in `ComboboxProvider` to supply translated labels and the host's
+overlay container. Explicit `portalContainer` overrides that default.
+The Web UI's legacy Select implementation is retired. Like retired Button and
+Switch overrides, legacy `components.select` Appearance rules are ignored at
+the existing read-only migration boundary; original packages are not rewritten.
+Selection visuals now come from the public field/menu semantic tokens.
+
+`Menu` remains composable inline anatomy. `MenuPopover` composes it into a
+controlled anchored or coordinate popup. Pass `items`, `open`, `onClose` and
+either `anchorRef` or `position`. Entries can include `submenu`, `shortcut`,
+`disabled`, `checked`/`role`, and `onSelect`. Activation closes the tree and
+restores focus before dispatching `onSelect`; the host owns asynchronous work
+and error handling. The popup flips and clamps to the viewport, keeps keyboard
+navigation in the active menu, and supports safe pointer travel to either side.
+
+Portals default to the nearest ThemeRoot. Supply `portalContainer` for a
+host-managed overlay layer; use `portalled={false}` only inside an existing
+overlay host. Stable `parts` wrappers preserve host data hooks; they must forward
+all props and refs and retain public component ownership. `useSubmenuIntent` is available
+for staged migration of other product popovers using the same pointer corridor.
+
 ## FlowChat tool cards
+
 
 FlowChat frameworks use an attention model rather than a size or border model:
 

@@ -37,3 +37,11 @@ test("NumberInput forwards native input attributes", () => {
   assert.match(markup, /aria-label="Font size"/);
   assert.match(markup, /data-testid="font-size"/);
 });
+
+test("NumberInput forwards Field composition attributes onto its native input", () => {
+  const markup = renderToStaticMarkup(createElement(NumberInput, {
+    id: "context-window", "aria-describedby": "context-help", "aria-invalid": true,
+    required: true, onChange: () => undefined, value: 1024,
+  }));
+  assert.match(markup, /<input[^>]*id="context-window"[^>]*required=""[^>]*aria-describedby="context-help"[^>]*aria-invalid="true"/);
+});

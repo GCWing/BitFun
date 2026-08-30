@@ -1,7 +1,8 @@
+import { Combobox } from '@bitfun/ui';
 import { Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select } from '@/component-library';
+
 import { useNotification, notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -174,7 +175,7 @@ export const SessionTitleConfig: React.FC = () => {
             data-bf-component="session-title-config"
             data-bf-part="modelControl"
           >
-            <Select
+            <Combobox
               size="small"
               searchable
               className="model-select-presentation__select"

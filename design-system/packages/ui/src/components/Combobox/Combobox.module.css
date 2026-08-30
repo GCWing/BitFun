@@ -1,0 +1,37 @@
+@layer bf.components {
+  .root { min-inline-size: 0; inline-size: 100%; font-family: var(--bf-font-family-control); font-size: var(--bf-font-size-small); color: var(--bf-color-content-primary); }
+  .control { display: flex; align-items: center; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-control-select-radius); background: var(--bf-color-field-background); }
+  .control:hover { border-color: var(--bf-color-field-border-hover); }
+  .control:focus-within { outline: var(--bf-focus-width) solid var(--bf-color-focus-ring); }
+  .root[data-invalid="true"] .control { border-color: var(--bf-color-status-danger-border); }
+  .root[data-disabled="true"] { color: var(--bf-color-content-disabled); }
+  .trigger { display: flex; align-items: center; gap: var(--bf-space-2); flex: 1; min-inline-size: 0; min-block-size: var(--bf-control-height-md); padding: var(--bf-space-1) var(--bf-control-select-padding-inline); border: 0; border-radius: inherit; color: inherit; background: transparent; font: inherit; text-align: start; cursor: pointer; outline: none; }
+  .trigger:disabled { cursor: not-allowed; }
+  .root[data-size="sm"] .trigger { min-block-size: var(--bf-control-height-sm); }
+  .root[data-size="lg"] .trigger { min-block-size: var(--bf-control-height-lg); }
+  .value { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .value[data-placeholder="true"], .group, .empty { color: var(--bf-color-content-muted); }
+  .tags { display: flex; flex: 1; flex-wrap: wrap; align-items: center; min-inline-size: 0; gap: var(--bf-space-1); padding: var(--bf-space-1); }
+  .tag { display: inline-flex; align-items: center; min-inline-size: 0; max-inline-size: 100%; padding-inline-start: var(--bf-space-1); border-radius: var(--bf-radius-xs); background: var(--bf-color-action-neutral-surface); }
+  .tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .control[data-tags="true"] .trigger { flex: 0 0 auto; }
+  .control[data-tags="true"] .value { display: none; }
+  .label { display: block; margin-block-end: var(--bf-space-2); }
+  .popup { box-sizing: border-box; z-index: var(--bf-layer-popover); display: flex; flex-direction: column; gap: var(--bf-space-1); min-inline-size: 0; padding: var(--bf-overlay-menu-surface-padding); border: var(--bf-border-width-default) solid var(--bf-color-border-subtle); border-radius: var(--bf-overlay-menu-surface-radius); background: var(--bf-color-surface-panel); color: var(--bf-color-content-primary); box-shadow: var(--bf-shadow-menu); font-family: var(--bf-font-family-control); font-size: var(--bf-font-size-small); }
+  .search { flex: 0 0 auto; }
+  .options { min-block-size: 0; max-block-size: var(--bf-overlay-menu-max-block-size); }
+  .option { display: flex; align-items: center; gap: var(--bf-space-2); min-block-size: var(--bf-overlay-menu-item-height); padding: var(--bf-space-2) var(--bf-overlay-menu-item-padding-inline); border-radius: var(--bf-overlay-menu-item-radius); cursor: pointer; overflow-wrap: anywhere; }
+  .option[data-active="true"], .option[data-selected="true"] { background: var(--bf-color-action-neutral-surface); }
+  .option[aria-disabled="true"] { color: var(--bf-color-content-disabled); cursor: not-allowed; }
+  .option > svg { flex-shrink: 0; inline-size: var(--bf-overlay-menu-item-icon-size); block-size: var(--bf-overlay-menu-item-icon-size); }
+  .copy { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; }
+  .copy small { color: var(--bf-color-content-muted); }
+  .group, .empty { padding: var(--bf-space-2); }
+  .selectAll { padding: var(--bf-space-2); border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+  .error { margin-block-start: var(--bf-space-1); color: var(--bf-color-status-danger-content); }
+  @media (forced-colors: active) {
+    .control, .popup { border-color: ButtonText; }
+    .option[data-active="true"] { outline: 1px solid Highlight; }
+    .option[data-selected="true"] { background: Highlight; color: HighlightText; }
+  }
+}

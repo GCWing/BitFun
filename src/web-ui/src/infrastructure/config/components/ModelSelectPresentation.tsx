@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { type SelectOption } from '@/component-library';
+import { type ComboboxOption as SelectOption } from '@bitfun/ui';
 import { getProviderDisplayName } from '../services/modelConfigs';
 import type { AIModelConfig } from '../types';
 import './ModelSelectPresentation.scss';

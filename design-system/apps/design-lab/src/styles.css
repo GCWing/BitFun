@@ -2995,6 +2995,100 @@ input.lab-force-focus {
   background: var(--bf-color-surface-subtle);
 }
 
+.pattern-provider,
+.pattern-provider-fields {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--bf-space-4);
+}
+
+.pattern-provider > [data-bf-component="card"] {
+  max-inline-size: 640px;
+  container-type: inline-size;
+}
+
+.pattern-provider-modal {
+  container-type: inline-size;
+}
+
+.pattern-provider-fields [data-bf-component="disclosure"] [data-bf-part="content-inner"] {
+  display: grid;
+  gap: var(--bf-space-3);
+  padding-inline: 0;
+}
+
+.pattern-model-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--bf-space-2);
+}
+
+.pattern-demo-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bf-space-4);
+  font-size: var(--bf-font-size-small);
+}
+
+.pattern-feedback {
+  margin: 0;
+  font-size: var(--bf-font-size-small);
+  color: var(--bf-color-content-muted);
+}
+
+.pattern-scene-toolbar {
+  min-inline-size: 0;
+}
+
+.pattern-scene-toolbar [data-bf-component="toolbar"] {
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+}
+
+.pattern-scene-content {
+  display: grid;
+  align-content: start;
+  min-block-size: 180px;
+  padding: var(--bf-space-5);
+  gap: var(--bf-space-4);
+}
+
+@container (max-width: 480px) {
+  .pattern-provider-fields [data-bf-component="field"][data-orientation="horizontal"] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--bf-space-2);
+  }
+}
+
+@media (max-width: 640px) {
+  .pattern-provider-fields [data-bf-component="field"][data-orientation="horizontal"],
+  .pattern-model-entry {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--bf-space-2);
+  }
+
+  .pattern-scene-toolbar [data-bf-component="toolbar"] {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--bf-space-2);
+  }
+
+  .pattern-scene-toolbar [data-bf-component="toolbar"] > [data-bf-part="trailing"] {
+    grid-column: 1;
+    justify-self: start;
+  }
+}
+
+.component-combobox-preview {
+  display: grid;
+  gap: var(--bf-space-3);
+  inline-size: min(100%, 380px);
+  min-block-size: 280px;
+  align-content: start;
+}
+
+.component-menu-interaction { margin-block-start: var(--bf-space-5); }
+
 /* Component reference page */
 .lab-page--component-detail {
   width: 100%;

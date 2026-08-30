@@ -33,6 +33,7 @@ import {
   ChangeCount,
   Checkbox,
   Composer,
+  Combobox,
   ComposerToolbar,
   Disclosure,
   Empty,
@@ -126,6 +127,7 @@ const componentIcons = {
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
+  if (component.name === "Combobox") return <Combobox label={t("components.preview.modalProviderName")} defaultValue="openbitfun" options={[{ value: "openbitfun", label: "OpenBitFun" }, { value: "custom", label: t("components.preview.add") }]} />;
   const flowChatPreview = getFlowChatPreviewDefinition(component.name);
 
   if (flowChatPreview) {

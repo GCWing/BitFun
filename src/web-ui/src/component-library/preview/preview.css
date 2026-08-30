@@ -119,21 +119,17 @@ body {
   width: 220px;
 }
 
-.preview-appearance-selector__select-component .select__trigger {
+.preview-appearance-selector__select-component [data-bf-part='trigger'] {
   min-height: 30px;
   padding: 4px 10px;
   border-radius: 10px;
   background: var(--bf-appearance-token-element-bg-base);
 }
 
-.preview-appearance-selector__select-component .select__value,
-.preview-appearance-selector__select-component .select__placeholder {
+.preview-appearance-selector__select-component [data-bf-part='value'] {
   font-size: 13px;
 }
 
-.preview-appearance-selector__select-component .select__dropdown {
-  z-index: 20;
-}
 
 .preview-container {
   flex: 1;

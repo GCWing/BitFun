@@ -1,13 +1,9 @@
+import { Combobox, type ComboboxOption } from '@bitfun/ui';
 import { Alert, Button, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
-import {
-  Select as LegacySelect,
-  type SelectOption,
-  ConfigPageLoading,
-  ConfigPageMessage,
-} from '@/component-library';
+import { ConfigPageLoading, ConfigPageMessage } from '@/component-library';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -36,7 +32,7 @@ import './ApplicationSettingsPages.scss';
 
 const log = createLogger('ApplicationSettings');
 
-type TerminalShellOption = SelectOption & {
+type TerminalShellOption = ComboboxOption & {
   shell?: ShellInfo;
 };
 
@@ -674,7 +670,7 @@ function TerminalSection() {
     </div>
   ), []);
 
-  const renderShellOption = useCallback((option: SelectOption) => {
+  const renderShellOption = useCallback((option: ComboboxOption) => {
     const shellOption = option as TerminalShellOption;
     if (!shellOption.shell) {
       return <div className="bitfun-terminal-config__shell-option-name" data-bf-component="application-settings" data-bf-part="shellOption">{option.label}</div>;
@@ -694,7 +690,7 @@ function TerminalSection() {
     );
   }, [renderShellDetails]);
 
-  const renderShellValue = useCallback((option?: SelectOption | SelectOption[]) => {
+  const renderShellValue = useCallback((option?: ComboboxOption | ComboboxOption[]) => {
     const selectedOption = Array.isArray(option) ? option[0] : option;
     const shell = (selectedOption as TerminalShellOption | undefined)?.shell;
     if (!shell) return null;
@@ -742,7 +738,7 @@ function TerminalSection() {
             align="center"
           >
             {availableShells.length > 0 ? (
-              <LegacySelect
+              <Combobox
                 value={selectedShellValue}
                 onChange={(v) => handleShellChange(v as string)}
                 options={shellOptions}

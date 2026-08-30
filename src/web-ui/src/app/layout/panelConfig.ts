@@ -4,7 +4,6 @@
  * Design references:
  * - VS Code: three modes (hidden/narrow/wide) + shortcuts + width memory
  * - JetBrains: multi-mode (floating/fixed/collapsed/icon)
- * - Figma: smart snapping + smooth animations
  *
  * Panel display modes:
  * - collapsed: fully hidden

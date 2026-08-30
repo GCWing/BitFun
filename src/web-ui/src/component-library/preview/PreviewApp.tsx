@@ -6,8 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { componentRegistry } from '../components/registry';
 import type { ComponentCategory } from '../types';
 import { FullPageLayout, LargeCardLayout, GridLayout, DemoLayout, ColumnLayout } from './layouts';
-import { Select } from '@components/Select';
-import type { SelectOption } from '@components/Select';
+import { Combobox, type ComboboxOption } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useAppearance } from '@/infrastructure/appearance';
 import './preview.css';
@@ -37,7 +36,7 @@ export const PreviewApp: React.FC = () => {
   const appearanceModeLabel = appearanceMode === 'light'
     ? t('componentLibrary.previewApp.appearanceModeLight')
     : t('componentLibrary.previewApp.appearanceModeDark');
-  const appearanceOptions = useMemo<SelectOption[]>(
+  const appearanceOptions = useMemo<ComboboxOption[]>(
     () =>
       appearances.map((entry) => ({
         label: entry.name,
@@ -66,7 +65,8 @@ export const PreviewApp: React.FC = () => {
               {t('componentLibrary.previewApp.appearanceLabel')}
             </span>
             <div className="preview-appearance-selector__control">
-              <Select
+              <Combobox
+                triggerAriaLabel={t('componentLibrary.previewApp.appearanceLabel')}
                 className="preview-appearance-selector__select-component"
                 size="small"
                 value={selectedAppearanceId}

@@ -32,7 +32,7 @@
     gap: $size-gap-3;
     min-width: 0;
 
-    > .select {
+    > :is([data-bf-component='combobox'], [data-bf-component='select']) {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -427,13 +427,13 @@
     min-width: 0;
   }
 
-  &__action > .select,
+  &__action > :is([data-bf-component='combobox'], [data-bf-component='select']),
   &__action > [data-bf-component='input'],
   &__action > [data-bf-component='number-input'] {
     min-width: 0;
   }
 
-  &__action > .select:first-child {
+  &__action > :is([data-bf-component='combobox'], [data-bf-component='select']):first-child {
     flex: 0 0 190px;
     width: 190px;
   }
@@ -450,7 +450,7 @@
     gap: $size-gap-1;
     min-width: 0;
 
-    > .select {
+    > :is([data-bf-component='combobox'], [data-bf-component='select']) {
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -529,7 +529,7 @@
       flex-basis: auto;
     }
 
-    &__action > .select:first-child,
+    &__action > :is([data-bf-component='combobox'], [data-bf-component='select']):first-child,
     &__action > [data-bf-component='input'],
     &__action > [data-bf-component='number-input'],
     &__effort-control,

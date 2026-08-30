@@ -1,7 +1,6 @@
 import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
 import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
 import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
-import { selectAppearanceDescriptor } from '@/component-library/components/Select/appearance';
 import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
 import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
@@ -261,7 +260,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(cardAppearanceDescriptor)
     .registerComponent(tooltipAppearanceDescriptor)
     .registerComponent(popupCloseButtonAppearanceDescriptor)
-    .registerComponent(selectAppearanceDescriptor)
     .registerComponent(codeEditorAppearanceDescriptor)
     .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)

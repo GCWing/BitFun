@@ -315,8 +315,8 @@
    * Ecosystem mode and per-capability access are the same control at two
    * levels — one width so they read as a single column of dropdowns.
    */
-  &__policy-actions .select,
-  &__capability-row .select {
+  &__policy-actions :is([data-bf-component='combobox'], [data-bf-component='select']),
+  &__capability-row :is([data-bf-component='combobox'], [data-bf-component='select']) {
     min-width: 142px;
   }
 
@@ -744,8 +744,8 @@
       width: 100%;
     }
 
-    &__policy-actions .select,
-    &__capability-row .select {
+    &__policy-actions :is([data-bf-component='combobox'], [data-bf-component='select']),
+    &__capability-row :is([data-bf-component='combobox'], [data-bf-component='select']) {
       width: 100%;
     }
 

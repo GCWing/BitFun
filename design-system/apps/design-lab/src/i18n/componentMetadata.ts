@@ -23,6 +23,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   Card: "component.Card.description",
   CommandToolCard: "component.CommandToolCard.description",
   Composer: "component.Composer.description",
+  Combobox: "component.Combobox.description",
   ConfirmDialog: "component.ConfirmDialog.description",
   ContextCompressionToolCard: "component.ContextCompressionToolCard.description",
   DefaultToolCard: "component.DefaultToolCard.description",

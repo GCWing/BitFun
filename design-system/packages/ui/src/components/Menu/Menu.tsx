@@ -15,6 +15,7 @@ import { ActionItem, type ActionItemProps } from "../ActionItem";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { ScrollArea, type ScrollbarVisibility } from "../ScrollArea";
 import { classNames } from "../../internal/classNames";
+import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Menu.module.css";
 
 export type MenuItemRole = "menuitem" | "menuitemcheckbox" | "menuitemradio";
@@ -62,7 +63,7 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
 function getEnabledItems(root: HTMLElement) {
   return Array.from(
     root.querySelectorAll<HTMLButtonElement>("[data-bf-menu-item]"),
-  ).filter((item) => !item.disabled && item.getAttribute("aria-disabled") !== "true");
+  ).filter((item) => item.closest('[role="menu"]') === root && !item.disabled && item.getAttribute("aria-disabled") !== "true");
 }
 
 function setActiveItem(items: readonly HTMLButtonElement[], index: number, focus = true) {
@@ -97,9 +98,16 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
   useEffect(() => {
     const root = rootRef.current.node;
     if (!root) return;
+    if (!autoFocusFirstItem) hasAutoFocusedRef.current = false;
 
     const items = getEnabledItems(root);
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      if (autoFocusFirstItem && !hasAutoFocusedRef.current) {
+        hasAutoFocusedRef.current = true;
+        root.focus();
+      }
+      return;
+    }
 
     const activeIndex = Math.max(items.findIndex((item) => item.tabIndex === 0), 0);
     setActiveItem(items, activeIndex, false);
@@ -113,8 +121,8 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
     onFocusCapture?.(event);
     if (event.defaultPrevented) return;
 
-    const target = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>("[data-bf-menu-item]")
+    const target = (event.target as Element).closest
+      ? (event.target as Element).closest<HTMLButtonElement>("[data-bf-menu-item]")
       : null;
     if (!target || !event.currentTarget.contains(target)) return;
 
@@ -125,10 +133,10 @@ export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({
 
   const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
     onKeyDown?.(event);
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || isImeOwnedKeyboardEvent(event)) return;
 
-    const target = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>("[data-bf-menu-item]")
+    const target = (event.target as Element).closest
+      ? (event.target as Element).closest<HTMLButtonElement>("[data-bf-menu-item]")
       : null;
     if (!target || !event.currentTarget.contains(target)) return;
 

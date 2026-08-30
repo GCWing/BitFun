@@ -139,7 +139,7 @@ $ins-label:   12px;
   width: 260px;
   min-width: 0;
 
-  .select__trigger {
+  [data-bf-component='combobox'] [data-bf-part='trigger'] {
     min-height: 42px;
     padding-top: 5px;
     padding-bottom: 5px;

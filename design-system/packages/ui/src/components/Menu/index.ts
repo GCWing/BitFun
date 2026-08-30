@@ -10,3 +10,4 @@ export {
   type MenuSectionProps,
   type MenuSeparatorProps,
 } from "./Menu";
+export { MenuPopover, type MenuPopoverProps, type MenuPopoverParts, type MenuEntry } from "./MenuPopover";

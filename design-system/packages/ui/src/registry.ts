@@ -7,6 +7,7 @@ import { buttonMeta } from "./components/Button/Button.meta";
 import { checkboxMeta } from "./components/Checkbox/Checkbox.meta";
 import { cardMeta } from "./components/Card/Card.meta";
 import { composerMeta } from "./components/Composer/Composer.meta";
+import { comboboxMeta } from "./components/Combobox/Combobox.meta";
 import { confirmDialogMeta } from "./components/ConfirmDialog/ConfirmDialog.meta";
 import { disclosureMeta } from "./components/Disclosure/Disclosure.meta";
 import { emptyMeta } from "./components/Empty/Empty.meta";
@@ -89,6 +90,7 @@ export const componentRegistry = [
   chatComposerMeta,
   commandToolCardMeta,
   composerMeta,
+  comboboxMeta,
   confirmDialogMeta,
   contextCompressionToolCardMeta,
   defaultToolCardMeta,
