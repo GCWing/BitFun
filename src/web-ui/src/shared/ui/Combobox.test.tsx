@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Combobox, Modal, type ComboboxProps } from '@bitfun/ui';
+import { Combobox, Field, Modal, type ComboboxProps } from '@bitfun/ui';
 
 describe('public Combobox product integration', () => {
   let root: Root;
@@ -58,5 +58,21 @@ describe('public Combobox product integration', () => {
     act(() => remove.click());
     expect(change).toHaveBeenLastCalledWith(['c']);
     expect(document.querySelector('[role="listbox"]')).toBeNull();
+  });
+  it('connects the public Field label, description, required and error states to the trigger', () => {
+    act(() => root.render(<Field label="Models" description="Choose a model" error="Required" required><Combobox /></Field>));
+    expect(host.querySelector('label')?.htmlFor).toBe(trigger().id);
+    expect(trigger().getAttribute('aria-label')).toBeNull();
+    expect(trigger().getAttribute('aria-required')).toBe('true');
+    expect(trigger().getAttribute('aria-invalid')).toBe('true');
+    const describedBy = trigger().getAttribute('aria-describedby')!.split(' ');
+    expect(describedBy.map(id => document.getElementById(id)?.textContent)).toEqual(['Choose a model', 'Required']);
+  });
+  it('mounts an initially open, filtered picker into its portal', () => {
+    render({ defaultOpen: true, defaultSearchValue: 'gam' });
+    expect(input().value).toBe('gam');
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(document.querySelector('[role="option"]')?.textContent).toBe('Gamma');
+    expect(document.activeElement).toBe(input());
   });
 });

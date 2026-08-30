@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon";
 import { IconButton } from "../IconButton";
@@ -36,6 +36,9 @@ export function ComboboxProvider({ children, labels, portalContainer }: { childr
 }
 
 export interface ComboboxProps extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
+  required?: boolean;
+  defaultOpen?: boolean;
+  defaultSearchValue?: string;
   options?: readonly ComboboxOption[];
   value?: ComboboxValue;
   defaultValue?: ComboboxValue;
@@ -75,7 +78,7 @@ export interface ComboboxProps extends Omit<HTMLAttributes<HTMLDivElement>, "def
 
 /** Searchable single/multiple selection. Data, async discovery and copy remain host-owned. */
 export function Combobox({
-  options = [], value, defaultValue, onChange, placeholder, label, disabled = false,
+  options = [], value, defaultValue, onChange, placeholder, label, disabled = false, required = false, id: providedId, defaultOpen = false, defaultSearchValue = "",
   multiple = false, searchable = true, clearable = false, showSelectAll = false,
   loading = false, error = false, errorMessage, size = "md", maxTagCount = 3,
   searchPlaceholder, emptyText, renderOption, renderValue, placement = "bottom",
@@ -86,7 +89,9 @@ export function Combobox({
 }: ComboboxProps) {
   const context = useContext(ComboboxContext);
   const labels = context.labels;
-  const id = `bf-combobox-${useId()}`;
+  const generatedId = useId();
+  const id = providedId ?? `bf-combobox-${generatedId}`;
+  const invalid = error || props['aria-invalid'] === true || props['aria-invalid'] === 'true';
   const listId = `${id}-list`;
   const rootRef = useRef<HTMLDivElement>(null);
   const controlRef = useRef<HTMLDivElement>(null);
@@ -94,8 +99,10 @@ export function Combobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useLayoutEffect(() => setMounted(true), []);
+  const [open, setOpen] = useState(defaultOpen && !disabled);
+  const [query, setQuery] = useState(defaultSearchValue);
   const [active, setActive] = useState(-1);
   const [internalValue, setInternalValue] = useState<ComboboxValue>(defaultValue ?? (multiple ? [] : ""));
   const selectedValue = value === undefined ? internalValue : value;
@@ -131,7 +138,7 @@ export function Combobox({
       setValue(multiple ? [...values, option.value] : option.value);
     }
   };
-  const layout = useAnchoredLayer({ open: open && dropdownMode === "overlay", anchorRef: controlRef, layerRef: popupRef, placement, matchWidth: dropdownMatchTriggerWidth, revision: `${query}:${options.length}:${loading}` });
+  const layout = useAnchoredLayer({ open: open && mounted && dropdownMode === "overlay", anchorRef: controlRef, layerRef: popupRef, placement, matchWidth: dropdownMatchTriggerWidth, revision: `${query}:${options.length}:${loading}` });
 
   useEffect(() => {
     if (!open) return;
@@ -147,7 +154,7 @@ export function Combobox({
     doc?.addEventListener("mousedown", outside);
     return () => doc?.removeEventListener("mousedown", outside);
   });
-  useEffect(() => { if (open && searchable) inputRef.current?.focus(); }, [open, searchable]);
+  useEffect(() => { if (open && mounted && searchable) inputRef.current?.focus(); }, [open, mounted, searchable]);
   useEffect(() => {
     if (open && activeIndex >= 0) popupRef.current?.querySelector(`[data-option-index="${activeIndex}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [open, activeIndex]);
@@ -204,9 +211,9 @@ export function Combobox({
       {!choices.length && <div className={styles.empty} role="status">{loading ? labels.loading : emptyText ?? labels.empty}</div>}
     </ScrollArea>
   </div>;
-  const target = open ? resolveLayerPortal(portalContainer ?? context.portalContainer, triggerRef.current) : null;
+  const target = open && mounted ? resolveLayerPortal(portalContainer ?? context.portalContainer, triggerRef.current) : null;
   const selectedCopy = renderValue?.(multiple ? selectedOptions : selectedOptions[0]) ?? (selectedOptions.length ? selectedOptions.slice(0, Math.max(1, maxTagCount)).map(option => option.label).join(", ") + (selectedOptions.length > maxTagCount ? ` +${selectedOptions.length - maxTagCount}` : "") : placeholder ?? labels.placeholder);
-  return <div {...props} ref={rootRef} className={classNames(styles.root, className)} data-bf-component="combobox" data-multiple={multiple} data-size={({ small: "sm", medium: "md", large: "lg" } as Record<string, string>)[size] ?? size} data-invalid={error} data-disabled={disabled}>
+  return <div {...props} ref={rootRef} className={classNames(styles.root, className)} data-bf-component="combobox" data-multiple={multiple} data-size={({ small: "sm", medium: "md", large: "lg" } as Record<string, string>)[size] ?? size} data-invalid={invalid} data-disabled={disabled}>
     {label && <label id={`${id}-label`} htmlFor={id} className={styles.label}>{label}</label>}
     <div ref={controlRef} className={styles.control} data-bf-part="control" data-tags={multiple && !renderValue && values.length > 0}>
       {multiple && !renderValue && values.length > 0 && <div className={styles.tags} data-bf-part="tags">
@@ -218,8 +225,8 @@ export function Combobox({
       <button id={id} ref={triggerRef} type="button" disabled={disabled} className={styles.trigger} data-bf-part="trigger" data-testid={triggerTestId}
         role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined}
         aria-activedescendant={open && !searchable && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
-        aria-label={triggerAriaLabel ?? props["aria-label"] ?? (label ? undefined : placeholder ?? labels.placeholder)} aria-labelledby={triggerAriaLabelledBy ?? (label ? `${id}-label` : props["aria-labelledby"])}
-        aria-describedby={error && errorMessage ? `${id}-error` : triggerAriaDescribedBy} aria-invalid={error || undefined} aria-busy={loading || undefined}
+        aria-label={triggerAriaLabel ?? props["aria-label"] ?? (label || providedId ? undefined : placeholder ?? labels.placeholder)} aria-labelledby={triggerAriaLabelledBy ?? (label ? `${id}-label` : props["aria-labelledby"])}
+        aria-describedby={[triggerAriaDescribedBy ?? props['aria-describedby'], error && errorMessage ? `${id}-error` : undefined].filter(Boolean).join(' ') || undefined} aria-invalid={invalid || undefined} aria-required={required || undefined} aria-busy={loading || undefined}
         onClick={() => changeOpen(!open)} onKeyDown={keyboard}>
         <span className={styles.value} data-bf-part="value" data-placeholder={!selectedOptions.length}>{selectedCopy}</span>
         <span data-bf-part="indicator">{loading ? <Icon name="refresh" size="sm" /> : indicator ?? <Icon name="chevron-down" size="sm" />}</span>
