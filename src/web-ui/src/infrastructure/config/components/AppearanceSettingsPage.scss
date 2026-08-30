@@ -115,6 +115,10 @@
     }
   }
 
+  &__card-preview--builtin img {
+    object-position: center top;
+  }
+
   &__selected-mark {
     position: absolute;
     top: $size-gap-2;

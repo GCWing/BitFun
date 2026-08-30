@@ -15,7 +15,7 @@ import { notificationService } from '@/shared/notification-system';
 import { AppearanceMarketDialog } from './AppearanceMarketDialog';
 import { ConfigPageSection } from './common';
 
-const DEFAULT_APPEARANCE_PREVIEW_SRC = '/assets/appearance/bitfun-default-preview.png';
+const DEFAULT_APPEARANCE_PREVIEW_SRC = '/assets/appearance/bitfun-default-preview@4x.png';
 
 function downloadArchive(bytes: ArrayBuffer, filename: string): void {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
@@ -202,15 +202,13 @@ function AppearancePackagePreview({
         data-bf-part="packagePreview"
         data-bf-state="selected"
       >
-        <div className="appearance-package-config__card-preview">
+        <div className={`appearance-package-config__card-preview${fallbackSrc ? ' appearance-package-config__card-preview--builtin' : ''}`}>
           {previewUrl
             ? <img src={previewUrl} alt="" />
             : <Icon name="image" size="lg" aria-hidden="true" />}
-          {!fallbackSrc && (
-            <span className="appearance-package-config__selected-mark" aria-hidden="true">
-              <Icon name="check-line" size="xs" />
-            </span>
-          )}
+          <span className="appearance-package-config__selected-mark" aria-hidden="true">
+            <Icon name="check-line" size="xs" />
+          </span>
         </div>
         <div className="appearance-package-config__card-body">
           <strong>{appearanceName}</strong>

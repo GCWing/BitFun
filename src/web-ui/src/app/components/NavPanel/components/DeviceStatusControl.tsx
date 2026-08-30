@@ -20,6 +20,7 @@ import {
   type DeviceOverviewDeviceKind,
 } from '../deviceInterconnectionOverview';
 import { useDeviceInterconnectionOverview } from './useDeviceInterconnectionOverview';
+import { DeviceArtwork } from './DeviceArtwork';
 
 interface DeviceStatusControlProps {
   open: boolean;
@@ -264,9 +265,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             ref={popoverRef}
             appearance="raised"
             className="bitfun-device-overview"
-            gap="sm"
-            padding="md"
-            radius="md"
+            gap="none"
+            padding="none"
+            radius="lg"
             role="dialog"
             aria-label={t('deviceOverview.title')}
             data-testid="nav-device-status-popover"
@@ -282,42 +283,24 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
           >
             <CardHeader
               className="bitfun-device-overview__header"
+              contentAlign="center"
               title={<h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
             />
             <ScrollArea className="bitfun-device-overview__scroll">
             <CardBody className="bitfun-device-overview__body">
-              {overview.mode === 'local' ? (
-                <div
-                  className="bitfun-device-overview__local-device"
-                  data-testid="nav-device-status-summary"
-                >
-                  <span className="bitfun-device-overview__device-icon" aria-hidden="true">
-                    <DeviceIcon
-                      identity={`${overview.primaryDevice.id} ${overview.primaryDevice.name}`}
-                      kind={overview.primaryDevice.kind}
-                      size={17}
-                    />
+              <div className="bitfun-device-overview__summary" data-testid="nav-device-status-summary">
+                <DeviceArtwork device={overview.primaryDevice} />
+                <span className="bitfun-device-overview__device-name" title={overview.currentWorkDeviceName}>
+                  {overview.currentWorkDeviceName}
+                </span>
+                {overview.mode === 'connected' && (
+                  <span className="bitfun-device-overview__activity">
+                    {deviceActivity(overview.primaryDevice)}
                   </span>
-                  <strong>{overview.currentWorkDeviceName}</strong>
-                </div>
-              ) : (
+                )}
+              </div>
+              {overview.mode === 'connected' && (
                 <>
-                  <section className="bitfun-device-overview__device-group is-primary">
-                    <h3>{t('deviceOverview.currentUse')}</h3>
-                    <div className="bitfun-device-overview__device-row">
-                      <span className="bitfun-device-overview__device-icon" aria-hidden="true">
-                        <DeviceIcon
-                          identity={`${overview.primaryDevice.id} ${overview.primaryDevice.name}`}
-                          kind={overview.primaryDevice.kind}
-                          size={16}
-                        />
-                      </span>
-                      <strong>{overview.primaryDevice.name}</strong>
-                      {overview.primaryDevice.activities.includes('background-execution') && (
-                        <span>{deviceActivity(overview.primaryDevice)}</span>
-                      )}
-                    </div>
-                  </section>
                   <section
                     className="bitfun-device-overview__device-group"
                     data-testid="nav-device-status-connected-devices"
@@ -380,13 +363,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
             <CardFooter align="center" className="bitfun-device-overview__actions">
               <Button
-                variant="outline"
+                variant="primary"
                 size="sm"
-                leadingIcon={<Icon name="link" size="md" />}
+                leadingIcon={<Icon name="link" size="sm" />}
                 onClick={handleManageDevices}
                 data-testid="nav-device-status-manage"
               >
-                {t('remoteConnect.centerTitle')}
+                {t('accountLogin.connectDevices')}
               </Button>
               {overview.peerActive && (
                 <Button

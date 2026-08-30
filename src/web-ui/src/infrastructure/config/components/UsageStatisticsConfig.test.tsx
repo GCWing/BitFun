@@ -33,7 +33,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   FormSection: ({
     children,
@@ -229,6 +230,9 @@ describe('UsageStatisticsConfig', () => {
       timeZone: 'UTC',
     });
 
+    const pageHeader = container.querySelector('[data-bf-component="page-header"]');
+    expect(pageHeader?.querySelector('h2')?.textContent).toBe('title');
+    expect(pageHeader?.textContent).toContain('subtitle');
     expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="distributions"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="modelHitRate"]')).not.toBeNull();
