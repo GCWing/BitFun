@@ -2,13 +2,18 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const menuMeta = {
   category: "navigation",
-  description: "A grouped, scrollable menu surface with native item roles and keyboard navigation.",
+  description: "Grouped menu anatomy plus anchored MenuPopover with nested keyboard navigation, pointer corridors and focus return.",
   maturity: "stable",
   name: "Menu",
   props: [
     { name: "children", type: "ReactNode" },
     { defaultValue: "false", name: "autoFocusFirstItem", type: "boolean" },
     { defaultValue: "auto", name: "scrollbarVisibility", type: "auto | always | hidden" },
+    { name: "MenuPopover.items", type: "readonly MenuEntry[]" },
+    { name: "MenuPopover.open / onClose", type: "boolean / () => void" },
+    { name: "MenuPopover.anchorRef / position", type: "RefObject<HTMLElement> / { x: number; y: number }" },
+    { name: "MenuPopover.placement", type: "top | bottom | left | right", defaultValue: "bottom" },
+    { name: "MenuPopover.portalContainer", type: "Element | DocumentFragment | (() => Element | null)" },
   ],
   states: ["default", "scrolling", "focus-within", "disabled-item", "checked-item"],
   tokens: [
