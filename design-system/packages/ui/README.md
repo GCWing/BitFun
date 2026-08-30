@@ -23,6 +23,12 @@ uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
 Product copy and the revealed content remain consumer-owned.
 
+Sized icon slots in buttons, tabs, menu items and fields own their glyph geometry.
+Pass catalog `Icon` nodes through `leadingIcon`, `trailingIcon`, `icon` or the
+matching component slot, just as for SVG icons. These slots constrain catalog
+icons to the component's size; a standalone `Icon` retains its explicit size
+(24px by default). Do not shrink the catalog globally to correct a slot mismatch.
+
 ## Advanced selection and menus
 
 Use native `Select` for simple options. `Combobox` adds search, grouped options,

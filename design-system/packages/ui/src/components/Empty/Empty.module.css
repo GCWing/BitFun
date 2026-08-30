@@ -30,7 +30,8 @@
     block-size: calc(var(--bf-control-height-lg) + var(--bf-space-4));
   }
 
-  .media > :where(svg, img) {
+  .media > :where(svg, img),
+  .media > [data-bf-component="icon"] {
     display: block;
     max-inline-size: 100%;
     max-block-size: 100%;

@@ -33,7 +33,8 @@
     background: var(--bf-color-status-info-surface);
   }
 
-  .icon > svg {
+  .icon > svg,
+  .icon > [data-bf-component="icon"] {
     inline-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
     block-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
   }

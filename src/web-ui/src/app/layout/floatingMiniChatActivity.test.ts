@@ -20,6 +20,12 @@ function readSource(relativePath: string): string {
 }
 
 describe('floating MiniApp chat activity', () => {
+  it('uses a compact glyph for the standalone chat trigger', () => {
+    const component = readSource('./FloatingMiniChat.tsx');
+    expect(component).toContain('<Icon name="side-chat" size="md" />');
+    expect(component).not.toContain('<Icon name="side-chat" size="lg" />');
+  });
+
   it.each([
     'pending',
     'image_analyzing',

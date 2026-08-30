@@ -93,7 +93,8 @@
     color: currentColor;
   }
 
-  .icon > :where(svg, img) {
+  .icon > :where(svg, img),
+  .icon > [data-bf-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;

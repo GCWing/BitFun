@@ -92,7 +92,8 @@
     color: var(--bf-color-content-secondary);
   }
 
-  .leading > :where(svg, img) {
+  .leading > :where(svg, img),
+  .leading > [data-bf-component="icon"] {
     display: block;
     inline-size: var(--bf-control-action-card-icon-size);
     block-size: var(--bf-control-action-card-icon-size);

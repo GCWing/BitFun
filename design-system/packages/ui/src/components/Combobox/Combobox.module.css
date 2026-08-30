@@ -23,7 +23,7 @@
   .option { display: flex; align-items: center; gap: var(--bf-space-2); min-block-size: var(--bf-overlay-menu-item-height); padding: var(--bf-space-2) var(--bf-overlay-menu-item-padding-inline); border-radius: var(--bf-overlay-menu-item-radius); cursor: pointer; overflow-wrap: anywhere; }
   .option[data-active="true"], .option[data-selected="true"] { background: var(--bf-color-action-neutral-surface); }
   .option[aria-disabled="true"] { color: var(--bf-color-content-disabled); cursor: not-allowed; }
-  .option > svg { flex-shrink: 0; inline-size: var(--bf-overlay-menu-item-icon-size); block-size: var(--bf-overlay-menu-item-icon-size); }
+  .option > svg, .option > [data-bf-component="icon"] { flex-shrink: 0; inline-size: var(--bf-overlay-menu-item-icon-size); block-size: var(--bf-overlay-menu-item-icon-size); }
   .copy { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; }
   .copy small { color: var(--bf-color-content-muted); }
   .group, .empty { padding: var(--bf-space-2); }

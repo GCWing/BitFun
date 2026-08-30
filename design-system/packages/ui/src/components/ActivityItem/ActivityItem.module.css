@@ -68,7 +68,8 @@
     justify-content: center;
   }
 
-  .leading > :where(svg, img) {
+  .leading > :where(svg, img),
+  .leading > [data-bf-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
