@@ -116,7 +116,9 @@
     margin-inline-end: var(--bf-control-select-trailing-inset);
   }
 
-  .leading > :where(svg, img, [data-bf-component="icon"]) {
+  .leading > :where(svg, img),
+  .leading > [data-bf-component="icon"],
+  .indicator > [data-bf-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;

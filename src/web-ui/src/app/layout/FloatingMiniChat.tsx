@@ -540,7 +540,7 @@ export const FloatingMiniChat: React.FC = () => {
             {renderMiniAppIcon(activeMiniAppIcon, 20)}
           </span>
         ) : (
-          <Icon name="side-chat" size="lg" />
+          <Icon name="side-chat" size="md" />
         )}
       </button>
 

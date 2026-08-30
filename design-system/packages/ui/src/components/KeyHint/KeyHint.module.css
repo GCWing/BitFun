@@ -32,7 +32,8 @@
     min-inline-size: 0;
   }
 
-  .icon > :where(svg, img) {
+  .icon > :where(svg, img),
+  .icon > [data-bf-component="icon"] {
     display: block;
     inline-size: 1em;
     block-size: 1em;

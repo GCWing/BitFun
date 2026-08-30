@@ -18,6 +18,7 @@ export const navigationPanelMeta = {
   tokens: [
     "color.surface.subtle",
     "color.border.subtle",
+    "color.content.primary",
     "color.content.muted",
     "color.action.neutral.content",
     "color.action.neutral.contentDisabled",

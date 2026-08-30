@@ -108,7 +108,8 @@
     block-size: var(--_icon-button-icon-size);
   }
 
-  .icon > :where(svg, img) {
+  .icon > :where(svg, img),
+  .icon > [data-bf-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;

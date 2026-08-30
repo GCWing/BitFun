@@ -92,7 +92,9 @@
   }
 
   .leading > :where(svg, img),
-  .trailing > :where(svg, img) {
+  .trailing > :where(svg, img),
+  .leading > [data-bf-component="icon"],
+  .trailing > [data-bf-component="icon"] {
     display: block;
     inline-size: var(--_field-icon-size);
     block-size: var(--_field-icon-size);

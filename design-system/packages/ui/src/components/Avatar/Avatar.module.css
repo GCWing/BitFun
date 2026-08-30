@@ -5,7 +5,7 @@
   .root[data-bf-shape="square"] { border-radius: var(--bf-radius-base); }
   .image { inline-size: 100%; block-size: 100%; object-fit: cover; }
   .content { display: inline-flex; align-items: center; justify-content: center; inline-size: 100%; block-size: 100%; }
-  .content > :where(svg, img) { inline-size: 55%; block-size: 55%; }
+  .content > :where(svg, img), .content > [data-bf-component="icon"] { inline-size: 55%; block-size: 55%; }
   .group { display: inline-flex; align-items: center; }
   .group > .root + .root { margin-inline-start: calc(var(--bf-space-2) * -1); }
 }
