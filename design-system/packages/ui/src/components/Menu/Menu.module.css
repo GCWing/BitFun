@@ -73,7 +73,7 @@
     font-family: var(--bf-font-family-control);
     font-size: var(--bf-overlay-menu-heading-font-size);
     font-weight: var(--bf-font-weight-medium);
-    line-height: var(--bf-line-height-tight);
+    line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
