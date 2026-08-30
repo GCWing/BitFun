@@ -32,7 +32,7 @@ describe('unified project session creation', () => {
     expect(voiceLauncherStyles).toContain('bottom: 0;');
     expect(voiceLauncherStyles).toContain('width: 84px;');
     expect(voiceLauncherStyles).toContain('height: 40px;');
-    expect(voiceLauncherStyles).toContain('font-weight: 300;');
+    expect(voiceLauncherStyles).toContain('font-weight: var(--bf-font-weight-regular);');
     expect(voiceLauncherStyles).toContain('font-synthesis: none;');
     expect(voiceLauncherStyles).toContain('opacity: 0.22;');
     expect(voiceLauncherStyles).toMatch(/&\.is-active\s*\{\s*opacity: 1;/);

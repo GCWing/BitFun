@@ -15,6 +15,9 @@
  *  - Zero performance impact when inactive
  */
 import { INSPECTOR_OVERLAY_THEME } from '@/shared/inspector/inspectorOverlayTheme';
+import { tokens as designTokens } from '@bitfun/design-tokens';
+
+const INSPECTOR_MONO_FONT = String(designTokens['font.family.mono']).split("'").join("\\'");
 
 const INSPECTOR_SCRIPT_BODY = /* js */ `
 (function () {
@@ -45,14 +48,14 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     'color:${INSPECTOR_OVERLAY_THEME.tooltipText}',
     'padding:8px 12px',
     'border-radius:6px',
-    'font-size:11px',
-    'font-family:ui-monospace,SFMono-Regular,Menlo,monospace',
+    'font-size:${designTokens['font.size.meta']}',
+    'font-family:${INSPECTOR_MONO_FONT}',
     'z-index:2147483647',
     'pointer-events:none',
     'display:none',
     'max-width:520px',
     'box-shadow:0 4px 12px ${INSPECTOR_OVERLAY_THEME.tooltipShadow}',
-    'line-height:1.5',
+    'line-height:${designTokens['lineHeight.base']}',
     'border:1px solid ${INSPECTOR_OVERLAY_THEME.activeBorderSubtle}',
   ].join(';');
 
@@ -63,8 +66,8 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     'color:${INSPECTOR_OVERLAY_THEME.staticWhite}',
     'padding:2px 6px',
     'border-radius:3px',
-    'font-size:10px',
-    'font-family:monospace',
+    'font-size:${designTokens['font.size.micro']}',
+    'font-family:${INSPECTOR_MONO_FONT}',
     'z-index:2147483647',
     'pointer-events:none',
     'display:none',

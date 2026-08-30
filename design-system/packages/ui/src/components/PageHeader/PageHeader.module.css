@@ -36,8 +36,8 @@
   .heading {
     margin: 0;
     color: inherit;
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-title);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-2xl);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
   }
@@ -51,7 +51,7 @@
   }
 
   .root[data-size="display"] .heading {
-    font-size: var(--bf-font-size-display);
+    font-size: var(--bf-font-size-4xl);
   }
 
   .required {
@@ -61,14 +61,14 @@
 
   .description {
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-body);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-body);
+    line-height: var(--bf-line-height-base);
   }
 
   .root[data-size="sm"] .description {
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .action {

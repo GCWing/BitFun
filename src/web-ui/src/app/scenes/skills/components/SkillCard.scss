@@ -118,10 +118,10 @@
   }
 
   &__name {
-    font-size: 0.9em;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: $line-height-base;
+    line-height: var(--bf-line-height-base);
     min-width: 0;
     flex: 1;
     overflow: hidden;
@@ -131,11 +131,11 @@
 
   &__desc {
     margin: 0;
-    font-size: 0.78em;
-    font-weight: $font-weight-normal;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-regular);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
-    line-height: $line-height-relaxed;
+    line-height: var(--bf-line-height-relaxed);
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -153,8 +153,8 @@
     margin: 0;
     padding: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
   }
 
   // ── Footer with actions ──

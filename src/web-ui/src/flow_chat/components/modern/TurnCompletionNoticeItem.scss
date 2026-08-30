@@ -13,8 +13,8 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 92%, transparent);
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-support);
 
   &--warning {
     border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent);
@@ -61,7 +61,7 @@
 }
 
 .turn-completion-notice__title {
-  font-weight: 600;
+  font-weight: var(--bf-font-weight-semibold);
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -91,8 +91,8 @@
   background: color-mix(in srgb, currentColor 10%, transparent);
   color: color-mix(in srgb, currentColor 72%, transparent);
   border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-meta);
 }
 
 @media (max-width: 900px) {

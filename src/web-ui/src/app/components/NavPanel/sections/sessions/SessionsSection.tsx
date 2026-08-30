@@ -6,7 +6,7 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Icon, IconButton, Input, ScrollArea, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
 import { Trash2, Bot, Loader2, Archive, FileDown, ChevronLeft, ChevronUp } from 'lucide-react';
 import { PresenceBoundary } from '@/component-library';
@@ -1853,22 +1853,21 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     </button>
                   </div>
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(
-                    <ScrollArea
+                    <Menu
                       ref={sessionMenuPopoverRef}
                       className="bitfun-nav-panel__inline-item-menu-popover"
                       data-bf-component="sessions-section"
                       data-bf-part="menu"
                       data-bf-state="menuOpen"
-                      role="menu"
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
                       data-testid="nav-session-menu"
                       data-session-id={session.sessionId}
                     >
                       {isExportScopeMenu ? (
                         <>
-                          <button
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<ChevronLeft size={13} />}
                             onClick={e => {
                               e.stopPropagation();
                               setIsExportScopeMenu(false);
@@ -1876,55 +1875,49 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-export-back"
                             data-session-id={session.sessionId}
                           >
-                            <ChevronLeft size={13} />
                             <span>{t('nav.sessions.exportMarkdown')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<FileDown size={13} />}
                             onClick={e => { void handleExportMarkdown(e, session, 'full'); }}
                             data-testid="nav-session-menu-export-full"
                             data-session-id={session.sessionId}
                           >
-                            <FileDown size={13} />
                             <span>{t('nav.sessions.exportMarkdownFull')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<FileDown size={13} />}
                             onClick={e => { void handleExportMarkdown(e, session, 'result'); }}
                             data-testid="nav-session-menu-export-result"
                             data-session-id={session.sessionId}
                           >
-                            <FileDown size={13} />
                             <span>{t('nav.sessions.exportMarkdownResult')}</span>
-                          </button>
+                          </MenuItem>
                         </>
                       ) : (
                         <>
-                          <button
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<Icon name="edit" size="xs" />}
                             onClick={e => { closeSessionMenu(); handleStartEdit(e, session); }}
                             data-testid="nav-session-menu-rename"
                             data-session-id={session.sessionId}
                           >
-                            <Icon name="edit" size="xs" />
                             <span>{t('nav.sessions.rename')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<Icon name="duplicate" size="xs" />}
                             onClick={e => { closeSessionMenu(); void handleCopySessionId(e, session.sessionId); }}
                             data-testid="nav-session-menu-copy-id"
                             data-session-id={session.sessionId}
                           >
-                            <Icon name="duplicate" size="xs" />
                             <span>{t('nav.sessions.copySessionId')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
                             onClick={e => {
                               e.stopPropagation();
                               setIsExportScopeMenu(true);
@@ -1932,15 +1925,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             disabled={exportingSessionId === session.sessionId}
                             data-testid="nav-session-menu-export-markdown"
                             data-session-id={session.sessionId}
-                          >
-                            {exportingSessionId === session.sessionId
+                            leading={exportingSessionId === session.sessionId
                               ? <Loader2 size={13} className="bitfun-nav-panel__inline-toggle-spinner" />
                               : <FileDown size={13} />}
+                          >
                             <span>{t('nav.sessions.exportMarkdown')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<Icon name="clock" size="xs" />}
                             onClick={e => {
                               e.stopPropagation();
                               closeSessionMenu();
@@ -1950,32 +1943,30 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-scheduled-jobs"
                             data-session-id={session.sessionId}
                           >
-                            <Icon name="clock" size="xs" />
                             <span>{t('nav.scheduledJobs.open')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item"
+                            leading={<Archive size={13} />}
                             onClick={e => { closeSessionMenu(); void handleArchive(e, session.sessionId); }}
                             data-testid="nav-session-menu-archive"
                             data-session-id={session.sessionId}
                           >
-                            <Archive size={13} />
                             <span>{t('nav.sessions.archive')}</span>
-                          </button>
-                          <button
+                          </MenuItem>
+                          <MenuItem
                             type="button"
-                            className="bitfun-nav-panel__inline-item-menu-item is-danger"
+                            tone="danger"
+                            leading={<Trash2 size={13} />}
                             onClick={e => { closeSessionMenu(); void handleDelete(e, session.sessionId); }}
                             data-testid="nav-session-menu-delete"
                             data-session-id={session.sessionId}
                           >
-                            <Trash2 size={13} />
                             <span>{t('nav.sessions.delete')}</span>
-                          </button>
+                          </MenuItem>
                         </>
                       )}
-                    </ScrollArea>,
+                    </Menu>,
                     getAppearanceOverlayHost()
                   )}
                 </>

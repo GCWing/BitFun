@@ -39,7 +39,7 @@ export const actionCardMeta = {
     "control.actionCard.radius",
     "font.family.control",
     "font.size.lg",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
     "font.weight.semibold",
   ],

@@ -25,17 +25,17 @@
 
 .workspace-manager h3 {
   margin: 0 0 16px 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-accent-500);
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-base);
-  font-weight: var(--bf-appearance-token-font-weight-semibold);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
 }
 
 .workspace-card {
@@ -158,28 +158,28 @@
 }
 
 .workspace-name {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-accent-500);
   margin-bottom: 6px;
   word-break: break-all;
-  line-height: 1.3;
+  line-height: var(--bf-line-height-snug);
 }
 
 .workspace-name__ssh-host {
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 55%, transparent);
   margin-right: 2px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
+  font-weight: var(--bf-font-weight-medium);
 }
 
 .workspace-path {
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 70%, transparent);
   margin-bottom: 12px;
   word-break: break-all;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-family: var(--bf-font-family-mono);
   background: var(--bf-appearance-token-color-overlay-black-20);
   padding: 4px 8px;
   border-radius: 6px;
@@ -208,7 +208,7 @@
 
 .workspace-type {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   text-transform: capitalize;
 }
 
@@ -217,7 +217,7 @@
   align-items: center;
   gap: 4px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
 }
 
 .workspace-identity {
@@ -231,14 +231,14 @@
 }
 
 .workspace-identity__label {
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: var(--bf-letter-spacing-wide);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 55%, transparent);
 }
 
 .workspace-identity__value {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-accent-500);
 }
 
@@ -250,9 +250,9 @@
 }
 
 .workspace-related-paths__label {
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: var(--bf-letter-spacing-wide);
   color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.55);
 }
 
@@ -272,8 +272,8 @@
 
 .workspace-related-paths__path {
   display: block;
-  font-size: 12px;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-font-family-mono);
   color: var(--bf-appearance-token-color-accent-500);
   word-break: break-all;
 }
@@ -281,18 +281,18 @@
 .workspace-related-paths__desc {
   display: block;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 72%, transparent);
-  line-height: 1.45;
+  line-height: var(--bf-line-height-support);
 }
 
 .workspace-related-paths__more {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 62%, transparent);
 }
 
 .workspace-type {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   padding: 2px 8px;
   background-color: var(--bf-appearance-token-color-bg-secondary);
   color: var(--bf-appearance-token-color-text-secondary);
@@ -304,7 +304,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -352,16 +352,16 @@
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-overlay-white-60);
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--bf-letter-spacing-wider);
 }
 
 .stat-value {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-accent-500);
 }
 
@@ -395,7 +395,7 @@
 .no-workspace p,
 .no-recent p {
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
 }
 
 .workspace-list {

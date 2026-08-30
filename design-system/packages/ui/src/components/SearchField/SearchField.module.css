@@ -26,8 +26,8 @@
     justify-content: center;
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-caption);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-tight);
     white-space: nowrap;
   }

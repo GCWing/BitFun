@@ -16,6 +16,11 @@ import { AlertCircle } from 'lucide-react';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import './DiffEditor.scss';
 import { Tooltip } from '@bitfun/ui';
+import {
+  DEFAULT_EDITOR_FONT_FAMILY,
+  DEFAULT_EDITOR_FONT_SIZE,
+  DEFAULT_EDITOR_LINE_HEIGHT,
+} from '../config/defaults';
 
 const log = createLogger('DiffEditor');
 
@@ -83,9 +88,9 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [changes, setChanges] = useState<monaco.editor.ILineChange[]>([]);
   const [editorConfig, setEditorConfig] = useState<Partial<EditorConfigType>>({
-    font_size: 14,
-    font_family: "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-    line_height: 1.5,
+    font_size: DEFAULT_EDITOR_FONT_SIZE,
+    font_family: DEFAULT_EDITOR_FONT_FAMILY,
+    line_height: DEFAULT_EDITOR_LINE_HEIGHT,
     tab_size: 2,
     insert_spaces: true,
     word_wrap: 'off',
@@ -221,10 +226,10 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           
           theme: themeId,
           automaticLayout: true,
-          fontSize: editorConfigRuntimeRef.current.font_size || 14,
-          fontFamily: editorConfigRuntimeRef.current.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
+          fontSize: editorConfigRuntimeRef.current.font_size || DEFAULT_EDITOR_FONT_SIZE,
+          fontFamily: editorConfigRuntimeRef.current.font_family || DEFAULT_EDITOR_FONT_FAMILY,
           lineHeight: editorConfigRuntimeRef.current.line_height 
-            ? Math.round((editorConfigRuntimeRef.current.font_size || 14) * editorConfigRuntimeRef.current.line_height)
+            ? Math.round((editorConfigRuntimeRef.current.font_size || DEFAULT_EDITOR_FONT_SIZE) * editorConfigRuntimeRef.current.line_height)
             : 0,
           lineNumbers: (editorConfigRuntimeRef.current.line_numbers || 'on') as monaco.editor.LineNumbersType,
           minimap: { 

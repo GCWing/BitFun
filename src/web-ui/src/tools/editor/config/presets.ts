@@ -3,6 +3,7 @@
  */
 
 import type { EditorPresetConfig, EditorPresetName } from './types';
+import { DEFAULT_INLAY_HINTS_CONFIG } from './defaults';
 
 /** Readonly preset: chat code blocks, doc preview, code display */
 export const PRESET_READONLY: EditorPresetConfig = {
@@ -30,10 +31,8 @@ export const PRESET_READONLY: EditorPresetConfig = {
     above: false,
   },
   inlayHints: {
+    ...DEFAULT_INLAY_HINTS_CONFIG,
     enabled: 'off',
-    fontSize: 12,
-    fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
-    padding: false,
   },
 };
 
@@ -54,10 +53,8 @@ export const PRESET_MINIMAL: EditorPresetConfig = {
   
   semanticHighlighting: false,
   inlayHints: {
+    ...DEFAULT_INLAY_HINTS_CONFIG,
     enabled: 'off',
-    fontSize: 12,
-    fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
-    padding: false,
   },
 };
 
@@ -101,10 +98,8 @@ export const PRESET_FULL: EditorPresetConfig = {
     above: false,
   },
   inlayHints: {
+    ...DEFAULT_INLAY_HINTS_CONFIG,
     enabled: 'on',
-    fontSize: 12,
-    fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
-    padding: false,
   },
   guides: {
     indentation: true,

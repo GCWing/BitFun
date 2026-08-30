@@ -25,7 +25,7 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
     }
   }
 
@@ -71,20 +71,20 @@
   }
 
   &__row-label {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   &__row-prompt {
     margin-top: 2px;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   &__row-controls {
@@ -135,8 +135,8 @@
   }
 
   &__modal-label {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -148,9 +148,9 @@
 
   &__modal-hint {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
   }
 
   &__modal-footer {

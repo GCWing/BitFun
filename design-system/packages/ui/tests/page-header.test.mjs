@@ -66,8 +66,8 @@ test("PageHeader omits the required marker by default", () => {
 test("PageHeader styles use shared typography and content tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-font-size-title/);
-  assert.match(styles, /--bf-font-size-display/);
+  assert.match(styles, /--bf-font-size-2xl/);
+  assert.match(styles, /--bf-font-size-4xl/);
   assert.match(styles, /--bf-font-family-sans/);
   assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-content-muted/);

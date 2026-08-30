@@ -1,10 +1,10 @@
-import { Combobox } from '@bitfun/ui';
 import { Button, ConfirmDialog, Icon, Select, Switch, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CircleDashed, FolderKanban, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { ConfigPageLoading } from '@/component-library';
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { i18nService } from '@/infrastructure/i18n';
@@ -2713,8 +2713,8 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       align="center"
                     >
                       {canEdit ? (
-                        <Combobox
-                          size="small"
+                        <LocalizedCombobox
+                          size="sm"
                           value={selectedKey}
                           triggerAriaLabel={t('agentModelBindings.selectLabel', {
                             request: externalAgentRequestedModelLabel(group.request, t),
@@ -2751,7 +2751,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                               disabled: true,
                             }] : []),
                           ]}
-                          onChange={(value) => {
+                          onValueChange={(value) => {
                             const nextKey = String(Array.isArray(value) ? value[0] : value);
                             if (nextKey === 'source') {
                               void setAgentModelBinding(group, undefined);

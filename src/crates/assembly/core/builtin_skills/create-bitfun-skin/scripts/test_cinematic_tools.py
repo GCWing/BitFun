@@ -71,7 +71,7 @@ class CinematicContractTests(unittest.TestCase):
         resolved = contract.resolve_palette_values(plan, palette["colors"])
         serialized = json.dumps(resolved)
         self.assertNotIn('"kind": "palette"', serialized)
-        self.assertEqual(43, len(plan["components"]))
+        self.assertEqual(41, len(plan["components"]))
         self.assertEqual(7, len(plan["scenes"]))
 
     def test_generic_support_validates_media_and_recorded_hashes(self) -> None:

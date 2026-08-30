@@ -21,8 +21,8 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 

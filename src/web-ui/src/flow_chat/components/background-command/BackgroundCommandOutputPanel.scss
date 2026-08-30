@@ -47,8 +47,8 @@
 
     .bitfun-checkbox__label {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      font-weight: 500;
+      font-size: var(--bf-type-flow-support-font-size);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     &:hover .bitfun-checkbox__label {
@@ -71,16 +71,16 @@
 
     h2 {
       margin: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-lg);
-      line-height: 1.2;
+      font-size: var(--bf-type-flow-lead-font-size);
+      line-height: var(--bf-line-height-tight);
     }
 
     p {
       margin: 4px 0 0;
       max-width: 100%;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-family: 'Fira Code', 'Noto Sans SC', Consolas, monospace;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -107,7 +107,7 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-4 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
   }
 
   &__meta-status {
@@ -140,7 +140,7 @@
     margin: $size-gap-3 $size-gap-4 0;
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
   }
 
   &__notice {
@@ -184,9 +184,9 @@
       min-height: 74px;
       max-height: 180px;
       resize: vertical;
-      font-family: 'Fira Code', 'Noto Sans SC', Consolas, monospace;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: 1.5;
+      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-line-height-base);
     }
 
     &--masked .bitfun-textarea__field {
@@ -210,7 +210,7 @@
   &__input-option {
     .bitfun-checkbox__label {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
     }
 
     &:hover .bitfun-checkbox__label {
@@ -250,7 +250,7 @@
     place-items: center;
     min-height: 240px;
     color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 82%, transparent);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   @media (max-width: 520px) {

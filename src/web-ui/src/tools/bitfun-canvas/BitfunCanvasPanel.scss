@@ -91,7 +91,7 @@
 
   h3 {
     margin: 0 0 var(--bf-appearance-token-size-gap-1);
-    font-size: var(--bf-appearance-token-font-size-lg);
+    font-size: var(--bf-font-size-lg);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -100,8 +100,8 @@
   }
 
   span {
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
   }
 }
 
@@ -121,8 +121,8 @@
   color: var(--bf-appearance-token-color-text-primary);
   overflow: auto;
   white-space: pre-wrap;
-  font-family: var(--bf-appearance-token-font-family-mono);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
 }
 
 .bitfun-canvas-panel__source-overlay {
@@ -170,5 +170,5 @@
   justify-content: center;
   height: 100%;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
 }

@@ -66,8 +66,8 @@
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: 1.4;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-ui);
   text-align: center;
   opacity: 0;
   transform: translate(-50%, -2px);

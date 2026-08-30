@@ -15,16 +15,16 @@
 
 .bitfun-remote-disclaimer__text {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-ui);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
 .bitfun-remote-disclaimer__section-title {
   margin: 2px 0 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .bitfun-remote-disclaimer__list {
@@ -35,8 +35,8 @@
   gap: 4px;
 
   li {
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-support);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 }
@@ -53,8 +53,8 @@
   summary {
     padding: 9px 12px;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
   }
 

@@ -26,8 +26,8 @@ const TOKEN_MAP: Readonly<Record<string, string>> = {
   '--bitfun-element-hover': '--bf-appearance-token-element-bg-medium',
   '--bitfun-radius': '--bf-appearance-token-size-radius-base',
   '--bitfun-radius-lg': '--bf-appearance-token-size-radius-lg',
-  '--bitfun-font-sans': '--bf-appearance-token-font-family-sans',
-  '--bitfun-font-mono': '--bf-appearance-token-font-family-mono',
+  '--bitfun-font-sans': '--bf-font-family-sans',
+  '--bitfun-font-mono': '--bf-font-family-mono',
   '--bitfun-scrollbar-thumb': '--bf-appearance-token-scrollbar-thumb',
   '--bitfun-scrollbar-thumb-hover': '--bf-appearance-token-scrollbar-thumb-hover',
 };

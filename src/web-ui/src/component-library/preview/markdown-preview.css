@@ -38,8 +38,8 @@
 
 .header-left h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-4xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-static-white);
 }
 
@@ -48,8 +48,8 @@
   background: var(--private-markdown-preview-badge-bg);
   border: 1px solid var(--private-markdown-preview-badge-border);
   border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--private-markdown-preview-badge-text);
 }
 
@@ -74,9 +74,9 @@
 }
 
 .control-group label {
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   color: var(--bf-appearance-token-color-text-muted);
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
 }
 
 .button-group {
@@ -111,9 +111,9 @@
   border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
   border-radius: 8px;
   color: var(--private-preview-text-primary);
-  font-family: 'Courier New', Consolas, Monaco, monospace;
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-base);
+  line-height: var(--bf-line-height-relaxed);
   resize: vertical;
   outline: none;
   backdrop-filter: blur(8px);
@@ -140,7 +140,7 @@
 
 .usage-guide h2 {
   margin: 0 0 16px 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-static-white);
 }

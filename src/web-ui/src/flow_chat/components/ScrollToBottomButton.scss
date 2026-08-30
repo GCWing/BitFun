@@ -85,9 +85,9 @@
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
-    font-weight: 600;
-    line-height: 1;
+    font-size: var(--bf-type-flow-meta-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-none);
     
     box-shadow: 
       0 2px 8px var(--bf-appearance-token-border-accent),

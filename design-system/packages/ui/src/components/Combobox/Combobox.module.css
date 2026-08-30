@@ -1,37 +1,332 @@
 @layer bf.components {
-  .root { min-inline-size: 0; inline-size: 100%; font-family: var(--bf-font-family-control); font-size: var(--bf-font-size-small); color: var(--bf-color-content-primary); }
-  .control { display: flex; align-items: center; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-control-select-radius); background: var(--bf-color-field-background); }
-  .control:hover { border-color: var(--bf-color-field-border-hover); }
-  .control:focus-within { outline: var(--bf-focus-width) solid var(--bf-color-focus-ring); }
-  .root[data-invalid="true"] .control { border-color: var(--bf-color-status-danger-border); }
-  .root[data-disabled="true"] { color: var(--bf-color-content-disabled); }
-  .trigger { display: flex; align-items: center; gap: var(--bf-space-2); flex: 1; min-inline-size: 0; min-block-size: var(--bf-control-height-md); padding: var(--bf-space-1) var(--bf-control-select-padding-inline); border: 0; border-radius: inherit; color: inherit; background: transparent; font: inherit; text-align: start; cursor: pointer; outline: none; }
-  .trigger:disabled { cursor: not-allowed; }
-  .root[data-size="sm"] .trigger { min-block-size: var(--bf-control-height-sm); }
-  .root[data-size="lg"] .trigger { min-block-size: var(--bf-control-height-lg); }
-  .value { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .value[data-placeholder="true"], .group, .empty { color: var(--bf-color-content-muted); }
-  .tags { display: flex; flex: 1; flex-wrap: wrap; align-items: center; min-inline-size: 0; gap: var(--bf-space-1); padding: var(--bf-space-1); }
-  .tag { display: inline-flex; align-items: center; min-inline-size: 0; max-inline-size: 100%; padding-inline-start: var(--bf-space-1); border-radius: var(--bf-radius-xs); background: var(--bf-color-action-neutral-surface); }
-  .tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .control[data-tags="true"] .trigger { flex: 0 0 auto; }
-  .control[data-tags="true"] .value { display: none; }
-  .label { display: block; margin-block-end: var(--bf-space-2); }
-  .popup { box-sizing: border-box; z-index: var(--bf-layer-popover); display: flex; flex-direction: column; gap: var(--bf-space-1); min-inline-size: 0; padding: var(--bf-overlay-menu-surface-padding); border: var(--bf-border-width-default) solid var(--bf-color-border-subtle); border-radius: var(--bf-overlay-menu-surface-radius); background: var(--bf-color-surface-panel); color: var(--bf-color-content-primary); box-shadow: var(--bf-shadow-menu); font-family: var(--bf-font-family-control); font-size: var(--bf-font-size-small); }
-  .search { flex: 0 0 auto; }
-  .options { min-block-size: 0; max-block-size: var(--bf-overlay-menu-max-block-size); }
-  .option { display: flex; align-items: center; gap: var(--bf-space-2); min-block-size: var(--bf-overlay-menu-item-height); padding: var(--bf-space-2) var(--bf-overlay-menu-item-padding-inline); border-radius: var(--bf-overlay-menu-item-radius); cursor: pointer; overflow-wrap: anywhere; }
-  .option[data-active="true"], .option[data-selected="true"] { background: var(--bf-color-action-neutral-surface); }
-  .option[aria-disabled="true"] { color: var(--bf-color-content-disabled); cursor: not-allowed; }
-  .option > svg, .option > [data-bf-component="icon"] { flex-shrink: 0; inline-size: var(--bf-overlay-menu-item-icon-size); block-size: var(--bf-overlay-menu-item-icon-size); }
-  .copy { display: flex; flex-direction: column; flex: 1; min-inline-size: 0; }
-  .copy small { color: var(--bf-color-content-muted); }
-  .group, .empty { padding: var(--bf-space-2); }
-  .selectAll { padding: var(--bf-space-2); border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-  .error { margin-block-start: var(--bf-space-1); color: var(--bf-color-status-danger-content); }
+  .root,
+  .visibleLabel,
+  .control,
+  .trigger,
+  .value,
+  .singleValue,
+  .valueLeading,
+  .valueLabel,
+  .placeholder,
+  .tags,
+  .tag,
+  .indicator,
+  .popover,
+  .search,
+  .message,
+  .error {
+    box-sizing: border-box;
+  }
+
+  .root {
+    --_combobox-height: var(--bf-control-height-md);
+
+    position: relative;
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--bf-space-1);
+    color: var(--bf-color-content-primary);
+  }
+
+  .root[data-size="sm"] {
+    --_combobox-height: var(--bf-control-height-sm);
+  }
+
+  .root[data-size="lg"] {
+    --_combobox-height: var(--bf-control-height-lg);
+  }
+
+  .visibleLabel {
+    color: var(--bf-color-content-secondary);
+    font-family: var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+  }
+
+  .error {
+    color: var(--bf-color-status-danger-content);
+    font-family: var(--bf-type-support-font-family);
+    font-size: var(--bf-type-support-font-size);
+    font-weight: var(--bf-type-support-font-weight);
+    line-height: var(--bf-type-support-line-height);
+  }
+
+  .control {
+    position: relative;
+    display: grid;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .trigger {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--_combobox-height);
+    margin: 0;
+    padding-block: var(--bf-space-1);
+    padding-inline-start: var(--bf-control-select-padding-inline);
+    padding-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+    );
+    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
+    border-radius: var(--bf-control-select-radius);
+    outline: 0;
+    color: inherit;
+    background: var(--bf-color-field-background);
+    font-family: var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-tight);
+    text-align: start;
+    cursor: pointer;
+    transition:
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .root:has(.clear) .trigger {
+    padding-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+      + var(--bf-control-height-sm)
+    );
+  }
+
+  .trigger:not(:disabled):hover {
+    border-color: var(--bf-color-field-border-hover);
+    background: var(--bf-color-field-background-hover);
+  }
+
+  .trigger:focus-visible,
+  .root[data-open="true"] .trigger {
+    border-color: var(--bf-color-field-border-focus);
+    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+  }
+
+  .root[data-invalid="true"] .trigger {
+    border-color: var(--bf-color-status-danger-border);
+  }
+
+  .root[data-disabled="true"] {
+    color: var(--bf-color-content-disabled);
+    opacity: var(--bf-opacity-disabled);
+  }
+
+  .trigger:disabled {
+    cursor: not-allowed;
+  }
+
+  .value,
+  .singleValue,
+  .tags {
+    display: flex;
+    overflow: hidden;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .singleValue {
+    gap: var(--bf-control-select-content-gap);
+  }
+
+  .valueLeading {
+    display: inline-flex;
+    flex: 0 0 var(--bf-control-select-indicator-size);
+    inline-size: var(--bf-control-select-indicator-size);
+    block-size: var(--bf-control-select-indicator-size);
+  }
+
+  .valueLeading > :where(svg, img) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .valueLabel,
+  .placeholder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .placeholder {
+    color: var(--bf-color-content-muted);
+  }
+
+  .tags {
+    gap: var(--bf-space-1);
+  }
+
+  .control[data-tags="true"] .tags {
+    z-index: 2;
+    grid-area: 1 / 1;
+    align-self: center;
+    margin-inline-start: var(--bf-control-select-padding-inline);
+    margin-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+    );
+    pointer-events: none;
+  }
+
+  .root:has(.clear) .control[data-tags="true"] .tags {
+    margin-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+      + var(--bf-control-height-sm)
+    );
+  }
+
+  .control[data-tags="true"] .value {
+    visibility: hidden;
+  }
+
+  .tag {
+    display: inline-flex;
+    overflow: hidden;
+    align-items: center;
+    max-inline-size: 10rem;
+    gap: var(--bf-space-1);
+    padding-inline-start: var(--bf-space-2);
+    border-radius: var(--bf-radius-xs);
+    color: var(--bf-color-action-neutral-content);
+    background: var(--bf-color-action-neutral-surface);
+    pointer-events: auto;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tag > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .clear,
+  .indicator {
+    z-index: 3;
+    grid-area: 1 / 1;
+    align-self: center;
+    justify-self: end;
+  }
+
+  .clear {
+    margin-inline-end: calc(
+      var(--bf-control-select-trailing-inset)
+      + var(--bf-control-select-indicator-size)
+      + var(--bf-control-select-content-gap)
+    );
+  }
+
+  .indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--bf-control-select-indicator-size);
+    block-size: var(--bf-control-select-indicator-size);
+    margin-inline-end: var(--bf-control-select-trailing-inset);
+    color: var(--bf-color-content-muted);
+    pointer-events: none;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  }
+
+  .indicator > svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .root[data-open="true"] .indicator {
+    transform: rotate(180deg);
+  }
+
+  .popover {
+    display: flex;
+    min-inline-size: var(--bf-overlay-menu-inline-size);
+    max-inline-size: calc(100vw - var(--bf-space-4));
+    min-block-size: 0;
+    flex-direction: column;
+    padding: var(--bf-overlay-menu-surface-padding);
+    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-radius: var(--bf-overlay-menu-surface-radius);
+    color: var(--bf-color-action-neutral-content);
+    background: var(--bf-color-surface-panel);
+    box-shadow: var(--bf-shadow-menu);
+  }
+
+  .popover[data-popover-mode="overlay"] {
+    position: fixed;
+  }
+
+  .popover[data-popover-mode="inline"] {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: calc(100% + var(--bf-space-1));
+    inset-inline-start: 0;
+    inline-size: 100%;
+  }
+
+  .search {
+    flex: 0 0 auto;
+    padding: var(--bf-space-1);
+  }
+
+  .listbox {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
+  .message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bf-space-2);
+  }
+
+  .spinner {
+    inline-size: var(--bf-overlay-menu-item-icon-size);
+    block-size: var(--bf-overlay-menu-item-icon-size);
+    animation: bf-combobox-spin var(--bf-motion-duration-loop) linear infinite;
+  }
+
+  @keyframes bf-combobox-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .trigger,
+    .indicator {
+      transition: none;
+    }
+
+    .spinner {
+      animation: none;
+    }
+  }
+
   @media (forced-colors: active) {
-    .control, .popup { border-color: ButtonText; }
-    .option[data-active="true"] { outline: 1px solid Highlight; }
-    .option[data-selected="true"] { background: Highlight; color: HighlightText; }
+    .trigger,
+    .popover,
+    .root[data-invalid="true"] .trigger {
+      border-color: ButtonText;
+    }
+
+    .trigger:focus-visible,
+    .root[data-open="true"] .trigger {
+      border-color: Highlight;
+      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+    }
   }
 }

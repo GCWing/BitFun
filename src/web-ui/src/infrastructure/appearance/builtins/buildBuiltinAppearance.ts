@@ -2,7 +2,6 @@ import type { AppearancePalette } from './AppearancePalette';
 import type {
   AppearanceColorValue,
   AppearanceDurationValue,
-  AppearanceFontFamilyValue,
   AppearanceLengthValue,
   AppearanceNumberValue,
   AppearancePackage,
@@ -19,10 +18,8 @@ const OVERLAY_WHITE_04 = 'rgba(255, 255, 255, 0.04)';
 const ref = (path: string): AppearanceReference => ({ kind: 'ref', path });
 const colorRef = (id: string): AppearanceReference => ref(`globals.colors.${id}`);
 const lengthRef = (id: string): AppearanceReference => ref(`globals.lengths.${id}`);
-const numberRef = (id: string): AppearanceReference => ref(`globals.numbers.${id}`);
 const durationRef = (id: string): AppearanceReference => ref(`globals.durations.${id}`);
 const easingRef = (id: string): AppearanceReference => ref(`globals.easings.${id}`);
-const fontRef = (id: string): AppearanceReference => ref(`globals.fontFamilies.${id}`);
 
 function color(value: string): AppearanceColorValue {
   const trimmed = value.trim();
@@ -71,11 +68,6 @@ function number(value: number): AppearanceNumberValue {
   return { kind: 'number', value };
 }
 
-function fontFamily(value: string): AppearanceFontFamilyValue {
-  const families = value.split(',').map(item => item.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
-  return { kind: 'fontFamily', families: families.slice(0, 8) };
-}
-
 function transition(property: 'all' | 'background-color' | 'border-color' | 'box-shadow' | 'color' | 'opacity' | 'transform' = 'all'): NonNullable<AppearanceStyle['transition']> {
   return [{ property, duration: durationRef('base'), easing: easingRef('standard') }];
 }
@@ -92,7 +84,7 @@ function colorToRgbChannels(value: string): string | null {
 }
 
 function createCssTokens(palette: AppearancePalette): Record<string, string> {
-  const { colors, effects, motion, typography } = palette;
+  const { colors, effects, motion } = palette;
   const purple = colors.purple ?? {
     100: colors.element.subtle,
     200: colors.element.soft,
@@ -321,24 +313,6 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-easing-accelerate': 'cubic-bezier(0.4, 0, 1, 1)',
     '--bf-appearance-token-easing-decelerate': motion.easing.decelerate,
     '--bf-appearance-token-easing-smooth': motion.easing.smooth,
-    '--bf-appearance-token-font-weight-bold': String(typography.weight.semibold),
-    '--bf-appearance-token-font-weight-normal': String(typography.weight.normal),
-    '--bf-appearance-token-font-size-3xl': typography.size['3xl'],
-    '--bf-appearance-token-line-height-tight': String(typography.lineHeight.tight),
-    '--bf-appearance-token-line-height-base': String(typography.lineHeight.base),
-    '--bf-appearance-token-line-height-relaxed': String(typography.lineHeight.relaxed),
-    '--bf-appearance-token-flowchat-font-size-xxs': '10px',
-    '--bf-appearance-token-flowchat-font-size-2xs': '11px',
-    '--bf-appearance-token-flowchat-font-size-xs': typography.size.xs,
-    '--bf-appearance-token-flowchat-font-size-sm': typography.size.sm,
-    '--bf-appearance-token-flowchat-font-size-base': typography.size.base,
-    '--bf-appearance-token-flowchat-font-size-lg': typography.size.lg,
-    '--bf-appearance-token-flowchat-font-size-xl': typography.size.xl,
-    '--bf-appearance-token-flowchat-font-size-2xl': typography.size['2xl'],
-    '--bf-appearance-token-flowchat-font-size-3xl': typography.size['3xl'],
-    '--bf-appearance-token-flowchat-text-line-height': '1.58',
-    '--bf-appearance-token-flowchat-support-line-height': '1.45',
-    '--bf-appearance-token-flowchat-compact-line-height': '1.32',
     '--bf-appearance-token-flowchat-flow-item-gap': '0.42rem',
     '--bf-appearance-token-flowchat-turn-gap': '0.46rem',
     '--bf-appearance-token-flowchat-inline-gap': '0.35rem',
@@ -353,19 +327,14 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
     '--bf-appearance-token-flowchat-card-pad-x': '0.75rem',
     '--bf-appearance-token-flowchat-card-expanded-pad-y': '0.5rem',
     '--bf-appearance-token-flowchat-card-expanded-pad-x': '0.625rem',
-    '--bf-appearance-token-flowchat-code-font-size': typography.size.sm,
-    '--bf-appearance-token-flowchat-code-line-height': '1.52',
     '--bf-appearance-token-flowchat-code-block-pad-y': '0.55rem',
     '--bf-appearance-token-flowchat-code-block-pad-x': '0.75rem',
     '--bf-appearance-token-flowchat-link-color': palette.type === 'dark' ? '#60a5fa' : '#0969da',
     '--bf-appearance-token-flowchat-link-hover-color': palette.type === 'dark' ? '#93c5fd' : '#0550ae',
-    '--bf-appearance-token-tool-card-font-mono': typography.font.mono,
     '--bf-appearance-token-tool-card-header-pad-y': '0.44rem',
     '--bf-appearance-token-tool-card-header-pad-right': '0.625rem',
     '--bf-appearance-token-tool-card-header-icon-slot': '34px',
     '--bf-appearance-token-tool-card-expanded-pad-x': '0.625rem',
-    '--bf-appearance-token-tool-card-action-font-size': typography.size.sm,
-    '--bf-appearance-token-tool-card-action-line-height': '1.45',
   };
 
   const overlays = {
@@ -401,12 +370,6 @@ function createCssTokens(palette: AppearancePalette): Record<string, string> {
   Object.entries(effects.spacing).forEach(([key, value]) => { tokens[`--bf-appearance-token-size-gap-${key}`] = value; });
   Object.entries(motion.duration).forEach(([key, value]) => { tokens[`--bf-appearance-token-motion-${key}`] = value; });
   Object.entries(motion.easing).forEach(([key, value]) => { tokens[`--bf-appearance-token-easing-${key}`] = value; });
-  tokens['--bf-appearance-token-font-family-sans'] = typography.font.sans;
-  tokens['--bf-appearance-token-font-family-mono'] = typography.font.mono;
-  Object.entries(typography.weight).forEach(([key, value]) => { tokens[`--bf-appearance-token-font-weight-${key}`] = String(value); });
-  Object.entries(typography.size).forEach(([key, value]) => { tokens[`--bf-appearance-token-font-size-${key}`] = value; });
-  Object.entries(typography.lineHeight).forEach(([key, value]) => { tokens[`--bf-appearance-token-line-height-${key}`] = String(value); });
-
   const button = palette.components?.button;
   tokens['--bf-appearance-token-btn-primary-bg'] = button?.primary.default.background ?? colors.accent[200];
   tokens['--bf-appearance-token-btn-primary-color'] = button?.primary.default.color ?? colors.accent[600];
@@ -525,18 +488,9 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
         'gap-3': length(palette.effects.spacing[3]),
         'gap-4': length(palette.effects.spacing[4]),
         'gap-6': length(palette.effects.spacing[6]),
-        'font-xs': length(palette.typography.size.xs),
-        'font-sm': length(palette.typography.size.sm),
-        'font-base': length(palette.typography.size.base),
-        'font-lg': length(palette.typography.size.lg),
       },
       numbers: {
         'opacity-disabled': number(palette.effects.opacity.disabled),
-        'weight-medium': number(palette.typography.weight.medium),
-        'weight-semibold': number(palette.typography.weight.semibold),
-        'line-tight': number(palette.typography.lineHeight.tight),
-        'line-base': number(palette.typography.lineHeight.base),
-        'line-relaxed': number(palette.typography.lineHeight.relaxed),
       },
       durations: {
         fast: duration(palette.motion.duration.fast),
@@ -544,9 +498,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
       },
       easings: {
         standard: { kind: 'easing', value: 'standard' },
-      },
-      fontFamilies: {
-        sans: fontFamily(palette.typography.font.sans),
       },
     },
     materials: {
@@ -556,7 +507,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
           backgroundColor: colorRef('element-base'),
           color: colorRef('text-secondary'),
           borderRadius: lengthRef('radius-sm'),
-          fontFamily: fontRef('sans'),
           transition: transition(),
         },
       },
@@ -605,9 +555,9 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
             ],
           },
           header: { base: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: lengthRef('gap-3') } },
-          title: { base: { color: colorRef('text-primary'), fontSize: lengthRef('font-sm'), fontWeight: numberRef('weight-semibold'), lineHeight: numberRef('line-tight') } },
-          subtitle: { base: { color: colorRef('text-muted'), fontSize: lengthRef('font-xs'), lineHeight: numberRef('line-base') } },
-          body: { base: { color: colorRef('text-secondary'), fontSize: lengthRef('font-sm'), lineHeight: numberRef('line-relaxed') } },
+          title: { base: { color: colorRef('text-primary') } },
+          subtitle: { base: { color: colorRef('text-muted') } },
+          body: { base: { color: colorRef('text-secondary') } },
           footer: { base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2') }, facets: { align: { left: { justifyContent: 'flex-start' }, center: { justifyContent: 'center' }, right: { justifyContent: 'flex-end' }, between: { justifyContent: 'space-between' } } } },
         },
       },
@@ -653,8 +603,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
               ...xtermAnsi,
             },
           },
-          fontWeight: palette.type === 'dark' ? 'normal' : '500',
-          fontWeightBold: palette.type === 'dark' ? 'bold' : '700',
         },
       },
       mermaid: {

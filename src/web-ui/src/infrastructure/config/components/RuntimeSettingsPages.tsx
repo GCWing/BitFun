@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea, type ComboboxOption } from '@bitfun/ui';
+import { Button, Icon, IconButton, Modal, NumberInput, Select, Switch, Tooltip, ScrollArea, type ComboboxOption, type SelectOption } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Trash2 } from 'lucide-react';
@@ -37,6 +37,8 @@ import { ask, open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import './RuntimeSettingsPages.scss';
+
+type DescribedSelectOption = SelectOption & { description?: string };
 
 const log = createLogger('RuntimeSettings');
 
@@ -515,7 +517,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     };
   });
 
-  const companionDisplayModeOptions: ComboboxOption[] = [
+  const companionDisplayModeOptions: DescribedSelectOption[] = [
     {
       value: 'desktop',
       label: t('features.pet.displayDesktop'),
@@ -528,7 +530,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
     },
   ];
 
-  const subagentBatchExecutionPolicyOptions: ComboboxOption[] = [
+  const subagentBatchExecutionPolicyOptions: DescribedSelectOption[] = [
     {
       value: 'safe_only',
       label: tTools('config.subagentBatchPolicy.safeOnly'),
@@ -1199,7 +1201,11 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({ page }) => {
             <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
               <Select
                 value={subagentBatchExecutionPolicy}
-                options={subagentBatchExecutionPolicyOptions}
+                options={subagentBatchExecutionPolicyOptions.map(option => ({
+                  disabled: option.disabled,
+                  label: option.description ? `${option.label} — ${option.description}` : option.label,
+                  value: option.value,
+                }))}
                 size="sm"
                 disabled={toolExecConfigLoading}
                 onValueChange={handleSubagentBatchExecutionPolicyChange}

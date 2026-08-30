@@ -33,6 +33,6 @@ export const tooltipMeta = {
     "overlay.tooltip.surfaceRadius",
     "overlay.tooltip.arrowSize",
     "overlay.tooltip.gap",
-    "overlay.tooltip.fontSize",
+    "type.support.fontSize",
   ],
 } as const satisfies ComponentMeta;

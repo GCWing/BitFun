@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Menu, MenuItem } from '@bitfun/ui';
 import {
   AlertCircle,
   CheckCircle2,
@@ -240,7 +241,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
           </button>
 
           {isPopoverOpen && createPortal(
-            <div
+            <Menu
               ref={popoverRef}
               data-bf-component="tool-timeout-indicator"
               data-bf-part="popover"
@@ -251,58 +252,52 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
                 left: `${popoverLayout?.left ?? 0}px`,
                 visibility: popoverLayout ? 'visible' : 'hidden',
               }}
+              aria-label={t('toolCards.timeout.disableTooltip')}
+              autoFocusFirstItem
             >
               {remainingAtDisable > 0 ? (
-                <button
-                  type="button"
+                <MenuItem
                   data-bf-component="tool-timeout-indicator"
                   data-bf-part="option"
-                  className="timeout-extend-option timeout-extend-option--danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     extendTimeout(remainingAtDisable);
                   }}
                 >
                   {t('toolCards.timeout.restoreShort', { seconds: remainingAtDisable })}
-                </button>
+                </MenuItem>
               ) : null}
-              <button
-                type="button"
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(60);
                 }}
               >
                 +1m
-              </button>
-              <button
-                type="button"
+              </MenuItem>
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(300);
                 }}
               >
                 +5m
-              </button>
-              <button
-                type="button"
+              </MenuItem>
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(600);
                 }}
               >
                 +10m
-              </button>
-            </div>,
+              </MenuItem>
+            </Menu>,
             getAppearanceOverlayHost(),
           )}
         </div>

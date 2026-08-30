@@ -1,8 +1,7 @@
-import { Combobox } from '@bitfun/ui';
 import { Switch } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -175,14 +174,14 @@ export const SessionTitleConfig: React.FC = () => {
             data-bf-component="session-title-config"
             data-bf-part="modelControl"
           >
-            <Combobox
-              size="small"
+            <LocalizedCombobox
+              size="sm"
               searchable
               className="model-select-presentation__select"
               dropdownClassName="model-select-presentation__dropdown"
               options={modelOptions}
               value={sessionTitleModelId}
-              onChange={(value) => void handleModelChange(normalizeSelectValue(value))}
+              onValueChange={(value) => void handleModelChange(normalizeSelectValue(value))}
               renderOption={renderModelOption}
               renderValue={renderModelValue}
               disabled={isLoading}

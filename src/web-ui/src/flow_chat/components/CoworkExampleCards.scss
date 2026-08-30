@@ -17,8 +17,8 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -64,16 +64,16 @@
   }
 
   &__card-title {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    line-height: var(--bf-type-flow-meta-line-height);
   }
 
   &__card-desc {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;

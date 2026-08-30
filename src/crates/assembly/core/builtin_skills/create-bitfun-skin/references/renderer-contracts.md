@@ -33,7 +33,7 @@ Accepted settings: `id`, `base`, `inherit`, `rules`, and `colors`. IDs use lower
 
 ## xterm
 
-Accepted settings: `surfaces`, `fontWeight`, and `fontWeightBold`. `surfaces` may define `terminal` and `output` color maps.
+Accepted settings: `surfaces`. It may define `terminal` and `output` color maps. Font family, size, weight, and line height remain owned by `@bitfun/design-tokens` and cannot be overridden by an Appearance package.
 
 ## mermaid
 

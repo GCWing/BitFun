@@ -3,9 +3,9 @@
     min-inline-size: 0;
     color: var(--bf-color-content-primary);
     background: var(--bf-color-surface-canvas);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-font-size-body);
-    line-height: var(--bf-line-height-body);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-base);
+    line-height: var(--bf-line-height-base);
   }
 
   .root[data-color-scheme="light"] {

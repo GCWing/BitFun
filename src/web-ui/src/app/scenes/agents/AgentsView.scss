@@ -56,11 +56,11 @@
   &__panel-label {
     flex-shrink: 0;
     padding: 10px $size-gap-4;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: var(--bf-letter-spacing-widest);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
@@ -106,25 +106,25 @@
 
   &__title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-2xl);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-2xl);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.4px;
+    letter-spacing: var(--bf-letter-spacing-tight);
   }
 
   &__sub {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.7;
+    line-height: var(--bf-line-height-spacious);
   }
 
   &__section-label {
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: var(--bf-letter-spacing-widest);
     align-self: flex-start;
     width: 100%;
     max-width: 520px;
@@ -153,7 +153,7 @@
       border-color $motion-fast $easing-standard,
       color $motion-fast $easing-standard;
     text-align: left;
-    font-family: $font-family-sans;
+    font-family: var(--bf-font-family-sans);
 
     &:hover {
       background: var(--bf-appearance-token-element-bg-subtle);
@@ -181,13 +181,13 @@
   }
 
   &__tpl-name {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__tpl-desc {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -196,7 +196,7 @@
 
   &__tpl-cnt {
     flex-shrink: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-disabled);
     background: var(--bf-appearance-token-element-bg-medium);
     padding: 2px 7px;
@@ -221,14 +221,14 @@
     border-radius: $size-radius-sm;
     padding: 7px $size-gap-6;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     cursor: pointer;
     transition:
       transform $motion-fast $easing-standard,
       background-color $motion-fast $easing-standard,
       border-color $motion-fast $easing-standard,
       color $motion-fast $easing-standard;
-    font-family: $font-family-sans;
+    font-family: var(--bf-font-family-sans);
 
     &:hover {
       color: var(--bf-appearance-token-color-text-secondary);

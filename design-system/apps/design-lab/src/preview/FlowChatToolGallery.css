@@ -35,9 +35,9 @@
 
 .flow-chat-tool-group__attention {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
   font-weight: var(--bf-font-weight-medium);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--bf-letter-spacing-wider);
   text-transform: uppercase;
 }
 
@@ -48,13 +48,13 @@
 
 .flow-chat-tool-group__heading h3 {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-title);
+  font-size: var(--bf-font-size-2xl);
 }
 
 .flow-chat-tool-group__heading p,
 .flow-chat-tool-group__heading > button {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
 }
 
 .flow-chat-tool-group__heading > button {
@@ -113,8 +113,8 @@
   overflow: hidden;
   min-width: 0;
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-small);
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -122,7 +122,7 @@
 .flow-chat-tool-specimen__heading span {
   flex: 0 0 auto;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
 }
 
 .flow-chat-dedicated-note {
@@ -158,19 +158,19 @@
 
 .flow-chat-dedicated-note strong {
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-small);
+  font-size: var(--bf-font-size-sm);
 }
 
 .flow-chat-dedicated-note p,
 .flow-chat-dedicated-note code {
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
 }
 
 .flow-chat-dedicated-note code {
   max-inline-size: 360px;
   color: var(--bf-color-content-muted);
-  font-family: var(--bf-font-family-mono);
-  line-height: var(--bf-line-height-body);
+  font-family:var(--bf-font-family-mono);
+  line-height: var(--bf-line-height-base);
   text-align: end;
 }
 

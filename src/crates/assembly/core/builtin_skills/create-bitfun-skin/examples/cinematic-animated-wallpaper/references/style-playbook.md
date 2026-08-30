@@ -22,7 +22,7 @@ Prefer a frame near the visual climax for still artwork. Keep source composition
 | `sidebar.webp` | one frame | all registered sidebar owners | portrait crop, moderately darkened |
 | `card-detail.webp` | one frame | compact cards, messages, terminal strip | lower/detail crop, strongly darkened |
 | `card-portrait.webp` | one frame | hero cards, MiniApp/Agent cards | face/character crop, strongly darkened |
-| `dialog.webp` | one frame | modal and dedicated dialog roots | wide crop, strongly darkened |
+| `dialog.webp` | one frame | registered dedicated dialog surfaces | wide crop, strongly darkened |
 | `preview.webp` | one frame | package preview | representative full frame |
 | `asset-preview-sheet.png` | generated report | outside the package | labeled overview of all six static roles |
 
@@ -51,9 +51,8 @@ Re-query every id before use.
 | settings transparency | `config.root`, `config.content`, `config.contentInner`, `archived-sessions-config.root`, `keyboard-shortcuts.root`, `keyboard-shortcuts.content` |
 | translucent settings cards | `config.sectionBody` |
 | Insights transparency | scene `insights.root`, `insights.content` |
-| image-led cards | `mini-app-card.root`, `agent-card.root`, `core-agent-card.root`, `skill-card.root`, `user-message-item.root`, `flow-chat-card.root` |
-| generic dialog | `modal.dialog` |
-| dedicated dialogs | registered dialog/modal root or body Parts returned by the contract |
+| image-led cards | `mini-app-card.root`, `agent-card.root`, `core-agent-card.root`, `skill-card.root`, `user-message-item.content` |
+| dialogs | registered dialog content, root, or body Parts returned by the current contract |
 
 ## Cascade rules
 

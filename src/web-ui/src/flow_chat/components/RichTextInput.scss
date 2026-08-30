@@ -11,14 +11,14 @@
   border: none !important;
   outline: none !important;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-base);
-  line-height: $line-height-base;
+  font-size: var(--bf-type-flow-body-font-size);
+  line-height: var(--bf-line-height-base);
   padding: 0;
   vertical-align: top;
   min-height: 24px;
   max-height: 200px;
   overflow-y: auto;
-  font-family: $font-family-sans;
+  font-family: var(--bf-font-family-sans);
   white-space: pre-wrap;
   word-wrap: break-word;
   word-break: break-word;
@@ -79,13 +79,13 @@
   background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
   border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
   border-radius: 6px;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  font-weight: 500;
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-accent-400);
   cursor: pointer;
   user-select: text;
   vertical-align: middle;
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  line-height: var(--bf-type-flow-support-line-height);
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -139,13 +139,13 @@
   background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
   border: none;
   border-radius: 10px;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  font-weight: 500;
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-font-weight-medium);
   color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, transparent);
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  line-height: var(--bf-type-flow-support-line-height);
   transition:
     background-color 160ms ease,
     color 160ms ease;
@@ -215,9 +215,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  font-family: $font-family-mono;
-  font-size: 0.85em;
+  line-height: var(--bf-type-flow-support-line-height);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
 }
 
 .rich-text-tag-pill--widget-ref {
@@ -248,9 +248,9 @@
   border-radius: 999px;
   background: var(--bf-appearance-token-color-overlay-white-15);
   color: inherit;
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: var(--bf-type-flow-micro-font-size);
+  font-weight: var(--bf-font-weight-bold);
+  letter-spacing: var(--bf-letter-spacing-wider);
   text-transform: uppercase;
 }
 
@@ -258,7 +258,7 @@
   min-width: 18px;
   padding: 0 3px;
   background: transparent;
-  letter-spacing: 0;
+  letter-spacing: var(--bf-letter-spacing-normal);
   text-transform: none;
 
   svg {
@@ -273,7 +273,7 @@
 }
 
 .rich-text-tag-pill__text--widget-ref {
-  font-family: $font-family-sans;
+  font-family: var(--bf-font-family-sans);
   max-width: 260px;
 }
 
@@ -293,8 +293,8 @@
   background: transparent;
   color: currentColor;
   opacity: 0.6;
-  font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
-  line-height: 1;
+  font-size: var(--bf-type-flow-section-title-font-size);
+  line-height: var(--bf-line-height-none);
   cursor: pointer;
   border-radius: 50%;
   transition:

@@ -10,16 +10,16 @@
 
   &__title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: var(--bf-appearance-token-font-weight-semibold);
-    line-height: 1.4;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-ui);
     overflow-wrap: anywhere;
   }
 
   &__description {
     margin-top: tokens.$size-gap-1;
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.45;
+    line-height: var(--bf-line-height-support);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -40,22 +40,22 @@
 
     dt {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: 1.4;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-ui);
     }
 
     dd {
       min-width: 0;
       margin: 0;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: 1.4;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-ui);
       overflow-wrap: anywhere;
       text-align: right;
     }
   }
 
   .is-monospace {
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 }

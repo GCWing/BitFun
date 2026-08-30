@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ListFilter } from 'lucide-react';
+import { ListFilter, RotateCcw } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { Icon, Tooltip } from '@bitfun/ui';
 import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
 import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
@@ -41,8 +41,6 @@ const MAIN_MENU_WIDTH = 220;
 const SUBMENU_WIDTH = 220;
 const MENU_GAP = 5;
 const VIEWPORT_PADDING = 8;
-const ROW_HEIGHT = 34;
-
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max));
 
@@ -52,14 +50,15 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<Submenu | null>(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [submenuPosition, setSubmenuPosition] = useState({ top: 0, left: 0, ready: false });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
   const {
-    requestChange: requestSubmenuChange,
-    requestClose: requestSubmenuClose,
+    closeNow: closeSubmenuNow,
     keepOpen: keepSubmenuOpen,
     openNow: openSubmenuNow,
+    requestClose: requestSubmenuClose,
   } = useSubmenuIntent<Submenu>({
     activeId: activeSubmenu,
     onActiveIdChange: setActiveSubmenu,
@@ -136,90 +135,153 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
     },
   }), [view]);
 
+  const definition = activeSubmenu ? definitions[activeSubmenu] : null;
+
+  useLayoutEffect(() => {
+    if (!activeSubmenu) {
+      setSubmenuPosition(position => position.ready ? { ...position, ready: false } : position);
+      return;
+    }
+
+    const updateSubmenuPosition = () => {
+      const trigger = menuRef.current?.querySelector<HTMLButtonElement>(
+        `[data-submenu-id="${activeSubmenu}"]`,
+      );
+      const submenu = submenuRef.current;
+      if (!trigger || !submenu) return;
+
+      const triggerBounds = trigger.getBoundingClientRect();
+      const submenuWidth = submenu.offsetWidth || SUBMENU_WIDTH;
+      const submenuHeight = submenu.offsetHeight;
+      const preferredLeft = triggerBounds.right + MENU_GAP;
+      const left = preferredLeft + submenuWidth <= window.innerWidth - VIEWPORT_PADDING
+        ? preferredLeft
+        : triggerBounds.left - MENU_GAP - submenuWidth;
+      setSubmenuPosition({
+        top: clamp(
+          triggerBounds.top,
+          VIEWPORT_PADDING,
+          window.innerHeight - submenuHeight - VIEWPORT_PADDING,
+        ),
+        left: clamp(
+          left,
+          VIEWPORT_PADDING,
+          window.innerWidth - submenuWidth - VIEWPORT_PADDING,
+        ),
+        ready: true,
+      });
+    };
+
+    updateSubmenuPosition();
+    const frame = requestAnimationFrame(updateSubmenuPosition);
+    return () => cancelAnimationFrame(frame);
+  }, [activeSubmenu, menuPosition]);
+
+  const focusSubmenuTrigger = useCallback((submenu: Submenu) => {
+    requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>(
+        `[data-submenu-id="${submenu}"]`,
+      )?.focus();
+    });
+  }, []);
+
+  const closeSubmenu = useCallback(() => {
+    if (!activeSubmenu) return;
+    const submenu = activeSubmenu;
+    closeSubmenuNow();
+    focusSubmenuTrigger(submenu);
+  }, [activeSubmenu, closeSubmenuNow, focusSubmenuTrigger]);
+
+  const openSubmenu = useCallback((submenu: Submenu, focusFirstItem = false) => {
+    setSubmenuPosition(position => ({ ...position, ready: false }));
+    openSubmenuNow(submenu);
+    if (focusFirstItem) {
+      requestAnimationFrame(() => {
+        submenuRef.current?.querySelector<HTMLButtonElement>('[data-bf-menu-item]')?.focus();
+      });
+    }
+  }, [openSubmenuNow]);
+
   const row = (submenu: Submenu, value?: string, active = false) => (
-    <button
-      type="button"
-      className={activeSubmenu === submenu ? 'is-open' : ''}
-      role="menuitem"
+    <MenuItem
+      data-submenu-id={submenu}
+      data-bf-state={activeSubmenu === submenu ? 'open' : undefined}
       aria-haspopup="menu"
       aria-expanded={activeSubmenu === submenu}
-      onPointerEnter={event => requestSubmenuChange(submenu, event)}
+      metadata={(
+        <span className="bitfun-nav-panel__session-filter-menu-value">
+          {active ? <span className="bitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
+          {value ? t(`nav.sessions.viewMenu.${submenu}.${value}`) : null}
+          <Icon name="chevron-right" size="md" aria-hidden="true" />
+        </span>
+      )}
+      onClick={() => {
+        if (activeSubmenu === submenu) closeSubmenuNow();
+        else openSubmenu(submenu);
+      }}
       onPointerLeave={requestSubmenuClose}
-      onFocus={() => openSubmenuNow(submenu)}
-      onClick={() => openSubmenuNow(submenu)}
+      onKeyDown={event => {
+        if (event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        event.stopPropagation();
+        openSubmenu(submenu, true);
+      }}
     >
-      <span>{t(`nav.sessions.viewMenu.${submenu}.label`)}</span>
-      <span className="bitfun-nav-panel__session-filter-menu-value">
-        {active ? <span className="bitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
-        {value ? t(`nav.sessions.viewMenu.${submenu}.${value}`) : null}
-        <Icon name="chevron-right" size="md" aria-hidden="true" />
-      </span>
-    </button>
+      {t(`nav.sessions.viewMenu.${submenu}.label`)}
+    </MenuItem>
   );
-
-  const submenuIndex: Record<Submenu, number> = {
-    ordering: 0,
-    show: 1,
-    status: 3,
-    worktree: 4,
-    environment: 5,
-    source: 6,
-  };
-  const submenuTop = menuPosition.top + 4 + (activeSubmenu ? submenuIndex[activeSubmenu] * ROW_HEIGHT : 0);
-  const preferredSubmenuLeft = menuPosition.left + MAIN_MENU_WIDTH + MENU_GAP;
-  const submenuLeft = preferredSubmenuLeft + SUBMENU_WIDTH <= window.innerWidth - VIEWPORT_PADDING
-    ? preferredSubmenuLeft
-    : menuPosition.left - SUBMENU_WIDTH - MENU_GAP;
-  const definition = activeSubmenu ? definitions[activeSubmenu] : null;
 
   const menu = open ? createPortal(
     <>
-      <div
+      <Menu
         ref={menuRef}
         className="bitfun-nav-panel__session-filter-menu"
         style={menuPosition}
-        role="menu"
+        autoFocusFirstItem
         aria-label={t('nav.sessions.viewMenu.title')}
         data-testid="nav-session-filter-menu"
       >
         {row('ordering', view.ordering)}
         {row('show')}
-        <div className="bitfun-nav-panel__session-filter-menu-divider" role="separator" />
-        <div className="bitfun-nav-panel__session-filter-menu-header">
-          <span>{t('nav.sessions.viewMenu.filters.label')}</span>
-          <button type="button" onClick={view.resetFilters}>{t('nav.sessions.viewMenu.filters.reset')}</button>
-        </div>
-        {row('status', undefined, view.filters.hiddenStatuses.length > 0)}
-        {row('worktree', undefined, view.filters.hiddenWorktrees.length > 0)}
-        {row('environment', undefined, view.filters.hiddenEnvironments.length > 0)}
-        {row('source', undefined, view.filters.hiddenSources.length > 0)}
-        <button
-          type="button"
-          className={view.filters.hideArchived ? 'is-filtered' : ''}
-          role="menuitemcheckbox"
-          aria-checked={!view.filters.hideArchived}
-          onPointerEnter={event => requestSubmenuChange(null, event)}
-          onClick={view.toggleArchived}
+        <MenuSeparator />
+        <MenuSection
+          title={t('nav.sessions.viewMenu.filters.label')}
+          actions={[{
+            id: 'reset',
+            label: t('nav.sessions.viewMenu.filters.reset'),
+            icon: <RotateCcw size={12} aria-hidden="true" />,
+            onClick: () => {
+              setActiveSubmenu(null);
+              view.resetFilters();
+            },
+          }]}
         >
-          <span>{t('nav.sessions.viewMenu.archived')}</span>
-          {!view.filters.hideArchived ? <Icon name="check-line" size="sm" aria-hidden="true" /> : null}
-        </button>
-        <div className="bitfun-nav-panel__session-filter-menu-divider" role="separator" />
+          {row('status', undefined, view.filters.hiddenStatuses.length > 0)}
+          {row('worktree', undefined, view.filters.hiddenWorktrees.length > 0)}
+          {row('environment', undefined, view.filters.hiddenEnvironments.length > 0)}
+          {row('source', undefined, view.filters.hiddenSources.length > 0)}
+          <MenuItem
+          role="menuitemcheckbox"
+            checked={!view.filters.hideArchived}
+            metadata={!view.filters.hideArchived ? <Icon name="check-line" size="sm" aria-hidden="true" /> : null}
+            onClick={() => {
+              setActiveSubmenu(null);
+              view.toggleArchived();
+            }}
+          >
+            {t('nav.sessions.viewMenu.archived')}
+          </MenuItem>
+        </MenuSection>
+        <MenuSeparator />
         {view.grouping === 'grouped' ? (
-          <button
-            type="button"
-            role="menuitem"
+          <MenuItem
             data-testid="nav-session-collapse-all"
-            onPointerEnter={event => requestSubmenuChange(null, event)}
             onClick={() => { view.requestCollapseAll(); close(); }}
           >
-            <span>{t('nav.sessions.viewMenu.collapseAll')}</span>
-          </button>
+            {t('nav.sessions.viewMenu.collapseAll')}
+          </MenuItem>
         ) : null}
-        <button
-          type="button"
-          role="menuitem"
-          onPointerEnter={event => requestSubmenuChange(null, event)}
+        <MenuItem
           onClick={() => {
             for (const session of flowChatStore.getState().sessions.values()) {
               if (session.hasUnreadCompletion) flowChatStore.clearSessionUnreadCompletion(session.sessionId);
@@ -227,35 +289,41 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
             close();
           }}
         >
-          <span>{t('nav.sessions.viewMenu.markAllRead')}</span>
-        </button>
-      </div>
+          {t('nav.sessions.viewMenu.markAllRead')}
+        </MenuItem>
+      </Menu>
 
       {activeSubmenu && definition ? (
-        <div
+        <Menu
           ref={submenuRef}
           className="bitfun-nav-panel__session-filter-submenu"
           style={{
-            top: clamp(submenuTop, VIEWPORT_PADDING, window.innerHeight - (definition.options.length * ROW_HEIGHT + 8) - VIEWPORT_PADDING),
-            left: clamp(submenuLeft, VIEWPORT_PADDING, window.innerWidth - SUBMENU_WIDTH - VIEWPORT_PADDING),
+            top: submenuPosition.top,
+            left: submenuPosition.left,
+            visibility: submenuPosition.ready ? 'visible' : 'hidden',
           }}
-          role="menu"
           aria-label={t(`nav.sessions.viewMenu.${activeSubmenu}.label`)}
           data-testid={`nav-session-filter-${activeSubmenu}-menu`}
           onPointerEnter={keepSubmenuOpen}
           onPointerLeave={requestSubmenuClose}
+          onKeyDown={event => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            closeSubmenu();
+          }}
         >
           {definition.options.map(option => {
             const selected = definition.kind === 'single'
               ? option === definition.value
               : !definition.hidden.includes(option);
             return (
-              <button
+              <MenuItem
                 key={option}
-                type="button"
-                className={selected ? 'is-selected' : ''}
                 role={definition.kind === 'single' ? 'menuitemradio' : 'menuitemcheckbox'}
-                aria-checked={selected}
+                checked={selected}
+                reserveLeadingSpace
+                leading={selected ? <Icon name="check-line" size="sm" /> : null}
                 onClick={() => {
                   if (definition.kind === 'single') {
                     definition.choose(option);
@@ -265,12 +333,11 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
                   }
                 }}
               >
-                <span className="bitfun-nav-panel__session-filter-check" aria-hidden="true">{selected ? <Icon name="check-line" size="sm" /> : null}</span>
-                <span>{t(`nav.sessions.viewMenu.${activeSubmenu}.${option}`)}</span>
-              </button>
+                {t(`nav.sessions.viewMenu.${activeSubmenu}.${option}`)}
+              </MenuItem>
             );
           })}
-        </div>
+        </Menu>
       ) : null}
     </>,
     getAppearanceOverlayHost(),

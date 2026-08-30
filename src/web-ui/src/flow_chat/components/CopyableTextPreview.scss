@@ -1,20 +1,20 @@
 .copyable-text-preview {
   flex: 1;
   min-width: 0;
-  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-family:var(--bf-font-family-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .copyable-text-preview.copyable-text-preview--theme-font {
-  font-family: var(--bf-appearance-token-font-family-sans);
+  font-family:var(--bf-font-family-sans);
 }
 
 .copyable-text-preview--compact {
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  font-weight: normal;
+  font-size: var(--bf-type-flow-support-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
+  font-weight: var(--bf-font-weight-regular);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -28,9 +28,9 @@
   display: flex;
   align-items: flex-start;
   gap: var(--bf-appearance-token-size-gap-2);
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .copyable-text-preview-tooltip-content__text {

@@ -33,7 +33,7 @@ export const inputMeta = {
     "control.height.md",
     "control.height.lg",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
     "radius.base",
   ],

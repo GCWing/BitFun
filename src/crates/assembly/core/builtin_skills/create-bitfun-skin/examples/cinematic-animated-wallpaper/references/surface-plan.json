@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "scope": "example-style-selection",
   "styleId": "cinematic-animated-wallpaper",
-  "validatedAgainstRegistryRevision": "a47c21a1a5b0b28ef9d2c1e17b9e1cea1be6f94c",
+  "validatedAgainstRegistryRevision": "19b5c2f96bb9f9eb7b83f6c9c7df0568dae4b153",
   "scenes": {
     "workbench": {
       "parts": {
@@ -194,18 +194,6 @@
             "transparent"
           ],
           "decorationIntent": "flat"
-        },
-        "footerMenu": {
-          "materials": [
-            "popup"
-          ],
-          "decorationIntent": "framed"
-        },
-        "workspaceMenu": {
-          "materials": [
-            "popup"
-          ],
-          "decorationIntent": "framed"
         }
       }
     },
@@ -607,40 +595,9 @@
         }
       }
     },
-    "flow-chat-card": {
-      "parts": {
-        "root": {
-          "materials": [
-            "detail-card"
-          ],
-          "decorationIntent": "framed"
-        }
-      }
-    },
-    "modal": {
-      "parts": {
-        "overlay": {
-          "base": {
-            "backgroundColor": {
-              "kind": "palette",
-              "role": "background",
-              "alpha": 0.62
-            }
-          },
-          "decorationIntent": "flat"
-        },
-        "dialog": {
-          "cascade": "override",
-          "materials": [
-            "dialog-art"
-          ],
-          "decorationIntent": "framed"
-        }
-      }
-    },
     "confirm-dialog": {
       "parts": {
-        "root": {
+        "content": {
           "materials": [
             "dialog-art"
           ],
@@ -833,18 +790,6 @@
               }
             }
           }
-        },
-        "configure": {
-          "materials": [
-            "control"
-          ],
-          "decorationIntent": "framed"
-        },
-        "newSession": {
-          "materials": [
-            "control"
-          ],
-          "decorationIntent": "framed"
         }
       }
     },
@@ -890,7 +835,7 @@
             }
           ]
         },
-        "menuPopover": {
+        "menu": {
           "materials": [
             "popup"
           ],

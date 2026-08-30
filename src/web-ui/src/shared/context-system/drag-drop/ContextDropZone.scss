@@ -57,8 +57,8 @@
   }
   
   &__text {
-    font-size: var(--bf-appearance-token-font-size-lg);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-accent-500);
     text-align: center;
     text-shadow: 0 2px 8px var(--bf-appearance-token-color-accent-400);

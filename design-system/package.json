@@ -16,6 +16,7 @@
     "build": "pnpm run build:packages && pnpm run build:lab",
     "dev": "pnpm run build:tokens && pnpm run build:theme && pnpm --filter @bitfun/design-lab run dev",
     "test": "pnpm run build:tokens && pnpm run build:theme && pnpm --filter @bitfun/token-engine run test && pnpm --filter @bitfun/design-tokens run test && pnpm --filter @bitfun/theme-bitfun run test && pnpm --filter @bitfun/ui run test && pnpm --filter @bitfun/package-contract run test && pnpm --filter @bitfun/design-lab run test",
-    "check": "pnpm run build && pnpm run test"
+    "typography:audit": "node ../scripts/audit-typography-tokens.mjs --scope design-system",
+    "check": "pnpm run build && pnpm run test && pnpm run typography:audit"
   }
 }

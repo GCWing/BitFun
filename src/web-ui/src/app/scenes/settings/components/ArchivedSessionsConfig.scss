@@ -13,7 +13,7 @@
     justify-content: center;
     padding: 32px 16px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   &__empty {
@@ -24,7 +24,7 @@
     padding: 32px 16px;
     color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   &__empty-icon {
@@ -47,10 +47,10 @@
     align-items: center;
     gap: $size-gap-2;
     padding: 6px 16px;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--bf-letter-spacing-wider);
     width: 100%;
     border: none;
     background: transparent;
@@ -69,7 +69,7 @@
   }
 
   &__group-name {
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-weight: var(--bf-font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -85,8 +85,8 @@
     padding: 0 5px;
     border-radius: 9px;
     background: var(--bf-appearance-token-element-bg-soft);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -120,19 +120,19 @@
   }
 
   &__row-name {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__row-date {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   &__row-actions {

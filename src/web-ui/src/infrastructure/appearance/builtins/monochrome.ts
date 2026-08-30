@@ -92,8 +92,6 @@ export const bitfunMonochromePalette: AppearancePalette = {
 
   effects: content.effects,
   motion: content.motion,
-  typography: content.typography,
-
   components: {
     button: {
       primary: {

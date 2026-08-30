@@ -12,11 +12,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { HarnessCreativeIcon } from '@/component-library/icons';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { notificationService } from '@/shared/notification-system';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 import './HarnessProfileSelector.scss';
 
 export type HarnessProfileId = KnownHarnessProfileId | (string & {});
@@ -118,25 +120,25 @@ function HarnessProfileMark({
       {profile === 'creative' ? (
         <HarnessCreativeIcon
           className="bitfun-harness-selector__density-frame"
-          size={26}
+          size={16}
         />
       ) : profile === 'other' ? (
         <Bot
           className="bitfun-harness-selector__density-frame"
-          size={24}
+          size={15}
           strokeWidth={1.45}
         />
       ) : DensityIcon ? (
         <DensityIcon
           className="bitfun-harness-selector__density-frame"
-          size={26}
+          size={16}
           strokeWidth={1.4}
         />
       ) : null}
       {densityProfile && (
         <Square
           className="bitfun-harness-selector__density-core"
-          size={8}
+          size={5}
           strokeWidth={0}
           fill="currentColor"
         />
@@ -172,6 +174,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     fixedSession ? 'summary' : 'profiles',
   );
   const previousFixedSessionRef = useRef(fixedSession);
+  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuLayout = useAnchoredPopoverPosition({
@@ -181,6 +184,12 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     preferredPlacement: 'top',
     alignment: 'start',
     gap: 8,
+    layoutRevision: `${fixedSession ? 1 : 0}:${page}:${otherAgents.length}`,
+  });
+  const sideMenuLayout = useSideAnchoredPopoverPosition({
+    open: open && presentation === 'menu-item',
+    anchorRef: triggerRef,
+    popoverRef: menuRef,
     layoutRevision: `${fixedSession ? 1 : 0}:${page}:${otherAgents.length}`,
   });
 
@@ -297,46 +306,38 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
     .filter(Boolean)
     .join(' ') || undefined;
   const creatingNewSession = fixedSession && page !== 'summary';
-  const menuHost = presentation === 'menu-item'
-    ? triggerRef.current?.parentElement ?? getAppearanceOverlayHost()
-    : getAppearanceOverlayHost();
+  const handleTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setOpen(value => {
+      if (!value) setPage(fixedSession ? 'summary' : 'profiles');
+      return !value;
+    });
+  };
 
   return (
     <div
+      ref={rootRef}
       className={`bitfun-harness-selector bitfun-harness-selector--${presentation}`}
       data-bf-component="harness-selector"
       data-bf-part="root"
       data-bf-presentation={presentation}
     >
       <Tooltip content={triggerTooltip}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="bitfun-harness-selector__trigger"
-          data-bf-component="harness-selector"
-          data-bf-part="trigger"
-          data-bf-state={triggerState}
-          data-harness-legacy={legacySession ? 'true' : undefined}
-          data-harness-locked={sessionStarted ? 'true' : undefined}
-          data-harness-fixed={fixedSession ? 'true' : undefined}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-label={triggerTooltip}
-          disabled={disabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            setOpen(value => {
-              if (!value) setPage(fixedSession ? 'summary' : 'profiles');
-              return !value;
-            });
-          }}
-          data-testid="harness-profile-selector"
-        >
-          {presentation === 'menu-item' ? (
-            <>
-              <span className="bitfun-harness-selector__trigger-label">
-                {t('chatInput.harness.menuLabel')}
-              </span>
+        {presentation === 'menu-item' ? (
+          <MenuItem
+            ref={triggerRef}
+            data-bf-component="harness-selector"
+            data-bf-part="trigger"
+            data-bf-state={triggerState}
+            data-harness-legacy={legacySession ? 'true' : undefined}
+            data-harness-locked={sessionStarted ? 'true' : undefined}
+            data-harness-fixed={fixedSession ? 'true' : undefined}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label={triggerTooltip}
+            disabled={disabled}
+            onClick={handleTriggerClick}
+            metadata={(
               <span className="bitfun-harness-selector__trigger-meta">
                 <span className="bitfun-harness-selector__trigger-current">
                   <span>{t('chatInput.current')}</span>
@@ -354,61 +355,88 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                   aria-hidden
                 />
               </span>
-            </>
-          ) : (
+            )}
+            data-testid="harness-profile-selector"
+          >
+            <span className="bitfun-harness-selector__trigger-label">
+              {t('chatInput.harness.menuLabel')}
+            </span>
+          </MenuItem>
+        ) : (
+          <button
+            ref={triggerRef}
+            type="button"
+            className="bitfun-harness-selector__trigger"
+            data-bf-component="harness-selector"
+            data-bf-part="trigger"
+            data-bf-state={triggerState}
+            data-harness-legacy={legacySession ? 'true' : undefined}
+            data-harness-locked={sessionStarted ? 'true' : undefined}
+            data-harness-fixed={fixedSession ? 'true' : undefined}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label={triggerTooltip}
+            disabled={disabled}
+            onClick={handleTriggerClick}
+            data-testid="harness-profile-selector"
+          >
             <span className="bitfun-harness-selector__trigger-value">{triggerLabel}</span>
-          )}
-        </button>
+          </button>
+        )}
       </Tooltip>
 
       {open && createPortal(
-        <div
+        <Menu
           ref={menuRef}
           className="bitfun-harness-selector__menu"
           data-bf-component="harness-selector"
           data-bf-part="menu"
           data-bf-state="open"
           data-bf-page={page}
-          data-bf-placement={presentation === 'menu-item' ? 'side' : menuLayout?.placement ?? 'top'}
+          data-bf-placement={presentation === 'menu-item'
+            ? 'side'
+            : menuLayout?.placement ?? 'top'}
           data-harness-locked={sessionStarted ? 'true' : undefined}
           data-harness-fixed={fixedSession ? 'true' : undefined}
-          role="menu"
           style={presentation === 'menu-item'
-            ? undefined
+            ? {
+                top: sideMenuLayout?.top ?? 0,
+                left: sideMenuLayout?.left ?? 0,
+                visibility: sideMenuLayout ? 'visible' : 'hidden',
+              }
             : {
                 top: `${menuLayout?.top ?? 0}px`,
                 left: `${menuLayout?.left ?? 0}px`,
                 visibility: menuLayout ? 'visible' : 'hidden',
               }}
+          autoFocusFirstItem
           onMouseDown={event => event.stopPropagation()}
         >
           {page === 'summary' ? (
             <>
-              <div
-                className="bitfun-harness-selector__session-summary"
+              <MenuItem
                 data-bf-component="harness-selector"
                 data-bf-part="sessionSummary"
                 data-testid="harness-session-summary"
-                role="presentation"
+                role="menuitemradio"
+                checked
+                aria-disabled="true"
+                metadata={<Check size={13} strokeWidth={2.4} aria-hidden />}
               >
-                <span className="bitfun-harness-selector__session-value">{primaryLabel}</span>
-                <Check size={13} strokeWidth={2.4} aria-hidden />
-              </div>
+                {primaryLabel}
+              </MenuItem>
               {onStartNewSession ? (
                 <>
-                  <div className="bitfun-harness-selector__divider" aria-hidden />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="bitfun-harness-selector__new-session"
+                  <MenuSeparator />
+                  <MenuItem
                     data-bf-component="harness-selector"
                     data-bf-part="newSession"
+                    metadata={<ChevronRight size={14} strokeWidth={1.8} aria-hidden />}
                     onClick={() => setPage('profiles')}
                     data-testid="harness-start-new-session"
                   >
-                    <span>{t('chatInput.harness.startNewSession')}</span>
-                    <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
-                  </button>
+                    {t('chatInput.harness.startNewSession')}
+                  </MenuItem>
                 </>
               ) : null}
             </>
@@ -416,17 +444,14 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
             <>
               {fixedSession ? (
                 <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="bitfun-harness-selector__back"
+                  <MenuItem
+                    leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
                     onClick={() => setPage('summary')}
                     data-testid="harness-new-session-back"
                   >
-                    <ChevronLeft size={14} strokeWidth={1.8} aria-hidden />
-                    <span>{t('chatInput.harness.newSessionModesTitle')}</span>
-                  </button>
-                  <div className="bitfun-harness-selector__divider" aria-hidden />
+                    {t('chatInput.harness.newSessionModesTitle')}
+                  </MenuItem>
+                  <MenuSeparator />
                 </>
               ) : null}
               {PROFILE_IDS.map((id) => {
@@ -438,51 +463,52 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                   ? 'current'
                   : 'available';
                 return (
-                  <button
+                  <span
                     key={id}
-                    type="button"
-                    role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
-                    aria-checked={creatingNewSession ? undefined : connected}
-                    className={`bitfun-harness-selector__profile${connected ? ' is-current' : ''}`}
+                    className="bitfun-harness-selector__row-contract"
                     data-bf-component="harness-selector"
                     data-bf-part="profile"
                     data-bf-profile={id}
                     data-bf-state={state}
-                    onClick={() => handleSelectProfile(id)}
-                    data-testid={`harness-profile-${id}`}
                   >
-                    <HarnessProfileMark profile={id} />
-                    <span className="bitfun-harness-selector__profile-copy">
-                      <span className="bitfun-harness-selector__profile-name">{name}</span>
-                    </span>
-                    <span className="bitfun-harness-selector__profile-status">
-                      {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
-                      {id === 'other' ? (
-                        <>
-                          <span className="bitfun-harness-selector__agent-count">
-                            {otherAgents.length}
-                          </span>
-                          <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
-                        </>
-                      ) : null}
-                    </span>
-                  </button>
+                    <MenuItem
+                      role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                      checked={!creatingNewSession && connected}
+                      data-bf-profile={id}
+                      data-bf-state={state}
+                      leading={<HarnessProfileMark profile={id} />}
+                      metadata={(
+                        <span className="bitfun-harness-selector__profile-status">
+                          {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                          {id === 'other' ? (
+                            <>
+                              <span className="bitfun-harness-selector__agent-count">
+                                {otherAgents.length}
+                              </span>
+                              <ChevronRight size={14} strokeWidth={1.8} aria-hidden />
+                            </>
+                          ) : null}
+                        </span>
+                      )}
+                      onClick={() => handleSelectProfile(id)}
+                      data-testid={`harness-profile-${id}`}
+                    >
+                      {name}
+                    </MenuItem>
+                  </span>
                 );
               })}
             </>
           ) : (
             <>
-              <button
-                type="button"
-                role="menuitem"
-                className="bitfun-harness-selector__back"
+              <MenuItem
+                leading={<ChevronLeft size={14} strokeWidth={1.8} aria-hidden />}
                 onClick={() => setPage('profiles')}
                 data-testid="harness-agent-back"
               >
-                <ChevronLeft size={14} strokeWidth={1.8} aria-hidden />
-                <span>{t('chatInput.harness.otherAgentsTitle')}</span>
-              </button>
-              <div className="bitfun-harness-selector__divider" aria-hidden />
+                {t('chatInput.harness.otherAgentsTitle')}
+              </MenuItem>
+              <MenuSeparator />
               {otherAgents.length === 0 ? (
                 <div className="bitfun-harness-selector__empty">
                   {t('chatInput.harness.otherAgentsEmpty')}
@@ -497,38 +523,42 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
                     ? 'unavailable'
                     : 'available';
                 return (
-                  <button
+                  <span
                     key={agent.id}
-                    type="button"
-                    role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
-                    aria-checked={creatingNewSession ? undefined : connected}
-                    className={`bitfun-harness-selector__agent${connected ? ' is-current' : ''}`}
+                    className="bitfun-harness-selector__row-contract"
                     data-bf-component="harness-selector"
                     data-bf-part="agent"
                     data-bf-agent-id={agent.id}
                     data-bf-state={state}
-                    onClick={() => handleSelectAgent(agent)}
-                    data-testid={`harness-agent-${agent.id}`}
                   >
-                    <span className="bitfun-harness-selector__agent-mark" aria-hidden>
-                      <Bot size={18} strokeWidth={1.55} />
-                    </span>
-                    <span className="bitfun-harness-selector__profile-copy">
-                      <span className="bitfun-harness-selector__profile-name">{agent.name}</span>
-                    </span>
-                    <span className="bitfun-harness-selector__profile-status">
-                      {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
-                      {agent.available === false
-                        ? t('chatInput.harness.unavailable')
-                        : null}
-                    </span>
-                  </button>
+                    <MenuItem
+                      role={creatingNewSession ? 'menuitem' : 'menuitemradio'}
+                      checked={!creatingNewSession && connected}
+                      data-bf-agent-id={agent.id}
+                      data-bf-state={state}
+                      leading={<Bot size={15} strokeWidth={1.55} aria-hidden />}
+                      metadata={(
+                        <span className="bitfun-harness-selector__profile-status">
+                          {connected ? <Check size={13} strokeWidth={2.4} aria-hidden /> : null}
+                          {agent.available === false
+                            ? t('chatInput.harness.unavailable')
+                            : null}
+                        </span>
+                      )}
+                      onClick={() => handleSelectAgent(agent)}
+                      data-testid={`harness-agent-${agent.id}`}
+                    >
+                      {agent.name}
+                    </MenuItem>
+                  </span>
                 );
               })}
             </>
           )}
-        </div>,
-        menuHost,
+        </Menu>,
+        presentation === 'menu-item'
+          ? rootRef.current ?? getAppearanceOverlayHost()
+          : getAppearanceOverlayHost(),
       )}
     </div>
   );

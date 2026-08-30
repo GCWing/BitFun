@@ -10,7 +10,7 @@
     background: var(--bf-color-surface-panel);
     box-shadow: none;
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
+    font-family:var(--bf-font-family-sans);
     line-height: var(--bf-line-height-tight);
   }
 
@@ -29,7 +29,7 @@
     padding-block: var(--bf-control-ask-user-summary-padding-block);
     padding-inline: var(--bf-control-ask-user-summary-padding-inline-start);
     border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
   }
 
@@ -70,7 +70,7 @@
   .summaryCopy {
     flex: 1 1 auto;
     gap: var(--bf-space-1);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-tight);
   }
@@ -175,7 +175,7 @@
     inline-size: 100%;
     padding-inline: var(--bf-control-ask-user-question-padding-inline);
     color: var(--bf-color-action-neutral-content);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
   }
@@ -252,7 +252,7 @@
 
   .optionLabel,
   .optionDescription {
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .optionLabel {
@@ -270,7 +270,7 @@
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
     font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-control-ask-user-description-line-height);
+    line-height: var(--bf-type-body-sm-line-height);
     text-align: end;
     text-overflow: ellipsis;
     white-space: nowrap;

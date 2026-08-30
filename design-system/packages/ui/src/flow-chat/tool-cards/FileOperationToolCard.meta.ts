@@ -24,7 +24,7 @@ export const fileOperationToolCardMeta = {
     "color.content.muted",
     "color.status.danger.content",
     "font.family.mono",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.semibold",
     "radius.sm",
   ],

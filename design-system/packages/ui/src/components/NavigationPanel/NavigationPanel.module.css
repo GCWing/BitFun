@@ -83,9 +83,9 @@
     min-inline-size: 0;
     /* Group captions carry half the ink of destinations, not the action label tone. */
     color: color-mix(in srgb, var(--bf-color-content-primary) 50%, transparent);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-layout-navigation-panel-heading-font-size);
-    font-weight: var(--bf-font-weight-medium);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
     line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;

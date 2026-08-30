@@ -66,9 +66,9 @@
   background: transparent;
   border: none;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-family: var(--bf-appearance-token-font-family-sans);
-  line-height: var(--bf-appearance-token-line-height-base);
+  font-size: var(--bf-font-size-sm);
+  font-family:var(--bf-font-family-sans);
+  line-height: var(--bf-line-height-base);
   resize: none;
   outline: none;
   min-height: 24px;

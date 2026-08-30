@@ -22,7 +22,7 @@
     border-radius: $size-radius-base;
     background: var(--bf-appearance-token-color-bg-secondary);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     cursor: pointer;
 
     > span:not([data-bf-component='avatar']) {
@@ -81,12 +81,12 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
     }
 
     span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
   }
 
@@ -119,15 +119,15 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-lg);
+      font-size: var(--bf-font-size-lg);
     }
 
     p {
       max-width: 390px;
       margin: 0;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: 1.55;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-comfortable);
     }
   }
 
@@ -136,7 +136,7 @@
     align-items: center;
     gap: $size-gap-2;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   &__error {
@@ -146,7 +146,7 @@
     border: 1px solid var(--bf-appearance-token-color-error);
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-error);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     text-align: left;
   }
 

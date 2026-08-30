@@ -8,7 +8,7 @@
  * - Supports 'primary' | 'fast' | specific model IDs
  */
 
-import { MenuItem, MenuSeparator, Switch } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import React, { useState, useEffect, useId, useRef, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -1269,25 +1269,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       }
     }
 
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-      return;
-    }
-
-    const items = Array.from(
-      event.currentTarget.querySelectorAll<HTMLButtonElement>(
-        'button[role="menuitemradio"]:not(:disabled), button[role="menuitem"]:not(:disabled)',
-      ),
-    );
-    if (items.length === 0) return;
-
-    event.preventDefault();
-    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    let nextIndex = activeIndex;
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = items.length - 1;
-    if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
-    if (event.key === 'ArrowUp') nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
-    items[nextIndex]?.focus();
   }, [
     activeProviderKey,
     closeNativeDetailLevel,
@@ -1463,7 +1444,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
         <PresenceBoundary active={dropdownOpen}>
           {createPortal(
-            <div
+            <Menu
             id={menuId}
             className="bitfun-model-selector__dropdown"
             ref={portalDropdownRef}
@@ -1474,46 +1455,31 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             data-open={dropdownOpen ? 'true' : 'false'}
             aria-hidden={!dropdownOpen}
             {...(!dropdownOpen ? { inert: '' } : {})}
-            role="menu"
             aria-label={t('modelSelector.modelSelection')}
             onKeyDown={handleDropdownKeyDown}
           >
-            <div className="bitfun-model-selector__dropdown-header">
-              <span>{t('modelSelector.modelSelection')}</span>
-              <span className="bitfun-model-selector__dropdown-hint">
-                {externalSelection.providerLabel}
-              </span>
-            </div>
-            <div className="bitfun-model-selector__list">
+            <MenuSection title={`${t('modelSelector.modelSelection')} · ${externalSelection.providerLabel}`}>
               {externalAvailableModels.map(model => {
                 const isSelected = externalCurrentModelId === model.id;
                 return (
                   <Tooltip key={model.id} content={model.providerName} placement="right">
-                    <button
-                      type="button"
+                    <MenuItem
                       role="menuitemradio"
-                      aria-checked={isSelected}
+                      checked={isSelected}
                       data-testid="chat-model-selector-option"
                       data-model-id={model.id}
                       data-model-name={model.modelName}
                       data-selected={isSelected ? 'true' : 'false'}
-                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      metadata={isSelected ? <Check size={14} aria-hidden /> : null}
                       onClick={() => handleSelectModel(model.id)}
                     >
-                      <div className="bitfun-model-selector__option-main">
-                        <span className="bitfun-model-selector__option-name">
-                          {model.modelName}
-                        </span>
-                      </div>
-                      {isSelected ? (
-                        <Check size={14} className="bitfun-model-selector__option-check" />
-                      ) : null}
-                    </button>
+                      {model.modelName}
+                    </MenuItem>
                   </Tooltip>
                 );
               })}
-            </div>
-            </div>,
+            </MenuSection>
+            </Menu>,
             document.body,
           )}
         </PresenceBoundary>
@@ -1640,7 +1606,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         {showModelTrigger && (
         <PresenceBoundary active={dropdownOpen}>
           {createPortal(
-            <div
+            <Menu
             id={menuId}
             className="bitfun-model-selector__dropdown"
             data-bf-component="model-selector"
@@ -1653,36 +1619,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             data-open={dropdownOpen ? 'true' : 'false'}
             aria-hidden={!dropdownOpen}
             {...(!dropdownOpen ? { inert: '' } : {})}
-            role="menu"
             aria-label={acpDropdownTitle}
             onKeyDown={handleDropdownKeyDown}
           >
-            <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-              <span>{acpDropdownTitle}</span>
-              <span className="bitfun-model-selector__dropdown-hint">
-                {acpClientId}
-              </span>
-            </div>
-
             {acpAvailableModels.length > 0 && (
-            <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
+            <MenuSection title={`${acpDropdownTitle}${acpClientId ? ` · ${acpClientId}` : ''}`} data-bf-component="model-selector" data-bf-part="list">
               {acpAvailableModels.map(model => {
                 const isSelected = currentAcpModelId === model.id;
 
                 return (
                   <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
-                    <button
-                      type="button"
+                    <MenuItem
                       role="menuitemradio"
-                      aria-checked={isSelected}
+                      checked={isSelected}
                       data-testid="chat-model-selector-option"
                       data-model-id={model.id}
                       data-model-name={model.modelName}
                       data-selected={isSelected ? 'true' : 'false'}
-                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      className="bitfun-model-selector__option"
                       data-bf-component="model-selector"
                       data-bf-part="option"
                       data-bf-state={isSelected ? 'selected' : undefined}
+                      metadata={isSelected ? <Check size={14} aria-hidden /> : null}
                       onClick={() => handleSelectModel(model.id)}
                     >
                       <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
@@ -1693,41 +1651,34 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                           {model.providerName}
                         </span>
                       </div>
-                      {isSelected && (
-                        <Check size={14} className="bitfun-model-selector__option-check" />
-                      )}
-                    </button>
+                    </MenuItem>
                   </Tooltip>
                 );
               })}
-            </div>
+            </MenuSection>
             )}
 
             {acpFastMode && (
               <>
                 {acpAvailableModels.length > 0 && (
-                  <div className="bitfun-model-selector__divider" />
+                  <MenuSeparator />
                 )}
-                <div className="bitfun-model-selector__config-row" data-bf-component="model-selector" data-bf-part="configRow">
-                  <div className="bitfun-model-selector__config-copy">
-                    <span className="bitfun-model-selector__config-name">
-                      {t('modelSelector.fastMode')}
-                    </span>
-                    <span className="bitfun-model-selector__config-description">
-                      {t('modelSelector.fastModeDescription')}
-                    </span>
-                  </div>
-                  <Switch
+                <Tooltip content={t('modelSelector.fastModeDescription')} placement="right">
+                  <MenuItem
+                    role="menuitemcheckbox"
                     checked={acpFastMode.enabled}
                     disabled={loading}
                     aria-busy={loading}
-                    aria-label={t('modelSelector.fastMode')}
-                    onChange={event => { void handleSetAcpFastMode(event.target.checked); }}
-                  />
-                </div>
+                    leading={<Zap size={13} aria-hidden />}
+                    metadata={acpFastMode.enabled ? <Check size={14} aria-hidden /> : null}
+                    onClick={() => { void handleSetAcpFastMode(!acpFastMode.enabled); }}
+                  >
+                    {t('modelSelector.fastMode')}
+                  </MenuItem>
+                </Tooltip>
               </>
             )}
-            </div>,
+            </Menu>,
             getAppearanceOverlayHost()
           )}
         </PresenceBoundary>
@@ -1824,7 +1775,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       <PresenceBoundary active={dropdownOpen}>
         {createPortal(
-          <div
+          <Menu
           id={menuId}
           className="bitfun-model-selector__dropdown"
           data-bf-component="model-selector"
@@ -1838,7 +1789,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           data-menu-level={activeProviderGroup ? 'provider' : nativeMenuLevel}
           aria-hidden={!dropdownOpen}
           {...(!dropdownOpen ? { inert: '' } : {})}
-          role="menu"
           aria-label={activeProviderGroup
             ? activeProviderGroup.providerName
             : nativeMenuLevel === 'settings'
@@ -1856,9 +1806,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             data-direction={levelDirection}
           >
           {nativeMenuLevel === 'settings' ? (
-            <div
+            <MenuSection
               className="bitfun-model-selector__settings-list"
               data-testid="chat-model-selector-settings"
+              aria-label={t('modelSelector.modelSettings')}
             >
               <MenuItem
                 className="bitfun-model-selector__settings-item"
@@ -1903,46 +1854,33 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               >
                 {t('modelSelector.resetToDefaults')}
               </MenuItem>
-            </div>
+            </MenuSection>
           ) : nativeMenuLevel === 'reasoning' ? (
             <>
-              <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-                <button
-                  type="button"
-                  role="menuitem"
+              <MenuItem
                   data-testid="chat-model-selector-back-to-settings"
-                  className="bitfun-model-selector__back"
                   data-bf-component="model-selector"
                   data-bf-part="back"
                   aria-label={t('modelSelector.backToSettings')}
+                  leading={<ChevronLeft size={12} aria-hidden />}
                   onClick={closeNativeDetailLevel}
                 >
-                  <ChevronLeft size={12} className="bitfun-model-selector__back-icon" />
-                  <span className="bitfun-model-selector__back-label">
-                    {t('reasoningSelector.title')}
-                  </span>
-                </button>
-              </div>
+                  {t('reasoningSelector.title')}
+              </MenuItem>
 
               <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
-                <button
-                  type="button"
+                <MenuItem
                   role="menuitemradio"
-                  aria-checked={!selectedReasoningDescriptor}
+                  checked={!selectedReasoningDescriptor}
                   data-testid="chat-model-selector-reasoning-option"
                   data-preset-id="auto"
-                  className={`bitfun-model-selector__option bitfun-model-selector__option--special ${!selectedReasoningDescriptor ? 'bitfun-model-selector__option--selected' : ''}`}
                   data-bf-component="model-selector"
                   data-bf-part="option"
                   data-bf-state={!selectedReasoningDescriptor ? 'selected' : undefined}
                   onClick={() => handleSelectReasoningPresetFromMenu(null)}
                 >
-                  <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                    <span className="bitfun-model-selector__option-name">
-                      {t('reasoningSelector.auto')}
-                    </span>
-                  </div>
-                </button>
+                  {t('reasoningSelector.auto')}
+                </MenuItem>
 
                 {orderedReasoningPresets.map((preset, index) => {
                   const isSelected = selectedReasoningDescriptor?.id === preset.id;
@@ -1950,48 +1888,35 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     ?? presetDisplayLabel(preset, orderedReasoningPresets, t);
 
                   return (
-                    <button
+                    <MenuItem
                       key={preset.id}
-                      type="button"
                       role="menuitemradio"
-                      aria-checked={isSelected}
+                      checked={isSelected}
                       data-testid="chat-model-selector-reasoning-option"
                       data-preset-id={preset.id}
-                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                       data-bf-component="model-selector"
                       data-bf-part="option"
                       data-bf-state={isSelected ? 'selected' : undefined}
                       onClick={() => handleSelectReasoningPresetFromMenu(preset.id)}
                     >
-                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                        <span className="bitfun-model-selector__option-name">
-                          {label}
-                        </span>
-                      </div>
-                    </button>
+                      {label}
+                    </MenuItem>
                   );
                 })}
               </div>
             </>
           ) : activeProviderGroup ? (
             <>
-              <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-                <button
-                  type="button"
-                  role="menuitem"
+              <MenuItem
                   data-testid="chat-model-selector-back"
-                  className="bitfun-model-selector__back"
                   data-bf-component="model-selector"
                   data-bf-part="back"
                   aria-label={t('modelSelector.backToProviders')}
+                  leading={<ChevronLeft size={12} aria-hidden />}
                   onClick={closeProviderLevel}
                 >
-                  <ChevronLeft size={12} className="bitfun-model-selector__back-icon" />
-                  <span className="bitfun-model-selector__back-label">
-                    {activeProviderGroup.providerName}
-                  </span>
-                </button>
-              </div>
+                  {activeProviderGroup.providerName}
+              </MenuItem>
 
               <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
                 {activeProviderGroup.models.map(model => {
@@ -1999,29 +1924,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                   return (
                     <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
-                      <button
-                        type="button"
+                      <MenuItem
                         role="menuitemradio"
-                        aria-checked={isSelected}
+                        checked={isSelected}
                         data-testid="chat-model-selector-option"
                         data-model-id={model.id}
                         data-model-name={model.modelName}
                         data-selected={isSelected ? 'true' : 'false'}
-                        className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                         data-bf-component="model-selector"
                         data-bf-part="option"
                         data-bf-state={isSelected ? 'selected' : undefined}
+                        metadata={isSelected ? <Check size={14} aria-hidden /> : null}
                         onClick={() => handleSelectModel(model.id)}
                       >
-                        <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                          <span className="bitfun-model-selector__option-name">
-                            {model.modelName}
-                          </span>
-                        </div>
-                        {isSelected && (
-                          <Check size={14} className="bitfun-model-selector__option-check" />
-                        )}
-                      </button>
+                        {model.modelName}
+                      </MenuItem>
                     </Tooltip>
                   );
                 })}
@@ -2029,23 +1946,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </>
           ) : (
             <>
-              <div className="bitfun-model-selector__dropdown-header bitfun-model-selector__dropdown-header--nav" data-bf-component="model-selector" data-bf-part="dropdownHeader">
-                <button
-                  type="button"
-                  role="menuitem"
+              <MenuItem
                   data-testid="chat-model-selector-back-to-settings"
-                  className="bitfun-model-selector__back"
                   data-bf-component="model-selector"
                   data-bf-part="back"
                   aria-label={t('modelSelector.backToSettings')}
+                  leading={<ChevronLeft size={12} aria-hidden />}
                   onClick={closeNativeDetailLevel}
                 >
-                  <ChevronLeft size={12} className="bitfun-model-selector__back-icon" />
-                  <span className="bitfun-model-selector__back-label">
-                    {t('modelSelector.model')}
-                  </span>
-                </button>
-              </div>
+                  {t('modelSelector.model')}
+              </MenuItem>
 
               {(() => {
                 const primaryModel = allModels.find(m => m.id === defaultModels.primary);
@@ -2057,27 +1967,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   : t('modelSelector.primaryModelDesc');
                 return (
                   <Tooltip content={primaryTooltip} placement="right">
-                    <button
-                      type="button"
+                    <MenuItem
                       role="menuitemradio"
-                      aria-checked={currentModelId === 'primary'}
+                      checked={currentModelId === 'primary'}
                       data-testid="chat-model-selector-option"
                       data-model-id="primary"
                       data-model-name={primaryModel?.model_name || 'primary'}
                       data-selected={currentModelId === 'primary' ? 'true' : 'false'}
-                      className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'primary' ? 'bitfun-model-selector__option--selected' : ''}`}
                       data-bf-component="model-selector"
                       data-bf-part="option"
                       data-bf-state={currentModelId === 'primary' ? 'selected' : undefined}
+                      metadata={currentModelId === 'primary' ? <Check size={14} aria-hidden /> : null}
                       onClick={() => handleSelectModel('primary')}
                     >
-                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                        <span className="bitfun-model-selector__option-name">{t('modelSelector.primaryModel')}</span>
-                      </div>
-                      {currentModelId === 'primary' && (
-                        <Check size={14} className="bitfun-model-selector__option-check" />
-                      )}
-                    </button>
+                      {t('modelSelector.primaryModel')}
+                    </MenuItem>
                   </Tooltip>
                 );
               })()}
@@ -2092,32 +1996,26 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   : t('modelSelector.fastModelDesc');
                 return (
                   <Tooltip content={fastTooltip} placement="right">
-                    <button
-                      type="button"
+                    <MenuItem
                       role="menuitemradio"
-                      aria-checked={currentModelId === 'fast'}
+                      checked={currentModelId === 'fast'}
                       data-testid="chat-model-selector-option"
                       data-model-id="fast"
                       data-model-name={fastModel?.model_name || 'fast'}
                       data-selected={currentModelId === 'fast' ? 'true' : 'false'}
-                      className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'fast' ? 'bitfun-model-selector__option--selected' : ''}`}
                       data-bf-component="model-selector"
                       data-bf-part="option"
                       data-bf-state={currentModelId === 'fast' ? 'selected' : undefined}
+                      metadata={currentModelId === 'fast' ? <Check size={14} aria-hidden /> : null}
                       onClick={() => handleSelectModel('fast')}
                     >
-                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
-                        <span className="bitfun-model-selector__option-name">{t('modelSelector.fastModel')}</span>
-                      </div>
-                      {currentModelId === 'fast' && (
-                        <Check size={14} className="bitfun-model-selector__option-check" />
-                      )}
-                    </button>
+                      {t('modelSelector.fastModel')}
+                    </MenuItem>
                   </Tooltip>
                 );
               })()}
 
-              <div className="bitfun-model-selector__divider" />
+              <MenuSeparator />
 
               <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
                 {providerGroups.map(group => {
@@ -2132,18 +2030,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       content={`${group.providerName} · ${t('modelSelector.providerModelCount', { total: group.models.length })}`}
                       placement="right"
                     >
-                      <button
-                        type="button"
-                        role="menuitem"
+                      <MenuItem
                         aria-haspopup="menu"
                         aria-expanded={false}
                         data-testid="chat-model-selector-provider"
                         data-provider-key={group.key}
                         data-selected={isSelected ? 'true' : 'false'}
-                        className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                         data-bf-component="model-selector"
                         data-bf-part="providerOption"
                         data-bf-state={isSelected ? 'selected' : undefined}
+                        metadata={group.models.length}
+                        shortcut={<ChevronRight size={14} aria-hidden />}
                         onClick={() => openProviderLevel(group.key)}
                       >
                         <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
@@ -2168,11 +2065,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             </span>
                           )}
                         </div>
-                        <span className="bitfun-model-selector__option-count">
-                          {group.models.length}
-                        </span>
-                        <ChevronRight size={14} className="bitfun-model-selector__option-chevron" />
-                      </button>
+                      </MenuItem>
                     </Tooltip>
                   );
                 })}
@@ -2180,7 +2073,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </>
           )}
           </div>
-          </div>,
+          </Menu>,
           getAppearanceOverlayHost()
         )}
       </PresenceBoundary>

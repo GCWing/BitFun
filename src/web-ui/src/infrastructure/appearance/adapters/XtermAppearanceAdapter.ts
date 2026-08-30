@@ -43,7 +43,7 @@ export class XtermAppearanceAdapter implements AppearanceRendererAdapter<'xterm'
     const errors: string[] = [];
     if (!isRecord(settings)) return ['Settings must be an object'];
     Object.keys(settings).forEach(key => {
-      if (!['surfaces', 'fontWeight', 'fontWeightBold'].includes(key)) errors.push(`Unknown setting: ${key}`);
+      if (key !== 'surfaces') errors.push(`Unknown setting: ${key}`);
     });
     if (!isRecord(settings.surfaces)) {
       errors.push('surfaces must be an object');
@@ -54,8 +54,6 @@ export class XtermAppearanceAdapter implements AppearanceRendererAdapter<'xterm'
       errors.push(...validateColors(settings.surfaces.terminal, 'surfaces.terminal'));
       errors.push(...validateColors(settings.surfaces.output, 'surfaces.output'));
     }
-    if (!['normal', '500'].includes(String(settings.fontWeight))) errors.push('fontWeight is invalid');
-    if (!['bold', '700'].includes(String(settings.fontWeightBold))) errors.push('fontWeightBold is invalid');
     return errors;
   }
 
@@ -74,13 +72,6 @@ export class XtermAppearanceAdapter implements AppearanceRendererAdapter<'xterm'
 
   getColors(surface: XtermAppearanceSurface): ITheme {
     return { ...this.requireSettings().surfaces[surface] };
-  }
-
-  getFontWeights(): Pick<XtermAppearanceSettings, 'fontWeight' | 'fontWeightBold'> {
-    return {
-      fontWeight: this.requireSettings().fontWeight,
-      fontWeightBold: this.requireSettings().fontWeightBold,
-    };
   }
 
   subscribe(listener: XtermAppearanceListener): () => void {

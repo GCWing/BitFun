@@ -33,7 +33,7 @@ export const menuMeta = {
     "overlay.menu.headingHeight",
     "overlay.menu.headingPaddingInline",
     "overlay.menu.headingGap",
-    "overlay.menu.headingFontSize",
+    "type.meta.fontSize",
     "overlay.menu.headingActionSize",
     "overlay.menu.itemHeight",
     "overlay.menu.itemPaddingInline",

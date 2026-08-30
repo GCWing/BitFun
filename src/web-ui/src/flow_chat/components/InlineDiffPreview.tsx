@@ -18,7 +18,7 @@ import { diffLines, Change } from 'diff';
 import { getPrismLanguage } from '@/infrastructure/language-detection';
 import { useAppearance } from '@/infrastructure/appearance';
 import { createLogger } from '@/shared/utils/logger';
-import { buildCodePreviewPrismStyle, CODE_PREVIEW_FONT_FAMILY } from './codePreviewPrismTheme';
+import { buildCodePreviewPrismStyle } from './codePreviewPrismTheme';
 import './InlineDiffPreview.scss';
 
 const log = createLogger('InlineDiffPreview');
@@ -567,7 +567,11 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
                   className="diff-line__content"
                   data-bf-component="inline-diff-preview"
                   data-bf-part="lineContent"
-                  style={{ fontFamily: CODE_PREVIEW_FONT_FAMILY, fontSize: '12px', fontWeight: 400 }}
+                  style={{
+                    fontFamily: 'var(--bf-type-flow-code-font-family)',
+                    fontSize: 'var(--bf-type-flow-code-font-size)',
+                    fontWeight: 'var(--bf-type-flow-code-font-weight)',
+                  }}
                 >
                   {renderTokenLine(lineTokens, stylesheet)}
                 </span>

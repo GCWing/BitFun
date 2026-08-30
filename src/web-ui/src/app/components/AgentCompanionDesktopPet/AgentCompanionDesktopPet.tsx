@@ -1,4 +1,4 @@
-import { ScrollArea } from '@bitfun/ui';
+import { Menu, MenuItem, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { emit, listen } from '@tauri-apps/api/event';
@@ -884,7 +884,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         />
       )}
       {menuItems.length > 0 && (
-        <div
+        <Menu
           ref={menuRef}
           className="bitfun-agent-companion-window__overlay bitfun-agent-companion-window__overlay--anchored"
           style={{
@@ -892,21 +892,19 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             bottom: `${menuPosition?.bottom ?? MENU_EDGE_MARGIN}px`,
             visibility: menuPosition ? 'visible' : 'hidden',
           }}
+          autoFocusFirstItem
         >
-          <div className="bitfun-agent-companion-window__menu" role="menu">
-            {menuItems.map(menuItem => (
-              <button
-                key={menuItem.key}
-                type="button"
-                role="menuitem"
-                className="bitfun-agent-companion-window__menu-item"
-                onClick={menuItem.onClick}
-              >
-                {menuItem.label}
-              </button>
-            ))}
-          </div>
-        </div>
+          {menuItems.map(menuItem => (
+            <MenuItem
+              key={menuItem.key}
+              tone={menuItem.key === 'close-pet' ? 'danger' : 'neutral'}
+              triggerClassName="bitfun-agent-companion-window__menu-item"
+              onClick={menuItem.onClick}
+            >
+              {menuItem.label}
+            </MenuItem>
+          ))}
+        </Menu>
       )}
       <div className="bitfun-agent-companion-window__stack" style={dockVars}>
         <div

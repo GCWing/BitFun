@@ -39,16 +39,16 @@
 
 .grid-card-title {
   margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
 .grid-card-description {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-muted);
-  line-height: 1.5;
+  line-height: var(--bf-line-height-base);
 }
 
 .grid-card-preview {
@@ -59,12 +59,12 @@
 }
 
 .preview-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-semibold);
   text-transform: uppercase;
   color: var(--bf-appearance-token-color-text-muted);
   margin-bottom: 12px;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--bf-letter-spacing-wider);
 }
 
 .preview-canvas {
@@ -92,16 +92,16 @@
   display: grid;
   grid-template-columns: 60px 1fr;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
 }
 
 .info-list dt {
-  font-weight: 600;
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
 .info-list dd {
   margin: 0;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-family:var(--bf-font-family-mono);
 }

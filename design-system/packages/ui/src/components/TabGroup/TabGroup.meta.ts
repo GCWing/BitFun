@@ -29,7 +29,7 @@ export const tabGroupMeta = {
     "control.tabGroup.itemActionInset",
     "control.tabGroup.itemRadius",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
     "font.weight.semibold",
     "radius.pill",

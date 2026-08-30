@@ -35,8 +35,6 @@ export const WIDGET_APPEARANCE_VARIABLE_NAMES = [
   '--bf-appearance-token-motion-fast',
   '--bf-appearance-token-motion-base',
   '--bf-appearance-token-easing-standard',
-  '--bf-appearance-token-font-family-sans',
-  '--bf-appearance-token-font-family-mono',
   '--bf-appearance-token-btn-primary-bg',
   '--bf-appearance-token-btn-primary-color',
   '--bf-appearance-token-btn-primary-border',

@@ -28,17 +28,17 @@
     }
 
     &-text {
-      font-size: 13px;
+      font-size: var(--bf-font-size-sm);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-family:var(--bf-font-family-mono);
       word-break: break-all;
     }
   }
 
   &__label {
     display: block;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: 6px;
   }
@@ -53,10 +53,10 @@
   }
 
   &__hint {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
     margin: 0 0 16px;
-    line-height: 1.45;
+    line-height: var(--bf-line-height-support);
   }
 
   &__actions {

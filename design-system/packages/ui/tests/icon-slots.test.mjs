@@ -22,7 +22,8 @@ const slots = [
   ["Avatar", "content", "inline-size", "55%"],
   ["Empty", "media", "max-inline-size", "100%"],
   ["ConfirmDialog", "icon", "inline-size", "var(--bf-layout-confirm-dialog-icon-glyph-size)"],
-  ["Combobox", "option", "inline-size", "var(--bf-overlay-menu-item-icon-size)"],
+  ["Listbox", "leading", "inline-size", "100%"],
+  ["Listbox", "indicator", "inline-size", "100%"],
 ];
 
 test("sized slots apply the same geometry to SVG and catalog icons, regardless of stylesheet order", async () => {

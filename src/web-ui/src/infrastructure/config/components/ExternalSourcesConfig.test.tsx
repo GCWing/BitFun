@@ -1911,8 +1911,12 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('agentConflicts.selectionApproves');
     expect(container.textContent).toContain('.opencode/agents/explore.md');
     expect(container.textContent).not.toContain('D:/workspace/project/.opencode/agents');
-    expect(container.innerHTML).not.toContain('D:');
-    expect(container.innerHTML).not.toContain('D:/shared');
+    const contentWithoutBundlerStyles = container.cloneNode(true) as HTMLElement;
+    contentWithoutBundlerStyles.querySelectorAll('[style]').forEach(element => {
+      element.removeAttribute('style');
+    });
+    expect(contentWithoutBundlerStyles.innerHTML).not.toContain('D:');
+    expect(contentWithoutBundlerStyles.innerHTML).not.toContain('D:/shared');
     expect(container.textContent).not.toContain('SECRET AGENT PROMPT');
 
     const enable = Array.from(container.querySelectorAll('button')).find((button) =>

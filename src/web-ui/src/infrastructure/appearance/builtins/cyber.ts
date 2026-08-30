@@ -4,7 +4,6 @@ import { AppearancePalette } from './AppearancePalette';
 import {
   createAccentScale,
   createCompactRadius,
-  createExpressiveTypography,
   createGitColors,
   createSemanticColors,
   createSecondaryAccentScale,
@@ -142,8 +141,6 @@ export const bitfunCyberPalette: AppearancePalette = {
     easing: createStandardEasing(),
   },
 
-
-  typography: createExpressiveTypography(),
 
 
   components: {

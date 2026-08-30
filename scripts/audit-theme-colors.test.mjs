@@ -222,33 +222,6 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   }
 });
 
-test('FlowChat heading scale derives from runtime typography without static 4xl root aliases', () => {
-  const tokens = readText(path.join(root, 'src/web-ui/src/component-library/styles/tokens.scss'));
-  const welcomePanel = readText(path.join(root, 'src/web-ui/src/flow_chat/components/WelcomePanel.css'));
-  const navScope = readText(path.join(root, 'src/web-ui/src/app/styles/nav-panel-font-scope.scss'));
-
-  assert.doesNotMatch(
-    tokens,
-    /^\s*--bf-appearance-token-flowchat-font-size-4xl:\s*var\(--bf-appearance-token-font-size-4xl\);$/m,
-    'static root --bf-appearance-token-flowchat-font-size-4xl should not be reintroduced',
-  );
-  assert.doesNotMatch(
-    tokens,
-    /^\s*--bf-appearance-token-font-size-4xl:/m,
-    'static root --bf-appearance-token-font-size-4xl should not be reintroduced',
-  );
-  assert.match(
-    welcomePanel,
-    /font-size:\s*calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 4px\);/,
-    'Welcome heading should preserve the 4xl visual size by deriving from FlowChat 3xl',
-  );
-  assert.match(
-    navScope,
-    /--bf-appearance-token-font-size-4xl:\s*max\(25px, calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 4px\)\);/,
-    'Nav scope should derive product 4xl from FlowChat 3xl without a static root alias',
-  );
-});
-
 test('repository dynamic CSS var families match the registered contract', () => {
   for (const sourceRoot of SOURCE_OWNER_ROOTS) {
     const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
@@ -477,7 +450,7 @@ test('theme color audit counts only the generated widget variable contract', (t)
       ':root {',
       '  --bf-appearance-token-color-bg-primary: #121214;',
       '  --bf-appearance-token-color-bg-secondary: #1c1c1f;',
-      '  --bf-appearance-token-font-family-mono: monospace;',
+      '  --bf-font-family-mono: monospace;',
       '}',
       '',
     ].join('\n'),
@@ -494,7 +467,7 @@ test('theme color audit counts only the generated widget variable contract', (t)
       'export const WIDGET_APPEARANCE_VARIABLE_NAMES = [',
       "  '--bf-appearance-token-color-bg-primary',",
       "  '--bf-appearance-token-color-bg-secondary',",
-      "  '--bf-appearance-token-font-family-mono',",
+      "  '--bf-font-family-mono',",
       '] as const;',
       '',
     ].join('\n'),
@@ -909,8 +882,8 @@ test('theme color audit requires dynamic CSS var families to be registered', (t)
 test('theme color audit accepts registered dynamic CSS var families', (t) => {
   const { dir, sourceRoot } = createFixture({
     'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': [
-      "for (const [key, value] of Object.entries(appearance.typography.size)) {",
-      "  document.documentElement.style.setProperty(`--bf-appearance-token-font-size-${key}`, value);",
+      "for (const [key, value] of Object.entries(fontSizeTokens)) {",
+      "  document.documentElement.style.setProperty(`--bf-font-size-${key}`, value);",
       '}',
       '',
     ].join('\n'),

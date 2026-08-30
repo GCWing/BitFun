@@ -36,8 +36,8 @@
     border-radius: $size-radius-sm;
     border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
     background: transparent;
   }
 
@@ -63,16 +63,16 @@
 
   &__pet-row-title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
-    line-height: var(--bf-appearance-token-line-height-base);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-base);
   }
 
   &__pet-row-description {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: var(--bf-appearance-token-font-weight-normal);
-    line-height: var(--bf-appearance-token-line-height-relaxed);
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__pet-select {
@@ -154,10 +154,10 @@
     grid-column: 1 / -1;
     padding: 6px 2px 2px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: var(--bf-appearance-token-font-weight-medium);
-    line-height: var(--bf-appearance-token-line-height-tight);
-    letter-spacing: 0;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-tight);
+    letter-spacing: var(--bf-letter-spacing-normal);
   }
 
   &__pet-select-option {

@@ -12,8 +12,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 24px var(--bf-appearance-token-color-overlay-black-15), 0 0 0 1px var(--bf-appearance-token-color-overlay-white-08);
@@ -154,14 +154,14 @@
   }
 
   &__status-title {
-    font-weight: 600;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__error-message {
     margin-left: auto;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-error);
     max-width: 50%;
     overflow: hidden;
@@ -185,8 +185,8 @@
     background: transparent;
     border: none;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     transition: background 0.2s;
     width: fit-content;
@@ -232,7 +232,7 @@
     width: 100%;
     text-align: left;
     transition: background 0.2s;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-primary);
     border-radius: 6px;
 
@@ -263,12 +263,12 @@
   }
 
   &__remediation-group-title {
-    font-weight: 600;
+    font-weight: var(--bf-font-weight-semibold);
     flex: 1;
   }
 
   &__remediation-group-count {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     font-variant-numeric: tabular-nums;
   }
@@ -338,17 +338,17 @@
     border-radius: 4px;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-type-flow-meta-line-height);
     vertical-align: text-bottom;
   }
 
   &__remediation-text {
     flex: 1;
     min-width: 0;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-appearance-token-color-text-secondary);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -371,11 +371,11 @@
 
   &__remediation-tradeoffs {
     display: block;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: var(--bf-type-flow-micro-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
     margin-top: 2px;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__decision-toggle {
@@ -385,7 +385,7 @@
     border: none;
     background: none;
     color: var(--bf-appearance-token-color-accent-500);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: var(--bf-type-flow-micro-font-size);
     cursor: pointer;
     opacity: 0.8;
     transition: opacity 0.15s ease;
@@ -415,8 +415,8 @@
       border-radius: 4px;
       background: none;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
       cursor: pointer;
       text-align: left;
       transition: background-color 0.12s ease;
@@ -433,14 +433,14 @@
 
     &.is-recommended .deep-review-action-bar__decision-option-text {
       color: var(--bf-appearance-token-color-accent-500);
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
     }
   }
 
   &__decision-option-marker {
     flex-shrink: 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-micro-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -455,8 +455,8 @@
     align-items: center;
     padding: 1px 6px;
     border-radius: 4px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-accent-500);
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
     margin-right: 6px;
@@ -466,9 +466,9 @@
 
   /* Hint texts */
   &__remediation-hint {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
     padding: 0 2px;
   }
 
@@ -484,7 +484,7 @@
       color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-secondary)) 0%,
       color-mix(in srgb, var(--bf-appearance-token-color-warning) 4%, var(--bf-appearance-token-color-bg-secondary)) 100%
     );
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 8%, transparent);
   }
@@ -519,15 +519,15 @@
 
   &__decision-gate-title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 650;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__decision-gate-desc {
     margin-top: 2px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__decision-gate-items {
@@ -548,8 +548,8 @@
 
   &__decision-question {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 600;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__decision-plan,
@@ -557,8 +557,8 @@
   &__decision-gate-note,
   &__decision-gate-warning {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__decision-tradeoffs {
@@ -582,8 +582,8 @@
     border-radius: 6px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     text-align: left;
     cursor: pointer;
     transition:
@@ -604,7 +604,7 @@
     }
 
     &.is-recommended .deep-review-action-bar__decision-gate-option-text {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
@@ -623,7 +623,7 @@
     flex-direction: column;
     gap: 6px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__decision-gate-supplement textarea {
@@ -635,8 +635,8 @@
     border-radius: 7px;
     background: var(--bf-appearance-token-color-bg-primary);
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     resize: vertical;
 
     &::placeholder {
@@ -676,7 +676,7 @@
   }
 
   &__no-issues-text {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -697,7 +697,7 @@
 
   &__fix-done-text {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   /* Custom instructions */
@@ -716,7 +716,7 @@
     background: transparent;
     border: 1px solid transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
     width: fit-content;
@@ -735,8 +735,8 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     background: var(--bf-appearance-token-color-bg-primary);
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     resize: vertical;
     min-height: 52px;
     max-height: 120px;
@@ -780,7 +780,7 @@
     padding: 8px 10px;
     border-radius: 6px;
     background: var(--bf-appearance-token-element-bg-subtle);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: 8px;
   }
@@ -798,12 +798,12 @@
     padding: 6px 10px;
     border-radius: 6px;
     background: var(--bf-appearance-token-element-bg-subtle);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__progress-text {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__elapsed {
@@ -847,7 +847,7 @@
 
   &__capacity-queue-title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 600;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__capacity-queue-detail {
@@ -872,7 +872,7 @@
     border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 24%, var(--bf-appearance-token-border-base));
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    line-height: var(--bf-type-flow-meta-line-height);
   }
 
   &__capacity-queue-reviewers {
@@ -884,8 +884,8 @@
 
   &__capacity-queue-reviewers-title {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__capacity-queue-reviewer-list {
@@ -904,17 +904,17 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 72%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    line-height: var(--bf-type-flow-meta-line-height);
   }
 
   &__capacity-queue-reviewer-name {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 600;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__capacity-queue-reviewer-meta {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__capacity-queue-actions {
@@ -933,7 +933,7 @@
     padding: 8px 12px;
     border-radius: 8px;
     background: var(--bf-appearance-token-element-bg-subtle);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__partial-count {
@@ -949,7 +949,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     padding: 2px 6px;
     border-radius: 4px;
     transition: background 0.2s;
@@ -970,12 +970,12 @@
   }
 
   &__partial-section {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__partial-section-title {
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__partial-list {
@@ -986,7 +986,7 @@
   &__partial-text {
     margin: 4px 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   /* Error attribution */
@@ -996,7 +996,7 @@
     gap: 10px;
     padding: 9px 12px;
     border-radius: 8px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     border: 1px solid var(--bf-appearance-token-border-subtle);
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 82%, transparent);
 
@@ -1035,7 +1035,7 @@
   &__attribution-message {
     flex: 1 1 auto;
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   /* Recovery plan */
@@ -1059,7 +1059,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -1089,8 +1089,8 @@
   }
 
   &__degradation-title {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -1118,13 +1118,13 @@
   }
 
   &__degradation-label {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__degradation-desc {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
   }
 

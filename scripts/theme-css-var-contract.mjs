@@ -269,24 +269,6 @@ export const FALLBACK_VAR_CONTRACTS = [];
 
 export const SURFACE_TOKEN_RENAME_CONTRACTS = [
   {
-    key: '--um-failed-fs',
-    canonical: '--user-message-failed-font-size',
-    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
-    reason: 'UserMessage failed-state sizing should use readable Flow Chat surface names instead of an abbreviated local key family.',
-  },
-  {
-    key: '--um-failed-lh',
-    canonical: '--user-message-failed-line-height',
-    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
-    reason: 'UserMessage failed-state line-height should use readable Flow Chat surface names instead of an abbreviated local key family.',
-  },
-  {
-    key: '--um-failed-line-box',
-    canonical: '--user-message-failed-line-box',
-    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
-    reason: 'UserMessage failed-state line box should use readable Flow Chat surface names instead of an abbreviated local key family.',
-  },
-  {
     key: '--m-editor-highlight-rgb',
     canonical: '--private-markdown-editor-highlight-rgb',
     owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
@@ -327,14 +309,9 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     reason: 'Mobile presets export assistant-mode identity accents by numeric stop for session and picker states.',
   },
   {
-    prefix: '--bf-appearance-token-flowchat-font-size-',
+    prefix: '--bf-font-size-',
     owner: 'src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
-    reason: 'Font preference runtime exports FlowChat font-size aliases from the adjusted typography scale.',
-  },
-  {
-    prefix: '--bf-appearance-token-font-size-',
-    owner: 'src/web-ui/src/infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts; src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
-    reason: 'Appearance runtime exports baseline typography size entries; font preference runtime can override the same family for user scaling.',
+    reason: 'Font preference runtime overrides the canonical design-system font-size primitives so every semantic role follows one global scale.',
   },
 ];
 

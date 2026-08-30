@@ -104,19 +104,19 @@
 
   &__tooltip-turn {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 600;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
-    letter-spacing: 0;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-type-flow-meta-line-height);
+    letter-spacing: var(--bf-letter-spacing-normal);
   }
 
   &__tooltip-message {
     display: -webkit-box;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
-    letter-spacing: 0;
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
+    letter-spacing: var(--bf-letter-spacing-normal);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     -webkit-box-orient: vertical;

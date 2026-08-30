@@ -4,8 +4,8 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -17,7 +17,7 @@
     align-items: center;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .summary {
@@ -50,9 +50,9 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -66,10 +66,10 @@
   .outputLabel,
   .sectionLabel {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   .outputGroup[data-tone="warning"] .outputBlock {
@@ -92,7 +92,7 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-raised);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .footerItem {
@@ -119,7 +119,7 @@
   }
 
   .footerItem[data-monospace="true"] .footerValue {
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 
   .footerItem[data-tone="success"] .footerValue {
@@ -132,8 +132,8 @@
 
   .error {
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -141,8 +141,8 @@
   .errorMeta {
     margin-block-start: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
   }
 
   .diffPath {
@@ -150,8 +150,8 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -167,7 +167,7 @@
     padding-block-end: var(--bf-space-2);
     border-block-end: 1px solid var(--bf-color-border-subtle);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .reviewDetails,
@@ -181,8 +181,8 @@
   .reviewSummary {
     margin: 0;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
   }
 
   .fileList {
@@ -191,9 +191,9 @@
     margin: 0;
     padding-inline-start: var(--bf-space-4);
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
   }
 
   .actions {
@@ -209,7 +209,7 @@
     grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
     gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .fieldLabel {
@@ -223,7 +223,7 @@
   }
 
   .field[data-monospace="true"] .fieldValue {
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 
   .agentHeader {
@@ -276,13 +276,13 @@
   }
 
   .agentName {
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
   }
 
   .agentStatus {
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .agentStatus[data-tone="success"] {
@@ -323,8 +323,8 @@
     border-radius: var(--bf-radius-sm);
     background: var(--bf-color-surface-canvas);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -48,8 +48,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
       color: var(--bf-appearance-token-color-text-primary);
     }
   }
@@ -136,7 +136,7 @@
     justify-content: center;
     gap: 4px;
     padding: 6px 12px;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     background: var(--bf-appearance-token-color-bg-secondary);
     border-top: 1px solid var(--bf-appearance-token-border-subtle);

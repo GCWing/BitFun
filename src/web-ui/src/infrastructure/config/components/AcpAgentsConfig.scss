@@ -22,16 +22,12 @@
 
   &__filter-select {
     width: 132px;
-
-    .select__trigger {
-      min-height: 32px;
-    }
   }
 
   &__json-textarea {
-    font-family: $font-family-mono;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.6;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__json-actions {
@@ -97,9 +93,9 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
-    line-height: 1.25;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-dense);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -108,14 +104,14 @@
     margin: 2px 0 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.35;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-compact);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__registry-command {
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
   }
 
   &__capabilities {
@@ -136,9 +132,9 @@
     border-radius: 999px;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    line-height: 1;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &.is-ok {
@@ -176,9 +172,9 @@
     padding: 0 $size-gap-2;
     border: 1px solid transparent;
     border-radius: 999px;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    line-height: 1;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &.is-enabled {
@@ -224,16 +220,6 @@
 
   &__confirmation-select {
     width: 118px;
-
-    .select__trigger {
-      min-height: 30px;
-      padding: 3px $size-gap-2;
-      background: var(--bf-appearance-token-element-bg-base);
-    }
-
-    .select__value {
-      font-size: var(--bf-appearance-token-font-size-xs);
-    }
   }
 
   &__add-button {
@@ -243,7 +229,7 @@
   &__empty {
     padding: $size-gap-4;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     text-align: center;
   }
 
@@ -322,9 +308,9 @@
     padding: 0 8px;
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 999px;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
-    line-height: 1;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &.is-success {

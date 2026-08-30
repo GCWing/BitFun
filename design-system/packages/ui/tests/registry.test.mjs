@@ -45,6 +45,7 @@ test("registry exposes only the formal stable components", () => {
       "IconButton",
       "Input",
       "KeyHint",
+      "Listbox",
       "Menu",
       "Modal",
       "NavigationPanel",
@@ -94,14 +95,15 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("color.") ||
           token.startsWith("control.") ||
           token.startsWith("font.") ||
+          token.startsWith("letterSpacing.") ||
           token.startsWith("lineHeight.") ||
           token.startsWith("layout.") ||
-          token.startsWith("lineHeight.") ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||
           token.startsWith("shadow.") ||
-          token.startsWith("space."),
+          token.startsWith("space.") ||
+          token.startsWith("type."),
       ),
       true,
       `${component.name} contains a token outside the allowed public layers.`,

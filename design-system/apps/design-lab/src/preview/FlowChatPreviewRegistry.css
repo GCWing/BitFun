@@ -18,7 +18,7 @@
   gap: var(--bf-space-3);
   overflow: hidden;
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-control);
+  font-family:var(--bf-font-family-sans);
   font-size: var(--bf-font-size-meta);
   white-space: nowrap;
 }
@@ -33,8 +33,8 @@
 }
 
 .flow-chat-composer-preview__context svg {
-  inline-size: var(--bf-font-size-body);
-  block-size: var(--bf-font-size-body);
+  inline-size: var(--bf-font-size-base);
+  block-size: var(--bf-font-size-base);
   flex: 0 0 auto;
 }
 
@@ -67,6 +67,7 @@
 }
 
 .flow-chat-composer-preview [data-bf-layout="compact"] textarea {
+  /* typography-audit: allow -- compact textarea uses the control track as its single-line box */
   line-height: var(--bf-control-chat-composer-compact-track-height);
 }
 
@@ -111,8 +112,8 @@
 }
 
 .flow-chat-composer-preview__action > svg {
-  inline-size: var(--bf-font-size-body);
-  block-size: var(--bf-font-size-body);
+  inline-size: var(--bf-font-size-base);
+  block-size: var(--bf-font-size-base);
 }
 
 .flow-chat-composer-preview__model {
@@ -120,8 +121,8 @@
   gap: var(--bf-space-1);
   padding-inline: var(--bf-space-2);
   border-radius: var(--bf-radius-pill);
-  font-family: var(--bf-font-family-control);
-  font-size: var(--bf-font-size-small);
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-sm);
 }
 
 .flow-chat-composer-preview__model > span {
@@ -151,7 +152,7 @@
   overflow: hidden;
   min-inline-size: 0;
   color: inherit;
-  font-family: var(--bf-font-family-mono);
+  font-family:var(--bf-font-family-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -194,7 +195,7 @@
 .flow-chat-tool-card-preview__details code {
   overflow: hidden;
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
+  font-family:var(--bf-font-family-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -208,7 +209,7 @@
   align-items: center;
   gap: var(--bf-space-1);
   color: var(--bf-color-content-muted);
-  font-family: var(--bf-font-family-mono);
+  font-family:var(--bf-font-family-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -217,8 +218,8 @@
 }
 
 .flow-chat-tool-card-preview__duration > svg {
-  inline-size: var(--bf-font-size-small);
-  block-size: var(--bf-font-size-small);
+  inline-size: var(--bf-font-size-sm);
+  block-size: var(--bf-font-size-sm);
 }
 
 .flow-chat-tool-card-preview__output,
@@ -227,9 +228,9 @@
   gap: var(--bf-space-1);
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-small);
-  line-height: var(--bf-line-height-body);
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-base);
   white-space: pre-wrap;
 }
 

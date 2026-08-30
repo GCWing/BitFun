@@ -19,8 +19,8 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
 
     svg {
       flex-shrink: 0;
@@ -50,8 +50,8 @@
     min-height: 44px;
     padding: 8px 12px;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     background: var(--bf-appearance-token-element-bg-subtle);
   }
 
@@ -74,7 +74,7 @@
   &__rule-heading {
     min-height: 32px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     background: var(--bf-appearance-token-element-bg-subtle);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
@@ -118,19 +118,9 @@
   &__empty {
     padding: 18px 12px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     text-align: center;
-  }
-}
-
-.global-permission-rules-dialog-overlay {
-  &:has(.select--open) {
-    [data-bf-component='modal'][data-bf-part='dialog'],
-    [data-bf-component='modal'][data-bf-part='content'],
-    .global-permission-rules-dialog__section {
-      overflow: visible;
-    }
   }
 }
 

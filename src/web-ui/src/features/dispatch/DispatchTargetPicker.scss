@@ -1,5 +1,4 @@
 @use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .dispatch-target-picker {
   position: relative;
@@ -22,8 +21,8 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 7%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
     font: inherit;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    line-height: 1;
+    font-size: var(--bf-type-flow-micro-font-size);
+    line-height: var(--bf-line-height-none);
     cursor: pointer;
     transition:
       background-color 120ms ease,
@@ -65,101 +64,20 @@
   }
 
   &__menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
     z-index: $z-popover;
-    box-sizing: border-box;
-    display: flex;
-    width: min(300px, calc(100vw - 16px));
-    max-height: min(410px, calc(100vh - 16px));
-    flex-direction: column;
-    gap: 4px;
-    padding: 6px;
-    overflow-x: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    user-select: none;
   }
 
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
-    padding: 2px 7px 5px;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-
-    small {
-      color: var(--bf-appearance-token-color-text-muted);
-      font: inherit;
-      font-weight: 400;
-    }
+  &__option-row {
+    min-height: 46px;
+    padding-block: 5px;
   }
 
-  &__section {
+  &__option-copy {
     display: flex;
+    min-width: 0;
     flex-direction: column;
     gap: 2px;
-  }
-
-  &__section-title {
-    padding: 4px 8px 2px;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  &__option {
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) 16px;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    min-height: 46px;
-    padding: 7px 8px;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      transform 100ms ease-out;
-
-    &:hover,
-    &:focus-visible,
-    &[aria-checked='true'] {
-      background: var(--bf-appearance-token-element-bg-medium);
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.99);
-    }
-
-    &[aria-checked='true'] > svg:last-child {
-      color: var(--bf-appearance-token-color-accent-500);
-    }
-
-    > span {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      gap: 2px;
-    }
 
     strong,
     small {
@@ -169,13 +87,13 @@
     }
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: 500;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xxs);
+      font-size: var(--bf-font-size-micro);
     }
   }
 
@@ -185,43 +103,7 @@
     gap: $size-gap-2;
     padding: 9px 8px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-  }
-
-  &__divider {
-    height: 1px;
-    margin: 3px 2px;
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__footer-action {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    min-height: 32px;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease,
-      transform 100ms ease-out;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-      outline: none;
-    }
-
-    &:active {
-      transform: scale(0.99);
-    }
+    font-size: var(--bf-font-size-xs);
   }
 
   &__spin {
@@ -230,9 +112,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dispatch-target-picker__trigger,
-  .dispatch-target-picker__option,
-  .dispatch-target-picker__footer-action {
+  .dispatch-target-picker__trigger {
     transition-duration: 0.01ms;
   }
 }

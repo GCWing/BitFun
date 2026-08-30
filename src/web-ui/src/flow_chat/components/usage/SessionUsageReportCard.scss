@@ -41,16 +41,16 @@
   &__loading-title {
     margin: 0;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 650;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-type-flow-meta-line-height);
   }
 
   &__loading-description,
   &__loading-step {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__loading-description {
@@ -97,9 +97,9 @@
     flex: 0 0 auto;
     margin: 0;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-lg);
-    font-weight: 650;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-lead-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-type-flow-meta-line-height);
     white-space: nowrap;
   }
 
@@ -128,8 +128,8 @@
     align-items: center;
     gap: 4px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: 1;
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
     cursor: pointer;
 
@@ -159,8 +159,8 @@
     height: 22px;
     padding: 0 8px;
     border-radius: 999px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: 1;
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &--complete {
@@ -189,7 +189,7 @@
     gap: 6px 10px;
     min-width: 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
 
     span {
       min-width: 0;
@@ -229,7 +229,7 @@
   &__metric-label {
     min-width: 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -238,8 +238,8 @@
   &__metric-value {
     margin-left: auto;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     white-space: nowrap;
 
     &--help {
@@ -275,8 +275,8 @@
 
   &__mini-list-title {
     min-width: 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__mini-list-empty {
@@ -285,15 +285,15 @@
     gap: 2px;
     min-height: 28px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
 
     strong {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
-      line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+      line-height: var(--bf-type-flow-meta-line-height);
     }
   }
 
@@ -307,7 +307,7 @@
     min-height: 34px;
     min-width: 0;
     padding: 6px 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
 
     & + & {
       border-top: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-base) 64%, transparent);
@@ -336,7 +336,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -409,7 +409,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-family: var(--bf-font-family-mono);
   }
 
   &__file-stat--added {
@@ -467,8 +467,8 @@
   flex-basis: auto;
   flex-wrap: nowrap;
   gap: 0;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-compact);
 }
 
 .session-usage-report-card--compact .session-usage-report-card__meta span {
@@ -532,9 +532,9 @@
 .session-usage-report-card__compact-token-label {
   gap: 9px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-compact);
 }
 
 .session-usage-report-card__compact-token-label svg,
@@ -547,11 +547,11 @@
   margin-top: 15px;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 39px;
+  font-size: var(--bf-font-size-6xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 670;
-  letter-spacing: 0.01em;
-  line-height: 0.98;
+  font-weight: var(--bf-font-weight-semibold);
+  letter-spacing: var(--bf-letter-spacing-subtle);
+  line-height: var(--bf-line-height-none);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -560,8 +560,8 @@
   min-width: 0;
   margin-top: 17px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
-  line-height: 1.3;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-snug);
 }
 
 .session-usage-report-card__compact-model-name {
@@ -593,8 +593,8 @@
   gap: 8px;
   border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 68%, transparent);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
-  line-height: 1.3;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-snug);
 }
 
 .session-usage-report-card__compact-cache-label {
@@ -605,8 +605,8 @@
   margin-left: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 15px;
-  font-weight: 620;
+  font-size: var(--bf-font-size-lg);
+  font-weight: var(--bf-font-weight-semibold);
   text-overflow: ellipsis;
 }
 
@@ -634,9 +634,9 @@
   min-width: 0;
   gap: 10px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-compact);
 }
 
 .session-usage-report-card__compact-metric-label svg {
@@ -658,10 +658,10 @@
   margin: 5px 0 0 28px;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 18px;
+  font-size: var(--bf-font-size-2xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  line-height: 1.15;
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
   text-decoration: none;
   text-overflow: ellipsis;
 }
@@ -680,10 +680,10 @@
   margin: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 18px;
+  font-size: var(--bf-font-size-2xl);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  line-height: 1.15;
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
   text-decoration: none;
   text-overflow: ellipsis;
 }
@@ -715,9 +715,9 @@
 .session-usage-report-card__compact-tools-header h4 {
   margin: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 17px;
-  font-weight: 680;
-  line-height: 1.2;
+  font-size: var(--bf-font-size-xl);
+  font-weight: var(--bf-font-weight-bold);
+  line-height: var(--bf-line-height-tight);
 }
 
 .session-usage-report-card__compact-tool-list {
@@ -752,15 +752,15 @@
 .session-usage-report-card__compact-tool-name {
   min-width: 0;
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-usage-report-card__compact-tool-calls {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -768,7 +768,7 @@
 .session-usage-report-card__compact-tool-empty {
   padding: 18px 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
 }
 
 .session-usage-report-card__compact-disclaimer {
@@ -776,8 +776,8 @@
   margin: auto 0 0;
   padding-top: 11px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-compact);
   text-align: center;
 }
 
@@ -834,7 +834,7 @@
 
 @media (max-width: 420px) {
   .session-usage-report-card__compact-token-value {
-    font-size: 34px;
+    font-size: var(--bf-font-size-5xl);
   }
 
   .session-usage-report-card__compact-metric {
@@ -844,6 +844,6 @@
   .session-usage-report-card__compact-metric > .session-usage-report-card__metric-value,
   .session-usage-report-card__compact-metric > [data-tooltip] .session-usage-report-card__metric-value {
     margin-left: 28px;
-    font-size: 18px;
+    font-size: var(--bf-font-size-2xl);
   }
 }

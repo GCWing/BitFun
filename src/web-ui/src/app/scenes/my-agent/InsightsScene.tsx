@@ -1,11 +1,10 @@
-import { Combobox, type ComboboxOption } from '@bitfun/ui';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, Icon, IconButton, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, ScrollArea, type ComboboxOption } from '@bitfun/ui';
 import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge, Brain } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import type { AIModelConfig } from '@/infrastructure/config/types';
@@ -215,7 +214,7 @@ const InsightsScene: React.FC = () => {
     if (!selected) return null;
     const fullLabel = selected.meta ? `${selected.modelName} · ${selected.meta}` : selected.modelName;
     return (
-      <span className="select__value insights-model-select__value" title={fullLabel}>
+      <span className="insights-model-select__value" title={fullLabel}>
         <span className="insights-model-select__value-name">{selected.modelName}</span>
         {selected.meta && <span className="insights-model-select__value-meta">{selected.meta}</span>}
       </span>
@@ -247,16 +246,16 @@ const InsightsScene: React.FC = () => {
         <div className="insights-scene__header-actions">
           <div className="insights-scene__model-control">
             <span className="insights-scene__control-label">{t('insights.modelLabel')}</span>
-            <Combobox
+            <LocalizedCombobox
               className="insights-scene__model-select"
               dropdownClassName="insights-scene__model-select-dropdown"
-              dropdownMatchTriggerWidth={false}
+              matchTriggerWidth={false}
               value={selectedModel}
               options={modelOptions}
               renderValue={renderModelValue}
               renderOption={renderModelOption}
-              onChange={(value) => setSelectedModel(String(Array.isArray(value) ? value[0] : value))}
-              size="small"
+              onValueChange={(value) => setSelectedModel(String(Array.isArray(value) ? value[0] : value))}
+              size="sm"
               searchable={availableModels.length > 6}
               disabled={generating}
               triggerTestId="insights-model-select"

@@ -19,6 +19,6 @@ export const readFileToolCardMeta = {
     "color.status.danger.content",
     "color.status.success.content",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
   ],
 } as const satisfies ComponentMeta;

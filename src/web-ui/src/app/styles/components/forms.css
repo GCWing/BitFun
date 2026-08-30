@@ -29,14 +29,14 @@
 /* ========== Label styles ========== */
 
 .form-label {
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-text-secondary);
   display: flex;
   align-items: center;
   gap: var(--bf-appearance-token-size-gap-2);
   margin-bottom: var(--bf-appearance-token-size-gap-1);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  line-height: var(--bf-line-height-tight);
 }
 
 .form-label.required::after {
@@ -46,9 +46,9 @@
 }
 
 .form-hint {
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
-  line-height: var(--bf-appearance-token-line-height-base);
+  line-height: var(--bf-line-height-base);
   margin-top: var(--bf-appearance-token-size-gap-1);
 }
 
@@ -59,10 +59,10 @@
 .form-textarea {
   width: 100%;
   padding: 12px 16px;
-  font-size: var(--bf-appearance-token-font-size-base);
-  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-font-size-base);
+  font-family:var(--bf-font-family-sans);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: var(--bf-appearance-token-line-height-base);
+  line-height: var(--bf-line-height-base);
   
   /* Glassmorphism effect */
   background: var(--bf-appearance-token-glass-bg-base);
@@ -86,14 +86,14 @@
 .form-input-sm,
 .form-select-sm {
   padding: 8px 12px;
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   border-radius: var(--bf-appearance-token-size-radius-sm);
 }
 
 .form-input-lg,
 .form-select-lg {
   padding: 16px 20px;
-  font-size: var(--bf-appearance-token-font-size-lg);
+  font-size: var(--bf-font-size-lg);
   border-radius: var(--bf-appearance-token-size-radius-lg);
 }
 
@@ -188,7 +188,7 @@
 .form-textarea {
   min-height: 100px;
   resize: vertical;
-  line-height: var(--bf-appearance-token-line-height-relaxed);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .form-textarea-sm {
@@ -220,7 +220,7 @@
   gap: var(--bf-appearance-token-size-gap-2);
   cursor: pointer;
   user-select: none;
-  line-height: var(--bf-appearance-token-line-height-base);
+  line-height: var(--bf-line-height-base);
 }
 
 .form-checkbox input,
@@ -271,7 +271,7 @@
   border: 1px solid var(--bf-appearance-token-glass-border-base);
   border-left: none;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   white-space: nowrap;
 }
 
@@ -319,9 +319,9 @@
   align-items: center;
   gap: var(--bf-appearance-token-size-gap-1);
   margin-top: var(--bf-appearance-token-size-gap-1);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-error);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  line-height: var(--bf-line-height-tight);
 }
 
 .form-success-message {
@@ -329,9 +329,9 @@
   align-items: center;
   gap: var(--bf-appearance-token-size-gap-1);
   margin-top: var(--bf-appearance-token-size-gap-1);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-success);
-  line-height: var(--bf-appearance-token-line-height-tight);
+  line-height: var(--bf-line-height-tight);
 }
 
 /* ========== File upload ========== */

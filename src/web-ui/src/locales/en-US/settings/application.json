@@ -70,11 +70,7 @@
       "customPxPlaceholder": "14",
       "customPxOutOfRange": "Please enter an integer between 12 and 20",
       "resetButton": "Reset to Default",
-      "previewText": "BitFun is an AI-driven programming environment. The quick brown fox jumps over the lazy dog.",
-      "flowChatLabel": "Chat area",
-      "flowChatHint": "When off, chat uses UI +1 px and tracks UI presets. When on, pick a size (12–20 px) from the list below.",
-      "flowChatCustomToggle": "Custom chat font size",
-      "flowChatPxOption": "{{n}} px"
+      "previewText": "BitFun is an AI-driven programming environment. The quick brown fox jumps over the lazy dog."
     }
   },
   "autoUpdate": {

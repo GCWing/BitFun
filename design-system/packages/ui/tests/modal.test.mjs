@@ -40,7 +40,8 @@ test("Modal geometry and surface styling use public design tokens", async () => 
   assert.match(styles, /--bf-overlay-modal-backdrop-blur/);
   assert.match(styles, /--bf-overlay-modal-surface-radius/);
   assert.match(styles, /--bf-overlay-modal-header-padding-inline/);
-  assert.match(styles, /--bf-overlay-modal-title-font-size/);
+  assert.match(styles, /--bf-type-heading-dialog-font-size/);
+  assert.match(styles, /--bf-type-heading-dialog-font-weight/);
   assert.match(styles, /--bf-scrollbar-width/);
   assert.match(styles, /--bf-scrollbar-radius/);
   assert.match(styles, /--bf-color-scrollbar-thumb/);

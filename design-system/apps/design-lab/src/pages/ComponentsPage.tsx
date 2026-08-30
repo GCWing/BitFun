@@ -32,8 +32,8 @@ import {
   CardHeader,
   ChangeCount,
   Checkbox,
-  Composer,
   Combobox,
+  Composer,
   ComposerToolbar,
   Disclosure,
   Empty,
@@ -45,6 +45,8 @@ import {
   IconButton,
   Input,
   KeyHint,
+  Listbox,
+  ListboxOption,
   Menu,
   MenuItem,
   MenuSection,
@@ -103,12 +105,14 @@ const componentIcons = {
   ActivityItem: Terminal,
   Button: MousePointerClick,
   Card: Rows3,
+  Combobox: SearchIcon,
   Composer: ArrowUp,
   Field: Rows3,
   Icon: SearchIcon,
   IconButton: List,
   Input: Eye,
   KeyHint: Keyboard,
+  Listbox: List,
   Menu: List,
   Modal: AppWindow,
   NavigationPanel: PanelLeft,
@@ -240,6 +244,13 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
       );
     case "KeyHint":
       return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+    case "Listbox":
+      return (
+        <Listbox aria-label={t("components.preview.appearance")}>
+          <ListboxOption selected value="ask">Ask</ListboxOption>
+          <ListboxOption value="plan">Plan</ListboxOption>
+        </Listbox>
+      );
     case "Menu":
       return (
         <Menu aria-label={t("components.preview.menuLabel")} scrollbarVisibility="hidden">
@@ -299,6 +310,18 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           description={t("components.preview.fieldDescription")}
           label={t("components.preview.notifications")}
           tabIndex={-1}
+        />
+      );
+    case "Combobox":
+      return (
+        <Combobox
+          options={[
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+          ]}
+          searchable
+          triggerAriaLabel={t("components.preview.appearance")}
+          value="ask"
         />
       );
     case "NumberInput":

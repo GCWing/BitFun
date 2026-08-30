@@ -100,7 +100,8 @@ vi.mock('@/component-library', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/infrastructure/confirm-dialog', () => ({
+vi.mock('@/infrastructure/confirm-dialog', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/infrastructure/confirm-dialog')>(),
   confirmDanger: vi.fn(async () => false),
 }));
 

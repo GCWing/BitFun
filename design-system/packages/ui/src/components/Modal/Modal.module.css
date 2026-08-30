@@ -144,9 +144,9 @@
     min-inline-size: 0;
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-overlay-modal-title-font-size);
-    font-weight: var(--bf-overlay-modal-title-font-weight);
+    font-family: var(--bf-type-heading-dialog-font-family);
+    font-size: var(--bf-type-heading-dialog-font-size);
+    font-weight: var(--bf-type-heading-dialog-font-weight);
     line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -161,10 +161,10 @@
   .description {
     margin: 0;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-body);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-body);
+    line-height: var(--bf-line-height-base);
   }
 
   .headerActions {
@@ -386,7 +386,7 @@
     }
 
     .title {
-      font-size: var(--bf-font-size-title);
+      font-size: var(--bf-font-size-2xl);
     }
 
     .close {

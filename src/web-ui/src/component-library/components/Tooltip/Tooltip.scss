@@ -34,10 +34,10 @@
     z-index: 1;
     padding: 6px 10px;
 
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: var(--bf-appearance-token-font-weight-normal);
-    line-height: 1.4;
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-ui);
     color: var(--bf-appearance-token-color-text-primary);
 
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 96%, transparent);

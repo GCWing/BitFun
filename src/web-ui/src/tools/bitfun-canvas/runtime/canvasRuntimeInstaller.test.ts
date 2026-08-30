@@ -4,16 +4,10 @@ import { readFileSync } from 'node:fs';
 import { buildCanvasRuntimeInstallerScript } from './canvasRuntimeInstaller';
 
 describe('Canvas runtime installer', () => {
-  it('keeps iframe-local shape, spacing, and type fallbacks out of the host payload contract', () => {
+  it('loads generated typography tokens while keeping iframe-local shape and spacing fallbacks', () => {
     const runtimeCss = readFileSync(new URL('./styles/canvas-runtime.scss', import.meta.url), 'utf8');
+    const runtimeEntry = readFileSync(new URL('./entry.tsx', import.meta.url), 'utf8');
     const iframeFallbackVars = [
-      '--bf-appearance-token-font-size-xs',
-      '--bf-appearance-token-font-size-sm',
-      '--bf-appearance-token-font-size-base',
-      '--bf-appearance-token-font-size-lg',
-      '--bf-appearance-token-font-size-2xl',
-      '--bf-appearance-token-font-weight-medium',
-      '--bf-appearance-token-font-weight-semibold',
       '--bf-appearance-token-size-radius-sm',
       '--bf-appearance-token-size-radius-base',
       '--bf-appearance-token-size-radius-md',
@@ -36,11 +30,8 @@ describe('Canvas runtime installer', () => {
     for (const name of iframeFallbackVars) {
       expect(runtimeCss).toContain(`${name}:`);
     }
-    const smallFontSizeValues = [...runtimeCss.matchAll(/--bf-appearance-token-font-size-sm:\s*([^;]+);/g)].map(
-      (match) => match[1]?.trim()
-    );
-
-    expect(smallFontSizeValues).toEqual(['13px']);
+    expect(runtimeEntry).toContain("import '@bitfun/design-tokens/tokens.css';");
+    expect(runtimeCss).not.toMatch(/^\s*--bf-(?:font|letter-spacing|line-height|type)-/m);
   });
 
   it('merges bundled SDK adapters before user module startup', () => {

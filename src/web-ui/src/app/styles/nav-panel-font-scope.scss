@@ -1,20 +1,4 @@
-/**
- * Keeps navigation typography on the product type scale while preserving the
- * smaller metadata steps needed by dense session and workspace rows.
- */
-
-@mixin nav-panel-font-token-scope {
-  --bf-appearance-token-font-size-xxs: max(9px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 2px));
-  --bf-appearance-token-font-size-2xs: max(10px, calc(var(--bf-appearance-token-flowchat-font-size-xs) - 1px));
-  --bf-appearance-token-font-size-xs: max(11px, var(--bf-appearance-token-flowchat-font-size-xs));
-  --bf-appearance-token-font-size-sm: max(12px, var(--bf-appearance-token-flowchat-font-size-sm));
-  --bf-appearance-token-font-size-base: max(13px, var(--bf-appearance-token-flowchat-font-size-base));
-  --bf-appearance-token-font-size-lg: max(14px, var(--bf-appearance-token-flowchat-font-size-lg));
-  --bf-appearance-token-font-size-xl: max(15px, var(--bf-appearance-token-flowchat-font-size-xl));
-  --bf-appearance-token-font-size-2xl: max(17px, var(--bf-appearance-token-flowchat-font-size-2xl));
-  --bf-appearance-token-font-size-3xl: max(21px, var(--bf-appearance-token-flowchat-font-size-3xl));
-  --bf-appearance-token-font-size-4xl: max(25px, calc(var(--bf-appearance-token-flowchat-font-size-3xl) + 4px));
-}
+/** Shared semantic text roles for navigation surfaces. */
 
 @mixin nav-panel-text-heading {
   color: var(--bf-appearance-token-color-text-primary);
@@ -78,9 +62,9 @@
 @mixin nav-panel-text-row {
   @include nav-panel-text-body;
 
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 400;
+  font-family: var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-regular);
   // Truncated labels need room for the bundled font's ascenders and descenders.
   line-height: var(--bf-line-height-base);
 }
@@ -88,15 +72,15 @@
 @mixin nav-panel-text-row-active {
   @include nav-panel-text-heading;
 
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
 }
 
 @mixin nav-panel-text-group {
   @include nav-panel-text-meta;
 
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: normal;
+  font-family: var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-medium);
+  letter-spacing: var(--bf-letter-spacing-normal);
   line-height: var(--bf-line-height-base);
 }

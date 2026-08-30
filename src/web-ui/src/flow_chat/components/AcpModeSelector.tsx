@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -103,20 +104,6 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
     };
   }, [dropdownPlacement, open]);
 
-  useEffect(() => {
-    if (!open || !keyboardOpen) return;
-    const frame = window.requestAnimationFrame(() => {
-      const checked = menuRef.current?.querySelector<HTMLButtonElement>(
-        'button[role="menuitemradio"][aria-checked="true"]:not(:disabled)',
-      );
-      const first = menuRef.current?.querySelector<HTMLButtonElement>(
-        'button[role="menuitemradio"]:not(:disabled)',
-      );
-      (checked ?? first)?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [keyboardOpen, open]);
-
   const select = useCallback((value: string) => {
     if (menuRef.current?.contains(document.activeElement)) {
       triggerRef.current?.focus();
@@ -130,21 +117,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
       event.preventDefault();
       triggerRef.current?.focus();
       setOpen(false);
-      return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(
-      'button[role="menuitemradio"]:not(:disabled)',
-    ));
-    if (items.length === 0) return;
-    event.preventDefault();
-    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    let nextIndex = activeIndex;
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = items.length - 1;
-    if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
-    if (event.key === 'ArrowUp') nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
-    items[nextIndex]?.focus();
   }, []);
 
   if (candidates.length === 0) return null;
@@ -210,9 +183,10 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
 
       <PresenceBoundary active={open}>
         {createPortal(
-          <div
+          <Menu
             id={menuId}
             ref={menuRef}
+            autoFocusFirstItem={keyboardOpen}
             className="bitfun-acp-mode-selector__menu"
             data-bf-component="acp-mode-selector"
             data-bf-part="menu"
@@ -220,7 +194,6 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
             data-open={open ? 'true' : 'false'}
             data-keyboard-open={keyboardOpen ? 'true' : 'false'}
             style={menuStyle}
-            role="menu"
             aria-hidden={!open}
             {...(!open ? { inert: '' } : {})}
             aria-label={t('modelSelector.acpMode')}
@@ -246,30 +219,31 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
                 : (candidate.description ?? candidate.name);
 
               return (
-                <Tooltip key={candidate.value} content={hint} placement="right">
-                  <button
+                <MenuItem
                     type="button"
                     role="menuitemradio"
-                    aria-checked={isSelected}
+                    checked={isSelected}
+                    key={candidate.value}
                     data-testid="chat-acp-mode-option"
                     data-mode-value={candidate.value}
                     data-selected={isSelected ? 'true' : 'false'}
                     disabled={mode.locked || loading}
-                    className="bitfun-acp-mode-selector__option"
+                    className="bitfun-acp-mode-selector__option-row"
+                    triggerClassName="bitfun-acp-mode-selector__option"
                     data-bf-component="acp-mode-selector"
                     data-bf-part="option"
                     data-bf-state={isSelected ? 'selected' : undefined}
+                    title={hint}
                     onClick={() => select(candidate.value)}
+                    shortcut={isSelected ? <Check size={14} aria-hidden="true" /> : undefined}
                   >
                     <span>
                       <strong>{candidate.name}</strong>
                     </span>
-                    {isSelected && <Check size={14} aria-hidden="true" />}
-                  </button>
-                </Tooltip>
+                  </MenuItem>
               );
             })}
-          </div>,
+          </Menu>,
           getAppearanceOverlayHost(),
         )}
       </PresenceBoundary>

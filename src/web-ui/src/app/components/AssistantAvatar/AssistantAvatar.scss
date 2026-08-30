@@ -38,8 +38,9 @@
 
   &__emoji {
     display: block;
+    /* typography-audit: allow -- emoji is graphic content scaled from the avatar box */
     font-size: calc(var(--assistant-avatar-size) * 0.5);
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
     transform: translateY(-1%);
   }
 

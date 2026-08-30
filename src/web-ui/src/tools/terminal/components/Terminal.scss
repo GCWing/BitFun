@@ -57,7 +57,7 @@
     }
 
     &-text {
-      font-size: 14px;
+      font-size: var(--bf-font-size-base);
     }
   }
 
@@ -73,11 +73,11 @@
     padding: 20px;
 
     &-icon {
-      font-size: 32px;
+      font-size: var(--bf-font-size-5xl);
     }
 
     &-message {
-      font-size: 14px;
+      font-size: var(--bf-font-size-base);
       text-align: center;
       max-width: 300px;
     }
@@ -108,7 +108,7 @@
     }
 
     &-title {
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-secondary);
 
       .shell-type {
@@ -155,7 +155,7 @@
     justify-content: space-between;
     padding: 2px 8px;
     background: var(--bf-appearance-token-color-info);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: white;
 
     &--error {

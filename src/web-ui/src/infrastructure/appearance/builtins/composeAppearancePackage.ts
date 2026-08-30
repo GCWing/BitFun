@@ -104,7 +104,6 @@ function mergeGlobals(base: AppearanceGlobalTokens | undefined, override: Appear
     numbers: { ...(base?.numbers ?? {}), ...(override?.numbers ?? {}) },
     durations: { ...(base?.durations ?? {}), ...(override?.durations ?? {}) },
     easings: { ...(base?.easings ?? {}), ...(override?.easings ?? {}) },
-    fontFamilies: { ...(base?.fontFamilies ?? {}), ...(override?.fontFamilies ?? {}) },
     shadows: { ...(base?.shadows ?? {}), ...(override?.shadows ?? {}) },
   };
 }

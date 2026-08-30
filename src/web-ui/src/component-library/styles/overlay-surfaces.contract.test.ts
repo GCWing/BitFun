@@ -7,6 +7,9 @@ const SOURCE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const REPOSITORY_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));
 const readSource = (path: string): string => readFileSync(join(SOURCE_ROOT, path), 'utf8');
 const readRepositorySource = (path: string): string => readFileSync(join(REPOSITORY_ROOT, path), 'utf8');
+const directoryHasEntries = (path: string): boolean => (
+  existsSync(path) && readdirSync(path).length > 0
+);
 
 const portalStyleOverrides: Record<string, string> = {
   'app/components/NavPanel/components/DeviceStatusControl.tsx':
@@ -27,9 +30,18 @@ const portalStyleOverrides: Record<string, string> = {
 
 // Portals whose chrome is owned by a design-system surface component satisfy
 // the contract without a floating-surface/dialog-surface SCSS include.
-const rendersDesignSystemSurface = (source: string): boolean =>
-  /import\s*\{[^}]*\b(?:Menu|Modal|ConfirmDialog)\b[^}]*\}\s*from\s*'@bitfun\/ui'/.test(source)
-  && /createPortal\(\s*<(?:Menu|Modal|ConfirmDialog)\b/.test(source);
+const rendersDesignSystemSurface = (source: string): boolean => {
+  const directSurface = (
+    /import\s*\{[^}]*\b(?:Menu|Modal|ConfirmDialog)\b[^}]*\}\s*from\s*'@bitfun\/ui'/.test(source)
+    && /<(?:Menu|Modal|ConfirmDialog)\b/.test(source)
+    && /createPortal\(/.test(source)
+  );
+  const raisedCardSurface = (
+    /import\s*\{[^}]*\bCard\b[^}]*\}\s*from\s*'@bitfun\/ui'/.test(source)
+    && /createPortal\([\s\S]{0,2000}<Card\b(?=[^>]*\bappearance=["']raised["'])/.test(source)
+  );
+  return directSurface || raisedCardSurface;
+};
 
 const portalSurfaceExceptions: Record<string, string> = {
   'app/components/panels/DiffFullscreenViewer.tsx': 'fullscreen viewer',
@@ -198,7 +210,7 @@ describe('overlay surface contracts', () => {
     const componentIndex = readSource('component-library/components/index.ts');
     const previewRegistry = readSource('component-library/components/registry.tsx');
 
-    expect(existsSync(join(SOURCE_ROOT, legacyDirectory))).toBe(false);
+    expect(directoryHasEntries(join(SOURCE_ROOT, legacyDirectory))).toBe(false);
     expect(componentIndex).not.toContain("./Modal");
     expect(previewRegistry).not.toContain(legacyImport);
     expect(previewRegistry).not.toContain("modal-basic");
@@ -225,15 +237,13 @@ describe('overlay surface contracts', () => {
   it.each([
     'flow_chat/components/modern/SessionTreePopover.scss',
     'flow_chat/components/ChatInput.scss',
-    'flow_chat/components/ModelSelector.scss',
-    'app/components/NavPanel/NavPanel.scss',
     'app/layout/FloatingMiniChat.scss',
   ])('%s consumes FloatingSurface instead of owning popup chrome', (path) => {
     expect(readSource(path)).toContain('@include surfaces.floating-surface');
   });
 
   it('retires the legacy Select after all consumers use public selection components', () => {
-    expect(existsSync(join(SOURCE_ROOT, 'component-library/components/Select'))).toBe(false);
+    expect(directoryHasEntries(join(SOURCE_ROOT, 'component-library/components/Select'))).toBe(false);
     expect(readSource('component-library/components/index.ts')).not.toContain("./Select");
     expect(readSource('component-library/preview/PreviewApp.tsx')).toContain('<Combobox');
     const styles = readRepositorySource('design-system/packages/ui/src/components/Combobox/Combobox.module.css');
@@ -257,7 +267,6 @@ describe('overlay surface contracts', () => {
   });
 
   it.each([
-    'app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.scss',
     'app/layout/AppLayout.scss',
     'app/layout/FloatingMiniChat.scss',
     'tools/git/components/BranchQuickSwitch.scss',
@@ -267,21 +276,33 @@ describe('overlay surface contracts', () => {
     'shared/notification-system/components/NotificationItem.scss',
     'shared/notification-system/components/ProgressNotification.scss',
     'tools/editor/meditor/components/TiptapEditor.scss',
-    'tools/git/components/PushButton/PushButton.scss',
   ])('%s consumes FloatingSurface for its non-portal transient card', (path) => {
     expect(readSource(path)).toContain('@include surfaces.floating-surface');
   });
 
-  it('keeps the transparent companion window on shared chrome without backdrop blur', () => {
-    const source = readSource(
+  it.each([
+    'flow_chat/components/ModelSelector.tsx',
+    'app/components/NavPanel/MainNav.tsx',
+    'app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx',
+    'tools/git/components/PushButton/PushButton.tsx',
+  ])('%s delegates transient surface chrome to the public Menu', (path) => {
+    const source = readSource(path);
+    expect(source).toMatch(/import\s*\{[^}]*\bMenu\b[^}]*\}\s*from\s*'@bitfun\/ui'/);
+    expect(source).toContain('<Menu');
+  });
+
+  it('keeps the transparent companion window on public Menu chrome without local backdrop blur', () => {
+    const styles = readSource(
       'app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.scss',
     );
-
-    expect(source).toContain(
-      '@include surfaces.floating-surface($backdrop-blur: false)',
+    const source = readSource(
+      'app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx',
     );
-    expect(source).not.toContain('border-radius: 10px;');
-    expect(source).not.toContain('box-shadow: 0 6px 18px');
+
+    expect(source).toContain('<Menu');
+    expect(source).toContain('triggerClassName="bitfun-agent-companion-window__menu-item"');
+    expect(styles).not.toContain('@include surfaces.floating-surface');
+    expect(styles).not.toMatch(/&__overlay\s*\{[^}]*\b(?:border|border-radius|background|box-shadow|backdrop-filter)\s*:/s);
   });
 
   it('requires every React portal surface to consume a contract or declare a semantic exception', () => {

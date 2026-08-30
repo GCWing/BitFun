@@ -36,8 +36,8 @@
   &__month {
     flex: 1 1 auto;
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -51,8 +51,8 @@
   &__weekday {
     padding: 2px 0;
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -66,7 +66,7 @@
     border-radius: $size-radius-base;
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     transition: background $motion-fast $easing-standard;

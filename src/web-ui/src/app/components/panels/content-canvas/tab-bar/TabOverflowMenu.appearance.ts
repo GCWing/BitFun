@@ -2,9 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const canvasTabOverflowAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'canvas-tab-overflow',
   parts: [
-    { id: 'root' }, { id: 'trigger' }, { id: 'badge' }, { id: 'menu' },
-    { id: 'missionControl' }, { id: 'divider' },
-    { id: 'item' }, { id: 'itemTitle' }, { id: 'itemClose' },
+    { id: 'root' }, { id: 'trigger' }, { id: 'badge' }, { id: 'itemTitle' },
   ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },

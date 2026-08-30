@@ -9,7 +9,7 @@
   flex-direction: column;
   height: 620px;
   max-height: calc(100vh - 120px);
-  font-family: $font-family-sans;
+  font-family: var(--bf-font-family-sans);
   overflow: hidden;
 
   
@@ -28,8 +28,8 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     margin: 0;
     flex: 1;
@@ -103,8 +103,8 @@
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition:
@@ -146,13 +146,13 @@
   }
 
   &__empty-icon {
-    font-size: 32px;
+    font-size: var(--bf-font-size-5xl);
     margin-bottom: $size-gap-3;
     opacity: 0.5;
   }
 
   &__empty-text {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -167,11 +167,11 @@
 
   &__group-title {
     padding: 6px $size-gap-4;
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     background: var(--bf-appearance-token-element-bg-subtle);
     user-select: none;
   }
@@ -234,8 +234,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: 12px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
 
     &--success {
       background: var(--bf-appearance-token-color-success-bg);
@@ -295,10 +295,10 @@
   }
 
   &__item-title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -306,18 +306,18 @@
   }
 
   &__item-percentage {
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-warning);
     font-variant-numeric: tabular-nums;
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
     flex-shrink: 0;
   }
 
   &__item-message {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.45;
+    line-height: var(--bf-line-height-support);
     margin-bottom: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -329,9 +329,9 @@
   }
 
   &__item-time {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
   }
 
   &__item-technical-details {
@@ -345,11 +345,11 @@
 
   &__item-technical-title {
     margin-bottom: 4px;
-    font-size: 10px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   &__item-technical-body {
@@ -357,9 +357,9 @@
     max-height: 160px;
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: $font-family-mono;
-    font-size: 11px;
-    line-height: 1.45;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -497,11 +497,11 @@
 
   &__active-section-title {
     padding: 6px $size-gap-4;
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-accent-500);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     user-select: none;
   }
 
@@ -555,8 +555,8 @@
   }
 
   &__active-task-title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -565,16 +565,16 @@
   }
 
   &__active-task-progress-text {
-    font-size: 11px;
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-accent-500);
     font-variant-numeric: tabular-nums;
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
     flex-shrink: 0;
   }
 
   &__active-task-message {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -631,8 +631,8 @@
   }
 
   &__active-loading-title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -640,7 +640,7 @@
   }
 
   &__active-loading-message {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;

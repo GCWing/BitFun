@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
-import { type ComboboxOption as SelectOption } from '@bitfun/ui';
+import type { ComboboxOption } from '@bitfun/ui';
 import { getProviderDisplayName } from '../services/modelConfigs';
 import type { AIModelConfig } from '../types';
 import './ModelSelectPresentation.scss';
 
-export type ModelSelectOption = SelectOption & {
+export type ModelSelectOption = ComboboxOption & {
   meta?: string;
 };
 
@@ -28,7 +28,7 @@ export function useModelSelectPresentation() {
     };
   }, [formatContextWindow]);
 
-  const renderModelOption = useCallback((option: SelectOption) => {
+  const renderModelOption = useCallback((option: ComboboxOption) => {
     const modelOption = option as ModelSelectOption;
 
     return (
@@ -43,7 +43,7 @@ export function useModelSelectPresentation() {
     );
   }, []);
 
-  const renderModelValue = useCallback((option?: SelectOption | SelectOption[]) => {
+  const renderModelValue = useCallback((option?: ComboboxOption | ComboboxOption[]) => {
     const selectedOption = Array.isArray(option) ? option[0] : option;
     if (!selectedOption) return null;
 
@@ -51,7 +51,6 @@ export function useModelSelectPresentation() {
     return (
       <span
         className={[
-          'select__value',
           'model-select-presentation__value',
           !modelOption.meta && 'model-select-presentation__value--single-line',
         ].filter(Boolean).join(' ')}

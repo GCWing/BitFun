@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
+import { fontPreferenceService } from '@/infrastructure/font-preference';
 import {
   createWidgetAppearanceFallbackCss,
   createWidgetAppearanceStaticShellCss,
@@ -93,16 +94,7 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
     * { box-sizing: border-box; }
     :root {
 ${createWidgetAppearanceFallbackCss()}
-      --bf-appearance-token-font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bf-appearance-token-font-family-mono: "SF Mono", Consolas, monospace;
 ${createWidgetAppearanceStaticShellCss()}
-      --bf-appearance-token-font-size-xs: 12px;
-      --bf-appearance-token-font-size-sm: 13px;
-      --bf-appearance-token-font-size-base: 14px;
-      --bf-appearance-token-font-size-lg: 15px;
-      --bf-appearance-token-font-size-2xl: 18px;
-      --bf-appearance-token-font-weight-medium: 500;
-      --bf-appearance-token-font-weight-semibold: 600;
       --bf-appearance-token-motion-fast: 0.15s;
       --bf-appearance-token-easing-standard: ease;
     }
@@ -113,7 +105,7 @@ ${createWidgetAppearanceStaticShellCss()}
       min-height: 0;
       background: transparent;
       color: var(--bf-appearance-token-color-text-primary);
-      font-family: var(--bf-appearance-token-font-family-sans);
+      font-family: var(--bf-font-family-sans);
       overflow-x: hidden;
       overflow-y: hidden;
     }
@@ -141,11 +133,11 @@ ${createWidgetAppearanceStaticShellCss()}
       word-break: break-word;
     }
     body {
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: 1.5;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-base);
     }
     body, button, input, textarea, select {
-      font-family: var(--bf-appearance-token-font-family-sans);
+      font-family: var(--bf-font-family-sans);
     }
     button, input, textarea, select {
       font: inherit;
@@ -223,23 +215,23 @@ ${createWidgetAppearanceStaticShellCss()}
     }
     .bf-title {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-lg);
-      font-weight: var(--bf-appearance-token-font-weight-semibold);
-      line-height: 1.2;
+      font-size: var(--bf-font-size-lg);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-tight);
       color: var(--bf-appearance-token-color-text-primary);
-      letter-spacing: -0.01em;
+      letter-spacing: var(--bf-letter-spacing-snug);
     }
     .bf-subtitle {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-muted);
-      line-height: 1.5;
+      line-height: var(--bf-line-height-base);
     }
     .bf-eyebrow {
       margin: 0;
-      font-size: 11px;
-      font-weight: var(--bf-appearance-token-font-weight-medium);
-      letter-spacing: 0.08em;
+      font-size: var(--bf-font-size-meta);
+      font-weight: var(--bf-font-weight-medium);
+      letter-spacing: var(--bf-letter-spacing-widest);
       text-transform: uppercase;
       color: var(--bf-appearance-token-color-text-muted);
     }
@@ -294,20 +286,20 @@ ${createWidgetAppearanceStaticShellCss()}
       border: 1px solid var(--bf-appearance-token-border-subtle);
     }
     .bf-kpi-label {
-      font-size: 11px;
-      font-weight: var(--bf-appearance-token-font-weight-medium);
+      font-size: var(--bf-font-size-meta);
+      font-weight: var(--bf-font-weight-medium);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: var(--bf-letter-spacing-widest);
       color: var(--bf-appearance-token-color-text-muted);
     }
     .bf-kpi-value {
-      font-size: var(--bf-appearance-token-font-size-2xl);
-      font-weight: var(--bf-appearance-token-font-weight-semibold);
-      line-height: 1.1;
+      font-size: var(--bf-font-size-2xl);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-display);
       color: var(--bf-appearance-token-color-text-primary);
     }
     .bf-kpi-meta {
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-secondary);
     }
     .bf-badge {
@@ -320,8 +312,8 @@ ${createWidgetAppearanceStaticShellCss()}
       border-radius: 999px;
       background: var(--bf-appearance-token-element-bg-base);
       border: 1px solid var(--bf-appearance-token-border-subtle);
-      font-size: 12px;
-      font-weight: var(--bf-appearance-token-font-weight-medium);
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
       color: var(--bf-appearance-token-color-text-secondary);
       white-space: nowrap;
     }
@@ -462,15 +454,15 @@ ${createWidgetAppearanceStaticShellCss()}
       vertical-align: top;
       border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: 13px;
+      font-size: var(--bf-font-size-sm);
       word-break: break-word;
     }
     .bf-table th {
-      font-size: 12px;
-      font-weight: var(--bf-appearance-token-font-weight-medium);
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
       color: var(--bf-appearance-token-color-text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: var(--bf-letter-spacing-wider);
     }
     .bf-empty {
       display: flex;
@@ -498,11 +490,11 @@ ${createWidgetAppearanceStaticShellCss()}
       border-radius: 6px;
       background: var(--bf-appearance-token-element-bg-base);
       color: var(--bf-appearance-token-color-text-primary);
-      font-family: var(--bf-appearance-token-font-family-mono);
-      font-size: 12px;
+      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-font-size-xs);
     }
     .bf-mono {
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-family: var(--bf-font-family-mono);
     }
     @media (max-width: 560px) {
       .bf-card,
@@ -514,7 +506,7 @@ ${createWidgetAppearanceStaticShellCss()}
         grid-template-columns: 1fr;
       }
       .bf-title {
-        font-size: var(--bf-appearance-token-font-size-base);
+        font-size: var(--bf-font-size-base);
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -756,8 +748,8 @@ ${createWidgetAppearanceStaticShellCss()}
             getComputedStyle(root).getPropertyValue('--bf-appearance-token-color-text-primary') ||
             body.style.color;
           body.style.fontFamily =
-            vars['--bf-appearance-token-font-family-sans'] ||
-            getComputedStyle(root).getPropertyValue('--bf-appearance-token-font-family-sans') ||
+            vars['--bf-font-family-sans'] ||
+            getComputedStyle(root).getPropertyValue('--bf-font-family-sans') ||
             body.style.fontFamily;
         }
       }
@@ -995,9 +987,11 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
     };
 
     updateAppearance();
-    const unsubscribe = widgetAppearanceAdapter.subscribe(updateAppearance);
+    const unsubscribeAppearance = widgetAppearanceAdapter.subscribe(updateAppearance);
+    const unsubscribeFont = fontPreferenceService.on('font:after-change', updateAppearance);
     return () => {
-      unsubscribe?.();
+      unsubscribeAppearance?.();
+      unsubscribeFont();
     };
   }, []);
 

@@ -155,7 +155,7 @@ function chartGrid(left: number, top: number, plotWidth: number, plotHeight: num
     return (
       <g key={`grid-${index}`}>
         <line x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="var(--bf-appearance-token-border-subtle)" strokeWidth={1} />
-        <text x={left - 8} y={y + 4} textAnchor="end" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
+        <text x={left - 8} y={y + 4} textAnchor="end" fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-micro-font-size)">
           {label}
         </text>
       </g>
@@ -193,7 +193,7 @@ export function BarChart(props: CanvasChartProps = {}) {
           }),
         )}
         {labels.map((label, index) => (
-          <text key={`label-${index}`} x={left + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
+          <text key={`label-${index}`} x={left + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-micro-font-size)">
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -231,7 +231,7 @@ export function LineChart(props: CanvasChartProps = {}) {
           )),
         )}
         {labels.map((label, index) => (
-          <text key={`label-${index}`} x={xFor(index)} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
+          <text key={`label-${index}`} x={xFor(index)} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-micro-font-size)">
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -302,10 +302,10 @@ export function PieChart(props: CanvasChartProps = {}) {
         {slices.slice(0, 6).map((item, index) => (
           <g key={`label-${index}`} transform={`translate(225 ${52 + index * 23})`}>
             <rect x={0} y={-8} width={9} height={9} rx={2} fill={item.color} />
-            <text x={16} y={0} fill="var(--bf-appearance-token-color-text-secondary)" fontSize={11}>
+            <text x={16} y={0} fill="var(--bf-appearance-token-color-text-secondary)" fontSize="var(--bf-type-meta-font-size)">
               {String(item.label).slice(0, 20)}
             </text>
-            <text x={118} y={0} fill="var(--bf-appearance-token-color-text-muted)" fontSize={11} textAnchor="end">
+            <text x={118} y={0} fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-meta-font-size)" textAnchor="end">
               {Math.round((item.value / total) * 100)}%
             </text>
           </g>

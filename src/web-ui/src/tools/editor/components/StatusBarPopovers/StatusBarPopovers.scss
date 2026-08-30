@@ -15,8 +15,8 @@
    z-index: $popover-z;
    min-width: 200px;
    max-width: 320px;
-   font-size: 12px;
-   font-family: $font-family-sans;
+   font-size: var(--bf-font-size-xs);
+   font-family: var(--bf-font-family-sans);
    color: var(--bf-appearance-token-color-text-primary);
    transform: translateY(-100%);
    animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
@@ -32,68 +32,19 @@
     border-radius: 4px;
 
     input {
-      font-size: 12px;
-      font-family: $font-family-mono;
+      font-size: var(--bf-font-size-xs);
+      font-family: var(--bf-font-family-mono);
     }
    }
 
    &__list {
      max-height: 280px;
-     padding: 4px 0;
-   }
-
-   &__item {
-    display: flex;
-     align-items: center;
-    justify-content: flex-start;
-    width: 100%;
-    height: auto;
-    min-height: 30px;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-     padding: 6px 12px;
-     cursor: pointer;
-     white-space: nowrap;
-     transition: background 0.1s ease;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--bf-appearance-token-color-text-primary);
-
-     &:hover {
-       background: var(--bf-appearance-token-color-overlay-white-08);
-     }
-
-    &:focus-visible {
-      outline: none;
-      background: var(--bf-appearance-token-color-overlay-white-12);
-    }
-
-     &--active {
-       background: var(--bf-appearance-token-color-overlay-white-12);
-       color: var(--bf-appearance-token-color-accent-400);
-     }
-   }
-
-   &__item-icon {
-     display: inline-flex;
-     align-items: center;
-     justify-content: center;
-     width: 18px;
-     height: 18px;
-     margin-right: 8px;
-     flex-shrink: 0;
-     color: var(--bf-appearance-token-color-text-muted);
-     opacity: 0.9;
-   }
-
-   .status-bar-popover__item--active &__item-icon {
-     color: var(--bf-appearance-token-color-accent-400);
+     padding: var(--bf-overlay-menu-surface-padding);
    }
 
    &__hint {
      padding: 6px 12px;
-     font-size: 11px;
+     font-size: var(--bf-font-size-meta);
      color: var(--bf-appearance-token-color-text-muted);
      border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
    }

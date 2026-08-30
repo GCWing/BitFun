@@ -38,7 +38,7 @@ export const selectMeta = {
     "control.select.indicatorSize",
     "control.select.radius",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
   ],
 } as const satisfies ComponentMeta;

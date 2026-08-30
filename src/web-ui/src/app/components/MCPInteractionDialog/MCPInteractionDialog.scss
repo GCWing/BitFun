@@ -10,7 +10,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
@@ -31,7 +31,7 @@
 }
 
 .mcp-interaction-dialog__label {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
@@ -42,8 +42,8 @@
   background: var(--bf-appearance-token-color-bg-tertiary);
   border: 1px solid var(--bf-appearance-token-border-base);
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 180px;
@@ -61,9 +61,9 @@
   background: var(--bf-appearance-token-color-bg-secondary);
   border: 1px solid var(--bf-appearance-token-border-base);
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
   resize: vertical;
 }
 

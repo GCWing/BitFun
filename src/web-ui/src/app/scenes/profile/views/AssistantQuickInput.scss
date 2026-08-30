@@ -50,9 +50,9 @@
       border-radius: #{$size-radius-xl} #{$size-radius-xl} 0 0;
       background: transparent !important;
       color: var(--bf-appearance-token-color-text-primary);
-      font-family: $font-family-sans;
-      font-size: var(--bf-appearance-token-font-size-base);
-      line-height: $line-height-relaxed;
+      font-family: var(--bf-font-family-sans);
+      font-size: var(--bf-font-size-base);
+      line-height: var(--bf-line-height-relaxed);
       resize: none;
       box-sizing: border-box;
       overflow-y: auto;
@@ -101,7 +101,7 @@
   }
 
   &__hint {
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
     user-select: none;

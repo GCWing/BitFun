@@ -454,10 +454,10 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     const oneOff = document.querySelector<HTMLButtonElement>(
       '[data-testid="chat-input-permission-next-turn-auto"]',
     );
-    expect(oneOff?.textContent).toBe('chatInput.permissionMode.activeTurnOnlyShort');
     expect(oneOff?.getAttribute('aria-label')).toBe(
       'chatInput.permissionMode.activeTurnOnly',
     );
+    expect(oneOff?.getAttribute('role')).toBe('menuitemcheckbox');
 
     await act(async () => {
       oneOff?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

@@ -27,7 +27,7 @@ export const actionItemMeta = {
     "color.status.danger.surface",
     "control.height.sm",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
     "font.weight.semibold",
     "radius.base",

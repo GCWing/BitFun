@@ -1,8 +1,8 @@
-import { Combobox, type ComboboxOption } from '@bitfun/ui';
-import { Button, Card, Icon, IconButton, Input, Modal, NumberInput, SearchField, Select, Switch, Textarea, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Card, Icon, IconButton, Input, Modal, NumberInput, SearchField, Select, Switch, Textarea, Tooltip, ScrollArea, type ComboboxOption } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Wifi, Loader, RefreshCw, AlertTriangle, EyeOff, ChevronUp, Brain, FolderOpen } from 'lucide-react';
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -2150,15 +2150,15 @@ const ModelSettingsPage: React.FC = () => {
       const selectedOptions = Array.isArray(option) ? option : option ? [option] : [];
 
       if (selectedOptions.length === 0) {
-        return <span className="select__placeholder">{t('providerSelection.selectModel')}</span>;
+        return <span>{t('providerSelection.selectModel')}</span>;
       }
       const summaryText = selectedOptions
         .map(item => String(item.label))
         .join(', ');
 
       return (
-        <span className="select__value bitfun-model-settings__model-picker-value">
-          <span className="select__value-label bitfun-model-settings__model-picker-value-text">
+        <span className="bitfun-model-settings__model-picker-value">
+          <span className="bitfun-model-settings__model-picker-value-text">
             {summaryText}
           </span>
         </span>
@@ -2318,14 +2318,14 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="bitfun-model-settings__selected-model-grid">
                     <div className="bitfun-model-settings__selected-model-field">
                       <span>{t('category.label')}</span>
-                      <Combobox
+                      <LocalizedCombobox
                         value={draft.category}
-                        onChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
+                        onValueChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
                         options={categoryOptions}
-                        size="small"
+                        size="sm"
                         className="bitfun-model-settings__selected-model-category-select"
                         dropdownClassName="bitfun-model-settings__selected-model-category-dropdown"
-                        dropdownMatchTriggerWidth={false}
+                        matchTriggerWidth={false}
                         renderValue={(option) => {
                           if (!option || Array.isArray(option)) {
                             return null;
@@ -2334,8 +2334,8 @@ const ModelSettingsPage: React.FC = () => {
                           const compactLabel = categoryCompactLabels[option.value as ModelCategory] ?? option.label;
 
                           return (
-                            <span className="select__value">
-                              <span className="select__value-label">{compactLabel}</span>
+                            <span>
+                              <span>{compactLabel}</span>
                             </span>
                           );
                         }}
@@ -2525,9 +2525,9 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
                   <div className="bitfun-model-settings__control-stack">
                     {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
-                      <Combobox
+                      <LocalizedCombobox
                         value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
-                        onChange={(value) => {
+                        onValueChange={(value) => {
                           const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
                           const newProvider = selectedOption?.format || editingConfig.provider || 'openai';
                           resetRemoteModelDiscovery();
@@ -2540,7 +2540,7 @@ const ModelSettingsPage: React.FC = () => {
                         }}
                         placeholder={t('form.baseUrl')}
                         options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} � ${opt.note}` }))}
-                        size="small"
+                        size="sm"
                       />
                     )}
                     <Input
@@ -2593,12 +2593,12 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <Combobox
+                      <LocalizedCombobox
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
                         value={selectedModelValues}
-                        onChange={(value) => {
+                        onValueChange={(value) => {
                           const nextModelNames = Array.isArray(value) ? value.map(item => String(item)) : [String(value)];
                           syncSelectedModelDrafts(nextModelNames, editingConfig);
                         }}
@@ -2611,11 +2611,9 @@ const ModelSettingsPage: React.FC = () => {
                         searchPlaceholder={t('providerSelection.inputModelName')}
                         allowCustomValue
                         customValueHint={t('providerSelection.addSearchedModel')}
-                        size="small"
+                        size="sm"
                         onOpenChange={handleModelSelectionOpenChange}
                         renderValue={renderModelPickerValue}
-                        indicator={selectedModelValues.length > 0 ? <Icon name="plus" size="sm" /> : undefined}
-                        className={selectedModelValues.length > 0 ? 'bitfun-model-settings__model-picker-select bitfun-model-settings__model-picker-select--has-value' : 'bitfun-model-settings__model-picker-select'}
                       />
                     </div>
                     <div className="bitfun-model-settings__manual-model-entry">
@@ -2712,12 +2710,12 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-model-settings__control-stack">
                     <div className="bitfun-model-settings__model-picker-row">
-                      <Combobox
+                      <LocalizedCombobox
                         data-testid="settings-model-select"
                         triggerTestId="settings-model-select-btn"
                         dropdownTestId="settings-model-select-menu"
                         value={editingConfig.id ? (selectedModelValues[0] || '') : selectedModelValues}
-                        onChange={(value) => {
+                        onValueChange={(value) => {
                           const nextModelNames = Array.isArray(value)
                             ? value.map(item => String(item))
                             : [String(value)];
@@ -2732,7 +2730,7 @@ const ModelSettingsPage: React.FC = () => {
                         searchPlaceholder={t('providerSelection.inputModelName')}
                         allowCustomValue
                         customValueHint={t('providerSelection.addSearchedModel')}
-                        size="small"
+                        size="sm"
                         onOpenChange={handleModelSelectionOpenChange}
                       />
                     </div>
@@ -2948,7 +2946,7 @@ const ModelSettingsPage: React.FC = () => {
                   className="bitfun-model-settings__custom-request-body-row"
                 >
                   <div className="bitfun-model-settings__row-control--stack">
-                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--bf-appearance-token-font-family-mono)', fontSize: '13px' }} />
+                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--bf-type-code-md-font-family)', fontSize: 'var(--bf-type-code-md-font-size)' }} />
                     {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
                       try { JSON.parse(editingConfig.custom_request_body); return <small className="bitfun-model-settings__json-status bitfun-model-settings__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
                       catch { return <small className="bitfun-model-settings__json-status bitfun-model-settings__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }

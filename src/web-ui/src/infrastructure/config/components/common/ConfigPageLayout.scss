@@ -11,7 +11,7 @@
   height: 100%;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--bf-appearance-token-font-family-sans);
+  font-family:var(--bf-font-family-sans);
   /* Shared layout contract for settings pages in wide scenes. */
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
@@ -88,18 +88,18 @@
 
 .bitfun-config-page-section__title {
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-lg);
-  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  font-size: var(--bf-font-size-lg);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.25;
+  line-height: var(--bf-line-height-dense);
 }
 
 .bitfun-config-page-section__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.35;
+  line-height: var(--bf-line-height-compact);
   text-wrap: pretty;
 }
 
@@ -186,18 +186,18 @@
 
 .bitfun-config-page-row__label {
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.25;
+  line-height: var(--bf-line-height-dense);
 }
 
 .bitfun-config-page-row__description {
   margin: var(--bf-appearance-token-size-gap-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-secondary);
-  line-height: 1.3;
+  line-height: var(--bf-line-height-snug);
   text-wrap: pretty;
 }
 

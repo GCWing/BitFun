@@ -1,0 +1,35 @@
+import type { ComponentMeta } from "../../registry.types";
+
+export const listboxMeta = {
+  category: "form",
+  description: "A scrollable single- or multi-select option surface with grouped, descriptive rows.",
+  maturity: "stable",
+  name: "Listbox",
+  props: [
+    { name: "children", type: "ReactNode" },
+    { defaultValue: "roving", name: "focusMode", type: "roving | virtual" },
+    { defaultValue: "false", name: "autoFocusOption", type: "boolean" },
+    { defaultValue: "false", name: "multiple", type: "boolean" },
+    { defaultValue: "auto", name: "scrollbarVisibility", type: "auto | always | hidden" },
+  ],
+  states: ["default", "active-option", "selected-option", "disabled-option", "multiple"],
+  tokens: [
+    "color.action.neutral.content",
+    "color.action.neutral.contentDisabled",
+    "color.action.neutral.surface",
+    "color.action.neutral.surfacePressed",
+    "color.content.muted",
+    "color.focus.ring",
+    "overlay.menu.maxBlockSize",
+    "overlay.menu.scrollbarGap",
+    "overlay.menu.sectionGap",
+    "overlay.menu.headingHeight",
+    "overlay.menu.headingPaddingInline",
+    "overlay.menu.itemHeight",
+    "overlay.menu.itemPaddingInline",
+    "overlay.menu.itemGap",
+    "overlay.menu.itemRadius",
+    "overlay.menu.itemIconSize",
+    "type.meta.fontSize",
+  ],
+} as const satisfies ComponentMeta;

@@ -16,8 +16,8 @@
 
     h2 {
       margin: 0;
-      font-size: 1.5rem;
-      font-weight: 600;
+      font-size: var(--bf-font-size-4xl);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     .header-actions {
@@ -41,7 +41,7 @@
       border: 1px solid var(--bf-appearance-token-border-base);
       border-radius: 6px;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: 0.9rem;
+      font-size: var(--bf-font-size-base);
       transition:
         border-color 150ms ease,
         box-shadow 150ms ease,
@@ -80,7 +80,7 @@
         color: var(--bf-appearance-token-color-text-secondary);
 
         .empty-icon {
-          font-size: 3rem;
+          font-size: var(--bf-font-size-7xl);
           margin-bottom: 1rem;
           opacity: 0.5;
         }
@@ -114,8 +114,8 @@
         }
 
         .resource-icon {
-          font-size: 1.5rem;
-          line-height: 1;
+          font-size: var(--bf-font-size-4xl);
+          line-height: var(--bf-line-height-none);
           flex-shrink: 0;
         }
 
@@ -124,7 +124,7 @@
           min-width: 0;
 
           .resource-name {
-            font-weight: 500;
+            font-weight: var(--bf-font-weight-medium);
             margin-bottom: 0.25rem;
             white-space: nowrap;
             overflow: hidden;
@@ -132,7 +132,7 @@
           }
 
           .resource-description {
-            font-size: 0.85rem;
+            font-size: var(--bf-font-size-base);
             color: var(--bf-appearance-token-color-text-secondary);
             margin-bottom: 0.25rem;
             display: -webkit-box;
@@ -142,9 +142,9 @@
           }
 
           .resource-uri {
-            font-size: 0.75rem;
+            font-size: var(--bf-font-size-xs);
             color: var(--bf-appearance-token-color-text-muted);
-            font-family: monospace;
+            font-family: var(--bf-font-family-mono);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -170,13 +170,13 @@
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          font-weight: 500;
+          font-weight: var(--bf-font-weight-medium);
           min-width: 0;
           flex: 1;
 
           .viewer-icon {
-            font-size: 1.5rem;
-            line-height: 1;
+            font-size: var(--bf-font-size-4xl);
+            line-height: var(--bf-line-height-none);
             flex-shrink: 0;
           }
 
@@ -188,12 +188,12 @@
         }
 
         .viewer-mime-type {
-          font-size: 0.8rem;
+          font-size: var(--bf-font-size-sm);
           color: var(--bf-appearance-token-color-text-muted);
           background: var(--bf-appearance-token-color-bg-tertiary);
           padding: 0.25rem 0.5rem;
           border-radius: 4px;
-          font-family: monospace;
+          font-family: var(--bf-font-family-mono);
           flex-shrink: 0;
           margin-left: 1rem;
         }
@@ -217,9 +217,9 @@
           background: none;
           border: none;
           color: var(--bf-appearance-token-color-text-primary);
-          font-family: 'Courier New', Consolas, monospace;
-          font-size: 0.9rem;
-          line-height: 1.6;
+          font-family: var(--bf-font-family-mono);
+          font-size: var(--bf-font-size-base);
+          line-height: var(--bf-line-height-relaxed);
           white-space: pre-wrap;
           word-wrap: break-word;
         }
@@ -234,7 +234,7 @@
         color: var(--bf-appearance-token-color-text-secondary);
 
         .empty-icon {
-          font-size: 3rem;
+          font-size: var(--bf-font-size-7xl);
           margin-bottom: 1rem;
           opacity: 0.5;
         }

@@ -9,7 +9,6 @@ import {
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
-  createStandardTypography,
   overlayBlack,
   overlayWhite,
   rgbFromHex,
@@ -132,8 +131,6 @@ export const bitfunMidnightPalette: AppearancePalette = {
     easing: createStandardEasing(),
   },
 
-
-  typography: createStandardTypography(),
 
 
   components: {

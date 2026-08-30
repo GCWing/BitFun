@@ -14,6 +14,9 @@
  *     programmatically cancel an active session.
  */
 import { INSPECTOR_OVERLAY_THEME } from '@/shared/inspector/inspectorOverlayTheme';
+import { tokens as designTokens } from '@bitfun/design-tokens';
+
+const INSPECTOR_MONO_FONT = String(designTokens['font.family.mono']).split("'").join("\\'");
 
 const INSPECTOR_SCRIPT_BODY = /* js */ `
 (function () {
@@ -49,15 +52,15 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     'color:${INSPECTOR_OVERLAY_THEME.tooltipText}',
     'padding:3px 8px',
     'border-radius:4px',
-    'font-size:12px',
-    'font-family:ui-monospace,SFMono-Regular,Menlo,monospace',
+    'font-size:${designTokens['font.size.xs']}',
+    'font-family:${INSPECTOR_MONO_FONT}',
     'z-index:2147483647',
     'pointer-events:none',
     'display:none',
     'max-width:480px',
     'white-space:nowrap',
     'box-shadow:0 2px 8px ${INSPECTOR_OVERLAY_THEME.tooltipShadow}',
-    'line-height:1.6',
+    'line-height:${designTokens['lineHeight.relaxed']}',
   ].join(';');
 
   document.documentElement.appendChild(overlay);

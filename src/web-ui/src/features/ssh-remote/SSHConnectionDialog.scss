@@ -10,7 +10,7 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  font-family: inherit;
+  font-family:var(--bf-font-family-sans);
 
   &__error-banner {
     flex-shrink: 0;
@@ -45,13 +45,13 @@
   }
 
   &__section-title {
-    font-size: 11px;
-    font-weight: 600;
-    font-family: inherit;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
+    font-family:var(--bf-font-family-sans);
     color: var(--bf-appearance-token-color-text-muted);
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     white-space: nowrap;
   }
 
@@ -121,25 +121,25 @@
   }
 
   &__saved-name {
-    font-size: 13px;
-    font-weight: 500;
-    font-family: inherit;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    font-family:var(--bf-font-family-sans);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: var(--bf-line-height-snug);
   }
 
   &__saved-detail {
-    font-size: 12px;
-    font-weight: 400;
-    font-family: inherit;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-regular);
+    font-family:var(--bf-font-family-sans);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: var(--bf-line-height-snug);
     font-variant-numeric: tabular-nums;
   }
 
@@ -157,7 +157,7 @@
     background: var(--bf-appearance-token-element-bg-subtle);
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 4px;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
   }
@@ -191,13 +191,13 @@
     }
 
     span {
-      font-size: 11px;
-      font-weight: 500;
-      font-family: inherit;
+      font-size: var(--bf-font-size-meta);
+      font-weight: var(--bf-font-weight-medium);
+      font-family:var(--bf-font-family-sans);
       color: var(--bf-appearance-token-color-text-muted);
       white-space: nowrap;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: var(--bf-letter-spacing-wider);
     }
   }
 
@@ -294,8 +294,8 @@
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     font: inherit;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     text-align: start;
     cursor: pointer;
     transition:
@@ -356,7 +356,7 @@
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-secondary);
 
     > span:last-child:not(:nth-child(2)) {
@@ -369,8 +369,8 @@
 
   &__hint {
     margin-top: 5px;
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
     color: var(--bf-appearance-token-color-text-muted);
 
     &--warning {
@@ -385,9 +385,9 @@
 
   &__label {
     display: block;
-    font-size: 12px;
-    font-weight: 500;
-    font-family: inherit;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    font-family:var(--bf-font-family-sans);
     color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: 6px;
   }
@@ -486,9 +486,4 @@
 /** SSH remote workspace dialog only: above nav fixed popovers (~10k) so the dimmed backdrop captures clicks. */
 .ssh-connection-dialog__modal-overlay {
   z-index: 20000;
-}
-
-/** Portalled Select menus must remain above the dialog's raised overlay. */
-.select__dropdown.ssh-connection-dialog__select-dropdown {
-  z-index: 20001;
 }

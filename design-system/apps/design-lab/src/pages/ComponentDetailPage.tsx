@@ -54,6 +54,8 @@ import {
   iconNames,
   Input,
   KeyHint,
+  Listbox,
+  ListboxOption,
   Menu,
   MenuItem,
   MenuSection,
@@ -144,6 +146,7 @@ const iconTones = ["inherit", "primary", "secondary", "muted", "disabled", "info
 
 const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   active: "detail.option.active",
+  "active-option": "detail.option.active-option",
   always: "detail.option.always",
   asking: "detail.option.asking",
   auto: "detail.option.auto",
@@ -175,7 +178,6 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   lg: "detail.option.lg",
   loading: "detail.option.loading",
   multiple: "detail.option.multiple",
-  searching: "detail.option.searching",
   custom: "detail.option.custom",
   empty: "detail.option.empty",
   pending: "detail.option.pending",
@@ -185,6 +187,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   none: "detail.option.none",
   off: "detail.option.off",
   on: "detail.option.on",
+  open: "detail.option.open",
   outline: "detail.option.outline",
   primary: "detail.option.primary",
   quiet: "detail.option.quiet",
@@ -193,12 +196,14 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   confirmation: "detail.option.confirmation",
   completed: "detail.option.completed",
   selected: "detail.option.selected",
+  "selected-option": "detail.option.selected-option",
   sm: "detail.option.sm",
   start: "detail.option.start",
   surface: "detail.option.surface",
   subtle: "detail.option.subtle",
   submitting: "detail.option.submitting",
   success: "detail.option.success",
+  searching: "detail.option.searching",
   text: "detail.option.text",
   media: "detail.option.media",
   unselected: "detail.option.unselected",
@@ -355,6 +360,9 @@ export function ComponentDetailPage({
         return ["default", "hover", "active", "disabled"] as const;
       case "Composer":
         return ["default", "focus-within", "with-context", "invalid", "disabled"] as const;
+      case "Combobox":
+      case "Listbox":
+        return component.states;
       case "ConfirmDialog":
         return ["info", "warning", "error", "success", "pending"] as const;
       case "Card":
@@ -388,8 +396,6 @@ export function ComponentDetailPage({
         return ["default", "with-center", "overflow"] as const;
       case "Tooltip":
         return ["top", "bottom", "left", "right"] as const;
-      case "Combobox":
-        return component.states;
       case "Switch":
         return ["off", "on", "focus-visible", "disabled"] as const;
       default:
@@ -407,7 +413,6 @@ export function ComponentDetailPage({
     if (component.name === "Checkbox" || component.name === "Radio") return `import { ${component.name} } from "@bitfun/ui";\n\n<${component.name} label="${t("components.preview.notifications")}" defaultChecked />`;
     if (component.name === "NumberInput") return 'import { useState } from "react";\nimport { NumberInput } from "@bitfun/ui";\n\nfunction Example() {\n  const [value, setValue] = useState(8);\n  return <NumberInput value={value} onChange={setValue} />;\n}';
     if (component.name === "Empty") return `import { Empty } from "@bitfun/ui";\n\n<Empty title="${t("components.preview.cardTitle")}" description="${t("components.preview.cardDescription")}" />`;
-    if (component.name === "Combobox") return 'import { Combobox } from "@bitfun/ui";\n\n<Combobox label="Models" multiple searchable allowCustomValue options={[{ label: "OpenBitFun", value: "openbitfun" }]} />';
     if (flowChatPreview) {
       return flowChatPreview.codeSample(t);
     }
@@ -510,6 +515,12 @@ export function ComponentDetailPage({
           ? " invalid"
           : "";
       return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
+    }
+    if (component.name === "Combobox") {
+      return `import { Combobox } from "@bitfun/ui";\n\n<Combobox\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  searchable\n  triggerAriaLabel="Mode"\n  value={mode}\n/>`;
+    }
+    if (component.name === "Listbox") {
+      return `import { Listbox, ListboxOption } from "@bitfun/ui";\n\n<Listbox aria-label="Mode">\n  <ListboxOption selected value="ask">Ask</ListboxOption>\n  <ListboxOption value="plan">Plan</ListboxOption>\n  <ListboxOption disabled value="agent">Agent</ListboxOption>\n</Listbox>`;
     }
     if (component.name === "Select") {
       return `import { Icon, Select } from "@bitfun/ui";\n\n<Select\n  aria-label="Mode"\n  leading={<Icon name="circle" />}\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value="${selectValue}"\n/>`;
@@ -880,8 +891,52 @@ export function ComponentDetailPage({
     }
 
     if (component.name === "Combobox") {
-      return <Combobox key={state} label={t("components.preview.modalSelectModels")} multiple={state === "multiple"} defaultValue={state === "multiple" ? ["glm-5.2", "openbitfun"] : undefined} defaultOpen={state === "open" || state === "searching"} defaultSearchValue={state === "searching" ? "glm" : ""} allowCustomValue={state === "custom"} disabled={state === "disabled"} error={state === "invalid"} loading={state === "loading"} options={state === "empty" || state === "loading" ? [] : [{ value: "glm-5.2", label: "GLM 5.2", group: "API" }, { value: "openbitfun", label: "OpenBitFun", group: "API" }]} />;
+      const multiple = state === "multiple";
+      return (
+        <Combobox
+          defaultOpen={state === "open" || state === "searching"}
+          defaultSearchValue={state === "searching" ? "Ask" : ""}
+          disabled={state === "disabled"}
+          invalid={state === "invalid"}
+          key={state}
+          loading={state === "loading"}
+          multiple={multiple}
+          onValueChange={(value) => {
+            if (!Array.isArray(value)) setSelectValue(String(value));
+          }}
+          options={state === "empty" || state === "loading" ? [] : [
+            { label: "Ask", value: "ask" },
+            { label: "Plan", value: "plan" },
+            { disabled: true, label: "Agent", value: "agent" },
+          ]}
+          allowCustomValue={state === "custom"}
+          popoverMode="inline"
+          searchable={state === "searching"}
+          triggerAriaLabel="Mode"
+          value={multiple ? ["ask", "plan"] : selectValue}
+        />
+      );
     }
+
+    if (component.name === "Listbox") {
+      const multiple = state === "multiple";
+      return (
+        <Listbox aria-label="Mode" multiple={multiple}>
+          <ListboxOption
+            active={state === "active-option"}
+            description="Default assistant behavior"
+            disabled={state === "disabled-option"}
+            selected={state === "selected-option" || multiple}
+            value="ask"
+          >
+            Ask
+          </ListboxOption>
+          <ListboxOption selected={multiple} value="plan">Plan</ListboxOption>
+          <ListboxOption disabled value="agent">Agent</ListboxOption>
+        </Listbox>
+      );
+    }
+
     if (component.name === "Select") {
       return (
         <Select
@@ -1794,13 +1849,15 @@ export function ComponentDetailPage({
                     </Fragment>
                   ))}
                 </div>
-              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" || component.name === "Tooltip" ? (
+              ) : component.name === "ActionCard" || component.name === "ActionItem" || component.name === "Combobox" || component.name === "Field" || component.name === "FieldGroup" || component.name === "Input" || component.name === "KeyHint" || component.name === "Listbox" || component.name === "Menu" || component.name === "NavigationPanel" || component.name === "PageHeader" || component.name === "ScrollArea" || component.name === "SearchField" || component.name === "SegmentedControl" || component.name === "Select" || component.name === "StatusPill" || component.name === "Tooltip" ? (
                 <div
                   className="component-preview-matrix"
                   data-component={component.name === "ActionCard"
                     ? "action-card"
                     : component.name === "ActionItem"
                       ? "action-item"
+                    : component.name === "Combobox"
+                      ? "combobox"
                     : component.name === "Field"
                       ? "field"
                     : component.name === "StatusPill"
@@ -1815,6 +1872,8 @@ export function ComponentDetailPage({
                       ? "input"
                     : component.name === "KeyHint"
                       ? "key-hint"
+                    : component.name === "Listbox"
+                      ? "listbox"
                       : component.name === "PageHeader"
                         ? "page-header"
                       : component.name === "Menu"

@@ -23,8 +23,8 @@ type ValidationErrorReporter = (
 
 const ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-const REFERENCE_PATTERN = /^globals\.(colors|lengths|numbers|durations|easings|fontFamilies|shadows)\.[a-z][a-zA-Z0-9.-]*$/;
-type AppearanceTokenGroup = 'colors' | 'lengths' | 'numbers' | 'durations' | 'easings' | 'fontFamilies' | 'shadows';
+const REFERENCE_PATTERN = /^globals\.(colors|lengths|numbers|durations|easings|shadows)\.[a-z][a-zA-Z0-9.-]*$/;
+type AppearanceTokenGroup = 'colors' | 'lengths' | 'numbers' | 'durations' | 'easings' | 'shadows';
 const FORBIDDEN_TEXT_PATTERN = /(?:https?:\/\/|javascript:|data:|url\s*\(|<\/?[a-z]|[{};])/i;
 const VISUAL_ROLES = new Set([
   'workspace', 'continuous-surface', 'panel', 'toolbar', 'card', 'control',
@@ -42,8 +42,7 @@ const STYLE_PROPERTIES = new Set<AppearanceStyleProperty>([
   'borderStyle', 'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
   'borderBottomRightRadius', 'borderBottomLeftRadius', 'boxSizing',
   'outlineColor', 'outlineWidth', 'outlineOffset', 'outlineStyle',
-  'boxShadow', 'opacity', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight',
-  'fontStyle', 'fontVariantNumeric', 'letterSpacing', 'textAlign', 'verticalAlign',
+  'boxShadow', 'opacity', 'textAlign', 'verticalAlign',
   'textIndent', 'textDecoration',
   'textTransform', 'textOverflow', 'whiteSpace', 'wordBreak', 'overflowWrap', 'display',
   'flexDirection', 'flexWrap', 'flexGrow', 'flexShrink', 'flexBasis', 'alignItems',
@@ -67,10 +66,10 @@ const COLOR_PROPERTIES = new Set<AppearanceStyleProperty>([
 ]);
 const LENGTH_PROPERTIES = new Set<AppearanceStyleProperty>([
   'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth',
-  'borderLeftWidth', 'borderRadius', 'outlineWidth', 'outlineOffset', 'fontSize',
+  'borderLeftWidth', 'borderRadius', 'outlineWidth', 'outlineOffset',
   'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius',
   'borderBottomLeftRadius',
-  'letterSpacing', 'textIndent', 'gap', 'rowGap', 'columnGap', 'width', 'minWidth', 'maxWidth',
+  'textIndent', 'gap', 'rowGap', 'columnGap', 'width', 'minWidth', 'maxWidth',
   'height', 'minHeight', 'maxHeight', 'padding', 'paddingBlock', 'paddingInline',
   'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'margin',
   'marginBlock', 'marginInline', 'marginTop', 'marginRight', 'marginBottom',
@@ -78,7 +77,7 @@ const LENGTH_PROPERTIES = new Set<AppearanceStyleProperty>([
   'left', 'backdropBlur',
 ]);
 const NUMBER_PROPERTIES = new Set<AppearanceStyleProperty>([
-  'opacity', 'fontWeight', 'lineHeight', 'flexGrow', 'flexShrink', 'gridColumnSpan',
+  'opacity', 'flexGrow', 'flexShrink', 'gridColumnSpan',
   'gridRowSpan', 'zIndex', 'order',
 ]);
 
@@ -89,8 +88,6 @@ const ENUM_VALUES: Partial<Record<AppearanceStyleProperty, ReadonlySet<string>>>
   backgroundPosition: new Set(['center', 'top', 'right', 'bottom', 'left']),
   backgroundRepeat: new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat']),
   boxSizing: new Set(['content-box', 'border-box']),
-  fontStyle: new Set(['normal', 'italic']),
-  fontVariantNumeric: new Set(['normal', 'tabular-nums']),
   textAlign: new Set(['left', 'center', 'right', 'start', 'end']),
   verticalAlign: new Set(['baseline', 'sub', 'super', 'text-top', 'text-bottom', 'middle', 'top', 'bottom']),
   textDecoration: new Set(['none', 'underline', 'line-through']),
@@ -334,7 +331,6 @@ export class AppearancePackageValidator {
       numbers: this.validateNumber.bind(this),
       durations: this.validateDuration.bind(this),
       easings: this.validateEasing.bind(this),
-      fontFamilies: this.validateFontFamily.bind(this),
       shadows: this.validateShadow.bind(this),
     };
     Object.entries(value).forEach(([group, entries]) => {
@@ -653,8 +649,6 @@ export class AppearancePackageValidator {
         } else {
           propertyValue.forEach((shadow, index) => this.validateShadow(shadow, `${propertyPath}.${index}`, error));
         }
-      } else if (property === 'fontFamily') {
-        this.validateFontFamily(propertyValue, propertyPath, error);
       } else if (property === 'transition') {
         this.validateTransition(propertyValue, propertyPath, error);
       } else if (property === 'transform') {
@@ -849,19 +843,6 @@ export class AppearancePackageValidator {
     if (this.validateReference(value, 'easings', path, error)) return;
     if (isRecord(value) && value.kind === 'easing' && ['linear', 'standard', 'decelerate', 'accelerate'].includes(String(value.value))) return;
     error(path, 'INVALID_EASING', 'Easing must be a supported structured easing value');
-  }
-
-  private validateFontFamily(value: unknown, path: string, error: (path: string, code: string, message: string) => void): void {
-    if (this.validateReference(value, 'fontFamilies', path, error)) return;
-    if (!isRecord(value) || value.kind !== 'fontFamily' || !Array.isArray(value.families) || value.families.length === 0 || value.families.length > 8) {
-      error(path, 'INVALID_FONT_FAMILY', 'Font family must contain between 1 and 8 local family names');
-      return;
-    }
-    value.families.forEach((family, index) => {
-      if (typeof family !== 'string' || !/^[\w .-]{1,80}$/.test(family) || FORBIDDEN_TEXT_PATTERN.test(family)) {
-        error(`${path}.families.${index}`, 'INVALID_FONT_FAMILY_NAME', 'Invalid local font family name');
-      }
-    });
   }
 
   private validateShadow(value: unknown, path: string, error: (path: string, code: string, message: string) => void): void {

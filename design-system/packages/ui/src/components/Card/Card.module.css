@@ -123,7 +123,7 @@
     min-inline-size: 0;
     overflow-wrap: anywhere;
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
+    font-family:var(--bf-font-family-sans);
     font-size: var(--bf-font-size-lg);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
@@ -133,8 +133,8 @@
   .body {
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-base);
   }

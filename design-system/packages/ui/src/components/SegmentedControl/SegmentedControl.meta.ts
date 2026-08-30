@@ -31,7 +31,7 @@ export const segmentedControlMeta = {
     "control.segmentedControl.segmentGap",
     "control.segmentedControl.segmentRadius",
     "control.segmentedControl.iconSize",
-    "control.segmentedControl.fontSize",
+    "type.meta.fontSize",
     "font.family.control",
     "font.weight.regular",
     "font.weight.medium",

@@ -14,7 +14,7 @@
     .language-selector__loading {
       margin-left: 8px;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
     }
   }
   
@@ -32,8 +32,8 @@
   
   &--icon-only {
     .language-selector__code {
-      font-size: 11px;
-      font-weight: 500;
+      font-size: var(--bf-font-size-meta);
+      font-weight: var(--bf-font-weight-medium);
     }
     
     .language-selector__dropdown {
@@ -67,13 +67,13 @@
 
       &--active {
         color: var(--bf-appearance-token-color-accent-500);
-        font-weight: 500;
+        font-weight: var(--bf-font-weight-medium);
       }
     }
     
     .language-selector__check {
       color: var(--bf-appearance-token-color-accent-500);
-      font-size: 14px;
+      font-size: var(--bf-font-size-base);
     }
   }
 }

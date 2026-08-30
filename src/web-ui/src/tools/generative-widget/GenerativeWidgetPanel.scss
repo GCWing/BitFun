@@ -16,7 +16,7 @@
 
 .bitfun-generative-widget-panel__empty-copy {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
 }
 
 .bitfun-generative-widget-panel__toolbar {
@@ -38,7 +38,7 @@
 }
 
 .bitfun-generative-widget-panel__save-state {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
@@ -86,8 +86,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
@@ -105,7 +105,10 @@
   padding: 14px 16px;
   background: transparent;
   color: var(--bf-appearance-token-color-text-primary);
-  font: 13px/1.6 var(--bf-appearance-token-font-family-mono);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-generative-widget-panel__error {
@@ -114,5 +117,5 @@
   border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 50%, transparent);
   background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
   color: var(--bf-appearance-token-color-error);
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
 }

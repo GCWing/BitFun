@@ -9,8 +9,8 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 58%, transparent);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-  line-height: 1;
+  font-size: var(--bf-type-flow-support-font-size);
+  line-height: var(--bf-line-height-none);
   cursor: pointer;
   min-width: 0;
 

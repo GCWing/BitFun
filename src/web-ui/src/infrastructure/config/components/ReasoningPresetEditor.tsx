@@ -1,5 +1,4 @@
-import { Combobox } from '@bitfun/ui';
-import { Button, Icon, IconButton, Input, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -8,7 +7,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import type {
   ReasoningCatalogProjection,
   ReasoningConfig,
@@ -359,10 +358,10 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             <span className="bitfun-reasoning-preset-editor__primary-setting-label">
               {t('reasoningPresets.catalogSource')}
             </span>
-            <Combobox
+            <LocalizedCombobox
               value={catalog.source}
               disabled={disabled}
-              size="small"
+              size="sm"
               triggerAriaLabel={t('reasoningPresets.catalogSource')}
               options={catalogOptions}
               renderOption={(option) => (
@@ -373,7 +372,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                   </div>
                 </Tooltip>
               )}
-              onChange={(next) => {
+              onValueChange={(next) => {
                 const source = next as 'auto' | 'models_dev' | 'disabled';
                 const nextCatalog = source === 'models_dev'
                   ? {
@@ -459,10 +458,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     {showModelsDevSearchResults && createPortal(
                       <div
                         ref={modelsDevSearchPopoverRef}
-                        id={modelsDevSearchListboxId}
                         className="bitfun-reasoning-preset-editor__models-dev-search-results"
-                        role="listbox"
-                        aria-label={t('reasoningPresets.catalogSearchResults')}
                         data-bf-placement={modelsDevSearchLayout?.placement ?? 'bottom'}
                         style={{
                           top: `${modelsDevSearchLayout?.top ?? 0}px`,
@@ -473,28 +469,31 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           visibility: modelsDevSearchLayout ? 'visible' : 'hidden',
                         }}
                       >
-                        {modelsDevSearchResults.items.length > 0
-                          ? modelsDevSearchResults.items.map((result, index) => (
-                          <button
-                            type="button"
-                            id={`${modelsDevSearchListboxId}-${index}`}
-                            key={`${result.provider.id}/${result.model.id}`}
-                            className="bitfun-reasoning-preset-editor__models-dev-search-result"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onMouseEnter={() => setModelsDevSearchHighlight(index)}
-                            onClick={() => selectModelsDevSearchResult(result)}
-                            role="option"
-                            aria-selected={index === modelsDevSearchHighlight}
-                            data-highlighted={index === modelsDevSearchHighlight ? 'true' : undefined}
-                          >
-                            <strong>{result.model.display_name || result.model.id}</strong>
-                            <span>{result.provider.id} / {result.model.id}</span>
-                          </button>
-                        )) : (
-                          <div className="bitfun-reasoning-preset-editor__models-dev-search-empty">
-                            {t('reasoningPresets.catalogSearchEmpty')}
-                          </div>
-                        )}
+                        <Listbox
+                          aria-label={t('reasoningPresets.catalogSearchResults')}
+                          className="bitfun-reasoning-preset-editor__models-dev-search-list"
+                          focusMode="virtual"
+                          id={modelsDevSearchListboxId}
+                        >
+                          {modelsDevSearchResults.items.length > 0
+                            ? modelsDevSearchResults.items.map((result, index) => (
+                            <ListboxOption
+                              active={index === modelsDevSearchHighlight}
+                              description={`${result.provider.id} / ${result.model.id}`}
+                              id={`${modelsDevSearchListboxId}-${index}`}
+                              key={`${result.provider.id}/${result.model.id}`}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => selectModelsDevSearchResult(result)}
+                              value={`${result.provider.id}/${result.model.id}`}
+                            >
+                              {result.model.display_name || result.model.id}
+                            </ListboxOption>
+                          )) : (
+                            <ListboxEmpty>
+                              {t('reasoningPresets.catalogSearchEmpty')}
+                            </ListboxEmpty>
+                          )}
+                        </Listbox>
                         {modelsDevSearchResults.total > modelsDevSearchResults.items.length && (
                           <div className="bitfun-reasoning-preset-editor__models-dev-search-limit">
                             {t('reasoningPresets.catalogSearchLimit')}
@@ -512,8 +511,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogProvider')}</span>
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 triggerAriaLabel={t('reasoningPresets.catalogProvider')}
                 value={catalog.provider}
                 options={modelsDevProviderOptions}
@@ -523,7 +522,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 allowCustomValue
                 customValueHint={t('reasoningPresets.catalogProviderCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogProvider')}
-                onChange={(next) => {
+                onValueChange={(next) => {
                   const provider = String(next || '');
                   rebindCatalog(provider
                     ? { ...catalog, provider, model: provider === catalog.provider ? catalog.model : '' }
@@ -533,8 +532,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
             </div>
             <div className="bitfun-reasoning-preset-editor__binding-field">
               <span>{t('reasoningPresets.catalogModel')}</span>
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 triggerAriaLabel={t('reasoningPresets.catalogModel')}
                 value={catalog.model}
                 options={modelsDevModelOptions}
@@ -544,7 +543,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                 allowCustomValue
                 customValueHint={t('reasoningPresets.catalogModelCustomValueHint')}
                 searchPlaceholder={t('reasoningPresets.catalogModel')}
-                onChange={(next) => {
+                onValueChange={(next) => {
                   const model = String(next || '');
                   rebindCatalog(model
                     ? { ...catalog, model }
@@ -800,8 +799,8 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         />
                         {action.type === 'effort' && (
                           <div className="bitfun-reasoning-preset-editor__effort-control">
-                            <Combobox
-                              size="small"
+                            <LocalizedCombobox
+                              size="sm"
                               value={action.value}
                               disabled={disabled}
                               options={effortOptions}
@@ -810,7 +809,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                               customValueHint={t('reasoningPresets.effortCustomValueHint')}
                               searchPlaceholder={t('reasoningPresets.effortSearchPlaceholder')}
                               triggerAriaLabel={t('reasoningPresets.settingEffort')}
-                              onChange={(next) => updateAction(presetIndex, actionIndex, {
+                              onValueChange={(next) => updateAction(presetIndex, actionIndex, {
                                 type: 'effort',
                                 value: String(next),
                               })}

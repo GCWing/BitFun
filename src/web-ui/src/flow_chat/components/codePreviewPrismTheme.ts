@@ -4,25 +4,21 @@
 import type { CSSProperties } from 'react';
 import { buildSharedPrismStyle } from '@/shared/prism/prismTheme';
 
-/** Match `.markdown-renderer` code blocks. */
-export const CODE_PREVIEW_FONT_FAMILY =
-  'var(--bf-appearance-token-font-family-mono)';
-
 export function buildCodePreviewPrismStyle(isLight: boolean): Record<string, CSSProperties> {
   return buildSharedPrismStyle(isLight, {
     pre: {
       margin: 0,
       padding: 0,
-      fontSize: '12px',
-      lineHeight: '1.6',
-      fontFamily: CODE_PREVIEW_FONT_FAMILY,
-      fontWeight: 400,
+      fontSize: 'var(--bf-type-flow-code-font-size)',
+      lineHeight: 'var(--bf-type-flow-code-line-height)',
+      fontFamily: 'var(--bf-type-flow-code-font-family)',
+      fontWeight: 'var(--bf-type-flow-code-font-weight)',
     },
     code: {
-      fontSize: '12px',
-      lineHeight: '1.6',
-      fontFamily: CODE_PREVIEW_FONT_FAMILY,
-      fontWeight: 400,
+      fontSize: 'var(--bf-type-flow-code-font-size)',
+      lineHeight: 'var(--bf-type-flow-code-line-height)',
+      fontFamily: 'var(--bf-type-flow-code-font-family)',
+      fontWeight: 'var(--bf-type-flow-code-font-weight)',
     },
   });
 }

@@ -193,7 +193,8 @@ transform 等复杂值必须使用结构化对象，不能使用 CSS 字符串�
 
 ## Token 与 Material
 
-`globals` 提供 colors、lengths、numbers、durations、easings、fontFamilies 和 shadows。
+`globals` 提供 colors、lengths、numbers、durations、easings 和 shadows。字体体系由
+`@bitfun/design-tokens` 独占，不属于 Appearance 包的可覆盖协议。
 组件规则通过 `{ "kind": "ref", "path": "globals.colors.accent" }` 引用。
 
 编译器将全局 token 投影为 `--bf-appearance-*` 变量。`materials` 是带视觉角色的可复用样式定义：

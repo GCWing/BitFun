@@ -1,10 +1,9 @@
-import { Combobox } from '@bitfun/ui';
 import { Button, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Trash2, Wrench, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { HarnessCreativeIcon } from '@/component-library/icons';
@@ -1283,15 +1282,15 @@ const AgentsHomeView: React.FC = () => {
                 {currentCapabilityTab === 'model'
                 && selectedAgent.agentKind === 'subagent'
                 && !selectedAgentIsExternal ? (
-                  <Combobox
-                    size="small"
+                  <LocalizedCombobox
+                    size="sm"
                     searchable
                     className="bitfun-agents-scene__subagent-model-select model-select-presentation__select"
                     dropdownClassName="model-select-presentation__dropdown"
-                    dropdownMode="inline"
+                    popoverMode="inline"
                     options={subagentModelOptions}
                     value={selectedSubagentModelValue}
-                    onChange={(value) => void handleSubagentModelChange(value)}
+                    onValueChange={(value) => void handleSubagentModelChange(value)}
                     renderOption={renderModelOption}
                     renderValue={renderModelValue}
                     disabled={savingSubagentModel}

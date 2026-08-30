@@ -28,7 +28,7 @@ export const statusPillMeta = {
     "control.statusPill.paddingInline",
     "control.statusPill.radius",
     "control.statusPill.iconSize",
-    "control.statusPill.fontSize",
+    "type.meta.fontSize",
     "font.family.control",
     "font.weight.regular",
   ],

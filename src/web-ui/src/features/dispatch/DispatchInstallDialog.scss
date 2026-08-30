@@ -20,7 +20,7 @@
   max-height: min(78vh, 720px);
   flex-direction: column;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
 
   &__header {
     display: flex;
@@ -32,14 +32,14 @@
   &__title {
     margin: 0;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-2xl);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-snug);
   }
 
   &__subtitle {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   // The one scrolling region. Keeps the footer reachable on short viewports,
@@ -83,14 +83,14 @@
 
   &__section-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__hint {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-support);
   }
 
   &__field {
@@ -101,8 +101,8 @@
 
   &__field-label {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   // A read-only path, not a code sample: drop the global `code` pill so the
@@ -113,8 +113,8 @@
     background: none;
     overflow-wrap: anywhere;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__base-ref {
@@ -129,8 +129,8 @@
       border-radius: $size-radius-base;
       background: var(--bf-appearance-token-color-bg-primary);
       color: var(--bf-appearance-token-color-text-primary);
-      font-family: var(--bf-appearance-token-font-family-mono);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-family:var(--bf-font-family-mono);
+      font-size: var(--bf-font-size-xs);
 
       &:focus-visible {
         border-color: var(--bf-appearance-token-color-accent-500);
@@ -160,13 +160,13 @@
 
       > span {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: var(--bf-appearance-token-font-size-xs);
+        font-size: var(--bf-font-size-xs);
       }
 
       > strong {
         min-width: 0;
         overflow-wrap: anywhere;
-        font-weight: 500;
+        font-weight: var(--bf-font-weight-medium);
       }
 
       &[data-state='ok'] > strong {
@@ -189,7 +189,7 @@
     align-items: center;
     gap: $size-gap-2;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__retry {
@@ -203,7 +203,7 @@
   &__details {
     width: 100%;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
 
     summary {
       width: fit-content;
@@ -242,7 +242,7 @@
       min-width: 0;
       margin: 0;
       overflow-wrap: anywhere;
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-family:var(--bf-font-family-mono);
     }
   }
 

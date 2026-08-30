@@ -8,8 +8,8 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -36,7 +36,7 @@
     border-radius: var(--bf-radius-sm);
     color: var(--bf-color-content-muted);
     background: var(--bf-color-action-neutral-surface);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     white-space: nowrap;
   }
 
@@ -56,8 +56,8 @@
     flex-direction: column;
     gap: var(--bf-space-2);
     color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
   }
 
   .error[data-guidance="true"] {

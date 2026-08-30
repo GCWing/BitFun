@@ -25,7 +25,7 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-color-error-bg);
     color: var(--bf-appearance-token-color-error);
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
   }
 
   &__list {
@@ -67,7 +67,7 @@
   }
 
   &__item-name {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -75,16 +75,16 @@
   }
 
   &__item-hint {
-    font-size: 10px;
-    line-height: 1.35;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-compact);
     color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 400;
+    font-weight: var(--bf-font-weight-regular);
     white-space: normal;
     opacity: 0.62;
   }
 
   &__item-conflict-hint {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-warning);
   }
 
@@ -118,8 +118,8 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
-    font-size: 12px;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     cursor: pointer;
     white-space: nowrap;
     min-width: 60px;
@@ -152,7 +152,7 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     cursor: pointer;
     padding: 0;
 
@@ -166,7 +166,7 @@
     padding: 32px;
     text-align: center;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 14px;
+    font-size: var(--bf-font-size-base);
   }
 }
 
@@ -174,7 +174,7 @@
 /* Page subtitle: keep primary title dominant */
 .kb-shortcuts-page-header.bitfun-config-page-header {
   .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.88;
   }

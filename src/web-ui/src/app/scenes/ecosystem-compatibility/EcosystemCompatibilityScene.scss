@@ -41,8 +41,8 @@ $compatibility-sidebar-width: 236px;
     border-radius: $size-radius-base;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-xs);
     text-align: left;
     cursor: pointer;
 
@@ -61,7 +61,7 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       overflow: hidden;
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
       text-align: right;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -87,10 +87,10 @@ $compatibility-sidebar-width: 236px;
       margin: 0 0 $size-gap-2;
       padding-inline: $size-gap-2;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
-      font-weight: $font-weight-semibold;
-      letter-spacing: 0.04em;
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-micro);
+      font-weight: var(--bf-font-weight-semibold);
+      letter-spacing: var(--bf-letter-spacing-wider);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -175,14 +175,14 @@ $compatibility-sidebar-width: 236px;
     }
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
-      line-height: $line-height-base;
+      font-size: var(--bf-font-size-micro);
+      line-height: var(--bf-line-height-base);
     }
   }
 
@@ -191,7 +191,7 @@ $compatibility-sidebar-width: 236px;
     align-items: center;
     gap: 4px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 9px;
+    font-size: var(--bf-font-size-2xs);
     white-space: nowrap;
 
     &.is-connected,
@@ -216,7 +216,7 @@ $compatibility-sidebar-width: 236px;
   &__sidebar-empty {
     padding: $size-gap-5 $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     text-align: center;
   }
 
@@ -227,8 +227,8 @@ $compatibility-sidebar-width: 236px;
     padding: $size-gap-3 $size-gap-4;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-relaxed);
 
     svg {
       margin-top: 1px;
@@ -283,10 +283,10 @@ $compatibility-sidebar-width: 236px;
 
     h1 {
       margin: 0;
-      font-size: 20px;
-      font-weight: $font-weight-semibold;
-      letter-spacing: -0.02em;
-      line-height: $line-height-tight;
+      font-size: var(--bf-font-size-3xl);
+      font-weight: var(--bf-font-weight-semibold);
+      letter-spacing: var(--bf-letter-spacing-tight);
+      line-height: var(--bf-line-height-tight);
     }
 
     > span {
@@ -294,7 +294,7 @@ $compatibility-sidebar-width: 236px;
       border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: $size-radius-full;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
       white-space: nowrap;
     }
   }
@@ -312,7 +312,7 @@ $compatibility-sidebar-width: 236px;
     dt {
       margin-bottom: 2px;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
 
     dd {
@@ -323,7 +323,7 @@ $compatibility-sidebar-width: 236px;
       margin: 0;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
       text-overflow: ellipsis;
       white-space: nowrap;
 
@@ -353,15 +353,15 @@ $compatibility-sidebar-width: 236px;
 
     span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
 
     strong {
       margin-top: 3px;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -386,7 +386,7 @@ $compatibility-sidebar-width: 236px;
     align-items: center;
     gap: $size-gap-2;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__loading {
@@ -453,16 +453,16 @@ $compatibility-sidebar-width: 236px;
 
     h2 {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-base);
-      font-weight: $font-weight-semibold;
-      line-height: $line-height-tight;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-tight);
     }
 
     p {
       margin: $size-gap-1 0 0;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -489,15 +489,15 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       display: block;
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     p {
       margin: $size-gap-1 0 0;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -520,7 +520,7 @@ $compatibility-sidebar-width: 236px;
     min-width: 700px;
     min-height: 52px;
     padding: $size-gap-2 $size-gap-4;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
 
     & + & {
       border-top: 1px solid var(--bf-appearance-token-border-subtle);
@@ -540,8 +540,8 @@ $compatibility-sidebar-width: 236px;
       padding-block: 0;
       background: var(--bf-appearance-token-element-bg-subtle);
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-micro);
+      font-weight: var(--bf-font-weight-medium);
 
       > span:last-child {
         text-align: right;
@@ -584,19 +584,19 @@ $compatibility-sidebar-width: 236px;
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
   }
 
   &__import-state {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
 
     &.is-ready,
     &.is-readyRename,
@@ -648,7 +648,7 @@ $compatibility-sidebar-width: 236px;
       max-width: 220px;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -669,13 +669,13 @@ $compatibility-sidebar-width: 236px;
     gap: 2px;
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
   }
 
@@ -721,8 +721,8 @@ $compatibility-sidebar-width: 236px;
     > strong,
     .ecosystem-compatibility__runtime-mode-title strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     p {
@@ -730,7 +730,7 @@ $compatibility-sidebar-width: 236px;
       margin: 3px 0 0;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -739,7 +739,7 @@ $compatibility-sidebar-width: 236px;
       margin-top: 2px;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -752,7 +752,7 @@ $compatibility-sidebar-width: 236px;
 
     > span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 9px;
+      font-size: var(--bf-font-size-2xs);
 
       &.is-configured,
       &.is-defaultProfile {
@@ -779,14 +779,14 @@ $compatibility-sidebar-width: 236px;
     gap: $size-gap-4;
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     p {
       margin: 3px 0 0;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
   }
 
@@ -796,7 +796,7 @@ $compatibility-sidebar-width: 236px;
     gap: $size-gap-2;
     flex: none;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
   }
 
   &__subagent-fields {
@@ -812,8 +812,8 @@ $compatibility-sidebar-width: 236px;
         display: block;
         margin-bottom: $size-gap-1;
         color: var(--bf-appearance-token-color-text-secondary);
-        font-size: 10px;
-        font-weight: $font-weight-medium;
+        font-size: var(--bf-font-size-micro);
+        font-weight: var(--bf-font-weight-medium);
       }
     }
 
@@ -835,7 +835,7 @@ $compatibility-sidebar-width: 236px;
       align-items: center;
       gap: $size-gap-1;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
 
     > div {

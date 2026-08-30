@@ -16,8 +16,8 @@
 
   [data-bf-component='modal'][data-bf-part='title'] {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-lg);
-    font-weight: var(--bf-appearance-token-font-weight-semibold);
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
   }
 }
 
@@ -67,18 +67,18 @@
 .bitfun-about-dialog__title {
   margin: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: clamp(48px, 5vw, 58px);
-  font-weight: var(--bf-appearance-token-font-weight-normal);
-  line-height: 0.98;
-  letter-spacing: -0.05em;
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-8xl);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-none);
+  letter-spacing: var(--bf-letter-spacing-tighter);
 }
 
 .bitfun-about-dialog__tagline {
   margin: 16px 0 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-base);
-  line-height: 1.55;
+  font-size: var(--bf-font-size-base);
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .bitfun-about-dialog__release {
@@ -95,9 +95,9 @@
 
 .bitfun-about-dialog__release-version {
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-xl);
+  font-size: var(--bf-font-size-xl);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: var(--bf-line-height-tight);
 }
 
 .bitfun-about-dialog__channel-badge {
@@ -109,8 +109,8 @@
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: var(--bf-appearance-token-element-bg-subtle);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-none);
   white-space: nowrap;
 }
 
@@ -177,15 +177,15 @@
   justify-content: space-between;
   gap: 12px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.4;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-ui);
 }
 
 .bitfun-about-dialog__download-hint {
   margin: 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.45;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-support);
 }
 
 .bitfun-about-dialog__update-installed {
@@ -200,8 +200,8 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.45;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-support);
 
   svg {
     flex-shrink: 0;
@@ -263,9 +263,9 @@
   gap: 13px;
   min-width: 0;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-base);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
-  line-height: 1.45;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-support);
 
   svg {
     flex-shrink: 0;
@@ -276,24 +276,24 @@
 .bitfun-about-dialog__info-value {
   min-width: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-lg);
-  font-weight: var(--bf-appearance-token-font-weight-normal);
-  line-height: 1.45;
+  font-size: var(--bf-font-size-lg);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-support);
   text-align: right;
   overflow-wrap: anywhere;
 
   &--version {
-    font-size: var(--bf-appearance-token-font-size-xl);
+    font-size: var(--bf-font-size-xl);
     font-variant-numeric: tabular-nums;
   }
 
   &--mono {
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     font-variant-numeric: tabular-nums;
   }
 
   &--branch {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
   }
 }
 
@@ -365,9 +365,9 @@
   gap: 6px;
   margin: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-base);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
-  line-height: 1.4;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-ui);
 
   svg {
     flex: 0 0 auto;
@@ -377,8 +377,8 @@
 .bitfun-about-dialog__star-description {
   margin: 4px 0 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.45;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-support);
 }
 
 .bitfun-about-dialog__star-rule {
@@ -404,8 +404,8 @@
 .bitfun-about-dialog__copyright {
   margin: 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.5;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-base);
 }
 
 @media (max-width: 900px) {
@@ -474,7 +474,7 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: 46px;
+    font-size: var(--bf-font-size-7xl);
   }
 
   .bitfun-about-dialog__release {
@@ -519,7 +519,7 @@
     }
 
     [data-bf-component='modal'][data-bf-part='title'] {
-      font-size: var(--bf-appearance-token-font-size-base);
+      font-size: var(--bf-font-size-base);
     }
   }
 
@@ -528,12 +528,12 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: 40px;
+    font-size: var(--bf-font-size-6xl);
   }
 
   .bitfun-about-dialog__tagline {
     margin-top: 10px;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   .bitfun-about-dialog__metadata {
@@ -547,7 +547,7 @@
 
   .bitfun-about-dialog__info-label {
     gap: 8px;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
 
     svg {
       width: 18px;
@@ -556,14 +556,14 @@
   }
 
   .bitfun-about-dialog__info-value {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
 
     &--version {
-      font-size: var(--bf-appearance-token-font-size-lg);
+      font-size: var(--bf-font-size-lg);
     }
 
     &--branch {
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
     }
   }
 
@@ -597,7 +597,7 @@
   }
 
   .bitfun-about-dialog__title {
-    font-size: 48px;
+    font-size: var(--bf-font-size-7xl);
   }
 
   .bitfun-about-dialog__release {

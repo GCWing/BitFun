@@ -155,6 +155,7 @@ export function resolveTokens(document) {
 
     const token = {
       description: definition.description,
+      sourceValue: cloneValue(definition.value),
       type: resolvedType ?? inferTokenType(resolvedValue),
       value: resolvedValue,
     };
@@ -195,14 +196,26 @@ export function renderCss(tokens, options = {}) {
   const {
     layer = "bf.tokens",
     prefix = "bf",
+    preserveReferences = false,
     selector = ":root",
   } = options;
+
+  function renderTokenValue(token) {
+    if (!preserveReferences || typeof token.sourceValue !== "string") {
+      return toCssValue(token.value, token.type);
+    }
+
+    return token.sourceValue.replace(
+      TOKEN_REFERENCE_PATTERN,
+      (_match, referencedName) => `var(${tokenNameToCssVariable(referencedName, prefix)})`,
+    );
+  }
 
   const declarations = Object.entries(tokens)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([name, token]) =>
-        `    ${tokenNameToCssVariable(name, prefix)}: ${toCssValue(token.value, token.type)};`,
+        `    ${tokenNameToCssVariable(name, prefix)}: ${renderTokenValue(token)};`,
     )
     .join("\n");
 

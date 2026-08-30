@@ -242,7 +242,7 @@ import {
 import './ChatInput.scss';
 
 import { setChatPopupActive } from './chatPopupState';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import {
   ChatComposer,
   ChatComposerContent,
@@ -6124,7 +6124,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   )}
 
                   {modeState.dropdownOpen && createPortal(
-                    <div
+                    <Menu
                       ref={boostMenuRef}
                       className="bitfun-chat-input__mode-dropdown bitfun-chat-input__mode-dropdown--agent-boost"
                       data-bf-component="chat-input"
@@ -6136,124 +6136,85 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         left: `${boostMenuLayout?.left ?? 0}px`,
                         visibility: boostMenuLayout ? 'visible' : 'hidden',
                       }}
+                      autoFocusFirstItem
+                      aria-label={t('chatInput.addBoostTooltip')}
                     >
                       {!isMultiLine && executionLevelPolicy.userConfigurable ? (
                         <>
-                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                            <HarnessProfileSelector
-                              {...harnessProfileSelectorProps}
-                              presentation="menu-item"
-                              onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}
-                            />
-                          </div>
-                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                          <HarnessProfileSelector
+                            {...harnessProfileSelectorProps}
+                            presentation="menu-item"
+                            onSelectionComplete={() => dispatchMode({ type: 'CLOSE_DROPDOWN' })}
+                          />
+                          <MenuSeparator data-bf-component="chat-input" data-bf-part="boostDivider" />
                         </>
                       ) : null}
 
                       {showAdditionalModes && (
                         <>
-                          <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                            <ChatInputBoostSubmenu
-                              label={t('chatInput.boostAdditionalModes')}
-                              icon={<Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />}
-                              estimatedPanelHeight={176}
-                              testId="chat-input-additional-modes"
-                            >
-                              <div className="bitfun-chat-input__boost-submenu-list">
-                                {additionalModeItems.map(item => (
-                                  <div
-                                    key={item.id}
-                                    role="menuitem"
-                                    tabIndex={0}
-                                    className="bitfun-chat-input__boost-submenu-item"
-                                    data-bf-component="chat-input"
-                                    data-bf-part="boostSubmenuItem"
-                                    data-bf-boost-item-kind="additional-mode"
-                                    data-bf-additional-mode-id={item.id}
-                                    data-testid={`chat-input-additional-mode-${item.id}`}
-                                    title={item.title}
-                                    onClick={event => {
-                                      event.stopPropagation();
-                                      selectAdditionalMode(item.selection);
-                                    }}
-                                    onKeyDown={event => {
-                                      if (event.key !== 'Enter' && event.key !== ' ') return;
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      selectAdditionalMode(item.selection);
-                                    }}
-                                  >
-                                    <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
-                                    <span className="bitfun-chat-input__boost-submenu-item-name">{item.label}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </ChatInputBoostSubmenu>
-                          </div>
-
-                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                          <ChatInputBoostSubmenu
+                            label={t('chatInput.boostAdditionalModes')}
+                            icon={<Sparkles size={14} aria-hidden />}
+                            testId="chat-input-additional-modes"
+                          >
+                            {additionalModeItems.map(item => (
+                              <MenuItem
+                                key={item.id}
+                                data-bf-component="chat-input"
+                                data-bf-part="boostSubmenuItem"
+                                data-bf-boost-item-kind="additional-mode"
+                                data-bf-additional-mode-id={item.id}
+                                data-testid={`chat-input-additional-mode-${item.id}`}
+                                title={item.title}
+                                leading={<Sparkles size={12} aria-hidden />}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  selectAdditionalMode(item.selection);
+                                }}
+                              >
+                                {item.label}
+                              </MenuItem>
+                            ))}
+                          </ChatInputBoostSubmenu>
+                          <MenuSeparator data-bf-component="chat-input" data-bf-part="boostDivider" />
                         </>
                       )}
 
-                      <div className="bitfun-chat-input__boost-section" data-bf-component="chat-input" data-bf-part="boostSection">
-                        <div
-                          role="menuitem"
-                          tabIndex={0}
-                          className="bitfun-chat-input__boost-context-row"
+                      <>
+                        <MenuItem
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
+                          leading={<Files size={14} aria-hidden />}
                           onClick={handleBoostOpenAtContext}
-                          onKeyDown={e => {
-                            if (e.key !== 'Enter' && e.key !== ' ') return;
-                            e.preventDefault();
-                            handleBoostOpenAtContext(e);
-                          }}
                         >
-                          <Files size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                          <span>{t('chatInput.boostAddContext')}</span>
-                        </div>
+                          {t('chatInput.boostAddContext')}
+                        </MenuItem>
 
-                        <div
-                          role="menuitem"
-                          tabIndex={0}
-                          className="bitfun-chat-input__boost-context-row"
+                        <MenuItem
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
+                          leading={<Image size={14} aria-hidden />}
                           onClick={handleBoostPickImage}
-                          onKeyDown={e => {
-                            if (e.key !== 'Enter' && e.key !== ' ') return;
-                            e.preventDefault();
-                            handleBoostPickImage(e as any);
-                          }}
                         >
-                          <Image size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                          <span>{t('input.addImage')}</span>
-                        </div>
+                          {t('input.addImage')}
+                        </MenuItem>
 
-                        <div
-                          role="menuitem"
-                          tabIndex={0}
-                          className="bitfun-chat-input__boost-context-row"
+                        <MenuItem
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
+                          leading={<BotMessageSquare size={14} aria-hidden />}
                           onClick={handleOpenCreateCustomMode}
-                          onKeyDown={e => {
-                            if (e.key !== 'Enter' && e.key !== ' ') return;
-                            e.preventDefault();
-                            handleOpenCreateCustomMode(e);
-                          }}
                         >
-                          <BotMessageSquare size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                          <span>{t('chatInput.createCustomMode')}</span>
-                        </div>
+                          {t('chatInput.createCustomMode')}
+                        </MenuItem>
 
                         {canUseSkillsForTarget && (
                           <ChatInputBoostSubmenu
                             label={t('chatInput.boostSkills')}
-                            icon={<Sparkles size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />}
+                            icon={<Sparkles size={14} aria-hidden />}
                             testId="chat-input-skills"
                           >
                             {resolvedModeSkillsLoading ? (
@@ -6262,101 +6223,80 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 <span>{t('chatInput.boostSkillsLoading')}</span>
                               </div>
                             ) : resolvedModeSkillsLoadFailed ? (
-                              <button
-                                type="button"
-                                className="bitfun-chat-input__boost-submenu-empty bitfun-chat-input__boost-submenu-retry"
+                              <MenuItem
                                 data-bf-component="chat-input"
                                 data-bf-part="boostSubmenuState"
+                                leading={<RotateCcw size={13} aria-hidden />}
                                 onClick={event => {
                                   event.stopPropagation();
                                   retryResolvedModeSkills();
                                 }}
                               >
-                                <RotateCcw size={13} aria-hidden />
-                                <span>{t('chatInput.boostSkillsLoadFailed')}</span>
-                              </button>
+                                {t('chatInput.boostSkillsLoadFailed')}
+                              </MenuItem>
                             ) : userInvocableSkills.length === 0 ? (
                               <div className="bitfun-chat-input__boost-submenu-empty" data-bf-component="chat-input" data-bf-part="boostSubmenuState" data-bf-state="empty">{t('chatInput.boostSkillsEmpty')}</div>
                             ) : (
-                              <div className="bitfun-chat-input__boost-submenu-list">
-                                {userInvocableSkills.map(skill => (
-                                  <div
-                                    key={skill.key}
-                                    role="menuitem"
-                                    tabIndex={0}
-                                    className="bitfun-chat-input__boost-submenu-item"
-                                    data-bf-component="chat-input"
-                                    data-bf-part="boostSubmenuItem"
-                                    data-bf-boost-item-kind="skill"
-                                    title={skill.description || skill.name}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      insertSkillIntoInput(skill.name);
-                                    }}
-                                    onKeyDown={e => e.key === 'Enter' && insertSkillIntoInput(skill.name)}
-                                  >
-                                    <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
-                                    <span className="bitfun-chat-input__boost-submenu-item-name">
-                                      {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                              userInvocableSkills.map(skill => (
+                                <MenuItem
+                                  key={skill.key}
+                                  data-bf-component="chat-input"
+                                  data-bf-part="boostSubmenuItem"
+                                  data-bf-boost-item-kind="skill"
+                                  title={skill.description || skill.name}
+                                  leading={<Sparkles size={12} aria-hidden />}
+                                  onClick={event => {
+                                    event.stopPropagation();
+                                    insertSkillIntoInput(skill.name);
+                                  }}
+                                >
+                                  {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
+                                </MenuItem>
+                              ))
                             )}
-                            <div
-                              role="menuitem"
-                              tabIndex={0}
-                              className="bitfun-chat-input__boost-submenu-manage"
+                            <MenuSeparator />
+                            <MenuItem
                               data-bf-component="chat-input"
                               data-bf-part="boostSubmenuManage"
                               data-bf-boost-item-kind="manage"
                               onClick={handleOpenSkillsLibrary}
-                              onKeyDown={e => e.key === 'Enter' && handleOpenSkillsLibrary(e as any)}
                             >
                               {t('chatInput.openSkillsLibrary')}
-                            </div>
+                            </MenuItem>
                           </ChatInputBoostSubmenu>
                         )}
 
                         {!!currentSessionId && !isBtwSession && (
                           <>
-                            <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              className="bitfun-chat-input__boost-context-row"
+                            <MenuSeparator data-bf-component="chat-input" data-bf-part="boostDivider" />
+                            <MenuItem
                               data-bf-component="chat-input"
                               data-bf-part="boostItem"
                               data-bf-boost-item-kind="context"
                               data-testid="chat-input-boost-start-btw"
+                              leading={<MessageSquarePlus size={14} aria-hidden />}
                               onClick={handleBoostStartBtw}
-                              onKeyDown={e => e.key === 'Enter' && handleBoostStartBtw(e)}
                             >
-                              <MessageSquarePlus size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                              <span>{t('chatInput.boostStartBtw')}</span>
-                            </div>
+                              {t('chatInput.boostStartBtw')}
+                            </MenuItem>
                           </>
                         )}
 
                         {(!currentSessionId || isBtwSession) && (
-                          <div className="bitfun-chat-input__boost-section-divider" data-bf-component="chat-input" data-bf-part="boostDivider" aria-hidden />
+                          <MenuSeparator data-bf-component="chat-input" data-bf-part="boostDivider" />
                         )}
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          className="bitfun-chat-input__boost-context-row"
+                        <MenuItem
                           data-bf-component="chat-input"
                           data-bf-part="boostItem"
                           data-bf-boost-item-kind="context"
                           data-testid="chat-input-boost-new-session"
+                          leading={<Plus size={14} aria-hidden />}
                           onClick={handleBoostNewSession}
-                          onKeyDown={e => e.key === 'Enter' && handleBoostNewSession(e)}
                         >
-                          <Plus size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
-                          <span>{t('chatInput.boostNewSession')}</span>
-                        </div>
-                      </div>
-                    </div>,
+                          {t('chatInput.boostNewSession')}
+                        </MenuItem>
+                      </>
+                    </Menu>,
                     getAppearanceOverlayHost(),
                   )}
                 </div>

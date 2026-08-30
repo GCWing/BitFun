@@ -30,7 +30,6 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct FontPreferenceSnapshot {
     pub ui_size: UiFontSizeSnapshot,
-    pub flow_chat: FlowChatFontSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,14 +38,6 @@ pub struct UiFontSizeSnapshot {
     pub level: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_px: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FlowChatFontSnapshot {
-    pub mode: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base_px: Option<u32>,
 }
 
 /// Global configuration structure - matches the frontend `GlobalConfig` exactly.
@@ -2112,6 +2103,31 @@ mod tests {
         let config: AppConfig =
             serde_json::from_value(serde_json::json!({})).expect("empty app config should default");
         assert!(!config.prevent_sleep);
+    }
+
+    #[test]
+    fn font_preferences_ignore_retired_flow_chat_data_without_reemitting_it() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "font": {
+                "uiSize": {
+                    "level": "large"
+                },
+                "flowChat": {
+                    "mode": "independent",
+                    "basePx": 20
+                }
+            }
+        }))
+        .expect("config with retired FlowChat font data should remain readable");
+
+        let font = config
+            .font
+            .as_ref()
+            .expect("global font preference should load");
+        assert_eq!(font.ui_size.level, "large");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["font"].get("flowChat").is_none());
     }
 
     #[test]

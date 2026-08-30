@@ -33,14 +33,19 @@ function declarations(selector: string): CSSStyleDeclaration {
 }
 
 describe('SettingsNav typography and layout ownership', () => {
-  it('uses the main navigation font scope and semantic text roles', () => {
+  it('uses the shared navigation semantic text roles without a local font scale', () => {
     const stylesheet = readSettingsNavStylesheet();
 
     expect(stylesheet).toContain("@use '../../styles/nav-panel-font-scope.scss' as nav-font;");
-    expect(stylesheet).toContain('@include nav-font.nav-panel-font-token-scope;');
+    expect(stylesheet).not.toContain('nav-panel-font-token-scope');
     expect(stylesheet).toContain('@include nav-font.nav-panel-text-body;');
     expect(stylesheet).toContain('@include nav-font.nav-panel-text-heading;');
     expect(stylesheet).toContain('@include nav-font.nav-panel-text-meta;');
+    // typography-audit: negative-test-start -- verifies Appearance no longer owns the navigation font scale
+    expect(stylesheet).not.toContain('--bf-appearance-token-font-size-');
+    // typography-audit: negative-test-end
+    expect(stylesheet).toContain('font-size: var(--bf-font-size-meta);');
+    expect(stylesheet).toContain('line-height: var(--bf-line-height-compact);');
     expect(stylesheet).not.toContain('text-transform: uppercase;');
   });
 

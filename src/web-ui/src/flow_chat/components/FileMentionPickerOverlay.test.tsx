@@ -12,10 +12,6 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/infrastructure/api', () => ({
   sessionAPI: {
     searchReferenceableSessions: vi.fn().mockResolvedValue([]),
@@ -107,11 +103,11 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    const item = document.querySelector<HTMLElement>('[data-bf-part="item"]');
+    const item = document.querySelector<HTMLElement>('[data-bf-part="option"]');
     expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('workspace');
     expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')).toBeNull();
-    expect(item?.querySelector('[data-bf-part="itemName"]')?.textContent).toBe('src');
-    expect(item?.querySelector('[data-bf-part="itemDetail"]')).toBeNull();
+    expect(item?.querySelector('[data-bf-part="label"]')?.textContent).toBe('src');
+    expect(item?.querySelector('[data-bf-part="metadata"]')).toBeNull();
 
     vi.mocked(workspaceAPI.getDirectoryChildren).mockResolvedValueOnce([
       {
@@ -128,9 +124,9 @@ describe('FileMentionPicker overlay', () => {
 
     expect(document.querySelector('[data-bf-part="currentDirectoryName"]')?.textContent).toBe('src');
     expect(document.querySelector('[data-bf-part="parentDirectoryPath"]')?.textContent).toBe('workspace');
-    const nestedItem = document.querySelector('[data-bf-part="item"]');
-    expect(nestedItem?.querySelector('[data-bf-part="itemName"]')?.textContent).toBe('App.tsx');
-    expect(nestedItem?.querySelector('[data-bf-part="itemDetail"]')).toBeNull();
+    const nestedItem = document.querySelector('[data-bf-part="option"]');
+    expect(nestedItem?.querySelector('[data-bf-part="label"]')?.textContent).toBe('App.tsx');
+    expect(nestedItem?.querySelector('[data-bf-part="metadata"]')).toBeNull();
   });
 
   it('does not present a remote browse failure as an empty directory', async () => {
@@ -224,7 +220,7 @@ describe('FileMentionPicker overlay', () => {
       await Promise.resolve();
     });
 
-    expect(document.querySelector('[data-bf-part="itemName"]')?.textContent)
+    expect(document.querySelector('[data-bf-part="option"] [data-bf-part="label"]')?.textContent)
       .toBe('手写笔画标注项目');
     expect(document.querySelector('[data-bf-part="root"]')?.getAttribute('data-bf-state'))
       .toBe('loading');

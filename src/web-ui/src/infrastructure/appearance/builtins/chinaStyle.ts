@@ -2,7 +2,6 @@
 
 import { AppearancePalette } from './AppearancePalette';
 import {
-  createChinaTypography,
   createAccentScale,
   createCompactRadius,
   createGitColors,
@@ -134,8 +133,6 @@ export const bitfunChinaStylePalette: AppearancePalette = {
     easing: createStandardEasing(),
   },
 
-
-  typography: createChinaTypography(),
 
 
   components: {

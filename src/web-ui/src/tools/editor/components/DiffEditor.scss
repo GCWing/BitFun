@@ -55,8 +55,8 @@ $_diff-error-max-width: 400px;
     align-items: center;
     gap: $size-gap-4;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-font-family-mono);
   }
 
   &__stats {
@@ -66,10 +66,10 @@ $_diff-error-max-width: 400px;
   }
 
   &__stat {
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     padding: 2px 6px;
     border-radius: $size-radius-sm;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     
     &--add {
       color: var(--bf-appearance-token-git-color-staged);
@@ -85,15 +85,15 @@ $_diff-error-max-width: 400px;
   }
 
   &__changes-count {
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__file-path {
     color: var(--bf-appearance-token-color-text-muted);
-    font-family: $font-family-mono;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__actions {
@@ -112,8 +112,8 @@ $_diff-error-max-width: 400px;
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-lg);
-    line-height: 1;
+    font-size: var(--bf-font-size-lg);
+    line-height: var(--bf-line-height-none);
     cursor: pointer;
     transition:
       transform $motion-fast $easing-standard,
@@ -215,16 +215,16 @@ $_diff-error-max-width: 400px;
 
   &__message {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     margin: 0;
-    line-height: $line-height-relaxed;
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__path {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-font-family-mono);
     margin: 0;
     max-width: 100%;
     overflow: hidden;
@@ -524,11 +524,11 @@ $_diff-error-max-width: 400px;
     max-width: 280px;
 
     &__message {
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
 
     &__path {
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
   }
 }

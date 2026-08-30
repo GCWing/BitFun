@@ -29,7 +29,7 @@
 }
 
 .generative-widget-card__status {
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
   color: var(--bf-appearance-token-color-text-secondary);
   white-space: nowrap;
 }
@@ -53,7 +53,7 @@
   justify-content: center;
   padding: var(--bf-appearance-token-size-gap-4);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
 }
 
 .generative-widget-card__placeholder--error {

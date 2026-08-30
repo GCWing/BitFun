@@ -6,7 +6,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  font-family: inherit;
+  font-family:var(--bf-font-family-sans);
 
   &__scroll {
     flex: 1;
@@ -37,8 +37,8 @@
     max-width: 520px;
     margin: 0 0 16px;
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-caption);
-    line-height: 1.55;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-comfortable);
   }
 
   &__form {
@@ -80,7 +80,7 @@
     margin: -4px 0 0;
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
   }
 
   &__actions {
@@ -122,7 +122,7 @@
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -140,8 +140,8 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-font-size-small);
-      line-height: 1.6;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -200,14 +200,14 @@
   }
 
   &__sync-option-title {
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
   }
 
   &__sync-option-desc {
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-micro);
-    line-height: 1.45;
+    line-height: var(--bf-line-height-support);
   }
 
   &__sync-indicator {
@@ -281,7 +281,7 @@
     border: var(--bf-border-width-default) dashed var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-caption);
+    font-size: var(--bf-font-size-xs);
     text-align: center;
 
     &--loading {
@@ -368,7 +368,7 @@
   &__device-name {
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -378,18 +378,18 @@
     display: inline-flex;
     align-items: baseline;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-sans);
+    font-family:var(--bf-font-family-sans);
     font-size: var(--bf-font-size-micro);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   &__device-id {
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     font-variant-numeric: tabular-nums;
   }
 
   &__device-status {
-    font-family: var(--bf-font-family-sans);
+    font-family:var(--bf-font-family-sans);
   }
 
   &__device-badge {
@@ -420,7 +420,7 @@
     border-radius: inherit;
     background: color-mix(in srgb, var(--bf-color-surface-raised) 92%, transparent);
     color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-caption);
+    font-size: var(--bf-font-size-xs);
     backdrop-filter: var(--bf-effect-blur-subtle);
   }
 

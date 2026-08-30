@@ -88,8 +88,8 @@ function RenderFallback({
             <div
               style={{
                 color: 'var(--bf-appearance-token-color-text-secondary)',
-                fontSize: 12,
-                lineHeight: 1.5,
+                fontSize: 'var(--bf-type-flow-support-font-size)',
+                lineHeight: 'var(--bf-type-flow-support-line-height)',
               }}
             >
               {getFirstLine(error)}
@@ -114,7 +114,9 @@ function RenderFallback({
                   marginTop: 8,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  fontSize: 12,
+                  fontFamily: 'var(--bf-type-flow-code-font-family)',
+                  fontSize: 'var(--bf-type-flow-code-font-size)',
+                  lineHeight: 'var(--bf-type-flow-code-line-height)',
                   maxHeight: 220,
                   overflow: 'auto',
                 }}
@@ -131,7 +133,9 @@ function RenderFallback({
                     marginTop: 8,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
-                    fontSize: 12,
+                    fontFamily: 'var(--bf-type-flow-code-font-family)',
+                    fontSize: 'var(--bf-type-flow-code-font-size)',
+                    lineHeight: 'var(--bf-type-flow-code-line-height)',
                     maxHeight: 260,
                     overflow: 'auto',
                   }}

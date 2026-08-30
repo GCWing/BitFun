@@ -17,6 +17,7 @@ import { iconMeta } from "./components/Icon/Icon.meta";
 import { iconButtonMeta } from "./components/IconButton/IconButton.meta";
 import { inputMeta } from "./components/Input/Input.meta";
 import { keyHintMeta } from "./components/KeyHint/KeyHint.meta";
+import { listboxMeta } from "./components/Listbox/Listbox.meta";
 import { menuMeta } from "./components/Menu/Menu.meta";
 import { modalMeta } from "./components/Modal/Modal.meta";
 import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
@@ -109,6 +110,7 @@ export const componentRegistry = [
   iconButtonMeta,
   inputMeta,
   keyHintMeta,
+  listboxMeta,
   menuMeta,
   modalMeta,
   navigationPanelMeta,

@@ -55,9 +55,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 4px;
   background: transparent;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 12px;
-  font-weight: $font-weight-normal;
-  line-height: 1.4;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-ui);
   cursor: pointer;
   transition: color $motion-fast $easing-standard;
 
@@ -67,7 +67,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
   &.is-active {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &:focus-visible {
@@ -125,10 +125,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-sidebar__title {
   margin: 0;
-  font-size: 13px;
-  font-weight: $font-weight-semibold;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--bf-letter-spacing-snug);
 }
 
 .skills-sidebar__nav {
@@ -150,8 +150,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: $size-radius-base;
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-normal;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-regular);
   cursor: pointer;
   text-align: left;
   transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
@@ -170,7 +170,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &.is-active {
     background: var(--bf-appearance-token-element-bg-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &:focus-visible {
@@ -203,8 +203,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 999px;
   background: var(--bf-appearance-token-element-bg-medium);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 10px;
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-medium);
 
   .skills-sidebar__item.is-active & {
     background: var(--bf-appearance-token-element-bg-soft);
@@ -223,10 +223,10 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-sidebar__hint {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.75;
-  line-height: 1.45;
+  line-height: var(--bf-line-height-support);
 }
 
 // ── Main Content ──────────────────────────────────────────────────────────────
@@ -264,8 +264,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: $size-radius-full;
   background: transparent;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   transition:
     background $motion-fast $easing-standard,
@@ -330,18 +330,18 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__eyebrow {
-  font-size: 11px;
-  font-weight: $font-weight-semibold;
-  letter-spacing: 0.12em;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-semibold);
+  letter-spacing: var(--bf-letter-spacing-caps);
   text-transform: uppercase;
   color: var(--bf-appearance-token-color-accent-500);
 }
 
 .skills-suite__title {
   margin: 0;
-  font-size: 20px;
-  font-weight: $font-weight-semibold;
-  line-height: $line-height-tight;
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
@@ -349,8 +349,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   margin: 0;
   max-width: 720px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: 1.55;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .skills-suite__mode-toolbar {
@@ -423,9 +423,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__mode-tab-label {
-  font-size: 13px;
-  font-weight: $font-weight-semibold;
-  line-height: 1.2;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
 }
 
 .skills-suite__mode-reset {
@@ -437,7 +437,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -472,9 +472,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-suite__section-label {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 11px;
-  font-weight: $font-weight-semibold;
-  letter-spacing: 0.04em;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-semibold);
+  letter-spacing: var(--bf-letter-spacing-wider);
   text-transform: uppercase;
 }
 
@@ -525,13 +525,13 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-suite__group-title {
-  font-size: 13px;
-  font-weight: $font-weight-semibold;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
 .skills-suite__group-count {
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -551,9 +551,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: 999px;
   background: var(--bf-appearance-token-element-bg-subtle);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 11px;
-  font-weight: $font-weight-medium;
-  line-height: 1;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-none);
   cursor: pointer;
   transition:
     background $motion-fast $easing-standard,
@@ -616,8 +616,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-suite__skill-chip-status {
   color: var(--bf-appearance-token-color-warning);
-  font-size: 10px;
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
 }
 
@@ -650,8 +650,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-height: 28px;
   padding: 0 12px 8px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: var(--bf-font-size-meta);
+  line-height: var(--bf-line-height-tight);
 }
 
 .skills-main__list-heading {
@@ -660,8 +660,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   min-width: 0;
   gap: 7px;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-semibold;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .skills-main__list-count {
@@ -674,8 +674,8 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   border-radius: $size-radius-full;
   background: var(--bf-appearance-token-element-bg-medium);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 10px;
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-medium);
 }
 
 .skills-main__column-label {
@@ -788,20 +788,20 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 }
 
 .skills-card__name {
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: $font-weight-semibold;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: $line-height-base;
+  line-height: var(--bf-line-height-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .skills-card__desc {
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.82;
-  line-height: $line-height-base;
+  line-height: var(--bf-line-height-base);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -842,7 +842,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-card__level {
   gap: 6px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   white-space: nowrap;
 
   span {
@@ -858,7 +858,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-card__status-unavailable {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
 }
 
 .skills-card__actions {
@@ -928,7 +928,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 .skills-discover__page-info {
   min-width: 60px;
   text-align: center;
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
@@ -945,7 +945,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   gap: 12px;
   min-height: 200px;
   padding: 32px;
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-muted);
   text-align: center;
 
@@ -993,17 +993,17 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__title {
   margin: 0 0 4px;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-semibold);
+  letter-spacing: var(--bf-letter-spacing-tight);
+  line-height: var(--bf-line-height-tight);
 }
 
 .skills-discover__subtitle {
   margin: 0 0 12px;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
-  line-height: 1.55;
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .skills-discover__search-wrapper {
@@ -1022,7 +1022,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
 
 .skills-discover__results-info {
   margin-bottom: 10px;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -1055,7 +1055,7 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -1067,9 +1067,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     border: none;
     background: none;
     font: inherit;
-    font-family: $font-family-mono;
-    font-size: 11px;
-    line-height: $line-height-base;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-base);
     text-align: left;
     word-break: break-all;
     color: var(--bf-appearance-token-color-accent-500);
@@ -1095,14 +1095,14 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__detail-label {
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__detail-value,
   &__detail-link {
     color: var(--bf-appearance-token-color-text-muted);
-    font-family: $font-family-mono;
-    font-size: 11px;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-meta);
     word-break: break-all;
   }
 
@@ -1125,14 +1125,14 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
   &__path-hint,
   &__form-hint,
   &__validating {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__validation {
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
 
     &.is-valid {
       background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
@@ -1147,9 +1147,9 @@ $skills-installed-columns: minmax(220px, 1fr) minmax(82px, 0.24fr) minmax(96px, 
     }
   }
 
-  &__validation-name  { font-weight: $font-weight-medium; }
-  &__validation-desc  { margin-top: 2px; font-size: var(--bf-appearance-token-font-size-xs); opacity: 0.85; }
-  &__validation-error { font-weight: $font-weight-medium; }
+  &__validation-name  { font-weight: var(--bf-font-weight-medium); }
+  &__validation-desc  { margin-top: 2px; font-size: var(--bf-font-size-xs); opacity: 0.85; }
+  &__validation-error { font-weight: var(--bf-font-weight-medium); }
 
   &__modal-form {
     display: flex;

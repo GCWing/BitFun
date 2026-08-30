@@ -28,16 +28,16 @@
 
 .demo-card-title {
   margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
 .demo-card-description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   color: var(--bf-appearance-token-color-text-muted);
-  line-height: 1.5;
+  line-height: var(--bf-line-height-base);
 }
 
 .demo-stage {
@@ -77,7 +77,7 @@
 }
 
 .demo-id {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
-  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-family:var(--bf-font-family-mono);
 }

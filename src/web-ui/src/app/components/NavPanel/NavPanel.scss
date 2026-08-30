@@ -22,7 +22,6 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel {
   @include chrome.apply;
-  @include nav-font.nav-panel-font-token-scope;
   @include shell-surfaces.sidebar-background;
 
   width: 100%;
@@ -172,8 +171,8 @@ $_section-header-height: 22px;
   &__mode-pill-caption {
     margin: 0;
     padding: 0 4px;
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    line-height: 1.35;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-compact);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.78;
     overflow-wrap: break-word;
@@ -292,9 +291,9 @@ $_section-header-height: 22px;
     gap: 4px;
     min-width: 0;
     padding: 6px 4px;
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    line-height: 1.15;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-muted);
     transition: color $motion-fast $easing-standard;
 
@@ -393,8 +392,8 @@ $_section-header-height: 22px;
     border-radius: $size-radius-base 0 0 $size-radius-base;
     background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     cursor: pointer;
     transition: background $motion-fast $easing-standard,
                 color $motion-fast $easing-standard,
@@ -478,72 +477,6 @@ $_section-header-height: 22px;
       outline: 1px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 1px;
     }
-  }
-
-  // ──────────────────────────────────────────────
-  // Session mode dropdown
-  // ──────────────────────────────────────────────
-
-  &__mode-dropdown {
-    @include surfaces.floating-surface;
-
-    position: fixed;
-    min-width: 180px;
-    padding: $size-gap-1 0;
-    z-index: 9999;
-    transform-origin: top left;
-    animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
-
-    &.is-closing {
-      animation: bitfun-footer-menu-out $motion-fast $easing-accelerate forwards;
-    }
-  }
-
-  &__mode-dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    padding: $size-gap-2 $size-gap-3;
-    border: none;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    text-align: left;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &.is-active {
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-  }
-
-  &__mode-dropdown-item-icon {
-    flex-shrink: 0;
-
-    &.is-code,
-    &.is-cowork {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 82%, var(--bf-appearance-token-color-text-muted));
-    }
-  }
-
-  &__mode-dropdown-item-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__mode-dropdown-item-check {
-    flex-shrink: 0;
-    color: var(--bf-appearance-token-color-text-primary);
-    margin-left: auto;
   }
 
   // ──────────────────────────────────────────────
@@ -641,9 +574,9 @@ $_section-header-height: 22px;
   }
 
   &__section-label {
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wider);
     text-transform: uppercase;
     color: var(--bf-appearance-token-color-text-muted);
     flex: 1;
@@ -654,9 +587,9 @@ $_section-header-height: 22px;
   }
 
   &__section-header--bf-appearance-token-scene-entry &__section-label {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
-    letter-spacing: normal;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-normal);
     text-transform: none;
     color: var(--bf-appearance-token-color-text-primary);
   }
@@ -686,8 +619,8 @@ $_section-header-height: 22px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
     transition: background $motion-fast $easing-standard,
                 color $motion-fast $easing-standard,
                 transform $motion-fast $easing-standard,
@@ -769,9 +702,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 500;
-    line-height: 1.1;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-display);
   }
 
   &__miniapp-entry-wrap {
@@ -869,9 +802,9 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 500;
-    line-height: 1.1;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-display);
   }
 
   &__miniapp-entry-apps {
@@ -943,9 +876,9 @@ $_section-header-height: 22px;
     &--more {
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 92%, transparent);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xxs);
-      font-weight: 700;
-      letter-spacing: 0.01em;
+      font-size: var(--bf-font-size-micro);
+      font-weight: var(--bf-font-weight-bold);
+      letter-spacing: var(--bf-letter-spacing-subtle);
       filter: none;
       opacity: 1;
 
@@ -1027,7 +960,6 @@ $_section-header-height: 22px;
 
   /* Positioning-only overrides; the design-system Menu owns the surface look. */
   &__assistant-session-menu {
-    @include nav-font.nav-panel-font-token-scope;
 
     position: fixed;
     min-inline-size: 200px;
@@ -1102,7 +1034,6 @@ $_section-header-height: 22px;
 
   /* Positioning-only overrides; the design-system Menu owns the surface look. */
   &__workspace-menu {
-    @include nav-font.nav-panel-font-token-scope;
 
     position: fixed;
     /* Shrink-wrap to widest row; cap width for long paths + viewport on small screens */
@@ -1135,14 +1066,14 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 0.92em;
+    font-size: var(--bf-font-size-sm);
   }
 
   &__workspace-menu-item-host-sep {
     flex: 0 0 auto;
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.55;
-    font-size: 0.92em;
+    font-size: var(--bf-font-size-sm);
   }
 
   &__workspace-menu-item-name {
@@ -1155,7 +1086,7 @@ $_section-header-height: 22px;
   &__workspace-menu-empty {
     padding: $size-gap-2 $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__workspace-menu-workspaces {
@@ -1298,8 +1229,8 @@ $_section-header-height: 22px;
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     text-align: left;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
     width: 100%;
     position: relative;
     opacity: 1;
@@ -1322,7 +1253,7 @@ $_section-header-height: 22px;
       opacity: 1;
       color: var(--bf-appearance-token-color-text-primary);
       background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
 
       &::before {
         content: '';
@@ -1375,7 +1306,7 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
   }
 
   // ──────────────────────────────────────────────
@@ -1384,14 +1315,14 @@ $_section-header-height: 22px;
 
   &__item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-appearance-token-font-size-xxs);
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
     margin-left: auto;
     max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: var(--bf-line-height-tight);
 
     &--clickable {
       cursor: pointer;
@@ -1604,7 +1535,7 @@ $_section-header-height: 22px;
   background: transparent;
   color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   text-align: left;
   transition: color $motion-fast $easing-standard,
               background $motion-fast $easing-standard;
@@ -1633,9 +1564,9 @@ $_section-header-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: 550;
-  line-height: 1.25;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-dense);
 }
 
 // Attached remote parties are shown once per device kind. Message-app marks
@@ -1661,7 +1592,7 @@ $_section-header-height: 22px;
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-sm;
   background: var(--bf-appearance-token-element-bg-subtle);
-  line-height: 1;
+  line-height: var(--bf-line-height-none);
 
   &[data-bf-device-kind='message-app'] {
     border: 0;
@@ -1671,9 +1602,9 @@ $_section-header-height: 22px;
 }
 
 .bitfun-nav-panel__footer-device-status-attached-count {
-  font-size: 9px;
-  font-weight: 650;
-  line-height: 1;
+  font-size: var(--bf-font-size-2xs);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-none);
 }
 
 // Footer notification: yellow only when there are unread messages (BellDot)
@@ -1767,107 +1698,6 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel__footer-menu-wrap {
   position: relative;
-}
-
-// ──────────────────────────────────────────────
-// Multimodal tools picker (Browser + Mermaid)
-// ──────────────────────────────────────────────
-
-@keyframes bitfun-multimodal-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(5px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.bitfun-nav-panel__footer-multimodal-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.bitfun-nav-panel__footer-multimodal-menu {
-  @include surfaces.floating-surface;
-
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: $size-gap-1;
-  min-width: 140px;
-  padding: $size-gap-1;
-  z-index: 9999;
-  transform-origin: bottom center;
-  animation: bitfun-multimodal-menu-in 0.14s $easing-decelerate forwards;
-
-}
-
-.bitfun-nav-panel__footer-multimodal-item {
-  display: flex;
-  align-items: center;
-  gap: $size-gap-2;
-  width: 100%;
-  padding: 0 $size-gap-2;
-  height: 24px;
-  border: none;
-  border-radius: $size-radius-sm;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  cursor: pointer;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: 400;
-  text-align: left;
-  white-space: nowrap;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
-
-  &:hover {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-
-    .bitfun-nav-panel__footer-multimodal-item-icon {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    background: var(--bf-appearance-token-element-bg-medium);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--bf-appearance-token-color-accent-500);
-    outline-offset: -1px;
-  }
-
-  &.is-active {
-    color: var(--bf-appearance-token-color-text-primary);
-    background: var(--bf-appearance-token-element-bg-soft);
-
-    .bitfun-nav-panel__footer-multimodal-item-icon {
-      color: var(--bf-appearance-token-color-text-primary);
-      opacity: 1;
-    }
-  }
-}
-
-.bitfun-nav-panel__footer-multimodal-item-icon {
-  flex-shrink: 0;
-  opacity: 0.65;
-  transition: opacity $motion-fast $easing-standard,
-              color $motion-fast $easing-standard;
-}
-
-.bitfun-nav-panel__footer-multimodal-item-label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 // Hover-open subtle glow on the main button
@@ -1988,16 +1818,16 @@ $_section-header-height: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: 650;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-snug);
   }
 }
 
 .bitfun-device-overview__detail {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: 1.35;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-compact);
 }
 
 .bitfun-device-overview__tag {
@@ -2008,9 +1838,9 @@ $_section-header-height: 22px;
   border-radius: $size-radius-full;
   background: transparent;
   color: var(--bf-appearance-token-color-accent-500);
-  font-size: 10px;
-  font-weight: 550;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-compact);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2021,9 +1851,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 0 10px;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 650;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-snug);
   }
 }
 
@@ -2049,9 +1879,9 @@ $_section-header-height: 22px;
   min-width: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-snug);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2064,8 +1894,8 @@ $_section-header-height: 22px;
   box-sizing: border-box;
   margin-top: 20px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: 1.35;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-compact);
 }
 
 .bitfun-device-overview__backup.is-done {
@@ -2101,7 +1931,7 @@ $_section-header-height: 22px;
     width: 100%;
     height: auto;
     min-height: var(--bf-control-height-sm);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     white-space: normal;
   }
 
@@ -2208,9 +2038,9 @@ $_section-header-height: 22px;
   h3 {
     margin: 0 6px 7px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1.35;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-compact);
   }
 }
 
@@ -2239,8 +2069,8 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 550;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -2248,8 +2078,8 @@ $_section-header-height: 22px;
   > span:not(.bitfun-device-overview__device-icon) {
     grid-column: 2;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
-    font-weight: 550;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     overflow-wrap: anywhere;
 
     // Green dot plus muted label, the live-state pairing the workspace list
@@ -2296,15 +2126,15 @@ $_section-header-height: 22px;
   border-radius: $size-radius-sm;
   background: var(--bf-appearance-token-element-bg-subtle);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 10px;
+  font-size: var(--bf-font-size-micro);
 
   strong {
     grid-column: 2;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 550;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2315,7 +2145,7 @@ $_section-header-height: 22px;
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 9px;
+    font-size: var(--bf-font-size-2xs);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2332,8 +2162,8 @@ $_section-header-height: 22px;
 
 .bitfun-nav-panel__remote-disclaimer-text {
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: 1.2;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-tight);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -2345,8 +2175,8 @@ $_section-header-height: 22px;
   gap: 0;
 
   li {
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.2;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-secondary);
     padding-right: 0;
   }
@@ -2366,7 +2196,7 @@ $_section-header-height: 22px;
   border: 1px solid transparent;
   min-width: 112px;
   padding: 7px 16px;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   cursor: pointer;
   transition:
     background-color $motion-fast $easing-standard,
@@ -2533,9 +2363,9 @@ $_section-header-height: 22px;
   border-radius: $size-radius-full;
   background: var(--bf-appearance-token-element-bg-soft);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-2xs);
-  font-weight: 600;
-  line-height: 1;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-none);
 
 }
 
@@ -2604,8 +2434,8 @@ $_section-header-height: 22px;
   border-radius: $size-radius-base;
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: 500;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   text-align: left;
   transition: background $motion-fast $easing-standard,
@@ -2784,8 +2614,8 @@ $_section-header-height: 22px;
     gap: $size-gap-1;
     padding: 0 $size-gap-2 0 38px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
 
     > span:first-child {
       flex: 1;
@@ -2798,81 +2628,14 @@ $_section-header-height: 22px;
 
   &__session-filter-menu,
   &__session-filter-submenu {
-    @include nav-font.nav-panel-font-token-scope;
-    @include surfaces.floating-surface;
-
     position: fixed;
     z-index: $z-popover;
-    box-sizing: border-box;
-    padding: $size-gap-1;
-    color: var(--bf-appearance-token-color-text-primary);
-    animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
-
-    > button {
-      display: flex;
-      align-items: center;
-      gap: $size-gap-2;
-      width: 100%;
-      min-height: 34px;
-      padding: 0 $size-gap-2;
-      border: none;
-      border-radius: $size-radius-sm;
-      background: transparent;
-      color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      text-align: left;
-      cursor: pointer;
-      transition: background $motion-fast $easing-standard,
-                  color $motion-fast $easing-standard;
-
-      > svg:last-child {
-        margin-left: auto;
-        color: var(--bf-appearance-token-color-text-muted);
-      }
-
-      &:hover,
-      &:focus-visible,
-      &.is-open {
-        outline: none;
-        background: var(--bf-appearance-token-element-bg-soft);
-      }
-
-      &.is-selected:not(:hover):not(:focus-visible):not(.is-open) {
-        background: transparent;
-      }
-    }
-  }
-
-  &__session-filter-menu {
-    width: 220px;
-
-    > button {
-      min-height: 34px;
-      font-size: var(--bf-appearance-token-font-size-sm);
-    }
-  }
-
-  &__session-filter-submenu {
-    width: 220px;
-
-    > button {
-      min-height: 34px;
-    }
-
-    > button > span:last-child {
-      flex: 1;
-      min-width: 0;
-    }
   }
 
   &__session-filter-menu-value {
     display: inline-flex;
     align-items: center;
-    justify-content: flex-end;
     gap: $size-gap-1;
-    margin-left: auto;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__session-filter-active-dot {
@@ -2880,46 +2643,6 @@ $_section-header-height: 22px;
     height: 7px;
     border-radius: 50%;
     background: var(--bf-appearance-token-color-accent-500);
-  }
-
-  &__session-filter-check {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 16px;
-    width: 16px;
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-
-  &__session-filter-menu-divider {
-    height: 1px;
-    margin: $size-gap-1 (-$size-gap-1);
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__session-filter-menu-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 34px;
-    padding: 0 $size-gap-2;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
-
-    > button {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font: inherit;
-      cursor: pointer;
-
-      &:hover,
-      &:focus-visible {
-        color: var(--bf-appearance-token-color-text-primary);
-        outline: none;
-      }
-    }
   }
 
   &__items--smart-members {
@@ -3204,31 +2927,12 @@ $_section-header-height: 22px;
 }
 
 .bitfun-nav-panel__workspace-menu,
-.bitfun-nav-panel__mode-dropdown,
 .bitfun-nav-panel__footer-menu,
-.bitfun-nav-panel__appearance-submenu,
-.bitfun-nav-panel__footer-multimodal-menu {
+.bitfun-nav-panel__appearance-submenu {
   animation: bitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &.is-closing {
     animation: bitfun-nav-popover-out 100ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  }
-}
-
-.bitfun-nav-panel__footer-multimodal-menu {
-  animation: bitfun-nav-centered-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-
-.bitfun-nav-panel__mode-dropdown-item,
-.bitfun-nav-panel__footer-multimodal-item {
-  border-radius: $size-radius-sm;
-  transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    background 120ms ease,
-    color 120ms ease;
-
-  &:active:not(:disabled) {
-    transform: scale(0.985);
   }
 }
 
@@ -3267,17 +2971,6 @@ $_section-header-height: 22px;
   }
 }
 
-@keyframes bitfun-nav-centered-popover-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 3px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-}
-
 @media (hover: hover) and (pointer: fine) {
   .bitfun-nav-panel__section-header--interactive:hover,
   .bitfun-nav-panel__top-action-btn:hover,
@@ -3295,10 +2988,8 @@ $_section-header-height: 22px;
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel__workspace-menu,
-  .bitfun-nav-panel__mode-dropdown,
   .bitfun-nav-panel__footer-menu,
   .bitfun-nav-panel__appearance-submenu,
-  .bitfun-nav-panel__footer-multimodal-menu,
   .bitfun-device-overview {
     animation: none;
   }
@@ -3318,7 +3009,7 @@ $_section-header-height: 22px;
 .bitfun-nav-panel {
   @include nav-font.nav-panel-text-body;
 
-  line-height: 1.35;
+  line-height: var(--bf-line-height-compact);
 
   &__search-trigger {
     @include nav-font.nav-panel-text-meta;
@@ -3331,10 +3022,10 @@ $_section-header-height: 22px;
     height: 34px;
     padding: 0 $size-gap-2;
     border: 0;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 400;
-    line-height: $line-height-base;
+    font-family: var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
+    line-height: var(--bf-line-height-base);
     text-align: left;
   }
 

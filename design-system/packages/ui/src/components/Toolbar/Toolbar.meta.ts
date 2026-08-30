@@ -32,7 +32,7 @@ export const toolbarMeta = {
     "layout.toolbar.groupGapSm",
     "layout.toolbar.groupGapMd",
     "layout.toolbar.badgeSize",
-    "layout.toolbar.badgeFontSize",
+    "type.meta.fontSize",
     "layout.toolbar.separatorBlockSize",
     "layout.toolbar.overflowFadeExtent",
     "font.family.control",

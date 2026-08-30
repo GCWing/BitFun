@@ -11,11 +11,12 @@ export function H1({ children, style, ...props }: CanvasHeadingProps) {
     <h1
       {...props}
       style={{
-        fontSize: 28,
-        lineHeight: 1.12,
+        fontFamily: 'var(--bf-type-heading-display-font-family)',
+        fontSize: 'var(--bf-type-heading-display-font-size)',
+        lineHeight: 'var(--bf-type-heading-display-line-height)',
         margin: 0,
-        fontWeight: 720,
-        letterSpacing: 0,
+        fontWeight: 'var(--bf-type-heading-display-font-weight)',
+        letterSpacing: 'var(--bf-type-heading-display-letter-spacing)',
         color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}
@@ -30,11 +31,12 @@ export function H2({ children, style, ...props }: CanvasHeadingProps) {
     <h2
       {...props}
       style={{
-        fontSize: 18,
-        lineHeight: 1.25,
+        fontFamily: 'var(--bf-type-heading-page-font-family)',
+        fontSize: 'var(--bf-type-heading-page-font-size)',
+        lineHeight: 'var(--bf-type-heading-page-line-height)',
         margin: 0,
-        fontWeight: 680,
-        letterSpacing: 0,
+        fontWeight: 'var(--bf-type-heading-page-font-weight)',
+        letterSpacing: 'var(--bf-type-heading-page-letter-spacing)',
         color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}
@@ -49,11 +51,12 @@ export function H3({ children, style, ...props }: CanvasHeadingProps) {
     <h3
       {...props}
       style={{
-        fontSize: 14,
-        lineHeight: 1.3,
+        fontFamily: 'var(--bf-type-heading-section-font-family)',
+        fontSize: 'var(--bf-type-heading-section-font-size)',
+        lineHeight: 'var(--bf-type-heading-section-line-height)',
         margin: 0,
-        fontWeight: 680,
-        letterSpacing: 0,
+        fontWeight: 'var(--bf-type-heading-section-font-weight)',
+        letterSpacing: 'var(--bf-type-heading-section-letter-spacing)',
         color: 'var(--bf-appearance-token-color-text-primary)',
         ...style,
       }}

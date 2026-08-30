@@ -25,13 +25,13 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: 600;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: 1.45;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-support);
     }
   }
 
@@ -50,7 +50,7 @@
     padding: 0 8px;
     border-radius: 6px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
 
     &.is-active {
       color: var(--bf-appearance-token-color-text-primary);
@@ -98,13 +98,13 @@
     text-align: center;
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-base);
-      font-weight: 600;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     code {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-2xs);
+      font-size: var(--bf-font-size-meta);
     }
   }
 
@@ -129,8 +129,8 @@
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      line-height: 1;
+      font-size: var(--bf-font-size-meta);
+      line-height: var(--bf-line-height-none);
     }
   }
 }

@@ -46,12 +46,12 @@
 }
 
 .tab-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .tab-description {
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   opacity: 0.7;
 }
 

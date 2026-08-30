@@ -92,16 +92,16 @@
 
 .file-name {
   color: var(--bf-appearance-token-color-overlay-white-95);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-semibold);
+  font-family: var(--bf-font-family-mono);
   margin-bottom: 2px;
 }
 
 .file-path-full {
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
-  font-size: 12px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--bf-font-size-xs);
+  font-family: var(--bf-font-family-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -180,7 +180,7 @@
   justify-content: center;
   gap: 12px;
   color: var(--bf-appearance-token-color-overlay-white-90);
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   backdrop-filter: blur(4px);
   z-index: 1000;
 }
@@ -234,11 +234,11 @@
   }
   
   .file-name {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
   }
   
   .file-path-full {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
   }
 }
 

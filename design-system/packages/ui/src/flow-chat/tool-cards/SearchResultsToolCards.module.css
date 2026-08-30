@@ -15,7 +15,7 @@
     align-items: baseline;
     gap: var(--bf-space-1);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .detailLabel {
@@ -30,7 +30,7 @@
   }
 
   .detail[data-monospace="true"] .detailValue {
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 
   .results {
@@ -49,7 +49,7 @@
     gap: var(--bf-space-2);
     padding-block: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
   }
 
   .result + .result {
@@ -102,12 +102,12 @@
   .resultUrl,
   .resultMeta {
     color: var(--bf-color-content-muted);
-    line-height: var(--bf-line-height-body);
+    line-height: var(--bf-line-height-base);
     overflow-wrap: anywhere;
   }
 
   .resultUrl {
-    font-family: var(--bf-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
   }
 
@@ -120,9 +120,9 @@
     margin: 0;
     overflow: auto;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
-    line-height: var(--bf-line-height-body);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -130,7 +130,7 @@
   .overflowLabel {
     padding-block: var(--bf-space-2);
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-small);
+    font-size: var(--bf-font-size-sm);
     font-style: italic;
     text-align: center;
   }

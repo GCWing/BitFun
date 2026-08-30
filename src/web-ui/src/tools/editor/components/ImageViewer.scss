@@ -12,7 +12,7 @@
   background: var(--bf-appearance-token-color-bg-primary);
   color: var(--bf-appearance-token-color-text-primary);
   overflow: hidden;
-  font-family: $font-family-sans;
+  font-family: var(--bf-font-family-sans);
 
   &.fullscreen {
     position: fixed;
@@ -33,13 +33,13 @@
     display: flex;
     align-items: center;
     gap: $size-gap-3;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     flex: 1;
     min-width: 0;
   }
 
   &__filename {
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -48,7 +48,7 @@
 
   &__dimensions,
   &__filesize {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
@@ -107,7 +107,7 @@
 
     p {
       margin: 0;
-      font-size: 14px;
+      font-size: var(--bf-font-size-base);
     }
   }
 
@@ -145,12 +145,12 @@
     p {
       margin: 0;
       color: var(--bf-appearance-token-color-error);
-      font-size: 14px;
+      font-size: var(--bf-font-size-base);
     }
   }
 
   &__error-path {
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     word-break: break-all;
     max-width: 600px;

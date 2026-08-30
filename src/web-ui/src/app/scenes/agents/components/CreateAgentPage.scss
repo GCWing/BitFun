@@ -20,16 +20,16 @@
 .th__title {
   margin: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-xl);
-  font-weight: $font-weight-semibold;
-  line-height: $line-height-tight;
+  font-size: var(--bf-font-size-xl);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-tight);
 }
 
 .th__title-sub {
   margin: 0;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: $line-height-relaxed;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .th-create-page__head {
@@ -50,7 +50,7 @@
 }
 
 .th-create-page .th__title {
-  letter-spacing: -0.02em;
+  letter-spacing: var(--bf-letter-spacing-tight);
 }
 
 .th-create-page__heading {
@@ -126,9 +126,9 @@
   h3 {
     margin: 0;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
   }
 
   &--tools {
@@ -172,9 +172,9 @@
   h3 {
     margin: 0;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
   }
 
   .th-create-panel__label-hint {
@@ -241,7 +241,7 @@
 
   .tool-group-summary__label {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
   }
 }
 
@@ -275,8 +275,8 @@
 
 .th-create-panel__prompt-context-label {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
 }
 
@@ -298,13 +298,13 @@
   border-radius: $size-radius-full;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  line-height: $line-height-base;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
 }
 
 .th-create-panel__prompt-context-empty {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
 }
 
 .th-create-panel__prompt-textarea {
@@ -318,8 +318,8 @@
     border: 0;
     border-radius: 0;
     background: var(--bf-appearance-token-color-bg-scene);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-relaxed);
 
     &:focus {
       background: var(--bf-appearance-token-color-bg-scene);
@@ -335,27 +335,27 @@
 
 .th-create-panel__label {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
 
   &--strong {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
   }
 }
 
 .th-create-panel__label-hint {
   margin-left: 4px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-normal;
-  line-height: $line-height-relaxed;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .th-create-panel__error {
   color: var(--bf-appearance-token-color-error);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
 }
 
 .th-create-panel__readonly-row {
@@ -383,9 +383,9 @@
   border-radius: $size-radius-full;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-family: inherit;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   transition:
     border-color $motion-fast $easing-standard,
@@ -407,7 +407,7 @@
     border-color: var(--bf-appearance-token-color-text-primary);
     background: var(--bf-appearance-token-color-text-primary);
     color: var(--bf-appearance-token-color-bg-scene);
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     box-shadow: var(--bf-appearance-token-shadow-xs);
   }
 
@@ -440,9 +440,9 @@
   border-radius: $size-radius-base;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-family: inherit;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   transition:
     border-color $motion-fast $easing-standard,
@@ -471,7 +471,7 @@
     border-color: var(--bf-appearance-token-border-base);
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     box-shadow: none;
   }
 }

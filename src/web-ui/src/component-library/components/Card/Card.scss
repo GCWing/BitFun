@@ -131,17 +131,17 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: var(--bf-appearance-token-font-weight-semibold);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: var(--bf-appearance-token-line-height-tight);
+    line-height: var(--bf-line-height-tight);
     margin-bottom: var(--bf-appearance-token-size-gap-1);
   }
 
   &__subtitle {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: var(--bf-appearance-token-line-height-base);
+    line-height: var(--bf-line-height-base);
   }
 
   &__extra {
@@ -155,8 +155,8 @@
 .v-card-body {
   flex: 1;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: var(--bf-appearance-token-line-height-relaxed);
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-relaxed);
 
   .v-card-header + & {
     margin-top: var(--bf-appearance-token-size-gap-3);

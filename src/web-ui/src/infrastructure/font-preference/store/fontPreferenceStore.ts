@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { createLogger } from '@/shared/utils/logger';
-import { FontPreference, FontSizeLevel, FlowChatFontMode, DEFAULT_FONT_PREFERENCE } from '../types';
+import { FontPreference, FontSizeLevel, DEFAULT_FONT_PREFERENCE } from '../types';
 import { fontPreferenceService } from '../core/FontPreferenceService';
 
 const log = createLogger('FontPreferenceStore');
@@ -14,7 +14,6 @@ interface FontPreferenceState {
 
   initialize: () => Promise<void>;
   setUiSize: (level: FontSizeLevel, customPx?: number) => Promise<void>;
-  setFlowChatFont: (mode: FlowChatFontMode, basePx?: number) => Promise<void>;
   reset: () => Promise<void>;
 }
 
@@ -56,16 +55,6 @@ export const useFontPreferenceStore = create<FontPreferenceState>((set, get) => 
     } catch (error) {
       log.error('Failed to set UI font size', { level, customPx, error });
       set({ error: error instanceof Error ? error.message : 'Failed to set UI font size' });
-    }
-  },
-
-  setFlowChatFont: async (mode: FlowChatFontMode, basePx?: number) => {
-    set({ error: null });
-    try {
-      await fontPreferenceService.setFlowChatFont(mode, basePx);
-    } catch (error) {
-      log.error('Failed to set flow chat font', { mode, basePx, error });
-      set({ error: error instanceof Error ? error.message : 'Failed to set flow chat font' });
     }
   },
 

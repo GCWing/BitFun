@@ -1150,11 +1150,12 @@ export const Markdown = React.memo<MarkdownProps>(({
       const codeBodyStyle: React.CSSProperties = {
         margin: 0,
         borderRadius: '0 0 8px 8px',
-        fontSize: '0.875rem',
-        lineHeight: '1.55',
+        fontSize: 'var(--bf-type-code-md-font-size)',
+        lineHeight: 'var(--bf-type-code-md-line-height)',
       };
       const codeTagStyle: React.CSSProperties = {
-        fontFamily: 'var(--bf-appearance-token-font-family-mono)',
+        fontFamily: 'var(--bf-type-code-md-font-family)',
+        fontWeight: 'var(--bf-type-code-md-font-weight)',
       };
       const gutterColor = isLightRef.current
         ? 'color-mix(in srgb, var(--bf-appearance-token-color-static-black) 40%, var(--bf-appearance-token-color-static-white))'

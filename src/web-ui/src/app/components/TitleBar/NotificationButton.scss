@@ -14,7 +14,7 @@
   cursor: pointer;
   padding: 4px 6px;
   border-radius: $size-radius-sm;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   flex-shrink: 0;
   position: relative;
   transition:
@@ -48,7 +48,7 @@
   }
 
   &__progress-text {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
@@ -67,7 +67,7 @@
   &__menu-count {
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     font-variant-numeric: tabular-nums;
   }
 
@@ -77,7 +77,7 @@
     border-radius: $size-radius-full;
     background: var(--bf-appearance-token-element-bg-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.2;
+    line-height: var(--bf-line-height-tight);
     text-align: center;
   }
 
@@ -97,7 +97,7 @@
     border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
     padding: 4px 8px;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-primary);
     box-shadow: var(--bf-appearance-token-shadow-base);
     max-width: 300px;

@@ -12,8 +12,8 @@
 
   &__title {
     margin: 0;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     text-align: center;
     overflow: hidden;

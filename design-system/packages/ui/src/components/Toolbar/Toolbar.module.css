@@ -120,10 +120,10 @@
     border-radius: var(--bf-radius-pill);
     color: var(--bf-color-content-secondary);
     background: var(--bf-color-action-neutral-surface);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-layout-toolbar-badge-font-size);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-font-weight-medium);
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

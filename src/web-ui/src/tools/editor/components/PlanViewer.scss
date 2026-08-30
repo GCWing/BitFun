@@ -36,7 +36,7 @@
 
       p {
         color: var(--bf-appearance-token-color-text-secondary);
-        font-size: 14px;
+        font-size: var(--bf-font-size-base);
         margin: 0;
       }
 
@@ -105,17 +105,17 @@
       }
 
       .file-name {
-        font-size: 14px;
-        font-weight: 500;
+        font-size: var(--bf-font-size-base);
+        font-weight: var(--bf-font-weight-medium);
         color: var(--bf-appearance-token-color-text-primary);
-        font-family: var(--bf-appearance-token-font-family-mono);
+        font-family:var(--bf-font-family-mono);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .unsaved-indicator {
-        font-size: 11px;
+        font-size: var(--bf-font-size-meta);
         color: var(--bf-appearance-token-color-warning);
         padding: 2px 6px;
         background: var(--bf-appearance-token-color-warning-bg);
@@ -131,14 +131,14 @@
       flex-shrink: 0;
 
       .todos-count {
-        font-size: 11px;
-        font-weight: 500;
+        font-size: var(--bf-font-size-meta);
+        font-weight: var(--bf-font-weight-medium);
         color: var(--bf-appearance-token-color-text-muted);
         padding: 2px 8px;
         border-radius: 999px;
         border: 1px solid var(--bf-appearance-token-border-base);
         background: var(--bf-appearance-token-color-bg-primary);
-        letter-spacing: 0.2px;
+        letter-spacing: var(--bf-letter-spacing-subtle);
       }
 
     }
@@ -242,8 +242,8 @@
       }
 
       .todo-content {
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: var(--bf-font-size-sm);
+        line-height: var(--bf-line-height-base);
         color: var(--bf-appearance-token-color-text-secondary);
         flex: 1;
         min-width: 0;
@@ -252,8 +252,8 @@
       .todo-content-input {
         flex: 1;
         min-width: 0;
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: var(--bf-font-size-sm);
+        line-height: var(--bf-line-height-base);
         color: var(--bf-appearance-token-color-text-primary);
         background: var(--bf-appearance-token-color-bg-primary);
         border: 1px solid var(--bf-appearance-token-border-base);
@@ -283,7 +283,7 @@
 
         .todo-content {
           color: var(--bf-appearance-token-color-text-primary);
-          font-weight: 500;
+          font-weight: var(--bf-font-weight-medium);
         }
       }
 

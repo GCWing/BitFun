@@ -276,9 +276,6 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Appearance UI font custom step minus | `appearance-ui-font-custom-step-minus` | Custom UI font px decrement button. |
 | Appearance UI font custom step plus | `appearance-ui-font-custom-step-plus` | Custom UI font px increment button. |
 | Appearance UI font preview | `appearance-ui-font-preview` | UI font preview area. |
-| Appearance Flow Chat font toggle | `appearance-flowchat-font-toggle` | Flow Chat independent font size toggle input. |
-| Appearance Flow Chat font select | `appearance-flowchat-font-select` | Flow Chat font size select trigger. |
-| Appearance Flow Chat font option | `appearance-flowchat-font-option` | Repeated Flow Chat font size option. Includes `data-font-px` and Select-provided `data-selected`. |
 | Appearance font reset button | `appearance-font-reset-btn` | Resets font preferences to defaults. |
 
 ## Shell Panel

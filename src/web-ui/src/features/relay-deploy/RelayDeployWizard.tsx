@@ -50,6 +50,7 @@ import { buildRelayServerSearchState, getRelayConnectionHost } from './serverSea
 import { ConnectedTerminal, getTerminalService } from '@/tools/terminal';
 import { createLogger } from '@/shared/utils/logger';
 import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
+import { getTypographyTokenPx } from '@/infrastructure/design-system/typographyRuntime';
 import './RelayDeployWizard.scss';
 
 const log = createLogger('RelayDeployWizard');
@@ -63,8 +64,8 @@ function parseRelayPort(raw: string): number | null {
   if (!Number.isFinite(n) || n < 1 || n > 65535) return null;
   return n;
 }
-/** Default terminal font is 14; embed two levels smaller to fit the dialog. */
-const DEPLOY_TERMINAL_FONT_SIZE = 12;
+/** Use the compact design-system step for the embedded deployment terminal. */
+const DEPLOY_TERMINAL_FONT_SIZE = getTypographyTokenPx('font.size.xs');
 const DEPLOY_TERMINAL_OPTIONS = { fontSize: DEPLOY_TERMINAL_FONT_SIZE };
 
 type Step = 'connect' | 'preflight' | 'deploy' | 'register' | 'done';

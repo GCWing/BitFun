@@ -1,13 +1,14 @@
 import React, { useCallback, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
-import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
+import { Menu, MenuItem } from '@bitfun/ui';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 
 interface ChatInputBoostSubmenuProps {
   label: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-  estimatedPanelWidth?: number;
-  estimatedPanelHeight?: number;
   testId?: string;
 }
 
@@ -16,118 +17,91 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
   label,
   icon,
   children,
-  estimatedPanelWidth = 260,
-  estimatedPanelHeight = 200,
   testId,
 }) => {
   const [open, setOpen] = useState(false);
-  const [openLeft, setOpenLeft] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
-  const hostRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-
-  const setActiveSubmenu = useCallback((id: 'submenu' | null) => {
-    if (id !== null) {
-      const host = hostRef.current;
-      if (host) {
-        const bounds = host.getBoundingClientRect();
-        setOpenLeft(bounds.right + estimatedPanelWidth > window.innerWidth - 8);
-        setOpenUp(bounds.top + estimatedPanelHeight > window.innerHeight - 8);
-      }
-    }
-    setOpen(id !== null);
-  }, [estimatedPanelHeight, estimatedPanelWidth]);
-
-  const {
-    requestChange,
-    requestClose,
-    keepOpen,
-    openNow,
-    closeNow: closeImmediately,
-  } = useSubmenuIntent<'submenu'>({
-    activeId: open ? 'submenu' : null,
-    onActiveIdChange: setActiveSubmenu,
-    parentRef: hostRef,
-    submenuRef,
-    openDelayMs: 0,
-    closeDelayMs: 180,
+  const layout = useSideAnchoredPopoverPosition({
+    open,
+    anchorRef: triggerRef,
+    popoverRef: submenuRef,
+    layoutRevision: React.Children.count(children),
   });
 
-  const openFlyout = useCallback(() => {
-    openNow('submenu');
-  }, [openNow]);
+  const openFlyout = useCallback((focusFirstItem = false) => {
+    setOpen(true);
+    if (focusFirstItem) {
+      requestAnimationFrame(() => {
+        submenuRef.current?.querySelector<HTMLButtonElement>('[data-bf-menu-item]')?.focus();
+      });
+    }
+  }, []);
 
   return (
     <div
-      ref={hostRef}
       className="bitfun-chat-input__boost-submenu-host"
-      onPointerEnter={event => requestChange('submenu', event)}
-      onPointerLeave={requestClose}
       data-testid={testId}
     >
-      <div
-        role="menuitem"
-        tabIndex={0}
-        className="bitfun-chat-input__boost-submenu-trigger"
+      <MenuItem
+        ref={triggerRef}
         data-bf-component="chat-input"
         data-bf-part="boostSubmenuTrigger"
         data-bf-state={open ? 'open' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={panelId}
+        leading={icon}
+        metadata={<ChevronRight size={14} aria-hidden />}
         onClick={(event) => {
           event.stopPropagation();
-          openFlyout();
+          if (open) setOpen(false);
+          else openFlyout();
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape' || event.key === 'ArrowLeft') {
             if (!open) return;
             event.preventDefault();
             event.stopPropagation();
-            closeImmediately();
+            setOpen(false);
             return;
           }
-          if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowRight') return;
+          if (event.key !== 'ArrowRight') return;
           event.preventDefault();
           event.stopPropagation();
-          openFlyout();
+          openFlyout(true);
         }}
       >
-        <span className="bitfun-chat-input__boost-submenu-trigger-main">
-          {icon}
-          <span>{label}</span>
-        </span>
-        <ChevronRight
-          size={14}
-          className="bitfun-chat-input__boost-submenu-chevron"
-          aria-hidden
-        />
-      </div>
-      <div
-        ref={submenuRef}
-        onPointerEnter={keepOpen}
-        onPointerLeave={requestClose}
-        className={[
-          'bitfun-chat-input__boost-submenu-shell',
-          open ? 'bitfun-chat-input__boost-submenu-shell--open' : '',
-          openLeft ? 'bitfun-chat-input__boost-submenu-shell--left' : '',
-          openUp ? 'bitfun-chat-input__boost-submenu-shell--up' : '',
-        ].filter(Boolean).join(' ')}
-      >
-        <div
+        {label}
+      </MenuItem>
+      {open ? createPortal(
+        <Menu
+          ref={submenuRef}
           id={panelId}
-          role="menu"
           className="bitfun-chat-input__boost-submenu-panel"
           data-bf-component="chat-input"
           data-bf-part="boostSubmenuPanel"
-          data-bf-state={open ? 'open' : undefined}
-          aria-hidden={!open}
-          {...(!open ? { inert: '' } : {})}
-        >
-          {children}
-        </div>
-      </div>
+          data-bf-state="open"
+          data-bf-placement={layout ? `${layout.placement}-${layout.alignment}` : 'right-start'}
+          style={{
+            top: layout?.top ?? 0,
+            left: layout?.left ?? 0,
+            visibility: layout ? 'visible' : 'hidden',
+          }}
+          onMouseDown={event => event.stopPropagation()}
+          onKeyDown={event => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            requestAnimationFrame(() => triggerRef.current?.focus());
+          }}
+          >
+            {children}
+        </Menu>,
+        getAppearanceOverlayHost(),
+      ) : null}
     </div>
   );
 };

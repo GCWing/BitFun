@@ -70,11 +70,7 @@
       "customPxPlaceholder": "14",
       "customPxOutOfRange": "请输入 12–20 之间的整数",
       "resetButton": "恢复默认",
-      "previewText": "BitFun 是一个由 AI 驱动的编程环境。The quick brown fox jumps over the lazy dog.",
-      "flowChatLabel": "对话区域",
-      "flowChatHint": "关闭时对话区域比界面大 1 px，并随界面档位变化。开启后在下方从列表中选择 12–20 px。",
-      "flowChatCustomToggle": "自定义对话字号",
-      "flowChatPxOption": "{{n}} px"
+      "previewText": "BitFun 是一个由 AI 驱动的编程环境。The quick brown fox jumps over the lazy dog."
     }
   },
   "autoUpdate": {

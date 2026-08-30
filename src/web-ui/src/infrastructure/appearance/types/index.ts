@@ -78,13 +78,6 @@ export interface AppearanceDurationLiteral {
 
 export type AppearanceDurationValue = AppearanceReference | AppearanceDurationLiteral;
 
-export interface AppearanceFontFamilyLiteral {
-  kind: 'fontFamily';
-  families: string[];
-}
-
-export type AppearanceFontFamilyValue = AppearanceReference | AppearanceFontFamilyLiteral;
-
 export interface AppearanceShadowLiteral {
   kind: 'shadow';
   x: AppearanceLengthValue;
@@ -248,13 +241,6 @@ export interface AppearanceStyle {
   outlineStyle?: AppearanceBorderStyle;
   boxShadow?: AppearanceShadowValue[];
   opacity?: AppearanceNumberValue;
-  fontFamily?: AppearanceFontFamilyValue;
-  fontSize?: AppearanceLengthValue;
-  fontWeight?: AppearanceNumberValue;
-  fontStyle?: 'normal' | 'italic';
-  fontVariantNumeric?: 'normal' | 'tabular-nums';
-  lineHeight?: AppearanceNumberValue;
-  letterSpacing?: AppearanceLengthValue;
   textAlign?: 'left' | 'center' | 'right' | 'start' | 'end';
   verticalAlign?: 'baseline' | 'sub' | 'super' | 'text-top' | 'text-bottom' | 'middle' | 'top' | 'bottom';
   textIndent?: AppearanceLengthValue;
@@ -360,7 +346,6 @@ export interface AppearanceGlobalTokens {
   numbers?: Record<string, AppearanceNumberValue>;
   durations?: Record<string, AppearanceDurationValue>;
   easings?: Record<string, AppearanceEasingValue>;
-  fontFamilies?: Record<string, AppearanceFontFamilyValue>;
   shadows?: Record<string, AppearanceShadowValue>;
 }
 
@@ -451,8 +436,6 @@ export interface XtermAppearanceColors {
 
 export interface XtermAppearanceSettings {
   surfaces: Record<XtermAppearanceSurface, XtermAppearanceColors>;
-  fontWeight: 'normal' | '500';
-  fontWeightBold: 'bold' | '700';
 }
 
 export interface MermaidAppearancePalette {

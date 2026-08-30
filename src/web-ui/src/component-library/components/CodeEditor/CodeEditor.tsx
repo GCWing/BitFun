@@ -9,6 +9,7 @@ import { requireMonaco } from '@/tools/editor/services/monacoRuntime';
 import { useI18n } from '@/infrastructure/i18n';
 import { MonacoEditorCore, type MonacoEditorCoreRef } from '@/tools/editor/core';
 import type { EditorConfigPartial } from '@/tools/editor/config';
+import { DEFAULT_EDITOR_FONT_SIZE } from '@/tools/editor/config/defaults';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './CodeEditor.scss';
 
@@ -54,7 +55,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   height = '500px',
   width = '100%',
   wordWrap = 'off',
-  fontSize = 16,
+  fontSize = DEFAULT_EDITOR_FONT_SIZE,
   tabSize = 2,
   onChange,
   onMount,

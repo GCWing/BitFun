@@ -4,7 +4,6 @@
  */
 
 @use '@/component-library/styles/tokens' as *;
-@use '@/component-library/styles/overlay-surfaces' as surfaces;
 
 // Variables
 $_breadcrumb-height: 24px;
@@ -35,8 +34,8 @@ $_dropdown-width: 220px;
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 12px;
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-xs);
+    font-family: var(--bf-font-family-mono);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     border-radius: 3px;
@@ -86,56 +85,10 @@ $_dropdown-width: 220px;
 
 // Dropdown Menu (Portal rendered)
 .editor-breadcrumb-dropdown {
-  @include surfaces.floating-surface;
-
   width: $_dropdown-width;
   max-height: $_dropdown-max-height;
   z-index: 10000;
-  overflow: hidden;
   animation: breadcrumb-dropdown-in 0.12s ease-out;
-  
-  &__header {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    background: var(--bf-appearance-token-color-bg-tertiary);
-  }
-  
-  &__back {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-    
-    &:hover {
-      background-color: var(--bf-appearance-token-element-bg-subtle);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-    
-    &:active {
-      background-color: var(--bf-appearance-token-element-bg-base);
-    }
-  }
-  
-  &__title {
-    flex: 1;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--bf-appearance-token-color-text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   
   &__loading {
     display: flex;
@@ -144,7 +97,7 @@ $_dropdown-width: 220px;
     gap: $size-gap-2;
     padding: 16px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
   }
   
   &__spinner {
@@ -155,72 +108,9 @@ $_dropdown-width: 220px;
     padding: 16px;
     text-align: center;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
   }
   
-  &__list {
-    list-style: none;
-    margin: 0;
-    padding: 4px 0;
-    max-height: $_dropdown-max-height - 40px;
-    
-  }
-  
-  &__item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 10px;
-    cursor: pointer;
-    transition: background-color 0.1s ease;
-    
-    &:hover {
-      background-color: var(--bf-appearance-token-element-bg-subtle);
-    }
-    
-    &:active {
-      background-color: var(--bf-appearance-token-element-bg-base);
-    }
-    
-    &--current {
-      background-color: var(--bf-appearance-token-color-accent-100);
-      
-      .editor-breadcrumb-dropdown__item-name {
-        color: var(--bf-appearance-token-color-accent-500);
-        font-weight: 500;
-      }
-      
-      &:hover {
-        background-color: var(--bf-appearance-token-color-accent-200);
-      }
-    }
-    
-    &-icon {
-      display: flex;
-      align-items: center;
-      flex-shrink: 0;
-      color: var(--bf-appearance-token-color-text-muted);
-      
-      svg { width: 14px; height: 14px; }
-      
-      .lucide-folder { color: rgb(var(--editor-breadcrumb-folder-rgb)); }
-    }
-    
-    &-name {
-      flex: 1;
-      font-size: 12px;
-      color: var(--bf-appearance-token-color-text-primary);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    
-    &-arrow {
-      flex-shrink: 0;
-      color: var(--bf-appearance-token-color-text-muted);
-      opacity: 0.6;
-    }
-  }
 }
 
 // Animations

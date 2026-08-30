@@ -78,14 +78,15 @@ export function Stat({ value, label, tone, style, ...props }: CanvasStatProps) {
       <strong
         style={{
           color: toneColor(tone),
-          fontSize: 24,
-          lineHeight: 1.05,
+          fontSize: 'var(--bf-font-size-3xl)',
+          fontWeight: 'var(--bf-font-weight-semibold)',
+          lineHeight: 'var(--bf-line-height-display)',
           fontVariantNumeric: 'tabular-nums',
         }}
       >
         {value}
       </strong>
-      <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{label}</span>
+      <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>{label}</span>
     </div>
   );
 }
@@ -222,7 +223,7 @@ export function DiffStats({ additions = 0, deletions = 0, style, ...props }: Can
         display: 'inline-flex',
         gap: 7,
         alignItems: 'center',
-        fontSize: 12,
+        fontSize: 'var(--bf-type-support-font-size)',
         fontVariantNumeric: 'tabular-nums',
         ...style,
       }}
@@ -344,8 +345,8 @@ export function KeyValueList({
               style={{
                 margin: 0,
                 color: 'var(--bf-appearance-token-color-text-muted)',
-                fontSize: 11,
-                lineHeight: 1.35,
+                fontSize: 'var(--bf-type-meta-font-size)',
+                lineHeight: 'var(--bf-type-meta-line-height)',
               }}
             >
               {item.label}
@@ -354,9 +355,9 @@ export function KeyValueList({
               style={{
                 margin: '2px 0 0',
                 color: toneColor(item.tone),
-                fontSize: compact ? 12 : 13,
-                fontWeight: 560,
-                lineHeight: 1.35,
+                fontSize: compact ? 'var(--bf-type-body-xs-font-size)' : 'var(--bf-type-body-sm-font-size)',
+                fontWeight: 'var(--bf-font-weight-semibold)',
+                lineHeight: 'var(--bf-line-height-compact)',
                 overflowWrap: 'anywhere',
               }}
             >
@@ -365,7 +366,7 @@ export function KeyValueList({
           </div>
         ))
       ) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>{emptyMessage}</div>
       )}
     </dl>
   );
@@ -407,8 +408,8 @@ export function Timeline({
                   borderRadius: 999,
                   background: 'color-mix(in srgb, currentColor 16%, transparent)',
                   color,
-                  fontSize: 10,
-                  fontWeight: 700,
+                  fontSize: 'var(--bf-type-micro-font-size)',
+                  fontWeight: 'var(--bf-font-weight-bold)',
                 }}
               >
                 {item.icon ?? ''}
@@ -423,17 +424,17 @@ export function Timeline({
                     minWidth: 0,
                   }}
                 >
-                  <strong style={{ minWidth: 0, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 13 }}>
+                  <strong style={{ minWidth: 0, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 'var(--bf-type-body-sm-font-size)' }}>
                     {item.title}
                   </strong>
                   {item.time ? (
-                    <time style={{ flex: '0 0 auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 11 }}>
+                    <time style={{ flex: '0 0 auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-meta-font-size)' }}>
                       {item.time}
                     </time>
                   ) : null}
                 </span>
                 {item.description ? (
-                  <span style={{ color: 'var(--bf-appearance-token-color-text-secondary)', fontSize: 12, overflowWrap: 'anywhere' }}>
+                  <span style={{ color: 'var(--bf-appearance-token-color-text-secondary)', fontSize: 'var(--bf-type-support-font-size)', overflowWrap: 'anywhere' }}>
                     {item.description}
                   </span>
                 ) : null}
@@ -442,7 +443,7 @@ export function Timeline({
           );
         })
       ) : (
-        <li style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</li>
+        <li style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>{emptyMessage}</li>
       )}
     </ol>
   );
@@ -474,8 +475,8 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
           style={{
             minWidth: 0,
             color: toneColor(item.tone),
-            fontFamily: 'var(--bf-appearance-token-font-family-mono)',
-            fontSize: 12,
+            fontFamily: 'var(--bf-type-code-sm-font-family)',
+            fontSize: 'var(--bf-type-code-sm-font-size)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -484,7 +485,7 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
           {item.name ?? item.path}
         </span>
         {item.meta ? (
-          <span style={{ flex: '0 0 auto', marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 11 }}>
+          <span style={{ flex: '0 0 auto', marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-meta-font-size)' }}>
             {item.meta}
           </span>
         ) : null}
@@ -526,7 +527,7 @@ export function FileTree({
       }}
     >
       {items.length ? renderFileTreeItems(items, 0, defaultExpanded) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>{emptyMessage}</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>{emptyMessage}</div>
       )}
     </div>
   );
@@ -555,7 +556,7 @@ export function ProgressBar({
             gap: 10,
             marginBottom: 5,
             color: 'var(--bf-appearance-token-color-text-secondary)',
-            fontSize: 12,
+            fontSize: 'var(--bf-type-support-font-size)',
           }}
         >
           <span>{label}</span>
@@ -643,8 +644,8 @@ export function UsageBar({
             gap: 12,
             marginBottom: 6,
             color: 'var(--bf-appearance-token-color-text-secondary)',
-            fontSize: 12,
-            lineHeight: 1.35,
+            fontSize: 'var(--bf-type-support-font-size)',
+            lineHeight: 'var(--bf-line-height-compact)',
           }}
         >
           <span>{topLeftLabel}</span>
@@ -733,9 +734,9 @@ function TodoMarker({ status }: { status: CanvasTodoItem['status'] }) {
         border: `1.5px solid ${color}`,
         background: isCompleted ? color : 'transparent',
         color: 'var(--bf-appearance-token-color-bg-primary)',
-        fontSize: 10,
-        lineHeight: 1,
-        fontWeight: 800,
+        fontSize: 'var(--bf-type-micro-font-size)',
+        lineHeight: 'var(--bf-line-height-none)',
+        fontWeight: 'var(--bf-font-weight-bold)',
       }}
     >
       {isCompleted ? '✓' : ''}
@@ -789,15 +790,15 @@ export function TodoList({
               <span
                 style={{
                   color: todo.status === 'completed' ? 'var(--bf-appearance-token-color-text-secondary)' : 'var(--bf-appearance-token-color-text-primary)',
-                  fontSize: 12,
-                  lineHeight: 1.45,
+                  fontSize: 'var(--bf-type-support-font-size)',
+                  lineHeight: 'var(--bf-type-support-line-height)',
                   textDecoration: todo.status === 'completed' ? 'line-through' : undefined,
                   overflowWrap: 'anywhere',
                 }}
               >
                 {content}
               </span>
-              <span style={{ color: todoStatusColor(todo.status), fontSize: 10, lineHeight: 1.2 }}>
+              <span style={{ color: todoStatusColor(todo.status), fontSize: 'var(--bf-type-micro-font-size)', lineHeight: 'var(--bf-type-micro-line-height)' }}>
                 {todoStatusLabel(todo.status)}
               </span>
             </span>
@@ -876,8 +877,8 @@ export function TodoListCard({
         >
           ›
         </span>
-        <span style={{ fontWeight: 650, fontSize: 12 }}>Tasks</span>
-        <span style={{ marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>
+        <span style={{ fontWeight: 'var(--bf-font-weight-semibold)', fontSize: 'var(--bf-type-support-font-size)' }}>Tasks</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>
           {completed}/{todos.length} done
         </span>
       </button>

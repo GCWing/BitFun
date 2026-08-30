@@ -22,11 +22,11 @@
     var(--bf-appearance-token-color-static-white)
   );
   color: var(--bf-appearance-token-color-static-white);
-  font-family: $font-family-mono;
-  font-size: var(--bf-appearance-token-font-size-base);
-  font-weight: 300;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-regular);
   font-synthesis: none;
-  line-height: $line-height-tight;
+  line-height: var(--bf-line-height-tight);
   opacity: 0.22;
   cursor: pointer;
   transition:

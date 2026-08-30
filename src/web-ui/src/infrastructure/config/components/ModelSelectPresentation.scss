@@ -2,18 +2,12 @@
 
 .model-select-presentation {
   &__select {
-    [data-bf-component='combobox'] [data-bf-part='trigger'] {
+    > [data-bf-part='control'] > [data-bf-part='trigger'] {
       min-height: 48px;
       align-items: flex-start;
       padding-top: 8px;
       padding-bottom: 8px;
     }
-
-    [data-bf-part='value'][data-placeholder='true'],
-    [data-bf-part='indicator'] {
-      align-self: center;
-    }
-
   }
 
   &__value {
@@ -48,8 +42,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: 10px;
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__value-meta,
@@ -60,8 +54,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 8px;
-    line-height: 1.4;
+    font-size: var(--bf-font-size-3xs);
+    line-height: var(--bf-line-height-ui);
   }
 
   &__thinking {
@@ -72,9 +66,4 @@
     height: 11px;
     color: rgba(var(--model-select-thinking-rgb), 0.9);
   }
-}
-
-.model-select-presentation__dropdown [data-bf-part='option'] {
-  padding: 8px 10px;
-  border-radius: 6px;
 }

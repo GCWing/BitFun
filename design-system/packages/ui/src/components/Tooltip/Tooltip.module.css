@@ -41,8 +41,8 @@
     border-radius: var(--bf-overlay-tooltip-surface-radius);
     background: color-mix(in srgb, var(--bf-color-surface-raised) 96%, transparent);
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-sans);
-    font-size: var(--bf-overlay-tooltip-font-size);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-support-font-size);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-base);
     overflow-wrap: break-word;

@@ -30,15 +30,6 @@
   --bf-appearance-token-element-bg-soft: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
   --bf-appearance-token-element-bg-base: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
   --bf-appearance-token-element-bg-medium: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
-  --bf-appearance-token-font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --bf-appearance-token-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --bf-appearance-token-font-size-xs: 12px;
-  --bf-appearance-token-font-size-sm: 13px;
-  --bf-appearance-token-font-size-base: 14px;
-  --bf-appearance-token-font-size-lg: 15px;
-  --bf-appearance-token-font-size-2xl: 18px;
-  --bf-appearance-token-font-weight-medium: 500;
-  --bf-appearance-token-font-weight-semibold: 600;
   --bf-appearance-token-size-radius-sm: 6px;
   --bf-appearance-token-size-radius-base: 8px;
   --bf-appearance-token-size-radius-md: var(--bf-appearance-token-size-radius-base);
@@ -76,7 +67,10 @@ body {
   margin: 0;
   background: var(--bf-appearance-token-color-bg-scene);
   color: var(--bf-appearance-token-color-text-primary);
-  font: 13px/1.5 var(--bf-appearance-token-font-family-sans);
+  font-family: var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-base);
   text-rendering: geometricPrecision;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -146,9 +140,9 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 9px 12px;
   border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.25;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-dense);
 }
 
 .bf-card-body {
@@ -181,15 +175,15 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-callout-title {
   margin-bottom: 6px;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-compact);
 }
 
 .bf-callout-body {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .bf-callout-body > :first-child {
@@ -209,8 +203,8 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 3px 9px;
   background: var(--bf-appearance-token-element-bg-base);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
   white-space: nowrap;
 }
 
@@ -247,8 +241,8 @@ html[data-bitfun-canvas-design-mode] body {
   padding: 1px 5px;
   background: var(--bf-appearance-token-element-bg-base);
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--bf-appearance-token-font-family-mono);
-  font-size: 0.92em;
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
 }
 
 .bf-table-wrap {
@@ -261,7 +255,7 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
 }
 
 .bf-table th,
@@ -274,7 +268,7 @@ html[data-bitfun-canvas-design-mode] body {
 
 .bf-table th {
   color: var(--bf-appearance-token-color-text-primary);
-  font-weight: 650;
+  font-weight: var(--bf-font-weight-semibold);
   background: var(--bf-appearance-token-color-bg-chrome);
 }
 
@@ -285,7 +279,10 @@ html[data-bitfun-canvas-design-mode] body {
 .bf-diff {
   overflow: auto;
   background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 54%, transparent);
-  font: 12px/1.55 var(--bf-appearance-token-font-family-mono);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-regular);
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .bf-chart {
@@ -309,9 +306,9 @@ html[data-bitfun-canvas-design-mode] body {
   min-width: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.25;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-line-height-dense);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -321,7 +318,7 @@ html[data-bitfun-canvas-design-mode] body {
   flex-wrap: wrap;
   gap: 6px 10px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
 }
 
 .bf-chart__legend-item {
@@ -359,13 +356,13 @@ html[data-bitfun-canvas-design-mode] body {
 
 .bf-canvas-toggle__label {
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
 }
 
 .bf-canvas-toggle__description,
 .bf-canvas-toggle__status {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
 }
 
 .bf-input,

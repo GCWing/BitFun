@@ -85,11 +85,11 @@
 }
 
 .branch-select-dialog__title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
   margin: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.3;
+  line-height: var(--bf-line-height-snug);
 }
 
 // ==================== Content Area ====================
@@ -122,7 +122,7 @@
   border: 1px solid var(--bf-appearance-token-color-error-border);
   border-radius: 6px;
   color: var(--bf-appearance-token-color-error);
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
 }
 
 // ==================== Branch List ====================
@@ -145,7 +145,7 @@
   align-items: center;
   gap: 10px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
 }
 
 .branch-select-dialog__loading-dots {
@@ -173,7 +173,7 @@
   padding: 24px;
   text-align: center;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
 }
 
 // ==================== Branch Item ====================
@@ -196,7 +196,7 @@
 
   &.current {
     .branch-select-dialog__item-name {
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
     }
   }
 
@@ -230,7 +230,7 @@
 
 .branch-select-dialog__item-name {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -244,8 +244,8 @@
 .branch-select-dialog__item-badge {
   flex-shrink: 0;
   padding: 2px 6px;
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-medium);
   text-transform: uppercase;
   color: var(--bf-appearance-token-color-accent-500);
   background: var(--bf-appearance-token-color-accent-100);

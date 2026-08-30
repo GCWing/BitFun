@@ -25,9 +25,9 @@ $_diff-padding-desktop: 32px;
     border-radius: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 50%, transparent);
     color: var(--bf-appearance-token-color-error);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    font-family: var(--bf-font-family-mono);
     animation: git-diff-editor-error-slide-in 0.3s ease-out;
 
     svg {
@@ -219,8 +219,8 @@ $_diff-padding-desktop: 32px;
     border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
     border-radius: $size-radius-base;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-font-family-mono);
     z-index: $z-overlay;
     animation: git-diff-editor-fade-in 0.2s ease-out;
     backdrop-filter: blur(4px);
@@ -244,9 +244,9 @@ $_diff-padding-desktop: 32px;
     animation: git-diff-editor-fade-in 0.2s ease-out;
 
     p {
-      font-size: var(--bf-appearance-token-font-size-base);
-      font-weight: $font-weight-medium;
-      font-family: $font-family-mono;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-medium);
+      font-family: var(--bf-font-family-mono);
       color: var(--bf-appearance-token-color-text-primary);
       animation: git-diff-editor-pulse $motion-slow ease-in-out infinite;
     }
@@ -314,9 +314,9 @@ $_diff-padding-desktop: 32px;
   }
 
   &__completed-title {
-    font-size: var(--bf-appearance-token-font-size-2xl);
-    font-weight: $font-weight-semibold;
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-2xl);
+    font-weight: var(--bf-font-weight-semibold);
+    font-family: var(--bf-font-family-mono);
     color: var(--bf-appearance-token-color-text-primary);
     margin-bottom: $size-gap-4;
     animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 40ms both;
@@ -329,16 +329,16 @@ $_diff-padding-desktop: 32px;
     animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 70ms both;
 
     .git-diff-editor__file-path {
-      font-size: var(--bf-appearance-token-font-size-base);
-      font-family: $font-family-mono;
+      font-size: var(--bf-font-size-base);
+      font-family: var(--bf-font-family-mono);
       color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   &__result-text {
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: $font-weight-medium;
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-medium);
+    font-family: var(--bf-font-family-mono);
     margin-top: $size-gap-3;
 
     &--success {
@@ -434,7 +434,7 @@ $_diff-padding-desktop: 32px;
     }
 
     &__completed-title {
-      font-size: var(--bf-appearance-token-font-size-xl);
+      font-size: var(--bf-font-size-xl);
     }
 
     &__spinner {

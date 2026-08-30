@@ -1,4 +1,3 @@
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-agent-companion-window-root,
 .bitfun-agent-companion-window-body {
@@ -83,69 +82,12 @@
   }
 
   &__overlay {
-    @include surfaces.floating-surface($backdrop-blur: false);
-
-    box-sizing: border-box;
-    width: max-content;
-    max-width: min(240px, 100vw);
-    padding: 5px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    /* Intentionally no backdrop-filter: adding a blurred layer on right-click
-       re-composites the other blurred surfaces and flashes the whole window.
-       All remaining chrome still comes from FloatingSurface. */
-    /* The floating surface follows the active appearance, so its foreground
-       must do the same instead of inheriting the always-dark bubble copy. */
-    color: var(--bf-appearance-token-color-text-primary);
     pointer-events: auto;
 
     /* Context menus are placed at the cursor. */
     &--anchored {
       position: absolute;
       z-index: 3;
-    }
-  }
-
-  &__menu {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  &__menu-item {
-    appearance: none;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 5px 8px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font: inherit;
-    font-size: 11px;
-    line-height: 1.3;
-    text-align: left;
-    /* Wrap rather than spill: the window can be as narrow as the pet sprite. */
-    white-space: normal;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-    transition:
-      color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
-      background var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
-
-    &:hover {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &:active {
-      background: var(--bf-appearance-token-element-bg-medium);
-    }
-
-    &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 70%, transparent);
-      outline-offset: -2px;
     }
   }
 
@@ -174,8 +116,8 @@
     background: var(--bf-appearance-token-color-overlay-white-95);
     color: inherit;
     font: inherit;
-    font-size: 10px;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-snug);
     user-select: text;
     -webkit-user-select: text;
 
@@ -420,16 +362,16 @@
     box-sizing: border-box;
     max-width: 100%;
     padding-right: 8px;
-    font-size: 11px;
-    line-height: 1.25;
-    font-weight: 650;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-dense);
+    font-weight: var(--bf-font-weight-semibold);
     min-width: 0;
   }
 
   &__bubble-status {
     margin-top: 2px;
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-dense);
     color: rgba(var(--bitfun-agent-companion-bubble-copy-rgb), 0.7);
   }
 
@@ -439,8 +381,8 @@
     min-height: 0;
     flex: 0 0 calc(12px * 4);
     height: calc(12px * 4);
-    font-size: 10px;
-    line-height: 12px;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-tight);
     color: rgba(var(--bitfun-agent-companion-bubble-copy-rgb), 0.82);
     white-space: pre-wrap;
     word-break: break-word;

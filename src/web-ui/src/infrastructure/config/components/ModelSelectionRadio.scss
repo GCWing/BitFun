@@ -24,7 +24,7 @@
     
     .model-selection-radio__option {
       padding: $size-gap-1 $size-gap-2;
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
     
     .model-selection-radio__dropdown {
@@ -37,7 +37,7 @@
     
     .model-selection-radio__option {
       padding: $size-gap-2 $size-gap-3;
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
     }
     
     .model-selection-radio__dropdown {
@@ -98,15 +98,15 @@
     gap: $size-gap-1;
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
     transition: color $motion-base $easing-standard;
   }
   
   
   &__hint {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    font-weight: $font-weight-normal;
+    font-weight: var(--bf-font-weight-regular);
     
     &--warning {
       color: var(--bf-appearance-token-color-warning);

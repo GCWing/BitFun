@@ -12,7 +12,6 @@ import {
   createSlateRadius,
   createStandardEasing,
   createStandardSpacing,
-  createStandardTypography,
   overlayBlack,
   overlayWhite,
   rgbFromHex,
@@ -146,8 +145,6 @@ export const bitfunSlatePalette: AppearancePalette = {
     easing: createStandardEasing(),
   },
 
-
-  typography: createStandardTypography(),
 
 
   components: {

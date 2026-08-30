@@ -41,13 +41,6 @@ $ins-r:    8px;
 $ins-r-sm: 5px;
 $ins-r-lg: 12px;
 
-// Type scale
-$ins-title:   20px;
-$ins-section: 12px;   // section headings (small caps style)
-$ins-body:    14px;
-$ins-small:   13px;
-$ins-label:   12px;
-
 // ============================================================
 // Keyframes
 // ============================================================
@@ -75,9 +68,9 @@ $ins-label:   12px;
   height: 100%;
   overflow: hidden;
   animation: ins-fade-in 0.18s ease-out both;
-  font-family: $font-family-sans;
-  font-size: $ins-body;
-  line-height: 1.6;
+  font-family: var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-base);
+  line-height: var(--bf-line-height-relaxed);
   color: var(--bf-appearance-token-color-text-primary);
   -webkit-font-smoothing: antialiased;
 }
@@ -107,15 +100,15 @@ $ins-label:   12px;
 }
 
 .insights-scene__header-title {
-  font-size: $ins-title;
-  font-weight: 600;
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
   margin: 0 0 2px;
-  letter-spacing: 0;
+  letter-spacing: var(--bf-letter-spacing-normal);
 }
 
 .insights-scene__header-subtitle {
-  font-size: $ins-small;
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-muted);
   margin: 0;
 }
@@ -139,12 +132,11 @@ $ins-label:   12px;
   width: 260px;
   min-width: 0;
 
-  [data-bf-component='combobox'] [data-bf-part='trigger'] {
+  > [data-bf-part='control'] > [data-bf-part='trigger'] {
     min-height: 42px;
     padding-top: 5px;
     padding-bottom: 5px;
   }
-
 }
 
 .insights-scene__model-select-dropdown {
@@ -153,6 +145,7 @@ $ins-label:   12px;
 
 .insights-model-select {
   &__value {
+    display: flex;
     align-items: flex-start;
     flex-direction: column;
     gap: 1px;
@@ -165,9 +158,9 @@ $ins-label:   12px;
     width: 100%;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.25;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-dense);
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -178,8 +171,8 @@ $ins-label:   12px;
     width: 100%;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 9px;
-    line-height: 1.2;
+    font-size: var(--bf-font-size-2xs);
+    line-height: var(--bf-line-height-tight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -191,9 +184,9 @@ $ins-label:   12px;
 
   &__option-name {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.35;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-compact);
     overflow-wrap: anywhere;
     white-space: normal;
   }
@@ -201,8 +194,8 @@ $ins-label:   12px;
   &__option-meta {
     margin-top: 2px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-snug);
     overflow-wrap: anywhere;
     white-space: normal;
   }
@@ -221,8 +214,8 @@ $ins-label:   12px;
 }
 
 .insights-scene__control-label {
-  font-size: 11px;
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-text-muted);
   white-space: nowrap;
 }
@@ -236,7 +229,7 @@ $ins-label:   12px;
   padding: 5px $ins-md;
   background: $ins-red-bg;
   border-radius: $ins-r-sm;
-  font-size: $ins-small;
+  font-size: var(--bf-font-size-sm);
   color: $ins-red;
 
   span { flex: 1; }
@@ -272,16 +265,16 @@ $ins-label:   12px;
 
   &__eyebrow {
     margin-bottom: 1px;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     color: $ins-blue;
-    letter-spacing: 0;
+    letter-spacing: var(--bf-letter-spacing-normal);
   }
 
   &__title {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.35;
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-compact);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -289,8 +282,8 @@ $ins-label:   12px;
     margin-top: 2px;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: $ins-label;
-    line-height: 1.4;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-ui);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -300,14 +293,14 @@ $ins-label:   12px;
     align-items: center;
     gap: $ins-xs;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     white-space: nowrap;
 
     strong {
       min-width: 36px;
       color: var(--bf-appearance-token-color-text-secondary);
       font-variant-numeric: tabular-nums;
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
@@ -369,9 +362,9 @@ $ins-label:   12px;
 
   &__step-label {
     overflow: hidden;
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 1.25;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-dense);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -394,10 +387,10 @@ $ins-label:   12px;
 }
 
 .insights-scene__history-label {
-  font-size: $ins-label;
-  font-weight: 600;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0;
+  letter-spacing: var(--bf-letter-spacing-normal);
   color: var(--bf-appearance-token-color-text-muted);
 }
 
@@ -412,16 +405,16 @@ $ins-label:   12px;
   border-radius: 9px;
   background: $ins-surface-soft;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-micro);
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .insights-scene__history-hint {
-  font-weight: 400;
+  font-weight: var(--bf-font-weight-regular);
   text-transform: none;
-  font-size: 10px;
+  font-size: var(--bf-font-size-micro);
   opacity: 0.55;
-  letter-spacing: 0;
+  letter-spacing: var(--bf-letter-spacing-normal);
   text-align: right;
 }
 
@@ -438,7 +431,7 @@ $ins-label:   12px;
   text-align: center;
   padding: $ins-xl;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: $ins-small;
+  font-size: var(--bf-font-size-sm);
 }
 
 .insights-scene__report-list {
@@ -494,14 +487,14 @@ $ins-label:   12px;
   }
 
   &__date {
-    font-size: $ins-body;
-    font-weight: 500;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     transition: color 0.2s;
   }
 
   &__range {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
@@ -525,15 +518,15 @@ $ins-label:   12px;
       display: flex;
       min-width: 0;
       flex-direction: column;
-      font-size: 10px;
-      line-height: 1.25;
+      font-size: var(--bf-font-size-micro);
+      line-height: var(--bf-line-height-dense);
     }
 
     strong {
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: $ins-small;
-      font-weight: 600;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-semibold);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -554,8 +547,8 @@ $ins-label:   12px;
       align-items: center;
       gap: 3px;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: 10px;
-      line-height: 1.3;
+      font-size: var(--bf-font-size-micro);
+      line-height: var(--bf-line-height-snug);
     }
 
   }
@@ -568,7 +561,7 @@ $ins-label:   12px;
   }
 
   &__tag {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     padding: 1px 6px;
     border-radius: 3px;
     background: $ins-blue-bg;
@@ -592,8 +585,8 @@ $ins-label:   12px;
     padding-top: $ins-sm;
     border-top: 1px solid $ins-border;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 9px;
-    line-height: 1.3;
+    font-size: var(--bf-font-size-2xs);
+    line-height: var(--bf-line-height-snug);
     opacity: 0.72;
 
     > span {
@@ -689,7 +682,7 @@ $ins-label:   12px;
     align-items: center;
     gap: $ins-lg;
     margin-left: auto;
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
 
@@ -749,10 +742,10 @@ $ins-label:   12px;
 
   &__title {
     margin: 0;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.035em;
-    line-height: 1.2;
+    font-size: var(--bf-font-size-4xl);
+    font-weight: var(--bf-font-weight-bold);
+    letter-spacing: var(--bf-letter-spacing-tighter);
+    line-height: var(--bf-line-height-tight);
     background: linear-gradient(
       135deg,
       var(--bf-appearance-token-color-text-primary) 0%,
@@ -787,10 +780,10 @@ $ins-label:   12px;
 
   // Section group label (reserved) - keeps structure flexible
   &__group-label {
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.5;
     padding: $ins-sm $ins-sm $ins-xs;
@@ -805,12 +798,12 @@ $ins-label:   12px;
     border: none;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     text-align: left;
     cursor: pointer;
     transition: color 0.15s, background 0.15s;
     border-radius: $ins-r-sm;
-    line-height: 1.35;
+    line-height: var(--bf-line-height-compact);
 
     // Active indicator pill on left edge
     &::before {
@@ -837,7 +830,7 @@ $ins-label:   12px;
 
     &.is-active {
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       background: $ins-blue-bg;
 
       &::before {
@@ -851,7 +844,7 @@ $ins-label:   12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
   }
 }
 
@@ -868,9 +861,9 @@ $ins-label:   12px;
   display: flex;
   align-items: center;
   gap: $ins-sm;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-bold);
+  letter-spacing: var(--bf-letter-spacing-tight);
   color: var(--bf-appearance-token-color-text-primary);
   margin: 0 0 $ins-lg;
   padding: 0;
@@ -890,18 +883,18 @@ $ins-label:   12px;
 
 .insights-section h3 { @extend %ins-section-heading; }
 .insights-section h4 {
-  font-size: $ins-body;
-  font-weight: 600;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-secondary);
   margin: $ins-lg 0 $ins-sm;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--bf-letter-spacing-snug);
 }
 
 .insights-section-intro {
-  font-size: $ins-body;
+  font-size: var(--bf-font-size-base);
   color: var(--bf-appearance-token-color-text-muted);
   margin: -$ins-sm 0 $ins-lg;
-  line-height: 1.7;
+  line-height: var(--bf-line-height-spacious);
 }
 
 // ============================================================
@@ -922,10 +915,10 @@ $ins-label:   12px;
   &:hover { border-color: var(--bf-appearance-token-border-medium); }
 
   &__title {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     color: $ins-blue;
     margin: 0 0 $ins-md;
   }
@@ -937,9 +930,9 @@ $ins-label:   12px;
   }
 
   &__item {
-    font-size: $ins-body;
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.7;
+    line-height: var(--bf-line-height-spacious);
     padding: $ins-md 0;
     border-bottom: 1px solid $ins-border;
 
@@ -948,8 +941,8 @@ $ins-label:   12px;
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: 600;
-      letter-spacing: -0.01em;
+      font-weight: var(--bf-font-weight-semibold);
+      letter-spacing: var(--bf-letter-spacing-snug);
     }
   }
 }
@@ -1001,18 +994,18 @@ $ins-label:   12px;
   }
 
   &__value {
-    font-size: 20px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-3xl);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.03em;
-    line-height: 1.2;
+    letter-spacing: var(--bf-letter-spacing-tight);
+    line-height: var(--bf-line-height-tight);
   }
 
   &__label {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: var(--bf-letter-spacing-wide);
     margin-top: 4px;
   }
 }
@@ -1037,10 +1030,10 @@ $ins-label:   12px;
   padding: 0;
 
   &__title {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: $ins-md;
     opacity: 0.6;
@@ -1056,7 +1049,7 @@ $ins-label:   12px;
 
   &__label {
     width: 88px;
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
     overflow: hidden;
@@ -1082,8 +1075,8 @@ $ins-label:   12px;
 
   &__value {
     width: 30px;
-    font-size: $ins-small;
-    font-weight: 500;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-muted);
     text-align: right;
   }
@@ -1112,9 +1105,9 @@ $ins-label:   12px;
   margin-bottom: $ins-lg;
 
   &__narrative {
-    font-size: $ins-body;
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.7;
+    line-height: var(--bf-line-height-spacious);
     margin: 0 0 $ins-md;
   }
 
@@ -1125,9 +1118,9 @@ $ins-label:   12px;
   }
 
   &__pattern {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     padding: $ins-sm 0;
     border-bottom: 1px solid $ins-border;
 
@@ -1164,22 +1157,22 @@ $ins-label:   12px;
   }
 
   &__name {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
   }
 
   &__count {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 }
@@ -1195,17 +1188,17 @@ $ins-label:   12px;
   &:first-child { border-top: 1px solid $ins-border; }
 
   &__title {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
     margin: 0 0 4px;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.65;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 
@@ -1213,17 +1206,17 @@ $ins-label:   12px;
   &__impact {
     display: flex;
     gap: 6px;
-    font-size: $ins-small;
-    font-weight: 500;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     margin: $ins-sm 0 0;
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
 
     &::before {
       content: '→';
       color: $ins-blue;
       flex-shrink: 0;
-      font-weight: 400;
+      font-weight: var(--bf-font-weight-regular);
     }
   }
 }
@@ -1239,23 +1232,23 @@ $ins-label:   12px;
   &:first-child { border-top: 1px solid $ins-border; }
 
   &__title {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
     margin: 0 0 4px;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.65;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 
   &__examples {
     margin: $ins-xs 0 0 $ins-md;
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     list-style: none;
     padding: 0;
@@ -1271,16 +1264,16 @@ $ins-label:   12px;
     display: flex;
     gap: 6px;
     margin-top: $ins-sm;
-    font-size: $ins-small;
-    font-weight: 500;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.55;
+    line-height: var(--bf-line-height-comfortable);
 
     &::before {
       content: '→';
       color: $ins-blue;
       flex-shrink: 0;
-      font-weight: 400;
+      font-weight: var(--bf-font-weight-regular);
     }
   }
 }
@@ -1296,20 +1289,20 @@ $ins-label:   12px;
   border-radius: $ins-r;
   padding: $ins-md $ins-lg;
   margin-bottom: $ins-md;
-  font-size: $ins-small;
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.7;
+  line-height: var(--bf-line-height-spacious);
 }
 
 // Conclusion line: single-sentence summary at end of each section
 .insights-conclusion-line {
-  font-size: $ins-small;
-  font-weight: 500;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-text-primary);
   padding-top: $ins-sm;
   border-top: 1px solid $ins-border;
   margin-top: $ins-md;
-  line-height: 1.6;
+  line-height: var(--bf-line-height-relaxed);
 }
 
 // Key metric inline: used inside paragraphs, not standalone
@@ -1320,15 +1313,15 @@ $ins-label:   12px;
   gap: 3px;
 
   &__value {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.03em;
+    font-size: var(--bf-font-size-xl);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-tight);
     color: $ins-blue;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
   }
 
   &__unit {
-    font-size: $ins-label;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 }
@@ -1339,7 +1332,7 @@ $ins-label:   12px;
 
 .insights-report-body {
   strong {
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -1374,20 +1367,20 @@ $ins-label:   12px;
 
   &__badge {
     display: inline-block;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-muted);
     background: $ins-surface-soft;
     border: 1px solid $ins-border;
     border-radius: $ins-r-sm;
     padding: 2px 7px;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--bf-letter-spacing-wide);
   }
 
   &__rationale {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     margin: $ins-xs 0 0;
     font-style: italic;
   }
@@ -1411,10 +1404,10 @@ $ins-label:   12px;
   &:first-of-type { border-top: 1px solid $ins-border; }
 
   &__index {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: $ins-blue;
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
     min-width: 18px;
     flex-shrink: 0;
     opacity: 0.7;
@@ -1427,24 +1420,24 @@ $ins-label:   12px;
   }
 
   &__title {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
     margin: 0 0 3px;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.65;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 
   &__benefit {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.55;
+    line-height: var(--bf-line-height-comfortable);
     margin: 4px 0 0;
     font-style: italic;
   }
@@ -1465,17 +1458,17 @@ $ins-label:   12px;
   &:first-of-type { border-top: 1px solid $ins-border; }
 
   &__title {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
     margin: 0 0 3px;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.65;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 }
@@ -1486,10 +1479,10 @@ $ins-label:   12px;
   margin-top: $ins-sm;
 
   &__label {
-    font-size: $ins-label;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: $ins-xs;
     opacity: 0.7;
@@ -1513,12 +1506,12 @@ $ins-label:   12px;
     // right padding reserves space for the button
     padding: $ins-sm 40px $ins-sm $ins-md;
     border-radius: $ins-r-sm;
-    font-size: $ins-small;
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-font-family-mono);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     transition: border-color 0.15s;
 
     .insights-copyable__row:hover & { border-color: $ins-border-hover; }
@@ -1574,11 +1567,11 @@ $ins-label:   12px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-bold);
+    letter-spacing: var(--bf-letter-spacing-normal);
     color: $ins-blue;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
     flex-shrink: 0;
     width: 24px;
     height: 24px;
@@ -1593,17 +1586,17 @@ $ins-label:   12px;
   }
 
   &__title {
-    font-weight: 600;
-    font-size: $ins-body;
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
     margin: 0 0 5px;
   }
 
   &__desc {
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.65;
+    line-height: var(--bf-line-height-relaxed);
     margin: 0;
   }
 
@@ -1615,16 +1608,16 @@ $ins-label:   12px;
     margin-top: $ins-md;
     padding-top: $ins-md;
     border-top: 1px solid $ins-border;
-    font-size: $ins-small;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.55;
+    line-height: var(--bf-line-height-comfortable);
   }
 
   &__how-label {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     color: $ins-blue;
     flex-shrink: 0;
     opacity: 0.8;
@@ -1662,18 +1655,18 @@ $ins-label:   12px;
   }
 
   &__headline {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-2xl);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 $ins-sm;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
+    letter-spacing: var(--bf-letter-spacing-tight);
+    line-height: var(--bf-line-height-dense);
   }
 
   &__message {
-    font-size: $ins-body;
+    font-size: var(--bf-font-size-base);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.7;
+    line-height: var(--bf-line-height-spacious);
     margin: 0;
     max-width: none;
     text-align: left;

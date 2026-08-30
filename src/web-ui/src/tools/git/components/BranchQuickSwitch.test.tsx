@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => undefined),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Button: forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
     loading?: boolean;
     variant?: string;

@@ -8,9 +8,9 @@
   outline: none !important;
   box-shadow: none !important;
   resize: none;
-  font-family: $font-family-mono;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: $line-height-relaxed;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-relaxed);
   background: transparent;
   color: inherit;
 

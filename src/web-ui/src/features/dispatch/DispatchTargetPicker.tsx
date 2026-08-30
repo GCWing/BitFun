@@ -16,7 +16,7 @@ import {
   Server,
 } from 'lucide-react';
 
-import { Icon, ScrollArea } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -30,7 +30,6 @@ import type {
 } from './types';
 import { useDispatchTargets } from './useDispatchTargets';
 import './DispatchTargetPicker.scss';
-import { Tooltip } from '@bitfun/ui';
 
 interface DispatchTargetPickerProps {
   target: DispatchTarget;
@@ -145,7 +144,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     target.kind === 'local' && !!localWorktreeControl?.enabled;
 
   const menu = open ? (
-    <ScrollArea
+    <Menu
       ref={menuRef}
       className="dispatch-target-picker__menu"
       data-bf-component="dispatch-target-picker"
@@ -156,76 +155,67 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         left: `${menuLayout?.left ?? 0}px`,
         visibility: menuLayout ? 'visible' : 'hidden',
       }}
-      role="menu"
       aria-label={t('chatInput.dispatch.menuLabel')}
       data-testid="dispatch-target-menu"
+      autoFocusFirstItem
     >
-      <div className="dispatch-target-picker__header">
-        <span>{t('chatInput.dispatch.menuLabel')}</span>
-        <small>{t('chatInput.dispatch.sessionScope')}</small>
-      </div>
-      <div className="dispatch-target-picker__section">
-        <div className="dispatch-target-picker__section-title">
-          {t('chatInput.dispatch.localSection')}
+      <MenuSection title={t('chatInput.dispatch.menuLabel')}>
+        <div className="dispatch-target-picker__status">
+          {t('chatInput.dispatch.sessionScope')}
         </div>
-        <button
-          type="button"
+      </MenuSection>
+      <MenuSeparator />
+      <MenuSection title={t('chatInput.dispatch.localSection')}>
+        <MenuItem
           role="menuitemradio"
-          aria-checked={localDirectorySelected}
-          className="dispatch-target-picker__option"
+          checked={localDirectorySelected}
+          className="dispatch-target-picker__option-row"
           data-bf-component="dispatch-target-picker"
           data-bf-part="option"
           data-testid="dispatch-target-local-option"
           disabled={localWorktreeControl?.locked}
+          leading={<Laptop size={15} aria-hidden />}
+          metadata={localDirectorySelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
           onClick={() => selectLocalMode(false)}
         >
-          <Laptop size={15} aria-hidden />
-          <span>
+          <span className="dispatch-target-picker__option-copy">
             <strong>{t('chatInput.dispatch.local')}</strong>
             <small>{t('chatInput.dispatch.localDescription')}</small>
           </span>
-          {localDirectorySelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
-        </button>
+        </MenuItem>
         {localWorktreeControl ? (
-          <button
-            type="button"
+          <MenuItem
             role="menuitemradio"
-            aria-checked={localWorktreeSelected}
-            className="dispatch-target-picker__option"
+            checked={localWorktreeSelected}
+            className="dispatch-target-picker__option-row"
             data-bf-component="dispatch-target-picker"
             data-bf-part="option"
             data-testid="dispatch-target-new-worktree-option"
             disabled={localWorktreeControl.locked}
+            leading={<FolderGit2 size={15} aria-hidden />}
+            metadata={localWorktreeSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
             onClick={() => selectLocalMode(true)}
           >
-            <FolderGit2 size={15} aria-hidden />
-            <span>
+            <span className="dispatch-target-picker__option-copy">
               <strong>{localWorktreeControl.label}</strong>
               <small>{localWorktreeControl.description}</small>
             </span>
-            {localWorktreeSelected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
-          </button>
+          </MenuItem>
         ) : null}
-      </div>
+      </MenuSection>
 
-      <div className="dispatch-target-picker__divider" role="separator" />
-      <div className="dispatch-target-picker__section">
-        <div className="dispatch-target-picker__section-title">
-          {t('chatInput.dispatch.deviceSection')}
-        </div>
+      <MenuSeparator />
+      <MenuSection title={t('chatInput.dispatch.deviceSection')}>
         {!loggedIn ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="dispatch-target-picker__footer-action"
+          <MenuItem
+            leading={<MonitorSmartphone size={14} aria-hidden />}
             onClick={() => {
               setOpen(false);
               setAccountDialogOpen(true);
             }}
           >
-            <MonitorSmartphone size={14} aria-hidden />
-            <span>{t('chatInput.dispatch.signInDevices')}</span>
-          </button>
+            {t('chatInput.dispatch.signInDevices')}
+          </MenuItem>
         ) : null}
         {loggedIn && !loading && deviceTargets.length === 0 ? (
           <div className="dispatch-target-picker__status">
@@ -236,21 +226,20 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           const selected = target.kind === 'device' && target.deviceId === option.deviceId;
           const online = option.online !== false;
           return (
-            <button
+            <MenuItem
               key={option.deviceId}
-              type="button"
               role="menuitemradio"
-              aria-checked={selected}
-              aria-disabled={!online}
-              className="dispatch-target-picker__option"
+              checked={selected}
+              className="dispatch-target-picker__option-row"
               disabled={!online}
+              leading={<MonitorSmartphone size={15} aria-hidden />}
+              metadata={selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
               onClick={() => {
                 setOpen(false);
                 setConfigureTarget(option);
               }}
             >
-              <MonitorSmartphone size={15} aria-hidden />
-              <span>
+              <span className="dispatch-target-picker__option-copy">
                 <strong>{option.displayName}</strong>
                 <small>
                   {online
@@ -258,17 +247,13 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
                     : t('chatInput.dispatch.deviceOffline')}
                 </small>
               </span>
-              {selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
-            </button>
+            </MenuItem>
           );
         })}
-      </div>
+      </MenuSection>
 
-      <div className="dispatch-target-picker__divider" role="separator" />
-      <div className="dispatch-target-picker__section">
-        <div className="dispatch-target-picker__section-title">
-          {t('chatInput.dispatch.sshSection')}
-        </div>
+      <MenuSeparator />
+      <MenuSection title={t('chatInput.dispatch.sshSection')}>
         {loading ? (
           <div className="dispatch-target-picker__status">
             <Loader2 size={14} className="dispatch-target-picker__spin" />
@@ -276,15 +261,12 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           </div>
         ) : null}
         {!loading && error ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="dispatch-target-picker__footer-action"
+          <MenuItem
+            leading={<RefreshCw size={14} aria-hidden />}
             onClick={() => void refresh()}
           >
-            <RefreshCw size={14} aria-hidden />
-            <span>{t('chatInput.dispatch.targetLoadFailed')}</span>
-          </button>
+            {t('chatInput.dispatch.targetLoadFailed')}
+          </MenuItem>
         ) : null}
         {!loading && !error && sshTargets.length === 0 ? (
           <div className="dispatch-target-picker__status">
@@ -294,42 +276,38 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         {sshTargets.map(option => {
           const selected = target.kind === 'ssh' && target.connectionId === option.connectionId;
           return (
-            <button
+            <MenuItem
               key={option.connectionId}
-              type="button"
               role="menuitemradio"
-              aria-checked={selected}
-              className="dispatch-target-picker__option"
+              checked={selected}
+              className="dispatch-target-picker__option-row"
+              leading={<Server size={15} aria-hidden />}
+              metadata={selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
               onClick={() => {
                 setOpen(false);
                 setConfigureTarget(option);
               }}
             >
-              <Server size={15} aria-hidden />
-              <span>
+              <span className="dispatch-target-picker__option-copy">
                 <strong>{option.displayName}</strong>
                 <small>{option.description || t('chatInput.dispatch.sshDescription')}</small>
               </span>
-              {selected ? <Icon name="check-line" size="sm" aria-hidden /> : null}
-            </button>
+            </MenuItem>
           );
         })}
-      </div>
+      </MenuSection>
 
-      <div className="dispatch-target-picker__divider" role="separator" />
-      <button
-        type="button"
-        role="menuitem"
-        className="dispatch-target-picker__footer-action"
+      <MenuSeparator />
+      <MenuItem
+        leading={<Icon name="plus" size="sm" aria-hidden />}
         onClick={() => {
           setOpen(false);
           setSshDialogOpen(true);
         }}
       >
-        <Icon name="plus" size="sm" aria-hidden />
-        <span>{t('chatInput.dispatch.addSsh')}</span>
-      </button>
-    </ScrollArea>
+        {t('chatInput.dispatch.addSsh')}
+      </MenuItem>
+    </Menu>
   ) : null;
 
   return (

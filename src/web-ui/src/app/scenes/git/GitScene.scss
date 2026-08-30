@@ -75,19 +75,19 @@
 
     h3 {
       margin: 0 0 4px;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
     }
     p {
       margin: 0;
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
   &__init-hint {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -105,7 +105,7 @@
   }
 
   &__loading-hint {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     margin: 0;
     opacity: 0.6;
   }

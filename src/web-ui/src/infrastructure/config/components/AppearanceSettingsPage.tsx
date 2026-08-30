@@ -1,9 +1,8 @@
-import { Combobox } from '@bitfun/ui';
 import { Select } from '@bitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useTranslation } from 'react-i18next';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import {
   SYSTEM_APPEARANCE_ID,
   getAppearancePackageValidationError,
@@ -192,10 +191,10 @@ function AppearanceSelectionSection() {
                 data-bf-component="appearance-settings"
                 data-bf-part="paletteSelect"
               >
-                <Combobox
-                  size="small"
+                <LocalizedCombobox
+                  size="sm"
                   value={selectedAppearanceId}
-                  onChange={(value) => handleAppearanceChange(value as string)}
+                  onValueChange={(value) => handleAppearanceChange(value as string)}
                   disabled={!initialized || status === 'applying'}
                   options={appearanceOptions}
                   triggerTestId="appearance-palette-select"

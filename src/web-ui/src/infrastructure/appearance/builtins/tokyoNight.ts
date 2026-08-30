@@ -4,7 +4,6 @@ import { AppearancePalette } from './AppearancePalette';
 import {
   createAccentScale,
   createCompactRadius,
-  createExpressiveTypography,
   createGitColors,
   createSemanticColors,
   createSecondaryAccentScale,
@@ -152,8 +151,6 @@ export const bitfunTokyoNightPalette: AppearancePalette = {
 
     easing: createStandardEasing(),
   },
-
-  typography: createExpressiveTypography(),
 
   components: {
     button: {

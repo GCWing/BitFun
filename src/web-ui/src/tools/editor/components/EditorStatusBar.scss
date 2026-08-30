@@ -7,7 +7,6 @@
 
 // Variables
 $_statusbar-height: 22px;
-$_statusbar-font-size: 11px;
 $_statusbar-padding: 0 12px;
 $_item-gap: 4px;
 $_section-gap: 12px;
@@ -21,8 +20,8 @@ $_section-gap: 12px;
   padding: $_statusbar-padding;
   background: var(--bf-appearance-token-color-bg-scene);
   border-top: 1px solid var(--bf-appearance-token-border-subtle);
-  font-size: $_statusbar-font-size;
-  font-family: $font-family-mono;
+  font-size: var(--bf-font-size-meta);
+  font-family: var(--bf-font-family-mono);
   color: var(--bf-appearance-token-color-text-muted);
   user-select: none;
   flex-shrink: 0;
@@ -83,10 +82,10 @@ $_section-gap: 12px;
     color: var(--bf-appearance-token-color-warning);
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
 }

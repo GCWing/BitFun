@@ -5,14 +5,6 @@
 @use '../../styles/flowchat-markdown-table-vars' as markdownTable;
 
 .markdown-renderer {
-  --markdown-font-sans: var(--bf-appearance-token-font-family-sans);
-  --markdown-font-heading: var(--markdown-font-sans);
-  --markdown-font-size: var(--bf-appearance-token-flowchat-font-size-base);
-  --markdown-font-size-sm: var(--bf-appearance-token-flowchat-font-size-sm);
-  --markdown-code-font-size: var(--bf-appearance-token-flowchat-code-font-size);
-  --markdown-line-height: var(--bf-appearance-token-flowchat-text-line-height);
-  --markdown-support-line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  --markdown-code-line-height: var(--bf-appearance-token-flowchat-code-line-height);
   --markdown-block-gap: #{markdown.$block-gap};
   --markdown-paragraph-gap: #{markdown.$paragraph-gap};
   --markdown-list-item-gap: #{markdown.$list-item-gap};
@@ -54,10 +46,10 @@
   margin: 0;
   padding: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--markdown-font-sans);
-  font-size: var(--markdown-font-size);
-  line-height: var(--markdown-line-height);
-  letter-spacing: 0;
+  font-family: var(--bf-type-flow-body-font-family);
+  font-size: var(--bf-type-flow-body-font-size);
+  line-height: var(--bf-type-flow-body-line-height);
+  letter-spacing: var(--bf-type-flow-body-letter-spacing);
   text-align: left;
   word-wrap: break-word;
   cursor: text;
@@ -101,28 +93,28 @@
   padding: 0;
   border: 0;
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--markdown-font-heading);
-  font-weight: var(--bf-appearance-token-font-weight-semibold);
-  letter-spacing: 0;
-  line-height: var(--markdown-support-line-height);
+  font-family: var(--bf-type-flow-title-font-family);
+  font-weight: var(--bf-type-flow-title-font-weight);
+  letter-spacing: var(--bf-type-flow-title-letter-spacing);
+  line-height: var(--bf-type-flow-title-line-height);
 }
 
 .markdown-renderer h1 {
-  font-size: calc(var(--markdown-font-size) + 2px);
+  font-size: var(--bf-type-flow-title-font-size);
 }
 
 .markdown-renderer h2 {
-  font-size: calc(var(--markdown-font-size) + 1px);
+  font-size: var(--bf-type-flow-lead-font-size);
 }
 
 .markdown-renderer h3 {
-  font-size: var(--markdown-font-size);
+  font-size: var(--bf-type-flow-body-font-size);
 }
 
 .markdown-renderer h4,
 .markdown-renderer h5,
 .markdown-renderer h6 {
-  font-size: var(--markdown-font-size);
+  font-size: var(--bf-type-flow-body-font-size);
 }
 
 .markdown-renderer h4,
@@ -195,13 +187,13 @@
 .markdown-renderer ul > li::marker,
 .markdown-renderer ol > li::marker {
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: 1em;
-  font-weight: 400;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-regular);
 }
 
 .markdown-renderer code {
   display: inline;
-  font-family: var(--bf-appearance-token-font-family-mono);
+  font-family: var(--bf-type-flow-code-font-family);
 }
 
 .markdown-renderer .inline-code {
@@ -211,10 +203,10 @@
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
   color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 88%, rgb(var(--private-markdown-inline-code-tint-rgb)) 12%);
-  font-family: var(--bf-appearance-token-font-family-mono);
-  font-size: 0.88em;
-  font-weight: 500;
-  line-height: var(--markdown-support-line-height);
+  font-family: var(--bf-type-flow-code-font-family);
+  font-size: var(--bf-type-flow-support-font-size);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-type-flow-support-line-height);
   white-space: nowrap;
   vertical-align: baseline;
   user-select: text !important;
@@ -238,8 +230,8 @@
   background: var(--markdown-pre-bg);
   box-shadow: none;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--markdown-code-font-size);
-  line-height: var(--markdown-code-line-height);
+  font-size: var(--bf-type-flow-code-font-size);
+  line-height: var(--bf-type-flow-code-line-height);
   transition: border-color 0.2s ease;
 }
 
@@ -258,7 +250,7 @@
   background: transparent;
   box-shadow: none;
   color: inherit;
-  font-family: var(--bf-appearance-token-font-family-mono);
+  font-family: var(--bf-type-flow-code-font-family);
   font-size: inherit !important;
   font-weight: inherit;
   line-height: inherit;
@@ -301,11 +293,11 @@
 
 .markdown-renderer .code-block-lang {
   color: var(--bf-appearance-token-color-text-muted);
-  font-family: var(--markdown-font-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  font-family: var(--bf-type-flow-micro-font-family);
+  font-size: var(--bf-type-flow-micro-font-size);
+  font-weight: var(--bf-font-weight-semibold);
+  letter-spacing: var(--bf-letter-spacing-wider);
+  line-height: var(--bf-type-flow-meta-line-height);
   text-transform: uppercase;
   user-select: none;
 }
@@ -324,17 +316,17 @@
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  font-size: var(--markdown-code-font-size) !important;
-  line-height: var(--markdown-code-line-height) !important;
+  font-size: var(--bf-type-flow-code-font-size) !important;
+  line-height: var(--bf-type-flow-code-line-height) !important;
 }
 
 .markdown-renderer .code-block-wrapper pre code,
 .markdown-renderer .code-block-wrapper code[style] {
   background: transparent !important;
   border: none !important;
-  font-family: var(--bf-appearance-token-font-family-mono) !important;
-  font-size: var(--markdown-code-font-size) !important;
-  line-height: var(--markdown-code-line-height) !important;
+  font-family: var(--bf-type-flow-code-font-family);
+  font-size: var(--bf-type-flow-code-font-size) !important;
+  line-height: var(--bf-type-flow-code-line-height) !important;
 }
 
 .markdown-renderer .copy-button {
@@ -423,8 +415,8 @@
 .markdown-renderer summary {
   color: var(--bf-appearance-token-color-text-primary);
   cursor: pointer;
-  font-weight: 600;
-  line-height: var(--markdown-support-line-height);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .markdown-renderer details[open] > summary {
@@ -487,8 +479,8 @@
   border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 35%, transparent);
   border-radius: var(--bf-appearance-token-flowchat-card-radius);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--markdown-font-size-sm);
-  line-height: var(--markdown-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
   overflow-wrap: anywhere;
   vertical-align: middle;
 }
@@ -512,8 +504,8 @@
   width: 100%;
   border-spacing: 0;
   border-collapse: collapse;
-  font-size: var(--markdown-font-size-sm);
-  line-height: var(--markdown-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .markdown-renderer .table-wrapper th,
@@ -533,8 +525,8 @@
 .markdown-renderer .table-wrapper th {
   background: var(--markdown-table-header-bg);
   color: var(--markdown-table-header-fg);
-  font-family: var(--markdown-font-heading);
-  font-weight: 600;
+  font-family:var(--bf-font-family-sans);
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .markdown-renderer .table-wrapper tr:last-child td {
@@ -589,14 +581,14 @@
   max-width: min(520px, 80vw);
   overflow-wrap: anywhere;
   text-align: left;
-  font-family: var(--bf-appearance-token-font-family-mono);
-  font-size: 0.78rem;
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-type-flow-support-line-height);
 }
 
 .markdown-renderer strong {
   color: var(--bf-appearance-token-color-text-primary);
-  font-weight: 650;
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .markdown-renderer em {

@@ -5,6 +5,7 @@ import {
   CircleOff,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -278,20 +279,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
     };
   }, [dropdownPlacement, open]);
 
-  useEffect(() => {
-    if (!open || !keyboardOpen) return;
-    const frame = window.requestAnimationFrame(() => {
-      const checked = menuRef.current?.querySelector<HTMLButtonElement>(
-        'button[role="menuitemradio"][aria-checked="true"]',
-      );
-      const first = menuRef.current?.querySelector<HTMLButtonElement>(
-        'button[role="menuitemradio"]',
-      );
-      (checked ?? first)?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [keyboardOpen, open]);
-
   const select = useCallback((presetId: string | null) => {
     if (menuRef.current?.contains(document.activeElement)) {
       triggerRef.current?.focus();
@@ -305,25 +292,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
       event.preventDefault();
       triggerRef.current?.focus();
       setOpen(false);
-      return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(
-      'button[role="menuitemradio"]:not(:disabled)',
-    ));
-    if (items.length === 0) return;
-    event.preventDefault();
-    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    let nextIndex = activeIndex;
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = items.length - 1;
-    if (event.key === 'ArrowDown') {
-      nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
-    }
-    if (event.key === 'ArrowUp') {
-      nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
-    }
-    items[nextIndex]?.focus();
   }, []);
 
   if (presets.length === 0) return null;
@@ -408,9 +377,10 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
 
       <PresenceBoundary active={open}>
         {createPortal(
-          <div
+          <Menu
           id={menuId}
           ref={menuRef}
+          autoFocusFirstItem={keyboardOpen}
           className="bitfun-reasoning-preset-selector__menu"
           data-bf-component="reasoning-preset-selector"
           data-bf-part="menu"
@@ -418,7 +388,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           data-open={open ? 'true' : 'false'}
           data-keyboard-open={keyboardOpen ? 'true' : 'false'}
           style={menuStyle}
-          role="menu"
           aria-hidden={!open}
           {...(!open ? { inert: '' } : {})}
           aria-label={t('reasoningSelector.title')}
@@ -433,18 +402,19 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             <span className="bitfun-reasoning-preset-selector__title">
               {t('reasoningSelector.title')}
             </span>
-            <button
+            <MenuItem
               type="button"
               role="menuitemradio"
-              aria-checked={!selected}
-              className="bitfun-reasoning-preset-selector__auto"
+              checked={!selected}
+              className="bitfun-reasoning-preset-selector__auto-row"
+              triggerClassName="bitfun-reasoning-preset-selector__auto"
               data-bf-component="reasoning-preset-selector"
               data-bf-part="auto"
               data-bf-state={!selected ? 'selected' : undefined}
               onClick={() => select(null)}
             >
               <span>{t('reasoningSelector.auto')}</span>
-            </button>
+            </MenuItem>
           </div>
           <div
             className="bitfun-reasoning-preset-selector__options"
@@ -455,13 +425,14 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
               const isSelected = selected?.id === preset.id;
               const label = presetLabels[index] ?? presetLabel(preset, t);
               return (
-                <button
+                <MenuItem
                   key={preset.id}
                   type="button"
                   role="menuitemradio"
-                  aria-checked={isSelected}
+                  checked={isSelected}
                   data-preset-id={preset.id}
-                  className="bitfun-reasoning-preset-selector__option"
+                  className="bitfun-reasoning-preset-selector__option-row"
+                  triggerClassName="bitfun-reasoning-preset-selector__option"
                   data-bf-component="reasoning-preset-selector"
                   data-bf-part="option"
                   data-bf-state={isSelected ? 'selected' : undefined}
@@ -470,11 +441,11 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
                   <span className="bitfun-reasoning-preset-selector__option-label">
                     {label}
                   </span>
-                </button>
+                </MenuItem>
               );
             })}
           </div>
-          </div>,
+          </Menu>,
           getAppearanceOverlayHost(),
         )}
       </PresenceBoundary>

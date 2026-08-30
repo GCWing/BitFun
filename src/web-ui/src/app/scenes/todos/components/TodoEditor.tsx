@@ -1,4 +1,3 @@
-import { Combobox } from '@bitfun/ui';
 /**
  * Create / edit form for a Todo.
  *
@@ -10,7 +9,7 @@ import { Combobox } from '@bitfun/ui';
 import { Button, Icon, Input, Select, Switch, ScrollArea, Textarea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bot, CalendarClock, ClipboardList, RefreshCw } from 'lucide-react';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
@@ -237,15 +236,15 @@ const TodoEditor: React.FC<TodoEditorProps> = ({
                 <Icon name="folder" size="md" aria-hidden="true" />
                 {t('shared:features.workspace')}
               </span>
-              <Combobox
-                size="medium"
+              <LocalizedCombobox
+                size="md"
                 className="bf-todos__field-control"
                 options={workspaceSelectOptions}
                 value={selectedWorkspaceId}
                 searchable
                 placeholder={t('editor.placeholders.workspace')}
                 triggerAriaLabel={t('shared:features.workspace')}
-                onChange={(value) => onSelectedWorkspaceIdChange(String(value))}
+                onValueChange={(value) => onSelectedWorkspaceIdChange(String(value))}
                 renderOption={(option) => (
                   <div className="bf-todos__workspace-option">
                     <span className="bf-todos__workspace-option-label">{option.label}</span>
