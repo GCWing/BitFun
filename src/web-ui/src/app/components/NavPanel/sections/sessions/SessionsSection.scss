@@ -933,7 +933,8 @@
     }
 
     &.is-assistant-session {
-      height: 42px;
+      height: auto;
+      min-height: 42px;
     }
   }
 
@@ -953,7 +954,7 @@
     @include nav-font.nav-panel-text-meta;
 
     font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1.2;
+    line-height: $line-height-base;
   }
 
   &__inline-toggle {
@@ -961,7 +962,7 @@
     @include nav-font.nav-panel-text-meta;
 
     font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.25;
+    line-height: $line-height-base;
 
     &:hover,
     &:focus-visible {
