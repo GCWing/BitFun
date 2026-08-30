@@ -70,3 +70,14 @@ test("Menu styling uses only public surface, geometry, action, and scrollbar tok
   assert.match(styles, /--bf-overlay-menu-scrollbar-gap/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
+
+test("Menu reserves space inside its scroll viewport for focus rings on all edges", async () => {
+  const styles = await readFile(new URL("../src/components/Menu/Menu.module.css", import.meta.url), "utf8");
+  const scrollStyles = await readFile(new URL("../src/components/ScrollArea/ScrollArea.module.css", import.meta.url), "utf8");
+  const itemStyles = await readFile(new URL("../src/components/ActionItem/ActionItem.module.css", import.meta.url), "utf8");
+  assert.match(styles, /\.list\s*\{[^}]*padding:\s*var\(--bf-focus-width\)/);
+  assert.match(itemStyles, /\.root:has\(\.trigger:focus-visible\)\s*\{[^}]*box-shadow:\s*0 0 0 var\(--bf-focus-width\)/);
+  // Keep clipping and scrolling; the content, not the viewport, owns the gutter.
+  assert.match(scrollStyles, /data-bf-orientation="vertical"\]\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto/);
+  assert.doesNotMatch(styles, /overflow[^:]*:\s*visible/);
+});

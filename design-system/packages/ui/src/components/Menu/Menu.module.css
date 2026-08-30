@@ -44,6 +44,8 @@
     min-inline-size: 0;
     flex-direction: column;
     gap: var(--bf-overlay-menu-section-gap);
+    /* Keep item focus rings inside the scroll viewport on every edge. */
+    padding: var(--bf-focus-width);
   }
 
   .section,
