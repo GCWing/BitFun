@@ -24,7 +24,7 @@ each missing what the other had.
 | `flowChatLiveTailWindow.test.ts` | "does the transcript still reach the newest Turn" |
 | `flowChatViewportAnchor.test.ts` | anchor geometry and the DOM contract |
 | `useFlowChatViewportAnchor.test.tsx` | capture, restore, carry, the settle window |
-| `VirtualMessageList.session-boundary.test.tsx` | prepend compensation and the ask |
+| `VirtualMessageList.session-boundary.test.tsx` | prepend compensation, the ask, and navigation-target current Turn with gesture/follow/session handoff |
 | `ModernFlowChatContainer.history-state.test.tsx` | history presentation and the submission event |
 | `flowChatViewportOwnership.test.ts` | the priority order, preemption, expiry |
 | `../../../infrastructure/diagnostics/flowChatViewportDiagnostics.test.ts` | coalescing, placement sampling, the switch |
@@ -32,6 +32,7 @@ each missing what the other had.
 | `useFlowChatVirtualizer.measurement.test.tsx` | `measureRenderedItems` against a real virtualizer |
 | `useFlowChatVirtualizer.aim.test.tsx` | the re-aim, and giving it up on takeover |
 | `VirtualMessageList.layout.test.ts` | the item-height estimate and the spacer |
+| `FlowChatTurnRail.test.tsx` | single-marker emphasis, neighboring hover fan, independent keyboard focus, reduced motion, and rail navigation |
 
 ## Manual
 
@@ -207,6 +208,12 @@ group does not renumber the others.
 
 ### Turn navigation
 
+At rest the rail's dark emphasis belongs only to its current step
+(`aria-current`), not to every Turn visible in the transcript. Hover temporarily
+emphasizes just the pointed marker, with a symmetric fan of muted neighbors;
+it never changes `aria-current`. Leaving restores the current-step emphasis.
+Keyboard focus has its own outline and does not navigate until activation.
+
 1. Turn Rail and Usage Report navigation can top-align the final Turns.
 2. Click the last Turn on the Turn Rail while it is short. It must land in one
    movement at the end of the transcript — no top-align followed by a slide
@@ -236,3 +243,17 @@ group does not renumber the others.
    enough history to keep re-measuring. Each flick keeps its distance — the
    failure was arriving and then sliding back part of the way, every time, so
    that a given point in the transcript could not be passed at all.
+9. With several short Turns visible together, only the current Turn's rail marker
+   is dark at rest. Hover a different marker: it becomes the only dark line and
+   longest line, with three progressively shorter muted neighbors on each side.
+   Leaving restores the current marker; hovering must not navigate. Repeat at
+   both ends of the rail and after scrolling a long rail. Keyboard focus must
+   remain visible without changing the current Turn before activation.
+10. Click each of several short tail Turns in sequence, including two that land
+    at the same content-end offset. Only the clicked Turn is dark, even when an
+    earlier Turn remains visible. Repeat with a top-aligned Turn and a sliver of
+    the preceding Turn above it. Scroll manually afterwards: current must follow
+    the reading position again. Jump to latest and switch sessions to confirm
+    neither retains the old navigation selection.
+11. With reduced motion enabled, the hover fan changes without animation. Touch
+    navigation must not leave a hover fan behind.

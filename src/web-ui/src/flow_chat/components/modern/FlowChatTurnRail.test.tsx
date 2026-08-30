@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import React from 'react';
+import { resolve } from 'node:path';
+import { compile } from 'sass';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,11 +54,29 @@ function createTurns(count: number): FlowChatTurnRailItem[] {
   }));
 }
 
+const railCss = compile(resolve(__dirname, 'FlowChatTurnRail.scss')).css;
+
 describe('FlowChatTurnRail', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let style: HTMLStyleElement;
+
+  const emphasizedBars = () => {
+    const selectors = Array.from(style.sheet!.cssRules)
+      .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
+      .filter(rule => rule.style.getPropertyValue('background') === 'var(--bf-appearance-token-color-text-primary)')
+      .map(rule => rule.selectorText);
+    expect(selectors.length).toBeGreaterThan(0);
+    // Both current and hover may use primary ink, but their compiled selectors
+    // must never emphasize multiple markers at once. Visibility is not selection.
+    expect(selectors.every(selector => !selector.includes('__item--visible'))).toBe(true);
+    return container.querySelectorAll(selectors.join(', '));
+  };
 
   beforeEach(() => {
+    style = document.createElement('style');
+    style.textContent = railCss;
+    document.head.appendChild(style);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -65,15 +85,115 @@ describe('FlowChatTurnRail', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    style.remove();
   });
 
-  it('renders every turn and highlights all viewport turns consistently', () => {
+  function hover(item: HTMLElement, pointerType = 'mouse') {
+    const event = new MouseEvent('pointerover', { bubbles: true });
+    Object.defineProperty(event, 'pointerType', { value: pointerType });
+    act(() => item.dispatchEvent(event));
+  }
+
+  function leave(item: HTMLElement) {
+    act(() => item.dispatchEvent(new MouseEvent('pointerout', {
+      bubbles: true,
+      relatedTarget: document.body,
+    })));
+  }
+
+  function barWidth(item: Element) {
+    return getComputedStyle(item.querySelector('.flowchat-turn-rail__bar')!).width;
+  }
+
+  it('fans out neighboring markers around hover without changing the current turn', () => {
+    const onNavigate = vi.fn();
+    act(() => root.render(
+      <FlowChatTurnRail turns={createTurns(12)} currentTurnId="turn-6" visibleTurnIds={['turn-6']} onNavigate={onNavigate} />,
+    ));
+    const items = container.querySelectorAll<HTMLButtonElement>('.flowchat-turn-rail__item');
+    const current = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-6"]')!;
+    const target = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-7"]')!;
+    const restingPositions = Array.from(items, item => item.style.top);
+    hover(target);
+
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement).toBe(target);
+    expect(current.getAttribute('aria-current')).toBe('step');
+    expect(target.hasAttribute('aria-current')).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+    for (const item of items) {
+      const distance = Math.abs(Number(item.dataset.turnOrdinal) - 6);
+      expect(barWidth(item)).toBe(`${[19, 16, 13, 11][distance] ?? 10}px`);
+      expect(getComputedStyle(item.querySelector('.flowchat-turn-rail__bar')!).opacity)
+        .toBe(distance === 0 ? '1' : '0.4');
+    }
+    expect(Array.from(items, item => item.style.top)).toEqual(restingPositions);
+    // Even the longest bar fits inside its stable hit area and clipped list.
+    expect(parseFloat(barWidth(target)) + 2).toBeLessThanOrEqual(parseFloat(getComputedStyle(target).width));
+
+    leave(target);
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement).toBe(current);
+    expect(Array.from(items, barWidth)).toEqual(Array(items.length).fill('10px'));
+  });
+
+  it('moves the hover fan at both ends and restores the latest selection on leave', () => {
+    const onNavigate = vi.fn();
+    const render = (currentTurnId: string) => act(() => root.render(
+      <FlowChatTurnRail turns={turns} currentTurnId={currentTurnId} visibleTurnIds={[]} onNavigate={onNavigate} />,
+    ));
+    render('turn-2');
+    const items = container.querySelectorAll<HTMLButtonElement>('.flowchat-turn-rail__item');
+    hover(items[0]);
+    expect(Array.from(items, barWidth)).toEqual(['19px', '16px', '13px', '11px']);
+    leave(items[0]);
+    hover(items[3]);
+    expect(Array.from(items, barWidth)).toEqual(['11px', '13px', '16px', '19px']);
+    act(() => items[3].click());
+    expect(onNavigate).toHaveBeenCalledWith(turns[3]);
+    render('turn-4');
+    expect(emphasizedBars()).toHaveLength(1);
+    leave(items[3]);
+    expect(emphasizedBars()[0].parentElement).toBe(items[3]);
+    expect(items[3].getAttribute('aria-current')).toBe('step');
+  });
+
+  it('does not leave a hover preview after touch or rail scrolling', () => {
+    const onNavigate = vi.fn();
+    act(() => root.render(
+      <FlowChatTurnRail turns={turns} currentTurnId="turn-2" visibleTurnIds={[]} onNavigate={onNavigate} />,
+    ));
+    const target = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-4"]')!;
+    hover(target, 'touch');
+    expect(barWidth(target)).toBe('10px');
+    hover(target);
+    expect(barWidth(target)).toBe('19px');
+    act(() => container.querySelector('.flowchat-turn-rail__list')!
+      .dispatchEvent(new Event('scroll', { bubbles: true })));
+    expect(barWidth(target)).toBe('10px');
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement?.getAttribute('data-turn-id')).toBe('turn-2');
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('disables marker transitions when reduced motion is requested', () => {
+    const media = Array.from(style.sheet!.cssRules)
+      .find((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule
+        && rule.conditionText === '(prefers-reduced-motion: reduce)');
+    expect(media).toBeDefined();
+    const rule = Array.from(media!.cssRules).find((candidate): candidate is CSSStyleRule => (
+      candidate instanceof CSSStyleRule && candidate.selectorText === '.flowchat-turn-rail__bar'
+    ));
+    expect(rule?.style.getPropertyValue('transition')).toBe('none');
+  });
+
+  it('emphasizes only the current turn when several turns share the viewport', () => {
     act(() => {
       root.render(
         <FlowChatTurnRail
           turns={turns}
           currentTurnId="turn-2"
-          visibleTurnIds={['turn-2', 'turn-3']}
+          visibleTurnIds={['turn-2', 'turn-3', 'turn-4']}
           onNavigate={vi.fn()}
         />,
       );
@@ -84,9 +204,37 @@ describe('FlowChatTurnRail', () => {
     expect(items[1].getAttribute('aria-current')).toBe('step');
     expect(items[1].className).toContain('flowchat-turn-rail__item--visible');
     expect(items[2].className).toContain('flowchat-turn-rail__item--visible');
-    expect(items[1].className).toBe(items[2].className);
+    expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement).toBe(items[1]);
     expect(items[0].getAttribute('aria-current')).toBeNull();
     expect(items[0].className).not.toContain('flowchat-turn-rail__item--visible');
+  });
+
+  it('moves emphasis with the current turn without retaining emphasis on other visible turns', () => {
+    const onNavigate = vi.fn();
+    const renderCurrent = (currentTurnId: string | null) => act(() => {
+      root.render(
+        <FlowChatTurnRail
+          turns={turns}
+          currentTurnId={currentTurnId}
+          visibleTurnIds={['turn-2', 'turn-3', 'turn-4']}
+          onNavigate={onNavigate}
+        />,
+      );
+    });
+    renderCurrent('turn-2');
+    const target = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-4"]')!;
+    act(() => target.click());
+    expect(onNavigate).toHaveBeenCalledWith(turns[3]);
+    renderCurrent('turn-4');
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement).toBe(target);
+    expect(container.querySelector('[data-turn-id="turn-2"]')?.hasAttribute('aria-current')).toBe(false);
+
+    renderCurrent(null);
+    expect(emphasizedBars()).toHaveLength(0);
+    expect(container.querySelectorAll('[aria-current]')).toHaveLength(0);
   });
 
   it('shows the turn number and user message in the tooltip without a timestamp', () => {
@@ -258,6 +406,8 @@ describe('FlowChatTurnRail', () => {
     expect(document.activeElement).toBe(next);
     expect(next.tabIndex).toBe(0);
     expect(current.tabIndex).toBe(-1);
+    expect(emphasizedBars()).toHaveLength(1);
+    expect(emphasizedBars()[0].parentElement).toBe(current);
   });
 
   it('bounds rendered markers to the viewport plus overscan', () => {

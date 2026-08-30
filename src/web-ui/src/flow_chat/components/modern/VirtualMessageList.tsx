@@ -432,6 +432,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     && initialViewportSnapshot.anchorOffsetPx !== null
   );
   const preparedTurnNavigationRef = useRef<PreparedTurnNavigation | null>(null);
+  // Selection identity only; this must never hold or reposition the viewport.
+  const navigatedTurnIdRef = useRef<string | null>(null);
   const boundaryRequestRef = useRef<Record<SessionHistoryWindowDirection, Promise<void> | null>>({
     before: null,
     after: null,
@@ -896,52 +898,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     viewportAnchor.openSettleWindow();
   }, [viewportAnchor, virtualItems]);
 
-  const notifyUserScrollIntent = useCallback(() => {
-    /*
-     * The reader outranks everything, and the claim is what makes that true of
-     * writers that are already in flight rather than only of ones yet to
-     * start. It lapses on its own after the same window the anchor uses to
-     * decide a scroll was theirs — a gesture has no completion event, so the
-     * hold has to end by itself or nothing below it could ever write again.
-     */
-    viewportOwner.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
-    /*
-     * The claim alone does not reach the library's re-aim. It goes on
-     * recomputing its target for five seconds and writes again whenever a
-     * measurement moves it, and the claim only refuses those writes while the
-     * gesture's own hold is live — 200ms after the last wheel notch, against a
-     * five-second re-aim. Measured: a Turn navigation placed at 5358, the
-     * reader took over 6ms later, and 12ms after that the re-aim asked for
-     * 7784 and was refused. Nothing had ended it; it was still armed when the
-     * recording stopped.
-     */
-    virtualizer.cancelAim();
-    viewportAnchor.markUserScrollIntent();
-    handleUserScrollIntent();
-    onUserScrollIntent?.();
-    /*
-     * A gesture that moves nothing is still the reader asking to go up, and it
-     * is the only signal there is once they are already at the top: the wheel
-     * emits no `scroll` event when the offset cannot change, so the scroll
-     * handler's evaluation never runs.
-     *
-     * Measured on a tail window of three Turns that fitted inside the viewport,
-     * so the whole scroll range was reserved blank: twenty gestures over seven
-     * seconds produced twenty `user-gesture` claims, no scroll events, and not
-     * one boundary evaluation. Nothing could ever page.
-     *
-     * After `handleUserScrollIntent`, which clears follow-output's ownership
-     * synchronously — so this asks as the reader rather than as our placement.
-     */
-    evaluateHistoryBoundariesRef.current();
-  }, [
-    handleUserScrollIntent,
-    onUserScrollIntent,
-    viewportAnchor,
-    viewportOwner,
-    virtualizer,
-  ]);
-
   const updateVisibleTurnInfoFromViewport = useCallback(() => {
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
@@ -962,7 +918,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scrollerRect.top,
       scrollerRect.bottom,
     );
-    const currentTurnId = visibleTurnIds[0] ?? null;
+    if (isFollowingOutputNow()) navigatedTurnIdRef.current = null;
+    const navigatedTurnId = navigatedTurnIdRef.current;
+    // A top gap can expose the preceding Turn; a content-end clamp can expose
+    // several. Neither makes that earlier Turn the user's navigation target.
+    // Until the target arrives on screen, keep reporting actual visibility.
+    const currentTurnId = navigatedTurnId && visibleTurnIds.includes(navigatedTurnId)
+      ? navigatedTurnId
+      : visibleTurnIds[0] ?? null;
     const currentTurn = currentTurnId
       ? userMessageItems.find(({ item }) => item.turnId === currentTurnId)
       : undefined;
@@ -988,7 +951,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       && previous.visibleTurnIds.length === visibleTurnIds.length
       && previous.visibleTurnIds.every((turnId, index) => turnId === visibleTurnIds[index]);
     if (!unchanged) store.setVisibleTurnInfo(nextVisibleTurnInfo);
-  }, [userMessageItems]);
+  }, [isFollowingOutputNow, userMessageItems]);
 
   const scheduleVisibleTurnInfoUpdate = useCallback(() => {
     if (visibleTurnUpdateFrameRef.current !== null) return;
@@ -997,6 +960,60 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       updateVisibleTurnInfoFromViewport();
     });
   }, [updateVisibleTurnInfoFromViewport]);
+
+  const setNavigatedTurn = useCallback((turnId: string | null) => {
+    navigatedTurnIdRef.current = turnId;
+    // Different tail Turns can land at the same offset, emitting no scroll.
+    scheduleVisibleTurnInfoUpdate();
+  }, [scheduleVisibleTurnInfoUpdate]);
+
+  const notifyUserScrollIntent = useCallback(() => {
+    /*
+     * The reader outranks everything, and the claim is what makes that true of
+     * writers that are already in flight rather than only of ones yet to
+     * start. It lapses on its own after the same window the anchor uses to
+     * decide a scroll was theirs — a gesture has no completion event, so the
+     * hold has to end by itself or nothing below it could ever write again.
+     */
+    viewportOwner.claim('user-gesture', { holdForMs: USER_DRIVEN_SCROLL_WINDOW_MS });
+    /*
+     * The claim alone does not reach the library's re-aim. It goes on
+     * recomputing its target for five seconds and writes again whenever a
+     * measurement moves it, and the claim only refuses those writes while the
+     * gesture's own hold is live — 200ms after the last wheel notch, against a
+     * five-second re-aim. Measured: a Turn navigation placed at 5358, the
+     * reader took over 6ms later, and 12ms after that the re-aim asked for
+     * 7784 and was refused. Nothing had ended it; it was still armed when the
+     * recording stopped.
+     */
+    virtualizer.cancelAim();
+    viewportAnchor.markUserScrollIntent();
+    handleUserScrollIntent();
+    setNavigatedTurn(null);
+    onUserScrollIntent?.();
+    /*
+     * A gesture that moves nothing is still the reader asking to go up, and it
+     * is the only signal there is once they are already at the top: the wheel
+     * emits no `scroll` event when the offset cannot change, so the scroll
+     * handler's evaluation never runs.
+     *
+     * Measured on a tail window of three Turns that fitted inside the viewport,
+     * so the whole scroll range was reserved blank: twenty gestures over seven
+     * seconds produced twenty `user-gesture` claims, no scroll events, and not
+     * one boundary evaluation. Nothing could ever page.
+     *
+     * After `handleUserScrollIntent`, which clears follow-output's ownership
+     * synchronously — so this asks as the reader rather than as our placement.
+     */
+    evaluateHistoryBoundariesRef.current();
+  }, [
+    handleUserScrollIntent,
+    onUserScrollIntent,
+    setNavigatedTurn,
+    viewportAnchor,
+    viewportOwner,
+    virtualizer,
+  ]);
 
   const captureViewportSnapshot = useCallback((): FlowChatViewportSnapshot | null => {
     const scroller = scrollerElementRef.current;
@@ -1725,6 +1742,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return 'rejected';
     }
     exitFollowOutput('scroll-to-turn');
+    setNavigatedTurn(turnId);
     /*
      * Ahead of the placement, so that nothing between here and the commit that
      * renders it can restore the position being left. The reading position the
@@ -1860,6 +1878,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     readContentEndScrollTop,
     resolveTurnTopScrollTop,
     scrollToContentEndThroughVirtualizer,
+    setNavigatedTurn,
     viewportAnchor,
     virtualItems,
     virtualizer,
@@ -1889,6 +1908,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (!element) return false;
 
     exitFollowOutput('scroll-to-index');
+    setNavigatedTurn(
+      element.closest<HTMLElement>('.virtual-item-wrapper[data-turn-id]')?.dataset.turnId ?? null,
+    );
     const scrollerRect = scroller.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
     const centred = scroller.scrollTop + elementRect.top - scrollerRect.top
@@ -1899,7 +1921,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       topPx: Math.max(0, Math.min(scroller.scrollHeight - scroller.clientHeight, centred)),
     });
     return true;
-  }, [exitFollowOutput, viewportOwner]);
+  }, [exitFollowOutput, setNavigatedTurn, viewportOwner]);
 
   const prepareTurnNavigation = useCallback((
     turnId: string,
@@ -1939,12 +1961,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const scrollToIndex = useCallback((index: number) => {
     if (index < 0 || index >= virtualItems.length) return;
     exitFollowOutput('scroll-to-index');
+    setNavigatedTurn(virtualItems[index].turnId);
     virtualizer.scrollItemIntoView(index, {
       align: 'center',
       owner: 'one-shot-navigation',
       holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
     });
-  }, [exitFollowOutput, virtualItems.length, virtualizer]);
+  }, [exitFollowOutput, setNavigatedTurn, virtualItems, virtualizer]);
 
   const scrollToTurnEnd = useCallback((turnId: string) => {
     let targetIndex = -1;
@@ -2002,6 +2025,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }) => {
     clearSearchMatch();
     exitFollowOutput('scroll-to-index');
+    setNavigatedTurn(virtualItems[target.virtualItemIndex]?.turnId ?? null);
     const requestId = searchNavigationRequestIdRef.current;
     virtualizer.scrollItemIntoView(target.virtualItemIndex, {
       align: 'center',
@@ -2052,7 +2076,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       });
     };
     requestAnimationFrame(resolve);
-  }, [clearSearchMatch, exitFollowOutput, viewportOwner, virtualizer]);
+  }, [clearSearchMatch, exitFollowOutput, setNavigatedTurn, viewportOwner, virtualItems, virtualizer]);
 
   useEffect(() => () => setFlowChatSearchHighlight(null), []);
 
@@ -2327,7 +2351,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   useLayoutEffect(() => {
     scheduleVisibleTurnInfoUpdate();
-  }, [scheduleVisibleTurnInfoUpdate, virtualItems]);
+  }, [isFollowingOutput, scheduleVisibleTurnInfoUpdate, virtualItems]);
 
   useEffect(() => {
     if (userMessageItems.length === 0) {
@@ -2357,17 +2381,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, []);
 
   const scrollToPhysicalBottom = useCallback(() => {
+    setNavigatedTurn(null);
     enterFollowOutput('jump-to-latest');
     updateIsAtBottom();
-  }, [enterFollowOutput, updateIsAtBottom]);
+  }, [enterFollowOutput, setNavigatedTurn, updateIsAtBottom]);
 
   const scrollToLatestEndPosition = useCallback(() => {
     onUserScrollIntent?.();
+    setNavigatedTurn(null);
     enterFollowOutput('jump-to-latest');
     // Entering follow can leave the viewport exactly where it is, which
     // produces no scroll event to recompute the band from.
     updateIsAtBottom();
-  }, [enterFollowOutput, onUserScrollIntent, updateIsAtBottom]);
+  }, [enterFollowOutput, onUserScrollIntent, setNavigatedTurn, updateIsAtBottom]);
 
   useImperativeHandle(ref, () => ({
     scrollToTurn,

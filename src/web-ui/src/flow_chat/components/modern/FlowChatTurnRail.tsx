@@ -60,6 +60,7 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
   );
   const initialFocusOrdinal = currentTurnOrdinal ?? turns[0]?.ordinal ?? null;
   const [focusOrdinal, setFocusOrdinal] = useState<number | null>(initialFocusOrdinal);
+  const [hoverOrdinal, setHoverOrdinal] = useState<number | null>(null);
   const [viewportMetrics, setViewportMetrics] = useState<FlowChatTurnRailViewportMetrics>(() => ({
     scrollTop: initialFocusOrdinal === null
       ? 0
@@ -85,6 +86,10 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
     }
     return windowTurns;
   }, [renderedRange.endOrdinalExclusive, renderedRange.startOrdinal, turnByOrdinal]);
+  const hoveredTurnOrdinal = hoverOrdinal !== null
+    && renderedTurns.some(turn => turn.ordinal === hoverOrdinal)
+    ? hoverOrdinal
+    : null;
   const tabStopOrdinal = focusOrdinal !== null
     && focusOrdinal >= renderedRange.startOrdinal
     && focusOrdinal < renderedRange.endOrdinalExclusive
@@ -218,11 +223,17 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
   }, [focusTurnAt, turns.length]);
 
   const handleScroll = useCallback(() => {
+    // Scrolling can replace the marker underneath a stationary pointer.
+    setHoverOrdinal(null);
     const list = listRef.current;
     if (list) {
       updateViewportMetrics(list);
     }
   }, [updateViewportMetrics]);
+
+  const handlePointerHover = useCallback((event: React.PointerEvent, ordinal: number) => {
+    if (event.pointerType !== 'touch') setHoverOrdinal(ordinal);
+  }, []);
 
   if (turns.length === 0) return null;
 
@@ -240,6 +251,7 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
       data-rendered-start-ordinal={renderedRange.startOrdinal}
       data-rendered-end-ordinal={renderedRange.endOrdinalExclusive}
       data-total-turn-count={totalOrdinalCount}
+      data-hovering={hoveredTurnOrdinal !== null ? 'true' : undefined}
     >
       <div
         ref={listRef}
@@ -256,6 +268,9 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
             const turnArrayIndex = turnArrayIndexByOrdinal.get(turn.ordinal) ?? 0;
             const isCurrent = turn.turnId !== null && turn.turnId === currentTurnId;
             const isVisible = turn.turnId !== null && visibleTurnIdSet.has(turn.turnId);
+            const hoverDistance = hoveredTurnOrdinal === null
+              ? null
+              : Math.abs(turn.ordinal - hoveredTurnOrdinal);
             const turnLabel = t('flowChatHeader.turnBadge', { current: turn.turnIndex });
             const content = turn.content === null
               ? null
@@ -301,10 +316,15 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
                   data-turn-key={turn.itemKey}
                   data-turn-index={turn.turnIndex}
                   data-turn-ordinal={turn.ordinal}
+                  data-hover-distance={hoverDistance !== null && hoverDistance <= 3 ? hoverDistance : undefined}
                   onClick={() => {
                     onNavigate(turn);
                   }}
                   onFocus={() => setFocusOrdinal(turn.ordinal)}
+                  onPointerEnter={event => handlePointerHover(event, turn.ordinal)}
+                  onPointerMove={event => handlePointerHover(event, turn.ordinal)}
+                  onPointerLeave={() => setHoverOrdinal(null)}
+                  onPointerCancel={() => setHoverOrdinal(null)}
                   onKeyDown={(event) => handleKeyDown(event, turnArrayIndex)}
                 >
                   <span className="flowchat-turn-rail__bar" data-bf-component="flow-chat-turn-rail" data-bf-part="bar" aria-hidden="true" />

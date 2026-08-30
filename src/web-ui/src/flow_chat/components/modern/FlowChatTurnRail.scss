@@ -52,7 +52,7 @@
     height: 2px;
     border-radius: 1px;
     background: var(--bf-appearance-token-color-text-muted);
-    opacity: 0.7;
+    opacity: 0.4;
     transform: translateY(-50%);
     transform-origin: left center;
     transition:
@@ -63,22 +63,32 @@
       transform 100ms ease;
   }
 
-  &__item--visible &__bar {
+  // Hover previews a target without changing the actual current step. Only
+  // one marker uses primary ink: the preview, or current when not hovering.
+  &:not([data-hovering='true']) &__item[aria-current='step'] &__bar {
     width: 10px;
     height: 2px;
     background: var(--bf-appearance-token-color-text-primary);
     opacity: 1;
   }
 
-  &__item:hover &__bar,
   &__item:focus-visible &__bar {
-    width: 22px;
-    background: var(--bf-appearance-token-color-text-primary);
+    width: 19px;
     opacity: 1;
   }
 
   &__item:focus-visible &__bar {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
+  }
+
+  // Fixed hit areas and row heights keep the hover fan from moving its target.
+  &__item[data-hover-distance='3'] &__bar { width: 11px; }
+  &__item[data-hover-distance='2'] &__bar { width: 13px; }
+  &__item[data-hover-distance='1'] &__bar { width: 16px; }
+  &__item[data-hover-distance='0'] &__bar {
+    width: 19px;
+    background: var(--bf-appearance-token-color-text-primary);
+    opacity: 1;
   }
 
   &__item:active &__bar {

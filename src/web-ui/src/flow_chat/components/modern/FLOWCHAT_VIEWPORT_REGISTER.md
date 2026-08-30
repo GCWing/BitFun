@@ -88,6 +88,30 @@ ownership to the reader, and their resting position is preserved.
 One-shot Turn, search and history navigation lives in `VirtualMessageList`, and
 holds `one-shot-navigation` for as long as it is still arriving.
 
+**The current Turn is not always the first visible Turn.** The top alignment
+gap can leave a sliver of the preceding Turn on screen; the content-end clamp
+can leave several earlier Turns visible. `VirtualMessageList` remembers the
+accepted navigation target and reports it as current once it intersects the
+viewport. Without a visible target, current still comes from the first visible
+Turn. This identity affects the rail and current-Turn affordances only: it
+never changes the scroll position, the viewport snapshot anchor, or the set of
+visible Turns. A rejected navigation does not replace it.
+
+Update that identity even when two targets produce the same clamped offset and
+no scroll event fires. Ordinary placement/measurement scroll events must not
+erase it. An explicit scroll gesture clears it, including a gesture that cannot
+move the viewport; item/search navigation replaces it; returning to follow or
+switching sessions clears it. The rail's single `aria-current` marker then
+reflects the chosen visible Turn, not another Turn sharing its viewport.
+
+The rail's pointer preview is separate from this navigation identity. Hover
+temporarily gives primary ink to the pointed marker and widens it to 19px;
+its three neighbors in each direction widen to 16px, 13px, and 11px, remaining
+muted. Other markers stay at 10px. Leaving restores current-step ink without
+navigating. Rail scrolling clears the preview, touch does not latch it, and
+reduced-motion keeps the shape change but removes the transition. Fixed row
+heights and hit areas keep this feedback out of transcript geometry.
+
 **Alignment is asked for, not computed, wherever it fits.** A navigation
 correcting its own scroll must re-issue through the virtualizer, never by
 writing the scroller. The virtualizer keeps re-aiming at its last target for as

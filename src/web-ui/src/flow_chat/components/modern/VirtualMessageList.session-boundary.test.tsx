@@ -604,6 +604,163 @@ describe('VirtualMessageList natural scroll contract', () => {
     }
   });
 
+  describe('the current Turn after navigation', () => {
+    let listRef: React.RefObject<VirtualMessageListRef>;
+    let scroller: HTMLElement;
+    let restoreLayout: () => void;
+
+    beforeEach(async () => {
+      mocks.items = Array.from({ length: 4 }, (_, index) => (
+        userMessage(`turn-${index + 1}`, `message-${index + 1}`, `Message ${index + 1}`)
+      ));
+      restoreLayout = fakeLayout({
+        clientHeight: 600,
+        scrollHeight: 1000,
+        turnTopFromScrollerTop: 500,
+      });
+      HTMLElement.prototype.getBoundingClientRect = function getRect() {
+        const isItem = this.classList.contains('virtual-item-wrapper');
+        // The previous Turn's last 5px remain visible above the target. Short
+        // tail Turns all share the same content-end-clamped scroll position.
+        const top = isItem ? Number(this.dataset.virtualIndex) * 80 - 35 : 0;
+        return new DOMRect(0, top, 1000, isItem ? 40 : 600);
+      };
+      listRef = React.createRef<VirtualMessageListRef>();
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.scrollTop = 1000 - tailSpacerPxForViewport(600, BOTTOM_INSET) - 600;
+      mocks.setVisibleTurnInfo.mockClear();
+    });
+
+    afterEach(() => restoreLayout());
+
+    async function navigate(turnId: string) {
+      act(() => { listRef.current?.navigateToTurn(turnId, { behavior: 'auto' }); });
+      await settleOpenReveal();
+    }
+
+    function expectCurrent(turnId: string) {
+      expect(mocks.setVisibleTurnInfo).toHaveBeenLastCalledWith(expect.objectContaining({
+        turnId,
+        turnIndex: Number(turnId.split('-')[1]),
+        visibleTurnIds: ['turn-1', 'turn-2', 'turn-3', 'turn-4'],
+      }));
+    }
+
+    it('publishes each clicked Turn even when the clamp produces no scroll event', async () => {
+      const restingOffset = scroller.scrollTop;
+      await navigate('turn-4');
+      expectCurrent('turn-4');
+      await navigate('turn-2');
+      expectCurrent('turn-2');
+      expect(scroller.scrollTop).toBe(restingOffset);
+
+      // Placement and measurement scroll events must not replace the target
+      // with the earlier Turn whose tail happens to intersect the viewport.
+      act(() => scroller.dispatchEvent(new Event('scroll')));
+      await settleOpenReveal();
+      expectCurrent('turn-2');
+    });
+
+    it('does not replace a valid target with a rejected navigation', async () => {
+      await navigate('turn-4');
+      act(() => {
+        expect(listRef.current?.navigateToTurn('missing-turn')).toBe(false);
+        scroller.dispatchEvent(new Event('scroll'));
+      });
+      await settleOpenReveal();
+      expectCurrent('turn-4');
+    });
+
+    it.each(['wheel', 'touchmove', 'keydown', 'scrollbar'])(
+      'returns to viewport-derived current Turn after a %s gesture',
+      async gesture => {
+        await navigate('turn-4');
+        expectCurrent('turn-4');
+        act(() => {
+          if (gesture === 'scrollbar') {
+            scroller.dispatchEvent(new MouseEvent('pointerdown', { clientX: 1005, bubbles: true }));
+            scroller.dispatchEvent(new Event('scroll'));
+          } else if (gesture === 'keydown') {
+            scroller.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }));
+          } else {
+            scroller.dispatchEvent(new Event(gesture, { bubbles: true }));
+          }
+        });
+        await settleOpenReveal();
+        expectCurrent('turn-1');
+      },
+    );
+
+    it('replaces the target when navigating to a different item', async () => {
+      await navigate('turn-4');
+      act(() => { listRef.current?.scrollToIndex(1); });
+      await settleOpenReveal();
+      expectCurrent('turn-2');
+    });
+
+    it('waits for a distant navigation target to become visible', async () => {
+      const target = container.querySelector<HTMLElement>('[data-turn-id="turn-4"]')!;
+      const rect = vi.spyOn(target, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 800, 1000, 40));
+      await navigate('turn-4');
+      expect(mocks.setVisibleTurnInfo).toHaveBeenLastCalledWith(expect.objectContaining({
+        turnId: 'turn-1',
+        visibleTurnIds: ['turn-1', 'turn-2', 'turn-3'],
+      }));
+      rect.mockRestore();
+      act(() => scroller.dispatchEvent(new Event('scroll')));
+      await settleOpenReveal();
+      expectCurrent('turn-4');
+    });
+
+    it('selects a prepared history target once its Turn enters the presentation', async () => {
+      await navigate('turn-4');
+      act(() => {
+        expect(listRef.current?.prepareTurnNavigation('turn-5')).toBe('pending');
+      });
+      mocks.items = [...mocks.items, userMessage('turn-5', 'message-5', 'Message 5')];
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      expect(mocks.setVisibleTurnInfo).toHaveBeenLastCalledWith(expect.objectContaining({
+        turnId: 'turn-5',
+        turnIndex: 5,
+        visibleTurnIds: ['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5'],
+      }));
+    });
+
+    it('clears the target on jump to latest even without a scroll event', async () => {
+      await navigate('turn-4');
+      expectCurrent('turn-4');
+      act(() => { listRef.current?.scrollToLatestEndPosition(); });
+      await settleOpenReveal();
+      expectCurrent('turn-1');
+    });
+
+    it('clears the target when follow-output takes over', async () => {
+      await navigate('turn-4');
+      expectCurrent('turn-4');
+      mocks.followsNow = true;
+      act(() => scroller.dispatchEvent(new Event('scroll')));
+      await settleOpenReveal();
+      expectCurrent('turn-1');
+      mocks.followsNow = false;
+      act(() => scroller.dispatchEvent(new Event('scroll')));
+      await settleOpenReveal();
+      expectCurrent('turn-1');
+    });
+
+    it('does not carry a target into another session with the same Turn IDs', async () => {
+      await navigate('turn-4');
+      expectCurrent('turn-4');
+      mocks.activeSession = { sessionId: 'session-2', dialogTurns: [] };
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      expectCurrent('turn-1');
+    });
+  });
+
   describe('scrollbar drags release the viewport', () => {
     // Content box ends at 0 + 1384; the gutter runs from there to 1394.
     const CONTENT_BOX_WIDTH = 1384;
