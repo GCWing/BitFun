@@ -1,9 +1,8 @@
 import { Combobox, type ComboboxOption } from '@bitfun/ui';
-import { Button, Card, Icon, IconButton, Input, Modal, SearchField, Select, Switch, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Card, Icon, IconButton, Input, Modal, NumberInput, SearchField, Select, Switch, Textarea, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Wifi, Loader, RefreshCw, AlertTriangle, EyeOff, ChevronUp, Brain, FolderOpen } from 'lucide-react';
-import { NumberInput, Textarea } from '@/component-library';
 import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 

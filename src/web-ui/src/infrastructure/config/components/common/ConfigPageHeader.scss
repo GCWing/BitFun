@@ -45,7 +45,8 @@
 }
 
 .bitfun-config-page-header__subtitle {
-  margin: var(--bf-appearance-token-size-gap-2) 0 0;
+  display: block;
+  margin: 0;
   font-size: var(--bf-appearance-token-font-size-lg);
   color: var(--bf-appearance-token-color-text-primary);
   line-height: 1.35;

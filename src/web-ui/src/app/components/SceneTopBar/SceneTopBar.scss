@@ -1,17 +1,24 @@
 .bitfun-scene-top-bar {
   position: relative;
   z-index: 10;
-  display: flex;
   align-items: center;
   flex: 0 0 var(--bf-control-tab-group-item-height);
   width: 100%;
   min-width: 0;
   height: var(--bf-control-tab-group-item-height);
+  min-block-size: var(--bf-control-tab-group-item-height);
+  padding: 0;
+  column-gap: 0;
   overflow: visible;
   background: var(--bf-appearance-token-color-bg-scene);
   container-name: scene-top-bar;
   container-type: inline-size;
   user-select: none;
+
+  > [data-bf-part='leading'],
+  > [data-bf-part='trailing'] {
+    height: 100%;
+  }
 
   &__actions {
     display: flex;

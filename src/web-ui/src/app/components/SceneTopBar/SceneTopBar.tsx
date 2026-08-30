@@ -1,4 +1,5 @@
 import React, { useCallback, useRef } from 'react';
+import { Toolbar } from '@bitfun/ui';
 import { WindowControls } from '@/component-library';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
@@ -65,14 +66,15 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
   }, [isSingleTab, onMaximize]);
 
   return (
-    <div
+    <Toolbar
+      bordered={false}
       className={`bitfun-scene-top-bar ${className}`.trim()}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
       data-bf-scene="workbench"
       data-bf-part="topBar"
-    >
-      <SceneBar />
+      leading={<SceneBar />}
+      trailing={<>
       <SceneChromeHost
         className="bitfun-scene-top-bar__actions"
         data-bf-scene="workbench"
@@ -92,7 +94,8 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
           />
         </div>
       ) : null}
-    </div>
+      </>}
+    />
   );
 };
 
