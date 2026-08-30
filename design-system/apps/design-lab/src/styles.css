@@ -3948,6 +3948,38 @@ input.lab-force-focus {
   padding: var(--bf-space-5);
 }
 
+.component-icon-composition {
+  display: grid;
+  gap: var(--bf-space-4);
+  min-inline-size: 0;
+  padding: var(--bf-space-5);
+  border-block-end: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+}
+
+.component-icon-composition h3,
+.component-icon-composition p {
+  margin: 0;
+}
+
+.component-icon-composition p {
+  color: var(--bf-color-content-muted);
+  font-size: var(--bf-font-size-small);
+}
+
+.component-icon-composition__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bf-space-4);
+  min-inline-size: 0;
+}
+
+.component-icon-composition__row > code {
+  min-inline-size: 112px;
+  color: var(--bf-color-content-secondary);
+  font-size: var(--bf-font-size-caption);
+}
+
 .component-icon-catalog__item {
   display: grid;
   min-block-size: 88px;

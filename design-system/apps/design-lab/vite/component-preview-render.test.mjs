@@ -83,3 +83,16 @@ test("Switch is explicit and unknown components never silently become switches",
   assert.match(preview, /此组件尚未实现预览/);
   assert.doesNotMatch(preview, /data-bf-component="switch"/);
 });
+
+test("Icon details include real mixed-icon compositions at every button size", () => {
+  const { preview } = render("Icon");
+  assert.match(preview, /component-icon-composition/);
+  for (const size of ["xs", "sm", "md", "lg"]) {
+    assert.match(preview, new RegExp(`Button / ${size}`));
+    assert.match(preview, new RegExp(`aria-label="SVG / ${size}"`));
+    assert.match(preview, new RegExp(`aria-label="Icon / ${size}"`));
+  }
+  assert.match(preview, /data-bf-component="tab-group"/);
+  assert.match(preview, /data-bf-component="input"/);
+  assert.match(preview, /component-icon-catalog/);
+});

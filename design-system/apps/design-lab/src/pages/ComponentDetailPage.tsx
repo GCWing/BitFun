@@ -98,6 +98,7 @@ import {
 } from "@bitfun/ui";
 import type { ComponentMeta } from "@bitfun/ui/registry";
 import previewImage from "../assets/design-system-hero.webp";
+import { IconCompositionPreview } from "../preview/IconCompositionPreview";
 import { NestedMenuPattern } from "./ReferencePatterns";
 import { useI18n, type MessageKey } from "../i18n";
 import {
@@ -1749,14 +1750,17 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "Icon" ? (
-                <div className="component-icon-catalog">
-                  {iconNames.map((name) => (
-                    <div className="component-icon-catalog__item" key={name}>
-                      <Icon name={name} size="lg" />
-                      <code>{name}</code>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <IconCompositionPreview />
+                  <div className="component-icon-catalog">
+                    {iconNames.map((name) => (
+                      <div className="component-icon-catalog__item" key={name}>
+                        <Icon name={name} size="lg" />
+                        <code>{name}</code>
+                      </div>
+                    ))}
+                  </div>
+                </>
               ) : component.name === "IconButton" ? (
                 <div
                   className="component-preview-matrix"
