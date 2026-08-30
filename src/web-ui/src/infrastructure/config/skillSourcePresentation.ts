@@ -22,14 +22,28 @@ function knownSourceLabel(value: string | undefined): string | undefined {
     ?? SOURCE_LABEL_BY_ID[normalized.replace(/^home\./, '').replace(/^config\./, '')];
 }
 
+export function getSkillSourceLabelFromIdentity(
+  sourceLabel: string | undefined,
+  sourceId: string | undefined,
+  sourceSlot: string | undefined,
+  fallbackLabel = 'Other source',
+): string {
+  return sourceLabel?.trim()
+    || knownSourceLabel(sourceId)
+    || knownSourceLabel(sourceSlot)
+    || fallbackLabel;
+}
+
 export function getSkillSourceLabel(
   skill: SkillInfo,
   fallbackLabel = 'Other source',
 ): string {
-  return skill.sourceLabel?.trim()
-    || knownSourceLabel(skill.sourceId)
-    || knownSourceLabel(skill.sourceSlot)
-    || fallbackLabel;
+  return getSkillSourceLabelFromIdentity(
+    skill.sourceLabel,
+    skill.sourceId,
+    skill.sourceSlot,
+    fallbackLabel,
+  );
 }
 
 export function canDeleteSkill(skill: SkillInfo): boolean {

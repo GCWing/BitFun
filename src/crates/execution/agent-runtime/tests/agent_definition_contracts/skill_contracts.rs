@@ -721,6 +721,39 @@ Run the review workflow.
 }
 
 #[test]
+fn codex_interface_metadata_does_not_affect_skill_identity_or_invocation_policy() {
+    let markdown = r#"---
+name: deep-research
+description: Run a research workflow.
+---
+
+Research the topic.
+"#;
+    let mut data = SkillData::from_markdown(
+        "/workspace/.codex/skills/deep-research".to_string(),
+        markdown,
+        SkillLocation::Project,
+        false,
+    )
+    .expect("valid skill markdown should parse");
+
+    for interface in [
+        "interface:\n  display_name: \"Academic Deep Research\"\n",
+        "interface:\n  display_name: 123\n",
+        "interface: invalid\n",
+    ] {
+        data.allow_implicit_invocation = true;
+        data.apply_openai_yaml_policy(&format!(
+            "{interface}policy:\n  allow_implicit_invocation: false\n"
+        ))
+        .expect("unconsumed interface metadata must not prevent policy parsing");
+
+        assert_eq!(data.name, "deep-research");
+        assert!(!data.allow_implicit_invocation);
+    }
+}
+
+#[test]
 fn implicit_skill_filter_keeps_explicit_only_skill_out_of_model_catalog() {
     let visible = project_skill("review");
     let mut explicit_only = project_skill("deploy");
