@@ -71,8 +71,8 @@
 }
 
 .session-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
@@ -80,18 +80,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  font-size: var(--bf-type-flow-control-font-size);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .session-stats .additions {
   color: var(--private-diff-fullscreen-accept-color);
-  font-weight: 600;
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .session-stats .deletions {
   color: var(--private-diff-fullscreen-reject-color);
-  font-weight: 600;
+  font-weight: var(--bf-font-weight-semibold);
 }
 
 .header-actions {
@@ -149,7 +149,7 @@
     color 160ms ease;
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  font-size: var(--bf-type-flow-control-font-size);
   border: 1px solid transparent;
 }
 
@@ -165,12 +165,12 @@
 }
 
 .file-tab .file-name {
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-type-flow-support-font-size);
 }
 
 .file-tab .file-status {
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  font-size: var(--bf-type-flow-micro-font-size);
 }
 
 .file-tab .file-status[data-status="pending"] {
@@ -227,16 +227,16 @@
 }
 
 .file-details .file-name {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-overlay-white-90);
-  font-family: 'Monaco', 'Menlo', monospace;
+  font-family: var(--bf-font-family-mono);
 }
 
 .file-details .file-path-full {
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: var(--bf-type-flow-support-font-size);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 50%, transparent);
-  font-family: 'Monaco', 'Menlo', monospace;
+  font-family: var(--bf-font-family-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -291,7 +291,7 @@
   justify-content: center;
   gap: 12px;
   color: var(--bf-appearance-token-color-overlay-white-90);
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
 }
 
 .loading-spinner {
@@ -321,11 +321,11 @@
   }
 
   .session-title {
-    font-size: 14px;
+    font-size: var(--bf-font-size-base);
   }
 
   .session-stats {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   .file-navigation {
@@ -337,11 +337,11 @@
   }
 
   .file-details .file-name {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   .file-details .file-path-full {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: var(--bf-type-flow-micro-font-size);
   }
 
   /* Hide file status text on small screens */
@@ -383,8 +383,8 @@
   color: var(--private-diff-fullscreen-selected-color);
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-  font-weight: 600;
+  font-size: var(--bf-type-flow-micro-font-size);
+  font-weight: var(--bf-font-weight-semibold);
   border: 1px solid rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
 }
 

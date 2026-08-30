@@ -21,8 +21,8 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-font-size-lg);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -69,9 +69,9 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
 
     svg {
       color: var(--bf-appearance-token-color-accent-500);
@@ -79,10 +79,10 @@
   }
 
   &__base-value {
-    font-family: $font-family-mono;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
     padding: 2px 8px;
     background: var(--bf-appearance-token-element-bg-base);
     border: 1px solid var(--bf-appearance-token-border-base);
@@ -102,8 +102,8 @@
   }
 
   &__label {
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     display: flex;
     align-items: center;
@@ -121,8 +121,8 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: $font-family-mono;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     transition:
       background-color $motion-base $easing-standard,
       border-color $motion-base $easing-standard,
@@ -138,7 +138,7 @@
 
     &::placeholder {
       color: var(--bf-appearance-token-color-text-muted);
-      font-family: $font-family-sans;
+      font-family: var(--bf-font-family-sans);
     }
 
     &:disabled {
@@ -165,18 +165,18 @@
     border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-error);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     animation: bitfun-create-branch-dialog-shake 0.4s ease-in-out;
   }
 
   &__hint {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
 
     div {
       margin-bottom: $size-gap-1;
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
     }
 
     ul {
@@ -203,8 +203,8 @@
       background: var(--bf-appearance-token-element-bg-base);
       border: 1px solid var(--bf-appearance-token-border-base);
       border-radius: $size-radius-sm;
-      font-family: $font-family-mono;
-      font-size: 10px;
+      font-family: var(--bf-font-family-mono);
+      font-size: var(--bf-font-size-micro);
       color: var(--bf-appearance-token-color-text-secondary);
     }
   }
@@ -220,7 +220,7 @@
 
   &__shortcuts {
     margin-top: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
 
@@ -230,9 +230,9 @@
       background: var(--bf-appearance-token-element-bg-base);
       border: 1px solid var(--bf-appearance-token-border-base);
       border-radius: $size-radius-sm;
-      font-family: $font-family-mono;
+      font-family: var(--bf-font-family-mono);
       margin: 0 4px;
-      font-size: 10px;
+      font-size: var(--bf-font-size-micro);
     }
   }
 

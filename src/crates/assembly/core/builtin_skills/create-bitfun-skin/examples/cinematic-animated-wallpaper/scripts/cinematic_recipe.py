@@ -298,8 +298,6 @@ def build_renderers(colors: Mapping[str, str], appearance_id: str) -> dict[str, 
                     }
                     for name in ("terminal", "output")
                 },
-                "fontWeight": "normal",
-                "fontWeightBold": "700",
             },
         },
         "mermaid": {

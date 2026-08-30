@@ -26,6 +26,34 @@ test("resolves aliases and emits stable CSS variable names", () => {
   assert.match(renderCss(tokens), /--bf-color-action-primary: #146c4b;/);
 });
 
+test("can preserve exact and embedded references in generated CSS", () => {
+  const tokens = resolveTokens({
+    font: {
+      size: {
+        base: { $type: "dimension", $value: "14px" },
+      },
+    },
+    type: {
+      body: {
+        fontSize: { $type: "dimension", $value: "{font.size.base}" },
+        fluidSize: {
+          $type: "dimension",
+          $value: "clamp({font.size.base}, 2vw, 18px)",
+        },
+      },
+    },
+  });
+
+  const css = renderCss(tokens, { preserveReferences: true });
+
+  assert.equal(tokens["type.body.fontSize"].value, "14px");
+  assert.match(css, /--bf-type-body-font-size: var\(--bf-font-size-base\);/);
+  assert.match(
+    css,
+    /--bf-type-body-fluid-size: clamp\(var\(--bf-font-size-base\), 2vw, 18px\);/,
+  );
+});
+
 test("merges token overrides without losing sibling groups", () => {
   const merged = mergeTokenDocuments(
     {

@@ -72,15 +72,15 @@
   }
 
   &__workspace {
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.25;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-bold);
+    line-height: var(--bf-line-height-dense);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__description {
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
     color: var(--bf-appearance-token-color-text-secondary);
     max-width: 56ch;
   }
@@ -116,7 +116,7 @@
   &__toolbar-summary {
     min-width: 0;
     flex: 1 1 180px;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -237,18 +237,18 @@
 
   &__row-title {
     min-width: 0;
-    font-size: 13px;
-    font-weight: 650;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
   }
 
   &__row-updated {
     flex-shrink: 0;
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
   }
@@ -267,9 +267,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 78%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-none);
 
   }
 

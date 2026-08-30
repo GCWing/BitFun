@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
+import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import { Tooltip } from '@/component-library';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -116,7 +117,7 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
       </Tooltip>
 
       {isMenuOpen && createPortal(
-        <div
+        <Menu
           className="bitfun-session-menu__dropdown"
           data-bf-component="session-menu"
           data-bf-part="dropdown"
@@ -130,9 +131,10 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="bitfun-session-menu__actions" data-bf-component="session-menu" data-bf-part="actions">
-            <button
+            <MenuItem
               type="button"
-              className="bitfun-session-menu__item bitfun-session-menu__item--new"
+              className="bitfun-session-menu__item-row bitfun-session-menu__item-row--new"
+              triggerClassName="bitfun-session-menu__item bitfun-session-menu__item--new"
               data-bf-component="session-menu"
               data-bf-part="item"
               data-bf-item-kind="create"
@@ -142,32 +144,36 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                 e.stopPropagation();
                 createSession();
               }}
+              leading={(
+                <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon">
+                  <Plus size={13} strokeWidth={2.25} />
+                </span>
+              )}
             >
-              <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon" aria-hidden>
-                <Plus size={13} strokeWidth={2.25} />
-              </span>
               <span className="bitfun-session-menu__item-label" data-bf-component="session-menu" data-bf-part="itemLabel">
                 {t('toolCards.toolbar.newSessionItem')}
               </span>
-            </button>
-            <div className="bitfun-session-menu__divider" data-bf-component="session-menu" data-bf-part="divider" role="separator" />
+            </MenuItem>
+            <MenuSeparator className="bitfun-session-menu__divider" data-bf-component="session-menu" data-bf-part="divider" />
           </div>
 
           <div
             className="bitfun-session-menu__scroll"
             data-bf-component="session-menu"
             data-bf-part="scroll"
-            role="listbox"
             aria-label={t('session.switchSession')}
           >
             {sessions.map((session) => (
-              <button
+              <MenuItem
                 key={session.sessionId}
                 type="button"
-                className={[
-                  'bitfun-session-menu__item',
-                  session.sessionId === activeSessionId ? 'bitfun-session-menu__item--active' : '',
-                ].filter(Boolean).join(' ')}
+                role="menuitemradio"
+                checked={session.sessionId === activeSessionId}
+                className="bitfun-session-menu__item-row"
+                triggerClassName={[
+                    'bitfun-session-menu__item',
+                    session.sessionId === activeSessionId ? 'bitfun-session-menu__item--active' : '',
+                  ].filter(Boolean).join(' ')}
                 data-bf-component="session-menu"
                 data-bf-part="item"
                 data-bf-item-kind="session"
@@ -175,10 +181,10 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                 onMouseDown={(e) => switchSession(e, session.sessionId)}
               >
                 {resolveDisplayTitle(session)}
-              </button>
+              </MenuItem>
             ))}
           </div>
-        </div>,
+        </Menu>,
         getAppearanceOverlayHost(),
       )}
     </div>

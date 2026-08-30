@@ -13,8 +13,8 @@
   overflow: hidden;
   background: var(--bf-appearance-token-color-bg-scene);
   position: relative;
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-type-flow-body-font-size);
 }
 
 .bitfun-chat-pane__chat-container {

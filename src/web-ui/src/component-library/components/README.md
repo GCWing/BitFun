@@ -18,7 +18,7 @@ Current component folders include:
 
 - **Actions & window controls**: `IconButton`, `WindowControls`
 - **Dialogs & overlays**: `Modal`, `InputDialog`, `ConfirmDialog`, `Tooltip`
-- **Form inputs**: `Input`, `NumberInput`, `Search`, `Select`, `Checkbox`, `Textarea`
+- **Form inputs**: `Input`, `NumberInput`, `Search`, `Checkbox`, `Textarea`
 - **Display & content**: `Alert`, `Badge`, `Tag`, `Avatar`, `Card`, `Empty`, `Markdown`, `Tabs`
 - **Editors & text**: `CodeEditor`, `StreamText`
 - **Visual utilities**: `CubeLoading`, `CubeLogo`, `DotMatrixLoader`, `TextStrokeEffect`

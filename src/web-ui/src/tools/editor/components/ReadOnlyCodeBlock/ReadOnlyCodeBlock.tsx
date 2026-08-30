@@ -9,6 +9,10 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import { MonacoEditorCore, type MonacoEditorCoreRef } from '../../core/MonacoEditorCore';
 import type { EditorConfigPartial } from '../../config/types';
+import {
+  DEFAULT_EDITOR_FONT_SIZE,
+  DEFAULT_EDITOR_LINE_HEIGHT,
+} from '../../config/defaults';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import './ReadOnlyCodeBlock.scss';
 
@@ -77,8 +81,8 @@ export const ReadOnlyCodeBlock: React.FC<ReadOnlyCodeBlockProps> = ({
     }
     
     const lineCount = content.split('\n').length;
-    const lineHeight = config?.lineHeight || 1.5;
-    const fontSize = config?.fontSize || 14;
+    const lineHeight = config?.lineHeight || DEFAULT_EDITOR_LINE_HEIGHT;
+    const fontSize = config?.fontSize || DEFAULT_EDITOR_FONT_SIZE;
     const calculatedHeight = lineCount * fontSize * lineHeight + 16; // +16 for padding
     
     const minH = typeof minHeight === 'number' ? minHeight : parseInt(String(minHeight), 10) || 50;

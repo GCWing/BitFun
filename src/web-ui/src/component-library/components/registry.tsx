@@ -1,9 +1,8 @@
 /* Component registry */
 import React from 'react';
 import type { ComponentCategory } from '../types';
-import { Alert, Avatar, AvatarGroup, Button, Checkbox, IconButton, StatusPill, TabGroup, Textarea } from '@bitfun/ui';
+import { Alert, Avatar, AvatarGroup, Button, Checkbox, Combobox, IconButton, StatusPill, TabGroup, Textarea } from '@bitfun/ui';
 import { WindowControls } from '@components/WindowControls';
-import { Combobox } from '@bitfun/ui';
 import { CubeLoading } from '@components/CubeLoading';
 import { Tooltip } from '@components/Tooltip';
 import { Markdown } from '@components/Markdown';
@@ -230,25 +229,25 @@ export const componentRegistry: ComponentCategory[] = [
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '20px' }}>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: previewTextDisabled, marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
+              <div style={{ fontSize: 'var(--bf-type-label-sm-font-size)', color: previewTextDisabled, marginBottom: '16px', fontWeight: 'var(--bf-type-label-sm-font-weight)' }}>尺寸</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="small" />
-                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Small</span>
+                  <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', color: previewTextSubtle }}>Small</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="medium" />
-                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Medium</span>
+                  <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', color: previewTextSubtle }}>Medium</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="large" />
-                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Large</span>
+                  <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', color: previewTextSubtle }}>Large</span>
                 </div>
               </div>
             </div>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: previewTextDisabled, marginBottom: '16px', fontWeight: 500 }}>With text</div>
+              <div style={{ fontSize: 'var(--bf-type-label-sm-font-size)', color: previewTextDisabled, marginBottom: '16px', fontWeight: 'var(--bf-type-label-sm-font-weight)' }}>With text</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-start' }}>
                 <CubeLoading text="加载中.." />
                 <CubeLoading size="large" text="加载中.." />
@@ -280,7 +279,7 @@ export const componentRegistry: ComponentCategory[] = [
     layoutType: 'grid-2',
     components: [
       {
-        id: 'select-basic',
+        id: 'combobox-basic',
         name: 'Combobox - 基础选择',
         description: '基础单选和多选示例',
         category: 'form',
@@ -291,7 +290,7 @@ export const componentRegistry: ComponentCategory[] = [
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '400px' }}>
               <Combobox
-                label="Select"
+                label="Combobox"
                 options={[
                   { label: 'Option 1', value: '1' },
                   { label: 'Option 2', value: '2' },
@@ -300,7 +299,7 @@ export const componentRegistry: ComponentCategory[] = [
                 ]}
                 placeholder="Select..."
                 value={value}
-                onChange={(v) => setValue(v as string | number)}
+                onValueChange={(v) => setValue(v as string | number)}
                 clearable
               />
 
@@ -317,13 +316,13 @@ export const componentRegistry: ComponentCategory[] = [
                 ]}
                 placeholder="选择技术"
                 value={multiValue}
-                onChange={(v) => setMultiValue(v as (string | number)[])}
+                onValueChange={(v) => setMultiValue(v as (string | number)[])}
                 clearable
               />
 
               <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
                 <Combobox
-                  size="small"
+                  size="sm"
                   options={[
                     { label: 'Small', value: 's1' },
                     { label: 'Option 2', value: 's2' },
@@ -331,7 +330,7 @@ export const componentRegistry: ComponentCategory[] = [
                   placeholder="Small size"
                 />
                 <Combobox
-                  size="large"
+                  size="lg"
                   options={[
                     { label: 'Large', value: 'l1' },
                     { label: 'Option 2', value: 'l2' },
@@ -344,8 +343,8 @@ export const componentRegistry: ComponentCategory[] = [
         },
       },
       {
-        id: 'select-searchable',
-        name: 'Combobox - Demo',
+        id: 'combobox-searchable',
+        name: 'Combobox - 搜索',
         description: '可搜索的选择器示例',
         category: 'form',
         component: () => {
@@ -373,7 +372,7 @@ export const componentRegistry: ComponentCategory[] = [
                 options={countries}
                 placeholder="Select..."
                 value={value}
-                onChange={(v) => setValue(v as string | number)}
+                onValueChange={(v) => setValue(v as string | number)}
                 clearable
               />
             </div>
@@ -381,7 +380,7 @@ export const componentRegistry: ComponentCategory[] = [
         },
       },
       {
-        id: 'select-grouped',
+        id: 'combobox-grouped',
         name: 'Combobox - 分组选择',
         description: '带分组的选择器',
         category: 'form',
@@ -408,7 +407,7 @@ export const componentRegistry: ComponentCategory[] = [
                 options={options}
                 placeholder="选择..."
                 value={value}
-                onChange={(v) => setValue(v as string | number)}
+                onValueChange={(v) => setValue(v as string | number)}
                 clearable
               />
             </div>
@@ -416,8 +415,8 @@ export const componentRegistry: ComponentCategory[] = [
         },
       },
       {
-        id: 'select-with-icons',
-        name: 'Combobox - Demo',
+        id: 'combobox-with-icons',
+        name: 'Combobox - 图标',
         description: '带图标的选择器',
         category: 'form',
         component: () => {
@@ -428,31 +427,31 @@ export const componentRegistry: ComponentCategory[] = [
               label: 'TypeScript',
               value: 'ts',
               description: 'TypeScript language',
-              icon: <span style={{ fontSize: '18px' }}>TS</span>
+              leading: <span style={{ fontSize: 'var(--bf-font-size-2xl)' }}>TS</span>
             },
             {
               label: 'JavaScript',
               value: 'js',
               description: 'JavaScript language',
-              icon: <span style={{ fontSize: '18px' }}>JS</span>
+              leading: <span style={{ fontSize: 'var(--bf-font-size-2xl)' }}>JS</span>
             },
             {
               label: 'Python',
               value: 'py',
               description: 'Python language',
-              icon: <span style={{ fontSize: '18px' }}>PY</span>
+              leading: <span style={{ fontSize: 'var(--bf-font-size-2xl)' }}>PY</span>
             },
             {
               label: 'Rust',
               value: 'rs',
               description: 'Rust language',
-              icon: <span style={{ fontSize: '18px' }}>RS</span>
+              leading: <span style={{ fontSize: 'var(--bf-font-size-2xl)' }}>RS</span>
             },
             {
               label: 'Go',
               value: 'go',
               description: 'Go language',
-              icon: <span style={{ fontSize: '18px' }}>GO</span>
+              leading: <span style={{ fontSize: 'var(--bf-font-size-2xl)' }}>GO</span>
             },
           ];
 
@@ -464,7 +463,7 @@ export const componentRegistry: ComponentCategory[] = [
                 options={options}
                 placeholder="Select..."
                 value={value}
-                onChange={(v) => setValue(v as string | number)}
+                onValueChange={(v) => setValue(v as string | number)}
                 clearable
               />
             </div>
@@ -472,8 +471,8 @@ export const componentRegistry: ComponentCategory[] = [
         },
       },
       {
-        id: 'select-advanced',
-        name: 'Combobox - Demo',
+        id: 'combobox-advanced',
+        name: 'Combobox - 状态',
         description: '加载、错误和禁用状态',
         category: 'form',
         component: () => {
@@ -494,17 +493,16 @@ export const componentRegistry: ComponentCategory[] = [
                 options={options}
                 placeholder="Loading..."
                 value={value1}
-                onChange={(v) => setValue1(v as string | number)}
+                onValueChange={(v) => setValue1(v as string | number)}
               />
 
               <Combobox
                 label="Error"
-                error
-                errorMessage="Error message"
+                invalid
                 options={options}
                 placeholder="Error"
                 value={value2}
-                onChange={(v) => setValue2(v as string | number)}
+                onValueChange={(v) => setValue2(v as string | number)}
               />
 
               <Combobox

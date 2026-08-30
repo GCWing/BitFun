@@ -1,8 +1,8 @@
-import { Combobox, type ComboboxOption } from '@bitfun/ui';
-import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip } from '@bitfun/ui';
+import { Button, Field, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, TabGroup, Tooltip, type ComboboxOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, CircleDot, Code2, GitCommitHorizontal, GitPullRequest, GitPullRequestClosed, KeyRound, Loader2, MessageSquareText, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { MarkdownRenderer } from '@/component-library';
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
@@ -1850,14 +1850,14 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           <div className="review-platform__topbar-actions" data-bf-component="review-platform" data-bf-part="actions">
             <div className="review-platform__remote-select">
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 value={selectedRemoteId ?? ''}
                 options={remoteOptions}
                 placeholder="Select remote"
                 disabled={!remoteOptions.length || loading}
                 searchable
-                onChange={handleRemoteChange}
+                onValueChange={handleRemoteChange}
               />
             </div>
             {account && (

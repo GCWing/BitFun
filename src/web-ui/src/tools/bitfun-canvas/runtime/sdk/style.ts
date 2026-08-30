@@ -126,22 +126,22 @@ export function flexJustify(value: unknown): React.CSSProperties['justifyContent
 export function sizeValue(size: unknown): string {
   if (typeof size === 'number') return `${size}px`;
   return size === 'small' || size === 'sm'
-    ? '12px'
+    ? 'var(--bf-type-body-xs-font-size)'
     : size === 'lg'
-      ? '16px'
+      ? 'var(--bf-type-body-lg-font-size)'
       : size === 'body' || size === 'md' || !size
-        ? '13px'
+        ? 'var(--bf-type-body-sm-font-size)'
         : String(size);
 }
 
 export function weightValue(weight: unknown): number | string {
   return weight === 'medium'
-    ? 500
+    ? 'var(--bf-font-weight-medium)'
     : weight === 'semibold'
-      ? 650
+      ? 'var(--bf-font-weight-semibold)'
       : weight === 'bold'
-        ? 700
-        : (weight as number | string | undefined) || 400;
+        ? 'var(--bf-font-weight-bold)'
+        : (weight as number | string | undefined) || 'var(--bf-font-weight-regular)';
 }
 
 export function toneColor(tone: CanvasTone | undefined): string {

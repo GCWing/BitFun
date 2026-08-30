@@ -13,6 +13,7 @@ import {
   tokenModes,
   tokens,
 } from "../dist/index.js";
+import { createTypographySizeScale } from "../dist/typography-runtime.mjs";
 
 const packageDirectory = fileURLToPath(new URL("../", import.meta.url));
 
@@ -70,7 +71,6 @@ test("SegmentedControl geometry preserves the compact mode-switch pill contract"
   assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
   assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
   assert.equal(tokens["control.segmentedControl.iconSize"], "12px");
-  assert.equal(tokens["control.segmentedControl.fontSize"], "11px");
   assert.equal(systemDocument.control.segmentedControl.radius.$value, "{radius.pill}");
   assert.equal(systemDocument.control.segmentedControl.segmentRadius.$value, "{radius.pill}");
 });
@@ -92,8 +92,6 @@ test("Activity geometry preserves inline and surfaced status compositions", asyn
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.activityItem.inlineIconSize"], "12px");
-  assert.equal(tokens["control.activityItem.inlineFontSize"], "11px");
-  assert.equal(tokens["control.activityItem.inlineLineHeight"], "17px");
   assert.equal(tokens["control.activityItem.surfaceHeight"], "30px");
   assert.equal(tokens["control.activityItem.surfaceIconSize"], "14px");
   assert.equal(tokens["control.activityItem.dividerBlockSize"], "16px");
@@ -111,7 +109,6 @@ test("StatusPill geometry preserves compact semantic status anatomy", async () =
   assert.equal(tokens["control.statusPill.paddingBlock"], "3px");
   assert.equal(tokens["control.statusPill.paddingInline"], "6px");
   assert.equal(tokens["control.statusPill.iconSize"], "14px");
-  assert.equal(tokens["control.statusPill.fontSize"], "11px");
   assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
 });
 
@@ -140,7 +137,6 @@ test("ActionCard geometry preserves compact and descriptive entry compositions",
 test("AskUser geometry preserves the answered question reference contract", () => {
   assert.equal(tokens["control.askUser.bodyGap"], "12px");
   assert.equal(tokens["control.askUser.bodyPadding"], "16px");
-  assert.equal(tokens["control.askUser.descriptionLineHeight"], "20px");
   assert.equal(tokens["control.askUser.descriptionMaxWidth"], "500px");
   assert.equal(tokens["control.askUser.headerHeight"], "30px");
   assert.equal(tokens["control.askUser.iconSize"], "14px");
@@ -259,7 +255,6 @@ test("Form grouping tokens preserve section, surface, and row composition", asyn
   assert.equal(tokens["layout.formSection.gap"], "16px");
   assert.equal(tokens["layout.formSection.headerGap"], "20px");
   assert.equal(tokens["layout.formSection.titleDescriptionGap"], "4px");
-  assert.equal(tokens["layout.formSection.titleFontSize"], "15px");
   assert.equal(tokens["layout.fieldGroup.radius"], "12px");
   assert.equal(tokens["layout.fieldGroup.rowPaddingBlock"], "16px");
   assert.equal(tokens["layout.fieldGroup.rowPaddingInline"], "20px");
@@ -304,8 +299,6 @@ test("Modal tokens preserve the reference surface and chrome contract", async ()
   assert.equal(tokens["overlay.modal.headerPaddingBlockStart"], "24px");
   assert.equal(tokens["overlay.modal.headerPaddingBlockEnd"], "20px");
   assert.equal(tokens["overlay.modal.headerPaddingInline"], "24px");
-  assert.equal(tokens["overlay.modal.titleFontSize"], "24px");
-  assert.equal(tokens["overlay.modal.titleFontWeight"], 700);
   assert.equal(systemDocument.overlay.modal.scrollbarWidth.$value, "{scrollbar.width}");
   assert.equal(tokens["overlay.modal.scrollbarWidth"], "6px");
   assert.equal(tokens["overlay.modal.footerBlur"], "blur(10px)");
@@ -383,11 +376,14 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["font.size.micro"], "10px");
   assert.equal(tokens["font.size.meta"], "11px");
   assert.equal(tokens["font.size.xs"], "12px");
-  assert.equal(tokens["font.size.small"], "13px");
+  assert.equal(tokens["font.size.sm"], "13px");
   assert.equal(tokens["font.size.4xl"], "26px");
+  assert.equal(tokens["font.size.8xl"], "56px");
   assert.equal(tokens["font.weight.regular"], 400);
-  assert.equal(tokens["font.weight.bold"], 600);
+  assert.equal(tokens["font.weight.bold"], 700);
   assert.equal(tokens["lineHeight.base"], 1.5);
+  assert.equal(tokens["lineHeight.reading"], 1.58);
+  assert.equal(tokens["letterSpacing.normal"], "0em");
   assert.equal(tokens["radius.xs"], "4px");
   assert.equal(tokens["radius.sm"], "6px");
   assert.equal(tokens["radius.2xl"], "20px");
@@ -397,6 +393,55 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["motion.easing.standard"], "cubic-bezier(0.23, 1, 0.32, 1)");
   assert.equal(tokens["layer.modal"], 200);
   assert.equal(tokens["layer.contextMenu"], 500);
+});
+
+test("semantic typography roles resolve to the canonical foundation", async () => {
+  const systemDocument = await readSource("system.tokens.json");
+
+  assert.equal(systemDocument.type.body.md.fontSize.$value, "{font.size.base}");
+  assert.equal(systemDocument.type.body.md.lineHeight.$value, "{lineHeight.base}");
+  assert.equal(systemDocument.type.label.selected.fontWeight.$value, "{font.weight.semibold}");
+  assert.equal(systemDocument.type.flow.body.lineHeight.$value, "{lineHeight.reading}");
+  assert.equal(tokens["type.body.md.fontSize"], "14px");
+  assert.equal(tokens["type.label.selected.fontWeight"], 600);
+  assert.equal(tokens["type.heading.page.fontSize"], "18px");
+  assert.equal(tokens["type.code.md.fontSize"], "13px");
+  assert.equal(tokens["type.flow.body.lineHeight"], 1.58);
+});
+
+test("generated CSS preserves semantic typography references", async () => {
+  const css = await readFile(path.join(packageDirectory, "dist", "tokens.css"), "utf8");
+
+  assert.match(css, /--bf-type-body-md-font-size: var\(--bf-font-size-base\);/);
+  assert.match(css, /--bf-type-flow-body-line-height: var\(--bf-line-height-reading\);/);
+  assert.match(css, /--bf-type-label-selected-font-weight: var\(--bf-font-weight-semibold\);/);
+});
+
+test("runtime typography scaling uses the canonical complete size ladder", () => {
+  assert.deepEqual(createTypographySizeScale(14), {
+    "4xs": "7px",
+    "3xs": "8px",
+    "2xs": "9px",
+    micro: "10px",
+    meta: "11px",
+    xs: "12px",
+    sm: "13px",
+    base: "14px",
+    lg: "15px",
+    xl: "16px",
+    "2xl": "18px",
+    "3xl": "22px",
+    "4xl": "26px",
+    "5xl": "32px",
+    "6xl": "40px",
+    "7xl": "48px",
+    "8xl": "56px",
+    "9xl": "64px",
+  });
+  assert.equal(createTypographySizeScale(8).base, "12px");
+  assert.equal(createTypographySizeScale(8)["4xs"], "7px");
+  assert.equal(createTypographySizeScale(24).base, "20px");
+  assert.throws(() => createTypographySizeScale(Number.NaN), /finite number/);
 });
 
 test("component spacing remains available in every density mode", () => {

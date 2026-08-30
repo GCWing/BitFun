@@ -59,16 +59,16 @@
     
     p {
       margin: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
+      font-size: var(--bf-type-flow-section-title-font-size);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-weight: $font-weight-normal;
-      line-height: $line-height-relaxed;
+      font-weight: var(--bf-font-weight-regular);
+      line-height: var(--bf-line-height-relaxed);
       
       &:first-child {
-        font-size: var(--bf-appearance-token-flowchat-font-size-3xl);
-        font-weight: $font-weight-semibold;
+        font-size: var(--bf-type-flow-page-title-font-size);
+        font-weight: var(--bf-font-weight-semibold);
         color: var(--bf-appearance-token-color-text-primary);
-        letter-spacing: -0.02em;
+        letter-spacing: var(--bf-letter-spacing-tight);
       }
     }
   }
@@ -77,14 +77,14 @@
     display: inline-flex;
     align-items: center;
     padding: 2px $size-gap-2;
-    font-family: $font-family-mono;
-    font-weight: $font-weight-medium;
+    font-family: var(--bf-font-family-mono);
+    font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
     color: var(--bf-appearance-token-color-text-primary);
     background: var(--bf-appearance-token-element-bg-soft);
     border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
     transition:
       background-color $motion-base $easing-standard,
       border-color $motion-base $easing-standard;
@@ -99,14 +99,14 @@
     display: inline-flex;
     align-items: center;
     padding: 2px $size-gap-2;
-    font-family: $font-family-mono;
-    font-weight: $font-weight-medium;
+    font-family: var(--bf-font-family-mono);
+    font-weight: var(--bf-font-weight-medium);
     font-size: inherit;
     color: var(--bf-appearance-token-color-text-primary);
     background: var(--bf-appearance-token-element-bg-soft);
     border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
     transition:
       background-color $motion-base $easing-standard,
       border-color $motion-base $easing-standard;
@@ -138,10 +138,10 @@
     
     p {
       margin: 0 0 $size-gap-3;
-      font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
+      font-size: var(--bf-type-flow-section-title-font-size);
       color: var(--bf-appearance-token-color-text-secondary);
-      line-height: $line-height-relaxed;
-      font-weight: $font-weight-normal;
+      line-height: var(--bf-line-height-relaxed);
+      font-weight: var(--bf-font-weight-regular);
       
       &:last-child {
         margin: 0;
@@ -150,7 +150,7 @@
   }
   
   &__hint {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xl);
+    font-size: var(--bf-type-flow-title-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
@@ -164,16 +164,16 @@
     
     p {
       margin: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xl);
+      font-size: var(--bf-type-flow-title-font-size);
       color: var(--bf-appearance-token-color-text-secondary);
-      line-height: var(--bf-appearance-token-flowchat-text-line-height);
-      font-weight: $font-weight-normal;
+      line-height: var(--bf-type-flow-body-line-height);
+      font-weight: var(--bf-font-weight-regular);
     }
     
     &-hint {
       margin-top: $size-gap-4;
       padding: $size-gap-3 $size-gap-4;
-      font-size: var(--bf-appearance-token-flowchat-font-size-lg);
+      font-size: var(--bf-type-flow-lead-font-size);
       color: var(--bf-appearance-token-color-text-muted);
       font-style: italic;
       background: var(--bf-appearance-token-element-bg-subtle);

@@ -1,6 +1,11 @@
 import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
 import { WIDGET_APPEARANCE_VARIABLE_NAMES } from '@/infrastructure/appearance/adapters/widgetAppearanceVariables';
 import { getBuiltinAppearanceCssToken } from '@/infrastructure/appearance/builtins/catalog';
+import {
+  cssVariables as systemCssVariables,
+  tokens as systemTokens,
+  type TokenName as SystemTokenName,
+} from '@bitfun/design-tokens';
 
 export type WidgetAppearancePayload = {
   id: string;
@@ -151,8 +156,31 @@ export const WIDGET_APPEARANCE_FALLBACK_VARS = {
   [FALLBACK_VAR.sizeGap16]: '64px',
 } as const satisfies Record<WidgetAppearanceFallbackVarName, string>;
 
+const WIDGET_TYPOGRAPHY_TOKEN_NAMES = Object.freeze(
+  (Object.keys(systemTokens) as SystemTokenName[]).filter(name => (
+    name.startsWith('font.')
+    || name.startsWith('lineHeight.')
+    || name.startsWith('letterSpacing.')
+    || name.startsWith('type.')
+  )),
+);
+
+export const WIDGET_TYPOGRAPHY_VARIABLE_NAMES = Object.freeze(
+  WIDGET_TYPOGRAPHY_TOKEN_NAMES.map(name => systemCssVariables[name]),
+);
+
+const WIDGET_TYPOGRAPHY_FALLBACK_VARS = Object.freeze(Object.fromEntries(
+  WIDGET_TYPOGRAPHY_TOKEN_NAMES.map(name => [
+    systemCssVariables[name],
+    String(systemTokens[name]),
+  ]),
+));
+
 export function createWidgetAppearanceFallbackCss(): string {
-  return Object.entries(WIDGET_APPEARANCE_FALLBACK_VARS)
+  return Object.entries({
+    ...WIDGET_APPEARANCE_FALLBACK_VARS,
+    ...WIDGET_TYPOGRAPHY_FALLBACK_VARS,
+  })
     .map(([name, value]) => `      ${name}: ${value};`)
     .join('\n');
 }
@@ -194,14 +222,10 @@ const WIDGET_APPEARANCE_STATIC_SHELL_VARS = {
   '--bf-appearance-token-shadow-base': `0 4px 8px ${widgetVar(FALLBACK_VAR.overlayBlack30)}`,
   '--bf-appearance-token-shadow-lg': `0 8px 16px ${widgetVar(FALLBACK_VAR.overlayBlack30)}`,
   '--bf-appearance-token-shadow-xl': `0 12px 24px ${widgetVar(FALLBACK_VAR.overlayBlack30)}`,
-  '--bf-appearance-token-font-size-xxs': '10px',
-  '--bf-appearance-token-font-size-2xs': '11px',
-  '--bf-appearance-token-font-size-xl': '16px',
   '--bf-appearance-token-opacity-disabled': '0.6',
   '--bf-appearance-token-opacity-hover': '0.8',
   '--bf-appearance-token-opacity-focus': '0.9',
   '--bf-appearance-token-motion-slow': '0.6s',
-  '--bf-appearance-token-tool-card-font-mono': widgetVar('--bf-appearance-token-font-family-mono'),
   '--bf-appearance-token-btn-primary-bg': widgetVar(FALLBACK_VAR.accent100),
   '--bf-appearance-token-btn-primary-color': widgetVar(FALLBACK_VAR.accent600),
   '--bf-appearance-token-btn-primary-border': 'transparent',
@@ -224,8 +248,6 @@ const WIDGET_APPEARANCE_STATIC_SHELL_VARS = {
   '--bf-appearance-token-tool-card-header-pad-right': '0.625rem',
   '--bf-appearance-token-tool-card-header-icon-slot': '34px',
   '--bf-appearance-token-tool-card-expanded-pad-x': '0.625rem',
-  '--bf-appearance-token-tool-card-action-font-size': widgetVar('--bf-appearance-token-font-size-sm'),
-  '--bf-appearance-token-tool-card-action-line-height': '1.45',
 } as const;
 
 export const WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES = Object.keys(WIDGET_APPEARANCE_STATIC_SHELL_VARS);
@@ -245,6 +267,14 @@ export function readWidgetAppearancePayload(): WidgetAppearancePayload | null {
     const value = settings.vars[name]
       ?? WIDGET_APPEARANCE_FALLBACK_VARS[name as keyof typeof WIDGET_APPEARANCE_FALLBACK_VARS];
     if (value) vars[name] = value;
+  }
+  const computedStyle = typeof document !== 'undefined' && typeof getComputedStyle === 'function'
+    ? getComputedStyle(document.documentElement)
+    : null;
+  for (const name of WIDGET_TYPOGRAPHY_VARIABLE_NAMES) {
+    const value = computedStyle?.getPropertyValue(name).trim()
+      || WIDGET_TYPOGRAPHY_FALLBACK_VARS[name];
+    vars[name] = value;
   }
 
   return {

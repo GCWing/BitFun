@@ -24,7 +24,6 @@
 
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../typography' as flow-type;
 
 // The only two spacings on the track. Their ratio is what replaces the
 // separators: parts of one segment sit close, segments sit apart.
@@ -52,8 +51,8 @@ $track-item-gap: 10px;
   // The whole track speaks at one size: facts inherit it from the rail and
   // controls restate it here. Shape — the pill and its hover fill — is what
   // says a control is a control, so a label never needs a size of its own.
-  font-size: flow-type.$meta-size;
-  line-height: 1;
+  font-size: var(--bf-type-flow-meta-font-size);
+  line-height: var(--bf-line-height-none);
   letter-spacing: inherit;
   white-space: nowrap;
   cursor: pointer;
@@ -99,11 +98,11 @@ $track-item-gap: 10px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: flow-type.$meta-size;
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-type-flow-meta-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
+  font-weight: var(--bf-font-weight-regular);
+  letter-spacing: var(--bf-letter-spacing-subtle);
   color: var(--bf-appearance-token-color-text-muted);
   user-select: text;
   pointer-events: auto;
@@ -249,54 +248,7 @@ $track-item-gap: 10px;
     padding-bottom: 1px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 500;
-  }
-
-  // Scope is chosen per click: the row body writes the session, the trailing
-  // button arms the same mode for one submission only.
-  // The row owns the background so hover and selection cover the trailing
-  // controls as well; the inner button stays transparent.
-  &__permission-option-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding-right: 8px;
-    border-radius: $size-radius-sm;
-
-    &:hover,
-    &:focus-within {
-      background: var(--bf-appearance-token-element-bg-medium);
-    }
-
-    &--selected {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
-
-      &:hover,
-      &:focus-within {
-        background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
-      }
-    }
-  }
-
-  &__permission-option-trailing {
-    display: flex;
-    flex: none;
-    align-items: center;
-    min-width: 16px;
-    justify-content: flex-end;
-  }
-
-  &__permission-option-check {
-    flex: none;
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-
-  // Session state and a temporary override share one slot, so the checkmark
-  // steps aside exactly when the one-off control claims it.
-  &__permission-option-row:hover &__permission-option-check,
-  &__permission-option-row:focus-within &__permission-option-check,
-  &__permission-option-row--armed &__permission-option-check {
-    display: none;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__permission-option-icon {
@@ -315,46 +267,6 @@ $track-item-gap: 10px;
     }
   }
 
-  // Hidden until the row is hovered or focused so the menu stays compact; an
-  // armed one stays visible because a pending override must not be invisible.
-  &__permission-option-next-turn {
-    flex: none;
-    display: none;
-    padding: 1px 5px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    font: inherit;
-    font-size: flow-type.$meta-size;
-    line-height: 1.4;
-    white-space: nowrap;
-    cursor: pointer;
-
-    &:hover:not(:disabled),
-    &:focus-visible {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-medium);
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.5;
-    }
-
-    &--armed {
-      display: inline-flex;
-      color: var(--bf-appearance-token-color-accent-500);
-      font-weight: 600;
-    }
-  }
-
-  &__permission-option-row:hover &__permission-option-next-turn,
-  &__permission-option-row:focus-within &__permission-option-next-turn {
-    display: inline-flex;
-  }
-
   // Marks a pending one-off override. A session-level choice is not dotted:
   // the trigger label already names it, and it is not waiting to expire.
   &__permission-next-turn-dot {
@@ -365,181 +277,10 @@ $track-item-gap: 10px;
     background: var(--bf-appearance-token-color-accent-500);
   }
 
-  // The reset row keeps a trailing shortcut into the settings page that owns
-  // the default it follows, revealed on hover so the menu stays quiet.
-  &__permission-action-row {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding-right: 6px;
-    border-radius: $size-radius-sm;
-
-    &:hover,
-    &:focus-within {
-      background: var(--bf-appearance-token-element-bg-medium);
-    }
-
-    .bitfun-chat-input-workspace-strip__permission-visibility-action {
-      flex: 1 1 auto;
-      padding-right: 0;
-
-      &:hover,
-      &:focus-visible {
-        background: transparent;
-      }
-    }
-  }
-
-  &__permission-action-settings {
-    flex: none;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 18px;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-muted);
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-strong);
-      outline: none;
-    }
-  }
-
-  &__permission-action-row:hover &__permission-action-settings,
-  &__permission-action-row:focus-within &__permission-action-settings {
-    display: inline-flex;
-  }
-
   &__permission-menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
     z-index: $z-popover;
-    box-sizing: border-box;
-    // Sized to the widest row now that mode descriptions are tooltips: the
-    // header's scope label (longest for dispatched sessions) rather than the
-    // option rows, which are single-line.
     width: min(240px, calc(100vw - 16px));
-    max-height: calc(100vh - 16px);
-    overflow-y: auto;
-    padding: 6px;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: flow-type.$support-size;
-    user-select: none;
-  }
-
-  &__permission-menu-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-height: 24px;
-    padding: 0 7px 4px;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: flow-type.$support-size;
-    font-weight: 600;
-    letter-spacing: 0;
-
-    // A longer localized scope label truncates instead of wrapping the header
-    // onto a second line and reopening the width the tooltips just reclaimed.
-    span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    span:first-child {
-      flex: none;
-    }
-
-    span:last-child {
-      min-width: 0;
-      color: var(--bf-appearance-token-color-text-muted);
-      font-weight: 400;
-    }
-  }
-
-  &__permission-options {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  &__permission-menu-divider {
-    height: 1px;
-    margin: 6px 2px;
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__permission-option {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-    min-height: 30px;
-    padding: 5px 0 5px 8px;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    letter-spacing: 0;
-    text-align: left;
-    cursor: pointer;
-
-    &:focus-visible {
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: wait;
-      opacity: 0.6;
-    }
-  }
-
-  &__permission-option-label {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: flow-type.$control-size;
-    font-weight: 500;
-    line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__permission-visibility-action {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    width: 100%;
-    min-height: 32px;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font: inherit;
-    font-size: flow-type.$control-size;
-    letter-spacing: 0;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-      outline: none;
-    }
   }
 
   &__usage-btn {
@@ -677,10 +418,10 @@ $track-item-gap: 10px;
     border-radius: 999px;
     background: transparent;
     color: inherit;
-    font-family: inherit;
+    font-family:var(--bf-font-family-sans);
     font-size: inherit;
-    font-weight: 500;
-    line-height: 1;
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
     cursor: default;
   }
@@ -724,7 +465,7 @@ $track-item-gap: 10px;
   &__branch {
     min-width: 0;
     white-space: nowrap;
-    font-family: inherit;
+    font-family:var(--bf-font-family-sans);
     font-size: inherit;
     font-weight: inherit;
     flex: 1 1 auto;
@@ -737,59 +478,9 @@ $track-item-gap: 10px;
   // strip feel like one family; the layout is simpler — a single column of
   // workspace names with a check on the active one.
   &__workspace-menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
     z-index: $z-popover;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
     width: min(220px, calc(100vw - 16px));
-    max-height: calc(100vh - 16px);
-    overflow-y: auto;
-    padding: 6px;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: flow-type.$support-size;
-    user-select: none;
-  }
-
-  &__workspace-option {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    width: 100%;
-    min-width: 0;
-    min-height: 28px;
-    padding: 4px 8px;
-    border: 0;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font: inherit;
-    letter-spacing: 0;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-soft);
-      outline: none;
-    }
-
-    > span {
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    > svg {
-      flex: none;
-      color: var(--bf-appearance-token-color-accent-500);
-    }
   }
 
 }

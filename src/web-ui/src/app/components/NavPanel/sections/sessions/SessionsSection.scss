@@ -6,7 +6,6 @@
  */
 
 @use '../../../../../component-library/styles/tokens.scss' as *;
-@use '../../../../../component-library/styles/overlay-surfaces' as surfaces;
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
@@ -41,7 +40,7 @@
   }
 
   &__inline-empty {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     padding: 4px $size-gap-1;
     font-style: italic;
@@ -63,14 +62,14 @@
     flex: 1;
     flex-direction: column;
     gap: 1px;
-    line-height: 1.2;
+    line-height: var(--bf-line-height-tight);
   }
 
   &__inline-empty-name {
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -83,7 +82,7 @@
     height: 24px;
     padding: 0 $size-gap-1;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
 
     svg {
       flex: 0 0 auto;
@@ -110,8 +109,8 @@
     border-radius: 4px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
     cursor: pointer;
     width: 100%;
     overflow: hidden;
@@ -150,7 +149,7 @@
     &.is-child {
       margin-top: -2px;
       min-height: 24px;
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
       padding-left: calc(var(--bf-nav-session-rail) + 14px);
       position: relative;
 
@@ -228,8 +227,8 @@
   &__inline-item-assistant-name {
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1.15;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -240,8 +239,8 @@
     margin-left: auto;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -270,9 +269,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 13%, var(--bf-appearance-token-element-bg-soft));
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 62%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wide);
     opacity: 0.96;
     overflow: visible;
     white-space: nowrap;
@@ -291,8 +290,8 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 12%, var(--bf-appearance-token-element-bg-soft));
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 76%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
 
@@ -322,9 +321,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 18%, var(--bf-appearance-token-element-bg-soft));
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 82%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wide);
     white-space: nowrap;
 
     svg {
@@ -386,9 +385,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
     color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 80%, var(--bf-appearance-token-color-text-primary));
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wide);
     white-space: nowrap;
   }
 
@@ -400,17 +399,17 @@
   }
 
   &__inline-item-tooltip-title {
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     word-break: break-word;
   }
 
   &__inline-item-tooltip-meta {
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     word-break: break-word;
   }
 
@@ -459,56 +458,8 @@
   }
 
   &__inline-item-menu-popover {
-    @include nav-font.nav-panel-font-token-scope;
-    @include surfaces.floating-surface;
-
     position: fixed;
-    width: max-content;
-    min-width: 140px;
-    max-width: min(220px, calc(100vw - 24px));
-    max-height: min(560px, calc(100vh - 16px));
-    overflow-x: hidden;
-    padding: $size-gap-1 0;
     z-index: 10000;
-    transform-origin: top left;
-    animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
-  }
-
-  &__inline-item-menu-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    min-height: 28px;
-    padding: 0 $size-gap-2;
-    border: none;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
-    cursor: pointer;
-    text-align: left;
-    white-space: nowrap;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
-
-    svg {
-      flex-shrink: 0;
-      opacity: 0.7;
-      transition: opacity $motion-fast $easing-standard;
-    }
-
-    &:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-text-primary);
-      background: var(--bf-appearance-token-element-bg-soft);
-
-      svg { opacity: 1; }
-    }
-
-    &.is-danger:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-error);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
-    }
   }
 
   &__inline-item-edit {
@@ -538,8 +489,8 @@
     }
 
     input {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: 16px;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-compact);
     }
   }
 
@@ -558,7 +509,7 @@
     border-radius: 4px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     text-align: left;
     cursor: pointer;
     width: 100%;
@@ -616,10 +567,10 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 9%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: 600;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     font-variant-numeric: tabular-nums;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
     transition: background $motion-fast $easing-standard,
                 color $motion-fast $easing-standard;
   }
@@ -688,8 +639,8 @@
   // Inline item badge (count / status text)
   &__inline-item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    line-height: 1;
+    font-size: var(--bf-font-size-micro);
+    line-height: var(--bf-line-height-none);
     color: var(--bf-appearance-token-color-text-muted);
     margin-left: auto;
     padding: 1px 4px;
@@ -854,33 +805,6 @@
     }
   }
 
-  &__inline-item-menu-popover {
-    transform-origin: top right;
-    animation: bitfun-session-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
-  }
-
-  &__inline-item-menu-item {
-    border-radius: $size-radius-sm;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      background 120ms ease,
-      color 120ms ease;
-
-    &:active {
-      transform: scale(0.985);
-    }
-  }
-}
-
-@keyframes bitfun-session-popover-in {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -889,11 +813,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-panel__inline-item-menu-popover {
-    animation: none;
-  }
-}
 
 // Match the primary navigation's readable text scale and 30px row rhythm while
 // retaining the existing nested/flat session geometry.
@@ -929,7 +848,7 @@
     &.is-child {
       height: 30px;
       margin-top: 0;
-      font-size: 13px;
+      font-size: var(--bf-font-size-sm);
     }
 
     &.is-assistant-session {
@@ -953,16 +872,16 @@
   &__inline-item-workspace-name {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-base);
   }
 
   &__inline-toggle {
     height: 32px;
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
 
     &:hover,
     &:focus-visible {

@@ -3,7 +3,7 @@
  * Used to browse and select remote directory as workspace
  */
 
-import { Button, ConfirmDialog, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, Menu, MenuItem, MenuSeparator, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -11,7 +11,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { RefreshCw, Home, Loader2 } from 'lucide-react';
+import { Download, FolderOpen, Home, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
 
 interface RemoteFileBrowserProps {
@@ -591,45 +591,44 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         </ScrollArea>
 
         {/* Context Menu */}
-        {contextMenu.show && contextMenu.entry && (
-          <div
+        {contextMenu.show && contextMenu.entry && createPortal(
+          <Menu
             ref={contextMenuRef}
             className="remote-file-browser__context-menu"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            aria-label={contextMenu.entry.name}
+            autoFocusFirstItem
           >
-            <button
-              className="remote-file-browser__context-menu-item"
+            <MenuItem
+              leading={<FolderOpen size={14} aria-hidden />}
               onClick={() => handleContextMenuAction('open')}
             >
-              <Icon name="folder" size="sm" />
-              <span>{t('actions.open') || 'Open'}</span>
-            </button>
+              {t('actions.open') || 'Open'}
+            </MenuItem>
             {!contextMenu.entry.isDir && (
-              <button
-                type="button"
-                className="remote-file-browser__context-menu-item"
+              <MenuItem
+                leading={<Download size={14} aria-hidden />}
                 onClick={() => handleContextMenuAction('download')}
               >
-                <Icon name="download" size="sm" />
-                <span>{t('ssh.remote.download')}</span>
-              </button>
+                {t('ssh.remote.download')}
+              </MenuItem>
             )}
-            <button
-              className="remote-file-browser__context-menu-item"
+            <MenuItem
+              leading={<Pencil size={14} aria-hidden />}
               onClick={() => handleContextMenuAction('rename')}
             >
-              <span className="remote-file-browser__context-menu-icon">✏️</span>
-              <span>{t('ssh.remote.rename')}</span>
-            </button>
-            <div className="remote-file-browser__context-menu-divider" />
-            <button
-              className="remote-file-browser__context-menu-item remote-file-browser__context-menu-item--danger"
+              {t('ssh.remote.rename')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              leading={<Trash2 size={14} aria-hidden />}
+              tone="danger"
               onClick={() => handleContextMenuAction('delete')}
             >
-              <span className="remote-file-browser__context-menu-icon">🗑️</span>
-              <span>{t('actions.delete') || 'Delete'}</span>
-            </button>
-          </div>
+              {t('actions.delete') || 'Delete'}
+            </MenuItem>
+          </Menu>,
+          getAppearanceOverlayHost(),
         )}
 
         {/* Rename Dialog */}

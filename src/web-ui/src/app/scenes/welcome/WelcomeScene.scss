@@ -44,10 +44,10 @@
       var(--bf-appearance-token-color-text-primary) 66%,
       var(--bf-appearance-token-color-text-secondary)
     );
-    font-size: clamp(28px, 2.5vw, 32px);
-    font-weight: $font-weight-semibold;
-    line-height: 1.15;
-    letter-spacing: -0.025em;
+    font-size: var(--bf-font-size-5xl);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
+    letter-spacing: var(--bf-letter-spacing-tight);
     text-wrap: balance;
   }
 
@@ -58,9 +58,9 @@
       var(--bf-appearance-token-color-text-primary) 66%,
       var(--bf-appearance-token-color-text-secondary)
     );
-    font-size: 17px;
-    font-weight: $font-weight-medium;
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xl);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-support);
     text-wrap: balance;
   }
 }
@@ -82,11 +82,11 @@
     }
 
     &__title {
-      font-size: clamp(24px, 7vw, 28px);
+      font-size: var(--bf-font-size-4xl);
     }
 
     &__greeting-label {
-      font-size: var(--bf-appearance-token-font-size-base);
+      font-size: var(--bf-font-size-base);
     }
   }
 }

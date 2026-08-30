@@ -172,34 +172,6 @@ export interface EasingConfig {
   smooth: string;
 }
 
-export interface FontConfig {
-  sans: string;
-  mono: string;
-}
-
-export interface FontWeightConfig {
-  normal: number;
-  medium: number;
-  semibold: number;
-}
-
-export interface FontSizeConfig {
-  xs: string;
-  sm: string;
-  base: string;
-  lg: string;
-  xl: string;
-  '2xl': string;
-  '3xl': string;
-  '4xl': string;
-}
-
-export interface LineHeightConfig {
-  tight: number;
-  base: number;
-  relaxed: number;
-}
-
 export interface MonacoEditorColors {
   background: ColorValue;
   foreground: ColorValue;
@@ -252,12 +224,6 @@ export interface AppearancePalette {
   motion: {
     duration: MotionConfig;
     easing: EasingConfig;
-  };
-  typography: {
-    font: FontConfig;
-    weight: FontWeightConfig;
-    size: FontSizeConfig;
-    lineHeight: LineHeightConfig;
   };
   components?: {
     button?: ButtonConfig;

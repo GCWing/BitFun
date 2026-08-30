@@ -77,7 +77,7 @@
   }
 
   &__name {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -86,8 +86,8 @@
 
   &__current-badge {
     flex-shrink: 0;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-accent-500);
     text-transform: uppercase;
   }
@@ -101,7 +101,7 @@
     padding: 16px;
     text-align: center;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
   }
 
   &__placeholder {
@@ -112,11 +112,11 @@
     flex: 1;
     gap: 8px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 14px;
+    font-size: var(--bf-font-size-base);
   }
 
   &__hint {
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     opacity: 0.8;
   }
 
@@ -132,8 +132,8 @@
   }
 
   &__history-title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     margin-right: auto;
   }
@@ -177,7 +177,7 @@
   }
 
   &__commit-message {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -185,7 +185,7 @@
   }
 
   &__commit-meta {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     margin-top: 2px;
   }
@@ -198,7 +198,7 @@
   &__commit-detail {
     padding: 8px 10px 10px 34px;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
   }
 
   &__commit-body {
@@ -206,11 +206,11 @@
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
   }
 
   &__files {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
 
     ul {

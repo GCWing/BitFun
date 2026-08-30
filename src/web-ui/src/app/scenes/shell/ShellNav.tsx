@@ -12,7 +12,7 @@ import type { TerminalConfig } from '@/infrastructure/config/types';
 import TerminalEditModal from '@/app/components/panels/TerminalEditModal';
 import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
-import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
+import type { MenuItem as ContextMenuItem } from '@/shared/context-menu-system/types/menu.types';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -21,7 +21,7 @@ import type { ShellInfo } from '@/tools/terminal/types/session';
 import { useShellEntries } from './hooks';
 import type { ShellEntry } from './hooks/shellEntryTypes';
 import { useShellNavMenuState } from './hooks/useShellNavMenuState';
-import { Button, Icon, NavigationPanel, ScrollArea, Tooltip } from '@bitfun/ui';
+import { Button, Icon, Menu, MenuItem, MenuSeparator, NavigationPanel, Tooltip } from '@bitfun/ui';
 import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -153,7 +153,7 @@ const ShellNav: React.FC = () => {
 
   const openContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,
-    items: MenuItem[],
+    items: ContextMenuItem[],
     data: Record<string, unknown>,
   ) => {
     event.preventDefault();
@@ -174,7 +174,7 @@ const ShellNav: React.FC = () => {
     );
   }, [showMenu]);
 
-  const getEntryMenuItems = useCallback((entry: ShellEntry): MenuItem[] => {
+  const getEntryMenuItems = useCallback((entry: ShellEntry): ContextMenuItem[] => {
     if (entry.kind === 'manual-profile') {
       return [
         !entry.isRunning
@@ -295,13 +295,12 @@ const ShellNav: React.FC = () => {
           </div>
 
           {menuOpen ? createPortal(
-            <ScrollArea
+            <Menu
               ref={menuPopoverRef}
               data-bf-component="shell-nav"
               data-bf-part="menu"
               data-bf-placement={createMenuLayout?.placement ?? 'bottom'}
               className="bitfun-shell-nav__dropdown-menu"
-              role="menu"
               style={{
                 top: `${createMenuLayout?.top ?? 0}px`,
                 left: `${createMenuLayout?.left ?? 0}px`,
@@ -309,25 +308,22 @@ const ShellNav: React.FC = () => {
               }}
             >
               {shellMenuItems.map((shell) => (
-                <button
+                <MenuItem
                   data-bf-component="shell-nav"
                   data-bf-part="menuItem"
                   key={shell.key}
                   type="button"
-                  className="bitfun-shell-nav__dropdown-item"
-                  role="menuitem"
+                  leading={<Icon name="plus" size="sm" />}
                   onClick={() => { void handleCreateManualTerminal(shell.shellType); }}
                 >
-                  <Icon name="plus" size="sm" />
                   <span>{shell.label}</span>
-                </button>
+                </MenuItem>
               ))}
-              {shellMenuItems.length > 0 ? <div className="bitfun-shell-nav__dropdown-separator" /> : null}
-              <button type="button" data-bf-component="shell-nav" data-bf-part="menuItem" className="bitfun-shell-nav__dropdown-item" role="menuitem" onClick={() => { setMenuOpen(false); void handleRefresh(); }}>
-                <RefreshCw size={14} />
+              {shellMenuItems.length > 0 ? <MenuSeparator /> : null}
+              <MenuItem type="button" data-bf-component="shell-nav" data-bf-part="menuItem" leading={<RefreshCw size={14} />} onClick={() => { setMenuOpen(false); void handleRefresh(); }}>
                 <span>{t('nav.shell.actions.refresh')}</span>
-              </button>
-            </ScrollArea>,
+              </MenuItem>
+            </Menu>,
             getAppearanceOverlayHost(),
           ) : null}
         </div>

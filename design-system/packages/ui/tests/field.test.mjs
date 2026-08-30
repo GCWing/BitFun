@@ -100,7 +100,7 @@ test("Field styles consume shared content and typography tokens", async () => {
   assert.match(styles, /--bf-color-content-primary/);
   assert.match(styles, /--bf-color-content-muted/);
   assert.match(styles, /--bf-color-accent-default/);
-  assert.match(styles, /--bf-font-size-caption/);
+  assert.match(styles, /--bf-font-size-xs/);
   assert.match(styles, /--bf-font-weight-semibold/);
   assert.match(styles, /--bf-layout-field-root-gap/);
   assert.match(styles, /--bf-layout-field-label-action-gap/);

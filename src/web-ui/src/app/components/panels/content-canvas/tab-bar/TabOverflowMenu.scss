@@ -2,8 +2,6 @@
  * TabOverflowMenu component styles.
  * Combines mission control entry and overflow menu.
  */
-@use '@/component-library/styles/overlay-surfaces' as surfaces;
-
 // Button wrapper
 .canvas-tab-panorama-wrapper {
   display: flex;
@@ -62,8 +60,8 @@
 
   // Overflow count badge
   &__badge {
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-accent-500);
     margin-left: 2px;
     transition: color 0.15s ease;
@@ -82,12 +80,9 @@
 
 // Overflow menu
 .canvas-tab-overflow-menu {
-  @include surfaces.floating-surface;
-
+  --bf-overlay-menu-inline-size: min(280px, calc(100vw - 16px));
+  --bf-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
   min-width: 200px;
-  max-width: 280px;
-  max-height: 360px;
-  overflow: hidden;
   z-index: 99999;
   animation: menuSlideIn 0.12s ease-out;
 
@@ -104,23 +99,10 @@
 
   // Mission control entry (fixed first item)
   &__mission-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    cursor: pointer;
-    color: var(--bf-appearance-token-color-text-primary);
-    transition: background-color 0.15s ease;
-
-    &:hover {
-      // Use accent-200 for clear hover in light/dark themes
-      background: var(--bf-appearance-token-color-accent-200);
-    }
-
     > span {
       flex: 1;
-      font-size: 12px;
-      font-weight: 500;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-medium);
     }
 
     svg {
@@ -130,52 +112,23 @@
 
   // Divider
   &__divider {
-    height: 1px;
     margin: 4px 12px;
-    background: var(--bf-appearance-token-border-base);
   }
 
   // Tab list
   &__list {
-    padding: 4px 0;
-    max-height: 280px;
+    min-width: 0;
   }
 
   // Tab item
   &__item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    transition: background-color 0.1s ease;
-
-    &:hover {
-      // Use element-bg-medium for clear hover in light/dark themes
-      // Light theme: blue-gray tint; dark theme: translucent white
-      background: var(--bf-appearance-token-element-bg-medium);
-
-      .canvas-tab-overflow-menu__item-close {
-        opacity: 1;
-      }
-    }
-
-    &.is-active {
-      // Use accent-100 as active background
-      background: var(--bf-appearance-token-color-accent-100);
-
-      .canvas-tab-overflow-menu__item-title {
-        color: var(--bf-appearance-token-color-accent-500);
-      }
-    }
-
     &-title {
       flex: 1;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-primary);
 
       em {
@@ -186,34 +139,9 @@
 
     &-dirty {
       flex-shrink: 0;
-      font-size: 8px;
+      font-size: var(--bf-font-size-3xs);
       color: var(--bf-appearance-token-color-warning);
     }
 
-    &-close {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
-      padding: 0;
-      background: none;
-      border: none;
-      color: var(--bf-appearance-token-color-text-muted);
-      cursor: pointer;
-      border-radius: 3px;
-      flex-shrink: 0;
-      opacity: 0;
-      transition:
-        transform 100ms cubic-bezier(0.23, 1, 0.32, 1),
-        background-color 100ms ease,
-        color 100ms ease,
-        opacity 100ms ease;
-
-      &:hover {
-        background: var(--bf-appearance-token-color-error-bg);
-        color: var(--bf-appearance-token-color-error);
-      }
-    }
   }
 }

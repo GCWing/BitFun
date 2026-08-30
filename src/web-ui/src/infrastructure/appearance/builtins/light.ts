@@ -9,7 +9,6 @@ import {
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
-  createStandardTypography,
   rgbFromHex,
   rgbaFromHex,
   STATIC_BLACK,
@@ -183,8 +182,6 @@ export const bitfunLightPalette: AppearancePalette = {
     easing: createStandardEasing(),
   },
 
-
-  typography: createStandardTypography(),
 
 
   components: {

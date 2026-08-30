@@ -79,10 +79,10 @@
 .bitfun-remote-connect__sidebar-title {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-display);
+  font-size: var(--bf-font-size-4xl);
   font-weight: var(--bf-font-weight-semibold);
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  letter-spacing: var(--bf-letter-spacing-tight);
+  line-height: var(--bf-line-height-tight);
 }
 
 .bitfun-remote-connect__title-extra {
@@ -102,8 +102,8 @@
   max-width: 172px;
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.65;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-remote-connect__sidebar-decoration {
@@ -158,9 +158,9 @@
   gap: 12px;
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-title);
+  font-size: var(--bf-font-size-2xl);
   font-weight: var(--bf-font-weight-semibold);
-  line-height: 1.4;
+  line-height: var(--bf-line-height-ui);
 }
 
 .bitfun-remote-connect__section-marker {
@@ -179,8 +179,8 @@
 .bitfun-remote-connect__overview-section-description {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.5;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
 }
 
 .bitfun-remote-connect__overview-actions {
@@ -306,14 +306,14 @@
   color: var(--bf-color-content-primary);
   font-size: var(--bf-font-size-lg);
   font-weight: var(--bf-font-weight-semibold);
-  line-height: 1.35;
+  line-height: var(--bf-line-height-compact);
 }
 
 .bitfun-remote-connect__overview-action-description {
   max-width: 410px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.55;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-comfortable);
 }
 
 .bitfun-remote-connect__overview-action-status {
@@ -328,7 +328,7 @@
   max-width: 150px;
   overflow: hidden;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -522,8 +522,8 @@
 .bitfun-remote-connect__pairing-label {
   margin-bottom: 7px;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.4;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-ui);
 }
 
 .bitfun-remote-connect__pairing-url-row {
@@ -537,10 +537,10 @@
     flex: 1;
     overflow: hidden;
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-semibold);
-    line-height: 1.45;
+    line-height: var(--bf-line-height-support);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -560,8 +560,8 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-caption);
-    line-height: 1.6;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 }
 
@@ -583,10 +583,10 @@
   border-radius: var(--bf-radius-lg);
   background: var(--bf-color-surface-panel);
   color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
+  font-family:var(--bf-font-family-mono);
   font-size: var(--bf-font-size-4xl);
   font-weight: var(--bf-font-weight-bold);
-  letter-spacing: 7px;
+  letter-spacing: var(--bf-letter-spacing-expanded);
   user-select: all;
 }
 
@@ -628,16 +628,16 @@
 .bitfun-remote-connect__bot-identity-title {
   margin: 0;
   color: var(--bf-color-content-primary);
-  font-size: var(--bf-font-size-title);
+  font-size: var(--bf-font-size-2xl);
   font-weight: var(--bf-font-weight-semibold);
-  line-height: 1.4;
+  line-height: var(--bf-line-height-ui);
 }
 
 .bitfun-remote-connect__bot-identity-description {
   margin: 9px 0 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.6;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-remote-connect__bot-setup {
@@ -692,8 +692,8 @@
   gap: 12px;
   margin: 0;
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.65;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-relaxed);
   text-align: left;
 }
 
@@ -708,7 +708,7 @@
   color: var(--bf-color-content-inverse);
   font-size: var(--bf-font-size-micro);
   font-weight: var(--bf-font-weight-bold);
-  line-height: 1;
+  line-height: var(--bf-line-height-none);
 }
 
 // ==================== Shared detail primitives ====================
@@ -728,8 +728,8 @@
 .bitfun-remote-connect__info-meta {
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.6;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-relaxed);
   text-align: left;
 }
 
@@ -750,7 +750,7 @@
 
 .bitfun-remote-connect__info-meta-label {
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
   white-space: nowrap;
 }
 
@@ -800,7 +800,7 @@
 
 .bitfun-remote-connect__peer-username {
   color: var(--bf-color-content-secondary);
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
 }
 
 .bitfun-remote-connect__connected {
@@ -855,14 +855,14 @@
     color: var(--bf-color-content-primary);
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-semibold);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   > span {
     max-width: 470px;
     color: var(--bf-color-content-muted);
-    font-size: var(--bf-font-size-caption);
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
   }
 }
 
@@ -884,8 +884,8 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-font-size-caption);
-    line-height: 1.6;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 }
 
@@ -916,8 +916,8 @@
   max-width: 480px;
   margin: 0;
   color: var(--bf-color-content-muted);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.65;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-remote-connect__hint {
@@ -931,15 +931,15 @@
 .bitfun-remote-connect__ngrok-usage-link {
   margin: 0;
   padding: 14px 40px 0;
-  font-size: var(--bf-font-size-caption);
+  font-size: var(--bf-font-size-xs);
   text-align: right;
 }
 
 .bitfun-remote-connect__error {
   margin: 0;
   color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-font-size-caption);
-  line-height: 1.5;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-base);
   text-align: center;
 }
 
@@ -955,8 +955,8 @@
   align-items: center;
   gap: var(--bf-space-2);
   color: var(--bf-color-content-muted);
-  font-family: var(--bf-font-family-control);
-  font-size: var(--bf-font-size-caption);
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-xs);
 
   > span[data-active='true'] {
     color: var(--bf-color-content-primary);
@@ -1088,7 +1088,7 @@
   }
 
   .bitfun-remote-connect__sidebar-title {
-    font-size: var(--bf-font-size-title);
+    font-size: var(--bf-font-size-2xl);
   }
 
   .bitfun-remote-connect__title-extra {

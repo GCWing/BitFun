@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES,
+  WIDGET_TYPOGRAPHY_VARIABLE_NAMES,
   WIDGET_APPEARANCE_VAR_NAMES,
   WIDGET_APPEARANCE_FALLBACK_VARS,
   createWidgetAppearanceFallbackCss,
@@ -11,8 +12,8 @@ import {
 } from './appearancePayload';
 import { widgetAppearanceAdapter } from '@/infrastructure/appearance/adapters/WidgetAppearanceAdapter';
 
-const WIDGET_APPEARANCE_VAR_NAMES_HASH = '19b0247c7dd289fa9cd550c072447967af335aa1947fbd6410616c4e0809fbd0';
-const WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES_HASH = '7fc7b32bf52a4c03333000ff3dadedf2af6f4ee75db788d4111aec50cab752f2';
+const WIDGET_APPEARANCE_VAR_NAMES_HASH = '1f51a4826457c2a97d91d3e15845482b8e1dea3b350c9de6d423498d7cba5bdf';
+const WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES_HASH = 'ccdda56565fec7e2491b6c8d4645267f7a972bf9f54a79cde9637fc450bfd025';
 const RETIRED_WIDGET_APPEARANCE_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -76,8 +77,10 @@ const RETIRED_WIDGET_APPEARANCE_COMPAT_KEYS = [
   '--bf-appearance-token-color-danger-hover',
   '--bf-appearance-token-element-bg',
   '--bf-appearance-token-element-bg-elevated',
+  // typography-audit: negative-test-start -- retained only to verify legacy widget font aliases stay retired
   '--bf-appearance-token-font-mono',
   '--bf-appearance-token-font-sans',
+  // typography-audit: negative-test-end
   '--markdown-font-mono',
   '--bf-appearance-token-motion-normal',
   '--smooth-height-collapse-duration',
@@ -158,36 +161,36 @@ const DERIVED_WIDGET_APPEARANCE_PAYLOAD_KEYS = [
   '--bf-appearance-token-size-gap-10',
   '--bf-appearance-token-size-gap-12',
   '--bf-appearance-token-size-gap-16',
-  '--bf-appearance-token-font-size-xs',
-  '--bf-appearance-token-font-size-sm',
-  '--bf-appearance-token-font-size-base',
-  '--bf-appearance-token-font-size-lg',
-  '--bf-appearance-token-font-size-2xl',
-  '--bf-appearance-token-font-weight-medium',
-  '--bf-appearance-token-font-weight-semibold',
+  '--bf-font-size-xs',
+  '--bf-font-size-sm',
+  '--bf-font-size-base',
+  '--bf-font-size-lg',
+  '--bf-font-size-2xl',
+  '--bf-font-weight-medium',
+  '--bf-font-weight-semibold',
 ] as const;
 const STATIC_WIDGET_SHELL_APPEARANCE_VARS = new Set([
   ...WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES,
-  '--bf-appearance-token-font-family-mono',
-  '--bf-appearance-token-font-family-sans',
+  '--bf-font-family-mono',
+  '--bf-font-family-sans',
 ]);
 const LOCAL_ONLY_WIDGET_SHELL_KEYS = [
   '--bf-appearance-token-color-bg-workbench',
   '--bf-appearance-token-color-overlay-white-08',
   '--bf-appearance-token-color-overlay-black-12',
   '--bf-appearance-token-tool-card-header-pad-y',
-  '--bf-appearance-token-tool-card-action-line-height',
+  '--bf-type-flow-control-line-height',
 ] as const;
 const IFRAME_ROOT_BASE_KEYS = [
-  '--bf-appearance-token-font-family-sans',
-  '--bf-appearance-token-font-family-mono',
-  '--bf-appearance-token-font-size-xs',
-  '--bf-appearance-token-font-size-sm',
-  '--bf-appearance-token-font-size-base',
-  '--bf-appearance-token-font-size-lg',
-  '--bf-appearance-token-font-size-2xl',
-  '--bf-appearance-token-font-weight-medium',
-  '--bf-appearance-token-font-weight-semibold',
+  '--bf-font-family-sans',
+  '--bf-font-family-mono',
+  '--bf-font-size-xs',
+  '--bf-font-size-sm',
+  '--bf-font-size-base',
+  '--bf-font-size-lg',
+  '--bf-font-size-2xl',
+  '--bf-font-weight-medium',
+  '--bf-font-weight-semibold',
 ] as const;
 const IFRAME_ROOT_BASE_APPEARANCE_VARS = new Set<string>(IFRAME_ROOT_BASE_KEYS);
 
@@ -225,7 +228,7 @@ describe('generated widget appearance payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 56,
+      count: 54,
       hash: WIDGET_APPEARANCE_VAR_NAMES_HASH,
       first: '--bf-appearance-token-color-bg-primary',
       last: '--bf-appearance-token-btn-ghost-hover-border',
@@ -238,7 +241,16 @@ describe('generated widget appearance payload contract', () => {
       Object.entries(WIDGET_APPEARANCE_FALLBACK_VARS).filter(([name]) => requestedNames.includes(name)),
     );
 
-    expect(payload?.vars).toEqual(requestedFallbackVars);
+    const payloadVars = payload?.vars ?? {};
+    const requestedPayloadVars = Object.fromEntries(
+      Object.entries(payloadVars).filter(([name]) => requestedNames.includes(name)),
+    );
+
+    expect(requestedPayloadVars).toEqual(requestedFallbackVars);
+    expect(Object.keys(payloadVars).sort()).toEqual([
+      ...Object.keys(requestedFallbackVars),
+      ...WIDGET_TYPOGRAPHY_VARIABLE_NAMES,
+    ].sort());
   });
 
   it('does not export retired low-risk compatibility keys', () => {
@@ -320,6 +332,7 @@ describe('generated widget appearance payload contract', () => {
       ...requestedNames,
       ...WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES,
       ...IFRAME_ROOT_BASE_KEYS,
+      ...WIDGET_TYPOGRAPHY_VARIABLE_NAMES,
     ]);
 
     for (const name of WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES) {
@@ -331,10 +344,10 @@ describe('generated widget appearance payload contract', () => {
       first: WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES[0],
       last: WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES[WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES.length - 1],
     }).toEqual({
-      count: 68,
+      count: 62,
       hash: WIDGET_APPEARANCE_STATIC_SHELL_VAR_NAMES_HASH,
       first: '--bf-appearance-token-color-bg-quaternary',
-      last: '--bf-appearance-token-tool-card-action-line-height',
+      last: '--bf-appearance-token-tool-card-expanded-pad-x',
     });
     const referencedVars = [...css.matchAll(/var\((--[a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
     expect(referencedVars.filter((name) => !resolvableVars.has(name))).toEqual([]);

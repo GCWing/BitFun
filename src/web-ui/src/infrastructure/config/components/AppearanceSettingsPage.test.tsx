@@ -50,6 +50,9 @@ vi.mock('@/infrastructure/appearance', () => ({
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
   useLanguageSelector: () => ({
     currentLanguage: 'zh-CN',
     supportedLocales: [{ id: 'zh-CN', nativeName: '简体中文' }],

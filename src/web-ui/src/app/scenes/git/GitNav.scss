@@ -34,8 +34,8 @@
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 600;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -58,13 +58,13 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: $size-gap-1;
   }
 
   &__branch-name {
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -75,7 +75,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-1;
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -98,8 +98,8 @@
     color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     text-align: left;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 400;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-regular);
     width: 100%;
     position: relative;
     transition: color $motion-fast $easing-standard,
@@ -117,7 +117,7 @@
     &.is-active {
       color: var(--bf-appearance-token-color-text-primary);
       background: var(--bf-appearance-token-element-bg-soft);
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
 
       &::before {
         content: '';
@@ -139,7 +139,7 @@
   }
 
   &__item-badge {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
     margin-left: $size-gap-1;
   }

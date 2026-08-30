@@ -30,7 +30,6 @@ export const chatInputAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'boost' },
     { id: 'boostTrigger' },
     { id: 'boostMenu' },
-    { id: 'boostSection' },
     { id: 'boostItem' },
     { id: 'boostDivider' },
     { id: 'boostSubmenuTrigger' },

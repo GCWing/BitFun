@@ -30,8 +30,8 @@
     border-radius: var(--bf-control-segmented-control-segment-radius);
     color: var(--bf-color-action-neutral-content);
     background: transparent;
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-control-segmented-control-font-size);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-tight);
     white-space: nowrap;

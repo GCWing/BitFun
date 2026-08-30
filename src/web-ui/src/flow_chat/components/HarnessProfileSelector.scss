@@ -1,6 +1,4 @@
 @use '../../component-library/styles/tokens' as tokens;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../typography' as flow-type;
 
 .bitfun-harness-selector {
   position: relative;
@@ -25,8 +23,8 @@
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
-  font-size: flow-type.$control-size;
-  font-weight: 500;
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
   text-align: left;
   cursor: pointer;
@@ -54,10 +52,13 @@
 }
 
 .bitfun-harness-selector__trigger-label {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bitfun-harness-selector__row-contract {
+  display: contents;
 }
 
 .bitfun-harness-selector__trigger-meta,
@@ -77,8 +78,8 @@
   gap: 4px;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$support-size;
-  font-weight: 400;
+  font-size: var(--bf-type-flow-support-font-size);
+  font-weight: var(--bf-font-weight-regular);
 }
 
 .bitfun-harness-selector__trigger-current-separator {
@@ -89,7 +90,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -104,32 +105,6 @@
 // root so both menus share one outside-click boundary.
 .bitfun-harness-selector--menu-item {
   width: 100%;
-
-  .bitfun-harness-selector__trigger {
-    width: 100%;
-    height: 32px;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 8px;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 500;
-
-    &:hover,
-    &[data-bf-state~='open'] {
-      background: var(--bf-appearance-token-element-bg-soft);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-  }
-
-  .bitfun-harness-selector__menu {
-    position: absolute;
-    inset: auto auto -5px calc(100% + 7px);
-    z-index: tokens.$z-popover;
-    max-height: min(420px, calc(100vh - 16px));
-    overflow-y: auto;
-    visibility: visible;
-  }
 }
 
 // The execution gears grow from focus corners to a 2 x 2 plan and finally a
@@ -139,8 +114,8 @@
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
@@ -161,194 +136,23 @@
 // One surface swaps between the fixed-Session summary, Harness profiles, and
 // the second-level Agent list.
 .bitfun-harness-selector__menu {
-  @include surfaces.floating-surface;
-
   position: fixed;
   z-index: tokens.$z-popover;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: max-content;
-  min-width: 228px;
-  max-width: min(308px, calc(100vw - 16px));
-  padding: 5px;
-  color: var(--bf-appearance-token-color-text-primary);
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: flow-type.$control-size;
-  user-select: none;
-}
-
-.bitfun-harness-selector__profile,
-.bitfun-harness-selector__agent {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 38px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-primary);
-  font: inherit;
-  letter-spacing: 0;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    outline: none;
-    background: var(--bf-appearance-token-element-bg-soft);
-  }
-
-  &.is-current .bitfun-harness-selector__profile-name {
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-
-  &.is-current .bitfun-harness-selector__density-frame {
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-}
-
-.bitfun-harness-selector__session-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 8px;
-  min-height: 38px;
-  padding: 6px 8px;
-
-  > svg {
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-}
-
-.bitfun-harness-selector__session-value {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bitfun-harness-selector__new-session {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 38px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-primary);
-  font: inherit;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-
-  span {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  svg {
-    flex: none;
-    color: var(--bf-appearance-token-color-text-secondary);
-  }
-
-  &:hover,
-  &:focus-visible {
-    outline: none;
-    background: var(--bf-appearance-token-element-bg-soft);
-  }
-}
-
-.bitfun-harness-selector__agent-mark {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  color: var(--bf-appearance-token-color-text-secondary);
-}
-
-.bitfun-harness-selector__back {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 4px 7px;
-  border: 0;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font: inherit;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    outline: none;
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-}
-
-.bitfun-harness-selector__divider {
-  height: 1px;
-  margin: 1px 5px 2px;
-  background: var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-harness-selector__empty {
   padding: 14px 10px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$support-size;
+  font-size: var(--bf-type-flow-support-font-size);
   text-align: center;
 }
 
-.bitfun-harness-selector__profile-copy {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.bitfun-harness-selector__profile-name {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .bitfun-harness-selector__profile-status {
-  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--bf-appearance-token-color-text-muted);
-  font-size: flow-type.$meta-size;
-
-  svg {
-    color: var(--bf-appearance-token-color-accent-500);
-  }
 }
 
 .bitfun-harness-selector__agent-count {
-  color: var(--bf-appearance-token-color-text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 360px) {
-  .bitfun-harness-selector--menu-item .bitfun-harness-selector__menu {
-    inset-inline: 0;
-    bottom: -5px;
-    width: 100%;
-    min-width: 100%;
-  }
 }

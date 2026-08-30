@@ -82,7 +82,7 @@ describe('ConfigPageLayout', () => {
     expect(layout).toContain('background: var(--bf-appearance-token-config-page-section-bg);\n  border: 0;');
     expect(layout).toContain('overflow: visible;\n  box-shadow: none;');
     expect(header).toContain('margin-bottom: 36px;');
-    expect(header).toContain('font-size: 24px;');
+    expect(header).toContain('font-size: var(--bf-font-size-4xl);');
   });
 
   it('strips the body surface chrome when the section opts out of the standard surface', () => {

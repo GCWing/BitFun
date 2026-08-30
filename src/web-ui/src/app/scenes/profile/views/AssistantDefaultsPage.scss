@@ -32,8 +32,8 @@ $assistant-defaults-row-columns:
       max-width: 760px;
       margin: $size-gap-2 0 0 34px;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -48,10 +48,10 @@ $assistant-defaults-row-columns:
       min-width: 0;
       margin: 0;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: clamp(20px, 2vw, 24px);
-      font-weight: $font-weight-semibold;
-      line-height: $line-height-tight;
-      letter-spacing: -0.025em;
+      font-size: var(--bf-font-size-3xl);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-tight);
+      letter-spacing: var(--bf-letter-spacing-tight);
     }
   }
 
@@ -63,7 +63,7 @@ $assistant-defaults-row-columns:
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-full;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     white-space: nowrap;
   }
 
@@ -79,7 +79,7 @@ $assistant-defaults-row-columns:
     align-items: center;
     gap: 6px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     white-space: nowrap;
 
     &--saved {
@@ -99,7 +99,7 @@ $assistant-defaults-row-columns:
     justify-content: center;
     gap: $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__workspace {
@@ -129,7 +129,7 @@ $assistant-defaults-row-columns:
     border-radius: $size-radius-base;
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
 
     > svg {
       flex: 0 0 auto;
@@ -145,7 +145,7 @@ $assistant-defaults-row-columns:
   &__footer {
     padding: $size-gap-3 0 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 }
 
@@ -177,15 +177,15 @@ $assistant-defaults-row-columns:
 
   span {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   strong {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: clamp(20px, 1.8vw, 24px);
-    font-weight: $font-weight-semibold;
-    line-height: 1;
-    letter-spacing: -0.03em;
+    font-size: var(--bf-font-size-3xl);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-none);
+    letter-spacing: var(--bf-letter-spacing-tight);
   }
 }
 
@@ -211,9 +211,9 @@ $assistant-defaults-row-columns:
     border-radius: calc(#{$size-radius-lg} - 3px);
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     transition:
       background $motion-fast $easing-standard,
@@ -241,8 +241,8 @@ $assistant-defaults-row-columns:
       border-radius: $size-radius-full;
       background: color-mix(in srgb, currentColor 10%, transparent);
       color: inherit;
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-meta);
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 }
@@ -279,7 +279,7 @@ $assistant-defaults-row-columns:
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
     font: inherit;
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -320,8 +320,8 @@ $assistant-defaults-row-columns:
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-color-bg-scene);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
 
     > div {
       min-width: 0;
@@ -415,24 +415,24 @@ $assistant-defaults-row-columns:
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-semibold;
-      line-height: $line-height-base;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-base);
       white-space: nowrap;
     }
 
     > span {
       display: block;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-base;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-base);
       white-space: nowrap;
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      line-height: $line-height-base;
+      font-size: var(--bf-font-size-meta);
+      line-height: var(--bf-line-height-base);
       white-space: nowrap;
     }
   }
@@ -442,18 +442,18 @@ $assistant-defaults-row-columns:
     padding: 0 $size-gap-3;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__source {
-    line-height: $line-height-relaxed;
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__difference {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__actions {
@@ -494,7 +494,7 @@ $assistant-defaults-row-columns:
   align-items: center;
   gap: 6px;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   white-space: nowrap;
 
   &__dot {
@@ -523,8 +523,8 @@ $assistant-defaults-row-columns:
   border-radius: $size-radius-base;
   background: var(--bf-appearance-token-element-bg-soft);
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-font-size-2xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-meta);
+  font-weight: var(--bf-font-weight-medium);
 
   &--muted {
     background: transparent;
@@ -620,19 +620,19 @@ $assistant-defaults-row-columns:
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-2xs);
+      font-size: var(--bf-font-size-meta);
     }
   }
 
   &__count {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     white-space: nowrap;
   }
 
@@ -640,7 +640,7 @@ $assistant-defaults-row-columns:
     margin: 0;
     padding: $size-gap-3 $size-gap-8;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
   }
 }
 
@@ -657,8 +657,8 @@ $assistant-defaults-row-columns:
   p {
     max-width: 420px;
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 
 }
@@ -693,13 +693,13 @@ $assistant-defaults-row-columns:
 
     strong {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-meta);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -721,10 +721,10 @@ $assistant-defaults-row-columns:
       margin: 2px 0 0;
       overflow-wrap: anywhere;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: clamp(17px, 1.6vw, 20px);
-      font-weight: $font-weight-semibold;
-      line-height: $line-height-tight;
-      letter-spacing: -0.025em;
+      font-size: var(--bf-font-size-2xl);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-tight);
+      letter-spacing: var(--bf-letter-spacing-tight);
     }
 
     > button {
@@ -750,9 +750,9 @@ $assistant-defaults-row-columns:
 
   &__eyebrow {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-semibold;
-    letter-spacing: 0.08em;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-widest);
     text-transform: uppercase;
   }
 
@@ -774,8 +774,8 @@ $assistant-defaults-row-columns:
       h4 {
         margin: 0 0 $size-gap-3;
         color: var(--bf-appearance-token-color-text-primary);
-        font-size: var(--bf-appearance-token-font-size-xs);
-        font-weight: $font-weight-semibold;
+        font-size: var(--bf-font-size-xs);
+        font-weight: var(--bf-font-weight-semibold);
       }
 
       dl {
@@ -791,8 +791,8 @@ $assistant-defaults-row-columns:
     margin: 0;
     padding: $size-gap-3 0;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__field {
@@ -804,8 +804,8 @@ $assistant-defaults-row-columns:
     dd {
       min-width: 0;
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-meta);
+      line-height: var(--bf-line-height-relaxed);
     }
 
     dt {
@@ -826,15 +826,15 @@ $assistant-defaults-row-columns:
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     p {
       margin: $size-gap-2 0 0;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-2xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-meta);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -853,14 +853,14 @@ $assistant-defaults-row-columns:
 
       strong {
         color: var(--bf-appearance-token-color-text-primary);
-        font-size: var(--bf-appearance-token-font-size-xs);
-        font-weight: $font-weight-medium;
+        font-size: var(--bf-font-size-xs);
+        font-weight: var(--bf-font-weight-medium);
       }
 
       span {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: var(--bf-appearance-token-font-size-2xs);
-        line-height: $line-height-relaxed;
+        font-size: var(--bf-font-size-meta);
+        line-height: var(--bf-line-height-relaxed);
       }
     }
   }
@@ -868,8 +868,8 @@ $assistant-defaults-row-columns:
   &__note {
     margin: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 }
 
@@ -1022,18 +1022,18 @@ $assistant-defaults-row-columns:
 
   .assistant-defaults-summary {
     strong {
-      font-size: 22px;
+      font-size: var(--bf-font-size-3xl);
     }
 
     span {
-      font-size: var(--bf-appearance-token-font-size-2xs);
+      font-size: var(--bf-font-size-meta);
     }
   }
 
   .assistant-defaults-tabs button {
     min-height: 34px;
     padding: 0 $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
 
     small {
       display: none;

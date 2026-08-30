@@ -70,13 +70,13 @@
 
         .margin-view-overlays .line-numbers {
           color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.35);
-          font-weight: 400;
+          font-weight: var(--bf-font-weight-regular);
           font-variant-numeric: tabular-nums;
         }
 
         .margin-view-overlays .current-line ~ .line-numbers {
           color: var(--code-editor-blue-100);
-          font-weight: 700;
+          font-weight: var(--bf-font-weight-bold);
           text-shadow: 0 0 10px rgba(var(--code-editor-blue-rgb), 0.6);
         }
 
@@ -455,7 +455,7 @@
     .code-editor__wrapper {
       :global {
         .monaco-editor {
-          font-size: 12px;
+          font-size: var(--bf-font-size-xs);
         }
       }
     }

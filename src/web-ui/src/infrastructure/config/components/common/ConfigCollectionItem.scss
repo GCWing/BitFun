@@ -72,8 +72,8 @@
   flex-shrink: 0;
   padding: 1px 7px;
   border-radius: $size-radius-sm;
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
   background: var(--bf-appearance-token-element-bg-medium);
   color: var(--bf-appearance-token-color-text-muted);
@@ -174,7 +174,7 @@
   gap: $size-gap-3;
   padding: $size-gap-6 $size-gap-4;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
 
   p {
     margin: 0;
@@ -197,8 +197,8 @@
 
   h3 {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 }
@@ -219,14 +219,14 @@
 // ─── details inner blocks ──────────────────────────────────────────────────────
 
 .bitfun-collection-details__field {
-  font-size: var(--bf-appearance-token-font-size-sm);
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-secondary);
-  line-height: $line-height-relaxed;
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-collection-details__label {
-  font-size: var(--bf-appearance-token-font-size-xs);
-  font-weight: $font-weight-medium;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--bf-appearance-token-color-text-muted);
   margin-bottom: $size-gap-1;
 }
@@ -237,17 +237,17 @@
   background: var(--bf-appearance-token-element-bg-medium);
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-sm;
-  font-family: $font-family-mono;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: $line-height-relaxed;
+  line-height: var(--bf-line-height-relaxed);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 200px;
 }
 
 .bitfun-collection-details__meta {
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
   padding-top: $size-gap-3;
   border-top: 1px solid var(--bf-appearance-token-border-subtle);
@@ -257,8 +257,8 @@
   padding: 1px 6px;
   background: var(--bf-appearance-token-element-bg-medium);
   border-radius: $size-radius-sm;
-  font-family: $font-family-mono;
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-accent-500);
 }
 

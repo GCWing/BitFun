@@ -4,7 +4,6 @@
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-device-switcher {
   display: flex;
@@ -21,9 +20,9 @@
   background: transparent;
   color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: 12px;
-  line-height: 1.3;
+  font-family:var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-snug);
   text-align: left;
   transition: background $motion-fast $easing-standard,
               color $motion-fast $easing-standard;
@@ -75,7 +74,7 @@
     border-radius: $size-radius-sm;
     background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
     color: var(--bf-appearance-token-color-success);
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     font-variant-numeric: tabular-nums;
   }
 
@@ -91,46 +90,8 @@
   }
 
   &__menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
-    min-width: 216px;
-    max-width: calc(100vw - 16px);
-    max-height: calc(100vh - 16px);
-    padding: $size-gap-1;
     z-index: 9999;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: var(--bf-appearance-token-font-size-sm);
-  }
-
-  &__menu-title {
-    padding: $size-gap-1 $size-gap-2;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  &__item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-1;
-    border-radius: $size-radius-sm;
-
-    &.is-offline {
-      opacity: 0.45;
-    }
-  }
-
-  &__item-main {
-    flex: 1 1 auto;
-    inline-size: 0;
-    min-width: 0;
-  }
-
-  &__item.is-current &__item-main {
-    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__item-metadata {
@@ -163,7 +124,7 @@
     border-radius: $size-radius-sm;
     background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     white-space: nowrap;
 
     &.is-busy {
@@ -172,22 +133,15 @@
     }
   }
 
-  &__item-disconnect {
-    flex-shrink: 0;
-    margin-right: $size-gap-1;
-  }
-
   &__empty,
   &__hint {
     padding: $size-gap-1 $size-gap-2;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
-    line-height: 1.4;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-ui);
   }
 
   &__hint {
-    margin-top: $size-gap-1;
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
     padding-top: $size-gap-2;
   }
 }

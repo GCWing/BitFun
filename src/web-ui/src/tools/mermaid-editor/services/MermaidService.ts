@@ -31,8 +31,6 @@ export class MermaidService {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'loose',
-      fontFamily: '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif',
-      fontSize: 13,
       ...config,
     } as any);
 

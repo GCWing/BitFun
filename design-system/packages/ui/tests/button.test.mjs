@@ -90,13 +90,13 @@ test("primary and text variants expose semantic emphasis without changing button
 test("Button owns the reference pill geometry and typography", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /letter-spacing:normal/);
+  assert.match(styles, /letter-spacing:var\(--bf-letter-spacing-normal\)/);
   assert.match(styles, /border-radius:var\(--bf-radius-pill\)/);
   assert.match(styles, /--_button-height:\s*var\(--bf-control-height-md\)/);
   assert.match(styles, /--_button-leading-icon-size:\s*16px/);
   assert.match(styles, /--_button-trailing-icon-size:\s*14px/);
-  assert.match(styles, /--_button-font-size:\s*var\(--bf-font-size-small\)/);
-  assert.match(styles, /font-family:var\(--bf-font-family-control\)/);
+  assert.match(styles, /--_button-font-size:\s*var\(--bf-font-size-sm\)/);
+  assert.match(styles, /font-family:var\(--bf-font-family-sans\)/);
   assert.match(styles, /font-weight:var\(--bf-font-weight-regular\)/);
   assert.match(styles, /padding-block:var\(--_button-padding-block\)/);
   assert.match(styles, /padding-inline:var\(--_button-padding-inline\)/);

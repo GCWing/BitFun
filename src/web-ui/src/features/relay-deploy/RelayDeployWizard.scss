@@ -13,7 +13,7 @@
   min-height: min(640px, calc(100vh - 96px));
   max-height: min(640px, calc(100vh - 96px));
   overflow: hidden;
-  font-family: inherit;
+  font-family:var(--bf-font-family-sans);
 
   // ── step indicator ──────────────────────────────────────────────────────
   &__steps {
@@ -54,14 +54,14 @@
     height: 18px;
     border-radius: 50%;
     border: 1px solid var(--bf-appearance-token-border-base);
-    font-size: 10px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-semibold);
     flex-shrink: 0;
   }
 
   &__step-label {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     white-space: nowrap;
   }
 
@@ -96,9 +96,9 @@
   &__desc {
     margin: 0;
     padding: 0 16px 10px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
   }
 
   &__section {
@@ -116,11 +116,11 @@
 
   &__section-title {
     margin: 0;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   &__search {
@@ -139,7 +139,7 @@
     min-height: 42px;
     padding: 8px 10px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     text-align: center;
   }
 
@@ -179,8 +179,8 @@
   }
 
   &__server-name {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -188,9 +188,9 @@
   }
 
   &__server-detail {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 
   &__divider {
@@ -199,7 +199,7 @@
     gap: 10px;
     padding: 10px 16px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
 
     &::before,
     &::after {
@@ -237,7 +237,7 @@
     border: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-color-bg-secondary);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
 
@@ -253,7 +253,7 @@
     &.is-active {
       border-color: var(--bf-appearance-token-color-accent-500);
       color: var(--bf-appearance-token-color-accent-500);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
@@ -271,8 +271,8 @@
   }
 
   &__label {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     margin-bottom: 4px;
   }
@@ -290,7 +290,7 @@
   }
 
   &__hint {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     margin-right: auto;
   }
@@ -305,8 +305,8 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-color-bg-secondary);
     border: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: 11px;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    font-family:var(--bf-font-family-mono);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -317,7 +317,7 @@
     gap: 8px;
     padding: 32px 16px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
 
     // Match terminal pane height so swap does not jump the dialog.
     &--terminal {
@@ -346,7 +346,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     background: var(--bf-appearance-token-color-bg-primary);
 
     &:not(:last-child) {
@@ -363,14 +363,14 @@
   }
 
   &__check-label {
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     flex-shrink: 0;
   }
 
   &__check-detail {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -385,9 +385,9 @@
 
   &__port-hint {
     margin: 0 0 6px;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     flex: 1;
     min-width: 160px;
   }
@@ -407,9 +407,9 @@
 
   &__mirror-hint {
     margin: 0 0 6px;
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     flex: 1;
     min-width: 200px;
   }
@@ -421,7 +421,7 @@
     margin: 0 16px 10px;
     padding: 10px 12px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
 
     &--info {
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, var(--bf-appearance-token-color-bg-secondary));
@@ -447,13 +447,13 @@
   }
 
   &__notice-title {
-    font-weight: 600;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__notice-desc {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
   }
 
   // ── embedded remote PTY ─────────────────────────────────────────────────
@@ -478,7 +478,7 @@
       height: 100%;
       // Slightly denser than default panel terminal (fontSize 12 via options).
       .xterm {
-        font-size: 12px;
+        font-size: var(--bf-font-size-xs);
       }
     }
 
@@ -495,9 +495,9 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-color-bg-secondary);
     border: 1px solid var(--bf-appearance-token-border-subtle);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: 10.5px;
-    line-height: 1.5;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -516,7 +516,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 16px 8px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
     min-height: 22px;
@@ -548,15 +548,15 @@
   }
 
   &__task-title {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__task-desc {
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
   }
 
   // ── done ────────────────────────────────────────────────────────────────
@@ -574,8 +574,8 @@
   }
 
   &__done-title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -584,8 +584,8 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-color-bg-secondary);
     border: 1px solid var(--bf-appearance-token-border-subtle);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: 12px;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-accent-500);
   }
 
@@ -593,9 +593,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     max-width: 100%;
-    line-height: 1.5;
+    line-height: var(--bf-line-height-base);
 
     &.ok { color: var(--bf-appearance-token-color-success); }
     &.failed { color: var(--bf-appearance-token-color-warning); }

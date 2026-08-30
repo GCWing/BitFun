@@ -149,8 +149,8 @@
       top: 50%;
       transform: translate(-50%, -50%);
       color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9);
-      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;

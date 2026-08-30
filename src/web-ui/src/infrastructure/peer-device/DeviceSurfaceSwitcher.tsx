@@ -8,9 +8,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActionItem, Button, Icon, ScrollArea } from '@bitfun/ui';
+import { ActionItem, Icon, Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { ChevronUp, Monitor, MonitorSmartphone, Loader2 } from 'lucide-react';
+import { ChevronUp, Monitor, MonitorSmartphone, Loader2, Unplug } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useNotification } from '@/shared/notification-system';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -207,10 +207,9 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
             className="bitfun-device-switcher__backdrop"
             onClick={() => setOpen(false)}
           />
-          <ScrollArea
+          <Menu
             ref={popoverRef}
             className="bitfun-device-switcher__menu"
-            role="menu"
             data-testid="device-surface-switcher-menu"
             data-bf-component="peer-device"
             data-bf-part="switcherMenu"
@@ -220,31 +219,20 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
               visibility: layout ? 'visible' : 'hidden',
             }}
           >
-            <div className="bitfun-device-switcher__menu-title">
-              {t('accountLogin.deviceSwitcher.title')}
-            </div>
-
-            {devices.map(device => {
-              const isCurrent = device.deviceId === activeDeviceId;
-              const busy = isDeviceBusy(activityKeyFor(device));
-              const attached = attachedIds.has(device.deviceId);
-              const selectable = device.online && (!isCurrent || switching);
-              return (
-                <div
-                  key={device.deviceId}
-                  className={[
-                    'bitfun-device-switcher__item',
-                    isCurrent && 'is-current',
-                    !device.online && 'is-offline',
-                  ].filter(Boolean).join(' ')}
-                  data-bf-component="peer-device"
-                  data-bf-part="switcherItem"
-                >
-                  <ActionItem
-                    role="menuitem"
-                    className="bitfun-device-switcher__item-main"
-                    triggerClassName="bitfun-device-switcher__item-trigger"
-                    disabled={!selectable}
+            <MenuSection title={t('accountLogin.deviceSwitcher.title')}>
+              {devices.map(device => {
+                const isCurrent = device.deviceId === activeDeviceId;
+                const busy = isDeviceBusy(activityKeyFor(device));
+                const attached = attachedIds.has(device.deviceId);
+                const selectable = device.online && (!isCurrent || switching);
+                return (
+                  <MenuItem
+                    key={device.deviceId}
+                    role="menuitemradio"
+                    checked={isCurrent}
+                    aria-disabled={!selectable}
+                    data-bf-component="peer-device"
+                    data-bf-part="switcherItem"
                     leading={(
                       <span
                         className={[
@@ -281,37 +269,32 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
                         {isCurrent && <Icon name="check-line" size="xs" aria-hidden="true" />}
                       </span>
                     )}
-                    onClick={() => { void handleSelect(device); }}
+                    actions={attached ? [{
+                      id: 'disconnect',
+                      label: t('accountLogin.deviceSwitcher.disconnectHint'),
+                      icon: <Unplug size={13} aria-hidden="true" />,
+                      disabled: switching,
+                      onClick: event => { void handleDisconnect(event, device); },
+                    }] : undefined}
+                    onClick={() => {
+                      if (selectable) void handleSelect(device);
+                    }}
                   >
                     {device.deviceName}
-                  </ActionItem>
-                  {attached && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="bitfun-device-switcher__item-disconnect"
-                      disabled={switching}
-                      title={t('accountLogin.deviceSwitcher.disconnectHint')}
-                      onClick={(event) => { void handleDisconnect(event, device); }}
-                    >
-                      {t('accountLogin.disconnectPeer')}
-                    </Button>
-                  )}
+                  </MenuItem>
+                );
+              })}
+              {devices.length <= 1 && (
+                <div className="bitfun-device-switcher__empty">
+                  {t('accountLogin.deviceSwitcher.noDevices')}
                 </div>
-              );
-            })}
-
-            {devices.length <= 1 && (
-              <div className="bitfun-device-switcher__empty">
-                {t('accountLogin.deviceSwitcher.noDevices')}
-              </div>
-            )}
-
+              )}
+            </MenuSection>
+            <MenuSeparator />
             <div className="bitfun-device-switcher__hint">
               {t('accountLogin.deviceSwitcher.hint')}
             </div>
-          </ScrollArea>
+          </Menu>
         </>,
         getAppearanceOverlayHost(),
       )}

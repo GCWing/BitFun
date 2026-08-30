@@ -70,8 +70,8 @@
     flex: 1 1 auto;
     min-inline-size: 0;
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-overlay-menu-heading-font-size);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-meta-font-size);
     font-weight: var(--bf-font-weight-medium);
     line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
@@ -99,6 +99,11 @@
 
   .item > [data-bf-part="trigger"] {
     gap: var(--bf-overlay-menu-item-gap);
+  }
+
+  .item:has(> [data-bf-part="trigger"][aria-checked="true"]) {
+    color: var(--bf-color-action-neutral-content);
+    background: var(--bf-color-action-neutral-surface);
   }
 
   .item [data-bf-part="leading"] {

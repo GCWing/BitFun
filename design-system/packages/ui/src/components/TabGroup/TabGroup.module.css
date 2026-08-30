@@ -31,10 +31,10 @@
     border-radius: var(--bf-control-tab-group-item-radius);
     color: var(--_tab-content);
     background: var(--_tab-background);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-regular);
-    letter-spacing: normal;
+    letter-spacing: var(--bf-letter-spacing-normal);
     line-height: var(--bf-line-height-tight);
     white-space: nowrap;
     cursor: pointer;

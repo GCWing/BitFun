@@ -5,7 +5,7 @@
     --_button-background-active: var(--bf-color-action-neutral-surface);
     --_button-border: var(--bf-color-action-neutral-border);
     --_button-content: var(--bf-color-action-neutral-content);
-    --_button-font-size: var(--bf-font-size-small);
+    --_button-font-size: var(--bf-font-size-sm);
     --_button-height: var(--bf-control-height-md);
     --_button-leading-icon-size: 16px;
     --_button-padding-block: var(--bf-space-component-block);
@@ -24,10 +24,10 @@
     border-radius: var(--bf-radius-pill);
     color: var(--_button-content);
     background: var(--_button-background);
-    font-family: var(--bf-font-family-control);
+    font-family:var(--bf-font-family-sans);
     font-size: var(--_button-font-size);
     font-weight: var(--bf-font-weight-regular);
-    letter-spacing: normal;
+    letter-spacing: var(--bf-letter-spacing-normal);
     line-height: var(--bf-line-height-tight);
     white-space: nowrap;
     cursor: pointer;
@@ -137,7 +137,7 @@
   }
 
   .button[data-size="xs"] {
-    --_button-font-size: var(--bf-control-button-xs-font-size);
+    --_button-font-size: var(--bf-type-meta-font-size);
     --_button-height: var(--bf-control-button-xs-height);
     --_button-leading-icon-size: var(--bf-control-button-xs-leading-icon-size);
     --_button-padding-block: var(--bf-space-1);
@@ -146,7 +146,7 @@
   }
 
   .button[data-size="sm"] {
-    --_button-font-size: var(--bf-font-size-caption);
+    --_button-font-size: var(--bf-font-size-xs);
     --_button-height: var(--bf-control-height-sm);
     --_button-leading-icon-size: 12px;
     --_button-padding-block: var(--bf-space-1);
@@ -155,7 +155,7 @@
   }
 
   .button[data-size="lg"] {
-    --_button-font-size: var(--bf-font-size-label);
+    --_button-font-size: var(--bf-font-size-base);
     --_button-height: var(--bf-control-height-lg);
     --_button-leading-icon-size: 20px;
     --_button-padding-inline: var(--bf-space-6);

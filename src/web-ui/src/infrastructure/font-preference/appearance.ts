@@ -6,6 +6,5 @@ export const fontPreferenceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root' },
     { id: 'customControls' },
     { id: 'preview' },
-    { id: 'flowChatControls' },
   ],
 };

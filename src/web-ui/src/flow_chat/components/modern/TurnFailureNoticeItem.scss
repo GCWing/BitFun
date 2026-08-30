@@ -12,8 +12,8 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-color-bg-secondary));
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--bf-font-size-xs);
+  line-height: var(--bf-line-height-support);
 
   &--warning {
     border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 45%, transparent);
@@ -54,7 +54,7 @@
 
 .turn-failure-notice__title {
   flex: 0 0 auto;
-  font-weight: 600;
+  font-weight: var(--bf-font-weight-semibold);
   white-space: nowrap;
 }
 
@@ -115,7 +115,7 @@
     min-width: 0;
     margin: 0;
     overflow-wrap: anywhere;
-    font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    font-family: var(--bf-font-family-mono);
   }
 }
 
@@ -158,9 +158,9 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 75%, transparent);
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.45;
+  font-family: var(--bf-font-family-mono);
+  font-size: var(--bf-font-size-meta);
+  line-height: var(--bf-line-height-support);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

@@ -7,8 +7,8 @@
   display: flex;
   align-items: center;
   gap: var(--bf-appearance-token-flowchat-control-gap);
-  font-size: var(--bf-appearance-token-flowchat-font-size-base);
-  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  font-size: var(--bf-type-flow-body-font-size);
+  line-height: var(--bf-type-flow-body-line-height);
   position: relative;
 }
 
@@ -19,7 +19,7 @@
 }
 
 .tool-action {
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
   white-space: nowrap;
 }
 

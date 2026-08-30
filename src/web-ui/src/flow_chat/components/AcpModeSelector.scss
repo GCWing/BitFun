@@ -1,5 +1,4 @@
 @use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
 
 .bitfun-acp-mode-selector {
   position: relative;
@@ -17,7 +16,7 @@
     border-radius: 10px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
+    font-size: var(--bf-type-flow-meta-font-size);
     cursor: pointer;
     opacity: 0.72;
     outline: none;
@@ -52,14 +51,10 @@
   }
 
   &__menu {
-    @include surfaces.floating-surface;
-
     --acp-mode-menu-offset: -4px;
+    --bf-overlay-menu-inline-size: min(240px, calc(100vw - 16px));
 
     min-width: clamp(0px, 190px, calc(100vw - 16px));
-    max-width: clamp(0px, 240px, calc(100vw - 16px));
-    padding: 4px;
-    overflow: hidden;
     z-index: $z-popover;
     transform-origin: center top;
     transition:
@@ -96,59 +91,22 @@
     gap: 8px;
     padding: 5px 7px 7px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__header-hint {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 400;
+    font-weight: var(--bf-font-weight-regular);
     opacity: 0.8;
   }
 
   &__option {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 30px;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-secondary);
-    text-align: left;
-    cursor: pointer;
 
-    &:hover,
-    &:focus-visible {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-      outline: none;
-    }
-
-    &[aria-checked='true'] {
-      background: var(--bf-appearance-token-element-bg-subtle);
-    }
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.55;
-
-      &:hover {
-        background: transparent;
-        color: var(--bf-appearance-token-color-text-secondary);
-      }
-
-      &[aria-checked='true']:hover {
-        background: var(--bf-appearance-token-element-bg-subtle);
-      }
-    }
-
-    > span {
+    > [data-bf-part='label'] > span {
       display: flex;
       flex-direction: column;
       min-width: 0;
@@ -158,15 +116,11 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      letter-spacing: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      font-weight: 500;
+      letter-spacing: var(--bf-letter-spacing-normal);
+      font-size: var(--bf-type-flow-support-font-size);
+      font-weight: var(--bf-font-weight-medium);
     }
 
-    svg {
-      flex-shrink: 0;
-      color: var(--bf-appearance-token-color-accent-500);
-    }
   }
 }
 

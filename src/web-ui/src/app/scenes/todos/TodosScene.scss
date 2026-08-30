@@ -53,16 +53,16 @@ $todos-compact-breakpoint: 720px;
 
   &__title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-lg);
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__subtitle {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -87,8 +87,8 @@ $todos-compact-breakpoint: 720px;
     justify-content: center;
     gap: $size-gap-1;
     min-width: 112px;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     font-variant-numeric: tabular-nums;
   }
@@ -139,22 +139,22 @@ $todos-compact-breakpoint: 720px;
   &__pane-title,
   &__list-title {
     margin: 0;
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__pane-title {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
   }
 
   &__list-title {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
   }
 
   &__pane-hint {
     margin: 2px 0 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -162,7 +162,7 @@ $todos-compact-breakpoint: 720px;
     margin: 0;
     padding: $size-gap-4 $size-gap-3;
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-muted);
     border: 1px dashed var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-base;
@@ -190,8 +190,8 @@ $todos-compact-breakpoint: 720px;
 
   &__overview-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -226,21 +226,21 @@ $todos-compact-breakpoint: 720px;
     color: var(--bf-appearance-token-color-text-primary);
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-xl);
-      font-weight: $font-weight-medium;
-      line-height: $line-height-tight;
+      font-size: var(--bf-font-size-xl);
+      font-weight: var(--bf-font-weight-medium);
+      line-height: var(--bf-line-height-tight);
       font-variant-numeric: tabular-nums;
     }
 
     span {
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   &__overview-label {
     margin-top: $size-gap-1;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -335,8 +335,8 @@ $todos-compact-breakpoint: 720px;
 
   &__row-name {
     min-width: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -349,9 +349,9 @@ $todos-compact-breakpoint: 720px;
     border-radius: $size-radius-sm;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
     color: var(--bf-appearance-token-color-accent-500);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-medium;
-    line-height: 1.5;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-base);
     white-space: nowrap;
 
     &--warn {
@@ -370,7 +370,7 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     gap: $size-gap-1;
     min-width: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -383,7 +383,7 @@ $todos-compact-breakpoint: 720px;
 
   &__row-error {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-error);
     word-break: break-word;
   }
@@ -415,8 +415,8 @@ $todos-compact-breakpoint: 720px;
 
   &__inactive-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -456,8 +456,8 @@ $todos-compact-breakpoint: 720px;
   &__calendar-weekday {
     padding: 2px 0;
     text-align: center;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-normal;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-regular);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -515,8 +515,8 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__calendar-daynum {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     font-variant-numeric: tabular-nums;
     color: var(--bf-appearance-token-color-text-secondary);
   }
@@ -536,8 +536,8 @@ $todos-compact-breakpoint: 720px;
     padding: 2px 5px;
     border-radius: $size-radius-sm;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1.45;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
   }
 
   &__calendar-chip-time {
@@ -556,7 +556,7 @@ $todos-compact-breakpoint: 720px;
 
   &__calendar-more {
     padding-left: 4px;
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -606,8 +606,8 @@ $todos-compact-breakpoint: 720px;
 
   &__day-detail-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -656,16 +656,16 @@ $todos-compact-breakpoint: 720px;
 
   &__editor-title {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-xl);
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-size: var(--bf-font-size-xl);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__editor-description {
     margin: 0;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -688,9 +688,9 @@ $todos-compact-breakpoint: 720px;
     margin: 0;
     padding-left: $size-gap-2;
     border-left: 3px solid var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
@@ -724,9 +724,7 @@ $todos-compact-breakpoint: 720px;
       );
     }
 
-    .bf-todos__field-control[data-bf-component='input'],
-    .bf-todos__field-control.select
-      > .select__trigger[data-bf-component='select'][data-bf-part='trigger'] {
+    .bf-todos__field-control[data-bf-component='input'] {
       min-height: 36px;
       padding: 0;
       border: 0;
@@ -737,11 +735,7 @@ $todos-compact-breakpoint: 720px;
     }
 
     .bf-todos__field-control[data-bf-component='input']:hover,
-    .bf-todos__field-control[data-bf-component='input']:focus-within,
-    .bf-todos__field-control.select
-      > .select__trigger[data-bf-component='select'][data-bf-part='trigger']:hover,
-    .bf-todos__field-control.select
-      > .select__trigger[data-bf-component='select'][data-bf-part='trigger']:focus-visible {
+    .bf-todos__field-control[data-bf-component='input']:focus-within {
       background: transparent;
       box-shadow: none;
     }
@@ -752,8 +746,8 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     gap: $size-gap-2;
     min-width: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
 
     svg {
@@ -763,8 +757,8 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__field-note {
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1.4;
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-ui);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -773,7 +767,7 @@ $todos-compact-breakpoint: 720px;
     align-items: center;
     min-height: 36px;
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -807,12 +801,12 @@ $todos-compact-breakpoint: 720px;
   }
 
   &__workspace-option-label {
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &__workspace-option-path {
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -873,14 +867,14 @@ $todos-compact-breakpoint: 720px;
     min-width: 0;
 
     strong {
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
       color: var(--bf-appearance-token-color-text-primary);
     }
 
     span {
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-base;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-base);
       color: var(--bf-appearance-token-color-text-muted);
     }
   }
@@ -911,8 +905,8 @@ $todos-compact-breakpoint: 720px;
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
     font: inherit;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     text-align: left;
     cursor: pointer;
 
@@ -950,8 +944,8 @@ $todos-compact-breakpoint: 720px;
   &__editor-advanced-note {
     grid-column: 1 / -1;
     margin-bottom: 0;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-base;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -961,7 +955,7 @@ $todos-compact-breakpoint: 720px;
     border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
     border-radius: $size-radius-base;
     background: color-mix(in srgb, var(--bf-appearance-token-color-error) 6%, transparent);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-error);
   }
 

@@ -210,11 +210,11 @@
   // Large display title
   &__title {
     margin: 0;
-    font-size: 22px;
-    font-weight: $font-weight-bold;
+    font-size: var(--bf-font-size-3xl);
+    font-weight: var(--bf-font-weight-bold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: 1.25;
-    letter-spacing: -0.03em;
+    line-height: var(--bf-line-height-dense);
+    letter-spacing: var(--bf-letter-spacing-tight);
     // Tight, impactful — like a magazine headline
   }
 
@@ -229,16 +229,16 @@
 
   // Body text: comfortable reading
   &__body {
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.72;
+    line-height: var(--bf-line-height-spacious);
     flex: 1;
 
     // First paragraph lead: slightly larger
     p:first-child {
-      font-size: 13.5px;
+      font-size: var(--bf-font-size-base);
       color: var(--bf-appearance-token-color-text-primary);
-      line-height: 1.65;
+      line-height: var(--bf-line-height-relaxed);
       margin: 0 0 1em;
     }
 
@@ -254,15 +254,15 @@
       border: 1px solid var(--bf-appearance-token-border-base);
       border-radius: $size-radius-sm;
       padding: 1px 5px;
-      font-size: 0.87em;
-      font-family: $font-family-mono;
+      font-size: var(--bf-font-size-xs);
+      font-family: var(--bf-font-family-mono);
       color: var(--bf-appearance-token-color-text-primary);
       white-space: nowrap;
     }
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-semibold;
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     // Bullet lists (rendered as <p> with leading dash from markdown)
@@ -271,22 +271,22 @@
       width: 100%;
       border-collapse: collapse;
       margin: 0.5em 0 1em;
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
 
       th, td {
         padding: 6px 12px;
         text-align: left;
         border: 1px solid var(--bf-appearance-token-border-base);
-        line-height: 1.5;
+        line-height: var(--bf-line-height-base);
         vertical-align: middle;
       }
 
       thead th {
         background: var(--bf-appearance-token-color-bg-secondary);
-        font-weight: $font-weight-semibold;
+        font-weight: var(--bf-font-weight-semibold);
         color: var(--bf-appearance-token-color-text-primary);
-        font-size: 11px;
-        letter-spacing: 0.03em;
+        font-size: var(--bf-font-size-meta);
+        letter-spacing: var(--bf-letter-spacing-wider);
         text-transform: uppercase;
       }
 
@@ -320,7 +320,7 @@
     align-items: center;
     justify-content: center;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
   }
 }
 

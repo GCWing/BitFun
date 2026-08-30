@@ -1,9 +1,12 @@
-import { Combobox, type ComboboxOption } from '@bitfun/ui';
-import { Alert, Button, Select, Switch, Tooltip } from '@bitfun/ui';
+import { Alert, Button, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
-import { ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import {
+  ConfigPageLoading,
+  ConfigPageMessage,
+} from '@/component-library';
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -697,7 +700,7 @@ function TerminalSection() {
 
     return (
       <Tooltip content={renderShellDetails(shell)} placement="top">
-        <span className="select__value bitfun-terminal-config__shell-value">
+        <span className="bitfun-terminal-config__shell-value">
           <span className="bitfun-terminal-config__shell-value-name">{formatShellLabel(shell)}</span>
         </span>
       </Tooltip>
@@ -738,9 +741,9 @@ function TerminalSection() {
             align="center"
           >
             {availableShells.length > 0 ? (
-              <Combobox
+              <LocalizedCombobox
                 value={selectedShellValue}
-                onChange={(v) => handleShellChange(v as string)}
+                onValueChange={(v) => handleShellChange(v as string)}
                 options={shellOptions}
                 renderOption={renderShellOption}
                 renderValue={renderShellValue}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "8761689df7f8e1015b97fa3d2928eaa5ed58833a68e97a1efb1420b759a4cdaf",
+  "catalogDigest": "50330e04b820bfaf1f564dca7e6e6983cae16c190b3e11cbdeb376349e17cac8",
   "count": 206,
   "reasonCounts": {
     "externalAuth": 4,
@@ -2537,18 +2537,17 @@
     {
       "capabilityId": "setting.application.appearance",
       "itemId": "ui-font-size",
-      "titleZh": "分别调整整个界面与聊天区字号，并支持自定义像素值",
-      "titleEn": "Adjust global UI and chat font sizes independently, including custom pixel values",
+      "titleZh": "调整全局界面字号，并支持自定义像素值",
+      "titleEn": "Adjust the global UI font size, including custom pixel values",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“分别调整整个界面与聊天区字号，并支持自定义像素值”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Adjust global UI and chat font sizes independently, including custom pixel values” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
+      "reasonZh": "“调整全局界面字号，并支持自定义像素值”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+      "reasonEn": "“Adjust the global UI font size, including custom pixel values” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "application.appearance"
       },
       "evidence": [
-        "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.fontSize.uiSizeLabel",
-        "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.fontSize.flowChatLabel"
+        "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.fontSize.uiSizeLabel"
       ]
     },
     {

@@ -55,8 +55,8 @@
 
     h3 {
       margin: 0;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
@@ -68,8 +68,8 @@
     background: var(--bf-appearance-token-color-accent-500);
     color: var(--bf-appearance-token-color-static-white);
     border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__search {
@@ -89,11 +89,11 @@
   }
 
   &__search-count {
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     padding: 0 8px;
-    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+    font-family: var(--bf-font-family-mono);
 
     &--no-results {
       color: var(--bf-appearance-token-color-text-muted);
@@ -249,8 +249,8 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 12px;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     white-space: nowrap;
     cursor: help;
 
@@ -277,14 +277,14 @@
 
   &__commit-message {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--bf-font-size-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 
     .git-graph-view__commit:hover & {
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
     }
   }
 
@@ -292,7 +292,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
   }
@@ -309,7 +309,7 @@
   }
 
   &__commit-hash {
-    font-family: 'Courier New', monospace;
+    font-family: var(--bf-font-family-mono);
     padding: 2px 6px;
     background: var(--bf-appearance-token-color-bg-tertiary);
     border-radius: 4px;

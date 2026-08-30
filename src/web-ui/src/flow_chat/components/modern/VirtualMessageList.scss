@@ -98,8 +98,8 @@
     border-radius: 6px;
     background: var(--bf-appearance-token-element-bg-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
-    line-height: 18px;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     text-align: center;
     overflow-wrap: anywhere;
     pointer-events: none;
@@ -114,8 +114,8 @@
     justify-content: center;
     gap: 6px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
-    line-height: 18px;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     pointer-events: none;
     overflow-anchor: none;
     visibility: hidden;

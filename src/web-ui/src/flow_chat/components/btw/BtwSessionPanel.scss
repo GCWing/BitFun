@@ -21,7 +21,7 @@
       justify-content: center;
       padding: 0 16px;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
       text-align: center;
     }
   }
@@ -65,16 +65,16 @@
   &__badge {
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     background: var(--bf-appearance-token-color-overlay-white-08);
     flex-shrink: 0;
   }
 
   &__title {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -89,7 +89,7 @@
     gap: 4px;
     min-width: 0;
     max-width: 100%;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -199,7 +199,7 @@
     gap: 8px;
     min-height: 120px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     text-align: center;
 
     &--with-content {
@@ -257,8 +257,8 @@
     background: var(--bf-appearance-token-color-bg-secondary);
     border: 1px solid var(--bf-appearance-token-border-base);
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     box-shadow: 0 2px 12px var(--bf-appearance-token-color-overlay-black-12);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -282,7 +282,7 @@
     padding: 2px 8px;
     border-radius: 10px;
     background: var(--bf-appearance-token-element-bg-soft);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;

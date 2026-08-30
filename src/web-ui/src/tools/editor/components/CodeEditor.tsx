@@ -45,6 +45,13 @@ import type { LineRange } from '@/component-library/components/Markdown';
 import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
 import largeFileExpansionLabels from './largeFileExpansionLabels.json';
+import {
+  DEFAULT_EDITOR_FONT_FAMILY,
+  DEFAULT_EDITOR_FONT_SIZE,
+  DEFAULT_EDITOR_FONT_WEIGHT,
+  DEFAULT_EDITOR_INLAY_FONT_SIZE,
+  DEFAULT_EDITOR_LINE_HEIGHT,
+} from '../config/defaults';
 
 const log = createLogger('CodeEditor');
 import {
@@ -229,10 +236,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   });
   const [monacoReady, setMonacoReady] = useState(false);
   const [editorConfig, setEditorConfig] = useState<Partial<EditorConfigType>>({
-    font_size: 14,
-    font_family: "'Fira Code', Consolas, 'Courier New', monospace",
-    font_weight: 'normal',
-    line_height: 1.5,
+    font_size: DEFAULT_EDITOR_FONT_SIZE,
+    font_family: DEFAULT_EDITOR_FONT_FAMILY,
+    font_weight: DEFAULT_EDITOR_FONT_WEIGHT,
+    line_height: DEFAULT_EDITOR_LINE_HEIGHT,
     tab_size: 2,
     insert_spaces: true,
     word_wrap: 'off',
@@ -489,11 +496,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   // Sync font/config to editor when editorConfig changes (fixes late getConfig when opening from file tree)
   useEffect(() => {
     if (!monacoReady || !editorRef.current) return;
-    const fs = editorConfig.font_size ?? 14;
+    const fs = editorConfig.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
     editorRef.current.updateOptions({
       fontSize: fs,
-      fontFamily: editorConfig.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-      fontWeight: editorConfig.font_weight || 'normal',
+      fontFamily: editorConfig.font_family || DEFAULT_EDITOR_FONT_FAMILY,
+      fontWeight: editorConfig.font_weight || DEFAULT_EDITOR_FONT_WEIGHT,
       lineHeight: editorConfig.line_height ? Math.round(fs * editorConfig.line_height) : 0,
     });
   }, [monacoReady, editorConfig.font_size, editorConfig.font_family, editorConfig.font_weight, editorConfig.line_height]);
@@ -503,7 +510,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       const withUserIndent = userIndentRef.current
         ? { ...config, ...userIndentRef.current }
         : config;
-      const appliedFontSize = config.font_size ?? 14;
+      const appliedFontSize = config.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
       const newConfig: Partial<EditorConfigType> = {
         ...withUserIndent,
         minimap: {
@@ -521,8 +528,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       if (editorRef.current) {
         editorRef.current.updateOptions({
           fontSize: appliedFontSize,
-          fontFamily: config.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-          fontWeight: config.font_weight || 'normal',
+          fontFamily: config.font_family || DEFAULT_EDITOR_FONT_FAMILY,
+          fontWeight: config.font_weight || DEFAULT_EDITOR_FONT_WEIGHT,
           lineHeight: config.line_height 
             ? Math.round(appliedFontSize * config.line_height)
             : 0,
@@ -631,12 +638,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           return;
         }
         
-        let createFontSize = 14;
-        let createFontFamily = editorConfigRuntimeRef.current.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace";
-        let createFontWeight = editorConfigRuntimeRef.current.font_weight || 'normal';
+        let createFontSize = DEFAULT_EDITOR_FONT_SIZE;
+        let createFontFamily = editorConfigRuntimeRef.current.font_family || DEFAULT_EDITOR_FONT_FAMILY;
+        let createFontWeight = editorConfigRuntimeRef.current.font_weight || DEFAULT_EDITOR_FONT_WEIGHT;
         let createLineHeight = 0;
         const applyFontConfig = (c: Partial<EditorConfigType>) => {
-          createFontSize = c.font_size ?? 14;
+          createFontSize = c.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
           createFontFamily = c.font_family || createFontFamily;
           createFontWeight = c.font_weight || createFontWeight;
           createLineHeight = c.line_height ? Math.round(createFontSize * c.line_height) : 0;
@@ -719,8 +726,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           definitionLinkOpensInPeek: false,
           inlayHints: {
             enabled: initialLargeFileMode ? 'off' : 'on',
-            fontSize: 12,
-            fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
+            fontSize: DEFAULT_EDITOR_INLAY_FONT_SIZE,
+            fontFamily: DEFAULT_EDITOR_FONT_FAMILY,
             padding: false
           },
 
@@ -799,11 +806,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         
         setMonacoReady(true);
         const applyOptionsFromConfig = (c: Partial<EditorConfigType>) => {
-          const fs = c.font_size ?? 14;
+          const fs = c.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
           editor!.updateOptions({
             fontSize: fs,
-            fontFamily: c.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-            fontWeight: c.font_weight || 'normal',
+            fontFamily: c.font_family || DEFAULT_EDITOR_FONT_FAMILY,
+            fontWeight: c.font_weight || DEFAULT_EDITOR_FONT_WEIGHT,
             lineHeight: c.line_height ? Math.round(fs * c.line_height) : 0,
           });
         };

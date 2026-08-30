@@ -9,11 +9,15 @@ import { classNames } from "../../internal/classNames";
 import styles from "./ActionItem.module.css";
 
 export interface ActionItemAction {
+  checked?: boolean;
   disabled?: boolean;
   icon: ReactNode;
   id: string;
   label: string;
   onClick?: MouseEventHandler<HTMLButtonElement>;
+  role?: "button" | "menuitem" | "menuitemcheckbox" | "menuitemradio";
+  testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
+  testId?: string;
   tone?: IconButtonProps["tone"];
 }
 
@@ -83,16 +87,22 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
       {actions.length > 0 && (
         <span className={styles.actions} data-bf-part="actions">
           {actions.map((action) => (
-            <IconButton
-              aria-label={action.label}
-              disabled={disabled || action.disabled}
-              icon={action.icon}
-              key={action.id}
-              onClick={action.onClick}
-              size="sm"
-              tone={action.tone}
-              variant="quiet"
-            />
+              <IconButton
+                aria-label={action.label}
+                aria-checked={action.role === "menuitemcheckbox" || action.role === "menuitemradio"
+                  ? action.checked
+                  : undefined}
+                data-testid={action.testId}
+                disabled={disabled || action.disabled}
+                icon={action.icon}
+                key={action.id}
+                onClick={action.onClick}
+                role={action.role}
+                size="sm"
+                tone={action.tone}
+                variant="quiet"
+                {...action.testAttributes}
+              />
           ))}
         </span>
       )}

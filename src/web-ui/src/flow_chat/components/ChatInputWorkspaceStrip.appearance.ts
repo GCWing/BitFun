@@ -9,9 +9,7 @@ export const chatInputWorkspaceStripAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'workspace' }, { id: 'workspaceMenu' },
     { id: 'workspaceOption' }, { id: 'branch' }, { id: 'divider' },
     { id: 'permission' }, { id: 'permissionMenu' },
-    { id: 'permissionOptions' }, { id: 'permissionOptionRow' },
-    { id: 'permissionOption' }, { id: 'permissionOptionTrailing' },
-    { id: 'permissionOptionNextTurn' }, { id: 'usageAction' },
+    { id: 'permissionOptions' }, { id: 'usageAction' },
   ],
   states: [
     { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },

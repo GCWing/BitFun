@@ -105,7 +105,7 @@
     overflow: hidden;
     z-index: $z-popover;
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
+    font-family:var(--bf-font-family-sans);
     transform-origin: center top;
     transition:
       opacity 100ms ease,
@@ -142,7 +142,7 @@
     padding: $size-gap-2 $size-gap-3;
     border-bottom: 1px solid var(--bf-appearance-token-border-base);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
   }
 
   &__body {
@@ -164,7 +164,7 @@
     }
 
     &--root {
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
     }
 
     &--subagent {
@@ -247,58 +247,10 @@
   }
 
   &__action-menu {
-    @include surfaces.floating-surface;
-
     position: fixed;
     top: auto;
     right: auto;
-    width: max-content;
-    min-width: 0;
-    max-width: min(200px, calc(100vw - 48px));
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px;
     z-index: 10000;
-  }
-
-  &__action-menu-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: calc($size-radius-base - 2px);
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    text-align: left;
-    white-space: nowrap;
-    cursor: pointer;
-
-    svg {
-      flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
-    }
-
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
-    }
-
-    &--danger:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-error);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent);
-
-      svg {
-        color: var(--bf-appearance-token-color-error);
-      }
-    }
   }
 
   &__node-copy {
@@ -317,13 +269,13 @@
   }
 
   &__node-title {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__node-meta {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 400;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-regular);
   }
 
   &__status {
@@ -360,7 +312,7 @@
     gap: $size-gap-2;
     padding: $size-gap-3;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
 
     &--error {
       color: var(--bf-appearance-token-color-error);

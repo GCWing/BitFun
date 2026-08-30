@@ -42,7 +42,7 @@
       "max": 0
     },
     "surfaceTokenRenames.registeredUnique": {
-      "max": 5
+      "max": 2
     },
     "surfaceTokenRenames.activeUnique": {
       "max": 0
@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 56
+      "max": 54
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 56
+      "max": 54
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0

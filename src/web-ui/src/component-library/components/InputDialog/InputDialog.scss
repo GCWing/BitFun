@@ -16,15 +16,15 @@
   &__error {
     display: block;
     margin-top: 6px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-color-status-danger-content);
   }
 
   &__description {
     margin: 0 0 12px 0;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-muted);
   }
 

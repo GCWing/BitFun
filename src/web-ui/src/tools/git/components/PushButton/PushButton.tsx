@@ -1,10 +1,13 @@
 /** Push button with optional force-push dropdown. */
 
-import { Button, Icon, IconButton, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Menu, MenuItem, MenuSeparator, Tooltip } from '@bitfun/ui';
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './PushButton.scss';
 
 export interface PushButtonProps {
@@ -50,29 +53,24 @@ export const PushButton: React.FC<PushButtonProps> = ({
   iconOnly = false
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n('panels/git');
-
-
-  useEffect(() => {
-    if (showDropdown && wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      setMenuPosition({
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: 0
-      });
-    }
-  }, [showDropdown]);
+  const menuLayout = useAnchoredPopoverPosition({
+    open: showDropdown,
+    anchorRef: wrapperRef,
+    popoverRef: menuRef,
+    preferredPlacement: 'bottom',
+    gap: 6,
+  });
 
 
   useEffect(() => {
     if (!showDropdown) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setShowDropdown(false);
       }
     };
@@ -98,7 +96,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
   };
 
   return (
-    <div className={`bitfun-push-button ${className}`} ref={dropdownRef} data-bf-component="git-tool" data-bf-part="pushButton">
+    <div className={`bitfun-push-button ${className}`} data-bf-component="git-tool" data-bf-part="pushButton">
       <div className="bitfun-push-button__wrapper" ref={wrapperRef}>
         {iconOnly ? (
           <Tooltip content={t('actions.push')}>
@@ -137,32 +135,36 @@ export const PushButton: React.FC<PushButtonProps> = ({
         </Tooltip>
       </div>
 
-      {showDropdown && (
-        <div 
+      {showDropdown && createPortal(
+        <Menu
+          ref={menuRef}
           className="bitfun-push-button__menu"
           style={{
-            top: `${menuPosition.top}px`,
-            left: `${menuPosition.left}px`
+            top: `${menuLayout?.top ?? 0}px`,
+            left: `${menuLayout?.left ?? 0}px`,
+            visibility: menuLayout ? 'visible' : 'hidden',
           }}
+          aria-label={`${t('actions.push')} / ${t('actions.forcePush')}`}
+          autoFocusFirstItem
         >
-          <button
-            className="bitfun-push-button__menu-item"
+          <MenuItem
+            leading={<Icon name="arrow-up" size="sm" />}
             onClick={() => handlePush(false)}
           >
-            <Icon name="arrow-up" size="sm" />
-            <span className="bitfun-push-button__menu-item-title">{t('actions.push')}</span>
-          </button>
+            {t('actions.push')}
+          </MenuItem>
 
-          <div className="bitfun-push-button__menu-divider" />
+          <MenuSeparator />
 
-          <button
-            className="bitfun-push-button__menu-item bitfun-push-button__menu-item--danger"
+          <MenuItem
+            leading={<AlertTriangle size={14} aria-hidden />}
+            tone="danger"
             onClick={() => handlePush(true)}
           >
-            <AlertTriangle size={14} />
-            <span className="bitfun-push-button__menu-item-title">{t('actions.forcePush')}</span>
-          </button>
-        </div>
+            {t('actions.forcePush')}
+          </MenuItem>
+        </Menu>,
+        getAppearanceOverlayHost(),
       )}
     </div>
   );

@@ -22,7 +22,7 @@
 .canvas-tool-card__status,
 .canvas-tool-card__meta {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
 }
 
 .canvas-tool-card__diagnostics {
@@ -30,7 +30,7 @@
   align-items: center;
   gap: 4px;
   color: var(--bf-appearance-token-color-warning);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
 }
 
 .canvas-tool-card__open-icon {
@@ -52,12 +52,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--bf-appearance-token-font-family-mono);
+  font-family:var(--bf-font-family-mono);
 }
 
 .canvas-tool-card__diagnostic-list {
   margin: 0;
   padding-left: var(--bf-appearance-token-size-gap-4);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
 }

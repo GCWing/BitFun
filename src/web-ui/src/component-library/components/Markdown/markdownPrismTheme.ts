@@ -5,14 +5,16 @@ export function buildMarkdownPrismStyle(isLight: boolean): Record<string, CSSPro
   return buildSharedPrismStyle(isLight, {
     pre: {
       margin: 0,
-      fontSize: '0.875rem',
-      lineHeight: '1.55',
-      fontFamily: 'var(--bf-appearance-token-font-family-mono)',
+      fontSize: 'var(--bf-type-code-md-font-size)',
+      lineHeight: 'var(--bf-type-code-md-line-height)',
+      fontFamily: 'var(--bf-type-code-md-font-family)',
+      fontWeight: 'var(--bf-type-code-md-font-weight)',
     },
     code: {
-      fontSize: '0.875rem',
-      lineHeight: '1.55',
-      fontFamily: 'var(--bf-appearance-token-font-family-mono)',
+      fontSize: 'var(--bf-type-code-md-font-size)',
+      lineHeight: 'var(--bf-type-code-md-line-height)',
+      fontFamily: 'var(--bf-type-code-md-font-family)',
+      fontWeight: 'var(--bf-type-code-md-font-weight)',
     },
   });
 }

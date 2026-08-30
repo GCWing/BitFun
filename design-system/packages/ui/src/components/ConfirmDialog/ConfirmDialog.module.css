@@ -58,10 +58,10 @@
     min-inline-size: 0;
     flex: 1 1 auto;
     color: var(--bf-color-content-secondary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-body);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-regular);
-    line-height: var(--bf-line-height-body);
+    line-height: var(--bf-line-height-base);
   }
 
   .message > :first-child {
@@ -88,8 +88,8 @@
   .preview pre {
     margin: 0;
     color: inherit;
-    font-family: var(--bf-font-family-mono);
-    font-size: var(--bf-font-size-caption);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     white-space: pre-wrap;
     overflow-wrap: anywhere;

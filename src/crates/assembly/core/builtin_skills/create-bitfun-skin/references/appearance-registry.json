@@ -1,102 +1,12 @@
 {
   "schema": "bitfun.appearance.registry",
   "schemaVersion": 1,
-  "generatedFrom": "a47c21a1a5b0b28ef9d2c1e17b9e1cea1be6f94c",
-  "generatedAt": "2026-08-22T14:28:57.698830+00:00",
-  "sourceRevision": "a47c21a1a5b0b28ef9d2c1e17b9e1cea1be6f94c",
-  "sourceDirty": false,
-  "sourceTreeHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+  "generatedFrom": "19b5c2f96bb9f9eb7b83f6c9c7df0568dae4b153",
+  "generatedAt": "2026-08-30T08:27:29.571207+00:00",
+  "sourceRevision": "19b5c2f96bb9f9eb7b83f6c9c7df0568dae4b153",
+  "sourceDirty": true,
+  "sourceTreeHash": "36781423bb7063ddcd5a6e21ef0244599d39955b45e79d0c183dee3e41fdb3ac",
   "components": [
-    {
-      "id": "button",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "loadingIcon",
-          "propertyProfile": "control",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "loadingText",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "primary",
-            "inverse",
-            "secondary",
-            "ghost",
-            "dashed",
-            "danger",
-            "success",
-            "accent",
-            "ai"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        },
-        {
-          "id": "iconOnly",
-          "attribute": "data-bf-icon-only",
-          "values": [
-            "true"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover:not(:disabled)"
-          }
-        },
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": ":active:not(:disabled)"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": ":disabled"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        }
-      ]
-    },
     {
       "id": "card",
       "parts": [
@@ -207,248 +117,6 @@
       ]
     },
     {
-      "id": "input",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "container",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "control",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "prefix",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "suffix",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "default",
-            "filled",
-            "outlined"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "modal",
-      "parts": [
-        {
-          "id": "overlay",
-          "propertyProfile": "overlay",
-          "visualRole": "popup"
-        },
-        {
-          "id": "dialog",
-          "propertyProfile": "overlay",
-          "visualRole": "dialog"
-        },
-        {
-          "id": "headerShell",
-          "propertyProfile": "container",
-          "visualRole": "toolbar",
-          "continuityGroup": "modal-dialog"
-        },
-        {
-          "id": "header",
-          "propertyProfile": "container",
-          "visualRole": "toolbar",
-          "continuityGroup": "modal-dialog"
-        },
-        {
-          "id": "titleGroup",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "title",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "titleExtra",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "close",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container",
-          "visualRole": "content",
-          "continuityGroup": "modal-dialog"
-        },
-        {
-          "id": "resizeHandle",
-          "propertyProfile": "overlay",
-          "visualRole": "control"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large",
-            "xlarge",
-            "xxlarge"
-          ]
-        },
-        {
-          "id": "placement",
-          "attribute": "data-bf-placement",
-          "values": [
-            "center",
-            "bottom-left",
-            "bottom-right"
-          ]
-        },
-        {
-          "id": "resizeDirection",
-          "attribute": "data-bf-resize-direction",
-          "values": [
-            "n",
-            "s",
-            "w",
-            "e",
-            "nw",
-            "ne",
-            "sw",
-            "se"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        },
-        {
-          "id": "draggable",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"draggable\"]"
-          }
-        },
-        {
-          "id": "dragging",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"dragging\"]"
-          }
-        },
-        {
-          "id": "resizable",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"resizable\"]"
-          }
-        },
-        {
-          "id": "resizing",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"resizing\"]"
-          }
-        },
-        {
-          "id": "contentInset",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"contentInset\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "tooltip",
       "parts": [
         {
@@ -494,85 +162,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"visible\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "icon-button",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "default",
-            "primary",
-            "ghost",
-            "danger",
-            "success",
-            "warning",
-            "ai"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "xs",
-            "small",
-            "medium",
-            "large"
-          ]
-        },
-        {
-          "id": "shape",
-          "attribute": "data-bf-shape",
-          "values": [
-            "square",
-            "circle"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover:not(:disabled)"
-          }
-        },
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": ":active:not(:disabled)"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": ":disabled"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
           }
         }
       ]
@@ -636,587 +225,6 @@
           "selector": {
             "kind": "self",
             "suffix": ":disabled"
-          }
-        }
-      ]
-    },
-    {
-      "id": "checkbox",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "wrapper",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "input",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "box",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "checked",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": ":has(input:checked)"
-          }
-        },
-        {
-          "id": "indeterminate",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": "[data-bf-state~=\"indeterminate\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "ancestorPart",
-            "part": "root",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "switch",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "wrapper",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "input",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "track",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "text",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "thumb",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "loading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "checked",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"checked\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "textarea",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "required",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "wrapper",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "field",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "count",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "default",
-            "filled",
-            "outlined"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        },
-        {
-          "id": "autoResize",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"autoResize\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "number-input",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "container",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "glow",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "valueArea",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "input",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "unit",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "buttons",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "decrement",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "increment",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "progress",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "progressBar",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "default",
-            "compact",
-            "stepper"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-within"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "editing",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"editing\"]"
-          }
-        },
-        {
-          "id": "dragging",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"dragging\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "search",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "wrapper",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "prefix",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "input",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "clear",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "suffix",
-          "propertyProfile": "paint",
-          "visualRole": "decoration"
-        },
-        {
-          "id": "button",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"hover\"]"
-          }
-        },
-        {
-          "id": "focusWithin",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"focused\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        },
-        {
-          "id": "expandable",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expandable\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "tabs",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "nav",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "navList",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "tab",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "close",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "inkBar",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "pane",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "line",
-            "card",
-            "pill"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        },
-        {
-          "id": "stretch",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"stretch\"]"
           }
         }
       ]
@@ -1412,205 +420,6 @@
       ]
     },
     {
-      "id": "alert",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "title",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "close",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "success",
-            "error",
-            "warning",
-            "info"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        }
-      ]
-    },
-    {
-      "id": "badge",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "neutral",
-            "accent",
-            "purple",
-            "success",
-            "warning",
-            "error",
-            "info"
-          ]
-        }
-      ],
-      "states": []
-    },
-    {
-      "id": "tag",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "close",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "blue",
-            "green",
-            "red",
-            "yellow",
-            "purple",
-            "gray"
-          ]
-        },
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "rounded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"rounded\"]"
-          }
-        },
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        }
-      ]
-    },
-    {
-      "id": "avatar",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "image",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "text",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "group",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "overflow",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "size",
-          "attribute": "data-bf-size",
-          "values": [
-            "small",
-            "medium",
-            "large",
-            "custom"
-          ]
-        },
-        {
-          "id": "shape",
-          "attribute": "data-bf-shape",
-          "values": [
-            "circle",
-            "square"
-          ]
-        }
-      ],
-      "states": []
-    },
-    {
       "id": "code-editor",
       "parts": [
         {
@@ -1667,19 +476,15 @@
       "id": "confirm-dialog",
       "parts": [
         {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
           "id": "content",
           "propertyProfile": "container"
         },
         {
-          "id": "title",
+          "id": "messageRow",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "icon",
           "propertyProfile": "container"
         },
         {
@@ -1689,20 +494,16 @@
         {
           "id": "preview",
           "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container"
         }
       ],
       "facets": [
         {
-          "id": "type",
-          "attribute": "data-bf-type",
+          "id": "status",
+          "attribute": "data-bf-status",
           "values": [
             "info",
             "warning",
-            "error",
+            "danger",
             "success"
           ]
         }
@@ -1735,50 +536,6 @@
       "states": []
     },
     {
-      "id": "cube-logo",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "particles",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "particle",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "scene",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "cube",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "block",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "face",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "variant",
-          "attribute": "data-bf-variant",
-          "values": [
-            "default",
-            "compact"
-          ]
-        }
-      ],
-      "states": []
-    },
-    {
       "id": "dot-matrix-loader",
       "parts": [
         {
@@ -1804,67 +561,6 @@
       "states": []
     },
     {
-      "id": "empty",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "image",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "description",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": []
-    },
-    {
-      "id": "filter-pill",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "count",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "group",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"disabled\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "input-dialog",
       "parts": [
         {
@@ -1880,82 +576,16 @@
           "propertyProfile": "container"
         },
         {
+          "id": "error",
+          "propertyProfile": "container"
+        },
+        {
           "id": "actions",
           "propertyProfile": "container"
         }
       ],
       "facets": [],
       "states": []
-    },
-    {
-      "id": "stream-text",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "character",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "cursor",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "effect",
-          "attribute": "data-bf-effect",
-          "values": [
-            "smooth",
-            "typewriter",
-            "wave",
-            "fade",
-            "glitch",
-            "neon",
-            "matrix",
-            "gradient",
-            "pulse",
-            "blur",
-            "bounce",
-            "shimmer"
-          ]
-        },
-        {
-          "id": "color",
-          "attribute": "data-bf-color",
-          "values": [
-            "blue",
-            "purple",
-            "green",
-            "rainbow",
-            "fire",
-            "ocean",
-            "sunset"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "streaming",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"streaming\"]"
-          }
-        },
-        {
-          "id": "complete",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"complete\"]"
-          }
-        }
-      ]
     },
     {
       "id": "task-running-indicator",
@@ -1981,29 +611,6 @@
           ]
         }
       ],
-      "states": []
-    },
-    {
-      "id": "text-stroke-effect",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "outline",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "animated",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "gradient",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
       "states": []
     },
     {
@@ -2054,6 +661,11 @@
         },
         {
           "id": "fallback",
+          "propertyProfile": "container",
+          "visualRole": "content"
+        },
+        {
+          "id": "imageFallback",
           "propertyProfile": "container",
           "visualRole": "content"
         },
@@ -2138,92 +750,6 @@
           }
         }
       ]
-    },
-    {
-      "id": "flow-chat-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "compact",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "header",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "details",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "processing",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "processingDot",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "display",
-          "attribute": "data-bf-display",
-          "values": [
-            "compact",
-            "normal",
-            "detailed"
-          ]
-        },
-        {
-          "id": "status",
-          "attribute": "data-bf-status",
-          "values": [
-            "pending",
-            "preparing",
-            "running",
-            "streaming",
-            "completed",
-            "cancelled",
-            "error"
-          ]
-        }
-      ],
-      "states": []
     },
     {
       "id": "view-transition-boundary",
@@ -2322,10 +848,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "commandCurrent",
-          "propertyProfile": "container"
-        },
-        {
           "id": "commandStatus",
           "propertyProfile": "container"
         },
@@ -2335,10 +857,6 @@
         },
         {
           "id": "commandEmpty",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
           "propertyProfile": "container"
         },
         {
@@ -2358,39 +876,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "modeChip",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "modeChipLabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "modeChipRemove",
-          "propertyProfile": "container"
-        },
-        {
           "id": "boostMenu",
           "propertyProfile": "container"
         },
         {
-          "id": "boostSection",
-          "propertyProfile": "container"
-        },
-        {
           "id": "boostItem",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "boostItemLabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "boostItemMeta",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "boostDefaultAction",
           "propertyProfile": "container"
         },
         {
@@ -2478,10 +968,11 @@
           "id": "boostItemKind",
           "attribute": "data-bf-boost-item-kind",
           "values": [
-            "mode",
+            "directive",
             "agent",
             "context",
             "skill",
+            "additional-mode",
             "manage"
           ]
         }
@@ -2572,9 +1063,29 @@
         {
           "id": "profile",
           "propertyProfile": "container"
+        },
+        {
+          "id": "agent",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sessionSummary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "newSession",
+          "propertyProfile": "container"
         }
       ],
       "facets": [
+        {
+          "id": "presentation",
+          "attribute": "data-bf-presentation",
+          "values": [
+            "standalone",
+            "menu-item"
+          ]
+        },
         {
           "id": "profile",
           "attribute": "data-bf-profile",
@@ -2582,7 +1093,8 @@
             "minimal",
             "balanced",
             "ultimate",
-            "creative"
+            "creative",
+            "other"
           ]
         }
       ],
@@ -2595,6 +1107,13 @@
           }
         },
         {
+          "id": "fixed",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"fixed\"]"
+          }
+        },
+        {
           "id": "current",
           "selector": {
             "kind": "self",
@@ -2602,17 +1121,17 @@
           }
         },
         {
-          "id": "pending",
+          "id": "available",
           "selector": {
             "kind": "self",
-            "suffix": "[data-bf-state~=\"pending\"]"
+            "suffix": "[data-bf-state~=\"available\"]"
           }
         },
         {
-          "id": "newSession",
+          "id": "unavailable",
           "selector": {
             "kind": "self",
-            "suffix": "[data-bf-state~=\"new-session\"]"
+            "suffix": "[data-bf-state~=\"unavailable\"]"
           }
         },
         {
@@ -2799,66 +1318,6 @@
       ]
     },
     {
-      "id": "file-operation-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "preview",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "previewText",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "guidance",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "path",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "action",
-          "attribute": "data-bf-action",
-          "values": [
-            "create",
-            "modify",
-            "delete"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "rich-text-input",
       "parts": [
         {
@@ -2900,7 +1359,8 @@
             "url",
             "web-element",
             "widget-reference",
-            "skill-reference"
+            "skill-reference",
+            "additional-mode-reference"
           ]
         }
       ],
@@ -3115,6 +1575,41 @@
       ]
     },
     {
+      "id": "deep-research-protocol",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "phaseList",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "summary",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "list",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "listItem",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "itemTitle",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "confidence",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [],
+      "states": []
+    },
+    {
       "id": "model-selector",
       "parts": [
         {
@@ -3130,6 +1625,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "reasoningSummary",
+          "propertyProfile": "container"
+        },
+        {
           "id": "contextUsage",
           "propertyProfile": "container"
         },
@@ -3138,7 +1637,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "dropdownHeader",
+          "id": "level",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "back",
           "propertyProfile": "container"
         },
         {
@@ -3150,11 +1653,11 @@
           "propertyProfile": "container"
         },
         {
-          "id": "optionMain",
+          "id": "providerOption",
           "propertyProfile": "container"
         },
         {
-          "id": "configRow",
+          "id": "optionMain",
           "propertyProfile": "container"
         }
       ],
@@ -3208,7 +1711,16 @@
           "propertyProfile": "container"
         }
       ],
-      "facets": [],
+      "facets": [
+        {
+          "id": "presentation",
+          "attribute": "data-bf-presentation",
+          "values": [
+            "meter",
+            "label"
+          ]
+        }
+      ],
       "states": [
         {
           "id": "open",
@@ -3281,14 +1793,6 @@
         },
         {
           "id": "leftActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "turnBadge",
           "propertyProfile": "container"
         },
         {
@@ -3689,10 +2193,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "back",
-          "propertyProfile": "container"
-        },
-        {
           "id": "body",
           "propertyProfile": "container"
         },
@@ -3898,10 +2398,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "subagentName",
-          "propertyProfile": "container"
-        },
-        {
           "id": "meta",
           "propertyProfile": "container"
         },
@@ -4016,10 +2512,6 @@
         },
         {
           "id": "toolbar",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "modeToggle",
           "propertyProfile": "container"
         },
         {
@@ -4861,101 +3353,6 @@
       ]
     },
     {
-      "id": "terminal-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "output",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "waiting",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "status",
-          "attribute": "data-bf-status",
-          "values": [
-            "pending",
-            "queued",
-            "waiting",
-            "preparing",
-            "streaming",
-            "receiving",
-            "running",
-            "completed",
-            "error",
-            "cancelled",
-            "rejected",
-            "pending_confirmation",
-            "confirmed"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "running",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"running\"]"
-          }
-        },
-        {
-          "id": "completed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"completed\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        },
-        {
-          "id": "cancelled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"cancelled\"]"
-          }
-        },
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "skills-config",
       "parts": [
         {
@@ -5495,83 +3892,6 @@
       "states": []
     },
     {
-      "id": "ask-user-question-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "header",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "questions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "question",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "options",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "option",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "customInput",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "summary",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "loading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        },
-        {
-          "id": "completed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"completed\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "create-plan-display",
       "parts": [
         {
@@ -5625,81 +3945,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "exec-process-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "output",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "waiting",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
-          }
-        },
-        {
-          "id": "completed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"completed\"]"
-          }
-        },
-        {
-          "id": "cancelled",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"cancelled\"]"
-          }
-        },
-        {
-          "id": "waiting",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"waiting\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
           }
         }
       ]
@@ -6083,10 +4328,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "modelSelectionInput",
-          "propertyProfile": "container"
-        },
-        {
           "id": "modelSelectionLabel",
           "propertyProfile": "container"
         },
@@ -6145,68 +4386,16 @@
           "propertyProfile": "container"
         },
         {
-          "id": "levelGroup",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "levelButton",
-          "propertyProfile": "container"
-        },
-        {
           "id": "customControls",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "numberInput",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
           "propertyProfile": "container"
         },
         {
           "id": "preview",
           "propertyProfile": "container"
-        },
-        {
-          "id": "flowChatControls",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "resetButton",
-          "propertyProfile": "container"
         }
       ],
-      "facets": [
-        {
-          "id": "level",
-          "attribute": "data-bf-level",
-          "values": [
-            "compact",
-            "small",
-            "default",
-            "medium",
-            "large",
-            "custom"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "selected",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"selected\"]"
-          }
-        },
-        {
-          "id": "error",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"error\"]"
-          }
-        }
-      ]
+      "facets": [],
+      "states": []
     },
     {
       "id": "language-selector",
@@ -6369,10 +4558,6 @@
         },
         {
           "id": "switcherStatusDot",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "switcherDisconnect",
           "propertyProfile": "container"
         }
       ],
@@ -7113,10 +5298,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "clear",
-          "propertyProfile": "container"
-        },
-        {
           "id": "items",
           "propertyProfile": "container"
         },
@@ -7837,6 +6018,14 @@
           "propertyProfile": "container"
         },
         {
+          "id": "scrollPrevious",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "scrollNext",
+          "propertyProfile": "container"
+        },
+        {
           "id": "controls",
           "propertyProfile": "container"
         }
@@ -8298,10 +6487,6 @@
         {
           "id": "actions",
           "propertyProfile": "container"
-        },
-        {
-          "id": "sections",
-          "propertyProfile": "container"
         }
       ],
       "facets": [],
@@ -8540,10 +6725,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "menuItem",
-          "propertyProfile": "container"
-        },
-        {
           "id": "progress",
           "propertyProfile": "container"
         },
@@ -8565,93 +6746,6 @@
         },
         {
           "id": "tooltipContent",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": []
-    },
-    {
-      "id": "context-compression-card",
-      "parts": [
-        {
-          "id": "compact",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "tokens",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "processing",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "summaryRow",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "statsRow",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "display",
-          "attribute": "data-bf-display",
-          "values": [
-            "compact"
-          ]
-        },
-        {
-          "id": "status",
-          "attribute": "data-bf-status",
-          "values": [
-            "pending",
-            "preparing",
-            "running",
-            "streaming",
-            "completed",
-            "cancelled",
-            "error"
-          ]
-        }
-      ],
-      "states": []
-    },
-    {
-      "id": "review-session-summary-card",
-      "parts": [
-        {
-          "id": "fileCount",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "details",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "summary",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "files",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "open",
           "propertyProfile": "container"
         }
       ],
@@ -8708,15 +6802,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "menu",
-          "propertyProfile": "container"
-        },
-        {
           "id": "profile",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuItem",
           "propertyProfile": "container"
         },
         {
@@ -8849,22 +6935,6 @@
         },
         {
           "id": "authActions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "confirmDialog",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "confirmWarning",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "confirmMessage",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "confirmActions",
           "propertyProfile": "container"
         },
         {
@@ -9115,12 +7185,6 @@
           "visualRole": "content"
         },
         {
-          "id": "sections",
-          "propertyProfile": "container",
-          "visualRole": "content",
-          "continuityGroup": "nav-panel"
-        },
-        {
           "id": "section",
           "propertyProfile": "container",
           "visualRole": "content"
@@ -9140,11 +7204,6 @@
           "id": "assistantSessionActions",
           "propertyProfile": "control",
           "visualRole": "control"
-        },
-        {
-          "id": "assistantSessionMenu",
-          "propertyProfile": "overlay",
-          "visualRole": "popup"
         },
         {
           "id": "miniAppFooter",
@@ -9167,51 +7226,6 @@
           "id": "settingsEntry",
           "propertyProfile": "control",
           "visualRole": "control"
-        },
-        {
-          "id": "footerButton",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "footerMenu",
-          "propertyProfile": "overlay",
-          "visualRole": "popup"
-        },
-        {
-          "id": "footerMenuItem",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "footerMenuDivider",
-          "propertyProfile": "paint",
-          "visualRole": "divider"
-        },
-        {
-          "id": "workspaceMenu",
-          "propertyProfile": "overlay",
-          "visualRole": "popup"
-        },
-        {
-          "id": "workspaceMenuItem",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "workspaceMenuDivider",
-          "propertyProfile": "paint",
-          "visualRole": "divider"
-        },
-        {
-          "id": "workspaceMenuTitle",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "workspaceMenuEmpty",
-          "propertyProfile": "container",
-          "visualRole": "content"
         }
       ],
       "facets": [
@@ -9236,11 +7250,7 @@
             "skills",
             "ecosystem-compatibility",
             "session-filter",
-            "assistant-manager",
-            "floating-window",
-            "appearance-configuration",
-            "open-settings",
-            "about"
+            "assistant-manager"
           ]
         },
         {
@@ -9331,15 +7341,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "retry",
-          "propertyProfile": "container"
-        },
-        {
           "id": "aggregateLoading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "aggregateRetry",
           "propertyProfile": "container"
         },
         {
@@ -9821,6 +7823,14 @@
           "propertyProfile": "container"
         },
         {
+          "id": "tabs",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "tabBar",
+          "propertyProfile": "container"
+        },
+        {
           "id": "tabContent",
           "propertyProfile": "container"
         },
@@ -9925,19 +7935,39 @@
           "propertyProfile": "container"
         },
         {
-          "id": "groups",
+          "id": "sidebar",
           "propertyProfile": "container"
         },
         {
-          "id": "groupTab",
+          "id": "sidebarBrand",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "main",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "overview",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "overviewSection",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "overviewAction",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sectionMarker",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "viewHeader",
           "propertyProfile": "container"
         },
         {
           "id": "subtabs",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "subtab",
           "propertyProfile": "container"
         },
         {
@@ -9946,6 +7976,14 @@
         },
         {
           "id": "body",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "pairingCard",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "botCard",
           "propertyProfile": "container"
         },
         {
@@ -9959,6 +7997,16 @@
       ],
       "facets": [
         {
+          "id": "view",
+          "attribute": "data-bf-view",
+          "values": [
+            "overview",
+            "network",
+            "bot",
+            "account"
+          ]
+        },
+        {
           "id": "group",
           "attribute": "data-bf-group",
           "values": [
@@ -9970,10 +8018,10 @@
       ],
       "states": [
         {
-          "id": "active",
+          "id": "authenticated",
           "selector": {
             "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
+            "suffix": "[data-bf-state~=\"authenticated\"]"
           }
         },
         {
@@ -9981,6 +8029,13 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"connected\"]"
+          }
+        },
+        {
+          "id": "disabled",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"disabled\"]"
           }
         }
       ]
@@ -10042,14 +8097,6 @@
         },
         {
           "id": "deviceCard",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "pages",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "pagesEntry",
           "propertyProfile": "container"
         }
       ],
@@ -10383,10 +8430,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "subagentName",
-          "propertyProfile": "container"
-        },
-        {
           "id": "badge",
           "propertyProfile": "container"
         },
@@ -10617,10 +8660,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "formActions",
-          "propertyProfile": "container"
-        },
-        {
           "id": "subscriptionArea",
           "propertyProfile": "container"
         },
@@ -10690,10 +8729,6 @@
         },
         {
           "id": "logoutConfirm",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "logoutActions",
           "propertyProfile": "container"
         }
       ],
@@ -11483,15 +9518,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "configure",
-          "propertyProfile": "container"
-        },
-        {
           "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "newSession",
           "propertyProfile": "container"
         },
         {
@@ -11706,10 +9733,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "quickAction",
-          "propertyProfile": "container"
-        },
-        {
           "id": "footer",
           "propertyProfile": "container"
         }
@@ -11911,6 +9934,10 @@
           "propertyProfile": "container"
         },
         {
+          "id": "overview",
+          "propertyProfile": "container"
+        },
+        {
           "id": "filters",
           "propertyProfile": "container"
         },
@@ -11957,12 +9984,6 @@
           "id": "search",
           "propertyProfile": "control",
           "visualRole": "control"
-        },
-        {
-          "id": "sections",
-          "propertyProfile": "container",
-          "visualRole": "content",
-          "continuityGroup": "settings-workspace"
         },
         {
           "id": "searchEmpty",
@@ -12447,6 +10468,162 @@
       ]
     },
     {
+      "id": "realtime-voice-call",
+      "parts": [
+        {
+          "id": "trigger",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "root",
+          "propertyProfile": "overlay",
+          "visualRole": "popup"
+        },
+        {
+          "id": "header",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "avatar",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "heading",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "liveIndicator",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "conversation",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "utterance",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "empty",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "task",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "meter",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "controls",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "control",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [
+        {
+          "id": "phase",
+          "attribute": "data-bf-phase",
+          "values": [
+            "connecting",
+            "live",
+            "ending",
+            "error"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "idle",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"idle\"]"
+          }
+        },
+        {
+          "id": "connecting",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"connecting\"]"
+          }
+        },
+        {
+          "id": "live",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"live\"]"
+          }
+        },
+        {
+          "id": "ending",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"ending\"]"
+          }
+        },
+        {
+          "id": "error",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"error\"]"
+          }
+        },
+        {
+          "id": "starting",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"starting\"]"
+          }
+        },
+        {
+          "id": "working",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"working\"]"
+          }
+        },
+        {
+          "id": "usingTools",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"using-tools\"]"
+          }
+        },
+        {
+          "id": "waitingApproval",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"waiting-approval\"]"
+          }
+        },
+        {
+          "id": "needsInput",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"needs-input\"]"
+          }
+        },
+        {
+          "id": "finishing",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"finishing\"]"
+          }
+        },
+        {
+          "id": "stopping",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"stopping\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "editor-breadcrumb",
       "parts": [
         {
@@ -12636,14 +10813,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "typeSwitcher",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "typeOption",
-          "propertyProfile": "container"
-        },
-        {
           "id": "content",
           "propertyProfile": "container"
         },
@@ -12717,13 +10886,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "active",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"active\"]"
           }
         }
       ]
@@ -13484,10 +11646,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
           "id": "empty",
           "propertyProfile": "container"
         },
@@ -13786,22 +11944,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "permissionOptionRow",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "permissionOption",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "permissionOptionTrailing",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "permissionOptionNextTurn",
-          "propertyProfile": "container"
-        },
-        {
           "id": "usageAction",
           "propertyProfile": "container"
         }
@@ -13966,10 +12108,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "editor",
-          "propertyProfile": "container"
-        },
-        {
           "id": "preview",
           "propertyProfile": "container"
         },
@@ -13988,13 +12126,6 @@
       ],
       "facets": [],
       "states": [
-        {
-          "id": "editing",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"editing\"]"
-          }
-        },
         {
           "id": "sending",
           "selector": {
@@ -14028,10 +12159,6 @@
         },
         {
           "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expandAction",
           "propertyProfile": "container"
         },
         {
@@ -14296,53 +12423,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"exporting\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "git-tool-display",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "headerExtra",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "info",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "output",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "stderr",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
           }
         }
       ]
@@ -14697,19 +12777,7 @@
           "propertyProfile": "container"
         },
         {
-          "id": "toolbar",
-          "propertyProfile": "container"
-        },
-        {
           "id": "info",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "controls",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
           "propertyProfile": "container"
         },
         {
@@ -14757,10 +12825,6 @@
         },
         {
           "id": "input",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
           "propertyProfile": "container"
         },
         {
@@ -14877,18 +12941,6 @@
         },
         {
           "id": "menuTrigger",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuPopover",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuItem",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "menuDivider",
           "propertyProfile": "container"
         },
         {
@@ -15207,10 +13259,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
           "id": "item",
           "propertyProfile": "container"
         },
@@ -15412,6 +13460,46 @@
       "states": []
     },
     {
+      "id": "flow-tool-card",
+      "parts": [
+        {
+          "id": "root",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "note",
+          "propertyProfile": "container"
+        }
+      ],
+      "facets": [
+        {
+          "id": "attention",
+          "attribute": "data-bf-attention",
+          "values": [
+            "ambient",
+            "prominent"
+          ]
+        },
+        {
+          "id": "presentation",
+          "attribute": "data-bf-presentation",
+          "values": [
+            "standard",
+            "dedicated"
+          ]
+        }
+      ],
+      "states": [
+        {
+          "id": "permissionPending",
+          "selector": {
+            "kind": "self",
+            "suffix": "[data-bf-state~=\"permission-pending\"]"
+          }
+        }
+      ]
+    },
+    {
       "id": "flow-text-block",
       "parts": [
         {
@@ -15420,6 +13508,14 @@
         },
         {
           "id": "textContent",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "protocol",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "protocolTextContent",
           "propertyProfile": "container"
         }
       ],
@@ -15485,103 +13581,6 @@
           "selector": {
             "kind": "self",
             "suffix": "[data-bf-state~=\"error\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "surface",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "header",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "extra",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "status",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "status",
-          "attribute": "data-bf-status",
-          "values": [
-            "pending",
-            "queued",
-            "waiting",
-            "preparing",
-            "streaming",
-            "receiving",
-            "running",
-            "completed",
-            "error",
-            "cancelled",
-            "rejected",
-            "analyzing",
-            "pending_confirmation",
-            "confirmed"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        },
-        {
-          "id": "confirmation",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"confirmation\"]"
           }
         }
       ]
@@ -15667,10 +13666,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "settingsButton",
-          "propertyProfile": "container"
-        },
-        {
           "id": "expanded",
           "propertyProfile": "container"
         },
@@ -15684,129 +13679,6 @@
         },
         {
           "id": "actionCode",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "default-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "meta",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "metaLabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "metaDescription",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "section",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "sectionLabel",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "code",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "confirmation",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"confirmation\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "get-file-diff-display",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "info",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "fileName",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "diffType",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "stats",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "message",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "preview",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
           "propertyProfile": "container"
         }
       ],
@@ -15877,10 +13749,6 @@
         },
         {
           "id": "footer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "open",
           "propertyProfile": "container"
         },
         {
@@ -15973,80 +13841,6 @@
       ]
     },
     {
-      "id": "todo-write-display",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "compactIcon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "count",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "progress",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "headerContent",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "list",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "item",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "itemContent",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "mode",
-          "attribute": "data-bf-mode",
-          "values": [
-            "compact",
-            "standard"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        },
-        {
-          "id": "completed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"completed\"]"
-          }
-        }
-      ]
-    },
-    {
       "id": "tool-timeout-indicator",
       "parts": [
         {
@@ -16117,185 +13911,6 @@
       ]
     },
     {
-      "id": "web-fetch-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "headerUrl",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "meta",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "detailsRow",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "details",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "detail",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "result",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "compact-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "surface",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "extra",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "status",
-          "attribute": "data-bf-status",
-          "values": [
-            "pending",
-            "queued",
-            "waiting",
-            "preparing",
-            "streaming",
-            "receiving",
-            "running",
-            "completed",
-            "error",
-            "cancelled",
-            "rejected",
-            "analyzing",
-            "pending_confirmation",
-            "confirmed"
-          ]
-        }
-      ],
-      "states": [
-        {
-          "id": "loading",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"loading\"]"
-          }
-        },
-        {
-          "id": "clickable",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"clickable\"]"
-          }
-        },
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "tool-card-status-slot",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "statusLayer",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "iconLayer",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [
-        {
-          "id": "defaultIcon",
-          "attribute": "data-bf-default-icon",
-          "values": [
-            "status",
-            "tool"
-          ]
-        }
-      ],
-      "states": []
-    },
-    {
-      "id": "tool-card-header-actions",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": []
-    },
-    {
       "id": "acp-permission-actions",
       "parts": [
         {
@@ -16331,171 +13946,6 @@
           "selector": {
             "kind": "self",
             "suffix": ":disabled"
-          }
-        }
-      ]
-    },
-    {
-      "id": "context-compression-display",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "info",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "tokenStat",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "savings",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "processing",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "meta",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "detail",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        },
-        {
-          "id": "fallback",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"fallback\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "get-tool-spec-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "view-image-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "content",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "preview",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "image",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "lightbox",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
-          }
-        }
-      ]
-    },
-    {
-      "id": "run-code-tool-card",
-      "parts": [
-        {
-          "id": "root",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expanded",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "section",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "output",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "error",
-          "propertyProfile": "container"
-        }
-      ],
-      "facets": [],
-      "states": [
-        {
-          "id": "expanded",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"expanded\"]"
-          }
-        },
-        {
-          "id": "failed",
-          "selector": {
-            "kind": "self",
-            "suffix": "[data-bf-state~=\"failed\"]"
           }
         }
       ]
@@ -16640,30 +14090,9 @@
         {
           "id": "root",
           "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "icon",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "text",
-          "propertyProfile": "container"
         }
       ],
-      "facets": [
-        {
-          "id": "action",
-          "attribute": "data-bf-action",
-          "values": [
-            "copy",
-            "edit"
-          ]
-        }
-      ],
+      "facets": [],
       "states": [
         {
           "id": "copied",
@@ -16816,10 +14245,6 @@
         },
         {
           "id": "summary",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "expand",
           "propertyProfile": "container"
         },
         {
@@ -17024,18 +14449,6 @@
         },
         {
           "id": "actions",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "label",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "loading",
           "propertyProfile": "container"
         }
       ],
@@ -17487,6 +14900,18 @@
           "propertyProfile": "container"
         },
         {
+          "id": "sceneSurface",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "topBar",
+          "propertyProfile": "container"
+        },
+        {
+          "id": "sceneActions",
+          "propertyProfile": "container"
+        },
+        {
           "id": "viewport",
           "propertyProfile": "container"
         },
@@ -17596,92 +15021,10 @@
           "id": "subtitle",
           "propertyProfile": "paint",
           "visualRole": "content"
-        },
-        {
-          "id": "divider",
-          "propertyProfile": "paint",
-          "visualRole": "divider"
-        },
-        {
-          "id": "recentSection",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "sectionHeader",
-          "propertyProfile": "container",
-          "visualRole": "toolbar"
-        },
-        {
-          "id": "sectionLabel",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "actions",
-          "propertyProfile": "container",
-          "visualRole": "toolbar"
-        },
-        {
-          "id": "action",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "recentList",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "recentRow",
-          "propertyProfile": "container",
-          "visualRole": "content"
-        },
-        {
-          "id": "recentItem",
-          "propertyProfile": "control",
-          "visualRole": "control"
-        },
-        {
-          "id": "recentName",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "recentMeta",
-          "propertyProfile": "paint",
-          "visualRole": "content"
-        },
-        {
-          "id": "empty",
-          "propertyProfile": "container",
-          "visualRole": "content"
         }
       ],
       "facets": [],
-      "states": [
-        {
-          "id": "hover",
-          "selector": {
-            "kind": "self",
-            "suffix": ":hover"
-          }
-        },
-        {
-          "id": "focusVisible",
-          "selector": {
-            "kind": "self",
-            "suffix": ":focus-visible"
-          }
-        },
-        {
-          "id": "disabled",
-          "selector": {
-            "kind": "self",
-            "suffix": ":disabled"
-          }
-        }
-      ]
+      "states": []
     },
     {
       "id": "shell",
@@ -18205,10 +15548,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "addAction",
-          "propertyProfile": "container"
-        },
-        {
           "id": "installedListHeader",
           "propertyProfile": "container"
         },
@@ -18329,10 +15668,6 @@
           "propertyProfile": "container"
         },
         {
-          "id": "discoverContent",
-          "propertyProfile": "container"
-        },
-        {
           "id": "resultsInfo",
           "propertyProfile": "container"
         },
@@ -18370,10 +15705,6 @@
         },
         {
           "id": "suiteLoading",
-          "propertyProfile": "container"
-        },
-        {
-          "id": "suiteSections",
           "propertyProfile": "container"
         },
         {
@@ -18784,13 +16115,6 @@
     "outlineStyle",
     "boxShadow",
     "opacity",
-    "fontFamily",
-    "fontSize",
-    "fontWeight",
-    "fontStyle",
-    "fontVariantNumeric",
-    "lineHeight",
-    "letterSpacing",
     "textAlign",
     "verticalAlign",
     "textIndent",
@@ -18842,7 +16166,6 @@
     "--bf-appearance-token-btn-primary-hover-shadow",
     "--bf-appearance-token-btn-primary-hover-transform",
     "--bf-appearance-token-btn-primary-shadow",
-    "--bf-appearance-token-button-bg-hover",
     "--bf-appearance-token-chrome-accent-100",
     "--bf-appearance-token-chrome-accent-200",
     "--bf-appearance-token-chrome-accent-300",
@@ -19013,44 +16336,16 @@
     "--bf-appearance-token-flowchat-card-radius",
     "--bf-appearance-token-flowchat-code-block-pad-x",
     "--bf-appearance-token-flowchat-code-block-pad-y",
-    "--bf-appearance-token-flowchat-code-font-size",
-    "--bf-appearance-token-flowchat-code-line-height",
-    "--bf-appearance-token-flowchat-compact-line-height",
     "--bf-appearance-token-flowchat-content-inline-pad",
     "--bf-appearance-token-flowchat-content-inline-pad-mobile",
     "--bf-appearance-token-flowchat-control-gap",
     "--bf-appearance-token-flowchat-control-pad-x",
     "--bf-appearance-token-flowchat-control-pad-y",
     "--bf-appearance-token-flowchat-flow-item-gap",
-    "--bf-appearance-token-flowchat-font-size-2xl",
-    "--bf-appearance-token-flowchat-font-size-2xs",
-    "--bf-appearance-token-flowchat-font-size-3xl",
-    "--bf-appearance-token-flowchat-font-size-base",
-    "--bf-appearance-token-flowchat-font-size-lg",
-    "--bf-appearance-token-flowchat-font-size-sm",
-    "--bf-appearance-token-flowchat-font-size-xl",
-    "--bf-appearance-token-flowchat-font-size-xs",
-    "--bf-appearance-token-flowchat-font-size-xxs",
     "--bf-appearance-token-flowchat-inline-gap",
     "--bf-appearance-token-flowchat-link-color",
     "--bf-appearance-token-flowchat-link-hover-color",
-    "--bf-appearance-token-flowchat-support-line-height",
-    "--bf-appearance-token-flowchat-text-line-height",
     "--bf-appearance-token-flowchat-turn-gap",
-    "--bf-appearance-token-font-family-mono",
-    "--bf-appearance-token-font-family-sans",
-    "--bf-appearance-token-font-size-2xl",
-    "--bf-appearance-token-font-size-3xl",
-    "--bf-appearance-token-font-size-4xl",
-    "--bf-appearance-token-font-size-base",
-    "--bf-appearance-token-font-size-lg",
-    "--bf-appearance-token-font-size-sm",
-    "--bf-appearance-token-font-size-xl",
-    "--bf-appearance-token-font-size-xs",
-    "--bf-appearance-token-font-weight-bold",
-    "--bf-appearance-token-font-weight-medium",
-    "--bf-appearance-token-font-weight-normal",
-    "--bf-appearance-token-font-weight-semibold",
     "--bf-appearance-token-git-color-added",
     "--bf-appearance-token-git-color-branch",
     "--bf-appearance-token-git-color-branch-bg",
@@ -19078,9 +16373,6 @@
     "--bf-appearance-token-language-red",
     "--bf-appearance-token-language-slate",
     "--bf-appearance-token-language-yellow",
-    "--bf-appearance-token-line-height-base",
-    "--bf-appearance-token-line-height-relaxed",
-    "--bf-appearance-token-line-height-tight",
     "--bf-appearance-token-motion-base",
     "--bf-appearance-token-motion-fast",
     "--bf-appearance-token-motion-instant",
@@ -19131,10 +16423,7 @@
     "--bf-appearance-token-size-radius-md",
     "--bf-appearance-token-size-radius-sm",
     "--bf-appearance-token-size-radius-xl",
-    "--bf-appearance-token-tool-card-action-font-size",
-    "--bf-appearance-token-tool-card-action-line-height",
     "--bf-appearance-token-tool-card-expanded-pad-x",
-    "--bf-appearance-token-tool-card-font-mono",
     "--bf-appearance-token-tool-card-header-icon-slot",
     "--bf-appearance-token-tool-card-header-pad-right",
     "--bf-appearance-token-tool-card-header-pad-y"
@@ -19176,8 +16465,6 @@
     "--bf-appearance-token-motion-fast",
     "--bf-appearance-token-motion-base",
     "--bf-appearance-token-easing-standard",
-    "--bf-appearance-token-font-family-sans",
-    "--bf-appearance-token-font-family-mono",
     "--bf-appearance-token-btn-primary-bg",
     "--bf-appearance-token-btn-primary-color",
     "--bf-appearance-token-btn-primary-border",

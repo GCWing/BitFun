@@ -5,7 +5,6 @@
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/_extended-mixins' as mixins;
 @use '../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../typography' as flow-type;
 
 .bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
@@ -138,8 +137,8 @@
   flex: 1 1 auto;
   overflow: hidden;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: flow-type.$support-size;
-  line-height: $line-height-base;
+  font-size: var(--bf-type-flow-support-font-size);
+  line-height: var(--bf-line-height-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -204,10 +203,10 @@
 .bitfun-chat-input__voice-pill-time {
   min-width: 36px;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: flow-type.$support-size;
-  font-weight: 550;
+  font-size: var(--bf-type-flow-support-font-size);
+  font-weight: var(--bf-font-weight-semibold);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: var(--bf-line-height-none);
 }
 
 .bitfun-chat-input__voice-pill-timeline {
@@ -438,8 +437,8 @@
     right: 0;
     pointer-events: none;
     color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 52%, transparent);
-    font-size: flow-type.$control-size;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -473,9 +472,9 @@
     display: inline-block;
     padding: 0 4px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: flow-type.$support-size;
-    font-weight: 500;
-    letter-spacing: 0.01em;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-medium);
+    letter-spacing: var(--bf-letter-spacing-subtle);
     background: transparent;
     border: none;
     box-shadow: none;
@@ -486,8 +485,8 @@
     align-items: center;
     flex-shrink: 0;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
-    font-size: flow-type.$control-size;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
     white-space: nowrap;
@@ -699,7 +698,7 @@
       border: 0;
       border-radius: var(--bf-radius-pill);
       background: transparent;
-      font-size: flow-type.$control-size;
+      font-size: var(--bf-type-flow-control-font-size);
       opacity: 1;
     }
 
@@ -779,7 +778,8 @@
         max-height: var(--bf-control-chat-composer-compact-track-height) !important;
         overflow: hidden;
         padding: 0 !important;
-        font-size: flow-type.$control-size;
+        font-size: var(--bf-type-flow-control-font-size);
+        /* typography-audit: allow -- compact input uses the control track as its single-line box */
         line-height: var(--bf-control-chat-composer-compact-track-height);
         pointer-events: auto;
       }
@@ -814,13 +814,13 @@
   }
 
   &__target-switcher-label {
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 400;
+    font-weight: var(--bf-font-weight-regular);
     padding: 0.12rem var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0.12rem 0;
     margin-right: var(--bf-appearance-token-flowchat-inline-gap);
     flex-shrink: 0;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--bf-letter-spacing-wide);
     opacity: 0.72;
   }
 
@@ -832,8 +832,8 @@
     border: none;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: flow-type.$control-size;
-    font-weight: 400;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-regular);
     border-radius: 5px;
     cursor: pointer;
     transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -856,7 +856,7 @@
 
     &--active {
       color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
-      font-weight: 500;
+      font-weight: var(--bf-font-weight-medium);
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 9%, transparent);
     }
   }
@@ -866,8 +866,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: flow-type.$support-size;
-    font-weight: 400;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-regular);
     opacity: 0.65;
 
     &::before {
@@ -889,7 +889,7 @@
     padding-bottom: 4px;
 
     .rich-text-input {
-      font-size: flow-type.$control-size;
+      font-size: var(--bf-type-flow-control-font-size);
     }
   }
 
@@ -1043,10 +1043,10 @@
 
   &__agent-boost-empty {
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     text-align: center;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
 
     &--inline {
       padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
@@ -1054,158 +1054,14 @@
     }
   }
 
-  &__boost-section {
-    padding: 2px 0 4px;
-  }
-
-  &__boost-section-divider {
-    height: 1px;
-    margin: 0;
-    background: var(--bf-appearance-token-border-subtle);
-  }
-
-  &__boost-context-row {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-    width: 100%;
-    margin: 0;
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    background: transparent;
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    user-select: none;
-    border-radius: 4px;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active {
-      transform: scale(0.985);
-    }
-
-    &:focus-visible {
-      outline: none;
-      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
-    }
-  }
-
-  &__boost-context-icon {
-    flex-shrink: 0;
-    opacity: 0.88;
-  }
-
-  // Nested add-menu rows share one secondary-panel interaction contract.
   &__boost-submenu-host {
     position: relative;
-    border-radius: 4px;
-    transition: none;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-
-      .bitfun-chat-input__boost-submenu-trigger {
-        color: var(--bf-appearance-token-color-text-primary);
-      }
-
-      .bitfun-chat-input__boost-submenu-chevron {
-        opacity: 0.85;
-      }
-    }
-  }
-
-  &__boost-submenu-trigger {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
     width: 100%;
-    margin: 0;
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    background: transparent;
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    user-select: none;
-    transition: none;
-  }
-
-  &__boost-submenu-trigger-main {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-    min-width: 0;
-  }
-
-  &__boost-submenu-chevron {
-    flex-shrink: 0;
-    opacity: 0.45;
-    color: var(--bf-appearance-token-color-text-muted);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-  }
-
-  // Shell: absolute from host, padding-left/right acts as mouse bridge over the gap
-  &__boost-submenu-shell {
-    position: absolute;
-    top: -4px;
-    left: 100%;
-    padding-left: 10px;
-    z-index: calc(#{$z-dropdown} + 20);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      opacity 0.12s ease,
-      visibility 0.12s ease;
-
-    &--open {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-    }
-
-    // Open to the left of the host
-    &--left {
-      left: auto;
-      right: 100%;
-      padding-left: 0;
-      padding-right: 10px;
-    }
-
-    // Align upward (panel grows upward from bottom of host)
-    &--up {
-      top: auto;
-      bottom: -4px;
-    }
   }
 
   &__boost-submenu-panel {
-    @include surfaces.floating-surface;
-
-    min-width: 220px;
-    max-width: 300px;
-    max-height: 280px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    transform-origin: left top;
-    animation: bitfun-chat-input-boost-menu-enter 180ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
-
-  &__boost-submenu-shell--left &__boost-submenu-panel {
-    transform-origin: right top;
-  }
-
-  &__boost-submenu-shell--up &__boost-submenu-panel {
-    transform-origin: left bottom;
-  }
-
-  &__boost-submenu-shell--left#{&}__boost-submenu-shell--up &__boost-submenu-panel {
-    transform-origin: right bottom;
+    position: fixed;
+    z-index: calc(#{$z-dropdown} + 20);
   }
 
   &__boost-submenu-loading,
@@ -1216,7 +1072,7 @@
     justify-content: center;
     gap: var(--bf-appearance-token-flowchat-control-gap);
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -1225,350 +1081,20 @@
     color: var(--bf-appearance-token-color-accent-500);
   }
 
-  &__boost-submenu-retry {
-    width: 100%;
-    margin: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
-  }
-
-  &__boost-submenu-list {
-    flex: 1;
-    min-height: 0;
-    max-height: 210px;
-    overflow-y: auto;
-    padding: 4px;
-
-    &::-webkit-scrollbar {
-      width: 3px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-color-overlay-white-15);
-      border-radius: 2px;
-    }
-  }
-
-  &__boost-submenu-item {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-    width: 100%;
-    padding: 0.32rem var(--bf-appearance-token-flowchat-card-expanded-pad-y);
-    border-radius: 4px;
-    background: transparent;
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-primary);
-    cursor: pointer;
-    user-select: none;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active {
-      transform: scale(0.985);
-    }
-
-    &:focus-visible {
-      outline: none;
-      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
-    }
-  }
-
-  &__boost-submenu-item-icon {
-    flex-shrink: 0;
-    opacity: 0.75;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 88%, transparent);
-  }
-
-  &__boost-submenu-item-name {
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  }
-
-  &__boost-submenu-manage {
-    flex-shrink: 0;
-    width: 100%;
-    margin: 0;
-    padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    background: transparent;
-    font-size: flow-type.$control-size;
-    font-weight: 500;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
-    cursor: pointer;
-    text-align: center;
-    user-select: none;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &:hover {
-      background: var(--bf-appearance-token-element-bg-medium);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 94%, var(--bf-appearance-token-color-text-primary));
-    }
-
-    &:active {
-      transform: scale(0.985);
-    }
-  }
-
-  @keyframes bitfun-chat-input-boost-menu-enter {
-    from {
-      opacity: 0;
-      transform: translateY(4px) scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
   &__mode-pending-indicator {
-    font-size: flow-type.$micro-size;
+    font-size: var(--bf-type-flow-micro-font-size);
     color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, transparent);
     margin-left: 4px;
     display: inline-flex;
     align-items: center;
-    font-weight: 500;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-type-flow-meta-line-height);
     vertical-align: middle;
   }
 
   &__mode-dropdown {
-    @include surfaces.floating-surface;
-
     position: fixed;
-    min-width: 200px;
-    max-width: calc(100vw - 16px);
-    max-height: calc(100vh - 16px);
-    overflow: hidden;
     z-index: $z-dropdown;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: flow-type.$control-size;
-    transform-origin: left bottom;
-    animation: mode-dropdown-fade-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &--agent-boost {
-      min-width: 228px;
-      max-width: 288px;
-      padding-bottom: 2px;
-      overflow: visible;
-    }
-  }
-
-  &__mode-option {
-    padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--bf-appearance-token-flowchat-control-gap);
-
-    &:hover:not(&--disabled) {
-      background: var(--bf-appearance-token-color-overlay-white-04);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:focus-visible:not(&--disabled) {
-      outline: none;
-      background: var(--bf-appearance-token-element-bg-soft);
-      box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
-    }
-
-    &:active:not(&--disabled) {
-      transform: scale(0.985);
-    }
-
-    &--active {
-      .bitfun-chat-input__mode-option-name {
-        color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, var(--bf-appearance-token-color-text-primary));
-      }
-    }
-
-    &--pending {
-      .bitfun-chat-input__mode-option-name {
-        color: var(--bf-appearance-token-color-warning);
-
-        &::after {
-          content: ' (Pending)';
-          font-size: flow-type.$meta-size;
-          opacity: 0.8;
-        }
-      }
-    }
-
-    &--disabled {
-      color: var(--bf-appearance-token-color-text-disabled);
-      cursor: default;
-      opacity: 0.5;
-
-      &:hover {
-        background: transparent;
-      }
-    }
-
-    &--coming-soon {
-      color: var(--bf-appearance-token-color-text-muted);
-    }
-
-  }
-
-  &__mode-divider {
-    display: flex;
-    align-items: center;
-    margin: 4px 12px;
-    position: relative;
-  }
-
-  &__mode-divider-line {
-    flex: 1;
-    height: 1px;
-    background: var(--bf-appearance-token-color-overlay-white-08);
-  }
-
-  &__mode-divider-text {
-    padding: 0 8px;
-    font-size: flow-type.$meta-size;
-    color: var(--bf-appearance-token-color-text-muted);
-    white-space: nowrap;
-    font-weight: 500;
-    letter-spacing: 0.5px;
-  }
-
-  &__mode-submenu {
-    margin: 2px 0;
-  }
-
-  &__mode-submenu-trigger {
-    padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
-    font-size: flow-type.$control-size;
-    color: var(--bf-appearance-token-color-text-secondary);
-    cursor: pointer;
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-    display: flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-
-    &:hover {
-      background: var(--bf-appearance-token-color-overlay-white-04);
-      color: var(--bf-appearance-token-color-text-primary);
-    }
-
-    &:active {
-      transform: scale(0.985);
-    }
-
-    &--expanded {
-      .bitfun-chat-input__mode-submenu-label {
-        color: var(--bf-appearance-token-color-text-primary);
-      }
-    }
-
-    &--has-active {
-      .bitfun-chat-input__mode-submenu-label {
-        color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-      }
-    }
-  }
-
-  &__mode-submenu-label {
-    font-weight: 500;
-    color: var(--bf-appearance-token-color-text-secondary);
-  }
-
-  &__mode-submenu-active-name {
-    font-size: flow-type.$support-size;
-    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-    font-weight: 500;
-    margin-left: auto;
-    padding-left: 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100px;
-  }
-
-  &__mode-submenu-dots {
-    font-size: flow-type.$micro-size;
-    color: var(--bf-appearance-token-color-text-muted);
-    margin-left: auto;
-    letter-spacing: 1px;
-  }
-
-  &__mode-submenu-content {
-    background: var(--bf-appearance-token-color-overlay-black-12);
-
-    .bitfun-chat-input__mode-option {
-      padding-left: 24px;
-      font-size: flow-type.$control-size;
-
-      &:hover:not(&--disabled) {
-        background: var(--bf-appearance-token-color-overlay-white-04);
-      }
-    }
-  }
-
-  &__mode-option-name {
-    font-weight: 500;
-    color: var(--bf-appearance-token-color-text-secondary);
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__mode-option-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    flex: 0 0 auto;
-  }
-
-  &__mode-option-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.12rem 0.32rem;
-    border-radius: 3px;
-    background: var(--bf-appearance-token-color-warning-bg);
-    color: var(--bf-appearance-token-color-warning);
-    font-size: flow-type.$micro-size;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    margin-left: 6px;
-
-    &--wip {
-      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-    }
-  }
-
-  @keyframes mode-dropdown-fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   &__slash-command-picker {
@@ -1580,8 +1106,8 @@
     overflow: hidden;
     z-index: $z-dropdown;
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
-    font-size: flow-type.$control-size;
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-flow-control-font-size);
     // Slash commands are opened by typing, so their keyboard path is instant.
     animation: none;
   }
@@ -1592,19 +1118,19 @@
     justify-content: space-between;
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: flow-type.$support-size;
-    font-weight: 500;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   &__slash-command-hint {
-    font-size: flow-type.$meta-size;
+    font-size: var(--bf-type-flow-meta-font-size);
     color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 400;
+    font-weight: var(--bf-font-weight-regular);
     text-transform: none;
-    letter-spacing: 0;
+    letter-spacing: var(--bf-letter-spacing-normal);
   }
 
   &__slash-command-list {
@@ -1646,9 +1172,9 @@
 
   &__slash-command-section-title {
     flex: 0 0 auto;
-    font-size: flow-type.$support-size;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wider);
     text-transform: uppercase;
     color: var(--bf-appearance-token-color-text-muted);
   }
@@ -1682,10 +1208,10 @@
   }
 
   &__slash-command-name {
-    font-size: flow-type.$control-size;
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
@@ -1694,11 +1220,11 @@
   }
 
   &__slash-command-label {
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     flex: 1;
     min-width: 0;
-    line-height: 1.35;
+    line-height: var(--bf-line-height-compact);
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -1713,12 +1239,12 @@
   }
 
   &__slash-command-current {
-    font-size: flow-type.$meta-size;
+    font-size: var(--bf-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
     color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 90%, var(--bf-appearance-token-color-text-primary));
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     flex: 0 0 auto;
   }
 
@@ -1728,10 +1254,10 @@
    * hints the TUI command menu appends to its descriptions.
    */
   &__slash-command-status {
-    font-size: flow-type.$meta-size;
+    font-size: var(--bf-type-flow-meta-font-size);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     flex: 0 0 auto;
     white-space: nowrap;
 
@@ -1749,7 +1275,7 @@
   &__slash-command-empty {
     padding: var(--bf-appearance-token-size-gap-4) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     text-align: center;
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
 
     &--retry {
@@ -2109,9 +1635,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: flow-type.$micro-size;
-    font-weight: 700;
-    line-height: 1;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-bold);
+    line-height: var(--bf-line-height-none);
     box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);
     pointer-events: none;
   }
@@ -2167,15 +1693,10 @@
   .bitfun-chat-input__action-button,
   .bitfun-chat-input__send-button,
   .bitfun-chat-input__breathing-circle,
-  .bitfun-chat-input__mode-option,
-  .bitfun-chat-input__slash-command-item,
-  .bitfun-chat-input__boost-submenu-shell,
-  .bitfun-chat-input__boost-submenu-chevron {
+  .bitfun-chat-input__slash-command-item {
     transition-duration: 0ms;
   }
 
-  .bitfun-chat-input__mode-dropdown,
-  .bitfun-chat-input__boost-submenu-panel,
   .bitfun-chat-input__loading-spinner,
   .bitfun-chat-input__boost-submenu-spinner {
     animation: none;

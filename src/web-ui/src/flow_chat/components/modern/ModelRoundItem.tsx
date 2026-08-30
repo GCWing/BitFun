@@ -10,6 +10,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { Copy, Check, CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
@@ -791,10 +792,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               </Tooltip>
 
               {isCopyMenuOpen && createPortal(
-                <div
+                <Menu
                   ref={copyMenuRef}
                   className="model-round-item__copy-menu"
-                  role="menu"
                   data-testid="model-round-copy-menu"
                   data-bf-placement={copyMenuLayout?.placement ?? 'top'}
                   style={{
@@ -803,25 +803,21 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                     visibility: copyMenuLayout ? 'visible' : 'hidden',
                   }}
                 >
-                  <button
+                  <MenuItem
                     type="button"
-                    role="menuitem"
-                    className="model-round-item__copy-menu-item"
                     onClick={() => void handleCopyScope('full')}
                     data-testid="model-round-copy-full"
                   >
                     {t('transcriptExport.copyFull')}
-                  </button>
-                  <button
+                  </MenuItem>
+                  <MenuItem
                     type="button"
-                    role="menuitem"
-                    className="model-round-item__copy-menu-item"
                     onClick={() => void handleCopyScope('result')}
                     data-testid="model-round-copy-result"
                   >
                     {t('transcriptExport.copyResult')}
-                  </button>
-                </div>,
+                  </MenuItem>
+                </Menu>,
                 getAppearanceOverlayHost(),
               )}
             </div>}

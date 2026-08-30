@@ -3,6 +3,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import { Select, type SelectOption } from '@bitfun/ui';
 import { componentRegistry } from '../components/registry';
 import type { ComponentCategory } from '../types';
 import { FullPageLayout, LargeCardLayout, GridLayout, DemoLayout, ColumnLayout } from './layouts';
@@ -68,13 +69,10 @@ export const PreviewApp: React.FC = () => {
               <Combobox
                 triggerAriaLabel={t('componentLibrary.previewApp.appearanceLabel')}
                 className="preview-appearance-selector__select-component"
-                size="small"
+                size="sm"
                 value={selectedAppearanceId}
                 options={appearanceOptions}
-                onChange={(value) => {
-                  if (Array.isArray(value)) {
-                    return;
-                  }
+                onValueChange={(value) => {
                   void select(String(value));
                 }}
                 disabled={!initialized || appearances.length === 0}

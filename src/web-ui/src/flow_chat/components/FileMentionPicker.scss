@@ -32,7 +32,7 @@
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
+    font-family:var(--bf-font-family-sans);
   }
   
   &__header {
@@ -42,36 +42,12 @@
     padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-medium);
+    letter-spacing: var(--bf-letter-spacing-wide);
     
     svg {
       opacity: 0.6;
-    }
-  }
-  
-  &__back-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    background: var(--bf-appearance-token-color-overlay-white-08);
-    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
-    border-radius: 4px;
-    cursor: pointer;
-    transition:
-      background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease,
-      scale 120ms cubic-bezier(0.23, 1, 0.32, 1);
-    color: var(--bf-appearance-token-color-text-muted);
-    
-    &:hover {
-      background: var(--bf-appearance-token-color-overlay-white-15);
-      color: var(--bf-appearance-token-color-text-primary);
     }
   }
   
@@ -100,15 +76,14 @@
     flex: 1 1 auto;
     min-width: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-weight: 400;
+    font-weight: var(--bf-font-weight-regular);
   }
   
   &__content {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     min-height: 60px;
     max-height: 240px;
-    
   }
   
   &__loading,
@@ -120,7 +95,7 @@
     gap: var(--bf-appearance-token-flowchat-inline-gap);
     padding: var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     
     span {
       opacity: 0.7;
@@ -138,84 +113,8 @@
   }
   
   &__list {
-    padding: 0.18rem;
-  }
-  
-  &__item {
-    display: flex;
-    align-items: center;
-    gap: var(--bf-appearance-token-flowchat-inline-gap);
-    padding: 0.25rem var(--bf-appearance-token-flowchat-card-expanded-pad-y);
-    border-radius: 4px;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease;
-    
-    &:hover {
-      background: var(--bf-appearance-token-color-overlay-white-08);
-      
-      .file-mention-picker__expand-icon {
-        opacity: 1;
-      }
-    }
-    
-    &--selected {
-      background: linear-gradient(135deg, var(--bf-appearance-token-color-accent-200), color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent));
-      
-      .file-mention-picker__item-name {
-        color: var(--bf-appearance-token-flowchat-link-hover-color);
-      }
-      
-      .file-mention-picker__expand-icon {
-        opacity: 0.8;
-      }
-    }
-  }
-  
-  &__icon {
-    flex-shrink: 0;
-    
-    &--file {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 85%, transparent);
-    }
-    
-    &--folder {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 85%, transparent);
-    }
-
-    &--session {
-      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 85%, transparent);
-    }
-  }
-  
-  &__item-name {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    font-weight: 400;
-    color: var(--bf-appearance-token-color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
-  }
-
-  &__item-detail {
-    flex-shrink: 1;
-    max-width: 42%;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__expand-icon {
-    flex-shrink: 0;
-    opacity: 0.4;
-    color: var(--bf-appearance-token-color-text-muted);
-    transition: opacity 0.15s ease;
+    block-size: 100%;
+    padding: var(--bf-overlay-menu-surface-padding);
   }
   
   &__footer {
@@ -225,7 +124,7 @@
     gap: var(--bf-appearance-token-flowchat-control-gap);
     padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: var(--bf-type-flow-micro-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     
     > span {
@@ -248,46 +147,6 @@
       0 1px 3px var(--bf-appearance-token-color-overlay-slate-04),
       inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-95);
 
-    &__back-btn {
-      background: var(--bf-appearance-token-color-overlay-slate-04);
-      border-color: var(--bf-appearance-token-color-overlay-slate-08);
-
-      &:hover {
-        background: var(--bf-appearance-token-color-overlay-slate-08);
-      }
-    }
-
-    &__item:hover {
-      background: var(--bf-appearance-token-element-bg-soft);
-    }
-
-    &__item--selected {
-      // Fallback when color-mix is unsupported; keeps keyboard highlight visible on light surfaces
-      background: var(--bf-appearance-token-element-bg-medium);
-      background: color-mix(
-        in srgb,
-        var(--bf-appearance-token-color-accent-500) 22%,
-        var(--bf-appearance-token-color-bg-elevated) 78%
-      );
-
-      .file-mention-picker__item-name {
-        color: color-mix(
-          in srgb,
-          var(--bf-appearance-token-color-accent-500) 72%,
-          var(--bf-appearance-token-color-text-primary)
-        );
-      }
-
-      .file-mention-picker__icon,
-      .file-mention-picker__expand-icon {
-        color: color-mix(
-          in srgb,
-          var(--bf-appearance-token-color-accent-500) 65%,
-          var(--bf-appearance-token-color-text-primary)
-        );
-        opacity: 0.92;
-      }
-    }
   }
 }
 

@@ -28,7 +28,7 @@ import {
   SubagentAvatar,
 } from '../../subagent-identity';
 import './SessionTreePopover.scss';
-import { IconButton } from '@bitfun/ui';
+import { IconButton, Menu, MenuItem } from '@bitfun/ui';
 
 export interface SessionTreeSelection {
   sessionId: string;
@@ -499,31 +499,29 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                 />
               </Tooltip>
               {openActionSessionId === node.sessionId && actionMenuPosition ? createPortal(
-                <div
+                <Menu
                   ref={actionMenuRef}
                   className="session-tree-popover__action-menu"
                   data-bf-component="flow-chat-header"
                   data-bf-part="sessionTreeMenu"
-                  role="menu"
                   aria-label={t('flowChatHeader.agentTreeActions')}
                   style={actionMenuPosition}
                   data-testid="flowchat-header-session-tree-menu"
                 >
-                  <button
+                  <MenuItem
                     type="button"
-                    role="menuitem"
-                    className="session-tree-popover__action-menu-item session-tree-popover__action-menu-item--danger"
+                    tone="danger"
                     data-bf-component="flow-chat-header"
                     data-bf-part="sessionTreeMenuItem"
                     onClick={() => void handleCancel(node)}
                     disabled={isCancelling}
+                    leading={<Square size={12} aria-hidden="true" />}
                   >
-                    <Square size={12} aria-hidden="true" />
                     <span>{isCancelling
                       ? t('flowChatHeader.agentTreeCancelling')
                       : t('flowChatHeader.agentTreeCancel')}</span>
-                  </button>
-                </div>,
+                  </MenuItem>
+                </Menu>,
                 getAppearanceOverlayHost(),
               ) : null}
             </div>

@@ -58,13 +58,6 @@ const CSS_PROPERTIES: Record<AppearanceStyleProperty, string> = {
   outlineStyle: 'outline-style',
   boxShadow: 'box-shadow',
   opacity: 'opacity',
-  fontFamily: 'font-family',
-  fontSize: 'font-size',
-  fontWeight: 'font-weight',
-  fontStyle: 'font-style',
-  fontVariantNumeric: 'font-variant-numeric',
-  lineHeight: 'line-height',
-  letterSpacing: 'letter-spacing',
   textAlign: 'text-align',
   verticalAlign: 'vertical-align',
   textIndent: 'text-indent',
@@ -530,8 +523,6 @@ export class AppearanceCompiler {
         return `${record.value}ms`;
       case 'easing':
         return this.serializeEasing(value as AppearanceEasingValue);
-      case 'fontFamily':
-        return (record.families as string[]).map(family => `'${family}'`).join(', ');
       case 'none':
         return 'none';
       case 'shadow': {

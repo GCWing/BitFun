@@ -27,9 +27,10 @@ const RETIRED_COMPONENT_SURFACE_IDS = new Set(['button', 'switch', 'select']);
 
 const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'assistant-card': new Set(['configure', 'newSession']),
-  'branch-quick-switch': new Set(['list']),
-  'canvas-tab-overflow': new Set(['list']),
+  'branch-quick-switch': new Set(['list', 'item', 'itemName']),
+  'canvas-tab-overflow': new Set(['list', 'menu', 'missionControl', 'divider', 'item', 'itemClose']),
   'computer-use-tool-card': new Set(['settingsButton']),
+  'context-menu': new Set(['item', 'separator', 'icon', 'label', 'shortcut', 'submenuArrow', 'submenu']),
   'context-list': new Set(['clear']),
   'copy-output-button': new Set(['action', 'icon', 'text']),
   'create-agent-page': new Set(['back']),
@@ -41,6 +42,8 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'markdown-editor': new Set(['modeToggle']),
   'market-account-controls': new Set(['menu', 'menuItem']),
   'mini-app-tool-display': new Set(['open']),
+  'editor-breadcrumb': new Set(['menuHeader', 'menuBack', 'menuTitle', 'list', 'listItem']),
+  'file-mention-picker': new Set(['back', 'loading', 'empty', 'list', 'item', 'itemName', 'itemDetail']),
   'nav-panel': new Set([
     'assistantSessionMenu',
     'footerMenu', 'footerMenuItem', 'footerMenuDivider',
@@ -55,8 +58,17 @@ const RETIRED_COMPONENT_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'review-session-summary-card': new Set(['open']),
   'sessions-section': new Set(['retry', 'aggregateRetry']),
   'smart-recommendations': new Set(['action', 'label', 'loading']),
+  'status-bar-popover': new Set(['list', 'item', 'itemIcon']),
   'subagent-projection': new Set(['expandAction']),
   'tiptap-editor': new Set(['quickAction']),
+};
+
+const RETIRED_COMPONENT_STATES: Readonly<Record<string, ReadonlySet<string>>> = {
+  'branch-quick-switch': new Set(['selected', 'current']),
+  'context-menu': new Set(['disabled', 'submenuActive']),
+  'editor-breadcrumb': new Set(['selected']),
+  'file-mention-picker': new Set(['selected']),
+  'status-bar-popover': new Set(['selected']),
 };
 
 const RETIRED_SCENE_PARTS: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -155,6 +167,70 @@ function migrateRetiredSurfaceParts(
   return { changed, surfaces: changed ? migrated : surfaces };
 }
 
+function dropRetiredRuleStates(value: unknown, retiredStates: ReadonlySet<string>): unknown {
+  if (!isRecord(value)) return value;
+  let changed = false;
+  const migrated = { ...value };
+
+  if (isRecord(value.states)) {
+    const states = Object.fromEntries(
+      Object.entries(value.states).filter(([stateId]) => !retiredStates.has(stateId)),
+    );
+    if (Object.keys(states).length !== Object.keys(value.states).length) {
+      changed = true;
+      if (Object.keys(states).length > 0) migrated.states = states;
+      else delete migrated.states;
+    }
+  }
+
+  if (Array.isArray(value.contexts)) {
+    const contexts = value.contexts.filter((context) => {
+      if (!isRecord(context) || !isRecord(context.when) || !Array.isArray(context.when.states)) {
+        return true;
+      }
+      return !context.when.states.some(state => (
+        typeof state === 'string' && retiredStates.has(state)
+      ));
+    });
+    if (contexts.length !== value.contexts.length) {
+      changed = true;
+      if (contexts.length > 0) migrated.contexts = contexts;
+      else delete migrated.contexts;
+    }
+  }
+
+  return changed ? migrated : value;
+}
+
+function dropRetiredSurfaceStates(value: unknown, retiredStates: ReadonlySet<string>): unknown {
+  if (!isRecord(value) || !isRecord(value.parts)) return value;
+  let changed = false;
+  const parts = Object.fromEntries(
+    Object.entries(value.parts).map(([partId, rule]) => {
+      const migratedRule = dropRetiredRuleStates(rule, retiredStates);
+      if (migratedRule !== rule) changed = true;
+      return [partId, migratedRule];
+    }),
+  );
+  return changed ? { ...value, parts } : value;
+}
+
+function migrateRetiredSurfaceStates(
+  surfaces: Record<string, unknown>,
+  retiredStatesBySurface: Readonly<Record<string, ReadonlySet<string>>>,
+): { changed: boolean; surfaces: Record<string, unknown> } {
+  let changed = false;
+  const migrated = { ...surfaces };
+  for (const [surfaceId, retiredStates] of Object.entries(retiredStatesBySurface)) {
+    if (!(surfaceId in migrated)) continue;
+    const nextSurface = dropRetiredSurfaceStates(migrated[surfaceId], retiredStates);
+    if (nextSurface === migrated[surfaceId]) continue;
+    migrated[surfaceId] = nextSurface;
+    changed = true;
+  }
+  return { changed, surfaces: changed ? migrated : surfaces };
+}
+
 /**
  * Read-only upgrade boundary for Appearance packages authored against settings
  * surface ids that predate the Settings information architecture.
@@ -187,6 +263,10 @@ export function migrateAppearancePackage(input: Record<string, unknown>): Record
     const retiredComponents = migrateRetiredSurfaceParts(components, RETIRED_COMPONENT_PARTS);
     components = retiredComponents.surfaces;
     changed = changed || retiredComponents.changed;
+
+    const retiredComponentStates = migrateRetiredSurfaceStates(components, RETIRED_COMPONENT_STATES);
+    components = retiredComponentStates.surfaces;
+    changed = changed || retiredComponentStates.changed;
   }
 
   if (scenes) {

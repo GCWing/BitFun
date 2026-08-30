@@ -90,8 +90,8 @@
     strong {
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-base);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -102,8 +102,8 @@
       margin: 0;
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: 1.45;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-support);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -114,7 +114,7 @@
     display: flex;
     align-items: center;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   &__eyebrow {
@@ -150,15 +150,15 @@
     // Same scale as the submission workspace: 13px/600 titles over 13px body.
     h4 {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     p,
     li {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -168,7 +168,7 @@
     align-items: center;
     gap: $size-gap-1;
     color: var(--bf-appearance-token-color-success);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   &__screenshots {
@@ -195,7 +195,7 @@
     border-radius: $size-radius-lg;
     background: var(--bf-appearance-token-color-warning-bg);
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   &__rating {
@@ -216,7 +216,7 @@
     span {
       margin-left: $size-gap-2;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
   }
 
@@ -232,7 +232,7 @@
       border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: $size-radius-base;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
     }
   }
 
@@ -245,7 +245,7 @@
     border: 0;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     cursor: pointer;
 
     &:hover {

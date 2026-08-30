@@ -17,6 +17,7 @@ import {
   GitPullRequest,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
 import { snapshotAPI } from '../../../infrastructure/api';
@@ -827,10 +828,9 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         </button>
 
         {isReviewMenuOpen && !isReviewLaunchOrActivityBlocking && createPortal(
-          <div
+          <Menu
             ref={reviewPopoverRef}
             className="session-files-badge__review-menu-popover"
-            role="menu"
             data-bf-component="session-files-badge"
             data-bf-part="reviewPopover"
             data-bf-placement={reviewPopoverLayout?.placement ?? 'bottom'}
@@ -840,45 +840,41 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
               visibility: reviewPopoverLayout ? 'visible' : 'hidden',
             }}
           >
-            {canLaunchReview && <button
-              className="session-files-badge__review-menu-item"
+            {canLaunchReview && <MenuItem
               data-bf-component="session-files-badge"
               data-bf-part="reviewItem"
               onClick={handleReviewClick}
               type="button"
-              role="menuitem"
               disabled={areReviewMenuItemsDisabled}
+              leading={<SearchCheck size={12} />}
             >
-              <SearchCheck size={12} className="session-files-badge__review-icon session-files-badge__review-icon--standard" />
               <span>{t('sessionFilesBadge.reviewModeStandard')}</span>
-            </button>}
+            </MenuItem>}
             {quickActions.filter(a => a.enabled).length > 0 && (
-              <div className="session-files-badge__review-menu-separator" role="separator" />
+              <MenuSeparator />
             )}
 
             {quickActions.filter(a => a.enabled).map(action => {
               const actionText = resolveQuickActionText(action, t);
               return (
-                <button data-bf-component="session-files-badge" data-bf-part="reviewItem"
+                <MenuItem data-bf-component="session-files-badge" data-bf-part="reviewItem"
                   key={action.id}
-                  className="session-files-badge__review-menu-item"
                   onClick={() => { void handleQuickActionClick(action); }}
                   type="button"
-                  role="menuitem"
                   disabled={isSessionProcessing}
-                >
-                  {action.id === 'commit' ? (
-                    <GitCommitHorizontal size={12} className="session-files-badge__review-icon" />
+                  leading={action.id === 'commit' ? (
+                    <GitCommitHorizontal size={12} />
                   ) : action.id === 'create_pr' ? (
-                    <GitPullRequest size={12} className="session-files-badge__review-icon" />
+                    <GitPullRequest size={12} />
                   ) : (
-                    <Zap size={12} className="session-files-badge__review-icon" />
+                    <Zap size={12} />
                   )}
+                >
                   <span>{actionText.label}</span>
-                </button>
+                </MenuItem>
               );
             })}
-          </div>,
+          </Menu>,
           getAppearanceOverlayHost(),
         )}
       </div>

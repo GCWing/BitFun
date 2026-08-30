@@ -57,6 +57,15 @@ test("Menu owns roving focus and standard single-level navigation keys", async (
   assert.match(source, /autoFocusFirstItem/);
 });
 
+test("Menu keeps roving focus scoped to items owned by the current menu", async () => {
+  const source = await readFile(
+    new URL("../src/components/Menu/Menu.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /item\.closest\('\[role="menu"\]'\) === root/);
+});
+
 test("Menu styling uses only public surface, geometry, action, and scrollbar tokens", async () => {
   const styles = await readFile(
     new URL("../src/components/Menu/Menu.module.css", import.meta.url),

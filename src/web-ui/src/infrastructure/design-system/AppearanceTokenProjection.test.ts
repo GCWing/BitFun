@@ -37,9 +37,6 @@ describe('Appearance to design-system token projection', () => {
     expect(projected[themeCssVariables['color.status.danger.content']]).toBe(
       settings.tokens['--bf-appearance-token-color-error'],
     );
-    expect(projected[systemCssVariables['font.family.sans']]).toBe(
-      settings.tokens['--bf-appearance-token-font-family-sans'],
-    );
     expect(projected[systemCssVariables['radius.md']]).toBe(
       settings.tokens['--bf-appearance-token-size-radius-md'],
     );

@@ -51,8 +51,8 @@
     flex: 0 0 auto;
     padding: 2px 7px;
     border-radius: 999px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-micro-font-size);
+    line-height: var(--bf-type-flow-meta-line-height);
 
     &--complete {
       color: var(--bf-appearance-token-color-success);
@@ -80,9 +80,9 @@
     h2 {
       margin: 0;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: 14px;
-      font-weight: 650;
-      line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+      font-size: var(--bf-font-size-base);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-type-flow-meta-line-height);
     }
   }
 
@@ -101,7 +101,7 @@
     gap: 6px;
     min-width: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
   }
 
   &__meta-label {
@@ -132,8 +132,8 @@
     align-items: center;
     gap: 4px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: 1;
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
     cursor: pointer;
 
@@ -183,7 +183,7 @@
     border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     white-space: nowrap;
     cursor: pointer;
 
@@ -226,7 +226,7 @@
     border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 74%, transparent);
     background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
 
     svg {
       flex: 0 0 auto;
@@ -266,19 +266,19 @@
 
     span {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
     }
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: 16px;
-      font-weight: 650;
+      font-size: var(--bf-font-size-xl);
+      font-weight: var(--bf-font-weight-semibold);
       white-space: nowrap;
     }
 
     em {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
       font-style: normal;
     }
   }
@@ -302,7 +302,7 @@
     dd {
       min-width: 0;
       margin: 0;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
     }
 
     dt {
@@ -336,13 +336,13 @@
     }
 
     strong {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
     }
 
     span {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
     }
   }
 
@@ -350,19 +350,19 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
   &__section-help {
     margin: -4px 0 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   &__table-wrap {
@@ -376,7 +376,7 @@
     width: 100%;
     min-width: 620px;
     border-collapse: collapse;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
 
     th,
     td {
@@ -388,7 +388,7 @@
 
     th {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 66%, transparent);
       white-space: nowrap;
     }
@@ -461,7 +461,7 @@
     max-width: 100%;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -492,8 +492,8 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 58%, transparent);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: 1;
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-line-height-none);
     white-space: nowrap;
 
     &--help {
@@ -557,8 +557,8 @@
     gap: 3px 8px;
     margin: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-type-flow-meta-line-height);
 
     > div {
       display: contents;
@@ -607,7 +607,7 @@
 
   &__turn-index-overflow {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     white-space: nowrap;
   }
 
@@ -617,7 +617,7 @@
     justify-content: flex-end;
     gap: 10px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
   }
 
   &__table-expand {
@@ -644,19 +644,19 @@
     min-height: 120px;
     padding: 12px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     text-align: center;
     border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
     border-radius: 6px;
 
     strong {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     span {
       max-width: 440px;
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
   }
 

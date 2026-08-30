@@ -55,16 +55,16 @@
   .title {
     margin: 0;
     color: var(--bf-color-content-primary);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-layout-form-section-title-font-size);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-body-lg-font-size);
     font-weight: var(--bf-font-weight-semibold);
     line-height: var(--bf-line-height-tight);
   }
 
   .description {
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-base);
   }

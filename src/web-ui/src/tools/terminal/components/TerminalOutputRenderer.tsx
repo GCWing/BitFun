@@ -16,6 +16,8 @@ import {
   prepareReadOnlyTerminalOutput,
   TERMINAL_OUTPUT_FONT_FAMILY,
   TERMINAL_OUTPUT_FONT_SIZE,
+  TERMINAL_OUTPUT_FONT_WEIGHT,
+  TERMINAL_OUTPUT_FONT_WEIGHT_BOLD,
   TERMINAL_OUTPUT_LINE_HEIGHT,
   type TerminalOutputFallbackModel,
 } from './terminalOutputPresentation';
@@ -114,7 +116,6 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   useLayoutEffect(() => {
     if (!containerRef.current) return;
 
-    const fontWeights = xtermAppearanceAdapter.getFontWeights();
     const terminal = new XTerm({
       disableStdin: true,       // Disable input for read-only rendering.
       cursorBlink: false,
@@ -122,8 +123,8 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
       cursorInactiveStyle: 'none',
       fontSize: TERMINAL_OUTPUT_FONT_SIZE,
       fontFamily: TERMINAL_OUTPUT_FONT_FAMILY,
-      fontWeight: fontWeights.fontWeight,
-      fontWeightBold: fontWeights.fontWeightBold,
+      fontWeight: TERMINAL_OUTPUT_FONT_WEIGHT,
+      fontWeightBold: TERMINAL_OUTPUT_FONT_WEIGHT_BOLD,
       lineHeight: TERMINAL_OUTPUT_LINE_HEIGHT,
       minimumContrastRatio: DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
       scrollback: 5000,
@@ -202,11 +203,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
     if (!terminal) return;
 
     const updateTheme = () => {
-      const fontWeights = xtermAppearanceAdapter.getFontWeights();
-
       terminal.options.theme = xtermAppearanceAdapter.getColors('output');
-      terminal.options.fontWeight = fontWeights.fontWeight;
-      terminal.options.fontWeightBold = fontWeights.fontWeightBold;
       terminal.refresh(0, terminal.rows - 1);
     };
 

@@ -318,6 +318,7 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
   let hasIntrinsicContract = false;
   let hasSharedToolCardContract = false;
   let hasConfigPageLayoutContract = false;
+  let hasProductAppearanceHostContract = false;
   let styledIntrinsicNodeCount = 0;
   const declaredPartIds = new Set();
   const usedVisualClassIds = new Set();
@@ -355,6 +356,9 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
       if (tagName === 'ConfigPageLayout' && surface && part) {
         hasConfigPageLayoutContract = true;
       }
+      if (tagName === 'Menu' && productSurface && productPart) {
+        hasProductAppearanceHostContract = true;
+      }
     }
     if (ts.isStringLiteralLike(node)) collectVisualClassIds(node.text);
     if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
@@ -368,6 +372,7 @@ function analyzeStyledOwnerContract(file, source, visualClassIds) {
     hasIntrinsicContract,
     hasSharedToolCardContract,
     hasConfigPageLayoutContract,
+    hasProductAppearanceHostContract,
     styledIntrinsicNodeCount,
     declaredPartIds,
     usedVisualClassIds,
@@ -708,7 +713,8 @@ for (const [file, source] of styledProductionTsx) {
   const contract = analyzeStyledOwnerContract(file, source, visualClassIds);
   if (!contract.hasIntrinsicContract
     && !contract.hasSharedToolCardContract
-    && !contract.hasConfigPageLayoutContract) {
+    && !contract.hasConfigPageLayoutContract
+    && !contract.hasProductAppearanceHostContract) {
     failures.push(`${relative(file)}: styled production component must expose a direct DOM Appearance contract or an approved host-forwarded contract`);
     continue;
   }
@@ -734,7 +740,8 @@ for (const [file, source] of productionCodeSources.filter(([candidate]) => candi
   if (styledProductionTsx.some(([styledFile]) => styledFile === file)) continue;
   const contract = analyzeStyledOwnerContract(file, source, allVisualClassIds);
   if (contract.usedVisualClassIds.size < 8 || contract.hasIntrinsicContract
-    || contract.hasSharedToolCardContract || contract.hasConfigPageLayoutContract) continue;
+    || contract.hasSharedToolCardContract || contract.hasConfigPageLayoutContract
+    || contract.hasProductAppearanceHostContract) continue;
   warnings.push(`${relative(file)}: uses ${contract.usedVisualClassIds.size} shared visual classes without a direct Appearance contract; review whether it needs a dedicated surface`);
 }
 

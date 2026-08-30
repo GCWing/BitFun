@@ -7,9 +7,10 @@ import { Code, Loader2 } from 'lucide-react';
 import { getFileIconType } from '@/tools/file-system/utils/fileIcons';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 import './EditorBreadcrumb.scss';
-import { Icon, ScrollArea, Tooltip } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSection, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('EditorBreadcrumb');
 
@@ -101,17 +102,17 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
   currentFilePath,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!isOpen || !anchorEl) return;
-
-    const rect = anchorEl.getBoundingClientRect();
-    setPosition({
-      top: rect.bottom + 2,
-      left: rect.left,
-    });
-  }, [isOpen, anchorEl]);
+  const anchorRef = useRef<HTMLElement | null>(null);
+  anchorRef.current = anchorEl;
+  const popoverLayout = useAnchoredPopoverPosition({
+    open: isOpen,
+    anchorRef,
+    popoverRef: menuRef,
+    preferredPlacement: 'bottom',
+    alignment: 'start',
+    gap: 4,
+    layoutRevision: `${loading}:${currentDirPath}:${items.length}`,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -159,86 +160,90 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
   const currentDirName = getDirectoryName(currentDirPath);
 
   const menuContent = (
-    <div 
-      ref={menuRef} 
+    <Menu
+      ref={menuRef}
+      aria-label={currentDirName}
+      autoFocusFirstItem
       className="editor-breadcrumb-dropdown"
-      data-bf-component="editor-breadcrumb"
-      data-bf-part="menu"
+      data-bf-product-component="editor-breadcrumb"
+      data-bf-product-part="menu"
       style={{
         position: 'fixed',
-        top: position.top,
-        left: position.left,
+        top: popoverLayout?.top ?? 0,
+        left: popoverLayout?.left ?? 0,
+        visibility: popoverLayout ? 'visible' : 'hidden',
       }}
     >
-      {canGoBack && (
-        <div data-bf-component="editor-breadcrumb" data-bf-part="menuHeader" className="editor-breadcrumb-dropdown__header">
-          <Tooltip content="Go to parent directory" placement="top">
-            <button 
-              data-bf-component="editor-breadcrumb"
-              data-bf-part="menuBack"
-              className="editor-breadcrumb-dropdown__back"
-              onClick={(e) => {
-                e.stopPropagation();
-                onGoBack();
-              }}
-            >
-              <Icon name="arrow-left" size="xs" />
-            </button>
-          </Tooltip>
+      <MenuSection
+        actions={canGoBack ? [{
+          icon: <Icon name="arrow-left" size="xs" />,
+          id: 'back',
+          label: 'Go to parent directory',
+          onClick: (event) => {
+            event.stopPropagation();
+            onGoBack();
+          },
+        }] : undefined}
+        title={canGoBack ? (
           <Tooltip content={currentDirPath} placement="top">
-            <span data-bf-component="editor-breadcrumb" data-bf-part="menuTitle" className="editor-breadcrumb-dropdown__title">
-              {currentDirName}
-            </span>
+            <span>{currentDirName}</span>
           </Tooltip>
-        </div>
-      )}
-      
-      {loading ? (
-        <div data-bf-component="editor-breadcrumb" data-bf-part="loading" className="editor-breadcrumb-dropdown__loading">
-          <Loader2 size={14} className="editor-breadcrumb-dropdown__spinner" />
-          <span>Loading...</span>
-        </div>
-      ) : sortedItems.length === 0 ? (
-        <div data-bf-component="editor-breadcrumb" data-bf-part="empty" className="editor-breadcrumb-dropdown__empty">
-          Empty directory
-        </div>
-      ) : (
-        <ScrollArea data-bf-component="editor-breadcrumb" data-bf-part="list" className="editor-breadcrumb-dropdown__list">
-          <ul>
-          {sortedItems.map((item) => {
+        ) : undefined}
+      >
+        {loading ? (
+          <div
+            data-bf-product-component="editor-breadcrumb"
+            data-bf-product-part="loading"
+            className="editor-breadcrumb-dropdown__loading"
+            role="status"
+          >
+            <Loader2 size={14} className="editor-breadcrumb-dropdown__spinner" />
+            <span>Loading...</span>
+          </div>
+        ) : sortedItems.length === 0 ? (
+          <div
+            data-bf-product-component="editor-breadcrumb"
+            data-bf-product-part="empty"
+            className="editor-breadcrumb-dropdown__empty"
+            role="status"
+          >
+            Empty directory
+          </div>
+        ) : (
+          sortedItems.map((item) => {
             const isCurrentFile = item.path.replace(/\\/g, '/') === currentFilePath.replace(/\\/g, '/');
             return (
-              <li
-                data-bf-component="editor-breadcrumb"
-                data-bf-part="listItem"
-                data-bf-state={isCurrentFile ? 'selected' : undefined}
+              <MenuItem
+                checked={isCurrentFile}
                 key={item.path}
-                className={`editor-breadcrumb-dropdown__item ${isCurrentFile ? 'editor-breadcrumb-dropdown__item--current' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
+                leading={item.isDirectory
+                  ? <Icon name="folder" size="sm" />
+                  : getFileIconComponent(item.name, 14)}
+                onClick={(event) => {
+                  event.stopPropagation();
                   onSelect(item);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowRight' && item.isDirectory) {
+                    event.preventDefault();
+                    onSelect(item);
+                  } else if (event.key === 'ArrowLeft' && canGoBack) {
+                    event.preventDefault();
+                    onGoBack();
+                  }
+                }}
+                role="menuitemradio"
+                shortcut={item.isDirectory
+                  ? <Icon name="chevron-right" size="xs" />
+                  : undefined}
               >
-                <span className="editor-breadcrumb-dropdown__item-icon">
-                  {item.isDirectory ? (
-                    <Icon name="folder" size="sm" />
-                  ) : (
-                    getFileIconComponent(item.name, 14)
-                  )}
-                </span>
-                <span className="editor-breadcrumb-dropdown__item-name">
-                  {item.name}
-                </span>
-                {item.isDirectory && (
-                  <Icon name="chevron-right" size="xs" className="editor-breadcrumb-dropdown__item-arrow" />
-                )}
-              </li>
+                {item.name}
+              </MenuItem>
             );
-          })}
-          </ul>
-        </ScrollArea>
-      )}
-    </div>
+          })
+        )}
+      </MenuSection>
+    </Menu>
   );
 
   return createPortal(menuContent, getAppearanceOverlayHost());
@@ -407,7 +412,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
   }
 
   return (
-    <nav className={`editor-breadcrumb ${className}`} data-bf-component="editor-breadcrumb" data-bf-part="root">
+    <nav className={`editor-breadcrumb ${className}`} data-bf-product-component="editor-breadcrumb" data-bf-product-part="root">
       {displaySegments.map((segment, index) => {
         const isEllipsis = 'isEllipsis' in segment && segment.isEllipsis;
         const pathSegment = segment as PathSegment;
@@ -416,18 +421,18 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
         return (
           <React.Fragment key={isEllipsis ? 'ellipsis' : pathSegment.fullPath}>
             {index > 0 && (
-              <Icon name="chevron-right" size="2xs" data-bf-component="editor-breadcrumb" data-bf-part="separator" className="editor-breadcrumb__separator" />
+              <Icon name="chevron-right" size="2xs" data-bf-product-component="editor-breadcrumb" data-bf-product-part="separator" className="editor-breadcrumb__separator" />
             )}
             
             {isEllipsis ? (
-              <span data-bf-component="editor-breadcrumb" data-bf-part="item" className="editor-breadcrumb__item editor-breadcrumb__item--ellipsis">
+              <span data-bf-product-component="editor-breadcrumb" data-bf-product-part="item" className="editor-breadcrumb__item editor-breadcrumb__item--ellipsis">
                 {segment.name}
               </span>
             ) : (
               <Tooltip content={pathSegment.fullPath} placement="bottom">
                 <span
-                  data-bf-component="editor-breadcrumb"
-                  data-bf-part="item"
+                  data-bf-product-component="editor-breadcrumb"
+                  data-bf-product-part="item"
                   data-bf-state={isDropdownOpen ? 'active' : undefined}
                   ref={(el) => setItemRef(pathSegment.fullPath, el)}
                   className={`editor-breadcrumb__item ${
@@ -437,14 +442,14 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
                   } editor-breadcrumb__item--clickable ${isDropdownOpen ? 'editor-breadcrumb__item--active' : ''}`}
                   onClick={(e) => handleSegmentClick(pathSegment, e)}
                 >
-                  <span data-bf-component="editor-breadcrumb" data-bf-part="itemIcon" className="editor-breadcrumb__item-icon">
+                  <span data-bf-product-component="editor-breadcrumb" data-bf-product-part="itemIcon" className="editor-breadcrumb__item-icon">
                     {pathSegment.isFile ? (
                       getFileIconComponent(pathSegment.name)
                     ) : (
                       <Icon name="folder" size="xs" />
                     )}
                   </span>
-                  <span data-bf-component="editor-breadcrumb" data-bf-part="itemText" className="editor-breadcrumb__item-text">
+                  <span data-bf-product-component="editor-breadcrumb" data-bf-product-part="itemText" className="editor-breadcrumb__item-text">
                     {pathSegment.name}
                   </span>
                 </span>

@@ -29,12 +29,12 @@
         white-space: pre-wrap !important;
         word-break: break-word !important;
         cursor: text;
-        font-family: var(--bf-appearance-token-font-family-mono) !important;
-        font-weight: 400 !important;
+        font-family:var(--bf-font-family-mono);
+        font-weight: var(--bf-font-weight-regular) !important;
 
         // Prism themes mark many tokens bold; match markdown body / code blocks (regular weight).
         span[style] {
-          font-weight: 400 !important;
+          font-weight: var(--bf-font-weight-regular) !important;
         }
         
         > span[style] {
@@ -73,14 +73,14 @@
     overflow: visible;
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-code-line-height);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-code-line-height);
 
     code {
       display: block;
       background: transparent;
-      font-family: inherit;
+      font-family:var(--bf-font-family-sans);
     }
   }
 
@@ -128,7 +128,7 @@
     justify-content: center;
     min-height: 60px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
     font-style: italic;
   }
   

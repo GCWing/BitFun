@@ -37,7 +37,7 @@ export const composerMeta = {
     "control.composer.toolbarGap",
     "control.composer.dividerBlockSize",
     "font.family.control",
-    "font.size.small",
+    "font.size.sm",
     "font.weight.regular",
     "shadow.composer",
   ],

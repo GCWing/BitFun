@@ -54,6 +54,18 @@ export {
   type ComposerProps,
 } from "./components/Composer";
 export {
+  Combobox,
+  ComboboxProvider,
+  type ComboboxLabels,
+  type ComboboxOption,
+  type ComboboxPlacement,
+  type ComboboxPopoverMode,
+  type ComboboxPortalTarget,
+  type ComboboxProps,
+  type ComboboxSize,
+  type ComboboxValue,
+} from "./components/Combobox";
+export {
   ConfirmDialog,
   ConfirmDialogProvider,
   type ConfirmDialogAction,
@@ -92,6 +104,17 @@ export {
 export { IconButton, type IconButtonProps } from "./components/IconButton";
 export { Input, type InputProps } from "./components/Input";
 export { KeyHint, type KeyHintProps } from "./components/KeyHint";
+export {
+  Listbox,
+  ListboxEmpty,
+  ListboxGroup,
+  ListboxOption,
+  type ListboxEmptyProps,
+  type ListboxGroupProps,
+  type ListboxOptionProps,
+  type ListboxProps,
+  type ListboxValue,
+} from "./components/Listbox";
 export { NumberInput, type NumberInputProps } from "./components/NumberInput";
 export {
   Menu,
@@ -206,4 +229,3 @@ export {
   type TokenOverrideName,
   type TokenOverrides,
 } from "./primitives/ThemeRoot";
-export { Combobox, ComboboxProvider, type ComboboxProps, type ComboboxOption, type ComboboxValue, type ComboboxLabels } from "./components/Combobox";

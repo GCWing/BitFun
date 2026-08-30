@@ -30,7 +30,7 @@ MAX_PIXELS = 50_000_000
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 REFERENCE_PATTERN = re.compile(
-    r"^globals\.(colors|lengths|numbers|durations|easings|fontFamilies|shadows)\.[a-z][a-zA-Z0-9.-]*$"
+    r"^globals\.(colors|lengths|numbers|durations|easings|shadows)\.[a-z][a-zA-Z0-9.-]*$"
 )
 ASSET_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_./-]*$")
 FORBIDDEN_RENDERER_TEXT = re.compile(r"(?:https?://|javascript:|data:|url\s*\(|</?[a-z]|[{};])", re.I)
@@ -60,8 +60,7 @@ STYLE_PROPERTIES = {
     "borderStyle", "borderRadius", "borderTopLeftRadius", "borderTopRightRadius",
     "borderBottomRightRadius", "borderBottomLeftRadius", "boxSizing", "outlineColor",
     "outlineWidth", "outlineOffset", "outlineStyle", "boxShadow", "opacity",
-    "fontFamily", "fontSize", "fontWeight", "lineHeight", "fontStyle",
-    "fontVariantNumeric", "letterSpacing", "textAlign", "verticalAlign", "textIndent",
+    "textAlign", "verticalAlign", "textIndent",
     "textDecoration", "textTransform", "textOverflow", "whiteSpace", "wordBreak",
     "overflowWrap", "display", "flexDirection", "flexWrap", "flexGrow", "flexShrink",
     "flexBasis", "alignItems", "alignContent", "alignSelf", "justifyContent",
@@ -86,8 +85,7 @@ PAINT_PROPERTIES = {
     "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderStyle",
     "borderRadius", "borderTopLeftRadius", "borderTopRightRadius",
     "borderBottomRightRadius", "borderBottomLeftRadius", "outlineColor", "outlineWidth",
-    "outlineOffset", "outlineStyle", "boxShadow", "opacity", "fontFamily", "fontSize",
-    "fontWeight", "fontStyle", "fontVariantNumeric", "lineHeight", "letterSpacing",
+    "outlineOffset", "outlineStyle", "boxShadow", "opacity",
     "textAlign", "verticalAlign", "textIndent", "textDecoration", "textTransform",
     "textOverflow", "whiteSpace", "wordBreak", "overflowWrap", "cursor", "transition",
     "transform", "filter", "backdropBlur", "objectFit", "objectPosition",
@@ -129,9 +127,9 @@ COLOR_PROPERTIES = {
 }
 LENGTH_PROPERTIES = {
     "borderWidth", "borderTopWidth", "borderRightWidth", "borderBottomWidth",
-    "borderLeftWidth", "borderRadius", "outlineWidth", "outlineOffset", "fontSize",
+    "borderLeftWidth", "borderRadius", "outlineWidth", "outlineOffset",
     "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius",
-    "borderBottomLeftRadius", "letterSpacing", "textIndent", "gap", "rowGap",
+    "borderBottomLeftRadius", "textIndent", "gap", "rowGap",
     "columnGap", "width", "minWidth", "maxWidth", "height", "minHeight", "maxHeight",
     "padding", "paddingBlock", "paddingInline", "paddingTop", "paddingRight",
     "paddingBottom", "paddingLeft", "margin", "marginBlock", "marginInline", "marginTop",
@@ -139,7 +137,7 @@ LENGTH_PROPERTIES = {
     "top", "right", "bottom", "left", "backdropBlur",
 }
 NUMBER_PROPERTIES = {
-    "opacity", "fontWeight", "lineHeight", "flexGrow", "flexShrink", "gridColumnSpan",
+    "opacity", "flexGrow", "flexShrink", "gridColumnSpan",
     "gridRowSpan", "zIndex", "order",
 }
 
@@ -150,8 +148,6 @@ ENUM_VALUES: dict[str, set[str]] = {
     "backgroundPosition": {"center", "top", "right", "bottom", "left"},
     "backgroundRepeat": {"repeat", "repeat-x", "repeat-y", "no-repeat"},
     "boxSizing": {"content-box", "border-box"},
-    "fontStyle": {"normal", "italic"},
-    "fontVariantNumeric": {"normal", "tabular-nums"},
     "textAlign": {"left", "center", "right", "start", "end"},
     "verticalAlign": {"baseline", "sub", "super", "text-top", "text-bottom", "middle", "top", "bottom"},
     "textDecoration": {"none", "underline", "line-through"},
@@ -330,7 +326,6 @@ class ManifestValidator:
             "numbers": self.validate_number,
             "durations": self.validate_duration,
             "easings": self.validate_easing,
-            "fontFamilies": self.validate_font_family,
             "shadows": self.validate_shadow,
         }
         for group, entries in value.items():
@@ -562,8 +557,6 @@ class ManifestValidator:
                 else:
                     for index, shadow in enumerate(prop_value):
                         self.validate_shadow(shadow, f"{prop_path}.{index}")
-            elif prop == "fontFamily":
-                self.validate_font_family(prop_value, prop_path)
             elif prop == "transition":
                 self.validate_transition(prop_value, prop_path)
             elif prop == "transform":
@@ -698,16 +691,6 @@ class ManifestValidator:
         if is_record(value) and value.get("kind") == "easing" and value.get("value") in ("linear", "standard", "decelerate", "accelerate"):
             return
         self.error(path, "INVALID_EASING", "Easing must be a supported structured easing value")
-
-    def validate_font_family(self, value: Any, path: str) -> None:
-        if self.validate_reference(value, "fontFamilies", path):
-            return
-        if not is_record(value) or value.get("kind") != "fontFamily" or not isinstance(value.get("families"), list) or not 1 <= len(value["families"]) <= 8:
-            self.error(path, "INVALID_FONT_FAMILY", "Font family must contain between 1 and 8 local family names")
-            return
-        for index, family in enumerate(value["families"]):
-            if not isinstance(family, str) or not re.fullmatch(r"[\w .-]{1,80}", family) or FORBIDDEN_RENDERER_TEXT.search(family):
-                self.error(f"{path}.families.{index}", "INVALID_FONT_FAMILY_NAME", "Invalid local font family name")
 
     def validate_shadow(self, value: Any, path: str) -> None:
         if self.validate_reference(value, "shadows", path) or (is_record(value) and value.get("kind") == "none"):
@@ -904,7 +887,7 @@ class ManifestValidator:
     def validate_xterm(self, settings: Mapping[str, Any]) -> list[str]:
         errors: list[str] = []
         for key in settings:
-            if key not in ("surfaces", "fontWeight", "fontWeightBold"):
+            if key != "surfaces":
                 errors.append(f"Unknown setting: {key}")
         surfaces = settings.get("surfaces")
         if not is_record(surfaces):
@@ -915,10 +898,6 @@ class ManifestValidator:
                     errors.append(f"Unknown xterm surface: {key}")
             errors.extend(self.validate_xterm_colors(surfaces.get("terminal"), "surfaces.terminal"))
             errors.extend(self.validate_xterm_colors(surfaces.get("output"), "surfaces.output"))
-        if settings.get("fontWeight") not in ("normal", "500"):
-            errors.append("fontWeight is invalid")
-        if settings.get("fontWeightBold") not in ("bold", "700"):
-            errors.append("fontWeightBold is invalid")
         return errors
 
     def validate_mermaid(self, settings: Mapping[str, Any]) -> list[str]:

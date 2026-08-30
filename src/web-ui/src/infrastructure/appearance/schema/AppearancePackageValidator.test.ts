@@ -3,6 +3,7 @@ import { createDefaultAppearanceRegistry } from '../registry/defaultAppearanceRe
 import type { AppearancePackage } from '../types';
 import { AppearancePackageValidationError } from './AppearancePackageValidationError';
 import { appearancePackageValidator, assertValidAppearancePackage } from './AppearancePackageValidator';
+import { migrateAppearancePackage } from './migrateAppearancePackage';
 
 function validPackage(): AppearancePackage {
   return {
@@ -101,6 +102,45 @@ describe('AppearancePackageValidator', () => {
     expect(result.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'UNKNOWN_SURFACE', path: 'components.private-widget' }),
     ]));
+  });
+
+  it('drops retired menu parts and states while preserving supported appearance rules', () => {
+    const legacy = validPackage() as unknown as Record<string, unknown>;
+    legacy.components = {
+      'branch-quick-switch': {
+        parts: {
+          root: {
+            base: { opacity: { kind: 'number', value: 1 } },
+            states: { selected: { opacity: { kind: 'number', value: 0.8 } } },
+            contexts: [{
+              when: { states: ['current'] },
+              style: { opacity: { kind: 'number', value: 0.9 } },
+            }],
+          },
+          item: { base: { opacity: { kind: 'number', value: 1 } } },
+        },
+      },
+      'context-menu': {
+        parts: {
+          root: {
+            base: { opacity: { kind: 'number', value: 1 } },
+            states: { disabled: { opacity: { kind: 'number', value: 0.5 } } },
+          },
+          submenu: { base: { opacity: { kind: 'number', value: 1 } } },
+        },
+      },
+    };
+
+    const migrated = migrateAppearancePackage(legacy);
+    const components = migrated.components as Record<string, {
+      parts: Record<string, Record<string, unknown>>;
+    }>;
+    expect(components['branch-quick-switch']?.parts.item).toBeUndefined();
+    expect(components['branch-quick-switch']?.parts.root?.states).toBeUndefined();
+    expect(components['branch-quick-switch']?.parts.root?.contexts).toBeUndefined();
+    expect(components['context-menu']?.parts.submenu).toBeUndefined();
+    expect(components['context-menu']?.parts.root?.states).toBeUndefined();
+    expect(appearancePackageValidator.validate(legacy, registry).valid).toBe(true);
   });
 
   it('keeps incompatible component contracts as grouped structured diagnostics', () => {

@@ -44,7 +44,7 @@ function DiagramShell({
       }}
     >
       {title ? (
-        <div style={{ marginBottom: 10, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 12, fontWeight: 650, lineHeight: 1.25 }}>
+        <div style={{ marginBottom: 10, color: 'var(--bf-appearance-token-color-text-primary)', fontSize: 'var(--bf-type-label-sm-font-size)', fontWeight: 'var(--bf-type-label-selected-font-weight)', lineHeight: 'var(--bf-type-label-sm-line-height)' }}>
           {title}
         </div>
       ) : null}
@@ -107,7 +107,7 @@ function renderGraphSvg({
                   y={(edge.sourceY + edge.targetY) / 2 - 4}
                   textAnchor="middle"
                   fill="var(--bf-appearance-token-color-text-muted)"
-                  fontSize={10}
+                  fontSize="var(--bf-type-micro-font-size)"
                 >
                   {String(meta.label).slice(0, 18)}
                 </text>
@@ -138,11 +138,11 @@ function renderGraphSvg({
               fill={color}
               opacity={0.78}
             />
-            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-appearance-token-color-text-primary)" fontSize={12} fontWeight={650}>
+            <text x={14} y={description ? 18 : layoutNode.height / 2 + 4} fill="var(--bf-appearance-token-color-text-primary)" fontSize="var(--bf-type-support-font-size)" fontWeight="var(--bf-font-weight-semibold)">
               {String(label).slice(0, 22)}
             </text>
             {description ? (
-              <text x={14} y={34} fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
+              <text x={14} y={34} fill="var(--bf-appearance-token-color-text-muted)" fontSize="var(--bf-type-micro-font-size)">
                 {String(description).slice(0, 26)}
               </text>
             ) : null}
@@ -177,7 +177,7 @@ export function DependencyGraph({
       {nodes.length ? (
         renderGraphSvg({ layout, nodes, edges: resolvedEdges, title: String(title || 'Dependency graph') })
       ) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>No graph nodes</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No graph nodes</div>
       )}
     </DiagramShell>
   );
@@ -238,7 +238,7 @@ export function FlowDiagram({
       {resolvedNodes.length ? (
         renderGraphSvg({ layout, nodes: resolvedNodes, edges: resolvedEdges, title: String(title || 'Flow diagram') })
       ) : (
-        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 12 }}>No flow steps</div>
+        <div style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No flow steps</div>
       )}
     </DiagramShell>
   );

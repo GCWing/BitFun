@@ -104,16 +104,16 @@
   }
   
   &__text {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-medium);
     white-space: nowrap;
     position: relative;
     z-index: 2;
   }
   
   &__progress {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     white-space: nowrap;
     position: relative;
     z-index: 2;

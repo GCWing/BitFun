@@ -12,8 +12,10 @@ import {
   Button,
   Icon,
   Input,
+  Listbox,
+  ListboxEmpty,
+  ListboxOption,
   Modal,
-  ScrollArea,
   SearchField,
 } from '@bitfun/ui';
 import { Loader2 } from 'lucide-react';
@@ -191,7 +193,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
 
   useEffect(() => {
     const items = listRef.current?.querySelectorAll<HTMLElement>(
-      '.branch-quick-switch__item',
+      '[data-bf-part="option"]',
     );
     const selectedItem = items?.[selectedIndex];
     if (typeof selectedItem?.scrollIntoView === 'function') {
@@ -413,8 +415,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     <div
       ref={panelRef}
       className="branch-quick-switch"
-      data-bf-component="branch-quick-switch"
-      data-bf-part="root"
+      data-bf-product-component="branch-quick-switch"
+      data-bf-product-part="root"
       data-bf-placement={popoverLayout?.placement ?? 'top'}
       data-testid="branch-quick-switch"
       role="dialog"
@@ -428,8 +430,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     >
       <div
         className="branch-quick-switch__search"
-        data-bf-component="branch-quick-switch"
-        data-bf-part="search"
+        data-bf-product-component="branch-quick-switch"
+        data-bf-product-part="search"
       >
         <SearchField
           ref={inputRef}
@@ -445,81 +447,64 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
           onCompositionEnd={() => {
             inputCompositionActiveRef.current = false;
           }}
-          data-bf-component="branch-quick-switch"
-          data-bf-part="input"
+          data-bf-product-component="branch-quick-switch"
+          data-bf-product-part="input"
         />
       </div>
-      <ScrollArea ref={listRef} className="branch-quick-switch__list">
+      <Listbox
+        ref={listRef}
+        aria-label={t('quickSwitch.menuLabel')}
+        className="branch-quick-switch__list"
+        focusMode="virtual"
+      >
         {isLoading && branches.length === 0 ? (
-          <div
+          <ListboxEmpty
             className="branch-quick-switch__loading"
-            data-bf-component="branch-quick-switch"
-            data-bf-part="loading"
+            data-bf-product-component="branch-quick-switch"
+            data-bf-product-part="loading"
           >
             <Loader2 size={16} className="branch-quick-switch__spinner" aria-hidden />
             <span>{t('quickSwitch.loading')}</span>
-          </div>
+          </ListboxEmpty>
         ) : loadFailed && branches.length === 0 ? (
-          <div
+          <ListboxEmpty
             className="branch-quick-switch__empty"
-            data-bf-component="branch-quick-switch"
-            data-bf-part="empty"
-            role="alert"
+            data-bf-product-component="branch-quick-switch"
+            data-bf-product-part="empty"
+            aria-live="polite"
           >
             {t('quickSwitch.errors.loadFailed')}
-          </div>
+          </ListboxEmpty>
         ) : filteredBranches.length === 0 ? (
-          <div
+          <ListboxEmpty
             className="branch-quick-switch__empty"
-            data-bf-component="branch-quick-switch"
-            data-bf-part="empty"
+            data-bf-product-component="branch-quick-switch"
+            data-bf-product-part="empty"
           >
             {searchTerm ? t('empty.noMatchingBranches') : t('empty.noBranches')}
-          </div>
+          </ListboxEmpty>
         ) : (
-          <div role="listbox" aria-label={t('quickSwitch.menuLabel')}>
-            {filteredBranches.map((branch, index) => (
-              <button
-                key={branch.name}
-                type="button"
-                role="option"
-                aria-selected={branch.current}
-                disabled={branch.current || isSwitching}
-                className={[
-                  'branch-quick-switch__item',
-                  branch.current && 'branch-quick-switch__item--current',
-                  index === selectedIndex && 'branch-quick-switch__item--selected',
-                  switchingBranch === branch.name && 'branch-quick-switch__item--switching',
-                ].filter(Boolean).join(' ')}
-                data-bf-component="branch-quick-switch"
-                data-bf-part="item"
-                data-bf-state={[
-                  branch.current && 'current',
-                  index === selectedIndex && 'selected',
-                ].filter(Boolean).join(' ') || undefined}
-                data-testid={`branch-quick-switch-option-${branch.name}`}
-                onClick={() => void handleSwitchBranch(branch.name)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                <Icon name="git" size="sm" className="branch-quick-switch__item-icon" aria-hidden />
-                <span
-                  className="branch-quick-switch__item-name"
-                  data-bf-component="branch-quick-switch"
-                  data-bf-part="itemName"
-                >
-                  {branch.name}
-                </span>
-                {branch.current ? (
-                  <Icon name="check-line" size="sm" className="branch-quick-switch__item-check" aria-hidden />
-                ) : null}
-                {switchingBranch === branch.name ? (
-                  <Loader2 size={14} className="branch-quick-switch__spinner" aria-hidden />
-                ) : null}
-              </button>
-            ))}
-          </div>
+          filteredBranches.map((branch, index) => (
+            <ListboxOption
+              active={index === selectedIndex}
+              className="branch-quick-switch__item"
+              data-index={index}
+              data-testid={`branch-quick-switch-option-${branch.name}`}
+              disabled={branch.current || isSwitching}
+              indicator={switchingBranch === branch.name
+                ? <Loader2 size={14} className="branch-quick-switch__spinner" aria-hidden />
+                : undefined}
+              key={branch.name}
+              leading={<Icon name="git" size="sm" aria-hidden />}
+              onClick={() => void handleSwitchBranch(branch.name)}
+              selected={branch.current}
+              value={branch.name}
+            >
+              {branch.name}
+            </ListboxOption>
+          ))
         )}
-      </ScrollArea>
+      </Listbox>
     </div>
   ) : null;
 

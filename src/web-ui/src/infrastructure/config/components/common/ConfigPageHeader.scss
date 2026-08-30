@@ -37,20 +37,20 @@
 
 .bitfun-config-page-header__title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--bf-font-size-4xl);
+  font-weight: var(--bf-font-weight-bold);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.25;
-  font-family: var(--bf-appearance-token-font-family-sans);
+  line-height: var(--bf-line-height-dense);
+  font-family:var(--bf-font-family-sans);
 }
 
 .bitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
-  font-size: var(--bf-appearance-token-font-size-lg);
+  font-size: var(--bf-font-size-lg);
   color: var(--bf-appearance-token-color-text-primary);
-  line-height: 1.35;
-  font-family: var(--bf-appearance-token-font-family-sans);
+  line-height: var(--bf-line-height-compact);
+  font-family:var(--bf-font-family-sans);
   max-width: 100%;
 }
 
@@ -83,11 +83,11 @@
   }
 
   .bitfun-config-page-header__title {
-    font-size: calc(var(--bf-appearance-token-font-size-lg) * 1.5);
+    font-size: var(--bf-font-size-3xl);
   }
 
   .bitfun-config-page-header__subtitle {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 }
 
@@ -135,12 +135,12 @@
   }
 
   .bitfun-config-page-header__title {
-    font-size: var(--bf-appearance-token-font-size-3xl);
+    font-size: var(--bf-font-size-3xl);
   }
 
   .bitfun-config-page-header__subtitle {
     margin-top: var(--bf-appearance-token-size-gap-1);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;

@@ -59,17 +59,17 @@
   }
 
   &__intro-title {
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.35;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-compact);
     color: var(--bf-appearance-token-color-text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: var(--bf-letter-spacing-snug);
   }
 
   &__intro-text,
   &__scope {
-    font-size: 12px;
-    line-height: 1.55;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-comfortable);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -93,8 +93,8 @@
   }
 
   &__intro-badge-label {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__empty {
@@ -107,8 +107,8 @@
     border-radius: 14px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 64%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     text-align: center;
   }
 
@@ -124,14 +124,14 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 12px;
-    font-weight: 650;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__section-description {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
   }
 
   &__external-section {
@@ -142,13 +142,13 @@
 
   &__read-only {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__diagnostics {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
 
     summary {
       cursor: pointer;
@@ -160,7 +160,7 @@
     }
 
     code {
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-family:var(--bf-font-family-mono);
       overflow-wrap: anywhere;
     }
   }
@@ -188,22 +188,22 @@
 
   &__external-alias {
     color: var(--bf-appearance-token-color-accent-500);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: 12px;
-    font-weight: 650;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__external-source {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: 11px;
+    font-size: var(--bf-font-size-meta);
   }
 
   &__external-path {
     overflow-wrap: anywhere;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: 11px;
-    line-height: 1.45;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
   }
 
   &__card-header {
@@ -221,9 +221,9 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 62%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-none);
   }
 
   &__remove {
@@ -271,7 +271,7 @@
     min-height: 64px;
     padding: 10px 12px;
     background: transparent;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     resize: none;
   }
 
@@ -281,8 +281,8 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
     color: color-mix(in srgb, var(--bf-appearance-token-color-error) 88%, var(--bf-appearance-token-color-text-primary));
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-support);
   }
 
   &__footer {

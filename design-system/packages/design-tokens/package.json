@@ -15,6 +15,10 @@
     },
     "./tokens.css": "./dist/tokens.css",
     "./tokens.json": "./dist/tokens.json",
+    "./typography-runtime": {
+      "types": "./dist/typography-runtime.d.ts",
+      "import": "./dist/typography-runtime.mjs"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": [

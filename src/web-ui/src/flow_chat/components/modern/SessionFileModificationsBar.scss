@@ -54,8 +54,8 @@
   }
 
   .file-count {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
   }
@@ -64,9 +64,9 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: $font-weight-medium;
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
+    font-family: var(--bf-font-family-mono);
 
     .stat-add {
       color: var(--bf-appearance-token-color-success);
@@ -157,7 +157,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-primary);
     cursor: pointer;
     transition: background-color $motion-fast $easing-standard;
@@ -198,7 +198,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
     }
 
     &__source {
@@ -210,9 +210,9 @@
       border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 18%, var(--bf-appearance-token-border-subtle));
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 9%, transparent);
       color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 72%, var(--bf-appearance-token-color-text-secondary));
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-      font-weight: $font-weight-semibold;
-      line-height: 1;
+      font-size: var(--bf-type-flow-micro-font-size);
+      font-weight: var(--bf-font-weight-semibold);
+      line-height: var(--bf-line-height-none);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -222,9 +222,9 @@
       align-items: center;
       gap: 6px;
       flex-shrink: 0;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: $font-weight-medium;
-      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-medium);
+      font-family: var(--bf-font-family-mono);
 
       .stat-add {
         color: var(--bf-appearance-token-color-success);
@@ -236,7 +236,7 @@
     }
 
     &__error {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
       color: var(--bf-appearance-token-color-error);
       font-style: italic;
     }
@@ -265,7 +265,7 @@
     align-items: center;
     justify-content: center;
     padding: 8px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     font-style: italic;
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 50%, transparent);

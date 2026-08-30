@@ -180,22 +180,22 @@
   &__zzz-glyph {
     fill: var(--bitfun-pet-decor);
     font-family:
-      'Comic Sans MS', 'Marker Felt', 'Trebuchet MS', system-ui, sans-serif;
-    font-weight: 700;
+      var(--bf-font-family-sans);
+    font-weight: var(--bf-font-weight-bold);
     opacity: 0;
 
     &--a {
-      font-size: 30px;
+      font-size: var(--bf-font-size-5xl);
       animation: bitfun-zzz-rise 6.8s ease-in-out infinite;
     }
 
     &--b {
-      font-size: 40px;
+      font-size: var(--bf-font-size-6xl);
       animation: bitfun-zzz-rise 6.8s ease-in-out -2.2s infinite;
     }
 
     &--c {
-      font-size: 54px;
+      font-size: var(--bf-font-size-8xl);
       animation: bitfun-zzz-rise 6.8s ease-in-out -4.4s infinite;
     }
   }

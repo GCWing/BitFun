@@ -14,7 +14,7 @@
     min-width: 0;
 
     .tool-name {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       white-space: nowrap;
       overflow: hidden;
@@ -23,7 +23,7 @@
   }
 
   .content-summary {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
@@ -53,9 +53,9 @@
     align-items: center;
     
     .error-text {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
       color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
     }
   }
 
@@ -74,8 +74,8 @@
         padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
         background: var(--bf-appearance-token-color-overlay-black-20);
         border-radius: 4px;
-        font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        font-size: var(--bf-type-flow-control-font-size);
+        line-height: var(--bf-type-flow-support-line-height);
         color: var(--bf-appearance-token-color-text-primary);
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -94,7 +94,7 @@
       gap: var(--bf-appearance-token-flowchat-control-gap);
       padding: var(--bf-appearance-token-size-gap-6);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+      font-size: var(--bf-type-flow-control-font-size);
     }
 
     .mcp-app-error {
@@ -116,20 +116,20 @@
       border-radius: 4px;
 
       .resource-name {
-        font-weight: 600;
+        font-weight: var(--bf-font-weight-semibold);
         color: var(--bf-appearance-token-color-text-primary);
         margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
       }
 
       .resource-uri {
-        font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+        font-size: var(--bf-type-flow-support-font-size);
         color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 70%, transparent);
-        font-family: monospace;
+        font-family: var(--bf-font-family-mono);
         margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
       }
 
       .resource-description {
-        font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+        font-size: var(--bf-type-flow-control-font-size);
         color: var(--bf-appearance-token-color-text-secondary);
       }
     }
@@ -141,7 +141,7 @@
 
     .error-message {
       color: color-mix(in srgb, var(--bf-appearance-token-color-error) 90%, transparent);
-      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+      font-size: var(--bf-type-flow-control-font-size);
     }
   }
 

@@ -10,8 +10,8 @@
 }
 
 .preview-container h1 {
-  font-size: 36px;
-  font-weight: 700;
+  font-size: var(--bf-font-size-5xl);
+  font-weight: var(--bf-font-weight-bold);
   margin-bottom: 40px;
   background: linear-gradient(135deg, var(--bf-appearance-token-color-accent-500) 0%, var(--bf-appearance-token-color-purple-500) 100%);
   -webkit-background-clip: text;
@@ -20,15 +20,15 @@
 }
 
 .preview-container h2 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-4xl);
+  font-weight: var(--bf-font-weight-semibold);
   margin-bottom: 20px;
   color: var(--bf-appearance-token-color-static-white);
 }
 
 .preview-container h3 {
-  font-size: 18px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-2xl);
+  font-weight: var(--bf-font-weight-medium);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 88%, var(--bf-appearance-token-color-static-black));
 }
 
@@ -42,7 +42,7 @@
 
 .preview-description {
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 63%, var(--bf-appearance-token-color-static-black));
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   margin-bottom: 24px;
   font-style: italic;
 }
@@ -74,8 +74,8 @@
 
 .preview-label {
   margin-top: 16px;
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
   color: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 60%, var(--bf-appearance-token-color-static-black));
-  font-weight: 500;
+  font-weight: var(--bf-font-weight-medium);
   text-transform: capitalize;
 }

@@ -35,9 +35,10 @@ test("KeyHint styles use shared primitive tokens", async () => {
   assert.match(styles, /--bf-color-key-hint-background/);
   assert.match(styles, /--bf-color-action-neutral-surface/);
   assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-font-family-control/);
+  assert.match(styles, /--bf-font-family-sans/);
   assert.match(styles, /--bf-font-size-micro/);
-  assert.match(styles, /--bf-font-size-caption/);
+  assert.match(styles, /--bf-letter-spacing-normal/);
+  assert.match(styles, /--bf-line-height-none/);
   assert.match(styles, /--bf-radius-xs/);
   assert.match(styles, /--bf-radius-sm/);
   assert.match(styles, /flex:\s*0 0 auto/);

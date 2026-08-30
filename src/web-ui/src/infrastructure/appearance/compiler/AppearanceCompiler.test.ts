@@ -910,7 +910,7 @@ describe('AppearanceCompiler', () => {
           parts: { root: { facets: { mood: { working: { backgroundColor: accent } } } } },
         },
         'file-mention-picker': {
-          parts: { item: { states: { selected: { backgroundColor: accent } } } },
+          parts: { root: { states: { loading: { backgroundColor: accent } } } },
         },
         'session-file-modifications-bar': {
           parts: { file: { facets: { operation: { edit: { borderColor: accent } } } } },
@@ -998,9 +998,9 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-bf-component="settings-nav"][data-bf-part="item"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="background-command-output-panel"][data-bf-part="root"][data-bf-state~="error"]');
     expect(snapshot.cssText).toContain('[data-bf-component="chat-input-pixel-pet"][data-bf-part="root"][data-bf-mood="working"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="file-mention-picker"][data-bf-part="item"][data-bf-state~="selected"]');
+    expect(snapshot.cssText).toContain('[data-bf-component="file-mention-picker"][data-bf-part="root"][data-bf-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-bf-component="session-file-modifications-bar"][data-bf-part="file"][data-bf-operation="edit"]');
-    expect(snapshot.cssText).toContain('[data-bf-component="editor-breadcrumb"][data-bf-part="item"][data-bf-state~="active"]');
+    expect(snapshot.cssText).toContain('[data-bf-product-component="editor-breadcrumb"][data-bf-product-part="item"][data-bf-state~="active"]');
     expect(snapshot.cssText).toContain('[data-bf-component="git-branch-history"][data-bf-part="commit"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="git-diff-view"][data-bf-part="file"][data-bf-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-bf-component="git-settings-view"][data-bf-part="status"][data-bf-state~="error"]');

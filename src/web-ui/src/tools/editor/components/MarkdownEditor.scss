@@ -81,7 +81,7 @@
 
     p {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
       color: var(--bf-appearance-token-color-text-secondary);
     }
 
@@ -91,42 +91,42 @@
 // Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared Sass values).
 .m-editor .markdown-body {
   color: var(--bf-appearance-token-color-text-secondary);
-  font-family: $font-family-sans;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  line-height: $line-height-relaxed;
+  font-family: var(--bf-font-family-sans);
+  font-size: var(--bf-font-size-sm);
+  line-height: var(--bf-line-height-relaxed);
 
   h1, h2, h3, h4, h5, h6 {
     margin-top: $size-gap-6;
     margin-bottom: $size-gap-4;
-    font-weight: $font-weight-semibold;
-    line-height: $line-height-tight;
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-tight);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   strong, b {
-    font-weight: $font-weight-bold;
+    font-weight: var(--bf-font-weight-bold);
     color: var(--bf-appearance-token-color-warning);
   }
 
   h1 {
-    font-size: var(--bf-appearance-token-font-size-3xl);
+    font-size: var(--bf-font-size-3xl);
     color: var(--bf-appearance-token-color-text-primary);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     padding-bottom: $size-gap-3;
     text-align: center;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   h2 {
-    font-size: var(--bf-appearance-token-font-size-2xl);
+    font-size: var(--bf-font-size-2xl);
     border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     padding-bottom: $size-gap-2;
   }
 
-  h3 { font-size: var(--bf-appearance-token-font-size-xl); }
-  h4 { font-size: var(--bf-appearance-token-font-size-lg); }
-  h5 { font-size: var(--bf-appearance-token-font-size-base); }
-  h6 { font-size: var(--bf-appearance-token-font-size-sm); }
+  h3 { font-size: var(--bf-font-size-xl); }
+  h4 { font-size: var(--bf-font-size-lg); }
+  h5 { font-size: var(--bf-font-size-base); }
+  h6 { font-size: var(--bf-font-size-sm); }
 
   p {
     margin-top: 0;
@@ -147,12 +147,12 @@
   code {
     padding: 0.1em 0.4em;
     margin: 0 0.05em;
-    font-size: 0.9em;
-    font-weight: 500;
-    line-height: 1.4;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    line-height: var(--bf-line-height-ui);
     vertical-align: baseline;
     white-space: nowrap;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     color: markdownCode.$inline-code-fg;
     background: markdownCode.$inline-code-bg;
     border: 1px solid markdownCode.$inline-code-border;
@@ -175,10 +175,10 @@
     margin: 0.25rem 0.3rem $size-gap-4;
     padding: markdownCode.$pre-padding;
     overflow: auto;
-    font-size: var(--bf-appearance-token-flowchat-code-font-size);
-    line-height: 1.5;
+    font-size: var(--bf-type-flow-code-font-size);
+    line-height: var(--bf-line-height-base);
     position: relative;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
     color: markdownCode.$pre-code-fg;
     background: markdownCode.$pre-bg;
     border: 1px dashed markdownCode.$pre-border;
@@ -200,8 +200,8 @@
       margin: 0;
       overflow: visible;
       white-space: pre;
-      font-family: var(--bf-appearance-token-font-family-mono);
-      font-size: var(--bf-appearance-token-flowchat-code-font-size);
+      font-family:var(--bf-font-family-mono);
+      font-size: var(--bf-type-flow-code-font-size);
       font-weight: inherit;
       line-height: inherit;
       word-wrap: normal;
@@ -264,7 +264,7 @@
     top: 0;
     width: markdownLayout.$list-marker-width;
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   > ul:not(.contains-task-list) > li::before {
@@ -312,7 +312,7 @@
     width: max-content;
     max-width: 100%;
     margin-bottom: $size-gap-4;
-    font-size: 0.85rem;
+    font-size: var(--bf-font-size-base);
     border: 1px solid markdownTable.$border;
     border-radius: var(--bf-appearance-token-flowchat-card-radius);
     background: markdownTable.$surface;
@@ -334,7 +334,7 @@
   }
 
   table th {
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     background: markdownTable.$th-bg;
     color: markdownTable.$th-fg;
   }
@@ -440,7 +440,7 @@
 
   summary {
     cursor: pointer;
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     list-style-position: outside;
 
@@ -496,7 +496,7 @@
 
   // KaTeX math formula styles
   .katex {
-    font-size: 1.1em;
+    font-size: var(--bf-font-size-lg);
   }
 
   .katex-display {

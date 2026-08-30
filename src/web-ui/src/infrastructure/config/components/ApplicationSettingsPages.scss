@@ -65,11 +65,11 @@
     background: transparent;
     border: 1px dashed var(--bf-appearance-token-border-base);
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: 12px;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     word-break: break-all;
     overflow-wrap: anywhere;
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     user-select: text;
   }
 }
@@ -105,13 +105,13 @@
   }
 
   &__shell-tooltip-name {
-    font-weight: var(--bf-appearance-token-font-weight-medium);
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__shell-tooltip-path {
     margin-top: 4px;
     overflow-wrap: anywhere;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-family:var(--bf-font-family-mono);
   }
 
   &__no-shells {
@@ -120,6 +120,6 @@
     border: 1px dashed var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 }

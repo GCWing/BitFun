@@ -19,8 +19,8 @@
 
 .explore-region--collapsible {
   margin: 0 0 0.3rem 0;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 
   .explore-region__header {
     display: flex;
@@ -28,8 +28,8 @@
     gap: 4px;
     padding: 0;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     cursor: pointer;
     user-select: none;
     border-radius: var(--bf-appearance-token-size-radius-sm);
@@ -50,8 +50,8 @@
   }
 
   .explore-region__summary {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     opacity: 0.8;
   }
 

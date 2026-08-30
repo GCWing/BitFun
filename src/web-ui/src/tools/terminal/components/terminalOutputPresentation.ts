@@ -1,6 +1,14 @@
-export const TERMINAL_OUTPUT_FONT_SIZE = 12;
-export const TERMINAL_OUTPUT_LINE_HEIGHT = 1.4;
-export const TERMINAL_OUTPUT_FONT_FAMILY = "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace";
+import {
+  getTypographyTokenNumber,
+  getTypographyTokenPx,
+  getTypographyTokenValue,
+} from '@/infrastructure/design-system/typographyRuntime';
+
+export const TERMINAL_OUTPUT_FONT_SIZE = getTypographyTokenPx('font.size.xs');
+export const TERMINAL_OUTPUT_LINE_HEIGHT = getTypographyTokenNumber('lineHeight.ui');
+export const TERMINAL_OUTPUT_FONT_FAMILY = getTypographyTokenValue('font.family.mono');
+export const TERMINAL_OUTPUT_FONT_WEIGHT = getTypographyTokenNumber('font.weight.regular');
+export const TERMINAL_OUTPUT_FONT_WEIGHT_BOLD = getTypographyTokenNumber('font.weight.bold');
 
 const DEFAULT_OUTPUT_ROW_HEIGHT = Math.ceil(
   TERMINAL_OUTPUT_FONT_SIZE * TERMINAL_OUTPUT_LINE_HEIGHT,

@@ -2,28 +2,27 @@
  * FlowTextBlock styles
  */
 @use '../../component-library/styles/markdown-layout' as markdown;
-@use '../typography' as flow-type;
 
 .flow-text-block {
   width: 100%;
   margin: 0 0 var(--bf-appearance-token-flowchat-flow-item-gap) 0;
-  font-size: var(--bf-appearance-token-flowchat-font-size-base);
-  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  font-size: var(--bf-type-flow-body-font-size);
+  line-height: var(--bf-type-flow-body-line-height);
   /* Transparent border to match the box-sizing of bordered FlowChat cards,
    * TerminalRegion, etc.) so that text and card content share the same left edge. */
   border: 1px solid transparent;
   box-sizing: border-box;
 
   .markdown-renderer {
-    --markdown-font-size: var(--bf-appearance-token-flowchat-font-size-base);
-    --markdown-font-size-sm: var(--bf-appearance-token-flowchat-font-size-sm);
-    --markdown-code-font-size: var(--bf-appearance-token-flowchat-code-font-size);
-    --markdown-line-height: var(--bf-appearance-token-flowchat-text-line-height);
+    --markdown-font-size: var(--bf-type-flow-body-font-size);
+    --markdown-font-size-sm: var(--bf-type-flow-control-font-size);
+    --markdown-code-font-size: var(--bf-type-flow-code-font-size);
+    --markdown-line-height: var(--bf-type-flow-body-line-height);
     --markdown-block-gap: #{markdown.$block-gap};
     --markdown-paragraph-gap: #{markdown.$paragraph-gap};
 
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
-    line-height: var(--bf-appearance-token-flowchat-text-line-height);
+    font-size: var(--bf-type-flow-body-font-size);
+    line-height: var(--bf-type-flow-body-line-height);
   }
 
   /* Keep all rendered link variants (anchors and button-like local links) visibly link-blue. */
@@ -58,11 +57,11 @@
   .markdown-renderer .code-block-wrapper pre[style],
   .markdown-renderer .code-block-wrapper code[style],
   .markdown-renderer pre code {
-    font-size: var(--bf-appearance-token-flowchat-code-font-size) !important;
+    font-size: var(--bf-type-flow-code-font-size) !important;
   }
 
   .markdown-renderer .table-wrapper table {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   /* Inline `code`: no chip background in chat (code blocks unchanged). */
@@ -70,7 +69,7 @@
     background: transparent;
     border: none;
     padding: 0.1em 0.2em;
-    font-size: flow-type.$control-size;
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   .markdown-renderer .inline-code:hover {
@@ -85,8 +84,8 @@
   }
 
   .markdown-renderer .code-block-lang {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-micro-font-size);
+    line-height: var(--bf-type-flow-meta-line-height);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button {
@@ -122,7 +121,7 @@
 
   .text-content {
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: var(--bf-appearance-token-flowchat-text-line-height);
+    line-height: var(--bf-type-flow-body-line-height);
     white-space: pre-wrap;
     word-wrap: break-word;
   }
@@ -139,8 +138,8 @@
     gap: var(--bf-appearance-token-flowchat-control-gap);
     min-height: 1.5rem;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-body-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     opacity: 0.86;
   }
 }

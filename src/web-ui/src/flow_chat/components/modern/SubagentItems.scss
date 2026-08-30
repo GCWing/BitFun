@@ -45,11 +45,11 @@
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
 
     .markdown-renderer,
     .text-content {
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
 
     .markdown-renderer {
@@ -75,7 +75,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 0;
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -84,7 +84,7 @@
     border: none;
     color: var(--bf-appearance-token-flowchat-link-color);
     cursor: pointer;
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    font-size: var(--bf-type-flow-control-font-size);
     padding: 0;
 
     &:hover {

@@ -11,7 +11,7 @@ $opacity-high: 0.8 !default;
   height: 100%;
   background: var(--bf-appearance-token-color-bg-primary);
   color: var(--bf-appearance-token-color-text-primary);
-  font-family: $font-family-sans;
+  font-family: var(--bf-font-family-sans);
 
   &__header {
     display: flex;
@@ -29,8 +29,8 @@ $opacity-high: 0.8 !default;
 
     h3 {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-lg);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-lg);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
     }
   }
@@ -46,7 +46,7 @@ $opacity-high: 0.8 !default;
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-4;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     position: relative;
 
     &--success {
@@ -69,8 +69,8 @@ $opacity-high: 0.8 !default;
     cursor: pointer;
     padding: 0 $size-gap-2;
     margin-left: auto;
-    font-size: var(--bf-appearance-token-font-size-xl);
-    line-height: 1;
+    font-size: var(--bf-font-size-xl);
+    line-height: var(--bf-line-height-none);
     opacity: $opacity-secondary;
     transition: opacity $motion-fast $easing-standard;
 
@@ -112,13 +112,13 @@ $opacity-high: 0.8 !default;
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   &__form-description {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     margin-top: -$size-gap-1;
   }
@@ -129,8 +129,8 @@ $opacity-high: 0.8 !default;
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-family: $font-family-mono;
+    font-size: var(--bf-font-size-sm);
+    font-family: var(--bf-font-family-mono);
     transition:
       background-color $motion-fast $easing-standard,
       border-color $motion-fast $easing-standard;
@@ -157,7 +157,7 @@ $opacity-high: 0.8 !default;
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     cursor: pointer;
     transition:
       background-color $motion-fast $easing-standard,
@@ -190,7 +190,7 @@ $opacity-high: 0.8 !default;
 
     label {
       margin: 0;
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
       color: var(--bf-appearance-token-color-text-primary);
       cursor: pointer;
       user-select: none;
@@ -215,14 +215,14 @@ $opacity-high: 0.8 !default;
   }
 
   &__section-title {
-    font-size: var(--bf-appearance-token-font-size-base);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-base);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     margin: 0;
   }
 
   &__section-description {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
     margin-top: $size-gap-1;
   }
@@ -253,17 +253,17 @@ $opacity-high: 0.8 !default;
   }
 
   &__config-key {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     margin-bottom: $size-gap-1;
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
   }
 
   &__config-value {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: $font-family-mono;
+    font-family: var(--bf-font-family-mono);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -287,14 +287,14 @@ $opacity-high: 0.8 !default;
     color: var(--bf-appearance-token-color-text-secondary);
 
     h3 {
-      font-size: var(--bf-appearance-token-font-size-lg);
-      font-weight: $font-weight-medium;
+      font-size: var(--bf-font-size-lg);
+      font-weight: var(--bf-font-weight-medium);
       margin: $size-gap-4 0 $size-gap-2 0;
       color: var(--bf-appearance-token-color-text-primary);
     }
 
     p {
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
       margin-bottom: $size-gap-4;
     }
   }
@@ -304,7 +304,7 @@ $opacity-high: 0.8 !default;
   }
 
   &__error-message {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-error);
     margin-bottom: $size-gap-4;
   }

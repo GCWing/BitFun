@@ -7,7 +7,7 @@
   border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
   background: var(--bf-appearance-token-element-bg-medium);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: var(--bf-type-flow-support-font-size);
 
   &__header {
     display: flex;
@@ -17,9 +17,9 @@
 
   &__title {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
-    font-weight: 600;
-    letter-spacing: 0.4px;
+    font-size: var(--bf-type-flow-meta-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wide);
     text-transform: uppercase;
   }
 
@@ -76,7 +76,7 @@
   }
 
   &__content {
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     word-break: break-word;
   }
 }

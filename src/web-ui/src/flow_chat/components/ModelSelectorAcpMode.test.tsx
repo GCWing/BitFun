@@ -243,8 +243,7 @@ describe('ModelSelector ACP mode picker', () => {
     expect(options[0]?.disabled).toBe(true);
     // The row itself stays a bare mode name; the reason is hover-only.
     expect(options[0]?.textContent).toBe('Standard');
-    expect(options[0]?.closest('[data-tooltip]')?.getAttribute('data-tooltip'))
-      .toContain('already started');
+    expect(options[0]?.getAttribute('title')).toContain('already started');
 
     await act(async () => {
       options[0]?.click();

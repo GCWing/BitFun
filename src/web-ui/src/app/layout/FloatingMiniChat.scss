@@ -336,8 +336,8 @@ $panel-height: 680px;
   border: none;
   background: transparent;
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-xs);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   border-radius: 6px;
   transition: background 0.15s ease;
@@ -401,7 +401,7 @@ $panel-height: 680px;
   gap: 8px;
   padding: 24px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
   text-align: center;
 }
 
@@ -433,10 +433,10 @@ $panel-height: 680px;
   h2 {
     max-width: 420px;
     margin: 8px 0 0;
-    font-size: 23px;
-    font-weight: var(--bf-appearance-token-font-weight-semibold);
-    line-height: 1.25;
-    letter-spacing: -0.02em;
+    font-size: var(--bf-font-size-3xl);
+    font-weight: var(--bf-font-weight-semibold);
+    line-height: var(--bf-line-height-dense);
+    letter-spacing: var(--bf-letter-spacing-tight);
   }
 }
 
@@ -456,17 +456,17 @@ $panel-height: 680px;
 .bitfun-fmc__miniapp-welcome-eyebrow {
   margin-top: 18px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-  font-weight: var(--bf-appearance-token-font-weight-medium);
-  letter-spacing: 0.04em;
+  font-size: var(--bf-type-flow-support-font-size);
+  font-weight: var(--bf-font-weight-medium);
+  letter-spacing: var(--bf-letter-spacing-wider);
 }
 
 .bitfun-fmc__miniapp-welcome-description {
   max-width: 420px;
   margin: 12px 0 0;
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: 1.6;
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-line-height-relaxed);
 }
 
 .bitfun-fmc__miniapp-workspace {
@@ -481,7 +481,7 @@ $panel-height: 680px;
   border-radius: var(--bf-appearance-token-size-radius-base);
   background: var(--bf-appearance-token-element-bg-subtle);
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: var(--bf-type-flow-support-font-size);
 
   span {
     min-width: 0;
@@ -499,7 +499,7 @@ $panel-height: 680px;
 .bitfun-fmc__miniapp-suggestions-label {
   margin-bottom: 8px;
   color: var(--bf-appearance-token-color-text-muted);
-  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-size: var(--bf-type-flow-support-font-size);
 }
 
 .bitfun-fmc__miniapp-suggestions-list {
@@ -521,8 +521,8 @@ $panel-height: 680px;
   background: var(--bf-appearance-token-element-bg-subtle);
   color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: 1.35;
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-line-height-compact);
   text-align: left;
   cursor: pointer;
   transition:

@@ -12,7 +12,7 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, var(--bf-appearance-token-color-warning));
   color: var(--bf-appearance-token-color-text-primary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  font-size: var(--bf-type-flow-control-font-size);
   animation: bitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &__request {
@@ -29,7 +29,7 @@
 
   &__action {
     flex: none;
-    font-weight: 600;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   &__separator {
@@ -51,7 +51,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -63,15 +63,15 @@
     border-radius: 8px;
     color: var(--bf-appearance-token-color-static-white);
     background: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 700;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-bold);
     cursor: default;
   }
 
   &__note {
     margin: 0;
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
 
     &--error {
       color: var(--bf-appearance-token-color-error);
@@ -106,7 +106,7 @@
     border-radius: 5px;
     color: var(--bf-appearance-token-color-text-secondary);
     background: transparent;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     cursor: pointer;
 
     &--active {

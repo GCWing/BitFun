@@ -108,7 +108,7 @@ function renderErrorPanel(error: unknown): void {
   }
 
   rootElement.innerHTML =
-    '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--bf-appearance-token-border-base);border-radius:8px"><h1 style="font-size:18px;margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
+    '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--bf-appearance-token-border-base);border-radius:8px"><h1 style="font-size:var(--bf-type-heading-page-font-size);font-weight:var(--bf-type-heading-page-font-weight);line-height:var(--bf-type-heading-page-line-height);margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
   const pre = rootElement.querySelector('pre');
   if (pre) pre.textContent = errorText(error);
 }

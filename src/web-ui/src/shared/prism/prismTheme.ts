@@ -54,7 +54,7 @@ export function buildSharedPrismStyle(
     function: { color: colors.functionName },
     className: { color: colors.functionName },
     regex: { color: colors.string },
-    important: { color: colors.keyword, fontWeight: 600 },
+    important: { color: colors.keyword, fontWeight: 'var(--bf-font-weight-semibold)' },
     variable: { color: colors.property },
     deleted: { color: colors.keyword },
   };

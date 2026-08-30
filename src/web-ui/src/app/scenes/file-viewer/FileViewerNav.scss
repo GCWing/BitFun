@@ -68,8 +68,8 @@
     background: var(--bf-appearance-token-element-bg-soft);
     margin: 0 $size-gap-2;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: 500;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     flex-shrink: 0;
   }
 
@@ -85,7 +85,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
   }
 
   &__actions {

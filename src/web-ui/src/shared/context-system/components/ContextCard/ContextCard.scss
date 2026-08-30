@@ -111,8 +111,8 @@
   }
   
   &__title {
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     display: flex;
     align-items: center;
@@ -125,7 +125,7 @@
   }
   
   &__subtitle {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     display: flex;
     align-items: center;
@@ -144,8 +144,8 @@
     display: inline-flex;
     align-items: center;
     padding: 2px 6px;
-    font-size: 11px;
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     background: var(--bf-appearance-token-element-bg-medium);
     border-radius: $size-radius-sm;
@@ -166,9 +166,9 @@
   }
   
   &__code {
-    font-family: $font-family-mono;
-    font-size: 12px;
-    line-height: 1.5;
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-base);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
@@ -228,7 +228,7 @@
     align-items: center;
     gap: $size-gap-1;
     padding: $size-gap-2;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     border-radius: $size-radius-sm;
     margin-top: $size-gap-2;
     
@@ -238,7 +238,7 @@
     
     span {
       flex: 1;
-      line-height: 1.4;
+      line-height: var(--bf-line-height-ui);
     }
   }
   
@@ -290,7 +290,7 @@
     }
     
     .bitfun-context-card__title {
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
     
     .bitfun-context-card__preview,

@@ -68,7 +68,7 @@
   &__message {
     p {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--bf-font-size-xl);
       color: var(--bf-appearance-token-color-text-secondary);
     }
   }

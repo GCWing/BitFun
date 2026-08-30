@@ -34,16 +34,16 @@
 
 .large-card-title {
   margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--bf-font-size-3xl);
+  font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-appearance-token-color-text-primary);
 }
 
 .large-card-description {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--bf-font-size-base);
   color: var(--bf-appearance-token-color-text-muted);
-  line-height: 1.5;
+  line-height: var(--bf-line-height-base);
 }
 
 .expand-button {
@@ -52,8 +52,8 @@
   border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
   color: var(--bf-appearance-token-color-accent-400);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-medium);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;

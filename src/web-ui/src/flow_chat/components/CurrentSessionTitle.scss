@@ -17,8 +17,8 @@
   position: relative;
 
   &__text {
-    font-size: var(--bf-appearance-token-flowchat-font-size-base);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-type-flow-body-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;

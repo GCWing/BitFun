@@ -1,25 +1,56 @@
-import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
+import {
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
-import { Icon } from "../Icon";
-import { IconButton } from "../IconButton";
-import { SearchField } from "../SearchField";
-import { ScrollArea } from "../ScrollArea";
+import { Check, ChevronDown, LoaderCircle, Plus, X } from "lucide-react";
 import { classNames } from "../../internal/classNames";
-import { isImeOwnedKeyboardEvent } from "../../internal/ime";
-import { resolveLayerPortal, useAnchoredLayer, type PortalTarget } from "../../internal/useAnchoredLayer";
+import { IconButton } from "../IconButton";
+import {
+  Listbox,
+  ListboxEmpty,
+  ListboxGroup,
+  ListboxOption,
+  type ListboxValue,
+} from "../Listbox";
+import { SearchField } from "../SearchField";
+import {
+  resolveLayerPortal,
+  useAnchoredLayer,
+  type PortalTarget,
+} from "../../internal/useAnchoredLayer";
 import styles from "./Combobox.module.css";
 
-export type ComboboxValue = string | number | (string | number)[];
+export type ComboboxValue = ListboxValue;
+export type ComboboxSize = "sm" | "md" | "lg";
+export type ComboboxPlacement = "top" | "bottom";
+export type ComboboxPopoverMode = "overlay" | "inline";
+export type ComboboxPortalTarget = PortalTarget;
+
 export interface ComboboxOption {
-  label: string;
-  value: string | number;
+  description?: ReactNode;
   disabled?: boolean;
-  description?: string;
-  icon?: ReactNode;
   group?: string;
-  testId?: string;
+  /** Compatibility alias for `leading`. */
+  icon?: ReactNode;
+  label: string;
+  leading?: ReactNode;
+  metadata?: ReactNode;
   testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
+  testId?: string;
+  value: ComboboxValue;
 }
+
 export interface ComboboxLabels {
   placeholder: string;
   search: string;
@@ -29,211 +60,799 @@ export interface ComboboxLabels {
   selectAll: string;
   create: string;
 }
-const defaultLabels: ComboboxLabels = { placeholder: "Select…", search: "Search options", empty: "No options", loading: "Loading…", clear: "Clear selection", selectAll: "Select all", create: "Add value" };
-const ComboboxContext = createContext<{ labels: ComboboxLabels; portalContainer?: PortalTarget }>({ labels: defaultLabels });
-export function ComboboxProvider({ children, labels, portalContainer }: { children: ReactNode; labels?: Partial<ComboboxLabels>; portalContainer?: PortalTarget }) {
-  return <ComboboxContext.Provider value={{ labels: { ...defaultLabels, ...labels }, portalContainer }}>{children}</ComboboxContext.Provider>;
+
+const defaultLabels: ComboboxLabels = {
+  placeholder: "Select an option",
+  search: "Search options",
+  empty: "No options",
+  loading: "Loading",
+  clear: "Clear selection",
+  selectAll: "Select all",
+  create: "Use custom value",
+};
+
+const ComboboxContext = createContext<{
+  labels: ComboboxLabels;
+  portalContainer?: ComboboxPortalTarget;
+}>({ labels: defaultLabels });
+
+export function ComboboxProvider({
+  children,
+  labels,
+  portalContainer,
+}: {
+  children: ReactNode;
+  labels?: Partial<ComboboxLabels>;
+  portalContainer?: ComboboxPortalTarget;
+}) {
+  const value = useMemo(() => ({
+    labels: { ...defaultLabels, ...labels },
+    portalContainer,
+  }), [labels, portalContainer]);
+  return <ComboboxContext.Provider value={value}>{children}</ComboboxContext.Provider>;
 }
 
-export interface ComboboxProps extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
-  required?: boolean;
+export interface ComboboxProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
+  allowCustomValue?: boolean;
+  autoClose?: boolean;
+  clearLabel?: string;
+  clearable?: boolean;
+  customValueHint?: ReactNode | ((value: string) => ReactNode);
   defaultOpen?: boolean;
   defaultSearchValue?: string;
-  options?: readonly ComboboxOption[];
-  value?: ComboboxValue;
-  defaultValue?: ComboboxValue;
-  onChange?: (value: ComboboxValue) => void;
-  placeholder?: string;
-  label?: string;
+  defaultValue?: ComboboxValue | ComboboxValue[];
   disabled?: boolean;
-  multiple?: boolean;
-  searchable?: boolean;
-  clearable?: boolean;
-  showSelectAll?: boolean;
-  loading?: boolean;
+  /** Compatibility alias for `popoverMode`. */
+  dropdownMode?: ComboboxPopoverMode;
+  /** Compatibility alias for `matchTriggerWidth`. */
+  dropdownMatchTriggerWidth?: boolean;
+  dropdownClassName?: string;
+  dropdownTestId?: string;
+  emptyText?: ReactNode;
+  /** Compatibility alias for `invalid`. */
   error?: boolean;
-  errorMessage?: string;
-  size?: "sm" | "md" | "lg" | "small" | "medium" | "large";
+  errorMessage?: ReactNode;
+  filterOption?: (option: ComboboxOption, query: string) => boolean;
+  invalid?: boolean;
+  label?: ReactNode;
+  loading?: boolean;
+  loadingText?: ReactNode;
+  matchTriggerWidth?: boolean;
   maxTagCount?: number;
-  searchPlaceholder?: string;
-  emptyText?: string;
+  multiple?: boolean;
+  /** Compatibility callback retained while consumers migrate to `onValueChange`. */
+  onChange?: (value: ComboboxValue | ComboboxValue[]) => void;
+  onOpenChange?: (open: boolean) => void;
+  onValueChange?: (value: ComboboxValue | ComboboxValue[]) => void;
+  open?: boolean;
+  options?: readonly ComboboxOption[];
+  placement?: ComboboxPlacement;
+  placeholder?: ReactNode;
+  popoverMode?: ComboboxPopoverMode;
+  portalContainer?: ComboboxPortalTarget;
   renderOption?: (option: ComboboxOption) => ReactNode;
   renderValue?: (option?: ComboboxOption | ComboboxOption[]) => ReactNode;
-  placement?: "top" | "bottom";
-  autoClose?: boolean;
-  allowCustomValue?: boolean;
-  customValueHint?: string;
-  indicator?: ReactNode;
-  onOpenChange?: (open: boolean) => void;
-  triggerTestId?: string;
-  dropdownTestId?: string;
+  required?: boolean;
+  searchPlaceholder?: string;
+  searchable?: boolean;
+  selectAllLabel?: ReactNode;
+  showSelectAll?: boolean;
+  size?: ComboboxSize | "small" | "medium" | "large";
+  triggerAriaDescribedBy?: string;
   triggerAriaLabel?: string;
   triggerAriaLabelledBy?: string;
-  triggerAriaDescribedBy?: string;
-  dropdownClassName?: string;
-  dropdownMode?: "overlay" | "inline";
-  dropdownMatchTriggerWidth?: boolean;
-  portalContainer?: PortalTarget;
+  triggerClassName?: string;
+  triggerTestId?: string;
+  value?: ComboboxValue | ComboboxValue[];
+  /** Optional custom suffix retained for existing public consumers. */
+  indicator?: ReactNode;
 }
 
-/** Searchable single/multiple selection. Data, async discovery and copy remain host-owned. */
-export function Combobox({
-  options = [], value, defaultValue, onChange, placeholder, label, disabled = false, required = false, id: providedId, defaultOpen = false, defaultSearchValue = "",
-  multiple = false, searchable = true, clearable = false, showSelectAll = false,
-  loading = false, error = false, errorMessage, size = "md", maxTagCount = 3,
-  searchPlaceholder, emptyText, renderOption, renderValue, placement = "bottom",
-  autoClose = false, allowCustomValue = false, customValueHint, indicator, onOpenChange,
-  triggerTestId, dropdownTestId, triggerAriaLabel, triggerAriaLabelledBy, triggerAriaDescribedBy,
-  dropdownClassName, dropdownMode = "overlay", dropdownMatchTriggerWidth = true,
-  portalContainer, className, ...props
-}: ComboboxProps) {
+type NavigationItem =
+  | { kind: "all" }
+  | { kind: "custom"; value: string }
+  | { kind: "option"; option: ComboboxOption };
+
+function isImeOwnedKeyboardEvent(event: ReactKeyboardEvent) {
+  const nativeEvent = event.nativeEvent as KeyboardEvent;
+  return nativeEvent.isComposing || nativeEvent.keyCode === 229;
+}
+
+function optionMatches(option: ComboboxOption, query: string) {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+  return option.label.toLocaleLowerCase().includes(normalizedQuery)
+    || String(option.value).toLocaleLowerCase().includes(normalizedQuery)
+    || (typeof option.description === "string"
+      && option.description.toLocaleLowerCase().includes(normalizedQuery));
+}
+
+function valuesFrom(value: ComboboxProps["value"], multiple: boolean): ComboboxValue[] {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === "") return [];
+  return multiple ? [value] : [value];
+}
+
+function firstEnabledIndex(items: readonly NavigationItem[], direction: 1 | -1) {
+  if (items.length === 0) return -1;
+  let index = direction === 1 ? 0 : items.length - 1;
+  while (index >= 0 && index < items.length) {
+    const item = items[index];
+    if (item?.kind !== "option" || !item.option.disabled) return index;
+    index += direction;
+  }
+  return -1;
+}
+
+export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combobox({
+  allowCustomValue = false,
+  autoClose,
+  className,
+  clearLabel: clearLabelProp,
+  clearable = false,
+  customValueHint: customValueHintProp,
+  defaultOpen = false,
+  defaultSearchValue = "",
+  defaultValue,
+  id: providedId,
+  "aria-describedby": rootAriaDescribedBy,
+  "aria-invalid": rootAriaInvalid,
+  "aria-label": rootAriaLabel,
+  "aria-labelledby": rootAriaLabelledBy,
+  disabled = false,
+  dropdownMode,
+  dropdownMatchTriggerWidth,
+  dropdownClassName,
+  dropdownTestId,
+  emptyText: emptyTextProp,
+  error = false,
+  errorMessage,
+  filterOption = optionMatches,
+  invalid: invalidProp = false,
+  indicator,
+  label,
+  loading = false,
+  loadingText: loadingTextProp,
+  matchTriggerWidth: matchTriggerWidthProp,
+  maxTagCount = 3,
+  multiple = false,
+  onChange,
+  onOpenChange,
+  onValueChange,
+  open,
+  options: optionsProp = [],
+  placement = "bottom",
+  placeholder: placeholderProp,
+  popoverMode: popoverModeProp,
+  portalContainer: portalContainerProp,
+  renderOption,
+  renderValue,
+  required = false,
+  searchPlaceholder: searchPlaceholderProp,
+  searchable = true,
+  selectAllLabel: selectAllLabelProp,
+  showSelectAll = false,
+  size: sizeProp = "md",
+  triggerAriaDescribedBy,
+  triggerAriaLabel,
+  triggerAriaLabelledBy,
+  triggerClassName,
+  triggerTestId,
+  value,
+  ...rootProps
+}, forwardedRef) {
   const context = useContext(ComboboxContext);
-  const labels = context.labels;
+  const clearLabel = clearLabelProp ?? context.labels.clear;
+  const customValueHint = customValueHintProp ?? context.labels.create;
+  const emptyText = emptyTextProp ?? context.labels.empty;
+  const invalid = invalidProp || error
+    || rootAriaInvalid === true
+    || rootAriaInvalid === "true";
+  const loadingText = loadingTextProp ?? context.labels.loading;
+  const matchTriggerWidth = matchTriggerWidthProp ?? dropdownMatchTriggerWidth ?? true;
+  const options = optionsProp;
+  const placeholder = placeholderProp ?? context.labels.placeholder;
+  const popoverMode = popoverModeProp ?? dropdownMode ?? "overlay";
+  const portalContainer = portalContainerProp ?? context.portalContainer;
+  const searchPlaceholder = searchPlaceholderProp ?? context.labels.search;
+  const selectAllLabel = selectAllLabelProp ?? context.labels.selectAll;
+  const size: ComboboxSize = sizeProp === "small"
+    ? "sm"
+    : sizeProp === "medium"
+      ? "md"
+      : sizeProp === "large"
+        ? "lg"
+        : sizeProp;
   const generatedId = useId();
   const id = providedId ?? `bf-combobox-${generatedId}`;
-  const invalid = error || props['aria-invalid'] === true || props['aria-invalid'] === 'true';
-  const listId = `${id}-list`;
-  const rootRef = useRef<HTMLDivElement>(null);
-  const controlRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const composing = useRef(false);
-  const [mounted, setMounted] = useState(false);
-  useLayoutEffect(() => setMounted(true), []);
-  const [open, setOpen] = useState(defaultOpen && !disabled);
+  const labelId = `${id}-label`;
+  const listboxId = `${id}-listbox`;
+  const errorId = `${id}-error`;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(
+    defaultOpen && !disabled,
+  );
+  const [uncontrolledValue, setUncontrolledValue] = useState<ComboboxValue | ComboboxValue[]>(
+    defaultValue ?? (multiple ? [] : ""),
+  );
   const [query, setQuery] = useState(defaultSearchValue);
-  const [active, setActive] = useState(-1);
-  const [internalValue, setInternalValue] = useState<ComboboxValue>(defaultValue ?? (multiple ? [] : ""));
-  const selectedValue = value === undefined ? internalValue : value;
-  const values = Array.isArray(selectedValue) ? selectedValue : selectedValue === "" ? [] : [selectedValue];
-  const selectedOptions = values.map(v => options.find(option => option.value === v) ?? { label: String(v), value: v });
-  const filtered = options.filter(option => !query || !searchable || `${option.label} ${option.value} ${option.description ?? ""}`.toLowerCase().includes(query.toLowerCase()));
-  // Flatten groups in exactly the same order used by keyboard navigation and the DOM.
-  const groups = new Map<string, ComboboxOption[]>();
-  for (const option of filtered) { const group = option.group ?? ""; groups.set(group, [...(groups.get(group) ?? []), option]); }
-  const displayed = [...groups.values()].flat();
-  const custom: ComboboxOption | null = allowCustomValue && query.trim() && !options.some(option => String(option.value).toLowerCase() === query.trim().toLowerCase() || option.label.toLowerCase() === query.trim().toLowerCase())
-    ? { label: query.trim(), value: query.trim() } : null;
-  const choices = custom ? [...displayed, custom] : displayed;
-  const activeIndex = choices[active] && !choices[active].disabled ? active : -1;
-  const setValue = (next: ComboboxValue) => { if (value === undefined) setInternalValue(next); onChange?.(next); };
-  const changeOpen = (next: boolean, restore = false) => {
-    if (next === open || (next && disabled)) return;
-    setOpen(next); onOpenChange?.(next); setActive(-1);
-    if (!next) { setQuery(""); if (restore) triggerRef.current?.focus(); }
-  };
-  const select = (option: ComboboxOption) => {
-    if (option.disabled || disabled) return;
-    setValue(multiple ? (values.includes(option.value) ? values.filter(v => v !== option.value) : [...values, option.value]) : option.value);
-    setQuery(""); setActive(-1);
-    if (!multiple || autoClose) changeOpen(false, true);
-    else inputRef.current?.focus();
-  };
-  const commitQuery = () => {
-    if (!allowCustomValue || !query.trim()) return;
-    const exact = options.find(option => String(option.value).toLowerCase() === query.trim().toLowerCase() || option.label.toLowerCase() === query.trim().toLowerCase());
-    const option = exact ?? custom;
-    if (option && !option.disabled && !values.includes(option.value)) {
-      setValue(multiple ? [...values, option.value] : option.value);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const resolvedOpen = open ?? uncontrolledOpen;
+  const resolvedValue = value ?? uncontrolledValue;
+  const selectedValues = useMemo(
+    () => valuesFrom(resolvedValue, multiple),
+    [multiple, resolvedValue],
+  );
+
+  const setRootRef = useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    if (typeof forwardedRef === "function") forwardedRef(node);
+    else if (forwardedRef) forwardedRef.current = node;
+  }, [forwardedRef]);
+
+  const setSearchInputRef = useCallback((node: HTMLInputElement | null) => {
+    searchRef.current = node;
+    if (node && resolvedOpen && searchable) node.focus();
+  }, [resolvedOpen, searchable]);
+
+  const updateOpen = useCallback((nextOpen: boolean) => {
+    if (nextOpen === resolvedOpen) return;
+    if (open === undefined) setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }, [onOpenChange, open, resolvedOpen]);
+
+  const commitValue = useCallback((nextValue: ComboboxValue | ComboboxValue[]) => {
+    if (value === undefined) setUncontrolledValue(nextValue);
+    onValueChange?.(nextValue);
+    onChange?.(nextValue);
+  }, [onChange, onValueChange, value]);
+
+  const filteredOptions = useMemo(
+    () => searchable && query.trim()
+      ? options.filter(option => filterOption(option, query))
+      : [...options],
+    [filterOption, options, query, searchable],
+  );
+
+  const customCandidate = useMemo(() => {
+    const candidate = query.trim();
+    if (!allowCustomValue || !candidate) return null;
+    const normalized = candidate.toLocaleLowerCase();
+    const exactMatch = options.some(option => (
+      String(option.value).toLocaleLowerCase() === normalized
+      || option.label.toLocaleLowerCase() === normalized
+    ));
+    return exactMatch ? null : candidate;
+  }, [allowCustomValue, options, query]);
+
+  const navigationItems = useMemo<NavigationItem[]>(() => {
+    const items: NavigationItem[] = [];
+    if (multiple && showSelectAll && filteredOptions.some(option => !option.disabled)) {
+      items.push({ kind: "all" });
     }
-  };
-  const layout = useAnchoredLayer({ open: open && mounted && dropdownMode === "overlay", anchorRef: controlRef, layerRef: popupRef, placement, matchWidth: dropdownMatchTriggerWidth, revision: `${query}:${options.length}:${loading}` });
+    filteredOptions.forEach(option => items.push({ kind: "option", option }));
+    if (customCandidate) items.push({ kind: "custom", value: customCandidate });
+    return items;
+  }, [customCandidate, filteredOptions, multiple, showSelectAll]);
 
-  useEffect(() => {
-    if (!open) return;
-    if (disabled) { changeOpen(false); return; }
-    const doc = rootRef.current?.ownerDocument;
-    const outside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (!rootRef.current?.contains(target) && !popupRef.current?.contains(target)) {
-        if (!multiple) commitQuery();
-        changeOpen(false);
-      }
-    };
-    doc?.addEventListener("mousedown", outside);
-    return () => doc?.removeEventListener("mousedown", outside);
-  });
-  useEffect(() => { if (open && mounted && searchable) inputRef.current?.focus(); }, [open, mounted, searchable]);
-  useEffect(() => {
-    if (open && activeIndex >= 0) popupRef.current?.querySelector(`[data-option-index="${activeIndex}"]`)?.scrollIntoView?.({ block: "nearest" });
-  }, [open, activeIndex]);
+  const optionId = useCallback((index: number) => `${listboxId}-option-${index}`, [listboxId]);
 
-  const keyboard = (event: KeyboardEvent) => {
+  const moveActive = useCallback((current: number, direction: 1 | -1) => {
+    if (navigationItems.length === 0) return -1;
+    let index = current;
+    for (let count = 0; count < navigationItems.length; count += 1) {
+      index += direction;
+      if (index < 0) index = navigationItems.length - 1;
+      if (index >= navigationItems.length) index = 0;
+      const item = navigationItems[index];
+      if (item?.kind !== "option" || !item.option.disabled) return index;
+    }
+    return -1;
+  }, [navigationItems]);
+
+  const selectOption = useCallback((option: ComboboxOption) => {
+    if (disabled || loading || option.disabled) return;
+    if (multiple) {
+      const nextValues = selectedValues.includes(option.value)
+        ? selectedValues.filter(candidate => candidate !== option.value)
+        : [...selectedValues, option.value];
+      commitValue(nextValues);
+      if (autoClose === true) updateOpen(false);
+      return;
+    }
+    commitValue(option.value);
+    setQuery("");
+    updateOpen(false);
+    triggerRef.current?.focus();
+  }, [autoClose, commitValue, disabled, loading, multiple, selectedValues, updateOpen]);
+
+  const submitCustomValue = useCallback((candidate: string) => {
+    if (!allowCustomValue || !candidate || disabled || loading) return;
+    if (multiple) {
+      const nextValues = selectedValues.includes(candidate)
+        ? selectedValues
+        : [...selectedValues, candidate];
+      commitValue(nextValues);
+      if (autoClose === true) updateOpen(false);
+    } else {
+      commitValue(candidate);
+      updateOpen(false);
+      triggerRef.current?.focus();
+    }
+    setQuery("");
+  }, [allowCustomValue, autoClose, commitValue, disabled, loading, multiple, selectedValues, updateOpen]);
+
+  const toggleSelectAll = useCallback(() => {
+    if (!multiple || disabled || loading) return;
+    const availableValues = filteredOptions
+      .filter(option => !option.disabled)
+      .map(option => option.value);
+    const allSelected = availableValues.length > 0
+      && availableValues.every(candidate => selectedValues.includes(candidate));
+    commitValue(allSelected
+      ? selectedValues.filter(candidate => !availableValues.includes(candidate))
+      : [...new Set([...selectedValues, ...availableValues])]);
+  }, [commitValue, disabled, filteredOptions, loading, multiple, selectedValues]);
+
+  const activateItem = useCallback((index: number) => {
+    const item = navigationItems[index];
+    if (!item) return;
+    if (item.kind === "all") toggleSelectAll();
+    else if (item.kind === "custom") submitCustomValue(item.value);
+    else selectOption(item.option);
+  }, [navigationItems, selectOption, submitCustomValue, toggleSelectAll]);
+
+  const openListbox = useCallback((direction: 1 | -1 = 1, keyboard = false) => {
     if (disabled) return;
-    if (isImeOwnedKeyboardEvent(event, composing.current)) { event.stopPropagation(); return; }
-    if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); changeOpen(false, true); return; }
-    if (event.key === "Tab" && open) {
-      // Portalled search is outside the trigger's tab order: return to the trigger before native Tab.
-      commitQuery(); changeOpen(false, true); return;
+    setKeyboardOpen(keyboard);
+    updateOpen(true);
+    if (!keyboard) {
+      setActiveIndex(-1);
+      return;
     }
-    if ((event.target as HTMLElement).closest("button") && event.target !== triggerRef.current) return;
-    if (event.key === "ArrowDown" || event.key === "ArrowUp" || (open && (event.key === "Home" || event.key === "End"))) {
-      event.preventDefault(); event.stopPropagation();
-      if (!open) changeOpen(true);
-      const indices = choices.flatMap((option, i) => option.disabled ? [] : [i]);
-      if (!indices.length) return;
-      const current = indices.indexOf(activeIndex);
-      const next = event.key === "Home" ? 0 : event.key === "End" ? indices.length - 1 : event.key === "ArrowDown" ? (current + 1) % indices.length : (current <= 0 ? indices.length - 1 : current - 1);
-      setActive(indices[next] ?? -1); return;
+    const selectedIndex = navigationItems.findIndex(item => (
+      item.kind === "option" && selectedValues.includes(item.option.value) && !item.option.disabled
+    ));
+    setActiveIndex(selectedIndex >= 0
+      ? selectedIndex
+      : firstEnabledIndex(navigationItems, direction));
+  }, [disabled, navigationItems, selectedValues, updateOpen]);
+
+  const closeListbox = useCallback((restoreFocus: boolean) => {
+    updateOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+    if (restoreFocus) triggerRef.current?.focus();
+  }, [updateOpen]);
+
+  const handleTriggerKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!resolvedOpen) openListbox(event.key === "ArrowDown" ? 1 : -1, true);
+      else setActiveIndex(current => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
+      return;
+    }
+    if (event.key === "Home" && resolvedOpen) {
+      event.preventDefault();
+      setActiveIndex(firstEnabledIndex(navigationItems, 1));
+      return;
+    }
+    if (event.key === "End" && resolvedOpen) {
+      event.preventDefault();
+      setActiveIndex(firstEnabledIndex(navigationItems, -1));
+      return;
+    }
+    if (event.key === "Escape" && resolvedOpen) {
+      event.preventDefault();
+      closeListbox(true);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (!resolvedOpen) openListbox(1, true);
+      else if (activeIndex >= 0) activateItem(activeIndex);
+    }
+  }, [
+    activateItem,
+    activeIndex,
+    closeListbox,
+    disabled,
+    moveActive,
+    navigationItems,
+    openListbox,
+    resolvedOpen,
+  ]);
+
+  const handleSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if ((event.key === "Enter" || event.key === "Escape") && isImeOwnedKeyboardEvent(event)) {
+      event.stopPropagation();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveIndex(current => moveActive(current, event.key === "ArrowDown" ? 1 : -1));
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveIndex(firstEnabledIndex(navigationItems, event.key === "Home" ? 1 : -1));
+      return;
     }
     if (event.key === "Enter") {
-      event.preventDefault(); event.stopPropagation();
-      if (!open) changeOpen(true);
-      else if (activeIndex >= 0 && choices[activeIndex]) select(choices[activeIndex]);
-      else if (custom) select(custom);
-      else if (query.trim()) { const exact = displayed.find(option => !option.disabled && (option.label.toLowerCase() === query.trim().toLowerCase() || String(option.value).toLowerCase() === query.trim().toLowerCase())); if (exact) select(exact); }
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeIndex >= 0) activateItem(activeIndex);
+      else if (customCandidate) submitCustomValue(customCandidate);
+      return;
     }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeListbox(true);
+      return;
+    }
+    if (event.key === "Tab") {
+      const candidate = query.trim();
+      const exactOption = candidate
+        ? options.find(option => (
+            String(option.value).toLocaleLowerCase() === candidate.toLocaleLowerCase()
+            || option.label.toLocaleLowerCase() === candidate.toLocaleLowerCase()
+          ))
+        : undefined;
+      if (exactOption && !exactOption.disabled) selectOption(exactOption);
+      else if (customCandidate) submitCustomValue(customCandidate);
+      closeListbox(true);
+    }
+  }, [
+    activateItem,
+    activeIndex,
+    closeListbox,
+    customCandidate,
+    moveActive,
+    navigationItems,
+    options,
+    query,
+    selectOption,
+    submitCustomValue,
+  ]);
+
+  useEffect(() => {
+    if (!resolvedOpen) return;
+    if (activeIndex < 0) return;
+    const current = navigationItems[activeIndex];
+    if (current?.kind !== "option" || !current.option.disabled) {
+      if (current) return;
+    }
+    setActiveIndex(firstEnabledIndex(navigationItems, 1));
+  }, [activeIndex, navigationItems, resolvedOpen]);
+
+  useEffect(() => {
+    if (!resolvedOpen) return;
+    const handleOutsidePointer = (event: MouseEvent) => {
+      const target = event.target;
+      if (!target || typeof (target as Node).nodeType !== "number") return;
+      if (!rootRef.current?.contains(target as Node) && !popoverRef.current?.contains(target as Node)) {
+        closeListbox(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsidePointer, true);
+    return () => document.removeEventListener("mousedown", handleOutsidePointer, true);
+  }, [closeListbox, resolvedOpen]);
+
+  const layout = useAnchoredLayer({
+    open: resolvedOpen && popoverMode === "overlay",
+    anchorRef: triggerRef,
+    layerRef: popoverRef,
+    placement,
+    matchWidth: matchTriggerWidth,
+    revision: `${query}:${filteredOptions.length}:${loading}`,
+  });
+
+  useEffect(() => {
+    if (!resolvedOpen || activeIndex < 0) return;
+    document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: "nearest" });
+  }, [activeIndex, optionId, resolvedOpen]);
+
+  const selectedOptions = useMemo<ComboboxOption[]>(() => selectedValues.map(selectedValue => (
+    options.find(option => option.value === selectedValue)
+      ?? { label: String(selectedValue), value: selectedValue }
+  )), [options, selectedValues]);
+
+  const renderedValue = useMemo(() => {
+    const customValue = renderValue?.(multiple ? selectedOptions : selectedOptions[0]);
+    if (customValue !== undefined && customValue !== null) return customValue;
+    if (selectedOptions.length === 0) {
+      return <span className={styles.placeholder}>{placeholder}</span>;
+    }
+    if (!multiple) {
+      const selected = selectedOptions[0];
+      const selectedLeading = selected?.leading ?? selected?.icon;
+      return (
+        <span className={styles.singleValue}>
+          {selectedLeading && <span aria-hidden="true" className={styles.valueLeading}>{selectedLeading}</span>}
+          <span className={styles.valueLabel}>{selected?.label}</span>
+        </span>
+      );
+    }
+    return (
+      <span className={styles.valueLabel}>
+        {selectedOptions.map(option => option.label).join(", ")}
+      </span>
+    );
+  }, [multiple, placeholder, renderValue, selectedOptions]);
+
+  const hasValue = selectedValues.length > 0;
+  const allFilteredSelected = filteredOptions.some(option => !option.disabled)
+    && filteredOptions
+      .filter(option => !option.disabled)
+      .every(option => selectedValues.includes(option.value));
+  const groupedOptions = useMemo(() => {
+    const ungrouped: ComboboxOption[] = [];
+    const groups = new Map<string, ComboboxOption[]>();
+    filteredOptions.forEach(option => {
+      if (!option.group) {
+        ungrouped.push(option);
+        return;
+      }
+      const group = groups.get(option.group) ?? [];
+      group.push(option);
+      groups.set(option.group, group);
+    });
+    return { groups, ungrouped };
+  }, [filteredOptions]);
+
+  const renderListboxOption = (option: ComboboxOption) => {
+    const navigationIndex = navigationItems.findIndex(item => (
+      item.kind === "option" && item.option === option
+    ));
+    const selected = selectedValues.includes(option.value);
+    return (
+      <ListboxOption
+        active={activeIndex === navigationIndex}
+        aria-label={typeof option.description === "string"
+          ? `${option.label} — ${option.description}`
+          : option.label}
+        description={renderOption ? undefined : option.description}
+        disabled={option.disabled || loading}
+        id={optionId(navigationIndex)}
+        indicator={selected ? <Check /> : null}
+        key={`${typeof option.value}:${option.value}`}
+        leading={renderOption ? undefined : option.leading ?? option.icon}
+        metadata={renderOption ? undefined : option.metadata}
+        onClick={() => selectOption(option)}
+        onMouseDown={event => event.preventDefault()}
+        selected={selected}
+        value={option.value}
+        data-testid={option.testId}
+        {...option.testAttributes}
+      >
+        {renderOption ? renderOption(option) : option.label}
+      </ListboxOption>
+    );
   };
-  const optionNode = (option: ComboboxOption, index: number, isCustom = false) => (
-    <div key={`${typeof option.value}:${option.value}`} id={`${listId}-${index}`} role="option" aria-selected={values.includes(option.value)} aria-disabled={option.disabled || undefined}
-      className={styles.option} data-bf-part="option" data-option-index={index} data-active={activeIndex === index} data-selected={values.includes(option.value)}
-      data-testid={option.testId} {...option.testAttributes} onMouseDown={event => event.preventDefault()} onMouseMove={() => !option.disabled && setActive(index)} onClick={() => select(option)}>
-      {isCustom ? <><Icon name="plus" size="sm" /><span>{customValueHint ?? labels.create}: {option.label}</span></> : <>
-        {renderOption ? renderOption(option) : <>{option.icon}<span className={styles.copy}><span>{option.label}</span>{option.description && <small>{option.description}</small>}</span></>}
-        {values.includes(option.value) && <Icon name="check-line" size="sm" />}
-      </>}
+
+  const activeDescendant = resolvedOpen && activeIndex >= 0
+    ? optionId(activeIndex)
+    : undefined;
+  const resolvedTriggerAriaLabel = triggerAriaLabel
+    ?? rootAriaLabel
+    ?? (label || providedId
+      ? undefined
+      : typeof placeholder === "string" ? placeholder : context.labels.placeholder);
+  const resolvedTriggerLabelledBy = resolvedTriggerAriaLabel
+    ? triggerAriaLabelledBy ?? rootAriaLabelledBy
+    : triggerAriaLabelledBy ?? rootAriaLabelledBy ?? (label ? labelId : undefined);
+  const resolvedTriggerDescribedBy = [
+    triggerAriaDescribedBy ?? rootAriaDescribedBy,
+    errorMessage ? errorId : undefined,
+  ].filter(Boolean).join(" ") || undefined;
+  const portalTarget = resolvedOpen && popoverMode === "overlay"
+    ? resolveLayerPortal(portalContainer, triggerRef.current)
+    : null;
+  const popover = resolvedOpen ? (
+    <div
+      className={classNames(styles.popover, dropdownClassName)}
+      data-bf-component="combobox-popup"
+      data-bf-part="popover"
+      data-keyboard-open={keyboardOpen ? "true" : "false"}
+      data-placement={layout?.placement ?? placement}
+      data-popover-mode={popoverMode}
+      data-testid={dropdownTestId}
+      ref={popoverRef}
+      style={popoverMode === "overlay"
+        ? layout?.style ?? { position: "fixed", visibility: "hidden" }
+        : undefined}
+    >
+      {searchable && (
+        <div className={styles.search} data-bf-part="search">
+          <SearchField
+            aria-activedescendant={activeDescendant}
+            aria-autocomplete="list"
+            aria-controls={listboxId}
+            aria-expanded={resolvedOpen}
+            aria-label={searchPlaceholder}
+            autoComplete="off"
+            clearLabel={clearLabel}
+            onClear={() => {
+              setQuery("");
+              setActiveIndex(firstEnabledIndex(navigationItems, 1));
+            }}
+            onKeyDown={handleSearchKeyDown}
+            onValueChange={(nextQuery) => {
+              setQuery(nextQuery);
+              setActiveIndex(-1);
+            }}
+            placeholder={searchPlaceholder}
+            ref={setSearchInputRef}
+            role="combobox"
+            size={size}
+            value={query}
+          />
+        </div>
+      )}
+      <Listbox
+        aria-label={triggerAriaLabel ?? (typeof label === "string" ? label : "Options")}
+        className={styles.listbox}
+        focusMode="virtual"
+        id={listboxId}
+        multiple={multiple}
+      >
+        {loading && filteredOptions.length === 0 ? (
+          <ListboxEmpty className={styles.message}>
+            <LoaderCircle aria-hidden="true" className={styles.spinner} />
+            <span>{loadingText}</span>
+          </ListboxEmpty>
+        ) : navigationItems.length === 0 ? (
+          <ListboxEmpty>{emptyText}</ListboxEmpty>
+        ) : (
+          <>
+            {navigationItems[0]?.kind === "all" && (
+              <ListboxOption
+                active={activeIndex === 0}
+                id={optionId(0)}
+                indicator={allFilteredSelected ? <Check /> : null}
+                onClick={toggleSelectAll}
+                onMouseDown={event => event.preventDefault()}
+                selected={allFilteredSelected}
+              >
+                {selectAllLabel}
+              </ListboxOption>
+            )}
+            {groupedOptions.ungrouped.map(renderListboxOption)}
+            {[...groupedOptions.groups].map(([groupLabel, groupOptions]) => (
+              <ListboxGroup key={groupLabel} label={groupLabel}>
+                {groupOptions.map(renderListboxOption)}
+              </ListboxGroup>
+            ))}
+            {customCandidate && (() => {
+              const customIndex = navigationItems.findIndex(item => item.kind === "custom");
+              return (
+                <ListboxOption
+                  active={activeIndex === customIndex}
+                  id={optionId(customIndex)}
+                  leading={<Plus />}
+                  onClick={() => submitCustomValue(customCandidate)}
+                  onMouseDown={event => event.preventDefault()}
+                  selected={selectedValues.includes(customCandidate)}
+                  value={customCandidate}
+                >
+                  {typeof customValueHint === "function"
+                    ? customValueHint(customCandidate)
+                    : <>{customValueHint}: {customCandidate}</>}
+                </ListboxOption>
+              );
+            })()}
+          </>
+        )}
+      </Listbox>
+    </div>
+  ) : null;
+
+  return (
+    <div
+      {...rootProps}
+      className={classNames(styles.root, className)}
+      data-bf-component="combobox"
+      data-disabled={disabled ? "true" : "false"}
+      data-invalid={invalid ? "true" : "false"}
+      data-multiple={multiple ? "true" : "false"}
+      data-open={resolvedOpen ? "true" : "false"}
+      data-size={size}
+      ref={setRootRef}
+    >
+      {label !== undefined && label !== null && (
+        <label className={styles.visibleLabel} data-bf-part="label" htmlFor={id} id={labelId}>
+          {label}
+        </label>
+      )}
+      <div
+        className={styles.control}
+        data-bf-part="control"
+        data-tags={multiple && !renderValue && hasValue ? "true" : "false"}
+      >
+        {multiple && !renderValue && hasValue && (
+          <span className={styles.tags} data-bf-part="tags">
+            {selectedOptions.slice(0, Math.max(1, maxTagCount)).map(option => (
+              <span className={styles.tag} data-bf-part="tag" key={`${typeof option.value}:${option.value}`}>
+                <span>{option.label}</span>
+                <IconButton
+                  aria-label={`${clearLabel}: ${option.label}`}
+                  disabled={disabled}
+                  icon={<X aria-hidden="true" />}
+                  onClick={event => {
+                    event.stopPropagation();
+                    commitValue(selectedValues.filter(candidate => candidate !== option.value));
+                  }}
+                  onMouseDown={event => event.preventDefault()}
+                  size="xs"
+                  variant="quiet"
+                />
+              </span>
+            ))}
+            {selectedOptions.length > Math.max(1, maxTagCount) && (
+              <span className={styles.tag}>+{selectedOptions.length - Math.max(1, maxTagCount)}</span>
+            )}
+          </span>
+        )}
+        <button
+          aria-activedescendant={!searchable ? activeDescendant : undefined}
+          aria-controls={resolvedOpen ? listboxId : undefined}
+          aria-describedby={resolvedTriggerDescribedBy}
+          aria-expanded={resolvedOpen}
+          aria-haspopup="listbox"
+          aria-invalid={invalid || undefined}
+          aria-label={resolvedTriggerAriaLabel}
+          aria-labelledby={resolvedTriggerLabelledBy}
+          aria-required={required || undefined}
+          aria-busy={loading || undefined}
+          className={classNames(styles.trigger, triggerClassName)}
+          data-bf-part="trigger"
+          data-testid={triggerTestId}
+          disabled={disabled}
+          id={id}
+          onClick={() => {
+            if (resolvedOpen) closeListbox(false);
+            else openListbox(1, false);
+          }}
+          onKeyDown={handleTriggerKeyDown}
+          ref={triggerRef}
+          role="combobox"
+          type="button"
+        >
+          <span className={styles.value} data-bf-part="value">{renderedValue}</span>
+        </button>
+        {clearable && hasValue && !disabled && (
+          <IconButton
+            aria-label={clearLabel}
+            className={styles.clear}
+            icon={<X aria-hidden="true" />}
+            onClick={event => {
+              event.stopPropagation();
+              commitValue(multiple ? [] : "");
+              setQuery("");
+            }}
+            size="sm"
+            variant="quiet"
+          />
+        )}
+        <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
+          {indicator ?? <ChevronDown />}
+        </span>
+      </div>
+      {errorMessage ? (
+        <span className={styles.error} data-bf-part="message" id={errorId}>
+          {errorMessage}
+        </span>
+      ) : null}
+      {popover && (portalTarget ? createPortal(popover, portalTarget) : popover)}
     </div>
   );
-  let optionIndex = 0;
-  const popup = <div ref={popupRef} className={classNames(styles.popup, dropdownClassName)} data-bf-component="combobox-popup" data-placement={layout?.placement ?? placement}
-    data-testid={dropdownTestId} onKeyDown={keyboard} style={dropdownMode === "inline" ? undefined : layout?.style ?? { position: "fixed", visibility: "hidden" }}>
-    {searchable && <SearchField ref={inputRef} className={styles.search} aria-label={searchPlaceholder ?? labels.search} placeholder={searchPlaceholder ?? labels.search}
-      role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
-      value={query} onValueChange={next => { setQuery(next); setActive(-1); }} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />}
-    {multiple && showSelectAll && filtered.some(option => !option.disabled) && <button type="button" className={styles.selectAll} onClick={() => {
-      const enabled = filtered.filter(option => !option.disabled).map(option => option.value);
-      setValue(enabled.every(v => values.includes(v)) ? values.filter(v => !enabled.includes(v)) : [...new Set([...values, ...enabled])]);
-    }}>{labels.selectAll}</button>}
-    <ScrollArea className={styles.options} id={listId} role="listbox" aria-label={label ?? triggerAriaLabel ?? placeholder ?? labels.placeholder} aria-multiselectable={multiple || undefined} aria-busy={loading || undefined}>
-      {[...groups].map(([group, groupOptions]) => group ? <div key={group} role="group" aria-label={group}><div className={styles.group}>{group}</div>{groupOptions.map(option => optionNode(option, optionIndex++))}</div> : groupOptions.map(option => optionNode(option, optionIndex++)))}
-      {custom && optionNode(custom, displayed.length, true)}
-      {!choices.length && <div className={styles.empty} role="status">{loading ? labels.loading : emptyText ?? labels.empty}</div>}
-    </ScrollArea>
-  </div>;
-  const target = open && mounted ? resolveLayerPortal(portalContainer ?? context.portalContainer, triggerRef.current) : null;
-  const selectedCopy = renderValue?.(multiple ? selectedOptions : selectedOptions[0]) ?? (selectedOptions.length ? selectedOptions.slice(0, Math.max(1, maxTagCount)).map(option => option.label).join(", ") + (selectedOptions.length > maxTagCount ? ` +${selectedOptions.length - maxTagCount}` : "") : placeholder ?? labels.placeholder);
-  return <div {...props} ref={rootRef} className={classNames(styles.root, className)} data-bf-component="combobox" data-multiple={multiple} data-size={({ small: "sm", medium: "md", large: "lg" } as Record<string, string>)[size] ?? size} data-invalid={invalid} data-disabled={disabled}>
-    {label && <label id={`${id}-label`} htmlFor={id} className={styles.label}>{label}</label>}
-    <div ref={controlRef} className={styles.control} data-bf-part="control" data-tags={multiple && !renderValue && values.length > 0}>
-      {multiple && !renderValue && values.length > 0 && <div className={styles.tags} data-bf-part="tags">
-        {selectedOptions.slice(0, Math.max(1, maxTagCount)).map(option => <span key={`${typeof option.value}:${option.value}`} className={styles.tag} data-bf-part="tag">
-          <span>{option.label}</span><IconButton aria-label={`${labels.clear}: ${option.label}`} icon={<Icon name="xmark" size="xs" />} size="xs" variant="quiet" disabled={disabled} onClick={() => setValue(values.filter(v => v !== option.value))} />
-        </span>)}
-        {values.length > Math.max(1, maxTagCount) && <span>+{values.length - Math.max(1, maxTagCount)}</span>}
-      </div>}
-      <button id={id} ref={triggerRef} type="button" disabled={disabled} className={styles.trigger} data-bf-part="trigger" data-testid={triggerTestId}
-        role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined}
-        aria-activedescendant={open && !searchable && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
-        aria-label={triggerAriaLabel ?? props["aria-label"] ?? (label || providedId ? undefined : placeholder ?? labels.placeholder)} aria-labelledby={triggerAriaLabelledBy ?? (label ? `${id}-label` : props["aria-labelledby"])}
-        aria-describedby={[triggerAriaDescribedBy ?? props['aria-describedby'], error && errorMessage ? `${id}-error` : undefined].filter(Boolean).join(' ') || undefined} aria-invalid={invalid || undefined} aria-required={required || undefined} aria-busy={loading || undefined}
-        onClick={() => changeOpen(!open)} onKeyDown={keyboard}>
-        <span className={styles.value} data-bf-part="value" data-placeholder={!selectedOptions.length}>{selectedCopy}</span>
-        <span data-bf-part="indicator">{loading ? <Icon name="refresh" size="sm" /> : indicator ?? <Icon name="chevron-down" size="sm" />}</span>
-      </button>
-      {clearable && values.length > 0 && <IconButton aria-label={labels.clear} icon={<Icon name="xmark" />} disabled={disabled} size="xs" variant="quiet" onClick={() => { setValue(multiple ? [] : ""); triggerRef.current?.focus(); }} />}
-    </div>
-    {open && !disabled && (dropdownMode === "inline" ? popup : target ? createPortal(popup, target) : null)}
-    {error && errorMessage && <div id={`${id}-error`} className={styles.error}>{errorMessage}</div>}
-  </div>;
-}
+});

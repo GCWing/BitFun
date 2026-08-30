@@ -276,9 +276,6 @@
 | Appearance UI 自定义字号减一按钮 | `appearance-ui-font-custom-step-minus` | custom UI 字号减一按钮。 |
 | Appearance UI 自定义字号加一按钮 | `appearance-ui-font-custom-step-plus` | custom UI 字号加一按钮。 |
 | Appearance UI 字号预览区 | `appearance-ui-font-preview` | UI 字号预览区域。 |
-| Appearance Flow Chat 字号开关 | `appearance-flowchat-font-toggle` | Flow Chat 独立字号开关的真实 input 节点。 |
-| Appearance Flow Chat 字号选择器 | `appearance-flowchat-font-select` | Flow Chat 字号 Select 的真实触发节点。 |
-| Appearance Flow Chat 字号选项 | `appearance-flowchat-font-option` | 重复的 Flow Chat 字号下拉选项。包含 `data-font-px`，并带有 Select 组件提供的 `data-selected`。 |
 | Appearance 字体重置按钮 | `appearance-font-reset-btn` | 重置字体偏好到默认值。 |
 
 ## Shell Panel

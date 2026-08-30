@@ -1,6 +1,6 @@
 @layer bf.components {
-  .root { display: inline-flex; align-items: center; justify-content: center; inline-size: var(--bf-control-height-md); block-size: var(--bf-control-height-md); overflow: hidden; flex: 0 0 auto; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-radius-pill); color: var(--bf-color-content-secondary); background: var(--bf-color-surface-subtle); font-family: var(--bf-font-family-control); font-size: var(--bf-font-size-small); font-weight: var(--bf-font-weight-semibold); }
-  .root[data-size="sm"] { inline-size: var(--bf-control-height-sm); block-size: var(--bf-control-height-sm); font-size: var(--bf-font-size-caption); }
+  .root { display: inline-flex; align-items: center; justify-content: center; inline-size: var(--bf-control-height-md); block-size: var(--bf-control-height-md); overflow: hidden; flex: 0 0 auto; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-radius-pill); color: var(--bf-color-content-secondary); background: var(--bf-color-surface-subtle); font-family:var(--bf-font-family-sans); font-size: var(--bf-font-size-sm); font-weight: var(--bf-font-weight-semibold); }
+  .root[data-size="sm"] { inline-size: var(--bf-control-height-sm); block-size: var(--bf-control-height-sm); font-size: var(--bf-font-size-xs); }
   .root[data-size="lg"] { inline-size: var(--bf-control-height-lg); block-size: var(--bf-control-height-lg); }
   .root[data-bf-shape="square"] { border-radius: var(--bf-radius-base); }
   .image { inline-size: 100%; block-size: 100%; object-fit: cover; }

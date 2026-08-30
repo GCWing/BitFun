@@ -60,7 +60,7 @@ $_indent-width: 8px;
   gap: 1px;
   padding: 4px 8px;
   height: 24px;
-  font-size: 11px;
+  font-size: var(--bf-font-size-meta);
   color: var(--bf-appearance-token-color-text-muted);
   background: linear-gradient(
     180deg,
@@ -161,7 +161,7 @@ $_indent-width: 8px;
 
     .bitfun-file-explorer__node-name {
       color: var(--bf-appearance-token-git-color-branch);
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
     }
 
     &:hover {
@@ -197,7 +197,7 @@ $_indent-width: 8px;
     
     .bitfun-file-explorer__node-name {
       color: var(--bf-appearance-token-git-color-branch);
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
     }
   }
 }
@@ -302,8 +302,8 @@ $_indent-width: 8px;
 
 .bitfun-file-explorer__node-name {
   flex: 1;
-  font-size: var(--bf-appearance-token-font-size-sm);
-  font-weight: $font-weight-normal;
+  font-size: var(--bf-font-size-sm);
+  font-weight: var(--bf-font-weight-regular);
   @include mixins.text-ellipsis;
   position: relative;
   z-index: 2;
@@ -342,9 +342,9 @@ $_indent-width: 8px;
     }
 
     input {
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
       border: none !important;
       outline: none !important;
     }
@@ -362,7 +362,7 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-size {
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.7;
   flex-shrink: 0;
@@ -371,7 +371,7 @@ $_indent-width: 8px;
 }
 
 .bitfun-file-explorer__node-modified {
-  font-size: var(--bf-appearance-token-font-size-xs);
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.7;
   flex-shrink: 0;
@@ -438,7 +438,7 @@ $_indent-width: 8px;
   }
 
   .bitfun-file-explorer__node-name {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
   }
 
   .bitfun-file-explorer__node-size,

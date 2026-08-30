@@ -89,8 +89,8 @@
 
   .review-reliability-status__title {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 650;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   .review-reliability-status__items {
@@ -110,8 +110,8 @@
     border-radius: 4px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 70%, transparent);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-support-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
 
     &--warning {
       border-left-color: var(--bf-appearance-token-color-warning);
@@ -138,7 +138,7 @@
 
   .review-reliability-status__label {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 650;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   .review-reliability-status__detail {
@@ -152,8 +152,8 @@
     border-bottom: 1px dashed var(--bf-appearance-token-border-base);
 
     .summary-header {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 8px;
     }
@@ -173,8 +173,8 @@
       align-items: center;
       gap: 12px;
       padding: 7px 10px;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-control-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
       border-bottom: 1px dashed var(--bf-appearance-token-border-base);
 
       &:last-child {
@@ -190,9 +190,9 @@
     }
 
     .summary-label {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
       flex-shrink: 0;
       min-width: 90px;
@@ -207,7 +207,7 @@
       &.risk-level {
         display: inline-flex;
         align-items: center;
-        font-weight: 600;
+        font-weight: var(--bf-font-weight-semibold);
         gap: 4px;
         white-space: nowrap;
       }
@@ -246,15 +246,15 @@
 
   .review-report-section__title {
     overflow: hidden;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 650;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .review-report-section__summary {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     white-space: nowrap;
   }
 
@@ -276,9 +276,9 @@
 
   .review-report-group__title {
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-bold);
+    letter-spacing: var(--bf-letter-spacing-wider);
     text-transform: uppercase;
   }
 
@@ -288,8 +288,8 @@
     margin: 0;
     padding-left: 18px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
 
     li {
       padding: 2px 4px;
@@ -319,29 +319,29 @@
 
   .review-decision-item__question {
     color: var(--bf-appearance-token-color-text-primary);
-    font-weight: 500;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   .review-decision-item__options {
     margin: 0;
     padding-left: 16px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
 
     li {
       padding: 1px 0;
 
       &.is-recommended {
         color: var(--bf-appearance-token-color-accent-500);
-        font-weight: 500;
+        font-weight: var(--bf-font-weight-medium);
       }
     }
   }
 
   .review-decision-item__tradeoffs {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     font-style: italic;
   }
 
@@ -367,14 +367,14 @@
 
     span {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
     }
 
     strong {
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 650;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -387,8 +387,8 @@
 
   .run-manifest__group-title {
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 650;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
 
     &--warning {
       color: var(--bf-appearance-token-color-warning);
@@ -414,8 +414,8 @@
   .run-manifest__chip-name {
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -423,7 +423,7 @@
   .run-manifest__chip-meta {
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -446,7 +446,7 @@
       border-radius: 6px;
       background: var(--bf-appearance-token-color-bg-elevated);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
     }
 
     span {
@@ -458,8 +458,8 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      font-weight: 650;
+      font-size: var(--bf-type-flow-support-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       white-space: nowrap;
     }
   }
@@ -509,15 +509,15 @@
   }
 
   .reviewer-name {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
   }
 
   .reviewer-specialty,
   .reviewer-status,
   .reviewer-issues {
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+    font-size: var(--bf-type-flow-micro-font-size);
     color: var(--bf-appearance-token-color-text-muted);
     border: 1px solid var(--bf-appearance-token-border-base);
     background: var(--bf-appearance-token-color-bg-elevated);
@@ -527,8 +527,8 @@
   }
 
   .reviewer-summary {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -543,8 +543,8 @@
     border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 6px;
     padding: 10px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     transition:
       background-color 160ms ease,
       border-color 160ms ease;
@@ -594,10 +594,10 @@
     }
 
     .issue-category {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-secondary);
       flex-shrink: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: var(--bf-type-flow-micro-font-size);
       padding: 1px 5px;
       background: var(--bf-appearance-token-color-bg-elevated);
       border-radius: 3px;
@@ -605,7 +605,7 @@
     }
 
     .issue-source {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: var(--bf-type-flow-micro-font-size);
       color: var(--bf-appearance-token-color-accent-500);
       border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
@@ -616,15 +616,15 @@
 
     .issue-location {
       color: var(--bf-appearance-token-color-text-muted);
-      font-family: var(--bf-appearance-token-tool-card-font-mono);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-family:var(--bf-font-family-mono);
+      font-size: var(--bf-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .issue-certainty {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: var(--bf-type-flow-micro-font-size);
       color: var(--bf-appearance-token-color-text-muted);
       background: var(--bf-appearance-token-color-bg-elevated);
       padding: 1px 6px;
@@ -635,16 +635,16 @@
     }
 
     .issue-title {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 4px;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
     }
 
     .issue-description {
       color: var(--bf-appearance-token-color-text-secondary);
       margin-bottom: 6px;
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
 
     .issue-validation-note {
@@ -654,7 +654,7 @@
       border-radius: 4px;
       background: var(--bf-appearance-token-glass-blue-subtle);
       border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 16%, transparent);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
     }
 
     .issue-suggestion {
@@ -669,16 +669,16 @@
     }
 
     .suggestion-label {
-      font-weight: 600;
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-success);
       flex-shrink: 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
     }
 
     .suggestion-text {
       color: var(--bf-appearance-token-color-text-primary);
       flex: 1;
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
   }
 
@@ -686,8 +686,8 @@
     margin-bottom: 12px;
 
     .team-header {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 8px;
     }
@@ -722,15 +722,15 @@
     }
 
     .reviewer-name {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
     }
 
     .reviewer-specialty,
     .reviewer-status,
     .reviewer-issues {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+      font-size: var(--bf-type-flow-micro-font-size);
       color: var(--bf-appearance-token-color-text-muted);
       border: 1px solid var(--bf-appearance-token-border-base);
       background: var(--bf-appearance-token-color-bg-elevated);
@@ -740,8 +740,8 @@
     }
 
     .reviewer-summary {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-control-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
       color: var(--bf-appearance-token-color-text-secondary);
     }
   }
@@ -753,8 +753,8 @@
     .issues-header {
       display: flex;
       align-items: center;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 8px;
     }
@@ -769,8 +769,8 @@
         border: 1px solid var(--bf-appearance-token-border-base);
         border-radius: 6px;
         padding: 10px;
-        font-size: var(--bf-appearance-token-tool-card-action-font-size);
-        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        font-size: var(--bf-type-flow-control-font-size);
+        line-height: var(--bf-type-flow-support-line-height);
         transition:
           background-color 160ms ease,
           border-color 160ms ease;
@@ -819,10 +819,10 @@
             min-width: 0;
 
             .issue-category {
-              font-weight: 600;
+              font-weight: var(--bf-font-weight-semibold);
               color: var(--bf-appearance-token-color-text-secondary);
               flex-shrink: 0;
-              font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+              font-size: var(--bf-type-flow-micro-font-size);
               padding: 1px 5px;
               background: var(--bf-appearance-token-color-bg-elevated);
               border-radius: 3px;
@@ -830,7 +830,7 @@
             }
 
             .issue-source {
-              font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+              font-size: var(--bf-type-flow-micro-font-size);
               color: var(--bf-appearance-token-color-accent-500);
               border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
               background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
@@ -841,8 +841,8 @@
 
             .issue-location {
               color: var(--bf-appearance-token-color-text-muted);
-              font-family: var(--bf-appearance-token-tool-card-font-mono);
-              font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+              font-family:var(--bf-font-family-mono);
+              font-size: var(--bf-type-flow-support-font-size);
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
@@ -850,7 +850,7 @@
           }
 
           .issue-certainty {
-            font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+            font-size: var(--bf-type-flow-micro-font-size);
             color: var(--bf-appearance-token-color-text-muted);
             background: var(--bf-appearance-token-color-bg-elevated);
             padding: 1px 6px;
@@ -862,16 +862,16 @@
         }
 
         .issue-title {
-          font-weight: 600;
+          font-weight: var(--bf-font-weight-semibold);
           color: var(--bf-appearance-token-color-text-primary);
           margin-bottom: 4px;
-          font-size: var(--bf-appearance-token-tool-card-action-font-size);
+          font-size: var(--bf-type-flow-control-font-size);
         }
 
         .issue-description {
           color: var(--bf-appearance-token-color-text-secondary);
           margin-bottom: 6px;
-          line-height: var(--bf-appearance-token-flowchat-support-line-height);
+          line-height: var(--bf-type-flow-support-line-height);
         }
 
         .issue-validation-note {
@@ -881,7 +881,7 @@
           border-radius: 4px;
           background: var(--bf-appearance-token-glass-blue-subtle);
           border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 16%, transparent);
-          font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+          font-size: var(--bf-type-flow-support-font-size);
         }
 
         .issue-suggestion {
@@ -895,16 +895,16 @@
           margin-top: 6px;
 
           .suggestion-label {
-            font-weight: 600;
+            font-weight: var(--bf-font-weight-semibold);
             color: var(--bf-appearance-token-color-success);
             flex-shrink: 0;
-            font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+            font-size: var(--bf-type-flow-support-font-size);
           }
 
           .suggestion-text {
             color: var(--bf-appearance-token-color-text-primary);
             flex: 1;
-            line-height: var(--bf-appearance-token-flowchat-support-line-height);
+            line-height: var(--bf-type-flow-support-line-height);
           }
         }
       }
@@ -923,16 +923,16 @@
     }
 
     .remediation-header {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 3px;
     }
 
     .remediation-selection-count {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-type-flow-meta-line-height);
     }
 
     .remediation-select-all {
@@ -954,8 +954,8 @@
       border-radius: 10px;
       background: var(--bf-appearance-token-color-bg-elevated);
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-control-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
 
       &.is-selected {
         border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, var(--bf-appearance-token-border-base));
@@ -994,8 +994,8 @@
       border-radius: 999px;
       background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
       color: var(--bf-appearance-token-color-accent-500);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-      font-weight: 700;
+      font-size: var(--bf-type-flow-micro-font-size);
+      font-weight: var(--bf-font-weight-bold);
       flex-shrink: 0;
       margin-top: 1px;
     }
@@ -1010,7 +1010,7 @@
       border-radius: 999px;
       background: transparent;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-size: var(--bf-type-flow-support-font-size);
       cursor: pointer;
       transition:
         background 160ms ease,
@@ -1036,7 +1036,7 @@
 
       p {
         margin: 0;
-        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        line-height: var(--bf-type-flow-support-line-height);
       }
     }
 
@@ -1046,15 +1046,15 @@
 
       span {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-        font-weight: 700;
-        letter-spacing: 0.06em;
+        font-size: var(--bf-type-flow-micro-font-size);
+        font-weight: var(--bf-font-weight-bold);
+        letter-spacing: var(--bf-letter-spacing-widest);
         text-transform: uppercase;
       }
 
       strong {
         color: var(--bf-appearance-token-color-text-primary);
-        font-weight: 650;
+        font-weight: var(--bf-font-weight-semibold);
       }
     }
 
@@ -1074,14 +1074,14 @@
 
       span {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+        font-size: var(--bf-type-flow-micro-font-size);
       }
 
       strong {
         overflow: hidden;
         color: var(--bf-appearance-token-color-text-primary);
-        font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-        font-weight: 650;
+        font-size: var(--bf-type-flow-support-font-size);
+        font-weight: var(--bf-font-weight-semibold);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1101,7 +1101,7 @@
 
       span {
         color: var(--bf-appearance-token-color-success);
-        font-weight: 650;
+        font-weight: var(--bf-font-weight-semibold);
         flex-shrink: 0;
       }
     }
@@ -1134,15 +1134,15 @@
     gap: 10px;
 
     &__title {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 700;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-bold);
       color: var(--bf-appearance-token-color-text-primary);
       margin-bottom: 3px;
     }
 
     &__hint {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
       color: var(--bf-appearance-token-color-text-muted);
     }
 
@@ -1155,16 +1155,16 @@
     &__empty-selection {
       margin-top: 10px;
       color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 80%, var(--bf-appearance-token-color-text-secondary));
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      font-size: var(--bf-type-flow-support-font-size);
+      line-height: var(--bf-type-flow-support-line-height);
     }
   }
 
   /* ---------- Positive points section ---------- */
   .review-positive {
     .positive-header {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-success);
       margin-bottom: 8px;
       padding-bottom: 6px;
@@ -1181,8 +1181,8 @@
         align-items: flex-start;
         gap: 8px;
         color: var(--bf-appearance-token-color-text-primary);
-        font-size: var(--bf-appearance-token-tool-card-action-font-size);
-        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        font-size: var(--bf-type-flow-control-font-size);
+        line-height: var(--bf-type-flow-support-line-height);
         padding: 6px 8px;
         background: var(--bf-appearance-token-color-bg-elevated);
         border-radius: 4px;

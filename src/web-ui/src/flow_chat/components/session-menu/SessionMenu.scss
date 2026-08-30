@@ -4,7 +4,6 @@
  */
 
 @use '../../../component-library/styles/tokens' as tokens;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
 
 $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -54,35 +53,19 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-session-menu__dropdown {
-  @include surfaces.floating-surface;
-
   --session-menu-entry-y: -4px;
+  --bf-overlay-menu-inline-size: min(220px, calc(100vw - 16px));
+  --bf-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
   position: fixed;
-  box-sizing: border-box;
-  width: min(220px, calc(100vw - 16px));
-  max-height: min(360px, calc(100vh - 16px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   z-index: tokens.$z-popover;
   animation: session-menu-appear 0.2s $session-menu-timing;
   transform-origin: top left;
-  font-family: var(--bf-appearance-token-font-family-sans);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  color: var(--bf-appearance-token-color-text-primary);
 
   &[data-bf-placement='top'] {
     --session-menu-entry-y: 4px;
     transform-origin: bottom left;
   }
 
-  .bitfun-session-menu__actions .bitfun-session-menu__item--new:first-of-type {
-    border-radius: 7px 7px 0 0;
-  }
-
-  .bitfun-session-menu__scroll .bitfun-session-menu__item:last-child {
-    border-radius: 0 0 7px 7px;
-  }
 }
 
 .bitfun-session-menu__actions {
@@ -90,66 +73,12 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-session-menu__scroll {
-  flex: 1 1 auto;
   min-height: 0;
-  /* Only the list is height-capped, so the actions stay pinned. */
-  max-height: min(240px, 38vh);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 45%, transparent) transparent;
-  -ms-overflow-style: auto;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 40%, transparent);
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
 }
 
 .bitfun-session-menu__item {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  color: var(--bf-appearance-token-color-text-secondary);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:hover {
-    background: var(--bf-appearance-token-element-bg-soft);
-    color: var(--bf-appearance-token-color-text-primary);
-  }
-
-  &--active {
-    background: var(--bf-appearance-token-color-accent-200);
-    color: var(--bf-appearance-token-color-accent-500);
-  }
-
   &--new {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: var(--bf-appearance-token-font-weight-medium);
-    color: var(--bf-appearance-token-color-text-primary);
+    font-weight: var(--bf-font-weight-medium);
 
     &:hover .bitfun-session-menu__item-icon {
       background: var(--bf-appearance-token-color-accent-300);
@@ -181,10 +110,7 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-session-menu__divider {
-  height: 1px;
   margin: 4px 8px;
-  background: var(--bf-appearance-token-border-subtle);
-  flex-shrink: 0;
 }
 
 @keyframes session-menu-appear {

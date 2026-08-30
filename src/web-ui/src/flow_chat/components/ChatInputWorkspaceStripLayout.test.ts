@@ -50,16 +50,16 @@ describe('composer context track layout', () => {
     // facts inherit it; every control restates the same step through the
     // shared mixin, so the row reads as a single hushed line.
     expect(stylesheet).toContain(
-      'font-size: flow-type.$meta-size;\n  line-height:',
+      'font-size: var(--bf-type-flow-meta-font-size);\n  line-height:',
     );
     expect(stylesheet).toMatch(/&__workspace \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(/&__branch \{[\s\S]*?font-size: inherit;/);
     expect(stylesheet).toMatch(
-      /@mixin strip-control \{[\s\S]*?font-size: flow-type\.\$meta-size;/,
+      /@mixin strip-control \{[\s\S]*?font-size: var\(--bf-type-flow-meta-font-size\);/,
     );
     // No control names a size of its own — that is how the track drifted into
     // four of them before.
-    const rails = stylesheet.slice(0, stylesheet.indexOf('  &__permission-option-row {'));
+    const rails = stylesheet.slice(0, stylesheet.indexOf('  &__permission-menu {'));
     expect(rails.match(/font-size:/g)?.length).toBe(2);
     // The rails end where the permission popover begins; that menu is its own
     // surface and is allowed a denser scale than the track.
@@ -433,7 +433,7 @@ describe('composer context track layout', () => {
     expect(component).toContain('aria-label={tooltip}');
     expect(stylesheet).toMatch(/&__trigger \{[\s\S]*?width: 18px;[\s\S]*?height: 18px;/);
     expect(stylesheet).toMatch(
-      /&__trigger-label \{[\s\S]*?font-size: flow-type\.\$control-size;/,
+      /&__trigger-label \{[\s\S]*?font-size: var\(--bf-type-flow-control-font-size\);/,
     );
     expect(chatInput).toContain('reasoningTriggerPresentation="label"');
   });

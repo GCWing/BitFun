@@ -7,6 +7,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, FolderPlus, ChevronDown, Check, GitBranch } from 'lucide-react';
+import { Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
 import { gitAPI } from '../../infrastructure/api';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
@@ -288,7 +289,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         />
                       </button>
                       {workspaceDropdownOpen && createPortal(
-                        <div
+                        <Menu
                           ref={workspaceMenuRef}
                           data-bf-component="welcome-panel"
                           data-bf-part="workspaceMenu"
@@ -299,45 +300,47 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                             left: `${workspaceMenuLayout?.left ?? 0}px`,
                             visibility: workspaceMenuLayout ? 'visible' : 'hidden',
                           }}
+                          autoFocusFirstItem
+                          aria-label={t('shared:features.workspace')}
                         >
-                          <button
-                            type="button"
+                          <MenuItem
                             data-bf-component="welcome-panel"
                             data-bf-part="workspaceItem"
-                            className="welcome-panel__dropdown-item welcome-panel__dropdown-item--accent"
+                            leading={<FolderPlus size={12} />}
                             onClick={() => { void handleCreateWorkspace(); }}
                           >
-                            <FolderPlus size={12} />
-                            <span className="welcome-panel__dropdown-name">{tCommon('header.newProject')}</span>
-                          </button>
-                          {(hasWorkspace || otherWorkspaces.length > 0) && <div className="welcome-panel__dropdown-sep" />}
+                            {tCommon('header.newProject')}
+                          </MenuItem>
+                          {(hasWorkspace || otherWorkspaces.length > 0) && <MenuSeparator />}
                           {hasWorkspace && currentWorkspace && (
-                            <div className="welcome-panel__dropdown-current">
-                              <Check size={11} />
-                              <FolderOpen size={12} />
-                              <span className="welcome-panel__dropdown-name">{currentWorkspace.name}</span>
-                            </div>
+                            <MenuItem
+                              role="menuitemradio"
+                              checked
+                              aria-disabled="true"
+                              leading={<FolderOpen size={12} />}
+                              metadata={<Check size={11} />}
+                            >
+                              {currentWorkspace.name}
+                            </MenuItem>
                           )}
                           {otherWorkspaces.length > 0 && (
                             <>
-                              {hasWorkspace && currentWorkspace && <div className="welcome-panel__dropdown-sep" />}
+                              {hasWorkspace && currentWorkspace && <MenuSeparator />}
                               {otherWorkspaces.map(ws => (
-                                <button
+                                <MenuItem
                                   key={ws.id}
-                                  type="button"
                                   data-bf-component="welcome-panel"
                                   data-bf-part="workspaceItem"
-                                  className="welcome-panel__dropdown-item"
+                                  leading={<FolderOpen size={12} />}
                                   onClick={() => { void handleSwitchWorkspace(ws); }}
                                   title={ws.rootPath}
                                 >
-                                  <FolderOpen size={12} />
-                                  <span className="welcome-panel__dropdown-name">{ws.name}</span>
-                                </button>
+                                  {ws.name}
+                                </MenuItem>
                               ))}
                             </>
                           )}
-                        </div>,
+                        </Menu>,
                         getAppearanceOverlayHost(),
                       )}
                     </span>

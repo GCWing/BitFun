@@ -65,7 +65,14 @@ export class AppErrorBoundary extends Component<Props, State> {
         }}
       >
         <div style={{ maxWidth: 760, width: '100%' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{title}</h2>
+          <h2 style={{
+            margin: 0,
+            fontFamily: 'var(--bf-type-heading-page-font-family)',
+            fontSize: 'var(--bf-type-heading-page-font-size)',
+            fontWeight: 'var(--bf-type-heading-page-font-weight)',
+            lineHeight: 'var(--bf-type-heading-page-line-height)',
+            letterSpacing: 'var(--bf-type-heading-page-letter-spacing)',
+          }}>{title}</h2>
           <p style={{ margin: '12px 0 0', opacity: 0.9 }}>{firstLine}</p>
           <div style={{ marginTop: 16 }}>
             <Button
@@ -88,7 +95,10 @@ export class AppErrorBoundary extends Component<Props, State> {
                   borderRadius: 8,
                   overflow: 'auto',
                   maxHeight: 240,
-                  fontSize: 12,
+                  fontFamily: 'var(--bf-type-code-sm-font-family)',
+                  fontSize: 'var(--bf-type-code-sm-font-size)',
+                  fontWeight: 'var(--bf-type-code-sm-font-weight)',
+                  lineHeight: 'var(--bf-type-code-sm-line-height)',
                 }}
               >
                 {this.state.error.stack ?? this.state.error.message}

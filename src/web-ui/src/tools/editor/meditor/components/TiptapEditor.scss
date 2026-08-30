@@ -27,8 +27,8 @@
     min-height: 100%;
     outline: none;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-relaxed);
 
     /* blockId lives on <hr> itself — do not use paragraph chrome (padding + radius + hover fill) on hr */
     > [data-block-id]:not(hr) {
@@ -48,7 +48,7 @@
 
     > p.is-empty {
       position: relative;
-      min-height: calc(var(--bf-appearance-token-font-size-sm) * var(--bf-appearance-token-line-height-relaxed));
+      min-height: calc(var(--bf-font-size-sm) * var(--bf-line-height-relaxed));
     }
 
     > p.is-empty::before {
@@ -56,8 +56,8 @@
       color: var(--bf-appearance-token-color-text-disabled);
       float: left;
       height: 0;
-      font-size: var(--bf-appearance-token-font-size-sm);
-      letter-spacing: normal;
+      font-size: var(--bf-font-size-sm);
+      letter-spacing: var(--bf-letter-spacing-normal);
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
@@ -92,34 +92,34 @@
     h6 {
       margin: 0;
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-semibold;
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     h1 {
-      font-size: var(--bf-appearance-token-font-size-3xl);
+      font-size: var(--bf-font-size-3xl);
       color: var(--bf-appearance-token-color-text-primary);
       text-align: center;
     }
 
     h2 {
-      font-size: var(--bf-appearance-token-font-size-2xl);
+      font-size: var(--bf-font-size-2xl);
     }
 
     h3 {
-      font-size: var(--bf-appearance-token-font-size-xl);
+      font-size: var(--bf-font-size-xl);
     }
 
     h4 {
-      font-size: var(--bf-appearance-token-font-size-lg);
+      font-size: var(--bf-font-size-lg);
     }
 
     h5 {
-      font-size: var(--bf-appearance-token-font-size-base);
+      font-size: var(--bf-font-size-base);
     }
 
     h6 {
-      font-size: var(--bf-appearance-token-font-size-sm);
-      letter-spacing: 0.02em;
+      font-size: var(--bf-font-size-sm);
+      letter-spacing: var(--bf-letter-spacing-wide);
       text-transform: uppercase;
     }
 
@@ -137,9 +137,9 @@
       margin: 0.25rem 0.3rem;
       padding: markdownCode.$pre-padding;
       overflow-x: auto;
-      font-size: var(--bf-appearance-token-flowchat-code-font-size);
-      line-height: 1.5;
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-size: var(--bf-type-flow-code-font-size);
+      line-height: var(--bf-line-height-base);
+      font-family:var(--bf-font-family-mono);
       color: markdownCode.$pre-code-fg;
       background: markdownCode.$pre-bg;
       border: 1px dashed markdownCode.$pre-border;
@@ -159,12 +159,12 @@
     code {
       padding: 0.1em 0.4em;
       margin: 0 0.05em;
-      font-size: 0.9em;
-      font-weight: 500;
-      line-height: 1.4;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
+      line-height: var(--bf-line-height-ui);
       vertical-align: baseline;
       white-space: nowrap;
-      font-family: var(--bf-appearance-token-font-family-mono);
+      font-family:var(--bf-font-family-mono);
       color: markdownCode.$inline-code-fg;
       background: markdownCode.$inline-code-bg;
       border: 1px solid markdownCode.$inline-code-border;
@@ -187,7 +187,7 @@
       display: block;
       padding: 0;
       margin: 0;
-      font-size: var(--bf-appearance-token-flowchat-code-font-size);
+      font-size: var(--bf-type-flow-code-font-size);
       font-weight: inherit;
       white-space: pre-wrap;
       word-break: break-word;
@@ -233,7 +233,7 @@
       border-spacing: 0;
       margin: $size-gap-4 0;
       table-layout: fixed;
-      font-size: 0.85rem;
+      font-size: var(--bf-font-size-base);
       border: 1px solid markdownTable.$border;
       border-radius: var(--bf-appearance-token-flowchat-card-radius);
       background: markdownTable.$surface;
@@ -256,7 +256,7 @@
     }
 
     th {
-      font-weight: $font-weight-semibold;
+      font-weight: var(--bf-font-weight-semibold);
       background: markdownTable.$th-bg;
       color: markdownTable.$th-fg;
     }
@@ -362,7 +362,7 @@
       top: 0;
       width: markdownLayout.$list-marker-width;
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
     }
 
     > ul:not([data-type='taskList']) > li::before {
@@ -492,8 +492,8 @@
     border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
 
     input {
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: 1.35;
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-compact);
     }
   }
 
@@ -520,18 +520,18 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 14%, transparent);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-medium;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
+    letter-spacing: var(--bf-letter-spacing-wide);
     white-space: nowrap;
   }
 
   .m-editor-inline-ai__section-title {
     margin: $size-gap-2 0 6px;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-xxs);
-    font-weight: $font-weight-medium;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-micro);
+    font-weight: var(--bf-font-weight-medium);
+    letter-spacing: var(--bf-letter-spacing-wide);
     opacity: 0.72;
   }
 
@@ -577,14 +577,14 @@
   }
 
   .m-editor-inline-ai-preview__title {
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-meta);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-accent-500);
-    letter-spacing: 0.02em;
+    letter-spacing: var(--bf-letter-spacing-wide);
   }
 
   .m-editor-inline-ai-preview__status {
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: var(--bf-appearance-token-color-text-disabled);
     white-space: nowrap;
   }
@@ -594,8 +594,8 @@
     position: relative;
     color: inherit;
     padding-left: $size-gap-3;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-support);
   }
 
   .m-editor-inline-ai-preview__body::before {
@@ -635,7 +635,7 @@
   .m-editor-inline-ai-rendered__loading {
     margin-bottom: $size-gap-2;
     color: var(--bf-appearance-token-color-text-disabled);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   .m-editor-inline-ai-rendered__content {
@@ -662,20 +662,20 @@
   .m-editor-inline-ai-rendered__content.markdown-body h2,
   .m-editor-inline-ai-rendered__content.markdown-body h3 {
     color: inherit;
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h1 {
-    font-size: var(--bf-appearance-token-font-size-lg);
+    font-size: var(--bf-font-size-lg);
     text-align: left;
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h2 {
-    font-size: var(--bf-appearance-token-font-size-base);
+    font-size: var(--bf-font-size-base);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h3 {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body p {
@@ -686,7 +686,7 @@
     margin: 0 0 6px;
     padding: markdownCode.$bq-padding;
     font-style: italic;
-    font-size: var(--bf-appearance-token-font-size-2xs);
+    font-size: var(--bf-font-size-meta);
     color: markdownCode.$bq-fg;
     background: markdownCode.$bq-bg;
     border-left: 3px solid markdownCode.$bq-border;
@@ -697,9 +697,9 @@
   .m-editor-inline-ai-rendered__content.markdown-body pre {
     margin: 0 0 6px;
     padding: 8px 10px;
-    font-size: var(--bf-appearance-token-font-size-2xs);
-    line-height: 1.45;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-font-size-meta);
+    line-height: var(--bf-line-height-support);
+    font-family:var(--bf-font-family-mono);
     color: markdownCode.$pre-code-fg;
     background: markdownCode.$pre-bg;
     border: 1px dashed markdownCode.$pre-border;
@@ -736,9 +736,9 @@
   .m-editor-inline-ai-rendered__content.markdown-body td code,
   .m-editor-inline-ai-rendered__content.markdown-body th code {
     padding: 0.1em 0.35em;
-    font-size: 0.9em;
-    font-weight: 500;
-    font-family: var(--bf-appearance-token-font-family-mono);
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
+    font-family:var(--bf-font-family-mono);
     color: markdownCode.$inline-code-fg;
     background: markdownCode.$inline-code-bg;
     border: 1px solid markdownCode.$inline-code-border;
@@ -768,8 +768,8 @@
 
   .m-editor-inline-ai-preview__placeholder {
     color: inherit;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.45;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-support);
     padding: 4px 6px;
   }
 
@@ -784,7 +784,7 @@
   .m-editor-inline-ai__error {
     margin-top: $size-gap-2;
     color: var(--bf-appearance-token-color-error);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
   }
 
   .m-editor-render-only-block,
@@ -808,8 +808,8 @@
 
   .m-editor-frontmatter__label {
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
   }
 
   .m-editor-raw-html-inline {
@@ -826,17 +826,17 @@
 
   .m-editor-raw-html-block__label,
   .m-editor-raw-html-inline__label {
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-semibold;
-    letter-spacing: 0.02em;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-wide);
     text-transform: uppercase;
     color: var(--bf-appearance-token-color-warning);
   }
 
   .m-editor-raw-html-inline__source {
     margin: 0;
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -879,8 +879,8 @@
   .m-editor-raw-html-block__textarea,
   .m-editor-frontmatter__textarea {
     margin: 0;
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     display: block;
     width: 100%;
     min-height: 180px;
@@ -890,7 +890,7 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 94%, black);
     color: var(--bf-appearance-token-color-text-primary);
     padding: $size-gap-3;
-    line-height: 1.55;
+    line-height: var(--bf-line-height-comfortable);
     word-break: break-word;
     outline: none;
     user-select: text;
@@ -941,9 +941,9 @@
     background: transparent;
     box-shadow: none;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: 1.55;
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-comfortable);
     white-space: pre;
 
     &:hover {
@@ -983,8 +983,8 @@
   .m-editor-frontmatter__source-fallback {
     display: none;
     margin: 0;
-    font-family: var(--bf-appearance-token-font-family-mono);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-family:var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-sm);
     white-space: pre-wrap;
     word-break: break-word;
     border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
@@ -992,7 +992,7 @@
     background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 94%, black);
     color: var(--bf-appearance-token-color-text-primary);
     padding: $size-gap-3;
-    line-height: 1.55;
+    line-height: var(--bf-line-height-comfortable);
   }
 
   .m-editor-render-only-block[data-preview-empty='true'] .m-editor-render-only-block__preview,
@@ -1013,7 +1013,7 @@
   .m-editor-render-only-block__details-summary,
   .m-editor-raw-html-block__details-summary {
     cursor: pointer;
-    font-weight: $font-weight-semibold;
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     list-style-position: outside;
   }
@@ -1058,13 +1058,13 @@
     padding: 0;
     width: 20px;
     height: 20px;
-    line-height: 1;
+    line-height: var(--bf-line-height-none);
     margin-top: 2px;
   }
 
   [data-type='details'] > button::before {
     content: '▸';
-    font-size: 14px;
+    font-size: var(--bf-font-size-base);
   }
 
   [data-type='details'].is-open > button::before {
@@ -1079,8 +1079,8 @@
     display: block;
     list-style: none;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     outline: none;
   }
 
@@ -1126,8 +1126,8 @@
     padding: 0;
     width: 20px;
     height: 20px;
-    font-size: 14px;
-    line-height: 1;
+    font-size: var(--bf-font-size-base);
+    line-height: var(--bf-line-height-none);
   }
 
   .m-editor-details-block__summary {
@@ -1136,8 +1136,8 @@
     border: none;
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     outline: none;
   }
 

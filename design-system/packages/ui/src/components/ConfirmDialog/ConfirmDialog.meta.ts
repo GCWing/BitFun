@@ -48,7 +48,7 @@ export const confirmDialogMeta = {
     "layout.confirmDialog.previewRadius",
     "font.family.control",
     "font.family.mono",
-    "font.size.body",
-    "font.size.caption",
+    "font.size.base",
+    "font.size.xs",
   ],
 } as const satisfies ComponentMeta;

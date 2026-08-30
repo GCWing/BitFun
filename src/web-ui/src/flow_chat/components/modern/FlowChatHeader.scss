@@ -2,7 +2,6 @@
 
 @use '../../../component-library/styles/tokens' as *;
 @use '../../../component-library/styles/overlay-surfaces' as surfaces;
-@use '../../typography' as flow-type;
 
 .flowchat-header {
   display: flex;
@@ -185,7 +184,7 @@
     flex-shrink: 0;
     padding: 0 3px;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     white-space: nowrap;
 
     &:empty {
@@ -238,7 +237,7 @@
     overflow: hidden;
     z-index: $z-popover;
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: var(--bf-appearance-token-font-family-sans);
+    font-family:var(--bf-font-family-sans);
   }
 
   &__session-overview-panel-header {
@@ -248,7 +247,7 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     border-bottom: 1px solid var(--bf-appearance-token-border-base);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
   }
 
@@ -331,8 +330,8 @@
     flex: 1;
     overflow: hidden;
     color: var(--bf-appearance-token-color-text-primary);
-    font-size: flow-type.$control-size;
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -340,7 +339,7 @@
   &__session-overview-section-count {
     flex: 0 0 auto;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     font-variant-numeric: tabular-nums;
   }
 
@@ -370,12 +369,12 @@
     border: 0;
     background: transparent;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     text-align: center;
 
     &--action {
       border-radius: $size-radius-base;
-      font-family: inherit;
+      font-family:var(--bf-font-family-sans);
       cursor: pointer;
       transition: background $motion-base $easing-standard;
 
@@ -408,8 +407,8 @@
     border-radius: $size-radius-base;
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
-    font-family: inherit;
-    font-size: flow-type.$control-size;
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-type-flow-control-font-size);
     text-align: left;
     cursor: pointer;
     transition: background $motion-base $easing-standard;
@@ -517,72 +516,12 @@
   }
 
   &__background-command-menu {
-    @include surfaces.floating-surface;
-
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    width: max-content;
-    min-width: 0;
-    max-width: min(200px, calc(100vw - 48px));
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px;
-    z-index: 40;
-
-    &--compact {
-      min-width: 0;
-    }
+    position: fixed;
+    z-index: 10000;
 
     &--portal {
-      position: fixed;
       top: auto;
       right: auto;
-      z-index: 10000;
-      max-height: calc(100vh - 16px);
-      overflow-y: auto;
-      color: var(--bf-appearance-token-color-text-primary);
-      font-family: var(--bf-appearance-token-font-family-sans);
-    }
-  }
-
-  &__background-command-menu-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: calc($size-radius-base - 2px);
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    font-size: flow-type.$control-size;
-    text-align: left;
-    white-space: nowrap;
-    cursor: pointer;
-
-    svg {
-      flex: 0 0 auto;
-      color: var(--bf-appearance-token-color-text-secondary);
-    }
-
-    &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
-    }
-
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
-    }
-
-    &--danger:hover:not(:disabled) {
-      color: var(--bf-appearance-token-color-error);
-      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent);
-
-      svg {
-        color: var(--bf-appearance-token-color-error);
-      }
     }
   }
 
@@ -591,7 +530,7 @@
     align-items: center;
     gap: $size-gap-1;
     width: 100%;
-    font-size: flow-type.$control-size;
+    font-size: var(--bf-type-flow-control-font-size);
     color: inherit;
     white-space: nowrap;
     overflow: hidden;
@@ -612,7 +551,7 @@
 
   &__background-command-list-meta {
     width: 100%;
-    font-size: flow-type.$support-size;
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;

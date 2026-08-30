@@ -28,7 +28,7 @@ export const commandToolCardMeta = {
     "color.surface.canvas",
     "color.surface.raised",
     "font.family.mono",
-    "font.size.small",
+    "font.size.sm",
     "radius.sm",
   ],
 } as const satisfies ComponentMeta;

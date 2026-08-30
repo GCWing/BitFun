@@ -83,10 +83,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     // Inactive state: lighter text color
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
     transition: color 0.15s ease;
   }
 
@@ -99,7 +99,7 @@
   &__dirty-indicator {
     display: none;
     flex-shrink: 0;
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-warning);
     margin-left: 2px;
   }

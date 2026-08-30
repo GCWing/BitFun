@@ -88,8 +88,8 @@
 }
 
 .image-analysis-card__filename {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--bf-font-size-base);
+  font-weight: var(--bf-font-weight-medium);
   color: var(--image-analysis-text);
   margin-bottom: 6px;
   overflow: hidden;
@@ -102,7 +102,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  font-size: var(--bf-type-flow-control-font-size);
   
   &.analyzing {
     color: var(--image-analysis-primary);
@@ -156,8 +156,8 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
   color: var(--image-analysis-text);
   
   .summary-icon {
@@ -186,17 +186,17 @@
     }
     
     h4 {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-control-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--image-analysis-text-secondary);
       margin: 0 0 6px 0;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: var(--bf-letter-spacing-wider);
     }
     
     p {
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
-      line-height: var(--bf-appearance-token-flowchat-text-line-height);
+      font-size: var(--bf-type-flow-control-font-size);
+      line-height: var(--bf-type-flow-body-line-height);
       color: var(--image-analysis-text);
       margin: 0;
     }
@@ -210,7 +210,7 @@
     .tag {
       display: inline-block;
       padding: 4px 10px;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
       background: var(--image-analysis-surface);
       color: var(--image-analysis-text);
       border: 1px solid var(--image-analysis-border);
@@ -222,7 +222,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--image-analysis-text-secondary);
     
     .meta-separator {
@@ -240,7 +240,7 @@
   padding: 8px 12px;
   background: rgba(var(--image-analysis-error-rgb) / 0.1);
   border-radius: 6px;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  font-size: var(--bf-type-flow-control-font-size);
   color: var(--image-analysis-error);
 }
 

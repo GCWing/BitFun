@@ -39,7 +39,7 @@
       justify-content: flex-start;
       gap: var(--bf-appearance-token-flowchat-inline-gap);
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
       border-bottom: none;
     }
   }
@@ -119,8 +119,8 @@
     }
 
     .file-name {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-      font-family: var(--bf-appearance-token-tool-card-font-mono);
+      font-size: var(--bf-type-flow-support-font-size);
+      font-family:var(--bf-font-family-mono);
       color: var(--bf-appearance-token-color-text-secondary);
       min-width: 0;
       overflow: hidden;
@@ -160,17 +160,17 @@
 
     .plan-title {
       margin: 0 0 var(--bf-appearance-token-flowchat-inline-gap) 0;
-      font-size: var(--bf-appearance-token-flowchat-font-size-base);
-      font-weight: 600;
+      font-size: var(--bf-type-flow-body-font-size);
+      font-weight: var(--bf-font-weight-semibold);
       color: var(--bf-appearance-token-color-text-primary);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
 
     .plan-overview {
       margin: 0;
-      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      font-size: var(--bf-type-flow-control-font-size);
       color: var(--bf-appearance-token-color-text-secondary);
-      line-height: var(--bf-appearance-token-flowchat-support-line-height);
+      line-height: var(--bf-type-flow-support-line-height);
     }
 
   }
@@ -226,8 +226,8 @@
       }
 
       .todo-content {
-        font-size: var(--bf-appearance-token-tool-card-action-font-size);
-        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        font-size: var(--bf-type-flow-control-font-size);
+        line-height: var(--bf-type-flow-support-line-height);
         color: var(--bf-appearance-token-color-text-secondary);
       }
 
@@ -242,7 +242,7 @@
         
         .todo-content {
           color: var(--bf-appearance-token-color-text-primary);
-          font-weight: 500;
+          font-weight: var(--bf-font-weight-medium);
         }
       }
 

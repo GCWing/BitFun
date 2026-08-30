@@ -4,7 +4,6 @@
  */
 
 $badge-border-radius: var(--bf-radius-sm);
-$badge-font-weight: var(--bf-font-weight-medium);
 $badge-padding-x: var(--bf-space-2);
 $badge-padding-y: var(--bf-appearance-token-badge-padding-y);
 
@@ -18,20 +17,9 @@ $easing-decelerate: var(--bf-motion-easing-decelerate);
 $easing-smooth: var(--bf-motion-easing-smooth);
 $easing-standard: var(--bf-motion-easing-standard);
 
-$font-family-mono: var(--bf-font-family-mono);
-$font-family-sans: var(--bf-font-family-sans);
-$font-weight-bold: var(--bf-font-weight-bold);
-$font-weight-medium: var(--bf-font-weight-medium);
-$font-weight-normal: var(--bf-font-weight-regular);
-$font-weight-semibold: var(--bf-font-weight-semibold);
-
 $glow-shadow-blue: var(--bf-appearance-token-glow-shadow-blue);
 $inner-glow-top: var(--bf-appearance-token-inner-glow-top);
 $inner-glow-top-hover: var(--bf-appearance-token-inner-glow-top-hover);
-
-$line-height-base: var(--bf-line-height-base);
-$line-height-relaxed: var(--bf-line-height-relaxed);
-$line-height-tight: var(--bf-line-height-tight);
 
 $motion-base: var(--bf-motion-duration-base);
 $motion-fast: var(--bf-motion-duration-fast);

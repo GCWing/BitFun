@@ -6,9 +6,9 @@
   color: var(--bf-appearance-token-color-text-secondary);
   background: transparent !important;
   box-shadow: none !important;
-  font-family: var(--bf-appearance-token-tool-card-font-mono);
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: var(--bf-appearance-token-flowchat-code-line-height);
+  font-family:var(--bf-font-family-mono);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-code-line-height);
   white-space: pre-wrap;
   word-break: break-word;
 }

@@ -183,8 +183,8 @@
 
 
   .task-action {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-primary);
     flex-shrink: 1;
     min-width: 0;
@@ -193,8 +193,8 @@
     white-space: nowrap;
 
     &__model-tag {
-      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-      font-weight: 400;
+      font-size: var(--bf-type-flow-micro-font-size);
+      font-weight: var(--bf-font-weight-regular);
       color: var(--bf-appearance-token-color-text-secondary);
       vertical-align: baseline;
     }
@@ -218,8 +218,8 @@
     align-items: center;
     padding: 0.1rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 3px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-muted);
     background: rgba(var(--task-failed-badge-rgb), 0.15);
@@ -230,8 +230,8 @@
     align-items: center;
     padding: 0.1rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 3px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-muted);
     background: var(--bf-appearance-token-element-bg-soft);
@@ -295,12 +295,12 @@
     align-items: center;
     padding: 0.125rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 4px;
-    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-micro-font-size);
+    font-weight: var(--bf-font-weight-medium);
     flex-shrink: 0;
     color: var(--bf-appearance-token-color-text-secondary);
     background: var(--bf-appearance-token-color-overlay-white-12);
-    letter-spacing: 0.02em;
+    letter-spacing: var(--bf-letter-spacing-wide);
   }
 
   .task-header-meta {
@@ -343,8 +343,8 @@
     align-items: flex-start;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
 
     svg {
       flex-shrink: 0;
@@ -385,10 +385,10 @@
     align-items: center;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    letter-spacing: var(--bf-letter-spacing-subtle);
+    line-height: var(--bf-type-flow-meta-line-height);
 
     svg {
       flex-shrink: 0;
@@ -410,11 +410,11 @@
     align-items: center;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
     margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
-    font-weight: 600;
+    font-size: var(--bf-type-flow-support-font-size);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
     opacity: 0.8;
   }
 
@@ -441,16 +441,16 @@
   }
 
   .error-message {
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-size: var(--bf-type-flow-control-font-size);
     color: var(--bf-appearance-token-color-error);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    line-height: var(--bf-type-flow-support-line-height);
   }
 
   .error-meta {
     display: flex;
     align-items: center;
     gap: var(--bf-appearance-token-flowchat-inline-gap);
-    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    font-size: var(--bf-type-flow-support-font-size);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
@@ -473,8 +473,8 @@
   .reject-button {
     padding: var(--bf-appearance-token-flowchat-control-pad-y) var(--bf-appearance-token-flowchat-control-pad-x);
     border-radius: 4px;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
-    font-weight: 500;
+    font-size: var(--bf-type-flow-control-font-size);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     transition:
       scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -644,13 +644,13 @@
   flex-direction: column;
   gap: var(--bf-appearance-token-flowchat-inline-gap);
   padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
-  font-size: var(--bf-appearance-token-tool-card-action-font-size);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
   color: var(--bf-appearance-token-color-text-secondary);
 
   &__role {
-    font-weight: 600;
-    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-weight: var(--bf-font-weight-semibold);
+    font-size: var(--bf-type-flow-control-font-size);
   }
 
   &__description {

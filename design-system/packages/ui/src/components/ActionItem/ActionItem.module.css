@@ -79,8 +79,8 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-font-size-small);
-    block-size: var(--bf-font-size-small);
+    inline-size: var(--bf-font-size-sm);
+    block-size: var(--bf-font-size-sm);
   }
 
   .leading > :where(svg, img),
@@ -94,8 +94,8 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-regular);
     line-height: var(--bf-line-height-base);
     text-overflow: ellipsis;
@@ -112,8 +112,8 @@
 
   .metadata {
     color: var(--bf-color-content-muted);
-    font-family: var(--bf-font-family-control);
-    font-size: var(--bf-font-size-small);
+    font-family:var(--bf-font-family-sans);
+    font-size: var(--bf-font-size-sm);
     line-height: var(--bf-line-height-tight);
     white-space: nowrap;
   }

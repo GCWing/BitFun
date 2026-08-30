@@ -35,7 +35,7 @@ describe('Skills scene presentation', () => {
 
     expect(stylesheet).toContain('$skills-sidebar-width: 184px;');
     expect(stylesheet).toContain('min-height: 32px;');
-    expect(stylesheet).toContain('font-size: 18px;');
+    expect(stylesheet).toContain('font-size: var(--bf-font-size-2xl);');
   });
 
   it('keeps row navigation and destructive actions as separate compact targets', () => {

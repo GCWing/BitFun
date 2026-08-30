@@ -10,11 +10,6 @@
     }
   }
 
-  /* 对话：左右单行，左侧说明区偏宽、右侧控件区保证最小宽度 */
-  &__row--flow-chat.bitfun-config-page-row:not(.bitfun-config-page-row--multiline) {
-    --row-grid-cols: minmax(0, 8fr) minmax(220px, 4fr);
-  }
-
   &__ui-size {
     display: flex;
     flex-direction: column;
@@ -48,49 +43,9 @@
     box-sizing: border-box;
   }
 
-  &__flow-chat {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: $size-gap-2;
-    width: 100%;
-    min-width: 0;
-  }
-
-  &__flow-chat-line {
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
-  }
-
-  &__flow-chat-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: $size-gap-2;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    cursor: pointer;
-  }
-
-  &__flow-chat-controls {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-
-    .select {
-      flex: 0 1 auto;
-      width: 100%;
-      max-width: 11rem;
-      min-width: 5.5rem;
-    }
-  }
-
   &__level-label {
     display: block;
-    line-height: 1.15;
+    line-height: var(--bf-line-height-tight);
     font-weight: inherit;
     color: inherit;
   }
@@ -101,9 +56,9 @@
 
   &__custom-hint {
     width: 100%;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
-    line-height: 1.4;
+    line-height: var(--bf-line-height-ui);
   }
 
   &__preview {
@@ -115,7 +70,7 @@
     border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-sm;
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: 1.6;
+    line-height: var(--bf-line-height-relaxed);
     word-wrap: break-word;
     transition: font-size $motion-base $easing-standard;
   }

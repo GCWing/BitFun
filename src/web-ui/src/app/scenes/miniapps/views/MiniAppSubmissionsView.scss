@@ -1,16 +1,6 @@
 @use '../../../../component-library/styles/tokens' as *;
 
-// One typographic scale for the whole submission workspace, borrowed from the
-// gallery/form primitives so nothing in here invents its own size:
-//   section title  13px / 600 / primary    — .gallery-zone__title
-//   section hint   12px / 400 / muted      — .gallery-zone__subtitle
-//   field label    13px / 500 / secondary  — Field label
-//   field value    13px / 400 / primary    — .select__value
-//   inline hint    12px / 400 / muted      — Field description
 .miniapp-submissions {
-  // Label-to-control distance, shared by Input, Select and the textarea fields.
-  --submissions-label-gap: 6px;
-
   &__header-actions {
     display: flex;
     align-items: center;
@@ -28,17 +18,7 @@
   // The shared Input renders its value at 14px while Select renders 13px; pin
   // both to 13px so every control in the form reads at the same size.
   [data-bf-component='input'] {
-    font-size: var(--bf-appearance-token-font-size-sm);
-  }
-
-  .select__label {
-    margin-bottom: var(--submissions-label-gap);
-  }
-
-  // Select's trigger is shrink-to-fit by default; stretch it so the dropdown
-  // lines up with the inputs above and below it.
-  .select__trigger {
-    width: 100%;
+    font-size: var(--bf-font-size-sm);
   }
 
   &__loading {
@@ -54,7 +34,7 @@
     gap: $size-gap-2;
     padding: 0 clamp(28px, 4vw, 64px) $size-gap-3;
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
 
     svg {
       flex: 0 0 auto;
@@ -97,8 +77,8 @@
       align-items: center;
       gap: $size-gap-2;
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-semibold);
 
       svg {
         flex: 0 0 auto;
@@ -108,8 +88,8 @@
 
     p {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -121,13 +101,13 @@
 
   &__field {
     display: grid;
-    gap: var(--submissions-label-gap);
+    gap: var(--bf-layout-field-root-gap);
 
     > span {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-medium;
-      letter-spacing: 0.2px;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
+      letter-spacing: var(--bf-letter-spacing-subtle);
     }
 
     textarea {
@@ -141,9 +121,9 @@
       outline: none;
       background: transparent;
       color: var(--bf-appearance-token-color-text-primary);
-      font-family: inherit;
-      font-size: var(--bf-appearance-token-font-size-sm);
-      line-height: $line-height-base;
+      font-family:var(--bf-font-family-sans);
+      font-size: var(--bf-font-size-sm);
+      line-height: var(--bf-line-height-base);
       resize: vertical;
       transition:
         border-color $motion-fast ease,
@@ -185,15 +165,15 @@
 
     span {
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-medium;
-      letter-spacing: 0.2px;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-medium);
+      letter-spacing: var(--bf-letter-spacing-subtle);
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      line-height: $line-height-relaxed;
+      font-size: var(--bf-font-size-xs);
+      line-height: var(--bf-line-height-relaxed);
     }
   }
 
@@ -217,7 +197,7 @@
       border-radius: $size-radius-sm;
       background: var(--bf-appearance-token-element-bg-soft);
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-sm);
+      font-size: var(--bf-font-size-sm);
 
       svg {
         color: var(--bf-appearance-token-color-text-muted);
@@ -255,8 +235,8 @@
     border: 0;
     background: transparent;
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-sm);
+    font-weight: var(--bf-font-weight-medium);
     cursor: pointer;
     justify-self: start;
     max-width: 100%;
@@ -273,8 +253,8 @@
     small {
       overflow: hidden;
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
-      font-weight: $font-weight-normal;
+      font-size: var(--bf-font-size-xs);
+      font-weight: var(--bf-font-weight-regular);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -298,12 +278,12 @@
       display: flex;
       justify-content: space-between;
       color: var(--bf-appearance-token-color-text-secondary);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-weight: $font-weight-medium;
+      font-weight: var(--bf-font-weight-medium);
       font-variant-numeric: tabular-nums;
     }
 
@@ -346,13 +326,13 @@
 
     strong {
       color: var(--bf-appearance-token-color-text-primary);
-      font-size: var(--bf-appearance-token-font-size-sm);
-      font-weight: $font-weight-semibold;
+      font-size: var(--bf-font-size-sm);
+      font-weight: var(--bf-font-weight-semibold);
     }
 
     small {
       color: var(--bf-appearance-token-color-text-muted);
-      font-size: var(--bf-appearance-token-font-size-xs);
+      font-size: var(--bf-font-size-xs);
     }
   }
 
@@ -377,15 +357,15 @@
   &__rejection {
     margin: 0;
     color: var(--bf-appearance-token-color-warning);
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__history-empty {
     padding: 32px 0;
     border-top: 1px solid var(--bf-appearance-token-border-subtle);
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     text-align: center;
   }
 }

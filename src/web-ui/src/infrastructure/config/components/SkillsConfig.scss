@@ -13,12 +13,12 @@
   }
 
   &__path-hint {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__validating {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
@@ -26,7 +26,7 @@
   &__validation {
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
 
     &.is-valid {
       background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
@@ -42,27 +42,27 @@
   }
 
   &__validation-name {
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__validation-desc {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     opacity: 0.8;
     margin-top: 2px;
   }
 
   &__validation-error {
-    font-weight: $font-weight-medium;
+    font-weight: var(--bf-font-weight-medium);
   }
 
   &__form-hint {
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__path-value {
-    font-family: $font-family-mono;
-    font-size: var(--bf-appearance-token-font-size-xs);
+    font-family: var(--bf-font-family-mono);
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-secondary);
     word-break: break-all;
   }
@@ -110,8 +110,8 @@
       var(--bf-appearance-token-color-overlay-white-04) 100%
     );
     color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-    line-height: $line-height-relaxed;
+    font-size: var(--bf-font-size-sm);
+    line-height: var(--bf-line-height-relaxed);
   }
 
   &__market-state--error {
@@ -207,10 +207,10 @@
   }
 
   &__market-item-name {
-    font-size: var(--bf-appearance-token-font-size-lg);
-    font-weight: $font-weight-semibold;
+    font-size: var(--bf-font-size-lg);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
-    line-height: $line-height-tight;
+    line-height: var(--bf-line-height-tight);
   }
 
   &__market-item-badge {
@@ -219,8 +219,8 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: $size-radius-full;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     border: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-muted);
@@ -233,9 +233,9 @@
   }
 
   &__market-item-description {
-    font-size: var(--bf-appearance-token-font-size-sm);
+    font-size: var(--bf-font-size-sm);
     color: var(--bf-appearance-token-color-text-secondary);
-    line-height: $line-height-relaxed;
+    line-height: var(--bf-line-height-relaxed);
     margin-bottom: $size-gap-3;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -257,8 +257,8 @@
     max-width: 100%;
     padding: 2px 10px;
     border-radius: $size-radius-full;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    line-height: 1.35;
+    font-size: var(--bf-font-size-xs);
+    line-height: var(--bf-line-height-compact);
     border: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-element-bg-soft);
     color: var(--bf-appearance-token-color-text-muted);
@@ -280,8 +280,8 @@
     flex-shrink: 0;
     padding: 2px 10px;
     border-radius: $size-radius-full;
-    font-size: var(--bf-appearance-token-font-size-xs);
-    font-weight: $font-weight-medium;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-muted);
     border: 1px solid var(--bf-appearance-token-border-subtle);
     background: var(--bf-appearance-token-color-overlay-white-08);
@@ -400,7 +400,7 @@
     }
 
     &__market-item-name {
-      font-size: var(--bf-appearance-token-font-size-base);
+      font-size: var(--bf-font-size-base);
     }
 
     &__market-item-description {

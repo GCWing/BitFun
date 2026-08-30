@@ -1,4 +1,3 @@
-import { Combobox } from '@bitfun/ui';
 /**
  * ScheduledJobsView — inline view for managing scheduled jobs.
  *
@@ -9,7 +8,7 @@ import { Combobox } from '@bitfun/ui';
 import { Button, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-
+import { LocalizedCombobox } from '@/infrastructure/design-system';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
   cronAPI,
@@ -908,17 +907,17 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 options={sessionOptions}
                 value={draft.sessionId}
-                error={validationErrors.sessionId}
+                invalid={validationErrors.sessionId}
                 allowCustomValue
                 searchable
                 clearable
                 className="asv__session-select"
                 dropdownClassName="asv__session-select-dropdown"
-                onChange={value => {
+                onValueChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
                 }}
@@ -932,11 +931,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.agentType')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 options={workspaceAgentOptions}
                 value={draft.agentType}
-                error={validationErrors.agentType}
+                invalid={validationErrors.agentType}
                 disabled={workspaceKind === WorkspaceKind.Assistant}
                 className="asv__agent-select"
                 dropdownClassName="asv__agent-select-dropdown"
@@ -948,7 +947,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                     ) : null}
                   </div>
                 )}
-                onChange={value => {
+                onValueChange={value => {
                   const agentType = String(value);
                   setValidationErrors(current => ({ ...current, agentType: false }));
                   setDraft(c => ({ ...c, agentType }));
@@ -963,14 +962,14 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
               <span className="asv__field-label">{t('nav.scheduledJobs.fields.session')}</span>
             </div>
             <div className="asv__field-control" data-bf-component="scheduled-jobs-view" data-bf-part="fieldControl">
-              <Combobox
-                size="small"
+              <LocalizedCombobox
+                size="sm"
                 options={sessionOptions}
                 value={draft.sessionId}
-                error={validationErrors.sessionId}
+                invalid={validationErrors.sessionId}
                 allowCustomValue
                 searchable
-                onChange={value => {
+                onValueChange={value => {
                   setValidationErrors(current => ({ ...current, sessionId: false }));
                   setDraft(c => ({ ...c, sessionId: String(value) }));
                 }}

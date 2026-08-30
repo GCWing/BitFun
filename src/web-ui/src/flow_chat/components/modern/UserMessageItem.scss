@@ -3,7 +3,6 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as tokens;
-@use '../../typography' as flow-type;
 
 .user-message-item {
   box-sizing: border-box;
@@ -14,7 +13,7 @@
    * `--failed`) re-point it to their own line box.
    */
   --user-message-line-box: calc(
-    var(--bf-appearance-token-flowchat-font-size-base) * var(--bf-appearance-token-flowchat-text-line-height)
+    var(--bf-type-flow-body-font-size) * var(--bf-type-flow-body-line-height)
   );
   /*
    * Fills the reading column instead of hugging its text: the bubble shares the
@@ -46,25 +45,15 @@
     background: var(--bf-appearance-token-element-bg-soft);
     border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 56%, transparent);
 
-    .user-message-item__copy-btn {
+    .user-message-item__actions {
       opacity: 1;
-    }
-
-    .user-message-item__rollback-btn {
-      opacity: 1;
-    }
-
-    .user-message-item__copy-btn:disabled,
-    .user-message-item__edit-btn:disabled {
-      opacity: 0.35;
     }
   }
 
   &:focus-within {
     border-color: color-mix(in srgb, var(--bf-appearance-token-border-accent) 68%, var(--bf-appearance-token-border-base));
 
-    .user-message-item__copy-btn,
-    .user-message-item__rollback-btn {
+    .user-message-item__actions {
       opacity: 1;
     }
   }
@@ -77,11 +66,11 @@
 }
 
 .user-message-item__timestamp {
-  font-size: flow-type.$meta-size;
+  font-size: var(--bf-type-flow-meta-font-size);
   color: var(--bf-appearance-token-color-text-muted);
-  font-weight: 400;
+  font-weight: var(--bf-font-weight-regular);
   margin-bottom: 0.12rem;
-  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  line-height: var(--bf-type-flow-meta-line-height);
 }
 
 .user-message-item__main {
@@ -102,10 +91,10 @@
   width: fit-content;
   padding: 0.12rem 0.44rem;
   border-radius: 999px;
-  font-size: flow-type.$micro-size;
-  font-weight: 600;
-  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
-  letter-spacing: 0;
+  font-size: var(--bf-type-flow-micro-font-size);
+  font-weight: var(--bf-font-weight-semibold);
+  line-height: var(--bf-type-flow-meta-line-height);
+  letter-spacing: var(--bf-letter-spacing-normal);
   user-select: none;
 }
 
@@ -120,6 +109,8 @@
   align-items: center;
   gap: 0.125rem;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 140ms ease;
   /*
    * The 28px hit targets are taller than the first-line box, and they keep that
    * layout box while idle at `opacity: 0`. Left alone the cluster becomes the
@@ -140,9 +131,9 @@
 
 .user-message-item__content {
   flex: 1;
-  font-size: flow-type.$body-size;
-  font-weight: 500;
-  line-height: flow-type.$body-line-height;
+  font-size: var(--bf-type-flow-body-font-size);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-type-flow-body-line-height);
   color: var(--bf-appearance-token-color-text-primary);
   white-space: pre-wrap;
   display: -webkit-box;
@@ -170,9 +161,9 @@
   border-radius: var(--bf-appearance-token-size-radius-sm);
   background: var(--bf-appearance-token-element-bg-hover);
   color: var(--bf-appearance-token-color-text-secondary);
-  font-size: flow-type.$control-size;
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: var(--bf-type-flow-control-font-size);
+  font-weight: var(--bf-font-weight-medium);
+  line-height: var(--bf-line-height-compact);
   white-space: nowrap;
   user-select: none;
 
@@ -199,13 +190,13 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --user-message-failed-font-size: #{flow-type.$control-size};
-  --user-message-failed-line-height: 1.55;
-  --user-message-failed-line-box: calc(
-    var(--user-message-failed-font-size) * var(--user-message-failed-line-height)
+  --_failed-font-size: var(--bf-type-flow-control-font-size);
+  --_failed-line-height: var(--bf-line-height-comfortable);
+  --_failed-line-box: calc(
+    var(--_failed-font-size) * var(--_failed-line-height)
   );
   /* Smaller text than the default bubble, so the shared line box follows it. */
-  --user-message-line-box: var(--user-message-failed-line-box);
+  --user-message-line-box: var(--_failed-line-box);
 
   background: transparent;
   border: none;
@@ -244,8 +235,8 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    height: var(--user-message-failed-line-box);
-    min-height: var(--user-message-failed-line-box);
+    height: var(--_failed-line-box);
+    min-height: var(--_failed-line-box);
     color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.9;
 
@@ -261,10 +252,10 @@
     width: max-content;
     max-width: 100%;
     color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--user-message-failed-font-size);
-    font-weight: 400;
+    font-size: var(--_failed-font-size);
+    font-weight: var(--bf-font-weight-regular);
     font-style: italic;
-    line-height: var(--user-message-failed-line-height);
+    line-height: var(--_failed-line-height);
     text-decoration: line-through;
     text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 72%, transparent);
   }
@@ -294,7 +285,8 @@
 }
 
 .user-message-item__copy-btn,
-.user-message-item__edit-btn {
+.user-message-item__edit-btn,
+.user-message-item__rollback-btn {
   // Align with the IconButton ghost variant.
   display: inline-flex;
   align-items: center;
@@ -309,16 +301,13 @@
   border-radius: var(--bf-appearance-token-size-radius-sm);
   color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
-  transition:
-    opacity 140ms ease,
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-  opacity: 0;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   flex-shrink: 0;
   align-self: center;
   outline: none;
   user-select: none;
   
-  &:hover {
+  &:hover:not(:disabled) {
     background: transparent;
     color: var(--bf-appearance-token-color-text-primary);
     box-shadow: none;
@@ -329,7 +318,6 @@
   }
 
   &:focus-visible {
-    opacity: 1;
     outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
@@ -350,11 +338,6 @@
 .user-message-item__copy-btn.copied {
   color: var(--bf-appearance-token-color-success);
   background: var(--bf-appearance-token-color-success-bg);
-  opacity: 1;
-}
-
-.user-message-item__edit-btn {
-  opacity: 1;
 }
 
 .user-message-edit-composer {
@@ -366,8 +349,8 @@
   min-height: 5.5rem;
   max-height: 45vh;
   overflow-y: auto;
-  font-size: flow-type.$body-size;
-  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  font-size: var(--bf-type-flow-body-font-size);
+  line-height: var(--bf-type-flow-body-line-height);
 }
 
 .user-message-edit-composer__rich-input {
@@ -382,8 +365,8 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    font-size: flow-type.$body-size;
-    line-height: var(--bf-appearance-token-flowchat-text-line-height);
+    font-size: var(--bf-type-flow-body-font-size);
+    line-height: var(--bf-type-flow-body-line-height);
   }
 }
 
@@ -393,58 +376,6 @@
 
 .user-message-edit-composer__spinner {
   animation: user-message-item-spin 1s linear infinite;
-}
-
-.user-message-item__rollback-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: var(--bf-appearance-token-size-radius-sm);
-  color: var(--bf-appearance-token-color-text-secondary);
-  cursor: pointer;
-  transition:
-    opacity 140ms ease,
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-  opacity: 0;
-  flex-shrink: 0;
-  align-self: center;
-  outline: none;
-  user-select: none;
-
-  &:hover:not(:disabled) {
-    background: transparent;
-    color: var(--bf-appearance-token-color-text-primary);
-    box-shadow: none;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
-  &:focus-visible {
-    opacity: 1;
-    outline: 2px solid var(--bf-appearance-token-border-accent);
-    outline-offset: 1px;
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.35;
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-    display: block;
-    flex-shrink: 0;
-  }
 }
 
 .user-message-item__rollback-spinner {
@@ -548,6 +479,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .user-message-item,
+  .user-message-item__actions,
   .user-message-item__copy-btn,
   .user-message-item__edit-btn,
   .user-message-item__rollback-btn,

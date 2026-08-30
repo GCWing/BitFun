@@ -38,13 +38,13 @@
 
 .bitfun-update-progress__hint {
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: var(--bf-font-size-sm);
   color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .bitfun-update-progress__restart {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--bf-font-size-xs);
   color: var(--bf-appearance-token-color-text-muted);
 }
 

@@ -18,6 +18,6 @@ export const contextCompressionToolCardMeta = {
     "color.content.muted",
     "color.status.danger.content",
     "font.family.mono",
-    "font.size.small",
+    "font.size.sm",
   ],
 } as const satisfies ComponentMeta;

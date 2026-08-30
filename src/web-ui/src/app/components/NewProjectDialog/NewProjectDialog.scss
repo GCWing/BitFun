@@ -49,8 +49,8 @@
   }
 
   &__title {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--bf-font-size-2xl);
+    font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 6px 0;
     position: relative;
@@ -58,7 +58,7 @@
   }
 
   &__subtitle {
-    font-size: 12px;
+    font-size: var(--bf-font-size-xs);
     color: var(--bf-appearance-token-color-text-muted);
     margin: 0;
     position: relative;
@@ -101,8 +101,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--bf-font-size-xs);
+    font-weight: var(--bf-font-weight-medium);
     color: var(--bf-appearance-token-color-text-secondary);
     margin: 0;
     
@@ -129,7 +129,7 @@
       width: 100%;
       cursor: default;
       user-select: none;
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       padding: 10px 12px;
       background: var(--bf-appearance-token-color-overlay-white-04);
       border: 1px dashed var(--bf-appearance-token-border-subtle);
@@ -138,7 +138,7 @@
       
       &::placeholder {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: 12px;
+        font-size: var(--bf-font-size-xs);
       }
       
       &:focus {
@@ -159,7 +159,7 @@
   &__name-input {
     input {
       width: 100%;
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       padding: 10px 12px;
       background: var(--bf-appearance-token-color-overlay-white-04);
       border: 1px solid var(--bf-appearance-token-border-subtle);
@@ -173,7 +173,7 @@
       
       &::placeholder {
         color: var(--bf-appearance-token-color-text-muted);
-        font-size: 12px;
+        font-size: var(--bf-font-size-xs);
       }
       
       &:focus {
@@ -235,15 +235,15 @@
   }
 
   &__preview-label {
-    font-size: 10px;
+    font-size: var(--bf-font-size-micro);
     color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--bf-letter-spacing-wider);
   }
 
   &__preview-path {
-    font-size: 11px;
-    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: var(--bf-font-size-meta);
+    font-family: var(--bf-font-family-mono);
     color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -270,7 +270,7 @@
     }
     
     span {
-      font-size: 12px;
+      font-size: var(--bf-font-size-xs);
       color: var(--bf-appearance-token-color-error);
     }
   }

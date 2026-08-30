@@ -3,6 +3,18 @@
  */
 
 import type { EditorConfig, MinimapConfig, GuidesConfig, ScrollbarConfig, HoverConfig, SuggestConfig, QuickSuggestionsConfig, InlayHintsConfig } from './types';
+import {
+  getTypographyTokenNumber,
+  getTypographyTokenPx,
+  getTypographyTokenValue,
+} from '@/infrastructure/design-system/typographyRuntime';
+
+export const DEFAULT_EDITOR_FONT_SIZE = getTypographyTokenPx('font.size.base');
+export const DEFAULT_EDITOR_FONT_FAMILY = getTypographyTokenValue('font.family.mono');
+export const DEFAULT_EDITOR_LINE_HEIGHT = getTypographyTokenNumber('lineHeight.base');
+export const DEFAULT_EDITOR_INLAY_FONT_SIZE = getTypographyTokenPx('font.size.xs');
+export const DEFAULT_EDITOR_FONT_WEIGHT: EditorConfig['fontWeight'] =
+  getTypographyTokenNumber('font.weight.regular') >= 600 ? 'bold' : 'normal';
 
 export const DEFAULT_MINIMAP_CONFIG: MinimapConfig = {
   enabled: true,
@@ -48,17 +60,17 @@ export const DEFAULT_QUICK_SUGGESTIONS_CONFIG: QuickSuggestionsConfig = {
 
 export const DEFAULT_INLAY_HINTS_CONFIG: InlayHintsConfig = {
   enabled: 'on',
-  fontSize: 12,
-  fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
+  fontSize: DEFAULT_EDITOR_INLAY_FONT_SIZE,
+  fontFamily: DEFAULT_EDITOR_FONT_FAMILY,
   padding: false,
 };
 
 export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   // Appearance
-  fontSize: 14,
-  fontFamily: "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-  fontWeight: 'normal',
-  lineHeight: 1.5,
+  fontSize: DEFAULT_EDITOR_FONT_SIZE,
+  fontFamily: DEFAULT_EDITOR_FONT_FAMILY,
+  fontWeight: DEFAULT_EDITOR_FONT_WEIGHT,
+  lineHeight: DEFAULT_EDITOR_LINE_HEIGHT,
   cursorStyle: 'line',
   cursorBlinking: 'smooth',
   renderWhitespace: 'selection',

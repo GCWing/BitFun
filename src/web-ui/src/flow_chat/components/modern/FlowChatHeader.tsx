@@ -38,7 +38,7 @@ import {
   createReviewPlatformTab,
 } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-import { IconButton, Input } from '@bitfun/ui';
+import { IconButton, Input, Menu, MenuItem } from '@bitfun/ui';
 
 const PULL_REQUEST_OVERVIEW_LIMIT = 3;
 
@@ -487,48 +487,44 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           />
         </Tooltip>
         {openBackgroundCommandMenuId === command.execSessionKey && backgroundCommandMenuPosition ? createPortal(
-          <div
+          <Menu
             ref={backgroundCommandMenuRef}
             className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
             data-bf-component="flow-chat-header"
             data-bf-part="commandMenu"
-            role="menu"
             aria-label={t('flowChatHeader.backgroundCommandActions')}
             style={backgroundCommandMenuPosition}
             data-testid="flowchat-header-background-menu"
           >
             {canSendBackgroundCommandInput ? (
-              <button
+              <MenuItem
                 type="button"
-                role="menuitem"
-                className="flowchat-header__background-command-menu-item"
                 data-bf-component="flow-chat-header"
                 data-bf-part="commandItem"
                 onClick={(event) => handleCommandInputRequest(event, command)}
+                leading={<Keyboard size={12} aria-hidden="true" />}
               >
-                <Keyboard size={12} aria-hidden="true" />
                 <span>{t('flowChatHeader.backgroundCommandSendInput')}</span>
-              </button>
+              </MenuItem>
             ) : null}
             {canStopBackgroundCommand ? (
-              <button
+              <MenuItem
                 type="button"
-                role="menuitem"
-                className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
+                tone="danger"
                 data-bf-component="flow-chat-header"
                 data-bf-part="commandItem"
                 onClick={(event) => handleCommandStop(event, command)}
                 disabled={command.isStopping === true}
+                leading={<Square size={12} aria-hidden="true" />}
               >
-                <Square size={12} aria-hidden="true" />
                 <span>
                   {command.isStopping
                     ? t('flowChatHeader.backgroundCommandStopping')
                     : t('flowChatHeader.backgroundCommandStop')}
                 </span>
-              </button>
+              </MenuItem>
             ) : null}
-          </div>,
+          </Menu>,
           getAppearanceOverlayHost(),
         ) : null}
       </div>
@@ -818,28 +814,26 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                         </Tooltip>
                       ) : null}
                       {isBackgroundCommandSectionMenuOpen && backgroundCommandMenuPosition ? createPortal(
-                        <div
+                        <Menu
                           ref={backgroundCommandMenuRef}
                           className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
                           data-bf-component="flow-chat-header"
                           data-bf-part="commandMenu"
-                          role="menu"
                           aria-label={t('flowChatHeader.backgroundCommandActions')}
                           style={backgroundCommandMenuPosition}
                           data-testid="flowchat-header-background-menu"
                         >
-                          <button
+                          <MenuItem
                             type="button"
-                            role="menuitem"
-                            className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
+                            tone="danger"
                             data-bf-component="flow-chat-header"
                             data-bf-part="commandItem"
                             onClick={handleCommandStopAll}
+                            leading={<Square size={12} aria-hidden="true" />}
                           >
-                            <Square size={12} aria-hidden="true" />
                             <span>{t('flowChatHeader.backgroundCommandStopAll')}</span>
-                          </button>
-                        </div>,
+                          </MenuItem>
+                        </Menu>,
                         getAppearanceOverlayHost(),
                       ) : null}
                     </div>

@@ -11,7 +11,7 @@ const ambientTokens = [
   "color.status.success.content",
   "font.family.control",
   "font.family.mono",
-  "font.size.small",
+  "font.size.sm",
   "font.weight.medium",
   "font.weight.regular",
   "radius.sm",
