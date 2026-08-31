@@ -222,6 +222,7 @@ agent-runtime = [
     "dep:similar",
     "dep:tokio-util",
     "dep:tool-runtime",
+    "tool-runtime/shell-analysis",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
     "bitfun-services-core/workspace-text-runtime",

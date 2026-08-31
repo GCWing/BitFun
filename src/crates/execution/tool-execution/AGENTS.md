@@ -31,11 +31,16 @@ agent-facing tool surface.
 - Provider-neutral contracts belong in `tool-contracts` (`bitfun-agent-tools`);
   product provider grouping belongs in `tool-provider-groups`
   (`bitfun-tool-packs`).
+- `shell-analysis` owns non-executing syntax facts for complete ExecCommand
+  inputs. Core's Agent Runtime selects it for task constraints; session state,
+  path IO and permission decisions stay in Core. Keep the default empty and
+  the regex dependency behind this feature. See `src/shell_analysis/README.md`.
 
 ## Verification
 
 ```bash
 cargo test -p tool-runtime
+cargo test -p tool-runtime --features shell-analysis --lib shell_analysis
 cargo test -p tool-runtime --features document-read fs::document
 cargo test -p tool-runtime --features web-readable web
 node scripts/check-core-boundaries.mjs

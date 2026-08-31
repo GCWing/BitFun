@@ -1,0 +1,1288 @@
+[
+  {
+    "id": "FD01",
+    "group": "fd",
+    "command": "printf x 2>&1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD02",
+    "group": "fd",
+    "command": "printf x 2>& 1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&",
+        "1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD03",
+    "group": "fd",
+    "command": "printf x 1>&2",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&2"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD04",
+    "group": "fd",
+    "command": "cat 3<&0",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&0"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD05",
+    "group": "fd",
+    "command": "printf x 2>&-",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&-"
+      ],
+      "required_descriptor_operations": [
+        "close"
+      ]
+    }
+  },
+  {
+    "id": "FD06",
+    "group": "fd",
+    "command": "printf x 3>&1-",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1-"
+      ],
+      "required_descriptor_operations": [
+        "move"
+      ]
+    }
+  },
+  {
+    "id": "FD07",
+    "group": "fd",
+    "command": "printf x >/tmp/lab/log 2>&1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/log"
+      ],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD08",
+    "group": "fd",
+    "command": "printf x >/app/file 2>&1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD09",
+    "group": "fd",
+    "command": "printf x 2>&1 >/app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD10",
+    "group": "fd",
+    "command": "exec 3>/app/file; printf x >&3",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [
+        "&3"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    }
+  },
+  {
+    "id": "FD11",
+    "group": "fd",
+    "command": "printf x 2>\\\n&1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": [
+        "copy"
+      ]
+    },
+    "notes": "Backslash-newline continuation must preserve descriptor syntax."
+  },
+  {
+    "id": "WR01",
+    "group": "file_redirect",
+    "command": "printf x>/app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR02",
+    "group": "file_redirect",
+    "command": "printf x>>/app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR03",
+    "group": "file_redirect",
+    "command": "printf x >| /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR04",
+    "group": "file_redirect",
+    "command": "cat <>/app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Read/write open is a potential mutation even without an explicit write argument."
+  },
+  {
+    "id": "WR05",
+    "group": "file_redirect",
+    "command": "printf x &>/app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR06",
+    "group": "file_redirect",
+    "command": "printf x &>>/app/file",
+    "context_overrides": {
+      "requires_shell_syntax": [
+        "&>>"
+      ]
+    },
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Use a Bash version/dialect that supports this syntax, as in the GNU Bash 5.3 reference. macOS /bin/bash 3.2 cannot serve as the syntax oracle for this case."
+  },
+  {
+    "id": "WR07",
+    "group": "file_redirect",
+    "command": "printf x > '&1'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/&1"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "This is an actual filename, not a descriptor operand."
+  },
+  {
+    "id": "WR08",
+    "group": "file_redirect",
+    "command": "printf x 2>1",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/1"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR09",
+    "group": "file_redirect",
+    "command": ">/app/new-file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/new-file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR10",
+    "group": "file_redirect",
+    "command": "printf x > '/tmp/lab/a b'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/a b"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR11",
+    "group": "file_redirect",
+    "command": "printf x > '/tmp/lab/a*b'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/a*b"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Quoted asterisk is literal; do not infer expansion from characters after quote removal."
+  },
+  {
+    "id": "WR12",
+    "group": "file_redirect",
+    "command": "printf x >/tmp/lab/a*",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Do not execute glob expansion during analysis."
+  },
+  {
+    "id": "WR13",
+    "group": "file_redirect",
+    "command": "cat </app/input",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Edit-constraint decision only; existing read permissions still apply."
+  },
+  {
+    "id": "WR14",
+    "group": "file_redirect",
+    "command": "printf x >/tmp/lab/log 2>&1; rm /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/tmp/lab/log",
+        "/app/file"
+      ],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "WR15",
+    "group": "file_redirect",
+    "command": "printf x >& /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Bash combined-output filename form with omitted destination FD; not a descriptor copy."
+  },
+  {
+    "id": "QU01",
+    "group": "quoted_data",
+    "command": "printf '%s' 'x > y; rm /app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "y",
+        "/app/file"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU02",
+    "group": "quoted_data",
+    "command": "psql -c \"SELECT 1 WHERE 2 > 1\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "1"
+      ],
+      "required_descriptor_operations": []
+    },
+    "notes": "No shell file effect inferred from SQL text; not a claim that every SQL statement is harmless."
+  },
+  {
+    "id": "QU03",
+    "group": "quoted_data",
+    "command": "printf x\\> /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "/app/file"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU04",
+    "group": "quoted_data",
+    "command": "printf '%s' '2>&1'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": []
+    },
+    "notes": "A quoted argument is not an FD operation either."
+  },
+  {
+    "id": "QU05",
+    "group": "quoted_data",
+    "command": "printf x # > /app/decoy",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU06",
+    "group": "quoted_data",
+    "command": "printf '%s' 'Path(\"/app/file\").write_text(\"x\")'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "/app/file"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU07",
+    "group": "substitution",
+    "command": "echo \"$(touch /app/file)\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Must not allow merely because command substitution is within double quotes."
+  },
+  {
+    "id": "QU08",
+    "group": "substitution",
+    "command": "echo '$(touch /app/file)'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "/app/file"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU09",
+    "group": "substitution",
+    "command": "echo \"`touch /app/file`\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU10",
+    "group": "substitution",
+    "command": "cat <(touch /app/file; printf x)",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Process substitution can execute mutations even when used as an input."
+  },
+  {
+    "id": "QU11",
+    "group": "substitution",
+    "command": "printf x > >(cat >/app/file)",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "QU12",
+    "group": "substitution",
+    "command": "printf x >\"$(touch /app/file; printf /tmp/lab/log)\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD01",
+    "group": "heredoc_data",
+    "command": "cat > /logs/agent/answer.txt <<'EOF'\nthreshold > 100000\nrm /app/decoy\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/logs/agent/answer.txt"
+      ],
+      "forbidden_file_targets": [
+        "100000",
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD02",
+    "group": "heredoc_data",
+    "command": "cat > /logs/agent/answer.txt <<\"EOF\"\n$(touch /app/decoy)\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/logs/agent/answer.txt"
+      ],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD03",
+    "group": "heredoc_data",
+    "command": "cat > /logs/agent/answer.txt <<'EOF'\nPath('/app/decoy').write_text('x')\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/logs/agent/answer.txt"
+      ],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD04",
+    "group": "heredoc_data",
+    "command": "cat <<'A' <<'B' >/tmp/lab/out\n> /app/decoy-a\nA\n> /app/decoy-b\nB",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/out"
+      ],
+      "forbidden_file_targets": [
+        "/app/decoy-a",
+        "/app/decoy-b"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD05",
+    "group": "heredoc_data",
+    "command": "cat <<-'EOF' >/tmp/lab/out\n\t> /app/decoy\n\tEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/out"
+      ],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD06",
+    "group": "heredoc_data",
+    "command": "cat <<'EOF' >/tmp/lab/out\nEOF extra\n> /app/decoy\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/out"
+      ],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD07",
+    "group": "heredoc_expansion",
+    "command": "cat >/tmp/lab/out <<EOF\n$(touch /app/file)\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Outer command substitution can execute despite cat being a data consumer."
+  },
+  {
+    "id": "HD08",
+    "group": "heredoc_program",
+    "command": "bash <<'EOF'\nprintf x >/app/file\nEOF",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Quoted delimiter prevents outer expansion, not child-shell execution."
+  },
+  {
+    "id": "HD09",
+    "group": "heredoc_program",
+    "command": "python3 <<'PY'\nfrom pathlib import Path\nPath('/app/file').write_text('x')\nPY",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Preserve existing interpreter mutation protection; do not skip executable stdin."
+  },
+  {
+    "id": "HD10",
+    "group": "herestring",
+    "command": "cat <<< 'x > /app/decoy'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "/app/decoy"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD11",
+    "group": "herestring",
+    "command": "cat <<< \"$(touch /app/file)\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "HD12",
+    "group": "malformed",
+    "command": "cat <<'EOF' >/tmp/lab/out\nunfinished body",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "invalid_or_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Unterminated here-doc must not silently become an empty analysis. Shell may warn and proceed; guard must communicate its conservative refusal."
+  },
+  {
+    "id": "HD13",
+    "group": "heredoc_program",
+    "command": "bash <<< 'printf x >/app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW01",
+    "group": "cwd",
+    "command": "printf x > sink.out",
+    "context_overrides": {
+      "workdir": "/tmp/lab"
+    },
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/sink.out"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW02",
+    "group": "cwd",
+    "command": "printf x > sink.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/sink.out"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW03",
+    "group": "cwd",
+    "command": "cd /tmp/lab && printf x > sink.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/sink.out"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW04",
+    "group": "cwd",
+    "command": "cd /tmp/lab; printf x > sink.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "If cd fails, write can still occur in protected initial cwd. A static existence check does not prove runtime success."
+  },
+  {
+    "id": "CW05",
+    "group": "cwd",
+    "command": "(cd /tmp/lab && printf x > sink.out); printf y > parent.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/parent.out"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Child cwd must not be reused for parent commands."
+  },
+  {
+    "id": "CW06",
+    "group": "cwd",
+    "command": "printf x > ../app/file",
+    "context_overrides": {
+      "workdir": "/tmp"
+    },
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW07",
+    "group": "cwd",
+    "command": "printf x >/tmp/lab/link/file",
+    "context_overrides": {
+      "filesystem_fixture": {
+        "symlinks": {
+          "/tmp/lab/link": "/app"
+        }
+      }
+    },
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW08",
+    "group": "cwd",
+    "command": "cd \"$DEST\" && printf x > sink.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CW09",
+    "group": "cwd",
+    "command": "cd /tmp/lab || printf x > sink.out",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "The right side runs on cd failure, in the initial protected cwd."
+  },
+  {
+    "id": "CM01",
+    "group": "command_effect",
+    "command": "rm /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM02",
+    "group": "command_effect",
+    "command": "mv /app/file /tmp/lab/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file",
+        "/tmp/lab/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM03",
+    "group": "command_effect",
+    "command": "cp /tmp/lab/input /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM04",
+    "group": "command_effect",
+    "command": "sed -i 's/x/y/' /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM05",
+    "group": "command_effect",
+    "command": "truncate -s 0 /tmp/lab/log",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/log"
+      ],
+      "forbidden_file_targets": [
+        "0",
+        "/app/0"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM06",
+    "group": "command_effect",
+    "command": "rm /tmp/lab/helper 2>/dev/null",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [
+        "/tmp/lab/helper",
+        "/dev/null"
+      ],
+      "forbidden_file_targets": [
+        "2>/dev/null"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM07",
+    "group": "command_effect",
+    "command": "git checkout HEAD -- /app/file",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_protected",
+      "required_resolved_file_targets": [
+        "/app/file"
+      ],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM08",
+    "group": "command_effect",
+    "command": "python3 -c \"open('/app/file', 'w').write('x')\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM09",
+    "group": "command_effect",
+    "command": "node -e \"require('fs').writeFileSync('/app/file', 'x')\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM10",
+    "group": "command_effect",
+    "command": "bash -lc 'printf x 2>&1'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM11",
+    "group": "command_effect",
+    "command": "bash -lc 'printf x >/app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM12",
+    "group": "command_effect",
+    "command": "bash /tmp/lab/script.sh",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "No script execution or unapproved script-content trust during preflight."
+  },
+  {
+    "id": "CM13",
+    "group": "command_effect",
+    "command": "printf '%s' 'touch /app/file' | bash",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Data becomes code at the shell consumer; pipeline must not be classified read-only."
+  },
+  {
+    "id": "CM14",
+    "group": "command_effect",
+    "command": "printf x > \"$DEST\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Dynamic file target cannot be approved based on a fake literal pathname."
+  },
+  {
+    "id": "CM15",
+    "group": "command_effect",
+    "command": "go test ./...",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "No explicit target is proven; preserve normal execution policy. This is not a read-only guarantee."
+  },
+  {
+    "id": "CM16",
+    "group": "wrapped_program",
+    "command": "env QA=1 bash -lc 'printf x >/app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM17",
+    "group": "wrapped_program",
+    "command": "timeout 5 sh -c 'printf x >/app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM18",
+    "group": "wrapped_program",
+    "command": "command bash -c 'printf x >/app/file'",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM19",
+    "group": "wrapped_program",
+    "command": "nohup bash -c 'printf x >/app/file' >/tmp/lab/log",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": [
+        "deny_protected",
+        "deny_unresolved"
+      ],
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CM20",
+    "group": "command_effect",
+    "command": "printf x >&\"$DEST\"",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "deny_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "With omitted FD, the dynamic operand may denote a filename; do not unconditionally classify as descriptor copy."
+  },
+  {
+    "id": "ER01",
+    "group": "malformed",
+    "command": "printf 'unfinished",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "invalid_or_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "ER02",
+    "group": "malformed",
+    "command": "printf x >",
+    "context_overrides": {},
+    "expected": {
+      "guard_decision": "invalid_or_unresolved",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CO01",
+    "group": "no_constraint",
+    "command": "printf x >/app/file",
+    "context_overrides": {
+      "active_constraints": false
+    },
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [],
+      "required_descriptor_operations": []
+    },
+    "notes": "Other command/path permissions remain active; this fixture disables only task edit constraints."
+  },
+  {
+    "id": "CO02",
+    "group": "shell_compat",
+    "command": "printf x 2>&1",
+    "context_overrides": {
+      "shell_kind": "sh"
+    },
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": []
+    }
+  },
+  {
+    "id": "CO03",
+    "group": "shell_compat",
+    "command": "printf x 2>&1",
+    "context_overrides": {
+      "shell_kind": "zsh"
+    },
+    "expected": {
+      "guard_decision": "no_guard_rejection",
+      "required_resolved_file_targets": [],
+      "forbidden_file_targets": [
+        "&1"
+      ],
+      "required_descriptor_operations": []
+    }
+  }
+]

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use terminal_core::ShellType;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tool_runtime::exec_command::{
     exec_command_argv_for_shell, exec_command_background_output_status,
     exec_command_lifecycle_background_output_status, exec_command_lifecycle_status_name,
@@ -55,7 +55,20 @@ pub(crate) struct ExecCommandShellPromptInfo {
     pub invocation: String,
 }
 
-pub struct ExecCommandTool;
+#[derive(Clone)]
+enum PreparedShell {
+    Local(ResolvedLocalExecShell),
+    Remote(RemoteShell),
+}
+
+pub struct ExecCommandTool {
+    // Execution selections only, never cached permission decisions. Bounded
+    // retained plans also cover original-input Hook checks that never execute.
+    prepared_shells: Mutex<HashMap<String, PreparedShell>>,
+    #[cfg(test)]
+    pub(crate) guard_fixture_state:
+        Option<crate::agentic::execution::edit_constraint_guard::EditConstraintState>,
+}
 
 impl Default for ExecCommandTool {
     fn default() -> Self {
@@ -65,7 +78,125 @@ impl Default for ExecCommandTool {
 
 impl ExecCommandTool {
     pub fn new() -> Self {
-        Self
+        Self {
+            prepared_shells: Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            guard_fixture_state: None,
+        }
+    }
+
+    fn context_rejection(decision: &str, reason: &str) -> ValidationResult {
+        let meta = json!({"blocks_input_rewrite":true,"executed":false,"failure_kind":"edit_constraint_guard","guard_decision":decision,"analysis_status":"unsupported","reason":reason});
+        ValidationResult {
+            result: false,
+            message: Some(format!(
+                "Command was not executed: {reason}.\nShell guard details: {meta}"
+            )),
+            error_code: Some(403),
+            meta: Some(meta),
+        }
+    }
+
+    fn plan_key(input: &Value, context: &ToolUseContext) -> String {
+        crate::agentic::execution::edit_constraint_guard::message_sha256(&format!(
+            "{:?}|{:?}|{:?}|{:?}|{}",
+            context.tool_call_id,
+            context.session_id,
+            context.workspace,
+            context.remote_exec_port().map(Arc::as_ptr),
+            input
+        ))
+    }
+
+    async fn prepare_shell(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<PreparedShell> {
+        let key = Self::plan_key(input, context);
+        let mut plans = self.prepared_shells.lock().await;
+        if let Some(shell) = plans.get(&key) {
+            return Ok(shell.clone());
+        }
+        let shell = if context.is_remote() {
+            let connection = context
+                .workspace
+                .as_ref()
+                .and_then(|w| w.connection_id())
+                .ok_or_else(|| {
+                    BitFunError::tool("remote connection id is required for ExecCommand")
+                })?;
+            let port = context.remote_exec_port().ok_or_else(|| {
+                BitFunError::tool("remote exec runtime service is required for ExecCommand")
+            })?;
+            PreparedShell::Remote(Self::resolve_remote_shell(port, connection).await)
+        } else {
+            PreparedShell::Local(resolve_local_exec_shell().await)
+        };
+        if plans.len() >= 128 {
+            plans.clear();
+        }
+        plans.insert(key, shell.clone());
+        Ok(shell)
+    }
+
+    async fn guard_prepared(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+        shell: &PreparedShell,
+    ) -> Option<ValidationResult> {
+        let parsed = exec_command_run_input_from_input(input)?;
+        let (kind, workdir) = match shell {
+            PreparedShell::Local(shell) => (
+                shell.shell_type.to_string(),
+                Self::resolve_workdir(input, context).map(|p| p.to_string_lossy().into_owned()),
+            ),
+            PreparedShell::Remote(shell) => (
+                shell.shell_type.to_string(),
+                Self::resolve_remote_workdir(input, context),
+            ),
+        };
+        let workdir = match workdir {
+            Ok(path) => path,
+            Err(_) => {
+                return Some(Self::context_rejection(
+                    "deny_workdir",
+                    "effective workdir is outside the supported execution context",
+                ))
+            }
+        };
+        #[cfg(test)]
+        if let Some(state) = &self.guard_fixture_state {
+            return crate::agentic::execution::edit_constraint_guard::check_shell_with_state(
+                context, parsed.cmd, &kind, &workdir, state,
+            )
+            .await;
+        }
+        crate::agentic::execution::edit_constraint_guard::check_exec_command(
+            context, parsed.cmd, &kind, &workdir,
+        )
+        .await
+    }
+
+    async fn take_prepared_shell(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<PreparedShell> {
+        let shell = self.prepare_shell(input, context).await?;
+        self.prepared_shells
+            .lock()
+            .await
+            .remove(&Self::plan_key(input, context));
+        // Recheck with the exact selection about to be used, including changes
+        // in constraints while a permission dialog was open.
+        if let Some(rejection) = self.guard_prepared(input, context, &shell).await {
+            return Err(BitFunError::Validation(
+                rejection.message.unwrap_or_default(),
+            ));
+        }
+        Ok(shell)
     }
 
     pub(crate) async fn local_shell_prompt_info() -> ExecCommandShellPromptInfo {
@@ -390,7 +521,11 @@ impl ExecCommandTool {
             BitFunError::tool("remote exec runtime service is required for ExecCommand".to_string())
         })?;
         let yield_time_ms = parsed_input.yield_time_ms;
-        let shell = Self::resolve_remote_shell(remote_exec_port, &connection_id).await;
+        let PreparedShell::Remote(shell) = self.take_prepared_shell(input, context).await? else {
+            return Err(BitFunError::tool(
+                "ExecCommand shell plan does not match remote execution",
+            ));
+        };
         let env_snapshot = remote_env_snapshot_for(
             remote_exec_port,
             &connection_id,
@@ -612,13 +747,38 @@ Output:
                 meta: None,
             };
         }
-        if let (Some(context), Some(parsed)) = (context, exec_command_run_input_from_input(input)) {
-            if let Some(rejection) =
-                crate::agentic::execution::edit_constraint_guard::check_bash_command(
-                    context, parsed.cmd,
-                )
-            {
-                return rejection;
+        if let Some(context) = context {
+            let active =
+                crate::agentic::execution::edit_constraint_guard::has_active_shell_constraints(
+                    context,
+                );
+            #[cfg(test)]
+            let active = active
+                || self
+                    .guard_fixture_state
+                    .as_ref()
+                    .is_some_and(|s| s.has_enforceable_constraints());
+            if active {
+                match self.prepare_shell(input, context).await {
+                    Ok(shell) => {
+                        if let Some(rejection) = self.guard_prepared(input, context, &shell).await {
+                            return rejection;
+                        }
+                    }
+                    Err(_) => {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "Command was not executed: execution shell could not be selected."
+                                    .into(),
+                            ),
+                            error_code: Some(403),
+                            meta: Some(
+                                json!({"blocks_input_rewrite":true,"executed":false,"failure_kind":"edit_constraint_guard","guard_decision":"deny_shell_context"}),
+                            ),
+                        }
+                    }
+                }
             }
         }
         ValidationResult {
@@ -643,7 +803,11 @@ Output:
         let cmd = parsed_input.cmd;
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = parsed_input.tty;
-        let shell = resolve_local_exec_shell().await;
+        let PreparedShell::Local(shell) = self.take_prepared_shell(input, context).await? else {
+            return Err(BitFunError::tool(
+                "ExecCommand shell plan does not match local execution",
+            ));
+        };
         let yield_time_ms = parsed_input.yield_time_ms;
         let terminal_port = context.terminal_port().ok_or_else(|| {
             BitFunError::tool("terminal runtime service is required for ExecCommand".to_string())
@@ -764,6 +928,7 @@ mod tests {
 
     #[derive(Debug)]
     struct ShellProbeRemoteExecPort {
+        probes: std::sync::atomic::AtomicUsize,
         response: bitfun_runtime_ports::RemoteExecOneShotCommandResponse,
     }
 
@@ -780,6 +945,8 @@ mod tests {
             _request: bitfun_runtime_ports::RemoteExecOneShotCommandRequest,
         ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecOneShotCommandResponse>
         {
+            self.probes
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(self.response.clone())
         }
 
@@ -831,6 +998,37 @@ mod tests {
         {
             panic!("shell probe must not control managed sessions");
         }
+    }
+
+    #[tokio::test]
+    async fn complete_shell_remote_selection_is_reused_until_dispatch() {
+        let port = Arc::new(ShellProbeRemoteExecPort {
+            probes: Default::default(),
+            response: bitfun_runtime_ports::RemoteExecOneShotCommandResponse {
+                stdout: "/bin/zsh\n".into(),
+                stderr: String::new(),
+                exit_code: 0,
+                interrupted: false,
+                timed_out: false,
+            },
+        });
+        let mut context = remote_tool_context("/remote/project");
+        context.runtime_handles = context
+            .runtime_handles
+            .with_remote_exec_port(Some(port.clone()));
+        let tool = ExecCommandTool::new();
+        let input = json!({"cmd":"printf x 2>&1", "workdir":"/remote/project"});
+        let first = tool.prepare_shell(&input, &context).await.unwrap();
+        let second = tool.take_prepared_shell(&input, &context).await.unwrap();
+        let (super::PreparedShell::Remote(first), super::PreparedShell::Remote(second)) =
+            (first, second)
+        else {
+            panic!("remote plan required");
+        };
+        assert_eq!(first.path, second.path);
+        assert_eq!(first.shell_type, second.shell_type);
+        assert_eq!(port.probes.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(tool.prepared_shells.lock().await.is_empty());
     }
 
     fn local_tool_context(workspace: &Path) -> ToolUseContext {
@@ -1092,6 +1290,7 @@ mod tests {
     async fn remote_shell_probe_uses_stdout_only() {
         let remote_exec_port: Arc<dyn bitfun_runtime_ports::RemoteExecPort> =
             Arc::new(ShellProbeRemoteExecPort {
+                probes: Default::default(),
                 response: bitfun_runtime_ports::RemoteExecOneShotCommandResponse {
                     stdout: "/bin/bash\n".to_string(),
                     stderr: "/tmp/not-a-shell-from-stderr\n".to_string(),
@@ -1171,3 +1370,7 @@ mod tests {
             .contains("terminal runtime service is required for ExecCommand"));
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "guard_tests.rs"]
+mod guard_tests;

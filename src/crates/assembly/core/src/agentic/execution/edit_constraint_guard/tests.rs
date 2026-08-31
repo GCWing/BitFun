@@ -878,3 +878,77 @@ fn local_recursive_delete_fallback_finds_protected_descendant() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+/// Opt-in offline replay: command bytes are passed ONLY to the two analyzers.
+/// No shell, process port, or referenced script content is accessed.
+#[test]
+#[ignore = "requires explicit archived input and report paths"]
+fn complete_shell_archive_replay() {
+    use tool_runtime::shell_analysis::analyze;
+    let input = std::env::var("BITFUN_SHELL_REPLAY_INPUT").expect("input JSONL path");
+    let output = std::env::var("BITFUN_SHELL_REPLAY_OUTPUT").expect("output report path");
+    let source = fs::read_to_string(input).unwrap();
+    let mut rows = vec![];
+    for line in source.lines() {
+        let row: Value = serde_json::from_str(line).unwrap();
+        let command = row["command"].as_str().unwrap();
+        // Warm regex initialization outside measured samples for both versions.
+        let _ = explicit_bash_mutation_targets(command);
+        let _ = analyze(command, "bash", "/app");
+        let mut old_times = vec![];
+        let mut new_times = vec![];
+        for _ in 0..11 {
+            let start = Instant::now();
+            let targets = explicit_bash_mutation_targets(command);
+            let unknown = has_unresolved_bash_mutation(command, &targets);
+            std::hint::black_box((targets, unknown));
+            old_times.push(start.elapsed().as_nanos());
+            let start = Instant::now();
+            std::hint::black_box(analyze(command, "bash", "/app"));
+            new_times.push(start.elapsed().as_nanos());
+        }
+        old_times.sort_unstable();
+        new_times.sort_unstable();
+        let targets = explicit_bash_mutation_targets(command);
+        let old_unknown = has_unresolved_bash_mutation(command, &targets);
+        let new = analyze(command, "bash", "/app");
+        rows.push(json!({"id":row["id"],"task_id":row["task_id"],"observed_target":row["observed_target"],"observed_category":row["observed_category"],"command_sha256":message_sha256(command),"bytes":command.len(),"old_targets":targets.iter().map(|t|json!({"path":t.path,"operation":t.operation.guard_operation()})).collect::<Vec<_>>(),"old_unresolved":old_unknown,"new":new,"old_median_ns":old_times[5],"new_median_ns":new_times[5]}));
+    }
+    assert_eq!(rows.len(), 476);
+    let fd_rows = rows.iter().filter(|r| r["observed_target"] == "&1").count();
+    let phantom = rows
+        .iter()
+        .filter(|r| r["observed_target"] == "&1")
+        .filter(|r| {
+            r["new"]["file_operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|t| t["path"] == "&1" || t["path"] == "/app/&1")
+        })
+        .count();
+    assert_eq!(fd_rows, 280);
+    assert_eq!(phantom, 0);
+    let report = json!({"mode":"pure_parser_only","executed_archived_commands":0,"assumed_shell":"bash","assumed_cwd":"/app","full_guard_context_reconstructed":false,"measurement":"median of 11 interleaved warm old/new analyses per input, nanoseconds","rows":rows});
+    fs::write(output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+}
+
+#[test]
+#[ignore = "requires explicit non-failure sample paths; pure analysis only"]
+fn complete_shell_normal_sample_replay() {
+    let source = fs::read_to_string(std::env::var("BITFUN_SHELL_NORMAL_INPUT").unwrap()).unwrap();
+    let output = std::env::var("BITFUN_SHELL_NORMAL_OUTPUT").unwrap();
+    let mut rows = vec![];
+    for line in source.lines() {
+        let row: Value = serde_json::from_str(line).unwrap();
+        let cmd = row["command"].as_str().unwrap();
+        let analysis = tool_runtime::shell_analysis::analyze(
+            cmd,
+            row["shell_kind"].as_str().unwrap(),
+            row["workdir"].as_str().unwrap(),
+        );
+        rows.push(json!({"id":row["id"],"group":row["group"],"command_sha256":message_sha256(cmd),"analysis":analysis}));
+    }
+    assert_eq!(rows.len(), 60);
+    fs::write(output, serde_json::to_vec_pretty(&rows).unwrap()).unwrap();
+}

@@ -3628,6 +3628,111 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn complete_shell_hook_workdir_rewrites_preserve_guard_and_model_observation() {
+        use crate::agentic::execution::edit_constraint_guard::{
+            ConstraintMatcher, ConstraintOperationScope, ConstraintSource, EditConstraintState,
+            ExtractedConstraint,
+        };
+        use crate::agentic::tools::implementations::exec_command::ExecCommandTool;
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        let scratch = temp.path().join("scratch");
+        std::fs::create_dir(&repo).unwrap();
+        std::fs::create_dir(&scratch).unwrap();
+        let state = EditConstraintState {
+            constraints: vec![ExtractedConstraint {
+                id: "fixture:protected".into(),
+                description: "Do not modify protected fixtures".into(),
+                operation_scope: ConstraintOperationScope::All,
+                matcher: ConstraintMatcher::PathUnderDir {
+                    dirs: vec![repo.to_string_lossy().into_owned()],
+                },
+                source: ConstraintSource::Legacy,
+                source_text: None,
+            }],
+            ..Default::default()
+        };
+        let protected_cmd = format!("printf x > '{}'", repo.join("victim").display());
+        let allowed_cmd = format!("printf x > '{}'", scratch.join("victim").display());
+        for (case, original_cwd, final_cwd, original_cmd, final_cmd) in [
+            (
+                "original-cwd",
+                &repo,
+                &scratch,
+                "printf x > victim",
+                "printf x > victim",
+            ),
+            (
+                "final-cwd",
+                &scratch,
+                &repo,
+                "printf x > victim",
+                "printf x > victim",
+            ),
+            (
+                "original-cmd",
+                &repo,
+                &repo,
+                protected_cmd.as_str(),
+                allowed_cmd.as_str(),
+            ),
+            (
+                "final-cmd",
+                &repo,
+                &repo,
+                allowed_cmd.as_str(),
+                protected_cmd.as_str(),
+            ),
+        ] {
+            let pipeline = test_tool_pipeline();
+            let mut tool = ExecCommandTool::new();
+            tool.guard_fixture_state = Some(state.clone());
+            pipeline
+                .tool_registry
+                .write()
+                .await
+                .register_tool(Arc::new(tool));
+            let mut task = test_tool_task_with_arguments(
+                case,
+                "ExecCommand",
+                json!({"cmd":original_cmd, "workdir":original_cwd}),
+            );
+            task.context.workspace = Some(WorkspaceBinding::new(None, repo.clone()));
+            let id = pipeline.state_manager.create_task(task.clone()).await;
+            assert_eq!(
+                pipeline
+                    .apply_hook_input_rewrite(&task, json!({"cmd":final_cmd, "workdir":final_cwd}))
+                    .await,
+                case.starts_with("original")
+            );
+            let persisted = pipeline.state_manager.get_task(&id).unwrap();
+            assert_eq!(
+                persisted.input_rewrite_rejection.is_some(),
+                case.starts_with("original")
+            );
+            let error = pipeline
+                .execute_single_tool(id.clone())
+                .await
+                .expect_err("guard must reject before execution");
+            assert!(error.to_string().contains("Command was not executed"));
+            let observation = build_error_execution_result(&id, Some(persisted), &error);
+            let text = observation.result.result_for_assistant.unwrap();
+            assert!(
+                text.contains("executed") && text.contains("false"),
+                "{text}"
+            );
+            assert!(
+                text.contains("deny_constraint") && text.contains("fixture:protected"),
+                "{text}"
+            );
+            assert!(!text.contains("your own implementation"));
+            assert!(!repo.join("victim").exists());
+            assert!(!scratch.join("victim").exists());
+        }
+    }
+
     #[tokio::test]
     async fn hook_rewrite_cannot_hide_a_non_relaxable_original_input_rejection() {
         let pipeline = test_tool_pipeline();

@@ -858,6 +858,8 @@ export const coreClosedFeatureProfileRules = [
       'dep:similar',
       'dep:tokio-util',
       'dep:tool-runtime',
+      // Complete ExecCommand constraint syntax facts live in the tool owner.
+      'tool-runtime/shell-analysis',
       'bitfun-services-core/permission',
       'bitfun-services-core/runtime-ownership',
       'bitfun-services-core/session-git',

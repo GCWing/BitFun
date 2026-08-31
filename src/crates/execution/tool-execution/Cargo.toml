@@ -5,6 +5,7 @@ edition.workspace = true
 
 [features]
 default = []
+shell-analysis = ["dep:regex"]
 document-read = ["dep:anydoc", "dep:sha2"]
 web-readable = ["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"]
 
