@@ -3,11 +3,11 @@ import { RecentWorkspaceEntry, RemoteSession } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import {
   CARD,
-  FLOATING_BORDER,
   INK,
+  LINE,
   MUTED,
   SCRIM,
-  SHADOW_MEDIUM,
+  SHADOW_SUBTLE,
   SOFT,
   TRANSPARENT,
 } from './Theme';
@@ -334,8 +334,8 @@ export struct RemoteSessionList {
     .padding({ top: 8, bottom: 8 })
     .backgroundColor(CARD)
     .borderRadius(14)
-    .border({ width: 1, color: FLOATING_BORDER })
-    .shadow({ radius: 20, color: SHADOW_MEDIUM, offsetY: 8 })
+    .border({ width: 0.5, color: LINE })
+    .shadow({ radius: 20, color: SHADOW_SUBTLE, offsetY: 8 })
   }
 
   @Builder

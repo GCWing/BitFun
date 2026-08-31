@@ -7,6 +7,7 @@ import {
   LINE,
   MUTED,
   PAGE_BG_FADE,
+  SHADOW_FAINT,
   STATUS_DANGER,
   SUBTLE
 } from './Theme';
@@ -166,6 +167,7 @@ export struct BitFunAccountLoginPage {
     .backgroundColor(CARD)
     .border({ width: 1, color: LINE })
     .borderRadius(24)
+    .shadow({ radius: 16, color: SHADOW_FAINT, offsetY: 5 })
     .clip(true)
   }
 

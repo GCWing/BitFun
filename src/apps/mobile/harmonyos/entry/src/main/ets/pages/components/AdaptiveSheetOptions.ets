@@ -1,8 +1,8 @@
 import {
-import { SCRIM, TRANSPARENT } from './Theme';
   SettingsPlacement,
   SettingsPlacementMode
 } from '../policy/SettingsPlacementPolicy';
+import { SCRIM, TRANSPARENT } from './Theme';
 
 /**
  * Shared SheetOptions for the four overlay sheets. Policy stays ArkUI-free;

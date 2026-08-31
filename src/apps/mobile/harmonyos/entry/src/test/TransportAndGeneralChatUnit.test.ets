@@ -907,6 +907,25 @@ export default function transportAndGeneralChatUnitTest() {
       expect(markdown).assertEqual('# 发布计划\n\n## 用户\n\n帮我整理发布计划\n\n## BitFun\n\n先检查发布清单。\n');
       expect(markdown.indexOf('secret retry context')).assertEqual(-1);
     });
+
+    it('omits a generated heading that repeats the first user message', 0, () => {
+      const session: RemoteSession = {
+        id: 'chat-duplicate-title',
+        title: '你好你好',
+        agentType: 'chat',
+        status: 'ready',
+        updatedAt: '2026-07-20T10:00:00.000Z',
+        createdAt: '2026-07-20T09:00:00.000Z',
+        messageCount: 2,
+        titleGenerated: true
+      };
+      const markdown = GeneralChatExportFormatter.markdown(session, [
+        chatMessage('user-1', 'user', '你好你好。'),
+        chatMessage('assistant-1', 'assistant', '你好！有什么我可以帮你的吗？')
+      ]);
+
+      expect(markdown).assertEqual('## 用户\n\n你好你好。\n\n## BitFun\n\n你好！有什么我可以帮你的吗？\n');
+    });
   });
 
   describe('GeneralChatStreamCoordinator', () => {

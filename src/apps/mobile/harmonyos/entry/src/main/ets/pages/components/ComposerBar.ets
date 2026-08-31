@@ -9,21 +9,16 @@ import {
   ConversationUiSelectedImage
 } from '../state/ConversationUiModels';
 import { ConversationModelPresentationPolicy } from '../policy/ConversationModelPresentationPolicy';
+import { TemplateIcon } from './TemplateIcon';
 import {
   CARD,
-  CONTENT_ON_ACTION,
-  FLOATING_PANEL_BG,
   INK,
   LINE,
   MEDIA_SCRIM,
   MUTED,
-  PRIMARY_ACTION,
   SCRIM,
-  SHADOW_FAINT,
-  SHADOW_MEDIUM,
   SHADOW_SUBTLE,
   SOFT,
-  STATUS_DANGER,
   STATUS_SUCCESS,
   TRANSPARENT
 } from './Theme';
@@ -34,10 +29,26 @@ export enum ComposerPresentation {
 }
 
 const COMPOSER_ACTION_SIZE: number = MobileDesignGeometry.composerActionSize;
+/** ChatGPT's visible send circle is about 32pt inside a 44pt hit target. */
+const COMPOSER_PRIMARY_SURFACE_SIZE: number = 32;
+const COMPOSER_SEND_TRANSITION_DURATION: number = 200;
 const COMPOSER_INPUT_HEIGHT: number = MobileDesignGeometry.composerInputHeight;
 const COMPOSER_EXPANDED_INPUT_HEIGHT: number = MobileDesignGeometry.composerExpandedInputHeight;
 const COMPOSER_COLLAPSED_HEIGHT: number = MobileDesignGeometry.composerCollapsedHeight;
-const COMPOSER_EXPANDED_HEIGHT: number = MobileDesignGeometry.composerExpandedHeight;
+// On a narrow phone, the 44vp controls should nearly fill the pill, matching
+// the compact ChatGPT composer instead of inheriting the roomier 56vp shell.
+const COMPOSER_COMPACT_COLLAPSED_HEIGHT: number = 52;
+// ArkUI's circular action is 44vp. The shared 40vp action-row token is too
+// short for this rendered control, so expand the Harmony row and its card by
+// the same delta instead of allowing the button to overflow the bottom edge.
+const COMPOSER_EXPANDED_ACTION_ROW_HEIGHT: number = Math.max(
+  MobileDesignGeometry.composerExpandedActionRowHeight,
+  COMPOSER_ACTION_SIZE
+);
+const COMPOSER_EXPANDED_HEIGHT: number = MobileDesignGeometry.composerExpandedHeight +
+  COMPOSER_EXPANDED_ACTION_ROW_HEIGHT - MobileDesignGeometry.composerExpandedActionRowHeight;
+/** Matches the compact reference's roughly eight-percent side inset. */
+const COMPOSER_COMPACT_HORIZONTAL_GUTTER: number = 32;
 const COMPOSER_IMAGE_CARD_SIZE: number = 64;
 const COMPOSER_IMAGE_STRIP_TOP_GAP: number = 6;
 /** Strip height plus its top gap and the parent Column's 2vp row spacing. */
@@ -52,6 +63,9 @@ export struct ComposerBar {
   @Param chatInput: string = '';
   @Local inputText: string = '';
   @Local inputFocused: boolean = false;
+  @Local primaryActionPressed: boolean = false;
+  @Local sendTransitionActive: boolean = false;
+  private sendTransitionTimerId: number = -1;
   @Param selectedImages: ConversationUiSelectedImage[] = [];
   @Param isBusy: boolean = false;
   @Param canStop: boolean = false;
@@ -78,6 +92,13 @@ export struct ComposerBar {
     this.inputText = this.chatInput;
   }
 
+  aboutToDisappear(): void {
+    if (this.sendTransitionTimerId >= 0) {
+      clearTimeout(this.sendTransitionTimerId);
+      this.sendTransitionTimerId = -1;
+    }
+  }
+
   @Monitor('chatInput')
   onChatInputParamChanged(): void {
     if (this.inputText !== this.chatInput) {
@@ -98,8 +119,8 @@ export struct ComposerBar {
     .constraintSize({ maxWidth: this.presentation === ComposerPresentation.Floating ? 760 : 10000 })
     .alignSelf(ItemAlign.Center)
     .padding({
-      left: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
-      right: this.presentation === ComposerPresentation.Floating ? 24 : MobileDesignGeometry.contentGutter,
+      left: this.presentation === ComposerPresentation.Floating ? 24 : COMPOSER_COMPACT_HORIZONTAL_GUTTER,
+      right: this.presentation === ComposerPresentation.Floating ? 24 : COMPOSER_COMPACT_HORIZONTAL_GUTTER,
       top: 8,
       bottom: this.presentation === ComposerPresentation.Floating ? 16 : 12
     })
@@ -136,7 +157,7 @@ export struct ComposerBar {
       }
       .width('100%')
       .height(this.isComposerExpanded() ? MobileDesignGeometry.composerExpandedInputRowHeight :
-        MobileDesignGeometry.composerCollapsedHeight)
+        this.collapsedComposerHeight())
 
       if (this.isComposerExpanded()) {
         Row({ space: 6 }) {
@@ -150,7 +171,7 @@ export struct ComposerBar {
           this.PrimaryActionButton()
         }
         .width('100%')
-        .height(MobileDesignGeometry.composerExpandedActionRowHeight)
+        .height(COMPOSER_EXPANDED_ACTION_ROW_HEIGHT)
         .padding({ left: 2, right: 0 })
         .alignItems(VerticalAlign.Center)
         .transition(TransitionEffect.translate({ x: 0, y: 8 })
@@ -167,12 +188,12 @@ export struct ComposerBar {
       bottom: this.isComposerExpanded() ? 2 : 0
     })
     .backgroundColor(CARD)
-    .border({ width: 1, color: LINE })
+    .border({ width: this.presentation === ComposerPresentation.Compact ? 0.5 : 1, color: LINE })
     .borderRadius(this.composerRadius())
     .shadow({
-      radius: this.presentation === ComposerPresentation.Floating ? 14 : 8,
-      color: this.presentation === ComposerPresentation.Floating ? SHADOW_SUBTLE : SHADOW_FAINT,
-      offsetY: this.presentation === ComposerPresentation.Floating ? 4 : 2
+      radius: this.presentation === ComposerPresentation.Floating ? 14 : 18,
+      color: SHADOW_SUBTLE,
+      offsetY: this.presentation === ComposerPresentation.Floating ? 4 : 6
     })
     .animation({ duration: MobileDesignMotion.structure, curve: Curve.EaseOut })
   }
@@ -267,11 +288,15 @@ export struct ComposerBar {
     }
     .width(asSheet ? '100%' : MobileDesignGeometry.composerModelSelectorWidth)
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-    .backgroundColor(asSheet ? CARD : FLOATING_PANEL_BG)
+    .backgroundColor(CARD)
     .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
       MobileDesignGeometry.composerModelSelectorRadius)
-    .border({ width: asSheet ? 0 : 1, color: asSheet ? TRANSPARENT : LINE })
-    .shadow({ radius: asSheet ? 0 : 18, color: asSheet ? TRANSPARENT : SHADOW_MEDIUM, offsetY: 7 })
+    .border({ width: asSheet ? 0 : 0.5, color: asSheet ? TRANSPARENT : LINE })
+    .shadow({
+      radius: asSheet ? 0 : 18,
+      color: asSheet ? TRANSPARENT : SHADOW_SUBTLE,
+      offsetY: asSheet ? 0 : 7
+    })
   }
 
   @Builder
@@ -281,7 +306,7 @@ export struct ComposerBar {
         if (this.isSelectedModel(model)) {
           SymbolGlyph($r('sys.symbol.checkmark_circle'))
             .fontSize(16)
-            .fontColor([this.primaryActionForegroundColor()])
+            .fontColor([INK])
         }
       }
       .width(20)
@@ -343,15 +368,17 @@ export struct ComposerBar {
         .layoutWeight(1)
         .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
         .fontSize(MobileDesignTypography.bodyLarge.size)
+        .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
         .fontColor(INK)
         .placeholderColor(this.isVoiceListening ? STATUS_SUCCESS : MUTED)
         .backgroundColor(TRANSPARENT)
         .borderRadius(20)
+        .align(this.isComposerExpanded() ? Alignment.TopStart : Alignment.Start)
         .padding({
           left: this.isVoiceListening ? 0 : 4,
           right: 4,
-          top: this.isComposerExpanded() ? 10 : 9,
-          bottom: this.isComposerExpanded() ? 8 : 9
+          top: this.isComposerExpanded() ? 10 : 0,
+          bottom: this.isComposerExpanded() ? 8 : 0
         })
         .maxLines(this.isComposerExpanded() ? 4 : 1)
         .defaultFocus(false)
@@ -384,12 +411,28 @@ export struct ComposerBar {
   PrimaryActionButton() {
     Button() {
       Stack({ alignContent: Alignment.Center }) {
-        if (this.primaryAction() === ComposerPrimaryAction.Stop) {
-          Text('')
-            .width(13)
-            .height(13)
-            .backgroundColor(CARD)
-            .borderRadius(3)
+        if (this.shouldShowActiveActionSurface()) {
+          Stack({ alignContent: Alignment.Center }) {
+            if (this.shouldShowStopGlyph()) {
+              Text('')
+                .width(10)
+                .height(10)
+                .backgroundColor(CARD)
+                .borderRadius(2.5)
+            } else {
+              TemplateIcon({
+                src: $r('app.media.gpt_composer_send_arrow'),
+                iconWidth: 16,
+                iconHeight: 18,
+                tint: CARD
+              })
+            }
+          }
+          .width(COMPOSER_PRIMARY_SURFACE_SIZE)
+          .height(COMPOSER_PRIMARY_SURFACE_SIZE)
+          .backgroundColor(this.activeActionSurfaceColor())
+          .borderRadius(COMPOSER_PRIMARY_SURFACE_SIZE / 2)
+          .animation({ duration: COMPOSER_SEND_TRANSITION_DURATION, curve: Curve.EaseOut })
         } else if (this.primaryAction() === ComposerPrimaryAction.Voice ||
           this.primaryAction() === ComposerPrimaryAction.VoiceBlocked) {
           this.MicrophoneGlyph()
@@ -397,7 +440,7 @@ export struct ComposerBar {
           SymbolGlyph($r('sys.symbol.arrow_up'))
             .fontSize(23)
             .fontWeight(FontWeight.Medium)
-            .fontColor([INK])
+            .fontColor([this.primaryActionForegroundColor()])
             .opacity(this.primaryAction() === ComposerPrimaryAction.Send ? 1 : 0.38)
         }
       }
@@ -408,11 +451,21 @@ export struct ComposerBar {
     .height(COMPOSER_ACTION_SIZE)
     .padding(0)
     .type(ButtonType.Circle)
-    .backgroundColor(this.actionBackgroundColor())
+    .backgroundColor(this.inactiveActionBackgroundColor())
     .borderRadius(COMPOSER_ACTION_SIZE / 2)
-    .stateEffect(true)
+    .stateEffect(false)
     .accessibilityText(RemoteI18n.t(ChatComposerPolicy.primaryActionAccessibilityKey(
       this.primaryAction(), this.isVoiceListening)))
+    .onTouch((event: TouchEvent) => {
+      if (!this.shouldShowActiveActionSurface()) {
+        return;
+      }
+      if (event.type === TouchType.Down) {
+        this.primaryActionPressed = true;
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.primaryActionPressed = false;
+      }
+    })
     // Driven off the same decision that drew the glyph, so the button can never
     // do something other than what it is showing.
     .onClick(() => {
@@ -426,6 +479,7 @@ export struct ComposerBar {
         return;
       }
       if (action === ComposerPrimaryAction.Send) {
+        this.beginSendTransition();
         this.onSend();
         return;
       }
@@ -556,8 +610,13 @@ export struct ComposerBar {
 
   // Attachments live inside the card, so the card has to grow to hold them.
   private composerHeight(): number {
-    const base = this.isComposerExpanded() ? COMPOSER_EXPANDED_HEIGHT : COMPOSER_COLLAPSED_HEIGHT;
+    const base = this.isComposerExpanded() ? COMPOSER_EXPANDED_HEIGHT : this.collapsedComposerHeight();
     return this.selectedImages.length > 0 ? base + COMPOSER_IMAGE_STRIP_BLOCK : base;
+  }
+
+  private collapsedComposerHeight(): number {
+    return this.presentation === ComposerPresentation.Compact ?
+      COMPOSER_COMPACT_COLLAPSED_HEIGHT : COMPOSER_COLLAPSED_HEIGHT;
   }
 
   // The pill radius only reads as a pill while the card is one row tall.
@@ -678,26 +737,54 @@ export struct ComposerBar {
       RemoteI18n.t('chat.inputPlaceholder');
   }
 
-  // Follows the offered action rather than the raw flags: while a turn runs and
-  // the user has typed something, the button is a send arrow, and a send arrow
-  // on a stop-red circle reads as "this will cancel".
-  private actionBackgroundColor(): ResourceColor {
+  private inactiveActionBackgroundColor(): ResourceColor {
     const action = this.primaryAction();
-    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Voice) {
-      return PRIMARY_ACTION;
+    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Stop ||
+      this.sendTransitionActive) {
+      return TRANSPARENT;
+    }
+    if (action === ComposerPrimaryAction.Voice) {
+      return CARD;
     }
     if (action === ComposerPrimaryAction.SendBlocked || action === ComposerPrimaryAction.VoiceBlocked ||
       action === ComposerPrimaryAction.Idle) {
       return SOFT;
     }
-    return this.isVoiceListening ? STATUS_SUCCESS : STATUS_DANGER;
+    return TRANSPARENT;
+  }
+
+  private shouldShowActiveActionSurface(): boolean {
+    const action = this.primaryAction();
+    return this.sendTransitionActive || action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Stop;
+  }
+
+  private shouldShowStopGlyph(): boolean {
+    return this.sendTransitionActive || this.primaryAction() === ComposerPrimaryAction.Stop;
+  }
+
+  private activeActionSurfaceColor(): ResourceColor {
+    return this.primaryActionPressed || this.sendTransitionActive ? MUTED : INK;
+  }
+
+  private beginSendTransition(): void {
+    this.primaryActionPressed = false;
+    this.sendTransitionActive = true;
+    if (this.sendTransitionTimerId >= 0) {
+      clearTimeout(this.sendTransitionTimerId);
+    }
+    this.sendTransitionTimerId = setTimeout(() => {
+      this.sendTransitionActive = false;
+      this.sendTransitionTimerId = -1;
+    }, COMPOSER_SEND_TRANSITION_DURATION);
   }
 
   private primaryActionForegroundColor(): ResourceColor {
     const action = this.primaryAction();
-    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Voice ||
-      action === ComposerPrimaryAction.Stop) {
-      return CONTENT_ON_ACTION;
+    if (action === ComposerPrimaryAction.Voice) {
+      return INK;
+    }
+    if (action === ComposerPrimaryAction.Send || action === ComposerPrimaryAction.Stop) {
+      return CARD;
     }
     return MUTED;
   }

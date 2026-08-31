@@ -5,7 +5,18 @@ import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels'
 import { GENERAL_CHAT_LOCAL_MODEL_ID } from '../../services/general-chat/GeneralChatConfigStore';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
-import { CARD, INK, LINE, MUTED, SOFT, STATUS_DANGER, STATUS_SUCCESS, SUBTLE, TRANSPARENT } from './Theme';
+import {
+  CARD,
+  INK,
+  LINE,
+  MUTED,
+  SHADOW_FAINT,
+  SOFT,
+  STATUS_DANGER,
+  STATUS_SUCCESS,
+  SUBTLE,
+  TRANSPARENT
+} from './Theme';
 import { SheetCloseHeader } from './SheetCloseHeader';
 import { AppActionButton, AppActionStyle } from './AppActionButton';
 
@@ -433,8 +444,10 @@ export struct ModelServiceSettingsPanel {
         .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
-        .backgroundColor(SOFT)
-        .borderRadius(8)
+        .backgroundColor(CARD)
+        .border({ width: 0.5, color: LINE })
+        .borderRadius(12)
+        .shadow({ radius: 12, color: SHADOW_FAINT, offsetY: 4 })
         .padding({ left: 14, right: 14 })
         .onFocus(() => {
           this.scrollFocusedFieldIntoView(kind);
@@ -482,8 +495,10 @@ export struct ModelServiceSettingsPanel {
         .fontSize(MobileDesignTypography.titleSmall.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
-        .backgroundColor(SOFT)
-        .borderRadius(8)
+        .backgroundColor(CARD)
+        .border({ width: 0.5, color: LINE })
+        .borderRadius(12)
+        .shadow({ radius: 12, color: SHADOW_FAINT, offsetY: 4 })
         .padding({ left: 14, right: 10 })
         .onFocus(() => {
           this.scrollFocusedFieldIntoView('key');

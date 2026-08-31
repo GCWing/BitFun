@@ -25,11 +25,12 @@ import { ComposerBar, ComposerPresentation } from './ComposerBar';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationHeaderPolicy, ConversationHeaderPresentation } from '../policy/ConversationHeaderPolicy';
 import {
-  FLOATING_PANEL_BG,
+  CARD,
   INK,
   LINE,
   MUTED,
   PAGE_BG,
+  SHADOW_SUBTLE,
   SOFT,
   STATUS_DANGER,
   STATUS_SUCCESS,
@@ -300,10 +301,10 @@ export struct ConversationView {
     }
     .width(292)
     .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-    .backgroundColor(FLOATING_PANEL_BG)
-    .border({ width: 1, color: LINE })
+    .backgroundColor(CARD)
+    .border({ width: 0.5, color: LINE })
     .borderRadius(16)
-    .shadow({ radius: 18, color: LINE, offsetY: 7 })
+    .shadow({ radius: 18, color: SHADOW_SUBTLE, offsetY: 7 })
     .transition(TransitionEffect.translate({ x: 8, y: -8 })
       .combine(TransitionEffect.opacity(0))
       .animation({ duration: 180, curve: Curve.EaseOut }))

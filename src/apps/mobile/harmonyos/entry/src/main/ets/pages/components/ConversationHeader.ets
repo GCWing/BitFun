@@ -8,6 +8,7 @@ import {
   LINE,
   MUTED,
   PAGE_BG,
+  SHADOW_SUBTLE,
   SOFT,
   TRANSPARENT,
 } from './Theme';
@@ -15,6 +16,8 @@ import { CompactMenuButton } from './CompactMenuButton';
 import { NavigationBackButton } from './NavigationBackButton';
 import { TemplateIcon } from './TemplateIcon';
 import { SidebarToggleButton } from './SidebarToggleButton';
+
+const HEADER_ACTION_SURFACE_SIZE: number = 42;
 
 @ComponentV2
 export struct ConversationHeader {
@@ -135,17 +138,25 @@ export struct ConversationHeader {
   private TrailingControl() {
     if (this.showActions) {
       Button() {
-        TemplateIcon({
-          src: $r('app.media.remote_ref_more'),
-          iconWidth: 23,
-          iconHeight: 7
-        })
+        Stack({ alignContent: Alignment.Center }) {
+          TemplateIcon({
+            src: $r('app.media.remote_ref_more'),
+            iconWidth: 23,
+            iconHeight: 7
+          })
+        }
+        .width(HEADER_ACTION_SURFACE_SIZE)
+        .height(HEADER_ACTION_SURFACE_SIZE)
+        .backgroundColor(CARD)
+        .borderRadius(HEADER_ACTION_SURFACE_SIZE / 2)
+        .shadow({ radius: 30, color: SHADOW_SUBTLE, offsetY: 7 })
+        .hitTestBehavior(HitTestMode.None)
       }
       .width(MobileDesignGeometry.controlTouchSize)
       .height(MobileDesignGeometry.controlTouchSize)
       .padding(0)
       .backgroundColor(TRANSPARENT)
-      .borderRadius(12)
+      .borderRadius(MobileDesignGeometry.controlTouchSize / 2)
       .stateEffect(true)
       .accessibilityText(RemoteI18n.t('sidebar.more'))
       .bindPopup(this.showActionsMenu, {
