@@ -10,7 +10,7 @@ import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/Ap
 ;
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { PresenceBoundary, PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { RetainedMountBoundary, DEFAULT_RETAINED_MOUNT_MS } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -88,7 +88,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
         setIsNewBranch(false);
         setOpenAfterCreate(defaultOpenAfterCreate);
         setError(null);
-      }, PRESENCE_BOUNDARY_MIN_EXIT_MS);
+      }, DEFAULT_RETAINED_MOUNT_MS);
       return () => window.clearTimeout(resetTimer);
     }
 
@@ -339,9 +339,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
   );
 
   const retainedModal = (
-    <PresenceBoundary active={isOpen}>
+    <RetainedMountBoundary present={isOpen}>
       {modalContent}
-    </PresenceBoundary>
+    </RetainedMountBoundary>
   );
 
   if (typeof document === 'undefined') {

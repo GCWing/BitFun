@@ -46,7 +46,6 @@ export interface MenuSectionProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   actions?: readonly MenuSectionAction[];
   children: ReactNode;
-  itemsClassName?: string;
   title?: ReactNode;
 }
 
@@ -230,7 +229,6 @@ export const MenuSection = forwardRef<HTMLDivElement, MenuSectionProps>(function
   actions = [],
   children,
   className,
-  itemsClassName,
   title,
   ...props
 }, ref) {
@@ -273,10 +271,7 @@ export const MenuSection = forwardRef<HTMLDivElement, MenuSectionProps>(function
           )}
         </div>
       )}
-      <div
-        className={classNames(styles.items, itemsClassName)}
-        data-bf-part="section-items"
-      >
+      <div className={styles.items} data-bf-part="section-items">
         {children}
       </div>
     </div>

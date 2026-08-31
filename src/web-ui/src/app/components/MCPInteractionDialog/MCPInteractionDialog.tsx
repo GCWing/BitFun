@@ -1,4 +1,13 @@
-import { Button, Modal, ScrollArea, Textarea } from '@bitfun/ui';
+import {
+  Button,
+  ScrollArea,
+  Textarea,
+  Dialog,
+  DialogBody,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -129,13 +138,19 @@ export const MCPInteractionDialog: React.FC = () => {
   }, [currentRequest]);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {}}
-      title={currentRequest ? `MCP Interaction: ${currentRequest.method}` : 'MCP Interaction'}
-      size="large"
-      showCloseButton={false}
+    <Dialog
+      open={isOpen}
+      onOpenChange={() => undefined}
+      size="lg"
+      closeOnEscape={false}
+      closeOnPointerOutside={false}
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{currentRequest ? `MCP Interaction: ${currentRequest.method}` : 'MCP Interaction'}</DialogTitle>
+        </DialogHeading>
+      </DialogHeader>
+      <DialogBody inset="none">
       {currentRequest && (
         <div
           className="mcp-interaction-dialog"
@@ -162,7 +177,8 @@ export const MCPInteractionDialog: React.FC = () => {
             <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Response JSON</div>
             <Textarea
               className="mcp-interaction-dialog__editor-field"
-              textareaClassName="mcp-interaction-dialog__editor"
+              font="mono"
+              rows={8}
               data-bf-component="mcp-interaction-dialog"
               data-bf-part="editor"
               value={editorValue}
@@ -193,7 +209,8 @@ export const MCPInteractionDialog: React.FC = () => {
           </div>
         </div>
       )}
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

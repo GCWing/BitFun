@@ -2,40 +2,37 @@
  * Standalone chat input styles
  */
 
-@use '../../component-library/styles/tokens' as *;
-@use '../../component-library/styles/_extended-mixins' as mixins;
-@use '../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
   flex: 0 0 auto;
-  bottom: $size-gap-6;
+  bottom: var(--bf-space-6);
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
   height: auto;
   min-height: 0;
   max-width: 900px;
-  z-index: $z-overlay;
+  z-index: var(--bf-layer-overlay);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0 $size-gap-2;
+  padding: 0 var(--bf-space-2);
   pointer-events: auto !important;
 
   &.bitfun-context-drop-zone--can-accept {
-    .bitfun-chat-input__composer-surface {
-      border-color: var(--bf-color-field-border-hover);
+    .bitfun-chat-input__composer {
+      outline: var(--bf-border-width-default) solid var(--bf-color-field-border-hover);
       box-shadow:
         0 12px 32px color-mix(in srgb, var(--bf-color-content-on-light) 45%, transparent),
         inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-      background: var(--bf-color-surface-scene);
     }
   }
 
   &.bitfun-context-drop-zone--cannot-accept {
-    .bitfun-chat-input__composer-surface {
-      border-color: var(--bf-color-status-danger-border);
+    .bitfun-chat-input__composer {
+      outline: var(--bf-border-width-default) solid var(--bf-color-status-danger-border);
       box-shadow:
         0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
         0 0 20px var(--bf-color-status-danger-content);
@@ -46,7 +43,7 @@
 .bitfun-chat-input__voice-cluster {
   display: inline-flex;
   align-items: center;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   flex-shrink: 0;
   min-width: 24px;
 
@@ -66,8 +63,7 @@
   line-height: 0;
 }
 
-.bitfun-chat-input__voice-control.icon-btn,
-.bitfun-chat-input__voice-control[data-bf-component='icon-button'] {
+.bitfun-chat-input__voice-control {
   width: 24px;
   height: 24px;
   min-width: 24px;
@@ -95,7 +91,7 @@
   padding: 0 2px 0 9px;
   gap: 5px;
   border: 1px solid var(--bf-color-border-default);
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
   box-shadow:
     0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
@@ -113,7 +109,7 @@
   padding: 2px 3px 2px 10px;
   gap: 7px;
   border: 1px solid var(--bf-color-border-default);
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-action-neutral-surface));
   box-shadow:
     0 1px 4px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent),
@@ -150,7 +146,7 @@
   left: 0;
   height: 2px;
   overflow: hidden;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: var(--bf-color-border-subtle);
 
   > span {
@@ -229,7 +225,7 @@
   justify-self: center;
   width: min(2px, 100%);
   height: 18px;
-  border-radius: $size-radius-full;
+  border-radius: var(--bf-radius-pill);
   background: currentColor;
   transform: scaleY(0.12);
   transform-origin: center;
@@ -448,30 +444,6 @@
 
   // Non-agent scenes: high transparency to avoid obscuring content
   &--non-agent {
-    .bitfun-chat-input__composer-surface {
-      background: color-mix(in srgb, var(--bf-color-content-on-light) 3%, transparent);
-      border-color: color-mix(in srgb, var(--bf-color-content-on-dark) 14%, transparent);
-      box-shadow: none;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      transition: none;
-
-      &:hover {
-        background: var(--bf-color-surface-tertiary);
-        border-color: var(--bf-color-field-border-hover);
-        box-shadow: 0 4px 16px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
-      }
-
-      &:focus-within {
-        background: var(--bf-color-surface-tertiary);
-        border-color: var(--bf-color-border-default);
-        box-shadow:
-          0 12px 32px color-mix(in srgb, var(--bf-color-content-on-light) 45%, transparent),
-          inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
-          inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-      }
-    }
-
     .bitfun-chat-input__input-area,
     .bitfun-chat-input__actions-left,
     .bitfun-chat-input__actions-right,
@@ -580,38 +552,11 @@
       gap: var(--bf-space-1);
     }
 
-    .bitfun-chat-input__agent-boost-add {
-      width: var(--bf-control-chat-composer-control-height) !important;
-      height: var(--bf-control-chat-composer-control-height) !important;
-      min-width: var(--bf-control-chat-composer-control-height) !important;
-      min-height: var(--bf-control-chat-composer-control-height) !important;
-      padding: 0 !important;
-      border: 0 !important;
-      border-radius: var(--bf-radius-pill) !important;
-      background: var(--bf-color-surface-subtle) !important;
-      color: var(--bf-color-content-primary);
-
-      &:hover,
-      &:focus-visible,
-      &[aria-expanded='true'] {
-        background: var(--bf-color-action-quiet-hover) !important;
-      }
-
-      svg {
-        width: 14px;
-        height: 14px;
-      }
-    }
-
     .bitfun-chat-input__model-usage-group,
     .bitfun-model-selector {
       display: flex;
       min-width: 0;
       align-items: center;
-    }
-
-    .bitfun-model-selector__ctx-usage {
-      display: none;
     }
 
     .bitfun-model-selector {
@@ -651,8 +596,7 @@
       border-radius: var(--bf-radius-sm);
     }
 
-    .bitfun-chat-input__voice-control.icon-btn,
-    .bitfun-chat-input__send-button {
+    .bitfun-chat-input__voice-control.icon-btn {
       width: var(--bf-control-chat-composer-control-height) !important;
       height: var(--bf-control-chat-composer-control-height) !important;
       min-width: var(--bf-control-chat-composer-control-height) !important;
@@ -665,8 +609,7 @@
       background: transparent;
     }
 
-    .bitfun-chat-input__voice-control.icon-btn svg,
-    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) svg {
+    .bitfun-chat-input__voice-control.icon-btn svg {
       width: 14px;
       height: 14px;
     }
@@ -957,27 +900,6 @@
     line-height: 0;
   }
 
-  &__agent-boost-add {
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
-    opacity: 1;
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-surface-subtle) !important;
-
-    .bitfun-chat-input__box:focus-within & {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-neutral-surface-hover) !important;
-    }
-
-    &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-neutral-surface-hover) !important;
-    }
-  }
-
   &__agent-boost-empty {
     padding: var(--bf-control-flow-chat-card-expanded-padding-inline) var(--bf-control-flow-chat-card-expanded-padding-inline);
     font-size: var(--bf-type-flow-support-font-size);
@@ -998,7 +920,7 @@
 
   &__boost-submenu-panel {
     position: fixed;
-    z-index: calc(#{$z-dropdown} + 20);
+    z-index: calc(var(--bf-layer-dropdown) + 20);
   }
 
   &__boost-submenu-loading,
@@ -1031,17 +953,17 @@
 
   &__mode-dropdown {
     position: fixed;
-    z-index: $z-dropdown;
+    z-index: var(--bf-layer-dropdown);
   }
 
   &__slash-command-picker {
-    @include surfaces.floating-surface;
+    @include surfaces.floating;
 
     position: fixed;
     width: min(260px, calc(100vw - 16px));
     max-height: min(280px, calc(100vh - 16px));
     overflow: hidden;
-    z-index: $z-dropdown;
+    z-index: var(--bf-layer-dropdown);
     color: var(--bf-color-content-primary);
     font-family:var(--bf-font-family-sans);
     font-size: var(--bf-type-flow-control-font-size);
@@ -1264,7 +1186,7 @@
     display: flex;
     height: var(--bf-control-chat-composer-control-height);
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     min-width: 0;
   }
 
@@ -1279,7 +1201,7 @@
   &__actions-right {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     height: var(--bf-control-chat-composer-control-height);
   }
 
@@ -1297,104 +1219,40 @@
     flex: 0 0 auto;
   }
 
-  /* Send and stop share the canonical primary-action contract in every theme. */
-  &__send-button {
+  /* The public composer action owns send geometry and states. Stop keeps its
+     product-specific live-task presentation without changing visual size. */
+  &__send-button--breathing {
     position: relative;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: none;
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-action-neutral-content-disabled);
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
     cursor: pointer;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 120ms ease;
-    flex-shrink: 0;
 
-    &:not(:disabled) {
-      background: var(--bf-color-action-primary-background);
-      border: 1px solid transparent;
-      color: var(--bf-color-action-primary-content);
-      box-shadow: none;
+    .bitfun-chat-input__box:focus-within &,
+    &:hover {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      transform: none !important;
     }
 
-    &:hover:not(:disabled) {
-      transform: scale(1.07);
+    &:hover .bitfun-chat-input__breathing-circle {
       filter: none;
       background: var(--bf-color-action-primary-hover);
       border-color: color-mix(in srgb, var(--bf-color-action-primary-content) 24%, transparent);
-      color: var(--bf-color-action-primary-content);
       box-shadow: var(--bf-shadow-base);
-    }
 
-    .bitfun-chat-input__box:focus-within &:not(:disabled) {
-      filter: none;
-      transform: scale(1.05);
-      background: var(--bf-color-action-primary-hover);
-      border-color: var(--bf-color-focus-ring);
-      box-shadow: 0 0 0 1px var(--bf-color-focus-ring), var(--bf-shadow-sm);
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-      filter: none;
-      background: var(--bf-color-action-primary-pressed);
-      box-shadow: var(--bf-shadow-xs);
-    }
-
-    &:disabled {
-      cursor: default;
-      background: var(--bf-color-action-neutral-surface);
-      border: none;
-      color: var(--bf-color-action-neutral-content-disabled);
-      opacity: 1;
-      box-shadow: none;
-      filter: saturate(0.65);
-    }
-
-    &--breathing {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent !important;
-      border: none !important;
-      border-radius: 0 !important;
-      padding: 0;
-      width: auto;
-      height: auto;
-      box-shadow: none !important;
-      transform: none !important;
-      cursor: pointer;
-
-      .bitfun-chat-input__box:focus-within & {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        transform: none !important;
-      }
-
-      &:hover {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-
-      &:hover .bitfun-chat-input__breathing-circle {
-        transform: scale(1.07);
-        filter: none;
-        background: var(--bf-color-action-primary-hover);
-        border-color: color-mix(in srgb, var(--bf-color-action-primary-content) 24%, transparent);
-        box-shadow: var(--bf-shadow-base);
-
-        &::after {
-          background: var(--bf-color-action-primary-content);
-          box-shadow: none;
-        }
+      &::after {
+        background: var(--bf-color-action-primary-content);
+        box-shadow: none;
       }
     }
   }
@@ -1419,9 +1277,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 120ms ease;
+    transition: opacity 120ms ease;
     background: var(--bf-color-action-primary-background);
     border: 1px solid transparent;
     box-shadow: none;
@@ -1478,8 +1334,6 @@
 }
 
 @media (hover: none), (pointer: coarse) {
-  .bitfun-chat-input__send-button:hover:not(:disabled),
-  .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle,
   .bitfun-chat-input__voice-pill-action:not(:disabled):hover,
   .bitfun-chat-input__voice-pill-send:not(:disabled):hover {
     transform: none;

@@ -2,8 +2,6 @@
  * Compact navigation chrome. Buttons share one geometry and only animate the
  * press response; panel and history changes themselves remain immediate.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
 @use '../../styles/workspace-shell-surfaces' as shell-surfaces;
 
 .bitfun-nav-bar {
@@ -13,8 +11,8 @@
   align-items: center;
   height: 35px;
   flex-shrink: 0;
-  padding: 0 $size-gap-2;
-  gap: $size-gap-1;
+  padding: 0 var(--bf-space-2);
+  gap: var(--bf-space-1);
   user-select: none;
 
   &--collapsed {
@@ -42,13 +40,13 @@
     flex-shrink: 0;
     padding: 0;
     border: none;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: transparent;
     color: var(--bf-color-content-muted);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(.is-inactive) {
       color: var(--bf-color-content-primary);
@@ -83,8 +81,8 @@
     background: transparent;
     color: var(--bf-color-content-muted);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);

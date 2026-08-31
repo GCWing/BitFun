@@ -3,8 +3,6 @@
  *
  * NavigationPanel owns group geometry, item typography, and interaction states.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
 @use '../../styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-settings-nav {
@@ -20,13 +18,12 @@
   inline-size: 100%;
   max-inline-size: none;
   height: 100%;
-  padding: $size-gap-2;
+  padding: var(--bf-space-2);
   box-sizing: border-box;
   overflow: hidden;
   line-height: var(--bf-line-height-compact);
-  background: transparent;
 
-  > [data-bf-part="header"] {
+  &__panel-header {
     display: flex;
     flex-direction: column;
     gap: var(--bf-layout-navigation-panel-content-gap);
@@ -78,17 +75,18 @@
   &__search-result-item {
     padding-block: 7px;
 
-    // Search copy lives in ActionItem's label, not on its outer wrapper.
-    > [data-bf-part="trigger"] > [data-bf-part="label"] {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
-    }
-
-    &.is-highlighted:not(:has(> [data-bf-part="trigger"][aria-current])) {
+    &.is-highlighted:not(.is-active) {
       background: var(--bf-color-action-neutral-surface);
     }
+  }
+
+  &__search-result-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
   }
 
   &__search-result-line {
@@ -113,7 +111,7 @@
   &__search-empty {
     @include nav-font.nav-panel-text-meta;
 
-    padding: $size-gap-3 $size-gap-2;
+    padding: var(--bf-space-3) var(--bf-space-2);
     font-size: var(--bf-font-size-sm);
     text-align: center;
   }

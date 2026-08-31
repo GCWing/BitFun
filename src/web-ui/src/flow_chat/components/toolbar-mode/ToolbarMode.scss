@@ -2,9 +2,7 @@
  * Toolbar Mode styles.
  * Compact floating bar with a two-row layout.
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 $transition-duration: 0.25s;
 $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
@@ -247,7 +245,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bitfun-toolbar-mode__session-dropdown {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   position: absolute;
   top: 100%;
@@ -372,7 +370,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
 .bitfun-toolbar-mode__overflow-menu {
   position: fixed;
-  z-index: $z-popover;
+  z-index: var(--bf-layer-popover);
 }
 
 

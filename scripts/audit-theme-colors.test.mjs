@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  CANONICAL_THEME_COLOR_TOKENS,
   COLOR_DOMAIN_CONTRACTS,
   COLOR_DOMAIN_KEYS,
   COLOR_DOMAIN_RULES,
@@ -20,6 +21,8 @@ import {
 const root = process.cwd();
 const SOURCE_OWNER_ROOTS = [
   'BitFun-Installer/src',
+  'design-system/packages/design-tokens/src',
+  'design-system/packages/theme-bitfun/src',
   'src/apps/mobile/design-system/preview',
   'src/mobile-web/src',
   'src/web-ui',
@@ -155,6 +158,16 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   }
   assert.ok(packageVariableNames.includes('--bf-space-1'));
   assert.ok(packageVariableNames.includes('--bf-color-surface-canvas'));
+  assert.ok(CANONICAL_THEME_COLOR_TOKENS.length > 0);
+  assert.equal(
+    CANONICAL_THEME_COLOR_TOKENS.every(token => (
+      /^--bf-[a-z0-9-]+$/.test(token.cssVariable)
+      && token.name.startsWith('color.')
+      && typeof token.value === 'string'
+    )),
+    true,
+    'canonical theme color tokens must expose semantic names, CSS variables, and resolved values',
+  );
 
   const domainContractKeys = new Set(COLOR_DOMAIN_CONTRACTS.map(contract => contract.key));
   assert.equal(
@@ -335,7 +348,7 @@ test('generated widget iframe has no compatibility alias module or contracts', (
 
 test('theme color audit emits scoped machine-readable reports', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
       ':root {',
       '  --bf-appearance-token-color-text-primary: #111111;',
       '  --static-only: #222222;',
@@ -366,8 +379,8 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.colorScopes.appUi.uniqueColors, 2);
   assert.equal(report.colorScopes.token.uniqueColors, 2);
   assert.equal(report.colorScopes.exception.uniqueColors, 1);
-  assert.equal(report.tokenAliasLiterals.occurrences, 0);
-  assert.equal(report.tokenAliasLiterals.uniqueColors, 0);
+  assert.equal(report.tokenAliasLiterals.occurrences, 1);
+  assert.equal(report.tokenAliasLiterals.uniqueColors, 1);
   assert.equal(report.cssVarDefinitions.runtimeOnlyRequiredContractUnique, 1);
   assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
   assert.equal(report.cssVarDefinitions.dynamicFamilyUnexportedUnique, 0);
@@ -377,7 +390,7 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
 
 test('theme color audit reports static contract token external consumption', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
       ':root {',
       '  --bf-appearance-token-color-text-primary: #111111;',
       '  --private-helper-rgb: 17, 17, 17;',
@@ -418,8 +431,8 @@ test('theme color audit reports static contract token external consumption', (t)
   assert.deepEqual(
     report.staticContractInternalOnlyVars.map(row => [row.key, row.definitionFiles, row.internalUsageCount]),
     [
-      ['--private-helper-rgb', ['component-library/styles/tokens.scss'], 1],
-      ['--unused-export', ['component-library/styles/tokens.scss'], 0],
+      ['--private-helper-rgb', ['design-system/packages/theme-bitfun/src/test.tokens.css'], 1],
+      ['--unused-export', ['design-system/packages/theme-bitfun/src/test.tokens.css'], 0],
     ],
   );
 });
@@ -469,7 +482,7 @@ test('theme color audit does not require a widget payload on surfaces without th
 
 test('theme color audit counts only the generated widget variable contract', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
       ':root {',
       '  --bf-appearance-token-color-bg-primary: #121214;',
       '  --bf-appearance-token-color-bg-secondary: #1c1c1f;',
@@ -508,7 +521,7 @@ test('theme color audit counts only the generated widget variable contract', (t)
 
 test('theme color audit fails closed when the generated widget variable contract is not parseable', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
       ':root {',
       '  --bf-appearance-token-color-bg-primary: #121214;',
       '}',
@@ -553,18 +566,18 @@ test('theme color audit reports fallback tokens that lack a boundary contract', 
 
 test('theme color audit reports specialized color domains separately from app UI', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': ':root { --bf-appearance-token-color-text-primary: #111111; }\n',
+    'design-system/packages/theme-bitfun/src/test.tokens.css': ':root { --bf-appearance-token-color-text-primary: #111111; }\n',
     'infrastructure/appearance/builtins/dark.ts': "export const bg = '#222222';\n",
     'tools/mermaid-editor/theme/mermaidTheme.ts': "export const node = '#333333';\n",
-    'component-library/components/CodeEditor/editorColor.ts': "export const editorBg = '#444444';\n",
+    'tools/editor/editorColor.ts': "export const editorBg = '#444444';\n",
     'shared/prism/prismTheme.ts': "export const prism = { keyword: '#555555' };\n",
     'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
     'tools/generative-widget/appearancePayload.ts': "export const fallback = { '--bf-appearance-token-color-text-primary': '#666666' };\n",
     'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
     'infrastructure/appearance/appearanceDomainTokens.ts': "export const accents = { tool: '#dddddd' };\n",
     'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
-    'component-library/components/TextStrokeEffect/TextStrokeEffect.tsx': "export const stroke = '#999999';\n",
-    'component-library/components/StreamText/StreamText.scss': ".stream { color: #bbbbbb; }\n",
+    'app/components/SplashScreen/SplashEffect.tsx': "export const stroke = '#999999';\n",
+    'app/components/SplashScreen/SplashEffect.scss': ".stream { color: #bbbbbb; }\n",
     'app/tools/mermaid-editorish/FakePanel.ts': "export const fake = '#cccccc';\n",
     'app/App.scss': '.app { color: #aaaaaa; }\n',
   });
@@ -788,9 +801,11 @@ test('theme color audit counts full CSS var governance debt before row truncatio
 
 test('theme color audit reports app literals that duplicate token values', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      '$color-accent-600: #3b82f6;',
-      '$color-warning: #f59e0b;',
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+      ':root {',
+      '  --bf-color-accent-default: #3b82f6;',
+      '  --bf-color-status-warning-content: #f59e0b;',
+      '}',
       '',
     ].join('\n'),
     'app/App.scss': [
@@ -813,7 +828,7 @@ test('theme color audit reports app literals that duplicate token values', (t) =
   assert.equal(report.tokenAliasLiterals.uniqueColors, 2);
   assert.deepEqual(
     report.tokenAliasLiterals.top.map(row => row.aliases),
-    [['$color-accent-600'], ['$color-warning']],
+    [['--bf-color-accent-default'], ['--bf-color-status-warning-content']],
   );
   assert.equal(report.colorScopes.exception.occurrences, 1);
 });
@@ -892,7 +907,7 @@ test('theme color audit reports near color pairs inside specialized color domain
 
 test('theme color audit excludes test files from production color budgets', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': ':root { --bf-appearance-token-color-error: #ef4444; }\n',
+    'design-system/packages/theme-bitfun/src/test.tokens.css': ':root { --bf-color-status-danger-content: #ef4444; }\n',
     'app/App.scss': '.app { color: #ef4444; }\n',
     'app/App.test.tsx': "expect(button).toHaveStyle({ color: '#ef4444' });\n",
     'app/__tests__/Fixture.tsx': "export const visualLock = '#ef4444';\n",
@@ -1015,7 +1030,7 @@ test('theme color audit accepts registered dynamic CSS var families', (t) => {
 
 test('theme color audit requires exact exports for dynamic-family CSS var usages', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
+    'design-system/packages/theme-bitfun/src/test.tokens.css': [
       ':root {',
       '  --bf-appearance-token-color-purple-200: rgba(139, 92, 246, 0.15);',
       '}',
@@ -1027,7 +1042,7 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
       '}',
       '',
     ].join('\n'),
-    'component-library/components/Tabs/Tabs.scss': [
+    'app/components/NavPanel/Tabs.scss': [
       '.tabs {',
       '  border-color: var(--bf-appearance-token-color-purple-300);',
       '}',

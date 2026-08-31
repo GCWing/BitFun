@@ -182,8 +182,7 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
 
   const header = (
     <ProminentToolCardHeader
-      icon={<Paintbrush size={16} />}
-      iconClassName="canvas-tool-card__icon"
+      icon={<span className="canvas-tool-card__icon"><Paintbrush size={16} /></span>}
       action={toolDisplayName}
       content={<span data-bf-component="canvas-tool-card" data-bf-part="title" className="canvas-tool-card__title">{title}</span>}
       extra={(

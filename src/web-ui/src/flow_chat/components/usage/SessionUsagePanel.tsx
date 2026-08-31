@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Wrench,
 } from 'lucide-react';
-import { MarkdownRenderer, Tooltip } from '@/component-library';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
+import { Tooltip } from '@bitfun/ui';
 import { snapshotAPI } from '@/infrastructure/api';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';

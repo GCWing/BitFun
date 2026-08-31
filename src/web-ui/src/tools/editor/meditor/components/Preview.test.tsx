@@ -11,7 +11,7 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@/infrastructure/markdown', () => ({
   MarkdownRenderer: ({ content }: { content: string }) => (
     <div data-testid="markdown-renderer">{content}</div>
   ),

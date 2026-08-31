@@ -1,16 +1,8 @@
-import { cardAppearanceDescriptor } from '@/component-library/components/Card/appearance';
-import { tooltipAppearanceDescriptor } from '@/component-library/components/Tooltip/appearance';
-import { popupCloseButtonAppearanceDescriptor } from '@/component-library/components/PopupCloseButton/appearance';
-import { codeEditorAppearanceDescriptor } from '@/component-library/components/CodeEditor/appearance';
-import { configPageAppearanceDescriptor } from '@/component-library/components/ConfigPage/appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
-import { cubeLoadingAppearanceDescriptor } from '@/component-library/components/CubeLoading/appearance';
-import { dotMatrixLoaderAppearanceDescriptor } from '@/component-library/components/DotMatrixLoader/appearance';
-import { inputDialogAppearanceDescriptor } from '@/component-library/components/InputDialog/appearance';
-import { taskRunningIndicatorAppearanceDescriptor } from '@/component-library/components/TaskRunningIndicator/appearance';
-import { windowControlsAppearanceDescriptor } from '@/component-library/components/WindowControls/appearance';
-import { markdownAppearanceDescriptor } from '@/component-library/components/Markdown/appearance';
-import { viewTransitionBoundaryAppearanceDescriptor } from '@/component-library/components/ViewTransitionBoundary/appearance';
+import { inputDialogAppearanceDescriptor } from '@/app/components/InputDialog/appearance';
+import { windowControlsAppearanceDescriptor } from '@/app/components/WindowControls/appearance';
+import { navigationTransitionBoundaryAppearanceDescriptor } from '@/app/navigation/NavigationTransitionBoundary/appearance';
+import { markdownAppearanceDescriptor } from '@/infrastructure/markdown/appearance';
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
@@ -57,8 +49,6 @@ import { fontPreferenceAppearanceDescriptor } from '@/infrastructure/font-prefer
 import { languageSelectorAppearanceDescriptor } from '@/infrastructure/i18n/appearance';
 import { peerDeviceAppearanceDescriptor } from '@/infrastructure/peer-device/appearance';
 import { updateAppearanceDescriptor } from '@/infrastructure/update/appearance';
-import { componentPreviewAppearanceDescriptor } from '@/component-library/preview/appearance';
-import { iconCatalogAppearanceDescriptor } from '@/component-library/preview/IconCatalogPreview.appearance';
 import { announcementAppearanceDescriptor } from '@/shared/announcement-system/appearance';
 import { contextMenuAppearanceDescriptor } from '@/shared/context-menu-system/appearance';
 import { contextListAppearanceDescriptor } from '@/shared/context-system/appearance';
@@ -173,7 +163,7 @@ import { threadGoalDialogsAppearanceDescriptor } from '@/flow_chat/components/th
 import { welcomePanelAppearanceDescriptor } from '@/flow_chat/components/WelcomePanel.appearance';
 import { generativeWidgetToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/GenerativeWidgetToolCard.appearance';
 import { snapshotFullscreenDiffViewerAppearanceDescriptor } from '@/flow_chat/tool-cards/SnapshotFullscreenDiffViewer.appearance';
-import { mermaidBlockAppearanceDescriptor } from '@/component-library/components/Markdown/MermaidBlock.appearance';
+import { mermaidBlockAppearanceDescriptor } from '@/infrastructure/markdown/MermaidBlock.appearance';
 import { defaultModelConfigAppearanceDescriptor } from '@/infrastructure/config/components/DefaultModelConfig.appearance';
 import { globalPermissionRulesDialogAppearanceDescriptor } from '@/infrastructure/config/components/GlobalPermissionRulesDialog.appearance';
 import { mcpResourceBrowserAppearanceDescriptor } from '@/infrastructure/config/components/MCPResourceBrowser.appearance';
@@ -257,19 +247,11 @@ import { AppearanceRegistry } from './AppearanceRegistry';
 
 export function createDefaultAppearanceRegistry(): AppearanceRegistry {
   return new AppearanceRegistry()
-    .registerComponent(cardAppearanceDescriptor)
-    .registerComponent(tooltipAppearanceDescriptor)
-    .registerComponent(popupCloseButtonAppearanceDescriptor)
-    .registerComponent(codeEditorAppearanceDescriptor)
-    .registerComponent(configPageAppearanceDescriptor)
     .registerComponent(confirmDialogAppearanceDescriptor)
-    .registerComponent(cubeLoadingAppearanceDescriptor)
-    .registerComponent(dotMatrixLoaderAppearanceDescriptor)
     .registerComponent(inputDialogAppearanceDescriptor)
-    .registerComponent(taskRunningIndicatorAppearanceDescriptor)
     .registerComponent(windowControlsAppearanceDescriptor)
+    .registerComponent(navigationTransitionBoundaryAppearanceDescriptor)
     .registerComponent(markdownAppearanceDescriptor)
-    .registerComponent(viewTransitionBoundaryAppearanceDescriptor)
     .registerComponent(chatInputAppearanceDescriptor)
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
@@ -316,8 +298,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(languageSelectorAppearanceDescriptor)
     .registerComponent(peerDeviceAppearanceDescriptor)
     .registerComponent(updateAppearanceDescriptor)
-    .registerComponent(componentPreviewAppearanceDescriptor)
-    .registerComponent(iconCatalogAppearanceDescriptor)
     .registerComponent(assistantAvatarAppearanceDescriptor)
     .registerComponent(deviceOverviewAppearanceDescriptor)
     .registerComponent(sessionNavigationAppearanceDescriptor)

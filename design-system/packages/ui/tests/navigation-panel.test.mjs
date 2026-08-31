@@ -5,6 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelFooter,
+  NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
   NavigationPanelSeparator,
@@ -16,20 +20,27 @@ test("NavigationPanel composes independent header, grouped body, and footer regi
       NavigationPanel,
       {
         "aria-label": "Application navigation",
-        footer: createElement("button", null, "Device"),
-        header: createElement("button", null, "Search"),
-        scrollbarVisibility: "always",
       },
+      createElement(NavigationPanelHeader, null, createElement("button", null, "Search")),
       createElement(
-        NavigationPanelSection,
-        {
-          actions: [{ icon: createElement("svg"), id: "add", label: "Add" }],
-          title: "Sessions",
-        },
-        createElement(NavigationPanelItem, { selected: true }, "Welcome"),
-        createElement(NavigationPanelItem, { disabled: true }, "Unavailable"),
+        NavigationPanelBody,
+        { scrollbarVisibility: "always" },
+        createElement(
+          NavigationPanelContent,
+          null,
+          createElement(
+            NavigationPanelSection,
+            {
+              actions: [{ icon: createElement("svg"), id: "add", label: "Add" }],
+              title: "Sessions",
+            },
+            createElement(NavigationPanelItem, { selected: true }, "Welcome"),
+            createElement(NavigationPanelItem, { disabled: true }, "Unavailable"),
+          ),
+          createElement(NavigationPanelSeparator),
+        ),
       ),
-      createElement(NavigationPanelSeparator),
+      createElement(NavigationPanelFooter, null, createElement("button", null, "Device")),
     ),
   );
 
@@ -55,8 +66,8 @@ test("NavigationPanel styling reuses shared action and scrollbar contracts", asy
   assert.match(styles, /--bf-layout-navigation-panel-inline-size/);
   assert.match(styles, /--bf-layout-navigation-panel-footer-height/);
   assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--bf-space-1\) \/ 2\)/);
-  assert.match(styles, /--bf-color-surface-subtle/);
-  assert.match(styles, /--bf-color-action-neutral-surface-pressed/);
+  assert.match(styles, /--bf-color-surface-chrome/);
+  assert.match(styles, /--bf-color-selection-surface/);
   assert.match(styles, /aria-current/);
   assert.match(styles, /scrollbar-gutter: stable/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);

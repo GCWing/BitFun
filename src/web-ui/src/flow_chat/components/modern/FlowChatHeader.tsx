@@ -20,7 +20,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import {
   SceneChromeContribution,
   useSceneChromeContext,

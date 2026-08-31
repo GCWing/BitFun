@@ -5,8 +5,8 @@
 
 import { createContext, useContext } from 'react';
 import type React from 'react';
-import type { FlowChatConfig, Session, ToolRejectOptions } from '../../types/flow-chat';
-import type { LineRange } from '@/component-library';
+import type { Session, ToolRejectOptions } from '../../types/flow-chat';
+import { type LineRange } from '@/shared/editor/LineRange';
 
 /**
  * Stable part of the FlowChat context: callbacks with stable identities plus
@@ -20,7 +20,6 @@ export interface FlowChatContextValue {
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
   onHttpLinkClick?: (url: string, event: React.MouseEvent<HTMLAnchorElement>) => boolean | void;
   onOpenVisualization?: (type: string, data: any) => void;
-  onSwitchToChatPanel?: () => void;
 
   // Tool actions
   onToolConfirm?: (toolId: string, permissionOptionId?: string, approve?: boolean) => Promise<void>;
@@ -48,9 +47,6 @@ export interface FlowChatContextValue {
   allowUserMessageEdit?: boolean;
   /** Hides transcript actions when the visible projection omits internal turn input. */
   allowTranscriptExport?: boolean;
-
-  // Config
-  config?: FlowChatConfig;
 
   // ========== Explore group collapse actions (stable callbacks) ==========
   /**

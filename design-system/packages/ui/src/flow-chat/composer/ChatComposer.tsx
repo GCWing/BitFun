@@ -5,6 +5,10 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import {
+  IconButton,
+  type IconButtonProps,
+} from "../../components/IconButton";
 import { classNames } from "../../internal/classNames";
 import styles from "./ChatComposer.module.css";
 
@@ -20,12 +24,33 @@ export interface ChatComposerProps
   layout?: ChatComposerLayout;
   queue?: ReactNode;
   startActions?: ReactNode;
-  surfaceClassName?: string;
 }
 
 export interface ChatComposerSlotProps {
   children: ReactNode;
 }
+
+export type ChatComposerActionButtonProps = Omit<
+  IconButtonProps,
+  "shape" | "size"
+>;
+
+/** Stable icon action for ChatComposer start and end action tracks. */
+export const ChatComposerActionButton = forwardRef<
+  HTMLButtonElement,
+  ChatComposerActionButtonProps
+>(function ChatComposerActionButton({ className, ...props }, ref) {
+  return (
+    <IconButton
+      {...props}
+      className={classNames(styles.actionButton, className)}
+      data-bf-role="composer-action"
+      ref={ref}
+      shape="circle"
+      size="sm"
+    />
+  );
+});
 
 /** Compound slot for complex consumers that keep content and actions adjacent. */
 export function ChatComposerContent({ children }: ChatComposerSlotProps) {
@@ -96,7 +121,6 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
     layout = "compact",
     queue,
     startActions,
-    surfaceClassName,
     ...props
   }, ref) {
     const contextVisible = hasSlot(contextBar);
@@ -134,7 +158,7 @@ export const ChatComposer = forwardRef<HTMLDivElement, ChatComposerProps>(
           )}
           <div
             aria-disabled={disabled || undefined}
-            className={classNames(styles.surface, surfaceClassName)}
+            className={styles.surface}
             data-bf-layout={layout}
             data-bf-part="surface"
           >

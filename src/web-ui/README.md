@@ -26,13 +26,11 @@ src/web-ui/
 ├── README.zh-CN.md               # Chinese version
 ├── LOGGING.md                    # Logging & debugging notes
 ├── index.html                    # Entry HTML
-├── preview.html                  # Preview page (optional)
 ├── package.json                  # Dependencies & scripts
 ├── package-lock.json             # Locked dependency versions
 ├── public/                       # Static assets
 ├── src/                          # Frontend source
 │   ├── app/                      # Main app UI
-│   ├── component-library/        # Component library
 │   ├── features/                 # Feature modules
 │   ├── flow_chat/                # Flow / chat UI
 │   ├── generated/                # Generated content (placeholder/artifacts)
@@ -46,7 +44,6 @@ src/web-ui/
 ├── tsconfig.json                 # TS config
 ├── tsconfig.node.json            # Node/Vite TS config
 ├── vite.config.ts                # Vite config
-├── vite.config.preview.ts        # Preview build config
 └── vite.config.version-plugin.ts # Version plugin
 ```
 
@@ -95,7 +92,7 @@ VITE_BUILD_TARGET=web pnpm --dir src/web-ui run build
 
 - [Logging guide](LOGGING.md)
 - [Motion audit and optimization checklist](MOTION_AUDIT.md)
-- [Component library README](src/component-library/README.md)
+- [Independent design system](../../design-system/README.md)
 - [i18n README](src/infrastructure/i18n/README.md)
 
 ## Notes

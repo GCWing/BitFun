@@ -1,4 +1,16 @@
-import { Avatar, Button, Icon, Menu, MenuItem, Modal } from '@bitfun/ui';
+import {
+  Avatar,
+  Button,
+  Icon,
+  Menu,
+  MenuItem,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Github, Loader2, LogOut } from 'lucide-react';
@@ -175,8 +187,8 @@ export function MarketAccountControls({
             aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
             onClick={() => setMenuOpen(open => !open)}
           >
-            <Avatar size={22} src={account.me.user.avatarUrl} alt={account.me.user.login} />
-            <span>@{account.me.user.login}</span>
+            <Avatar size="sm" src={account.me.user.avatarUrl} alt={account.me.user.login} />
+            <span className="market-account-controls__identity-name">@{account.me.user.login}</span>
             <Icon name="chevron-down" size="xs" aria-hidden="true" />
           </button>
           {menuOpen && createPortal(
@@ -195,7 +207,7 @@ export function MarketAccountControls({
                 data-bf-component="market-account-controls"
                 data-bf-part="profile"
               >
-                <Avatar size={30} src={account.me.user.avatarUrl} alt={account.me.user.login} />
+                <Avatar size="md" src={account.me.user.avatarUrl} alt={account.me.user.login} />
                 <div>
                   <strong>@{account.me.user.login}</strong>
                   <span>{t('market.account.githubAccount')}</span>
@@ -225,15 +237,20 @@ export function MarketAccountControls({
         </Button>
       )}
 
-      <Modal
-        isOpen={loginOpen && !account.me}
-        onClose={closeLogin}
-        title={t('market.account.dialogTitle')}
-        size="small"
-        contentPadding="lg"
-        closeOnOverlayClick={account.status !== 'authorizing'}
-        testId="market-account-login-dialog"
+      <Dialog
+        open={loginOpen && !account.me}
+        onOpenChange={(nextOpen) => { if (!nextOpen) closeLogin(); }}
+        size="sm"
+        closeOnPointerOutside={account.status !== 'authorizing'}
+        data-testid="market-account-login-dialog"
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('market.account.dialogTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
         <div
           className="market-account-login"
           data-bf-component="market-account-controls"
@@ -289,7 +306,8 @@ export function MarketAccountControls({
             </Button>
           </div>
         </div>
-      </Modal>
+              </DialogBody>
+      </Dialog>
     </div>
   );
 }

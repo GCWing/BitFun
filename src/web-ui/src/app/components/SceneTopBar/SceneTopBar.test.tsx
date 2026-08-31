@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import SceneTopBar from './SceneTopBar';
 
-vi.mock('@/component-library', () => ({ WindowControls: () => <button>Window controls</button> }));
+vi.mock('@/app/components/WindowControls', () => ({ WindowControls: () => <button>Window controls</button> }));
 vi.mock('@/infrastructure/runtime', () => ({ supportsNativeWindowDragging: () => false }));
 vi.mock('../../stores/sceneStore', () => ({ useSceneStore: (selector: (state: unknown) => unknown) => selector({ openTabs: [{}] }) }));
 vi.mock('../SceneBar/SceneBar', () => ({ default: () => <div role="tablist"><button role="tab">Settings</button></div> }));

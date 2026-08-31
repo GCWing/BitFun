@@ -33,7 +33,7 @@ Peer Device Mode（同账号远程完整客户端）的边界见 `docs/architect
 ## 本模块规则
 
 - 不要在 UI 组件里直接调用 Tauri API；应通过 adapter / infrastructure 层访问
-- 新增前端基础设施前，先复用已有的 theme、i18n、component-library 和 Zustand stores
+- 新增前端基础设施前，先复用 `@bitfun/ui`、设计令牌、theme、i18n 和 Zustand stores
 - 主题与颜色 Token 改动遵循 `docs/architecture/theme-token-optimization.md`。审计失败应通过复用 Token、
   收敛冗余值或增加最小 owner contract 修复，不得仅为通过检查提高 baseline 或测试期望；跨形态改动运行
   `pnpm run theme:color-audit:all`。

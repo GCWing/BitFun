@@ -21,7 +21,7 @@ import type { SceneTabId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useDialogCompletionNotify } from '../hooks/useDialogCompletionNotify';
-import { DotMatrixLoader } from '@/component-library';
+import { Spinner } from '@bitfun/ui';
 import SettingsScene from './settings/SettingsScene';
 import AssistantScene from './assistant/AssistantScene';
 import SessionScene from './session/SessionScene';
@@ -269,7 +269,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                         data-bf-scene="workbench"
                         data-bf-part="loading"
                       >
-                        <DotMatrixLoader size="medium" />
+                        <Spinner size="md" />
                       </div>
                     ) : null
                   }
@@ -319,7 +319,7 @@ function renderScene(
     case 'browser':
       return <BrowserScene />;
     case 'assistant':
-      return <AssistantScene workspacePath={workspacePath} />;
+      return <AssistantScene />;
     case 'todos':
       return <TodosScene />;
     case 'insights':

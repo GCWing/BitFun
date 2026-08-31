@@ -4,25 +4,25 @@ import {
   type HTMLAttributes,
   type MouseEventHandler,
   type ReactNode,
-  type Ref,
 } from "react";
 import { ActionItem, type ActionItemProps } from "../ActionItem";
 import { IconButton, type IconButtonProps } from "../IconButton";
-import { ScrollArea, type ScrollbarVisibility } from "../ScrollArea";
+import { ScrollArea, type ScrollAreaProps } from "../ScrollArea";
 import { classNames } from "../../internal/classNames";
 import styles from "./NavigationPanel.module.css";
 
 export interface NavigationPanelProps
   extends Omit<HTMLAttributes<HTMLElement>, "children"> {
-  bodyClassName?: string;
-  /** Ref to the scroll viewport so product sticky headers can track the same root. */
-  bodyRef?: Ref<HTMLDivElement>;
   children: ReactNode;
-  contentClassName?: string;
-  footer?: ReactNode;
-  header?: ReactNode;
-  scrollbarVisibility?: ScrollbarVisibility;
 }
+
+export type NavigationPanelHeaderProps = HTMLAttributes<HTMLDivElement>;
+
+export interface NavigationPanelBodyProps
+  extends Omit<ScrollAreaProps, "orientation"> {}
+
+export type NavigationPanelContentProps = HTMLAttributes<HTMLDivElement>;
+export type NavigationPanelFooterProps = HTMLAttributes<HTMLDivElement>;
 
 export interface NavigationPanelItemProps extends ActionItemProps {
   selected?: boolean;
@@ -41,7 +41,6 @@ export interface NavigationPanelSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: readonly NavigationPanelSectionAction[];
   children: ReactNode;
-  itemsClassName?: string;
   title?: ReactNode;
 }
 
@@ -49,14 +48,8 @@ export type NavigationPanelSeparatorProps = HTMLAttributes<HTMLDivElement>;
 
 export const NavigationPanel = forwardRef<HTMLElement, NavigationPanelProps>(
   function NavigationPanel({
-    bodyClassName,
-    bodyRef,
     children,
     className,
-    contentClassName,
-    footer,
-    header,
-    scrollbarVisibility = "auto",
     ...props
   }, ref) {
     return (
@@ -66,26 +59,62 @@ export const NavigationPanel = forwardRef<HTMLElement, NavigationPanelProps>(
         data-bf-component="navigation-panel"
         ref={ref}
       >
-        {header !== undefined && header !== null && (
-          <div className={styles.header} data-bf-part="header">{header}</div>
-        )}
-        <ScrollArea
-          className={classNames(styles.body, bodyClassName)}
-          orientation="vertical"
-          ref={bodyRef}
-          scrollbarVisibility={scrollbarVisibility}
-        >
-          <div
-            className={classNames(styles.content, contentClassName)}
-            data-bf-part="content"
-          >
-            {children}
-          </div>
-        </ScrollArea>
-        {footer !== undefined && footer !== null && (
-          <div className={styles.footer} data-bf-part="footer">{footer}</div>
-        )}
+        {children}
       </nav>
+    );
+  },
+);
+
+export const NavigationPanelHeader = forwardRef<HTMLDivElement, NavigationPanelHeaderProps>(
+  function NavigationPanelHeader({ className, ...props }, ref) {
+    return (
+      <div
+        {...props}
+        className={classNames(styles.header, className)}
+        data-bf-part="header"
+        ref={ref}
+      />
+    );
+  },
+);
+
+export const NavigationPanelBody = forwardRef<HTMLDivElement, NavigationPanelBodyProps>(
+  function NavigationPanelBody({ className, scrollbarVisibility = "auto", ...props }, ref) {
+    return (
+      <ScrollArea
+        {...props}
+        className={classNames(styles.body, className)}
+        data-bf-part="body"
+        orientation="vertical"
+        ref={ref}
+        scrollbarVisibility={scrollbarVisibility}
+      />
+    );
+  },
+);
+
+export const NavigationPanelContent = forwardRef<HTMLDivElement, NavigationPanelContentProps>(
+  function NavigationPanelContent({ className, ...props }, ref) {
+    return (
+      <div
+        {...props}
+        className={classNames(styles.content, className)}
+        data-bf-part="content"
+        ref={ref}
+      />
+    );
+  },
+);
+
+export const NavigationPanelFooter = forwardRef<HTMLDivElement, NavigationPanelFooterProps>(
+  function NavigationPanelFooter({ className, ...props }, ref) {
+    return (
+      <div
+        {...props}
+        className={classNames(styles.footer, className)}
+        data-bf-part="footer"
+        ref={ref}
+      />
     );
   },
 );
@@ -115,7 +144,6 @@ export const NavigationPanelSection = forwardRef<HTMLElement, NavigationPanelSec
     actions = [],
     children,
     className,
-    itemsClassName,
     title,
     ...props
   }, ref) {
@@ -156,10 +184,7 @@ export const NavigationPanelSection = forwardRef<HTMLElement, NavigationPanelSec
             )}
           </div>
         )}
-        <div
-          className={classNames(styles.items, itemsClassName)}
-          data-bf-part="section-items"
-        >
+        <div className={styles.items} data-bf-part="section-items">
           {children}
         </div>
       </section>

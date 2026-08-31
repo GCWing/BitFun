@@ -3,24 +3,6 @@
  * Modal owns the outer surface; this file owns the product, metadata, and CTA layout.
  */
 
-.bitfun-about-dialog-overlay {
-  > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'][data-testid='about-dialog-modal'] {
-    width: min(960px, 100%);
-    max-width: min(960px, 100%);
-  }
-
-  [data-bf-component='modal'][data-bf-part='header'] {
-    min-height: 48px;
-    padding: 8px 24px;
-  }
-
-  [data-bf-component='modal'][data-bf-part='title'] {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-font-size-lg);
-    font-weight: var(--bf-font-weight-semibold);
-  }
-}
-
 .bitfun-about-dialog__modal-content {
   overflow: hidden;
 }
@@ -409,13 +391,6 @@
 }
 
 @media (max-width: 900px) {
-  .bitfun-about-dialog-overlay {
-    > [data-bf-component='modal'][data-bf-part='dialog'][data-bf-size='xxlarge'][data-testid='about-dialog-modal'] {
-      width: 100%;
-      max-width: 100%;
-    }
-  }
-
   .bitfun-about-dialog__body {
     grid-template-columns: minmax(300px, 0.37fr) minmax(0, 0.63fr);
   }
@@ -436,13 +411,6 @@
 }
 
 @media (max-width: 760px) {
-  .bitfun-about-dialog-overlay {
-    [data-bf-component='modal'][data-bf-part='header'] {
-      min-height: 48px;
-      padding: 8px 18px;
-    }
-  }
-
   .bitfun-about-dialog__modal-content {
     overflow-y: auto;
   }
@@ -512,17 +480,6 @@
 }
 
 @media (max-width: 520px) {
-  .bitfun-about-dialog-overlay {
-    [data-bf-component='modal'][data-bf-part='header'] {
-      min-height: 48px;
-      padding: 8px 14px;
-    }
-
-    [data-bf-component='modal'][data-bf-part='title'] {
-      font-size: var(--bf-font-size-base);
-    }
-  }
-
   .bitfun-about-dialog__brand {
     padding: 26px 20px;
   }

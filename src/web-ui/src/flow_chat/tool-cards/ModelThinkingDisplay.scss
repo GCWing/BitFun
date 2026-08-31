@@ -8,7 +8,7 @@
  */
 
 @use './_tool-card-common.scss';
-@use '../../component-library/styles/markdown-layout' as markdown;
+@use '@/infrastructure/markdown/layout' as markdown;
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:

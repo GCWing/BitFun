@@ -58,19 +58,18 @@ interface PersonaDocState {
 interface AutoResizeTextareaProps {
   value: string;
   onChange: (value: string) => void;
-  className?: string;
 }
 
 const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
   value,
   onChange,
-  className = '',
 }) => {
   return (
     <Textarea
       autoResize
       className="acp-persona-editor__frontmatter-control"
-      textareaClassName={`m-editor-textarea ${className}`.trim()}
+      font="mono"
+      resize="none"
       value={value}
       onValueChange={onChange}
       spellCheck={false}
@@ -437,7 +436,6 @@ const AssistantConfigPage: React.FC = () => {
                       key={`${fileName}-frontmatter`}
                       value={sections.frontmatter}
                       onChange={handlePersonaDocFrontmatterChange}
-                      className="acp-persona-editor__frontmatter-textarea"
                     />
                   </section>
                   <div className="acp-persona-editor__divider" aria-hidden="true" />

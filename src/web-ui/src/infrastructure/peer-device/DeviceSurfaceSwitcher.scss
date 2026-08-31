@@ -2,19 +2,16 @@
  * Device surface switcher row above the NavPanel footer.
  * Neutral while rendering this machine, warning-tinted while rendering a peer.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-
 .bitfun-device-switcher {
   display: flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   flex-shrink: 0;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
   margin: 0;
-  padding: $size-gap-2 $size-gap-3;
+  padding: var(--bf-space-2) var(--bf-space-3);
   border: none;
   border-top: 1px solid var(--bf-color-border-subtle);
   background: transparent;
@@ -24,8 +21,8 @@
   font-size: var(--bf-font-size-xs);
   line-height: var(--bf-line-height-snug);
   text-align: left;
-  transition: background $motion-fast $easing-standard,
-              color $motion-fast $easing-standard;
+  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+              color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &__trigger {
     inline-size: 100%;
@@ -71,7 +68,7 @@
     gap: 3px;
     flex-shrink: 0;
     padding: 1px 5px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
     color: var(--bf-color-status-success-content);
     font-size: var(--bf-font-size-micro);
@@ -97,7 +94,7 @@
   &__item-metadata {
     display: inline-flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__dot {
@@ -109,7 +106,7 @@
 
     &.is-busy {
       background: var(--bf-color-status-warning-content);
-      animation: bitfun-device-switcher-pulse 1.6s $easing-standard infinite;
+      animation: bitfun-device-switcher-pulse 1.6s var(--bf-motion-easing-standard) infinite;
     }
 
     &.is-offline {
@@ -121,7 +118,7 @@
   &__tag {
     flex-shrink: 0;
     padding: 1px 5px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-micro);
@@ -135,14 +132,14 @@
 
   &__empty,
   &__hint {
-    padding: $size-gap-1 $size-gap-2;
+    padding: var(--bf-space-1) var(--bf-space-2);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-meta);
     line-height: var(--bf-line-height-ui);
   }
 
   &__hint {
-    padding-top: $size-gap-2;
+    padding-top: var(--bf-space-2);
   }
 }
 

@@ -10,7 +10,7 @@
   margin-top: 42px;
 }
 
-.flow-chat-tool-gallery > .component-library-section-heading {
+.flow-chat-tool-gallery > .component-catalog-section-heading {
   margin-block: 0 -8px;
   padding-top: 34px;
   border-top: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
@@ -181,7 +181,7 @@
 }
 
 @media (max-width: 720px) {
-  .component-library-section-heading {
+  .component-catalog-section-heading {
     grid-template-columns: 1fr;
     align-items: start;
     gap: 12px;

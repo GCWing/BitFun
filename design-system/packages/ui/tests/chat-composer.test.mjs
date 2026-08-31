@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   ChatComposer,
+  ChatComposerActionButton,
   ChatComposerContent,
   ChatComposerEndActions,
   ChatComposerQueue,
@@ -17,6 +18,31 @@ import {
   ChatComposerQueueTitle,
   ChatComposerStartActions,
 } from "../dist/flow-chat.js";
+
+test("ChatComposerActionButton shares one stable action and icon geometry", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      "div",
+      null,
+      createElement(ChatComposerActionButton, {
+        "aria-expanded": true,
+        "aria-label": "Add context",
+        icon: createElement("svg", { "data-icon": "plus" }),
+        variant: "fill",
+      }),
+      createElement(ChatComposerActionButton, {
+        "aria-label": "Send",
+        icon: createElement("svg", { "data-icon": "arrow-up" }),
+        variant: "primary",
+      }),
+    ),
+  );
+
+  assert.equal((markup.match(/data-bf-role="composer-action"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-bf-shape="circle"/g) ?? []).length, 2);
+  assert.match(markup, /data-bf-variant="fill"/);
+  assert.match(markup, /data-bf-variant="primary"/);
+});
 
 test("ChatComposer publishes stable context, content, and action slots", () => {
   const markup = renderToStaticMarkup(
@@ -201,6 +227,7 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
   assert.match(styles, /--bf-control-chat-composer-compact-padding-block/);
   assert.match(styles, /--bf-control-chat-composer-compact-padding-inline/);
   assert.match(styles, /--bf-control-chat-composer-compact-track-height/);
+  assert.match(styles, /--bf-control-chat-composer-action-icon-size/);
   assert.match(styles, /--bf-control-chat-composer-control-height/);
   assert.match(styles, /--bf-space-8/);
   assert.match(styles, /--bf-radius-2xl/);

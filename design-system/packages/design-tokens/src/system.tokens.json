@@ -374,6 +374,7 @@
     },
     "chatComposer": {
       "$type": "dimension",
+      "actionIconSize": { "$value": "14px" },
       "compactGap": { "$value": "9px" },
       "compactHeight": { "$value": "45px" },
       "compactPaddingBlock": { "$value": "9px" },
@@ -566,9 +567,19 @@
       "messageGap": { "$value": "{space.3}" },
       "iconSize": { "$value": "32px" },
       "iconGlyphSize": { "$value": "18px" },
+      "previewMaxBlockSize": { "$value": "240px" },
       "previewPaddingBlock": { "$value": "{space.3}" },
       "previewPaddingInline": { "$value": "{space.4}" },
       "previewRadius": { "$value": "{radius.base}" }
+    },
+    "spinner": {
+      "matrixCellXs": { "$value": "3px" },
+      "matrixCellSm": { "$value": "4px" },
+      "matrixCellMd": { "$value": "6px" },
+      "matrixCellLg": { "$value": "8px" },
+      "matrixGapSm": { "$value": "1px" },
+      "matrixGapMd": { "$value": "2px" },
+      "matrixRadius": { "$value": "1px" }
     },
     "card": {
       "paddingSm": { "$value": "{space.3}" },
@@ -679,23 +690,23 @@
         "$value": "{space.2}"
       }
     },
-    "modal": {
+    "dialog": {
       "$type": "dimension",
       "viewportGutter": {
-        "$description": "Minimum viewport inset reserved around a centered modal.",
+        "$description": "Minimum viewport inset reserved around a centered dialog.",
         "$value": "24px"
       },
       "edgeGutter": {
-        "$description": "Inset shared by modal header chrome and the close action.",
+        "$description": "Inset shared by dialog header chrome and the close action.",
         "$value": "8px"
       },
       "backdropBlur": {
-        "$description": "Background blur applied by the reference modal scrim.",
+        "$description": "Background blur applied by the reference dialog scrim.",
         "$type": "filter",
         "$value": "blur(20px)"
       },
       "surfaceRadius": {
-        "$description": "Reference corner radius for the modal surface.",
+        "$description": "Reference corner radius for the dialog surface.",
         "$value": "28px"
       },
       "headerGap": {
@@ -724,7 +735,7 @@
       "footerPaddingBlockEnd": { "$value": "{space.5}" },
       "footerPaddingInline": { "$value": "{space.6}" },
       "footerHeight": {
-        "$description": "Total visual height of the floating modal action bar.",
+        "$description": "Total visual height of the floating dialog action bar.",
         "$value": "68px"
       },
       "footerFadeExtent": {
@@ -732,11 +743,11 @@
         "$value": "{space.6}"
       },
       "footerContentInset": {
-        "$description": "Trailing scroll space that keeps content reachable beneath the floating modal action bar.",
+        "$description": "Trailing scroll space that keeps content reachable beneath the floating dialog action bar.",
         "$value": "104px"
       },
       "footerBlur": {
-        "$description": "Backdrop blur applied to content passing beneath the floating modal action bar.",
+        "$description": "Backdrop blur applied to content passing beneath the floating dialog action bar.",
         "$type": "filter",
         "$value": "blur(10px)"
       },
@@ -770,6 +781,10 @@
     }
   },
   "motion": {
+    "distance": {
+      "$type": "dimension",
+      "sm": { "$value": "{space.1}" }
+    },
     "duration": {
       "$type": "duration",
       "instant": { "$value": "80ms" },

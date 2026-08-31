@@ -21,10 +21,6 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => children,
-}));
-
 vi.mock('@bitfun/ui', () => ({
   IconButton: ({ icon, loading: _loading, size: _size, variant: _variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
     icon?: ReactNode;
@@ -32,6 +28,7 @@ vi.mock('@bitfun/ui', () => ({
     size?: string;
     variant?: string;
   }) => <button {...props}>{icon}</button>,
+  Tooltip: ({ children }: { children: ReactNode }) => children,
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({

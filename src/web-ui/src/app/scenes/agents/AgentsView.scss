@@ -1,5 +1,3 @@
-@use '../../../component-library/styles/tokens' as *;
-
 // ─── Page enter animations ────────────────────────────────────────────────────
 
 @keyframes tv-page-reveal {
@@ -17,14 +15,14 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  animation: tv-page-reveal 0.32s $easing-decelerate both;
+  animation: tv-page-reveal 0.32s var(--bf-motion-easing-decelerate) both;
 
   // ── Editor bar (back button) ─────────────────────────────────────────────
   &__editor-bar {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    padding: $size-gap-3 clamp(16px, 2.2vw, 28px);
+    padding: var(--bf-space-3) clamp(16px, 2.2vw, 28px);
     border-bottom: 1px solid var(--bf-color-border-subtle);
     background: linear-gradient(
       to bottom,
@@ -55,7 +53,7 @@
 
   &__panel-label {
     flex-shrink: 0;
-    padding: 10px $size-gap-4;
+    padding: 10px var(--bf-space-4);
     font-size: var(--bf-font-size-xs);
     font-weight: var(--bf-font-weight-semibold);
     color: var(--bf-color-content-muted);
@@ -76,8 +74,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 56px $size-gap-10 $size-gap-12;
-  gap: $size-gap-6;
+  padding: 56px var(--bf-space-10) var(--bf-space-12);
+  gap: var(--bf-space-6);
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
@@ -86,7 +84,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     text-align: center;
     max-width: 400px;
   }
@@ -98,10 +96,10 @@
     align-items: center;
     justify-content: center;
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-lg;
+    border-radius: var(--bf-radius-lg);
     color: var(--bf-color-content-muted);
     background: var(--bf-color-surface-subtle);
-    margin-bottom: $size-gap-2;
+    margin-bottom: var(--bf-space-2);
   }
 
   &__title {
@@ -141,17 +139,17 @@
   &__tpl {
     display: flex;
     align-items: center;
-    gap: $size-gap-4;
-    padding: 13px $size-gap-4;
+    gap: var(--bf-space-4);
+    padding: 13px var(--bf-space-4);
     background: transparent;
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     text-align: left;
     font-family: var(--bf-font-family-sans);
 
@@ -169,7 +167,7 @@
     align-items: center;
     justify-content: center;
     border: 1px solid;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
   }
 
   &__tpl-body {
@@ -206,7 +204,7 @@
   &__tpl-arrow {
     flex-shrink: 0;
     color: var(--bf-color-content-disabled);
-    transition: transform $motion-fast $easing-standard, color $motion-fast $easing-standard;
+    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     .tv-onboard__tpl:hover & {
       transform: translateX(2px);
@@ -215,19 +213,19 @@
   }
 
   &__blank {
-    margin-top: $size-gap-2;
+    margin-top: var(--bf-space-2);
     background: transparent;
     border: 1px dashed var(--bf-color-border-subtle);
-    border-radius: $size-radius-sm;
-    padding: 7px $size-gap-6;
+    border-radius: var(--bf-radius-sm);
+    padding: 7px var(--bf-space-6);
     color: var(--bf-color-content-muted);
     font-size: var(--bf-font-size-xs);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     font-family: var(--bf-font-family-sans);
 
     &:hover {

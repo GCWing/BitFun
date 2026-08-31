@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FileEdit, FilePlus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';

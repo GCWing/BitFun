@@ -88,7 +88,8 @@ vi.mock('./components/ToolGroupPicker', () => ({
   ),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
@@ -301,12 +302,12 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
     expect(agentCardStyles).toContain('height: 148px;');
     expect(coreCardSurfaceStyles).toContain('height: 148px;');
-    expect(agentCardStyles).toContain('border-radius: $size-radius-lg;');
-    expect(coreCardSurfaceStyles).toContain('border-radius: $size-radius-lg;');
+    expect(agentCardStyles).toContain('border-radius: var(--bf-radius-lg);');
+    expect(coreCardSurfaceStyles).toContain('border-radius: var(--bf-radius-lg);');
     expect(agentCardStyles).toContain('background: var(--bf-color-surface-raised);');
     expect(coreCardSurfaceStyles).toContain('background: var(--bf-color-surface-raised);');
-    expect(agentCardStyles).toContain('box-shadow: $shadow-xs;');
-    expect(coreCardSurfaceStyles).toContain('box-shadow: $shadow-xs;');
+    expect(agentCardStyles).toContain('box-shadow: var(--bf-shadow-xs);');
+    expect(coreCardSurfaceStyles).toContain('box-shadow: var(--bf-shadow-xs);');
     expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
     expect(coreCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
     expect(agentCardStyles).toContain('inset-block: 12px;');
@@ -323,7 +324,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(agentCardSource).not.toContain('--agent-card-gradient');
     expect(coreCardSource).not.toContain('getAlphaColor');
     expect(coreCardSource).not.toContain('--core-card-gradient');
-    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-color-content-primary\);[\s\S]*?\[data-bf-component="icon"\] \{[\s\S]*?color: var\(--bf-color-status-success-content\);/);
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-color-content-primary\);[\s\S]*?\.core-agent-card__status-icon \{[\s\S]*?color: var\(--bf-color-status-success-content\);/);
     expect(coreCardSurfaceStyles).not.toContain('$gradient');
     expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
     expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');

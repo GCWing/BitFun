@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Layers } from 'lucide-react';
-import { CubeLoading } from '@/component-library';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { Combobox } from '@bitfun/ui';
+import { Spinner } from '@bitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { configManager } from '../services/ConfigManager';
 import type {
@@ -23,7 +23,7 @@ type DefaultModelSlot = 'primary' | 'fast' | 'image_understanding' | 'speech_rec
 
 export const DefaultModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/default-model');
-  const { buildModelOption, renderModelOption, renderModelValue } = useModelSelectPresentation();
+  const { buildModelOption } = useModelSelectPresentation();
   const renderOptionalLabel = (text: string) => (
     <>
       {text}
@@ -159,7 +159,7 @@ export const DefaultModelConfig: React.FC = () => {
   if (loading) {
     return (
       <div className="default-model-config__loading" data-bf-component="default-model-config" data-bf-part="loading" data-bf-state="loading">
-        <CubeLoading size="small" />
+        <Spinner size="sm" />
         <p>{t('loading')}</p>
       </div>
     );
@@ -181,17 +181,13 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.primary.description')}
         align="center"
       >
-        <LocalizedCombobox
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="primaryModel"
           value={defaultModels.primary || ''}
           onValueChange={(value) => handleDefaultModelChange('primary', normalizeSelectValue(value))}
           placeholder={t('core.primary.placeholder')}
           options={enabledModels.map(buildModelOption)}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
-          className="model-select-presentation__select"
-          dropdownClassName="model-select-presentation__dropdown"
           disabled={enabledModels.length === 0}
           size="sm"
         />
@@ -202,7 +198,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.fast.description')}
         align="center"
       >
-        <LocalizedCombobox
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="lightweightModel"
           value={defaultModels.fast || ''}
@@ -212,10 +208,6 @@ export const DefaultModelConfig: React.FC = () => {
             { label: t('core.fast.notSet'), value: '' },
             ...enabledModels.map(buildModelOption),
           ]}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
-          className="model-select-presentation__select"
-          dropdownClassName="model-select-presentation__dropdown"
           size="sm"
         />
       </ConfigPageRow>
@@ -225,7 +217,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('optional.capabilities.image_understanding.description')}
         align="center"
       >
-        <LocalizedCombobox
+        <Combobox
           data-bf-component="default-model-config"
           data-bf-part="embeddingModel"
           value={defaultModels.image_understanding || ''}
@@ -235,10 +227,6 @@ export const DefaultModelConfig: React.FC = () => {
             { label: t('optional.notSet'), value: '' },
             ...imageUnderstandingModels.map(buildModelOption),
           ]}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
-          className="model-select-presentation__select"
-          dropdownClassName="model-select-presentation__dropdown"
           size="sm"
         />
       </ConfigPageRow>
@@ -248,7 +236,7 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('optional.capabilities.speech_recognition.description')}
         align="center"
       >
-        <LocalizedCombobox
+        <Combobox
           value={defaultModels.speech_recognition || ''}
           onValueChange={(value) => handleDefaultModelChange('speech_recognition', normalizeSelectValue(value))}
           placeholder={t('optional.notSet')}
@@ -256,8 +244,6 @@ export const DefaultModelConfig: React.FC = () => {
             { label: t('optional.notSet'), value: '' },
             ...speechRecognitionModels.map(buildModelOption),
           ]}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
           className="default-model-config__model-select"
           disabled={speechRecognitionModels.length === 0}
           size="sm"

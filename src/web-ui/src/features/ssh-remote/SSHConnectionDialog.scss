@@ -19,7 +19,7 @@
     background: var(--bf-color-surface-canvas);
   }
 
-  &__error-alert[data-bf-component='alert'] {
+  &__error-alert {
     padding: 8px 10px;
     align-items: center;
   }
@@ -444,7 +444,7 @@
     &__actions {
       padding-inline: 12px;
 
-      [data-bf-component='button'] {
+      > * {
         flex: 1 1 auto;
       }
     }

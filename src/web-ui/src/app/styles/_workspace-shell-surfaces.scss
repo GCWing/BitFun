@@ -1,28 +1,20 @@
 /**
  * Workspace shell surface recipes.
  *
- * Keep shell-level tone decisions here so NavBar, NavPanel, and the layout
- * container resolve to one surface without introducing a new runtime token.
+ * Keep shell-level surface ownership here so NavBar, NavPanel, and the layout
+ * container resolve to the canonical structural chrome token.
  */
 
 @mixin sidebar-background {
-  background: color-mix(
-    in srgb,
-    var(--bf-color-surface-chrome) 50%,
-    var(--bf-color-surface-workbench)
-  );
+  background: var(--bf-color-surface-chrome);
 }
 
-@mixin navigation-feedback {
-  background: var(--bf-color-action-quiet-hover);
+@mixin navigation-hover-feedback {
+  background: var(--bf-color-action-neutral-surface);
+}
 
-  :root[data-bf-appearance-mode='light'] & {
-    background: color-mix(
-      in srgb,
-      var(--bf-color-content-on-light) 5%,
-      transparent
-    );
-  }
+@mixin navigation-selection-feedback {
+  background: var(--bf-color-selection-surface);
 }
 
 @mixin sidebar-hairline-color {

@@ -23,7 +23,6 @@ export type FieldLabelWidth = "auto" | "sm" | "md" | "lg";
 export interface FieldProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: ReactElement<FieldControlProps>;
-  controlClassName?: string;
   controlLeading?: ReactNode;
   controlTrailing?: ReactNode;
   controlWidth?: FieldControlWidth;
@@ -33,7 +32,6 @@ export interface FieldProps
   horizontalGap?: FieldHorizontalGap;
   label: ReactNode;
   labelAction?: ReactNode;
-  labelClassName?: string;
   labelWidth?: FieldLabelWidth;
   orientation?: "horizontal" | "vertical";
   required?: boolean;
@@ -42,7 +40,6 @@ export interface FieldProps
 export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   children,
   className,
-  controlClassName,
   controlLeading,
   controlTrailing,
   controlWidth = "auto",
@@ -51,7 +48,6 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
   horizontalGap = "md",
   label,
   labelAction,
-  labelClassName,
   labelWidth = "auto",
   orientation = "vertical",
   required = false,
@@ -88,7 +84,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
       data-required={isRequired ? "true" : "false"}
       ref={ref}
     >
-      <span className={classNames(styles.content, labelClassName)} data-bf-part="content">
+      <span className={styles.content} data-bf-part="content">
         <span className={styles.labelRow} data-bf-part="label-row">
           <label className={styles.label} htmlFor={controlId}>
             <span>{label}</span>
@@ -110,7 +106,7 @@ export const Field = forwardRef<HTMLDivElement, FieldProps>(function Field({
           </span>
         )}
       </span>
-      <span className={classNames(styles.control, controlClassName)} data-bf-part="control">
+      <span className={styles.control} data-bf-part="control">
         {controlLeading !== undefined && controlLeading !== null && (
           <span className={styles.controlAdornment} data-bf-part="control-leading">
             {controlLeading}

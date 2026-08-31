@@ -765,12 +765,3 @@ export interface FlowChatActions {
   deleteSession: (sessionId: string) => Promise<void>; // Now async.
   retryLastMessage: () => void;
 }
-
-// Flow Chat configuration.
-export interface FlowChatConfig {
-  enableMarkdown: boolean;
-  autoScroll: boolean;
-  showTimestamps: boolean;
-  maxHistoryRounds: number;
-  enableVirtualScroll: boolean;
-}

@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CubeLoading } from '../../component-library';
+import { Spinner } from '@bitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
@@ -616,15 +616,14 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
   const renderStatusIcon = () => {
     if (isLoading) {
-      return <CubeLoading size="small" />;
+      return <Spinner size="sm" />;
     }
     return null;
   };
 
   const renderHeader = () => (
     <ProminentToolCardHeader
-      icon={renderToolIcon()}
-      iconClassName="mcp-icon"
+      icon={<span className="mcp-icon">{renderToolIcon()}</span>}
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
         <span className="mcp-tool-info" data-bf-component="mcp-tool-display" data-bf-part="info">
@@ -663,7 +662,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           <div className="content-item content-item-mcp-app" data-bf-component="mcp-tool-display" data-bf-part="item">
             {mcpAppState.loading && (
               <div className="mcp-app-loading" data-bf-component="mcp-tool-display" data-bf-part="loading" data-bf-state="loading">
-                <CubeLoading size="small" />
+                <Spinner size="sm" />
                 <span>{t('toolCards.mcp.loadingApp')}</span>
               </div>
             )}

@@ -1,4 +1,16 @@
-import { Button, Icon, Modal, ScrollArea, SearchField, Select } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  ScrollArea,
+  SearchField,
+  Select,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, PackageCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -285,7 +297,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         data-bf-component="appearance-settings"
         data-bf-part="marketDetail"
       >
-        <Button variant="outline" size="sm" onClick={() => setDetail(null)} leadingIcon={<Icon name="arrow-left" size="sm" />}>
+        <Button className="appearance-market__back" variant="outline" size="sm" onClick={() => setDetail(null)} leadingIcon={<Icon name="arrow-left" size="sm" />}>
 
           {t('package.market.back')}
         </Button>
@@ -437,17 +449,20 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
   const showEmpty = loadedOnce && !loading && items.length === 0 && !error;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={t('package.market.title')}
-      titleExtra={<MarketAccountControls />}
-      size="xlarge"
-      contentPadding="lg"
-      contentLayout="flex"
-      contentClassName="appearance-market__modal"
-      testId="appearance-market-dialog"
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="xl"
+      data-testid="appearance-market-dialog"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('package.market.title')}{<MarketAccountControls />}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <div className="appearance-market__modal">
       <div
         className="appearance-market"
         data-bf-component="appearance-settings"
@@ -500,6 +515,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               data-bf-part="marketToolbar"
             >
               <SearchField
+                className="appearance-market__toolbar-control appearance-market__toolbar-search"
                 leadingIcon={<Icon name="search" size="lg" aria-hidden />}
                 value={query}
                 onValueChange={setQuery}
@@ -509,6 +525,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 size="sm"
               />
               <Select
+                className="appearance-market__toolbar-control"
                 value={mode}
                 onValueChange={value => setMode(value as AppearanceMarketMode | 'all')}
                 options={[
@@ -520,6 +537,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                 aria-label={t('package.market.modeFilter')}
               />
               <Select
+                className="appearance-market__toolbar-control"
                 value={sort}
                 onValueChange={value => setSort(value as AppearanceMarketSort)}
                 options={[
@@ -669,6 +687,8 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
           </div>
         )}
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 }

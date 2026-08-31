@@ -3,15 +3,15 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Combobox, ComboboxProvider } from "../dist/index.js";
+import { Combobox, DesignSystemProvider, MultiSelect } from "../dist/index.js";
 
-test("Combobox preserves provider localization and compatibility props", () => {
+test("Combobox consumes host localization and canonical invalid state", () => {
   const markup = renderToStaticMarkup(createElement(
-    ComboboxProvider,
-    { labels: { placeholder: "Choose model" } },
+    DesignSystemProvider,
+    { messages: { selectPlaceholder: "Choose model" } },
     createElement(Combobox, {
       disabled: true,
-      error: true,
+      invalid: true,
       errorMessage: "Required",
       options: [],
       required: true,
@@ -25,28 +25,23 @@ test("Combobox preserves provider localization and compatibility props", () => {
   assert.match(markup, /Required/);
 });
 
-test("Combobox links its trigger, search, and multi-select listbox", () => {
-  const markup = renderToStaticMarkup(createElement(Combobox, {
+test("MultiSelect exposes an explicit multi-value trigger contract", () => {
+  const markup = renderToStaticMarkup(createElement(MultiSelect, {
     defaultOpen: true,
     defaultValue: ["one"],
-    multiple: true,
     options: [
       { label: "One", value: "one" },
       { description: "Unavailable", disabled: true, label: "Two", value: "two" },
     ],
-    portalContainer: null,
-    searchable: true,
     showSelectAll: true,
-    triggerAriaLabel: "Models",
+    "aria-label": "Models",
   }));
 
+  assert.match(markup, /data-bf-component="multi-select"/);
   assert.match(markup, /role="combobox"/);
   assert.match(markup, /aria-expanded="true"/);
-  assert.match(markup, /aria-controls="[^"]+-listbox"/);
-  assert.match(markup, /role="combobox"/);
-  assert.match(markup, /role="listbox"/);
-  assert.match(markup, /aria-multiselectable="true"/);
-  assert.match(markup, /aria-selected="true"/);
+  assert.match(markup, /aria-label="Models"/);
+  assert.match(markup, />One</);
 });
 
 test("Combobox owns keyboard selection, IME safety, filtering, and custom values", async () => {
@@ -61,7 +56,9 @@ test("Combobox owns keyboard selection, IME safety, filtering, and custom values
   assert.match(source, /event\.key === "End"/);
   assert.match(source, /nativeEvent\.isComposing/);
   assert.match(source, /filterOption\(option, query\)/);
-  assert.match(source, /submitCustomValue/);
+  assert.match(source, /submitCreateValue/);
+  assert.match(source, /onCreateValue/);
+  assert.match(source, /useDismissibleLayer/);
   assert.doesNotMatch(source, /onMouseEnter=.*setActive/);
 });
 

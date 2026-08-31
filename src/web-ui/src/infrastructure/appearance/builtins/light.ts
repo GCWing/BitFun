@@ -33,7 +33,9 @@ const LIGHT_WARNING = getDesignSystemThemeString('light', 'color.status.warning.
 const LIGHT_ERROR = getDesignSystemThemeString('light', 'color.status.danger.content');
 const LIGHT_ERROR_BG = getDesignSystemThemeString('light', 'color.status.danger.surface');
 const LIGHT_BACKGROUND_PRIMARY = getDesignSystemThemeString('light', 'color.surface.canvas');
+const LIGHT_SURFACE_CHROME = getDesignSystemThemeString('light', 'color.surface.chrome');
 const LIGHT_SURFACE_SUBTLE = getDesignSystemThemeString('light', 'color.surface.subtle');
+const LIGHT_SURFACE_TERTIARY = getDesignSystemThemeString('light', 'color.surface.tertiary');
 const LIGHT_SURFACE_SOFT = getDesignSystemThemeString('light', 'color.action.quiet.hover');
 const LIGHT_BORDER_BASE = getDesignSystemThemeString('light', 'color.border.default');
 
@@ -47,7 +49,7 @@ export const bitfunLightPalette: AppearancePalette = {
   type: 'light',
   description: 'Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions',
   author: 'BitFun Team',
-  version: '2.4.0',
+  version: '2.5.0',
 
   layout: {
     sceneViewportBorder: false,
@@ -58,10 +60,11 @@ export const bitfunLightPalette: AppearancePalette = {
     background: {
       primary: LIGHT_BACKGROUND_PRIMARY,
       secondary: STATIC_WHITE,
-      tertiary: LIGHT_SURFACE_SOFT,
+      tertiary: LIGHT_SURFACE_TERTIARY,
       elevated: STATIC_WHITE,
       workbench: LIGHT_SURFACE_SOFT,
       scene: STATIC_WHITE,
+      chrome: LIGHT_SURFACE_CHROME,
     },
 
     text: {

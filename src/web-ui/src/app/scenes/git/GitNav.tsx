@@ -5,7 +5,16 @@
  */
 
 import React, { useCallback } from 'react';
-import { Icon, IconButton, NavigationPanel, NavigationPanelItem, Tooltip } from '@bitfun/ui';
+import {
+  Icon,
+  IconButton,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
+  NavigationPanelItem,
+  Tooltip,
+} from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Layers2 } from 'lucide-react';
 import { useGitSceneStore, type GitSceneView } from './gitSceneStore';
@@ -58,15 +67,16 @@ const GitNav: React.FC = () => {
       data-bf-component="git-nav"
       data-bf-part="root"
       className="bitfun-git-scene-nav"
-      header={(
-      <div className="bitfun-git-scene-nav__header" data-bf-component="git-nav" data-bf-part="header">
-        <span className="bitfun-git-scene-nav__title" data-bf-component="git-nav" data-bf-part="title">{t('title')}</span>
-      </div>
-      )}
     >
-
-      {isRepository && (
-      <div className="bitfun-git-scene-nav__status" data-bf-component="git-nav" data-bf-part="status">
+      <NavigationPanelHeader className="bitfun-git-nav__panel-header">
+        <div className="bitfun-git-scene-nav__header" data-bf-component="git-nav" data-bf-part="header">
+          <span className="bitfun-git-scene-nav__title" data-bf-component="git-nav" data-bf-part="title">{t('title')}</span>
+        </div>
+      </NavigationPanelHeader>
+      <NavigationPanelBody>
+        <NavigationPanelContent className="bitfun-git-nav__panel-content">
+          {isRepository && (
+            <div className="bitfun-git-scene-nav__status" data-bf-component="git-nav" data-bf-part="status">
           <div className="bitfun-git-scene-nav__branch-row">
             <Icon name="git" size="xs" aria-hidden />
             <span className="bitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
@@ -97,11 +107,11 @@ const GitNav: React.FC = () => {
               />
             </Tooltip>
           </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {NAV_ITEMS.map(({ id, icon: ItemIcon, labelKey }) => (
-        <NavigationPanelItem
+          {NAV_ITEMS.map(({ id, icon: ItemIcon, labelKey }) => (
+            <NavigationPanelItem
           key={id}
           className={['bitfun-git-scene-nav__item', activeView === id && 'is-active'].filter(Boolean).join(' ')}
           selected={activeView === id}
@@ -118,8 +128,10 @@ const GitNav: React.FC = () => {
           onClick={() => handleViewClick(id)}
         >
           {t(labelKey)}
-        </NavigationPanelItem>
-      ))}
+            </NavigationPanelItem>
+          ))}
+        </NavigationPanelContent>
+      </NavigationPanelBody>
     </NavigationPanel>
   );
 };

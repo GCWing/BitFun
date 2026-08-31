@@ -45,9 +45,14 @@ vi.mock('@bitfun/ui', () => ({
   ),
   FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) => (
-    isOpen ? <div role="dialog">{children}</div> : null
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (
+    open ? <div role="dialog">{children}</div> : null
   ),
+  DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props} />,
+  DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
   Button: ({ children, disabled, onClick }: {
     children: React.ReactNode;
     disabled?: boolean;

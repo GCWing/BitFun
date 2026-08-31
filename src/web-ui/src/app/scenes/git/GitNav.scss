@@ -3,9 +3,6 @@
  *
  * Reuses design language as SettingsNav (tokens, spacing, BEM).
  */
-
-@use '../../../component-library/styles/tokens.scss' as *;
-
 .bitfun-git-scene-nav {
   display: flex;
   flex-direction: column;
@@ -16,11 +13,11 @@
   overflow: hidden;
   background: transparent;
 
-  > [data-bf-part="header"] {
+  &__panel-header {
     padding: 0;
   }
 
-  [data-bf-part="content"] {
+  &__panel-content {
     padding: 0;
     gap: 0;
   }
@@ -29,7 +26,7 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    padding: 0 $size-gap-3;
+    padding: 0 var(--bf-space-3);
     height: 40px;
   }
 
@@ -44,23 +41,23 @@
 
   &__sections {
     flex: 1 1 auto;
-    padding: $size-gap-2 0;
+    padding: var(--bf-space-2) 0;
   }
 
   &__status {
     flex-shrink: 0;
-    padding: 0 $size-gap-3 $size-gap-2;
+    padding: 0 var(--bf-space-3) var(--bf-space-2);
     border-bottom: 1px solid var(--bf-color-border-subtle);
-    margin-bottom: $size-gap-2;
+    margin-bottom: var(--bf-space-2);
   }
 
   &__branch-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     font-size: var(--bf-font-size-sm);
     color: var(--bf-color-content-secondary);
-    margin-bottom: $size-gap-1;
+    margin-bottom: var(--bf-space-1);
   }
 
   &__branch-name {
@@ -74,7 +71,7 @@
   &__sync-badges {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     font-size: var(--bf-font-size-micro);
     color: var(--bf-color-content-muted);
   }
@@ -82,8 +79,8 @@
   &__actions-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
-    margin-top: $size-gap-2;
+    gap: var(--bf-space-1);
+    margin-top: var(--bf-space-2);
   }
 
   &__item {
@@ -91,9 +88,9 @@
     align-items: center;
     justify-content: space-between;
     height: 32px;
-    padding: 0 $size-gap-2 0 $size-gap-3;
+    padding: 0 var(--bf-space-2) 0 var(--bf-space-3);
     border: none;
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     background: transparent;
     color: var(--bf-color-content-secondary);
     cursor: pointer;
@@ -102,8 +99,8 @@
     font-weight: var(--bf-font-weight-regular);
     width: 100%;
     position: relative;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-color-content-primary);
@@ -141,6 +138,6 @@
   &__item-badge {
     font-size: var(--bf-font-size-micro);
     color: var(--bf-color-content-muted);
-    margin-left: $size-gap-1;
+    margin-left: var(--bf-space-1);
   }
 }

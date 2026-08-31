@@ -3,7 +3,21 @@
  * Provides a consistent UI for creating a new branch from an existing base branch.
  */
 
-import { Button, Field, FieldGroup, FieldRow, Icon, Input, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Button,
+  Field,
+  FieldGroup,
+  FieldRow,
+  Icon,
+  Input,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 ;
@@ -119,7 +133,18 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
   const canSubmit = branchName.trim().length > 0 && !error && !isCreating;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleCancel} title={t('dialog.createNewBranch.title')} size="small">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) handleCancel(); }}
+      size="sm"
+    >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('dialog.createNewBranch.title')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <div className="bitfun-create-branch-dialog" onKeyDown={handleKeyDown} data-bf-component="git-tool" data-bf-part="createBranchDialog">
       <ScrollArea className="bitfun-create-branch-dialog__scroll">
         <div className="bitfun-create-branch-dialog__base-info">
@@ -196,7 +221,8 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
         </div>
       </ScrollArea>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

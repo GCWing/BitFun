@@ -249,23 +249,6 @@
         min-width: 0;
       }
 
-      .todo-content-input {
-        flex: 1;
-        min-width: 0;
-        font-size: var(--bf-font-size-sm);
-        line-height: var(--bf-line-height-base);
-        color: var(--bf-color-content-primary);
-        background: var(--bf-color-surface-canvas);
-        border: 1px solid var(--bf-color-border-default);
-        border-radius: 4px;
-        padding: 4px 8px;
-        outline: none;
-
-        &:focus {
-          border-color: var(--bf-color-status-info-content);
-        }
-      }
-
       .todo-content-input-field {
         flex: 1;
         min-width: 0;

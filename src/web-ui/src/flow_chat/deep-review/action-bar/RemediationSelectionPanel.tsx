@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle, ChevronDown, ChevronUp, Info, Loader2 } from 'lucide-react';
-import { Checkbox } from '@/component-library';
+import { Checkbox } from '@bitfun/ui';
 import type { ReviewRemediationItem } from '../../utils/codeReviewRemediation';
 import { REMEDIATION_GROUP_ORDER } from '../../utils/codeReviewRemediation';
 import type { RemediationGroupId } from '../../utils/codeReviewReport';
@@ -102,7 +102,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
             }
           }}
           disabled={selectionDisabled || totalCount === 0}
-          size="small"
+          size="sm"
         />
         <span className="deep-review-action-bar__remediation-label">
           {t('toolCards.codeReview.remediationActions.selectionCount', {
@@ -144,7 +144,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                         onToggleGroup(groupId);
                       }
                     }}
-                    size="small"
+                    size="sm"
                     disabled={selectionDisabled || groupTotalCount === 0}
                     label={(
                       <>
@@ -179,7 +179,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                           checked={isCompleted || selectedRemediationIds.has(item.id)}
                           onChange={() => !isLocked && onToggleRemediation(item.id)}
                           disabled={isLocked}
-                          size="small"
+                          size="sm"
                         />
                         <span
                           className="deep-review-action-bar__remediation-text"

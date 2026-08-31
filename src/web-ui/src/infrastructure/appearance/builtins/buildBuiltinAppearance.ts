@@ -7,8 +7,6 @@ import type {
   AppearanceLengthValue,
   AppearanceNumberValue,
   AppearancePackage,
-  AppearanceReference,
-  AppearanceStyle,
   AppearanceThemeTokenName,
 } from '../types';
 import {
@@ -17,12 +15,6 @@ import {
 } from '../adapters/widgetAppearanceVariables';
 
 const OVERLAY_WHITE_04 = 'rgba(255, 255, 255, 0.04)';
-
-const ref = (path: string): AppearanceReference => ({ kind: 'ref', path });
-const colorRef = (id: string): AppearanceReference => ref(`globals.colors.${id}`);
-const lengthRef = (id: string): AppearanceReference => ref(`globals.lengths.${id}`);
-const durationRef = (id: string): AppearanceReference => ref(`globals.durations.${id}`);
-const easingRef = (id: string): AppearanceReference => ref(`globals.easings.${id}`);
 
 function color(value: string): AppearanceColorValue {
   const trimmed = value.trim();
@@ -71,10 +63,6 @@ function number(value: number): AppearanceNumberValue {
   return { kind: 'number', value };
 }
 
-function transition(property: 'all' | 'background-color' | 'border-color' | 'box-shadow' | 'color' | 'opacity' | 'transform' = 'all'): NonNullable<AppearanceStyle['transition']> {
-  return [{ property, duration: durationRef('base'), easing: easingRef('standard') }];
-}
-
 type ThemeValue = string | number | boolean;
 
 function themeValuesToCssTokens(
@@ -108,7 +96,10 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.surface.scene': colors.background.scene,
     'color.surface.workbench': colors.background.workbench,
     'color.surface.tertiary': colors.background.tertiary,
-    'color.surface.chrome': colors.chrome?.background.primary ?? colors.background.primary,
+    'color.surface.chrome': colors.background.chrome
+      ?? colors.chrome?.background.chrome
+      ?? colors.chrome?.background.primary
+      ?? colors.background.primary,
     'color.surface.subtle': colors.element.subtle,
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
@@ -141,6 +132,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.quiet.hover': colors.element.soft,
     'color.action.quiet.pressed': colors.element.base,
     'color.action.quiet.content': colors.text.secondary,
+    'color.selection.surface': colors.element.medium,
     'color.field.background': colors.background.secondary,
     'color.field.backgroundHover': colors.element.subtle,
     'color.field.border': colors.border.base,
@@ -194,7 +186,7 @@ function createChromeThemeTokens(
     'color.surface.scene': chrome.background.scene,
     'color.surface.workbench': chrome.background.workbench,
     'color.surface.tertiary': chrome.background.tertiary,
-    'color.surface.chrome': chrome.background.primary,
+    'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
     'color.content.secondary': chrome.text.secondary,
@@ -219,6 +211,7 @@ function createChromeThemeTokens(
     'color.action.quiet.hover': chrome.element.soft,
     'color.action.quiet.pressed': chrome.element.base,
     'color.action.quiet.content': chrome.text.secondary,
+    'color.selection.surface': chrome.element.medium,
     'color.field.background': chrome.background.secondary,
     'color.field.backgroundHover': chrome.element.subtle,
     'color.field.border': chrome.border.base,
@@ -245,13 +238,13 @@ function createAppearanceOwnedTokens(
   const configPage = palette.components?.configPage;
   return {
     ...themeValuesToCssTokens(createThemeTokenValues(palette)),
-    '--bf-component-config-page-section-background': configPage?.section.background ?? colors.element.subtle,
+    '--bf-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
     '--bf-component-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
     '--bf-component-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',
     '--bf-component-config-page-section-shadow': configPage?.section.shadow
       ?? `inset 0 1px 0 ${OVERLAY_WHITE_04}`,
     '--bf-component-config-page-divider': configPage?.divider ?? colors.border.subtle,
-    '--bf-component-config-page-row-hover-background': configPage?.rowHover ?? OVERLAY_WHITE_04,
+    '--bf-component-config-page-row-hover-background': configPage?.rowHover ?? colors.element.soft,
     '--bf-component-scene-viewport-border-width': palette.layout?.sceneViewportBorder === false ? '0' : '1px',
     '--bf-component-badge-padding-block': '2px',
     '--bf-domain-context-compression': purple[500],
@@ -422,7 +415,7 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
     name: palette.name,
     version: /^\d+\.\d+\.\d+/.test(palette.version ?? '') ? palette.version! : '1.0.0',
     mode: palette.type,
-    requiredCapabilities: ['components.v1', 'renderers.v1'],
+    requiredCapabilities: ['renderers.v1'],
     globals: {
       colors,
       lengths: {
@@ -445,68 +438,6 @@ export function buildBuiltinAppearance(palette: AppearancePalette): AppearancePa
       },
       easings: {
         standard: { kind: 'easing', value: 'standard' },
-      },
-    },
-    materials: {
-      control: {
-        visualRole: 'control',
-        style: {
-          backgroundColor: colorRef('element-base'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-sm'),
-          transition: transition(),
-        },
-      },
-      surface: {
-        visualRole: 'card',
-        style: {
-          backgroundColor: colorRef('element-subtle'),
-          color: colorRef('text-secondary'),
-          borderRadius: lengthRef('radius-base'),
-          transition: transition(),
-        },
-      },
-    },
-    components: {
-      card: {
-        parts: {
-          root: {
-            materials: ['surface'],
-            base: { display: 'flex', flexDirection: 'column' },
-            facets: {
-              variant: {
-                default: { backgroundColor: colorRef('element-subtle') },
-                elevated: { backgroundColor: colorRef('element-soft') },
-                subtle: { backgroundColor: { kind: 'transparent' } },
-                accent: { backgroundColor: colorRef('element-soft') },
-                purple: { backgroundColor: colorRef('purple-bg') },
-              },
-              padding: {
-                none: { padding: { kind: 'zero' } },
-                small: { padding: lengthRef('gap-2') },
-                medium: { padding: lengthRef('gap-4') },
-                large: { padding: lengthRef('gap-6') },
-              },
-              radius: {
-                small: { borderRadius: lengthRef('radius-sm') },
-                medium: { borderRadius: lengthRef('radius-base') },
-                large: { borderRadius: lengthRef('radius-lg') },
-              },
-            },
-            states: {
-              fullWidth: { width: { kind: 'percent', value: 100 } },
-            },
-            contexts: [
-              { when: { states: ['interactive', 'hover'] }, style: { backgroundColor: colorRef('element-soft'), cursor: 'pointer' } },
-              { when: { states: ['interactive', 'active'] }, style: { backgroundColor: colorRef('element-base') } },
-            ],
-          },
-          header: { base: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: lengthRef('gap-3') } },
-          title: { base: { color: colorRef('text-primary') } },
-          subtitle: { base: { color: colorRef('text-muted') } },
-          body: { base: { color: colorRef('text-secondary') } },
-          footer: { base: { display: 'flex', alignItems: 'center', gap: lengthRef('gap-2') }, facets: { align: { left: { justifyContent: 'flex-start' }, center: { justifyContent: 'center' }, right: { justifyContent: 'flex-end' }, between: { justifyContent: 'space-between' } } } },
-        },
       },
     },
     renderers: {

@@ -3,9 +3,6 @@
  * Follows SCSS isolation strategy and BEM naming conventions
  * Consistent visual style with the regular editor
  */
-
-@use '@/component-library/styles/tokens' as *;
-
 // Component Variables
 $_diff-toolbar-height: 36px;
 $_diff-error-max-width: 400px;
@@ -37,20 +34,20 @@ $_diff-error-max-width: 400px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 $size-gap-3;
+  padding: 0 var(--bf-space-3);
   background: var(--bf-color-surface-canvas);
   border-bottom: 1px solid var(--bf-color-border-default);
   flex-shrink: 0;
   height: $_diff-toolbar-height;
   min-height: $_diff-toolbar-height;
   transition:
-    background-color $motion-fast $easing-standard,
-    border-color $motion-fast $easing-standard;
+    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
   &__info {
     display: flex;
     align-items: center;
-    gap: $size-gap-4;
+    gap: var(--bf-space-4);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-sm);
     font-family: var(--bf-font-family-mono);
@@ -59,21 +56,21 @@ $_diff-error-max-width: 400px;
   &__stats {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__stat {
     font-weight: var(--bf-font-weight-semibold);
     padding: 2px 6px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     font-size: var(--bf-font-size-xs);
-    
+
     &--add {
       color: var(--bf-domain-git-staged);
       background: var(--diff-editor-added-soft-bg);
       border: 1px solid var(--diff-editor-added-border);
     }
-    
+
     &--del {
       color: var(--bf-domain-git-deleted);
       background: var(--diff-editor-deleted-soft-bg);
@@ -95,7 +92,7 @@ $_diff-error-max-width: 400px;
 
   &__actions {
     display: flex;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__btn {
@@ -104,27 +101,27 @@ $_diff-error-max-width: 400px;
     justify-content: center;
     min-width: 32px;
     height: 32px;
-    padding: 0 $size-gap-3;
+    padding: 0 var(--bf-space-3);
     background: var(--bf-color-action-neutral-surface);
     border: 1px solid var(--bf-color-border-default);
-    border-radius: $size-radius-base;
+    border-radius: var(--bf-radius-base);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-lg);
     line-height: var(--bf-line-height-none);
     cursor: pointer;
     transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      border-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard;
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover:not(:disabled) {
       background: var(--bf-color-action-neutral-surface-hover);
       border-color: var(--bf-color-accent-default);
       color: var(--bf-color-accent-default);
       transform: translateY(-1px);
-      box-shadow: 
+      box-shadow:
         0 2px 8px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent),
         0 0 20px var(--bf-color-action-secondary-background);
     }
@@ -194,16 +191,16 @@ $_diff-error-max-width: 400px;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  padding: $size-gap-6;
+  padding: var(--bf-space-6);
   background: var(--bf-color-surface-canvas);
   border: 1px solid var(--bf-color-border-subtle);
-  border-radius: $size-radius-lg;
+  border-radius: var(--bf-radius-lg);
   max-width: $_diff-error-max-width;
   z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: $size-gap-3;
+  gap: var(--bf-space-3);
 
   &__icon {
     color: var(--bf-color-content-muted);
@@ -277,7 +274,7 @@ $_diff-error-max-width: 400px;
       background: transparent !important;
       border: none !important;
     }
-    
+
     .monaco-diff-editor .codicon,
     .monaco-diff-editor .codicon-revert,
     .monaco-diff-editor .revert-button,
@@ -287,52 +284,52 @@ $_diff-error-max-width: 400px;
       box-shadow: none !important;
       background: transparent !important;
       color: var(--bf-color-content-muted) !important;
-      
+
       &:hover {
         color: var(--bf-color-content-secondary) !important;
       }
-      
+
       &:focus {
         outline: none !important;
         border: none !important;
         box-shadow: none !important;
       }
     }
-    
+
     .monaco-diff-editor .gutterItem,
     .monaco-diff-editor .gutter-item {
       outline: none !important;
       border: none !important;
       box-shadow: none !important;
       background: transparent !important;
-      
+
       .background {
         border: none !important;
         background: transparent !important;
       }
     }
-    
+
     .monaco-diff-editor .view-overlays .current-line,
     .monaco-diff-editor .view-overlays .selected-text {
       outline: none !important;
       border: none !important;
     }
-    
+
     .monaco-diff-editor.side-by-side .editor.original {
       border-right: 1px dashed var(--bf-color-field-border-hover) !important;
       transition: border-color 0.2s ease;
     }
-    
+
     .monaco-diff-editor.side-by-side .editor.modified {
       border-left: 1px dashed var(--bf-color-field-border-hover) !important;
       transition: border-color 0.2s ease;
     }
-    
+
     .monaco-diff-editor.side-by-side:hover .editor.original {
       border-right-style: solid !important;
       border-right-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent) !important;
     }
-    
+
     .monaco-diff-editor.side-by-side:hover .editor.modified {
       border-left-style: solid !important;
       border-left-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent) !important;
@@ -354,7 +351,7 @@ $_diff-error-max-width: 400px;
     .monaco-diff-editor .monaco-editor .view-line {
       background-color: transparent !important;
     }
-    
+
     .monaco-diff-editor .monaco-editor .lines-content.monaco-editor-background {
       margin-left: 6px !important;
     }
@@ -364,7 +361,7 @@ $_diff-error-max-width: 400px;
       border-left: 1px dashed var(--bf-color-field-border-hover) !important;
       border-right: 1px dashed var(--bf-color-field-border-hover) !important;
       transition: background-color 0.2s ease;
-      
+
       &:hover {
         background-color: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent) !important;
         border-left-style: solid !important;
@@ -403,7 +400,7 @@ $_diff-error-max-width: 400px;
       border-radius: 2px;
       border: none !important;
     }
-    
+
     .monaco-diff-editor .char-modified {
       background-color: color-mix(in srgb, var(--bf-color-accent-default) 32%, transparent) !important;
       border-radius: 2px;
@@ -412,7 +409,7 @@ $_diff-error-max-width: 400px;
 
     .monaco-editor .decorationsOverviewRuler {
       width: 8px !important;
-      
+
       .insert {
         background: var(--bf-color-status-success-content);
       }
@@ -425,20 +422,20 @@ $_diff-error-max-width: 400px;
         background: var(--bf-color-status-warning-content);
       }
     }
-    
+
     .monaco-diff-editor {
       .decorationsOverviewRuler {
         display: none !important;
       }
-      
+
       .editor.modified .monaco-editor .overflow-guard > .decorationsOverviewRuler {
         display: none !important;
       }
-      
+
       .editor.original .monaco-editor .overflow-guard > .decorationsOverviewRuler {
         display: none !important;
       }
-      
+
       .original.diffOverviewRuler,
       .modified.diffOverviewRuler {
         display: none !important;
@@ -446,11 +443,11 @@ $_diff-error-max-width: 400px;
         min-width: 0 !important;
         max-width: 0 !important;
       }
-      
+
       .diffOverview {
         display: none !important;
         width: 0 !important;
-        
+
         .diffOverviewRuler {
           display: none !important;
         }
@@ -464,7 +461,7 @@ $_diff-error-max-width: 400px;
         .slider {
           background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
           border-radius: 4px;
-          transition: background $motion-base $easing-standard;
+          transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
 
           &:hover {
             background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
@@ -496,14 +493,14 @@ $_diff-error-max-width: 400px;
 @media (max-width: 768px) {
   .diff-editor-toolbar {
     flex-wrap: wrap;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-2) var(--bf-space-3);
     min-height: auto;
 
     &__info {
       width: 100%;
       flex-wrap: wrap;
-      margin-bottom: $size-gap-1;
+      margin-bottom: var(--bf-space-1);
     }
 
     &__actions {
@@ -517,7 +514,7 @@ $_diff-error-max-width: 400px;
   }
 
   .diff-editor-error {
-    padding: $size-gap-4;
+    padding: var(--bf-space-4);
     max-width: 280px;
 
     &__message {
@@ -594,38 +591,38 @@ $_diff-error-max-width: 400px;
     border: none !important;
     box-shadow: none !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .view-overlays .line-insert,
   .diff-editor-container .monaco-diff-editor .editor.modified .view-overlays .line-insert,
   .diff-editor-container .monaco-diff-editor .line-insert {
     background-color: var(--diff-editor-added-line-bg) !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .view-overlays .line-delete,
   .diff-editor-container .monaco-diff-editor .editor.original .view-overlays .line-delete,
   .diff-editor-container .monaco-diff-editor .line-delete {
     background-color: var(--diff-editor-deleted-line-bg) !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .char-insert,
   .diff-editor-container .monaco-diff-editor .char-insert {
     background-color: var(--diff-editor-added-char-bg) !important;
     border-radius: 2px !important;
     border: none !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .char-delete,
   .diff-editor-container .monaco-diff-editor .char-delete {
     background-color: var(--diff-editor-deleted-char-bg) !important;
     border-radius: 2px !important;
     border: none !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .view-overlays .cdr.insert,
   .diff-editor-container .monaco-diff-editor .cdr.insert {
     background-color: var(--diff-editor-added-line-bg) !important;
   }
-  
+
   .diff-editor-container .monaco-diff-editor .view-overlays .cdr.delete,
   .diff-editor-container .monaco-diff-editor .cdr.delete {
     background-color: var(--diff-editor-deleted-line-bg) !important;

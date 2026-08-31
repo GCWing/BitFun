@@ -1,13 +1,9 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-
 .notification-container {
   position: fixed;
   bottom: 60px;
   left: 16px;
   right: auto;
-  z-index: $z-notification;
+  z-index: var(--bf-layer-notification);
   display: flex;
   flex-direction: column-reverse;
   gap: 8px;

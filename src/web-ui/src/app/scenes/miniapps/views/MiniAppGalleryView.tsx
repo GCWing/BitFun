@@ -561,8 +561,8 @@ const MiniAppGalleryView: React.FC = () => {
       />
 
       <ConfirmDialog
-        isOpen={pendingDeleteId !== null}
-        onClose={() => setPendingDeleteId(null)}
+        open={pendingDeleteId !== null}
+        onOpenChange={() => setPendingDeleteId(null)}
         onConfirm={handleDeleteConfirm}
         title={t('confirmDelete.title', { name: apps.find((app) => app.id === pendingDeleteId)?.name ?? '' })}
         message={t('confirmDelete.message')}
@@ -573,8 +573,8 @@ const MiniAppGalleryView: React.FC = () => {
       />
 
       <ConfirmDialog
-        isOpen={pendingPackage !== null}
-        onClose={() => setPendingPackage(null)}
+        open={pendingPackage !== null}
+        onOpenChange={() => setPendingPackage(null)}
         onConfirm={() => void handlePackageImportConfirm()}
         title={t('market.import.confirmTitle', {
           name: pendingPackage?.inspection.name ?? '',

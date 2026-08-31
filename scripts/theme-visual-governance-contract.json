@@ -76,7 +76,7 @@
     },
     {
       "key": "code-editor-diff",
-      "owner": "src/web-ui/src/tools/editor; src/web-ui/src/component-library/components/CodeEditor",
+      "owner": "src/web-ui/src/tools/editor",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
@@ -124,7 +124,7 @@
     },
     {
       "key": "markdown-mermaid",
-      "owner": "src/web-ui/src/component-library/components/Markdown; src/web-ui/src/tools/mermaid-editor",
+      "owner": "src/web-ui/src/infrastructure/markdown; src/web-ui/src/tools/mermaid-editor",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],

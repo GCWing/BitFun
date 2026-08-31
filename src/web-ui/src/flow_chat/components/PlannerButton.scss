@@ -1,9 +1,6 @@
 /**
  * Planner button styles - pill layout.
  */
-
-@use '../../component-library/styles/tokens.scss' as *;
-
 .bitfun-planner-button {
   // Reset default styles
   margin: 0;
@@ -14,14 +11,14 @@
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
-  
+
   // Base layout
   display: inline-flex;
   align-items: center;
   gap: 2px;
   height: 22px;
   border-radius: 11px;
-  
+
   // Default state without glass effect
   background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
@@ -29,7 +26,7 @@
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  
+
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     color 160ms ease,
@@ -37,7 +34,7 @@
     box-shadow 180ms ease;
   position: relative;
   overflow: hidden;
-  
+
   // Light sweep effect
   &::before {
     content: '';
@@ -58,7 +55,7 @@
     z-index: 1;
     pointer-events: none;
   }
-  
+
   // Hover: enable glass effect only for devices with a persistent pointer.
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -73,7 +70,7 @@
       box-shadow:
         0 10px 20px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
         0 6px 12px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-        $inner-glow-top-hover,
+        var(--bf-shadow-inner-highlight-hover),
         inset 0 -1px 0 color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
       backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
       -webkit-backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
@@ -84,12 +81,12 @@
       }
     }
   }
-  
+
   // Active state
   &:active {
     transform: scale(0.97);
   }
-  
+
   &__dot {
     width: 5px;
     height: 5px;
@@ -102,7 +99,7 @@
     z-index: 2;
     margin-right: 2px;
   }
-  
+
   &__text {
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-medium);
@@ -110,7 +107,7 @@
     position: relative;
     z-index: 2;
   }
-  
+
   &__progress {
     font-size: var(--bf-type-flow-support-font-size);
     font-weight: var(--bf-font-weight-semibold);

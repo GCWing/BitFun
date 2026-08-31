@@ -1,12 +1,8 @@
-import { Alert, Button, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
+import { Alert, Button, Combobox, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
-import {
-  ConfigPageLoading,
-  ConfigPageMessage,
-} from '@/component-library';
-import { LocalizedCombobox } from '@/infrastructure/design-system';
+import { ConfigLoadingState, ConfigMessage } from '@/infrastructure/config/components/common';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -109,13 +105,13 @@ function LaunchAtLoginSection() {
   }
 
   if (loading) {
-    return <ConfigPageLoading text={t('launchAtLogin.messages.loading')} />;
+    return <ConfigLoadingState label={t('launchAtLogin.messages.loading')} />;
   }
 
   return (
     <div className="bitfun-launch-at-login-config" data-bf-component="application-settings" data-bf-part="launchAtLogin">
       <div className="bitfun-launch-at-login-config__content">
-        <ConfigPageMessage message={message} />
+        <ConfigMessage message={message} />
         <ConfigPageSection
           title={t('launchAtLogin.sections.title')}
           description={t('launchAtLogin.sections.hint')}
@@ -206,13 +202,13 @@ function AutoUpdateSection() {
   }
 
   if (loading) {
-    return <ConfigPageLoading text={t('autoUpdate.messages.loading')} />;
+    return <ConfigLoadingState label={t('autoUpdate.messages.loading')} />;
   }
 
   return (
     <div className="bitfun-auto-update-config" data-bf-component="application-settings" data-bf-part="autoUpdate">
       <div className="bitfun-auto-update-config__content">
-        <ConfigPageMessage message={message} />
+        <ConfigMessage message={message} />
         <ConfigPageSection
           title={t('autoUpdate.sections.title')}
           description={t('autoUpdate.sections.hint')}
@@ -304,7 +300,7 @@ function PreventSleepSection() {
   }
 
   if (loading) {
-    return <ConfigPageLoading text={t('preventSleep.messages.loading')} />;
+    return <ConfigLoadingState label={t('preventSleep.messages.loading')} />;
   }
 
   return (
@@ -312,7 +308,7 @@ function PreventSleepSection() {
       title={t('preventSleep.sections.title')}
       description={t('preventSleep.sections.hint')}
     >
-      <ConfigPageMessage message={message} />
+      <ConfigMessage message={message} />
       <ConfigPageRow
         label={t('preventSleep.toggleLabel')}
         description={t('preventSleep.toggleDescription')}
@@ -462,13 +458,13 @@ function LoggingSection() {
   }, [showMessage, t]);
 
   if (loading) {
-    return <ConfigPageLoading text={t('logging.messages.loading')} />;
+    return <ConfigLoadingState label={t('logging.messages.loading')} />;
   }
 
   return (
     <div className="bitfun-logging-config" data-bf-component="application-settings" data-bf-part="logging">
       <div className="bitfun-logging-config__content">
-        <ConfigPageMessage message={message} />
+        <ConfigMessage message={message} />
 
         <ConfigPageSection
           title={t('logging.sections.logging')}
@@ -476,7 +472,7 @@ function LoggingSection() {
         >
           {runtimeInfo?.previousUnexpectedExit?.detected && (
             <Alert
-              type={runtimeInfo.previousUnexpectedExit.category === 'crash' ? 'warning' : 'info'}
+              tone={runtimeInfo.previousUnexpectedExit.category === 'crash' ? 'warning' : 'info'}
               message={t(
                 runtimeInfo.previousUnexpectedExit.category === 'crash'
                   ? 'logging.previousCrash.title'
@@ -650,6 +646,7 @@ function TerminalSection() {
     () => [
       { value: '', label: t('terminal.controls.autoDetect') },
       ...availableShells.map((shell) => ({
+        description: shell.path,
         value: shell.path,
         label: formatShellLabel(shell),
         shell,
@@ -666,47 +663,6 @@ function TerminalSection() {
   );
   const selectedShellValue = selectedShell?.path ?? defaultShell;
 
-  const renderShellDetails = useCallback((shell: ShellInfo) => (
-    <div className="bitfun-terminal-config__shell-tooltip">
-      <div className="bitfun-terminal-config__shell-tooltip-name">{formatShellLabel(shell)}</div>
-      <div className="bitfun-terminal-config__shell-tooltip-path">{shell.path}</div>
-    </div>
-  ), []);
-
-  const renderShellOption = useCallback((option: ComboboxOption) => {
-    const shellOption = option as TerminalShellOption;
-    if (!shellOption.shell) {
-      return <div className="bitfun-terminal-config__shell-option-name" data-bf-component="application-settings" data-bf-part="shellOption">{option.label}</div>;
-    }
-
-    const { shell } = shellOption;
-    const content = (
-      <div className="bitfun-terminal-config__shell-option" data-bf-component="application-settings" data-bf-part="shellOption">
-        <div className="bitfun-terminal-config__shell-option-name">{formatShellLabel(shell)}</div>
-      </div>
-    );
-
-    return (
-      <Tooltip content={renderShellDetails(shell)} placement="right">
-        {content}
-      </Tooltip>
-    );
-  }, [renderShellDetails]);
-
-  const renderShellValue = useCallback((option?: ComboboxOption | ComboboxOption[]) => {
-    const selectedOption = Array.isArray(option) ? option[0] : option;
-    const shell = (selectedOption as TerminalShellOption | undefined)?.shell;
-    if (!shell) return null;
-
-    return (
-      <Tooltip content={renderShellDetails(shell)} placement="top">
-        <span className="bitfun-terminal-config__shell-value">
-          <span className="bitfun-terminal-config__shell-value-name">{formatShellLabel(shell)}</span>
-        </span>
-      </Tooltip>
-    );
-  }, [renderShellDetails]);
-
   const terminalPanelPositionOptions = useMemo(
     () => [
       { value: 'right', label: t('terminal.panelPosition.options.right') },
@@ -717,13 +673,13 @@ function TerminalSection() {
   const shouldShowCmdFallbackNotice = selectedShell?.shellType === 'Cmd' || defaultShell === 'Cmd';
 
   if (loading) {
-    return <ConfigPageLoading text={t('terminal.messages.loading')} />;
+    return <ConfigLoadingState label={t('terminal.messages.loading')} />;
   }
 
   return (
     <div className="bitfun-terminal-config" data-bf-component="application-settings" data-bf-part="terminal">
       <div className="bitfun-terminal-config__content">
-        <ConfigPageMessage message={message} />
+        <ConfigMessage message={message} />
 
         <ConfigPageSection
           title={t('terminal.sections.terminal')}
@@ -731,7 +687,7 @@ function TerminalSection() {
         >
           {shouldShowCmdFallbackNotice && (
             <Alert
-              type="info"
+              tone="info"
               message={t('terminal.controls.cmdFallbackMessage')}
             />
           )}
@@ -741,12 +697,10 @@ function TerminalSection() {
             align="center"
           >
             {availableShells.length > 0 ? (
-              <LocalizedCombobox
+              <Combobox
                 value={selectedShellValue}
                 onValueChange={(v) => handleShellChange(v as string)}
                 options={shellOptions}
-                renderOption={renderShellOption}
-                renderValue={renderShellValue}
                 placeholder={t('terminal.controls.placeholder')}
                 disabled={saving}
               />
@@ -841,13 +795,13 @@ function WindowBehaviorSection() {
   if (!isTauri) return null;
 
   if (loading) {
-    return <ConfigPageLoading text={t('windowBehavior.messages.loading')} />;
+    return <ConfigLoadingState label={t('windowBehavior.messages.loading')} />;
   }
 
   return (
     <div className="bitfun-window-behavior-config" data-bf-component="application-settings" data-bf-part="windowBehavior">
       <div className="bitfun-window-behavior-config__content">
-        <ConfigPageMessage message={message} />
+        <ConfigMessage message={message} />
         <ConfigPageSection
           title={t('windowBehavior.sections.title')}
           description={t('windowBehavior.sections.hint')}
@@ -943,7 +897,7 @@ function NotificationsSection() {
       data-bf-component="application-settings"
       data-bf-part="notifications"
     >
-      <ConfigPageMessage message={message} />
+      <ConfigMessage message={message} />
       <ConfigPageRow
         label={t('notifications.dialogCompletion.label')}
         description={t('notifications.dialogCompletion.description')}

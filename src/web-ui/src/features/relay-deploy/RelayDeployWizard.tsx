@@ -10,7 +10,23 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import { Alert, Button, Field, Icon, IconButton, Input as DesignInput, Modal, Select, Tooltip, ScrollArea } from '@bitfun/ui';
+import {
+  Alert,
+  Button,
+  Field,
+  Icon,
+  IconButton,
+  Input as DesignInput,
+  Select,
+  Tooltip,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Server, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine, AlertTriangle, EyeOff, Rocket, PartyPopper } from 'lucide-react';
@@ -1339,15 +1355,19 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
   return (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        title={t('relayDeploy.title')}
-        size="large"
-        showCloseButton
-        closeOnOverlayClick={false}
-        contentLayout="flex"
+      <Dialog
+        open={isOpen}
+        onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+        size="lg"
+        closeOnPointerOutside={false}
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('relayDeploy.title')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         <div className="relay-deploy-wizard" data-bf-component="relay-deploy" data-bf-part="root">
           <div className="relay-deploy-wizard__steps" data-bf-component="relay-deploy" data-bf-part="steps">
             {steps.map((s, i) => (
@@ -1370,7 +1390,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
 
           {error && (
             <div className="relay-deploy-wizard__error-banner" data-bf-component="relay-deploy" data-bf-part="error">
-              <Alert type="error" message={error} closable onClose={() => setError(null)}
+              <Alert tone="error" message={error} closable onClose={() => setError(null)}
                 className="relay-deploy-wizard__error-alert" />
             </div>
           )}
@@ -1381,7 +1401,8 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
           {step === 'register' && renderRegister()}
           {step === 'done' && renderDone()}
         </div>
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
       {credentialsPrompt && (
         <SSHAuthPromptDialog

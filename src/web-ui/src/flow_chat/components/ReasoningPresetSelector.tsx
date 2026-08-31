@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Menu, MenuItem } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
-import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
+import { Tooltip } from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type {
   ReasoningCatalogProjection,
@@ -375,7 +375,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
         </button>
       </Tooltip>
 
-      <PresenceBoundary active={open}>
+      <RetainedMountBoundary present={open}>
         {createPortal(
           <Menu
           id={menuId}
@@ -407,7 +407,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
               role="menuitemradio"
               checked={!selected}
               className="bitfun-reasoning-preset-selector__auto-row"
-              triggerClassName="bitfun-reasoning-preset-selector__auto"
               data-bf-component="reasoning-preset-selector"
               data-bf-part="auto"
               data-bf-state={!selected ? 'selected' : undefined}
@@ -432,7 +431,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
                   checked={isSelected}
                   data-preset-id={preset.id}
                   className="bitfun-reasoning-preset-selector__option-row"
-                  triggerClassName="bitfun-reasoning-preset-selector__option"
                   data-bf-component="reasoning-preset-selector"
                   data-bf-part="option"
                   data-bf-state={isSelected ? 'selected' : undefined}
@@ -448,7 +446,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
           </Menu>,
           getAppearanceOverlayHost(),
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
     </div>
   );
 };

@@ -86,7 +86,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             data-bf-state={disabledReason ? 'disabled' : 'connected'}
             title={statusLabel}
           >
-            <Icon name="circle" size="2xs" />
+            <Icon className="core-agent-card__status-icon" name="circle" size="2xs" />
             <span>{statusLabel}</span>
           </span>
         </div>

@@ -34,29 +34,6 @@
       width: 100%;
     }
 
-    .search-input {
-      width: 100%;
-      padding: 0.5rem 0.75rem;
-      background: var(--bf-color-surface-panel);
-      border: 1px solid var(--bf-color-border-default);
-      border-radius: 6px;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-font-size-base);
-      transition:
-        border-color 150ms ease,
-        box-shadow 150ms ease,
-        background-color 150ms ease;
-
-      &:focus {
-        outline: none;
-        border-color: var(--bf-color-accent-default);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-      }
-
-      &::placeholder {
-        color: var(--bf-color-content-muted);
-      }
-    }
   }
 
   .browser-content {

@@ -15,7 +15,7 @@ import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';

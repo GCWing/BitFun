@@ -97,20 +97,6 @@
   min-height: 0;
 }
 
-.bitfun-generative-widget-panel__editor {
-  height: 100%;
-  resize: none;
-  border: 0;
-  outline: none;
-  padding: 14px 16px;
-  background: transparent;
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-font-family-mono);
-  font-size: var(--bf-font-size-sm);
-  font-weight: var(--bf-font-weight-regular);
-  line-height: var(--bf-line-height-relaxed);
-}
-
 .bitfun-generative-widget-panel__error {
   padding: 10px 12px;
   border-radius: 10px;

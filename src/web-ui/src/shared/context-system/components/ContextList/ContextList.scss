@@ -1,13 +1,7 @@
- 
-
-@use '../../../../component-library/styles/tokens.scss' as *;
-
-
-
 .bitfun-context-list {
   display: flex;
   flex-direction: column;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   width: 100%;
   
   
@@ -16,13 +10,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
   }
   
   &__title {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     font-size: var(--bf-font-size-sm);
     font-weight: var(--bf-font-weight-medium);
     color: var(--bf-color-content-secondary);
@@ -40,7 +34,7 @@
     color: var(--bf-color-content-primary);
     background: var(--bf-color-action-neutral-surface-hover);
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-full;
+    border-radius: var(--bf-radius-pill);
   }
   
   
@@ -50,7 +44,7 @@
     flex-direction: column;
     gap: 0;
     overflow-x: hidden;
-    padding: 0 $size-gap-2;
+    padding: 0 var(--bf-space-2);
     
   }
   
@@ -61,9 +55,9 @@
     opacity: 1;
     transform: translateX(0);
     transition:
-      grid-template-rows 160ms $easing-decelerate,
-      opacity 110ms $easing-standard,
-      transform 140ms $easing-decelerate;
+      grid-template-rows 160ms var(--bf-motion-easing-decelerate),
+      opacity 110ms var(--bf-motion-easing-standard),
+      transform 140ms var(--bf-motion-easing-decelerate);
 
     @starting-style {
       opacity: 0;
@@ -87,7 +81,7 @@
     }
 
     > .bitfun-context-card {
-      margin-bottom: $size-gap-2;
+      margin-bottom: var(--bf-space-2);
     }
   }
   
@@ -102,20 +96,20 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: $size-gap-8;
+    padding: var(--bf-space-8);
     text-align: center;
   }
   
   &__empty-icon {
     color: var(--bf-color-content-disabled);
-    margin-bottom: $size-gap-3;
+    margin-bottom: var(--bf-space-3);
   }
   
   &__empty-text {
     font-size: var(--bf-font-size-base);
     font-weight: var(--bf-font-weight-medium);
     color: var(--bf-color-content-muted);
-    margin: 0 0 $size-gap-1;
+    margin: 0 0 var(--bf-space-1);
   }
   
   &__empty-hint {

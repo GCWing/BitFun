@@ -3,7 +3,7 @@
 import { Button, NumberInput, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import { ConfigLoadingState, ConfigMessage } from '@/infrastructure/config/components/common';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -348,7 +348,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           subtitle={t('subtitle')}
         />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('messages.loading')} />
+          <ConfigLoadingState label={t('messages.loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -387,23 +387,23 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           <ConfigPageRow label={t('appearance.fontSize')} align="center">
             <NumberInput
               value={config.fontSize}
-              onChange={(v) => updateConfig('fontSize', v)}
+              onValueChange={(v) => updateConfig('fontSize', v)}
               min={10}
               max={32}
               step={1}
               unit="px"
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.lineHeight')} align="center">
             <NumberInput
               value={config.lineHeight}
-              onChange={(v) => updateConfig('lineHeight', v)}
+              onValueChange={(v) => updateConfig('lineHeight', v)}
               min={1.0}
               max={3.0}
               step={0.1}
               precision={1}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.cursorStyle')} align="center">
@@ -431,10 +431,10 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           <ConfigPageRow label={t('behavior.tabSize')} align="center">
             <NumberInput
               value={config.tabSize}
-              onChange={(v) => updateConfig('tabSize', v)}
+              onValueChange={(v) => updateConfig('tabSize', v)}
               min={1}
               max={8}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.insertSpaces')} description={t('behavior.insertSpacesDesc')} align="center">
@@ -578,7 +578,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           </ConfigPageRow>
         </ConfigPageSection>
 
-        <ConfigPageMessage message={statusMessage} />
+        <ConfigMessage message={statusMessage} />
       </ConfigPageContent>
     </ConfigPageLayout>
   );

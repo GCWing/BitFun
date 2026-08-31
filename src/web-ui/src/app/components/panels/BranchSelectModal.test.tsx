@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRESENCE_BOUNDARY_MIN_EXIT_MS } from '@/component-library';
+import { DEFAULT_RETAINED_MOUNT_MS } from '@/shared/presence';
 import { BranchSelectModal } from './BranchSelectModal';
 
 const mocks = vi.hoisted(() => ({
@@ -67,7 +67,7 @@ describe('BranchSelectModal presence', () => {
     expect(document.querySelector('.branch-select-overlay')?.getAttribute('data-state')).toBe('closed');
     expect(document.querySelector('.branch-select-dialog__title')?.textContent).toBe('Choose release branch');
 
-    act(() => vi.advanceTimersByTime(PRESENCE_BOUNDARY_MIN_EXIT_MS - 1));
+    act(() => vi.advanceTimersByTime(DEFAULT_RETAINED_MOUNT_MS - 1));
     expect(document.querySelector('.branch-select-overlay')).not.toBeNull();
 
     act(() => vi.advanceTimersByTime(1));

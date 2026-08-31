@@ -431,7 +431,7 @@
     &__actions {
       justify-content: stretch;
 
-      [data-bf-component='button'] {
+      .bitfun-worktree-settings__action {
         flex: 1;
       }
     }

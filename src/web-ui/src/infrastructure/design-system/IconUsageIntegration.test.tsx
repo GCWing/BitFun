@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { Icon } from '@bitfun/ui';
-import { ConfigPageRefreshButton } from '@/component-library/components/ConfigPage/ConfigPageRefreshButton';
+import { ConfigRefreshButton } from '@/infrastructure/config/components/common';
 
 const sourceRoot = path.resolve(__dirname, '../..');
 
@@ -53,10 +53,10 @@ describe('catalog icon consumer integration', () => {
 
   it('keeps the shared refresh action compact and disables it while loading', () => {
     const props = { tooltip: 'Refresh', onClick: () => {} };
-    const idle = renderToStaticMarkup(createElement(ConfigPageRefreshButton, props));
+    const idle = renderToStaticMarkup(createElement(ConfigRefreshButton, props));
     expect(idle).toContain('data-bf-name="refresh"');
     expect(idle).toContain('data-size="sm"');
-    const loading = renderToStaticMarkup(createElement(ConfigPageRefreshButton, { ...props, loading: true }));
+    const loading = renderToStaticMarkup(createElement(ConfigRefreshButton, { ...props, loading: true }));
     expect(loading).toContain('aria-busy="true"');
     expect(loading).toContain('disabled=""');
   });

@@ -71,7 +71,6 @@
   line-height: var(--bf-control-chat-composer-compact-track-height);
 }
 
-.flow-chat-composer-preview__action,
 .flow-chat-composer-preview__model {
   display: inline-flex;
   min-inline-size: 0;
@@ -86,34 +85,9 @@
   cursor: pointer;
 }
 
-.flow-chat-composer-preview__action {
-  inline-size: var(--bf-control-chat-composer-control-height);
-  aspect-ratio: 1;
-  border-radius: var(--bf-radius-pill);
-}
-
 .flow-chat-composer-preview [data-bf-layout="compact"]
-  :is(.flow-chat-composer-preview__action, .flow-chat-composer-preview__model) {
+  .flow-chat-composer-preview__model {
   block-size: 100%;
-}
-
-.flow-chat-composer-preview [data-bf-layout="compact"]
-  .flow-chat-composer-preview__action {
-  inline-size: auto;
-}
-
-.flow-chat-composer-preview__action--fill {
-  background: var(--bf-color-action-neutral-surface);
-}
-
-.flow-chat-composer-preview__action--primary {
-  color: var(--bf-color-action-primary-content);
-  background: var(--bf-color-action-primary-background);
-}
-
-.flow-chat-composer-preview__action > svg {
-  inline-size: var(--bf-font-size-base);
-  block-size: var(--bf-font-size-base);
 }
 
 .flow-chat-composer-preview__model {
@@ -136,12 +110,10 @@
   font: inherit;
 }
 
-.flow-chat-composer-preview__action:hover:not(:disabled),
 .flow-chat-composer-preview__model:hover:not(:disabled) {
   background: var(--bf-color-action-neutral-surface-hover);
 }
 
-.flow-chat-composer-preview__action:focus-visible,
 .flow-chat-composer-preview__model:focus-visible {
   outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
   outline-offset: var(--bf-focus-offset);

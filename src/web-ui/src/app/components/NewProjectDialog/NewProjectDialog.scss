@@ -1,8 +1,6 @@
 /**
  * New Project Dialog Styles
  */
-@use '../../../component-library/styles/tokens.scss' as *;
-
 // ==================== Dialog Container ====================
 
 .new-project-dialog {
@@ -12,7 +10,7 @@
   max-width: 100%;
 
   // ==================== Hero Section ====================
-  
+
   &__hero {
     display: flex;
     flex-direction: column;
@@ -81,7 +79,7 @@
     flex-direction: column;
     gap: 8px;
     animation: new-project-field-enter 0.35s ease-out both;
-    
+
     &:nth-child(1) { animation-delay: 0.05s; }
     &:nth-child(2) { animation-delay: 0.1s; }
   }
@@ -105,7 +103,7 @@
     font-weight: var(--bf-font-weight-medium);
     color: var(--bf-color-content-secondary);
     margin: 0;
-    
+
     svg {
       width: 14px;
       height: 14px;
@@ -124,7 +122,7 @@
   &__path-input {
     flex: 1;
     min-width: 0;
-    
+
     input {
       width: 100%;
       cursor: default;
@@ -135,12 +133,12 @@
       border: 1px dashed var(--bf-color-border-subtle);
       border-radius: 8px;
       color: var(--bf-color-content-primary);
-      
+
       &::placeholder {
         color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-xs);
       }
-      
+
       &:focus {
         border-style: solid;
         border-color: var(--bf-color-border-default);
@@ -170,18 +168,18 @@
         border-color 0.2s ease,
         box-shadow 0.2s ease,
         color 0.2s ease;
-      
+
       &::placeholder {
         color: var(--bf-color-content-muted);
         font-size: var(--bf-font-size-xs);
       }
-      
+
       &:focus {
         border-color: color-mix(in srgb, var(--bf-color-accent-default) 45%, transparent);
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
         outline: none;
       }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -261,14 +259,14 @@
     border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
     border-radius: 8px;
     animation: new-project-error-shake 0.4s ease-out;
-    
+
     svg {
       flex-shrink: 0;
       width: 14px;
       height: 14px;
       color: var(--bf-color-status-danger-content);
     }
-    
+
     span {
       font-size: var(--bf-font-size-xs);
       color: var(--bf-color-status-danger-content);
@@ -314,23 +312,23 @@
 @media (max-width: 520px) {
   .new-project-dialog {
     width: 100%;
-    
+
     &__hero {
       padding: 8px 16px 20px;
     }
-    
+
     &__content {
       padding: 0 16px 16px;
     }
-    
+
     &__footer {
       padding: 10px 16px;
     }
-    
+
     &__path-selector {
       flex-direction: column;
     }
-    
+
     &__select-btn {
       width: 100%;
     }

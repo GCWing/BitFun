@@ -20,7 +20,7 @@
     min-block-size: 0;
     flex-direction: column;
     color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-chrome);
   }
 
   .header {
@@ -128,7 +128,7 @@
   }
 
   .item:has(> [data-bf-part="trigger"][aria-current]) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--bf-color-selection-surface);
   }
 
   .item > [data-bf-part="trigger"][aria-current] > [data-bf-part="label"] {

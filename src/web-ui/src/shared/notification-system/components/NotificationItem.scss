@@ -1,15 +1,12 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .notification-item {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-2;
-  padding: $size-gap-3;
+  gap: var(--bf-space-2);
+  padding: var(--bf-space-3);
   min-width: 280px;
   max-width: 320px;
   animation: bitfun-notification-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
@@ -102,8 +99,8 @@
   
   &__actions {
     display: flex;
-    gap: $size-gap-1;
-    margin-top: $size-gap-1;
+    gap: var(--bf-space-1);
+    margin-top: var(--bf-space-1);
   }
 
   &--exiting {

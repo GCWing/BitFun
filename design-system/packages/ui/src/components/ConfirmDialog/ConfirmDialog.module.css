@@ -75,12 +75,13 @@
   .preview {
     overflow: auto;
     min-inline-size: 0;
+    max-block-size: var(--bf-layout-confirm-dialog-preview-max-block-size);
     padding-block: var(--bf-layout-confirm-dialog-preview-padding-block);
     padding-inline: var(--bf-layout-confirm-dialog-preview-padding-inline);
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     border-radius: var(--bf-layout-confirm-dialog-preview-radius);
     color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-subtle);
+    background: var(--bf-color-surface-tertiary);
     scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
     scrollbar-width: thin;
   }
@@ -88,7 +89,7 @@
   .preview pre {
     margin: 0;
     color: inherit;
-    font-family:var(--bf-font-family-mono);
+    font-family: var(--bf-font-family-mono);
     font-size: var(--bf-font-size-xs);
     line-height: var(--bf-line-height-base);
     white-space: pre-wrap;

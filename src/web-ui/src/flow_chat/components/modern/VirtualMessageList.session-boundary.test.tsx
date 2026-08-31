@@ -166,8 +166,6 @@ vi.mock('../../hooks/useActiveSessionState', () => ({
 
 vi.mock('../../store/chatInputStateStore', () => ({
   useChatInputState: (selector: (state: Record<string, unknown>) => unknown) => selector({
-    isActive: false,
-    isExpanded: false,
     inputHeight: 140,
   }),
 }));

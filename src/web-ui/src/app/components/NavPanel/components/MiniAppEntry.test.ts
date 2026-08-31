@@ -33,8 +33,8 @@ describe('MiniAppEntry navigation presentation', () => {
     expect(source.indexOf('bitfun-nav-panel__miniapp-entry-icon'))
       .toBeLessThan(source.indexOf('bitfun-nav-panel__miniapp-entry-title'));
     expect(stylesheet).toContain('&__miniapp-entry-icon');
-    expect(stylesheet).toContain('padding: 8px 10px 8px $size-gap-2;');
-    expect(stylesheet).toContain('gap: $size-gap-2;');
+    expect(stylesheet).toContain('padding: 8px 10px 8px var(--bf-space-2);');
+    expect(stylesheet).toContain('gap: var(--bf-space-2);');
     expect(stylesheet).toContain('flex: 0 0 22px;');
   });
 });

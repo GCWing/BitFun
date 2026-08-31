@@ -1,11 +1,9 @@
 // Shared presentation for runtime-owned settings pages and their embedded sections.
-@use '../../../component-library/styles/tokens' as *;
-
 .bitfun-runtime-settings {
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-6;
+    gap: var(--bf-space-6);
   }
 
   &__row-control {
@@ -13,7 +11,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   /** Computer use: authorized status label (Granted / 已授权) */
@@ -33,7 +31,7 @@
   &__warning {
     max-width: 100%;
     padding: 6px 10px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     border: 1px dashed color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
     color: var(--bf-color-status-warning-content);
     font-size: var(--bf-font-size-xs);
@@ -51,7 +49,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-row-copy {
@@ -82,7 +80,7 @@
   &__pet-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     white-space: nowrap;
   }
 
@@ -90,7 +88,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
   }
 
   &__pet-expand-button {
@@ -100,7 +98,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
     padding: 5px 10px 5px 8px;
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-sm);
@@ -136,14 +134,14 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-list {
     max-height: min(360px, 52vh);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 12px;
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-sm);
@@ -167,7 +165,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     padding: 9px 10px;
     border: 1px solid var(--bf-color-border-subtle);
     border-radius: var(--bf-radius-sm);
@@ -202,7 +200,7 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: $size-gap-3;
+    gap: var(--bf-space-3);
   }
 
   &__pet-select-delete {
@@ -316,7 +314,7 @@
 
     &__pet-row-heading {
       flex-direction: column;
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     &__pet-actions {

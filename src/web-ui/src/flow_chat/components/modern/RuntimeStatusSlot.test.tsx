@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 
-vi.mock('@/component-library', () => ({
-  DotMatrixLoader: () => <span data-testid="dot-matrix" />,
+vi.mock('@bitfun/ui', () => ({
+  Spinner: () => <span data-testid="dot-matrix" />,
 }));
 
 vi.mock('react-i18next', () => ({

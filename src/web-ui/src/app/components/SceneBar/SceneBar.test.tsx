@@ -58,8 +58,12 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ debug: vi.fn() }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock('@/app/components/WindowControls', () => ({
   WindowControls: () => null,
 }));
 

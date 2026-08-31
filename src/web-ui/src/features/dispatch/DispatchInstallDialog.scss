@@ -1,5 +1,3 @@
-@use '../../component-library/styles/tokens' as *;
-
 // Three deliberate type steps, so "section" reads louder than "item" and
 // "item" reads louder than "explanation":
 //   title   18px/600  — the dialog's own heading
@@ -26,7 +24,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: $size-gap-4 $size-gap-4 $size-gap-3;
+    padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-3);
   }
 
   &__title {
@@ -49,7 +47,7 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    padding: 0 $size-gap-4 $size-gap-4;
+    padding: 0 var(--bf-space-4) var(--bf-space-4);
 
     // The body is a height-constrained column flex container, so its children
     // would otherwise shrink below their content instead of scrolling.
@@ -58,15 +56,15 @@
     }
 
     > [role='alert'] {
-      margin-bottom: $size-gap-3;
+      margin-bottom: var(--bf-space-3);
     }
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-3 0;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3) 0;
 
     &:first-child {
       padding-top: 0;
@@ -96,7 +94,7 @@
   &__field {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
 
   &__field-label {
@@ -124,9 +122,9 @@
       box-sizing: border-box;
       width: 100%;
       min-height: 32px;
-      padding: 0 $size-gap-2;
+      padding: 0 var(--bf-space-2);
       border: 1px solid var(--bf-color-border-subtle);
-      border-radius: $size-radius-base;
+      border-radius: var(--bf-radius-base);
       background: var(--bf-color-surface-canvas);
       color: var(--bf-color-content-primary);
       font-family:var(--bf-font-family-mono);
@@ -151,8 +149,8 @@
     > div {
       display: grid;
       grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
-      gap: $size-gap-2;
-      padding: $size-gap-2 0;
+      gap: var(--bf-space-2);
+      padding: var(--bf-space-2) 0;
 
       + div {
         border-top: 1px solid var(--bf-color-border-subtle);
@@ -187,7 +185,7 @@
   &__retry {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     color: var(--bf-color-content-secondary);
     font-size: var(--bf-font-size-xs);
   }
@@ -218,12 +216,12 @@
     }
 
     &[open] summary {
-      margin-bottom: $size-gap-2;
+      margin-bottom: var(--bf-space-2);
     }
 
     dl {
       display: grid;
-      gap: $size-gap-1;
+      gap: var(--bf-space-1);
       width: 100%;
       margin: 0;
     }
@@ -231,7 +229,7 @@
     dl > div {
       display: grid;
       grid-template-columns: 84px minmax(0, 1fr);
-      gap: $size-gap-2;
+      gap: var(--bf-space-2);
     }
 
     dt {
@@ -250,8 +248,8 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: $size-gap-2;
-    padding: $size-gap-3 $size-gap-4;
+    gap: var(--bf-space-2);
+    padding: var(--bf-space-3) var(--bf-space-4);
     border-top: 1px solid var(--bf-color-border-subtle);
     background: var(--bf-color-surface-canvas);
   }

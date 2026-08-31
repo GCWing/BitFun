@@ -36,7 +36,7 @@ describe('WorkspaceListSection layout styles', () => {
     const workspaceList = extractBlock(stylesheet, '&__workspace-list');
     const workspaceDropTarget = extractBlock(stylesheet, '&__workspace-drop-target');
 
-    expect(workspaceList).toContain('gap: $size-gap-2;');
+    expect(workspaceList).toContain('gap: var(--bf-space-2);');
     expect(workspaceDropTarget).toContain('gap: 0;');
   });
 

@@ -30,6 +30,6 @@ test("Textarea guards IME-owned commit and cancel keys", async () => {
 test("Textarea resizes on mount and when a controlled value changes", async () => {
   const source = await readFile(new URL("../src/components/Textarea/Textarea.tsx", import.meta.url), "utf8");
   assert.match(source, /useIsomorphicLayoutEffect/);
-  assert.match(source, /\[resize, value\]/);
-  assert.match(source, /resize\(textareaRef\.current\)/);
+  assert.match(source, /\[resizeToContent, value\]/);
+  assert.match(source, /resizeToContent\(textareaRef\.current\)/);
 });

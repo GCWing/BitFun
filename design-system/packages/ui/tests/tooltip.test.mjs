@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Tooltip, TooltipProvider } from "../dist/index.js";
+import { DesignSystemProvider, Tooltip } from "../dist/index.js";
 
 test("Tooltip renders only the trigger until it is shown", () => {
   const markup = renderToStaticMarkup(
@@ -18,11 +18,11 @@ test("Tooltip renders only the trigger until it is shown", () => {
   assert.doesNotMatch(markup, /role="tooltip"/);
 });
 
-test("TooltipProvider accepts shared delay and portal configuration", () => {
+test("DesignSystemProvider owns shared tooltip delay and portal configuration", () => {
   const markup = renderToStaticMarkup(
     createElement(
-      TooltipProvider,
-      { delay: 0, portalContainer: null },
+      DesignSystemProvider,
+      { tooltipDelay: 0, portalHost: null },
       createElement(
         Tooltip,
         { content: "Rename", placement: "right" },
@@ -49,6 +49,8 @@ test("Tooltip owns delayed opening, viewport flipping, and interactive persisten
   assert.match(source, /aria-describedby/);
   assert.match(source, /role="tooltip"/);
   assert.match(source, /requestAnimationFrame/);
+  assert.match(source, /useDesignSystem/);
+  assert.match(source, /<Portal/);
 });
 
 test("Tooltip styling uses only public surface, geometry, and elevation tokens", async () => {

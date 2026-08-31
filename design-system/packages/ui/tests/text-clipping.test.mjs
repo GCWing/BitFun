@@ -13,7 +13,7 @@ for (const [component, selector] of [
   ["SegmentedControl", ".label"],
   ["NavigationPanel", ".headingLabel"],
   ["Menu", ".headingLabel"],
-  ["Modal", ".title"],
+  ["Dialog", ".title"],
   ["Disclosure", ".summary"],
 ]) {
   test(`${component} ${selector} retains ellipsis with font-safe line height`, async () => {

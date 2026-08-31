@@ -3,7 +3,26 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import { Alert, Button, Field, FieldGroup, FieldRow, FormSection, Icon, IconButton, Input as DesignInput, Modal, ScrollArea, Select, Tooltip } from '@bitfun/ui';
+import {
+  Alert,
+  Button,
+  Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
+  Icon,
+  IconButton,
+  Input as DesignInput,
+  ScrollArea,
+  Select,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteContext';
@@ -692,21 +711,24 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
   return (
     <>
-      <Modal
-        isOpen={open}
-        onClose={onClose}
-        title={t('ssh.remote.title') || 'SSH Remote'}
-        size="medium"
-        showCloseButton
-        closeOnOverlayClick={false}
-        overlayClassName="ssh-connection-dialog__modal-overlay"
-        contentLayout="flex"
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+        size="md"
+        closeOnPointerOutside={false}
       >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('ssh.remote.title') || 'SSH Remote'}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody inset="none">
         <div className="ssh-connection-dialog" data-bf-component="ssh-remote" data-bf-part="connection">
           {error && (
             <div className="ssh-connection-dialog__error-banner" data-bf-component="ssh-remote" data-bf-part="connectionError">
               <Alert
-                type="error"
+                tone="error"
                 message={error}
                 closable
                 onClose={dismissError}
@@ -1363,7 +1385,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             </Button>
           </div>
         </div>
-      </Modal>
+              </DialogBody>
+      </Dialog>
 
       {open && credentialsPrompt && (
         <SSHAuthPromptDialog

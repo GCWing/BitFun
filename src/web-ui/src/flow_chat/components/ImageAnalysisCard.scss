@@ -121,11 +121,11 @@
   
   &.error {
     color: var(--image-analysis-error);
-
-    > [data-bf-component='button'] {
-      margin-left: 8px;
-    }
   }
+}
+
+.image-analysis-card__retry {
+  margin-left: 8px;
 }
 
 @keyframes image-analysis-spin {
@@ -165,7 +165,7 @@
   }
 }
 
-.image-analysis-card__content > [data-bf-component='button'] {
+.image-analysis-card__toggle {
   margin-top: 8px;
 }
 

@@ -189,16 +189,12 @@
         "openSettings": "打开设置",
         "openTerminal": "打开终端"
       },
-      "app": {
-        "closePreview": "关闭预览 / 关闭弹窗"
-      },
       "canvas": {
         "missionControl": "Mission Control",
         "splitHorizontal": "水平分屏",
         "splitVertical": "垂直分屏",
         "anchorZone": "切换锚点区",
-        "maximize": "最大化编辑器",
-        "closePreview": "关闭预览"
+        "maximize": "最大化编辑器"
       },
       "editor": {
         "findInFile": "在文件中查找（Monaco）"

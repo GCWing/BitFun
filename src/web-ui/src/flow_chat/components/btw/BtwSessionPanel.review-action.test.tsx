@@ -103,17 +103,19 @@ vi.mock('./DeepReviewActionBar', () => ({
   ReviewActionBar: () => <div data-testid="review-action-bar" />,
 }));
 
-vi.mock('@/component-library', () => ({
-  DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
   IconButton: ({
     children,
     onClick,
     disabled,
     className,
+    icon,
     'data-testid': testId,
     'aria-label': ariaLabel,
   }: {
-    children: React.ReactNode;
+    children?: React.ReactNode;
+    icon?: React.ReactNode;
     onClick?: () => void;
     disabled?: boolean;
     className?: string;
@@ -128,6 +130,7 @@ vi.mock('@/component-library', () => ({
       data-testid={testId}
       aria-label={ariaLabel}
     >
+      {icon}
       {children}
     </button>
   ),

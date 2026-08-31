@@ -2,7 +2,9 @@
 import React, { act, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MenuPopover, ThemeRoot, type MenuEntry } from '@bitfun/ui';
+import { DesignSystemProvider, MenuPopover, ThemeRoot, type MenuEntry } from '@bitfun/ui';
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('public MenuPopover', () => {
   let host: HTMLDivElement;
@@ -14,10 +16,22 @@ describe('public MenuPopover', () => {
     { id: 'share', label: 'Share', submenu: [{ id: 'email', label: 'Email', onSelect: selected }, { id: 'link', label: 'Link' }] },
   ];
   const key = (value: string, isComposing = false) => act(() => { document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, isComposing })); });
+  const keyAsync = async (value: string) => act(async () => {
+    document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+    await Promise.resolve();
+  });
   function Harness() {
     const anchorRef = useRef<HTMLButtonElement>(null);
+    const portalRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
-    return <ThemeRoot><button ref={anchorRef} onClick={() => setOpen(!open)}>Commands</button><MenuPopover items={items} open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} aria-label="Commands" /></ThemeRoot>;
+    return <DesignSystemProvider portalHost={() => portalRef.current}>
+      <ThemeRoot>
+        <div ref={portalRef}>
+          <button ref={anchorRef} onClick={() => setOpen(!open)}>Commands</button>
+          <MenuPopover items={items} open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} aria-label="Commands" />
+        </div>
+      </ThemeRoot>
+    </DesignSystemProvider>;
   }
   const open = () => {
     act(() => root.render(<Harness />));
@@ -28,21 +42,25 @@ describe('public MenuPopover', () => {
   beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host); selected.mockClear(); });
   afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); });
 
-  it('portals inside the theme scope, supports typeahead and dispatches after focus return', () => {
+  it('portals inside the theme scope, supports typeahead and dispatches after focus return', async () => {
     const trigger = open();
     expect(host.querySelector('[role="menu"]')?.closest('[data-bf-design-system-root]')).not.toBeNull();
     expect(document.activeElement?.textContent).toBe('Copy');
     key('s'); expect(document.activeElement?.textContent).toBe('Share');
     key('Home'); key('Enter', true); expect(selected).not.toHaveBeenCalled();
-    key('Enter'); expect(selected).toHaveBeenCalledOnce(); expect(document.activeElement).toBe(trigger);
+    await keyAsync('Enter');
+    expect(selected).toHaveBeenCalledOnce();
+    expect(host.querySelector('[role="menu"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(document.activeElement).toBe(trigger);
   });
-  it('opens and backs out of nested menus and closes the tree on Tab', () => {
+  it('opens and backs out of nested menus and closes the tree on Tab', async () => {
     const trigger = open(); key('End'); key('ArrowRight');
     expect(document.activeElement?.textContent).toBe('Email');
     key('ArrowDown'); expect(document.activeElement?.textContent).toBe('Link');
     key('ArrowLeft'); expect(document.activeElement?.textContent).toBe('Share');
-    key('Tab'); expect(document.activeElement).toBe(trigger);
+    await keyAsync('Tab');
     expect(host.querySelector('[role="menu"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(document.activeElement).toBe(trigger);
   });
   it('flips the root above its anchor and submenus left near viewport edges', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
@@ -64,7 +82,7 @@ describe('public MenuPopover', () => {
     const close = vi.fn();
     act(() => root.render(<MenuPopover items={items} open onClose={close} position={{ x: 50, y: 50 }} />));
     expect(document.activeElement?.textContent).toBe('Copy');
-    act(() => document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+    act(() => document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })));
     expect(close).toHaveBeenCalledOnce();
   });
   it('retains exit geometry and focuses the first item when reopened during exit', () => {

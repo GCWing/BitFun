@@ -1,5 +1,6 @@
 @layer bf.components {
   .root { display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--bf-space-2); color: var(--bf-color-content-primary); font-family:var(--bf-font-family-sans); }
+  .root[data-layout="fill"] { flex: 1 1 auto; min-block-size: 0; }
   .label { font-size: var(--bf-font-size-sm); font-weight: var(--bf-font-weight-medium); line-height: var(--bf-line-height-tight); }
   .required, .error { color: var(--bf-color-status-danger-content); }
   .textarea {
@@ -20,6 +21,9 @@
     transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
   .root[data-auto-resize="true"] .textarea { overflow: hidden; resize: none; }
+  .root[data-font="mono"] .textarea { font-family: var(--bf-font-family-mono); }
+  .root[data-layout="fill"] .textarea { flex: 1 1 auto; min-block-size: 0; }
+  .root[data-resize="none"] .textarea { resize: none; }
   .root[data-variant="filled"] .textarea { border-color: transparent; }
   .textarea:hover:not(:disabled) { border-color: var(--bf-color-field-border-hover); background: var(--bf-color-field-background-hover); }
   .textarea:focus { border-color: var(--bf-color-field-border-focus); box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring); }

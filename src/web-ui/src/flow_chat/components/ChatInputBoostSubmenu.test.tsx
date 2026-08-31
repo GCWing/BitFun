@@ -13,10 +13,8 @@ import { ChatInputBoostSubmenu } from './ChatInputBoostSubmenu';
 import { HarnessProfileSelector } from './HarnessProfileSelector';
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: vi.fn() },
   useTranslation: () => ({ t: (key: string) => key }),
-}));
-vi.mock('@/component-library', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('@/shared/notification-system', () => ({
   notificationService: { info: vi.fn() },

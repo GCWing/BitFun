@@ -189,16 +189,12 @@
         "openSettings": "Open Settings",
         "openTerminal": "Open Terminal"
       },
-      "app": {
-        "closePreview": "Close Preview / Dismiss Dialog"
-      },
       "canvas": {
         "missionControl": "Mission Control",
         "splitHorizontal": "Horizontal Split",
         "splitVertical": "Vertical Split",
         "anchorZone": "Toggle Anchor Zone",
-        "maximize": "Maximize Editor",
-        "closePreview": "Close Preview"
+        "maximize": "Maximize Editor"
       },
       "editor": {
         "findInFile": "Find in file (Monaco)"

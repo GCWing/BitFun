@@ -1,4 +1,12 @@
-import { Alert, Button, Modal, ScrollArea } from '@bitfun/ui';
+import {
+  Alert,
+  Button,
+  ScrollArea,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -69,15 +77,18 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
   const resolvedHeadCommit = result?.headCommit;
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={onClose}
-      size="medium"
-      closeOnOverlayClick
-      showCloseButton
-      ariaLabelledBy={DIALOG_TITLE_ID}
-      testId="dispatch-sync-dialog"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="md"
+      closeOnPointerOutside
+      aria-labelledby={DIALOG_TITLE_ID}
+      data-testid="dispatch-sync-dialog"
     >
+      <DialogHeader>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <div
         className="dispatch-result-dialog"
         data-bf-component="dispatch-result-dialog"
@@ -104,10 +115,10 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
           data-bf-part="body"
         >
           {error ? (
-            <Alert type="error" message={error} closable onClose={() => setError(null)} />
+            <Alert tone="error" message={error} closable onClose={() => setError(null)} />
           ) : null}
           {baselineMissing ? (
-            <Alert type="error" message={t('dispatch.syncBaselineMissing')} />
+            <Alert tone="error" message={t('dispatch.syncBaselineMissing')} />
           ) : null}
 
           {resolvedBranch || resolvedBaselinePath || resolvedHeadCommit ? (
@@ -153,7 +164,7 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
             result.changed ? (
               <>
                 <Alert
-                  type="success"
+                  tone="success"
                   message={t('dispatch.syncSucceeded', { count: result.commitCount })}
                 />
                 <section className="dispatch-result-dialog__group">
@@ -180,11 +191,11 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
                   )}
                 </section>
                 {result.truncatedChanges ? (
-                  <Alert type="info" message={t('dispatch.syncChangesTruncated')} />
+                  <Alert tone="info" message={t('dispatch.syncChangesTruncated')} />
                 ) : null}
               </>
             ) : (
-              <Alert type="info" message={t('dispatch.syncNoChanges')} />
+              <Alert tone="info" message={t('dispatch.syncNoChanges')} />
             )
           ) : null}
         </ScrollArea>
@@ -208,6 +219,7 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
           </Button>
         </div>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };

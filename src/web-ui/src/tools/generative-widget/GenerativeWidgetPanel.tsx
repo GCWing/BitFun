@@ -146,7 +146,9 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
           </div>
           <Textarea
             className="bitfun-generative-widget-panel__editor-field"
-            textareaClassName="bitfun-generative-widget-panel__editor"
+            font="mono"
+            layout="fill"
+            resize="none"
             data-bf-component="generative-widget"
             data-bf-part="editor"
             value={draftCode}

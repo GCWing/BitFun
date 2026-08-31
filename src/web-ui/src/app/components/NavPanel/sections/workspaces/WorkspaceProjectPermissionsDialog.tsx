@@ -1,4 +1,18 @@
-import { Button, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  Select,
+  type SelectOption,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Save, ShieldCheck } from 'lucide-react';
 
@@ -226,19 +240,21 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        if (!isBusy) {
-          onClose();
-        }
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isBusy) onClose();
       }}
-      title={workspace.name}
-      size="xlarge"
-      contentPadding="lg"
-      contentClassName="workspace-project-permissions-dialog__modal"
-      overlayClassName="workspace-project-permissions-dialog-overlay"
+      size="xl"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{workspace.name}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <div className="workspace-project-permissions-dialog__modal">
       <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="root" className="workspace-project-permissions-dialog">
         <div data-bf-component="workspace-project-permissions-dialog" data-bf-part="intro" className="workspace-project-permissions-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
@@ -405,7 +421,9 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
           ) : null}
         </section>
       </div>
-    </Modal>
+            </div>
+            </DialogBody>
+    </Dialog>
   );
 };
 

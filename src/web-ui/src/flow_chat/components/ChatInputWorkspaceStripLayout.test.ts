@@ -150,10 +150,10 @@ describe('composer context track layout', () => {
     expect(component).toContain('contextBar={workspaceStrip}');
     expect(component).toContain('<ChatInputWorkspaceStrip');
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 \$size-gap-2;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?padding: 0 var\(--bf-space-2\);/,
     );
     expect(chatInput).toMatch(
-      /\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: \$size-gap-6;/,
+      /\.bitfun-context-drop-zone\.bitfun-chat-input-drop-zone \{[\s\S]*?bottom: var\(--bf-space-6\);/,
     );
     expect(stripRoot).toContain('position: relative;');
     expect(stripRoot).toContain('padding: 0;');
@@ -308,8 +308,13 @@ describe('composer context track layout', () => {
     expect(chatInput).not.toContain('harnessControl');
     // Reasoning belongs beside the model it configures; context usage remains
     // a ring in the upper context track rather than repeating as a number.
+    const modelSelector = readLocalFile('ModelSelector.tsx');
     expect(stylesheet).not.toContain('.bitfun-reasoning-preset-selector,');
-    expect(stylesheet).toContain('.bitfun-model-selector__ctx-usage {');
+    expect(modelSelector).not.toContain('tokenPercentage');
+    expect(modelSelector).not.toContain('data-bf-part="contextUsage"');
+    expect(modelSelector).toContain('buildContextUsageTooltip');
+    expect(modelSelector).toContain('buildModelSelectorTooltipDetails');
+    expect(stylesheet).not.toContain('.bitfun-model-selector__ctx-usage {');
     expect(stylesheet).toContain(
       ".bitfun-reasoning-preset-selector[data-bf-presentation='label']",
     );
@@ -319,7 +324,7 @@ describe('composer context track layout', () => {
     const component = readLocalFile('ChatInput.tsx');
 
     expect(component).toContain(
-      "clone.querySelector(\n      '.bitfun-chat-input__composer-surface'",
+      'clone.querySelector(\n      \'[data-bf-component="chat-composer"] [data-bf-part="surface"]\'',
     );
     expect(component).toContain("cloneComposerSurfaceEl.dataset.bfLayout = 'compact';");
     expect(component).toContain('const singleLineThreshold = paddingBlock + singleLineHeight * 1.5;');
@@ -365,27 +370,21 @@ describe('composer context track layout', () => {
     expect(modelPair).not.toContain('border-color:');
   });
 
-  it('gives the add icon a background without adding a border', () => {
+  it('uses the shared composer action contract for add and send controls', () => {
+    const component = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
-    const addControl = stylesheet.slice(
-      stylesheet.indexOf('    .bitfun-chat-input__agent-boost-add {'),
-      stylesheet.indexOf('    .bitfun-chat-input__model-usage-group,'),
-    );
 
-    expect(addControl).toContain(
-      'width: var(--bf-control-chat-composer-control-height) !important;',
+    expect(component).toContain('ChatComposerActionButton');
+    expect(component).toMatch(
+      /className="bitfun-chat-input__agent-boost-add"[\s\S]*?variant="fill"/,
     );
-    expect(addControl).toContain(
-      'height: var(--bf-control-chat-composer-control-height) !important;',
+    expect(component).toMatch(
+      /className="bitfun-chat-input__send-button"[\s\S]*?variant="primary"/,
     );
-    expect(addControl).toContain('border: 0 !important;');
-    expect(addControl).toContain(
-      'background: var(--bf-color-surface-subtle) !important;',
+    expect(stylesheet).not.toContain('.bitfun-chat-input__agent-boost-add {');
+    expect(stylesheet).not.toContain(
+      '.bitfun-chat-input__box:focus-within &:not(:disabled)',
     );
-    expect(addControl).toMatch(
-      /&:hover,[\s\S]*?&:focus-visible,[\s\S]*?&\[aria-expanded='true'\] \{[\s\S]*?color-action-quiet-hover/,
-    );
-    expect(addControl).not.toContain('border-color:');
   });
 
   it('uses the scaled 45px capsule and keeps 25px controls stable across layouts', () => {

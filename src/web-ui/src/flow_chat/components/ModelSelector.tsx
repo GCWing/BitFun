@@ -25,8 +25,8 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName, getProviderGroupKey } from '@/infrastructure/config/services/modelConfigs';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
-import { Tooltip } from '@/component-library';
-import { PresenceBoundary } from '@/component-library/components/PresenceBoundary';
+import { Tooltip } from '@bitfun/ui';
+import { RetainedMountBoundary } from '@/shared/presence';
 import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
@@ -1508,17 +1508,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
   }, [dropdownOpen, keyboardNavigationOpen]);
   
-  const tokenPercentage = useMemo(() => {
-    if (!maxTokens || maxTokens <= 0 || !currentTokens) return 0;
-    return Math.min(Math.round((currentTokens / maxTokens) * 100), 100);
-  }, [currentTokens, maxTokens]);
-
-  const tokenStatusClass = useMemo(() => {
-    if (tokenPercentage >= 90) return 'critical';
-    if (tokenPercentage >= 70) return 'warning';
-    return '';
-  }, [tokenPercentage]);
-
   const resolvedContextUsageSource: ContextUsageSource =
     contextUsageSource ?? (isAcpSession ? 'acp_context' : 'agent_prompt');
   if (externalSelection) {
@@ -1576,7 +1565,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           />
         ) : null}
 
-        <PresenceBoundary active={dropdownOpen}>
+        <RetainedMountBoundary present={dropdownOpen}>
           {createPortal(
             <Menu
             id={menuId}
@@ -1616,7 +1605,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </Menu>,
             document.body,
           )}
-        </PresenceBoundary>
+        </RetainedMountBoundary>
       </div>
     );
   }
@@ -1657,18 +1646,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       },
       t,
     });
-    // Whichever trigger is on screen carries the context readout; with no model
-    // trigger it rides along on the mode one instead of disappearing.
-    const contextUsageBadge = tokenPercentage > 0 ? (
-      <span
-        className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}
-        data-bf-component="model-selector"
-        data-bf-part="contextUsage"
-      >
-        · {tokenPercentage}%
-      </span>
-    ) : null;
-
     return (
       <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}
         ref={dropdownRef}
@@ -1707,7 +1684,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
-            {contextUsageBadge}
             <ChevronDown size={10} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>
@@ -1721,7 +1697,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             loading={loading}
             dropdownPlacement={dropdownPlacement}
             onSelect={handleSelectAcpMode}
-            {...(showModelTrigger ? {} : { tooltip: acpTooltip, trailing: contextUsageBadge })}
+            {...(showModelTrigger ? {} : { tooltip: acpTooltip })}
           />
         )}
 
@@ -1738,7 +1714,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ) : null}
 
         {showModelTrigger && (
-        <PresenceBoundary active={dropdownOpen}>
+        <RetainedMountBoundary present={dropdownOpen}>
           {createPortal(
             <Menu
             id={menuId}
@@ -1815,7 +1791,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </Menu>,
             getAppearanceOverlayHost()
           )}
-        </PresenceBoundary>
+        </RetainedMountBoundary>
         )}
       </div>
     );
@@ -1899,15 +1875,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </button>
       </Tooltip>
 
-      {tokenPercentage > 0 && (
-        <Tooltip content={tooltipContent}>
-          <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`} data-bf-component="model-selector" data-bf-part="contextUsage">
-            · {tokenPercentage}%
-          </span>
-        </Tooltip>
-      )}
-
-      <PresenceBoundary active={dropdownOpen}>
+      <RetainedMountBoundary present={dropdownOpen}>
         {createPortal(
           <Menu
             id={menuId}
@@ -1987,7 +1955,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </Menu>,
           getAppearanceOverlayHost()
         )}
-      </PresenceBoundary>
+      </RetainedMountBoundary>
 
       {dropdownOpen && nativeSubmenu && createPortal(
         <Menu

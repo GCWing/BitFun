@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Markdown } from '@/component-library/components/Markdown/Markdown';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { flowChatStore } from '../store/FlowChatStore';
 import {
   formatAgentIdForDisplay,
@@ -216,7 +216,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
         onOpenAgent={canOpenSession ? handleOpenSession : undefined}
         openAgentLabel={t('toolCards.taskTool.openInPanel')}
         prompt={prompt ? (
-          <Markdown
+          <MarkdownRenderer
             content={prompt}
             isStreaming={false}
           />

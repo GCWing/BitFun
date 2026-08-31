@@ -8,7 +8,7 @@ test("NumberInput exposes a decimal input, unit, and labelled step controls", ()
   const markup = renderToStaticMarkup(createElement(NumberInput, {
     decrementLabel: "Less",
     incrementLabel: "More",
-    onChange: () => undefined,
+    onValueChange: () => undefined,
     unit: "%",
     value: 50,
   }));
@@ -19,29 +19,28 @@ test("NumberInput exposes a decimal input, unit, and labelled step controls", ()
   assert.match(markup, /data-bf-component="number-input"/);
 });
 
-test("NumberInput normalizes legacy size names", () => {
+test("NumberInput exposes canonical size names", () => {
   const markup = renderToStaticMarkup(createElement(NumberInput, {
-    onChange: () => undefined,
-    size: "large",
+    onValueChange: () => undefined,
+    size: "lg",
     value: 3,
   }));
   assert.match(markup, /data-size="lg"/);
 });
 
-test("NumberInput forwards native input attributes", () => {
+test("NumberInput applies its accessible label to the native input", () => {
   const markup = renderToStaticMarkup(createElement(NumberInput, {
-    inputProps: { "aria-label": "Font size", "data-testid": "font-size" },
-    onChange: () => undefined,
+    "aria-label": "Font size",
+    onValueChange: () => undefined,
     value: 14,
   }));
   assert.match(markup, /aria-label="Font size"/);
-  assert.match(markup, /data-testid="font-size"/);
 });
 
 test("NumberInput forwards Field composition attributes onto its native input", () => {
   const markup = renderToStaticMarkup(createElement(NumberInput, {
     id: "context-window", "aria-describedby": "context-help", "aria-invalid": true,
-    required: true, onChange: () => undefined, value: 1024,
+    required: true, onValueChange: () => undefined, value: 1024,
   }));
   assert.match(markup, /<input[^>]*id="context-window"[^>]*required=""[^>]*aria-describedby="context-help"[^>]*aria-invalid="true"/);
 });

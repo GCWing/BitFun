@@ -19,14 +19,15 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : us
 export interface TextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> {
   autoResize?: boolean;
   className?: string;
-  error?: boolean;
   errorMessage?: string;
+  font?: "mono" | "sans";
   hint?: string;
   invalid?: boolean;
   label?: string;
+  layout?: "auto" | "fill";
   onValueChange?: (value: string) => void;
+  resize?: "none" | "vertical";
   showCount?: boolean;
-  textareaClassName?: string;
   variant?: "default" | "filled" | "outlined";
 }
 
@@ -35,12 +36,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   "aria-invalid": ariaInvalid,
   autoResize = false,
   className,
-  error = false,
   errorMessage,
+  font = "sans",
   hint,
   id,
   invalid = false,
   label,
+  layout = "auto",
   maxLength,
   onChange,
   onCompositionEnd,
@@ -48,8 +50,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   onKeyDown,
   onValueChange,
   required,
+  resize = "vertical",
   showCount = false,
-  textareaClassName,
   value,
   variant = "default",
   ...props
@@ -61,10 +63,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [uncontrolledCount, setUncontrolledCount] = useState(() => String(props.defaultValue ?? "").length);
   const count = value === undefined ? uncontrolledCount : String(value).length;
-  const resolvedInvalid = invalid || error || (ariaInvalid !== undefined && ariaInvalid !== false && ariaInvalid !== "false");
+  const resolvedInvalid = invalid || (ariaInvalid !== undefined && ariaInvalid !== false && ariaInvalid !== "false");
   const hasSupport = Boolean((resolvedInvalid && errorMessage) || (!resolvedInvalid && hint) || showCount);
 
-  const resize = useCallback((node: HTMLTextAreaElement) => {
+  const resizeToContent = useCallback((node: HTMLTextAreaElement) => {
     if (!autoResize) return;
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
@@ -73,12 +75,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   useImperativeHandle(ref, () => textareaRef.current as HTMLTextAreaElement);
 
   useIsomorphicLayoutEffect(() => {
-    if (textareaRef.current) resize(textareaRef.current);
-  }, [resize, value]);
+    if (textareaRef.current) resizeToContent(textareaRef.current);
+  }, [resizeToContent, value]);
 
   const handleChange: ChangeEventHandler<HTMLTextAreaElement> = (event) => {
     setUncontrolledCount(event.currentTarget.value.length);
-    resize(event.currentTarget);
+    resizeToContent(event.currentTarget);
     onChange?.(event);
     onValueChange?.(event.currentTarget.value);
   };
@@ -88,7 +90,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       className={classNames(styles.root, className)}
       data-auto-resize={autoResize ? "true" : "false"}
       data-bf-component="textarea"
+      data-font={font}
       data-invalid={resolvedInvalid ? "true" : "false"}
+      data-layout={layout}
+      data-resize={resize}
       data-variant={variant}
     >
       {label && <label className={styles.label} data-bf-part="label" htmlFor={resolvedId}>{label}{required && <span className={styles.required}>*</span>}</label>}
@@ -96,7 +101,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         {...props}
         aria-describedby={hasSupport ? supportId : ariaDescribedBy}
         aria-invalid={resolvedInvalid || undefined}
-        className={classNames(styles.textarea, textareaClassName)}
+        className={styles.textarea}
         data-bf-part="input"
         id={resolvedId}
         maxLength={maxLength}

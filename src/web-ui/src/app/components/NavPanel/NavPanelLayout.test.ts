@@ -46,11 +46,11 @@ describe('NavPanel layout styles', () => {
     const topActionExpandBlock = extractBlock(stylesheet, '&__top-action-expand');
     const topActionSublistBlock = extractBlock(stylesheet, '&__top-action-sublist');
 
-    expect(itemsBlock).toContain('padding: 2px $size-gap-1;');
+    expect(itemsBlock).toContain('padding: 2px var(--bf-space-1);');
     expect(itemsBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(topActionExpandBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
     expect(topActionSublistBlock).toContain('gap: calc(var(--bf-space-1) / 2);');
-    expect(sectionHeaderBlock).toContain('margin: 0 $size-gap-1;');
+    expect(sectionHeaderBlock).toContain('margin: 0 var(--bf-space-1);');
   });
 
   it('clips collapsible section content when collapsed via grid 0fr', () => {
@@ -80,7 +80,7 @@ describe('NavPanel layout styles', () => {
     )].map(match => match.groups?.body ?? '');
 
     expect(footerBlocks).toHaveLength(2);
-    expect(footerBlocks[0]).toContain('padding: 2px $size-gap-2;');
+    expect(footerBlocks[0]).toContain('padding: 2px var(--bf-space-2);');
     expect(footerBlocks[1]).toContain('padding: 2px 6px;');
   });
 

@@ -1,17 +1,14 @@
- 
-
-@use '../../../component-library/styles/tokens' as *;
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .loading-notification {
-  @include surfaces.floating-surface;
+  @include surfaces.floating;
 
   min-width: 260px;
   max-width: 320px;
-  padding: $size-gap-2 $size-gap-3;
+  padding: var(--bf-space-2) var(--bf-space-3);
   display: flex;
   align-items: flex-start;
-  gap: $size-gap-2;
+  gap: var(--bf-space-2);
   animation: bitfun-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   
   

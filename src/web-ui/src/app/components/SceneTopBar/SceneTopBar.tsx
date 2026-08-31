@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { Toolbar } from '@bitfun/ui';
-import { WindowControls } from '@/component-library';
+import { WindowControls } from '@/app/components/WindowControls';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '../../stores/sceneStore';
@@ -88,9 +88,9 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
         >
           <WindowControls
             onMinimize={onMinimize!}
-            onMaximize={onMaximize!}
+            onToggleMaximize={onMaximize!}
             onClose={onClose!}
-            isMaximized={isMaximized}
+            maximized={isMaximized}
           />
         </div>
       ) : null}

@@ -44,7 +44,7 @@
 
   .root[data-selected="true"] {
     border-color: var(--bf-color-border-default);
-    background: var(--bf-color-action-neutral-surface-hover);
+    background: var(--bf-color-selection-surface);
   }
 
   .root:has(.trigger:focus-visible) {

@@ -75,6 +75,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
   return (
     <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
       <Input
+        className="bitfun-file-explorer__rename-input"
         type="text"
         size="sm"
         value={value}

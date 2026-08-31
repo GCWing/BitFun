@@ -280,7 +280,7 @@
       transform var(--_tool-card-transition);
   }
 
-  .mainIcon > :where(svg, img),
+  .mainIcon :where(svg, img),
   .inlineAffordance > :where(svg, img),
   .statusIcon > :where(svg, img) {
     display: block;

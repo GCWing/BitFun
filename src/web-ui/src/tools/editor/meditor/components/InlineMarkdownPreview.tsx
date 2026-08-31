@@ -1,5 +1,5 @@
 import React from 'react';
-import { MarkdownRenderer } from '@/component-library';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 
 interface InlineMarkdownPreviewProps {
   value: string;

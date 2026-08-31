@@ -1,0 +1,33 @@
+/**
+ * Product-shell surface recipes for custom shells that are not public
+ * @bitfun/ui overlays. Geometry and color remain owned by canonical design
+ * tokens; public Dialog, Menu, Popover, and Tooltip anatomy must not consume
+ * these mixins.
+ */
+
+@mixin -chrome($background, $backdrop-blur: false) {
+  border: var(--bf-border-width-default) solid var(--bf-color-border-default);
+  border-radius: var(--bf-radius-lg);
+  background: $background;
+  box-shadow: var(--bf-shadow-lg);
+
+  @if $backdrop-blur {
+    backdrop-filter: blur(var(--bf-effect-blur-medium));
+    -webkit-backdrop-filter: blur(var(--bf-effect-blur-medium));
+  }
+}
+
+@mixin floating($backdrop-blur: true) {
+  @include -chrome(
+    $background: color-mix(
+      in srgb,
+      var(--bf-color-surface-raised) 94%,
+      transparent
+    ),
+    $backdrop-blur: $backdrop-blur
+  );
+}
+
+@mixin dialog {
+  @include -chrome($background: var(--bf-color-surface-raised));
+}

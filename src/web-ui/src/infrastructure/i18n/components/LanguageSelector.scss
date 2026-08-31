@@ -1,4 +1,4 @@
-@use '../../../component-library/styles/overlay-surfaces' as surfaces;
+@use '@/shared/styles/surface-recipes' as surfaces;
 
 .language-selector {
   position: relative;
@@ -37,7 +37,7 @@
     }
     
     .language-selector__dropdown {
-      @include surfaces.floating-surface;
+      @include surfaces.floating;
 
       position: absolute;
       top: 100%;

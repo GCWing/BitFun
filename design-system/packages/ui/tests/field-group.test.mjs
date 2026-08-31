@@ -55,6 +55,6 @@ test("form grouping styles consume only shared public composition tokens", async
   assert.match(styles, /--bf-layout-form-section-gap/);
   assert.match(styles, /--bf-layout-field-group-radius/);
   assert.match(styles, /--bf-layout-field-group-row-padding-block/);
-  assert.match(styles, /--bf-color-surface-subtle/);
+  assert.match(styles, /--bf-color-surface-tertiary/);
   assert.match(styles, /--bf-color-border-subtle/);
 });

@@ -5,8 +5,8 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { MarkdownRenderer } from '@/component-library';
-import type { MarkdownTraceContext } from '@/component-library';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
+import { type MarkdownTraceContext } from '@/infrastructure/markdown';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';

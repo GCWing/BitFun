@@ -137,8 +137,6 @@
     "cli:exec": "cd src/apps/cli && cargo run -- exec",
     "cli:check": "cd src/apps/cli && cargo check",
     "cli:test": "cd src/apps/cli && cargo test",
-    "preview-components": "pnpm --dir src/web-ui exec vite --config vite.config.preview.ts",
-    "build-components": "pnpm --dir src/web-ui exec vite build --config vite.config.preview.ts",
     "design-system:dev": "pnpm --dir design-system run dev",
     "design-system:build": "pnpm --dir design-system run build",
     "design-system:test": "pnpm --dir design-system run test",

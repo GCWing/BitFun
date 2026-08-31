@@ -61,7 +61,7 @@ export function FlowChatToolGallery({
 
   return (
     <section className="flow-chat-tool-gallery">
-      <header className="component-library-section-heading">
+      <header className="component-catalog-section-heading">
         <div>
           <span className="page-kicker">{t("components.flowChat.toolsKicker")}</span>
           <h2>{t("components.flowChat.toolsTitle")}</h2>

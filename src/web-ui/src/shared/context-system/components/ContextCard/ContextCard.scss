@@ -1,14 +1,8 @@
- 
-
-@use '../../../../component-library/styles/tokens.scss' as *;
-
-
-
 .bitfun-context-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: $size-gap-1;
+  gap: var(--bf-space-1);
   
   
   background: linear-gradient(135deg,
@@ -17,18 +11,18 @@
     color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent) 100%
   );
   border: 1px solid var(--bf-color-border-default);
-  border-radius: $size-radius-base;
-  padding: $size-gap-3;
+  border-radius: var(--bf-radius-base);
+  padding: var(--bf-space-3);
   
-  backdrop-filter: $blur-base;
-  -webkit-backdrop-filter: $blur-base;
+  backdrop-filter: var(--bf-effect-blur-base);
+  -webkit-backdrop-filter: var(--bf-effect-blur-base);
   
   transition:
-    background-color $motion-base $easing-standard,
-    border-color $motion-base $easing-standard,
-    box-shadow $motion-base $easing-standard,
-    opacity $motion-base $easing-standard,
-    transform $motion-base $easing-standard;
+    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
+    transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
   overflow: hidden;
   
   
@@ -38,7 +32,7 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    border-radius: $size-radius-base 0 0 $size-radius-base;
+    border-radius: var(--bf-radius-base) 0 0 var(--bf-radius-base);
     opacity: 0.8;
   }
   
@@ -46,7 +40,7 @@
   &__body {
     display: flex;
     align-items: flex-start;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     flex: 1;
     min-width: 0; 
   }
@@ -55,7 +49,7 @@
   &__toolbar {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     margin-left: auto;
   }
   
@@ -77,7 +71,7 @@
     flex-shrink: 0;
     width: 32px;
     height: 32px;
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     background: var(--bf-color-action-quiet-hover);
     color: var(--bf-color-content-secondary);
     
@@ -107,7 +101,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
   
   &__title {
@@ -116,7 +110,7 @@
     color: var(--bf-color-content-primary);
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     
     
     overflow: hidden;
@@ -129,7 +123,7 @@
     color: var(--bf-color-content-muted);
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     
     overflow: hidden;
     text-overflow: ellipsis;
@@ -148,18 +142,18 @@
     font-weight: var(--bf-font-weight-medium);
     color: var(--bf-color-content-secondary);
     background: var(--bf-color-action-neutral-surface-hover);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     border: 1px solid var(--bf-color-border-subtle);
   }
   
   
   
   &__preview {
-    margin-top: $size-gap-2;
-    padding: $size-gap-2;
+    margin-top: var(--bf-space-2);
+    padding: var(--bf-space-2);
     background: var(--bf-color-surface-tertiary);
     border: 1px solid var(--bf-color-border-subtle);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     max-height: 100px;
     overflow: auto;
     
@@ -179,7 +173,7 @@
   &__actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
     margin-left: auto;
   }
   
@@ -193,13 +187,13 @@
     border: none;
     background: transparent;
     color: var(--bf-color-content-muted);
-    border-radius: $size-radius-sm;
+    border-radius: var(--bf-radius-sm);
     cursor: pointer;
     transition:
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard,
-      opacity $motion-fast $easing-standard,
-      transform $motion-fast $easing-standard;
+      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
     
     &:hover {
       background: var(--bf-color-action-neutral-surface-hover);
@@ -226,11 +220,11 @@
   &__warning {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
-    padding: $size-gap-2;
+    gap: var(--bf-space-1);
+    padding: var(--bf-space-2);
     font-size: var(--bf-font-size-xs);
-    border-radius: $size-radius-sm;
-    margin-top: $size-gap-2;
+    border-radius: var(--bf-radius-sm);
+    margin-top: var(--bf-space-2);
     
     svg {
       flex-shrink: 0;
@@ -251,7 +245,7 @@
   &__warnings {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-1;
+    gap: var(--bf-space-1);
   }
   
   &__warning {
@@ -277,7 +271,7 @@
   
   
   &--compact {
-    padding: $size-gap-2;
+    padding: var(--bf-space-2);
     
     .bitfun-context-card__icon {
       width: 24px;
@@ -327,7 +321,7 @@
   &__fallback {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--bf-space-2);
     width: 100%;
   }
   

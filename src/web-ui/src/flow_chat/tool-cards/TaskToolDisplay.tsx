@@ -20,8 +20,8 @@ import {
 } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
-import { CubeLoading } from '../../component-library';
-import { Markdown } from '@/component-library/components/Markdown/Markdown';
+import { Spinner } from '@bitfun/ui';
+import { MarkdownRenderer } from '@/infrastructure/markdown';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import {
   AmbientToolCard,
@@ -771,8 +771,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const renderHeader = () => (
     <div className="task-header-wrapper" data-bf-component="task-tool-display" data-bf-part="header">
       <ToolCardIconSlot
-        icon={renderToolIcon()}
-        iconClassName={`task-icon ${effectiveIsRunning ? 'is-running' : ''}`}
+        icon={<span className={`task-icon ${effectiveIsRunning ? 'is-running' : ''}`}>{renderToolIcon()}</span>}
         expandable={showHeaderExpandHint}
         affordanceKind="expand"
         isExpanded={displayIsExpanded}
@@ -869,7 +868,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               <div className="task-header-rail__visual" aria-hidden>
                 <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />{effectiveIsRunning ? (
                   <ToolCardStatusIcon
-                    icon={<CubeLoading size="small" />}
+                    icon={<Spinner size="sm" />}
                     className="task-status-icon--rail"
                   />
                 ) : null}
@@ -947,7 +946,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               className="thinking-content task-prompt-content expanded"
               onScroll={checkPromptScrollState}
             >
-              <Markdown
+              <MarkdownRenderer
                 content={taskInput!.prompt}
                 isStreaming={false}
                 className="thinking-markdown task-prompt-markdown"

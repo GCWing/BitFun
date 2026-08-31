@@ -10,7 +10,7 @@ import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
 import type { ChatInputRegistration } from '../../../flow_chat/components/chatInputRegistration';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
-import type { LineRange } from '@/component-library';
+import { type LineRange } from '@/shared/editor/LineRange';
 import path from 'path-browserify';
 import { createLogger } from '@/shared/utils/logger';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
@@ -173,17 +173,10 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
         }}
         onFileViewRequest={handleFileViewRequest}
         onTabOpen={handleTabOpen}
-        onSwitchToChatPanel={() => {}}
-        config={{
-          enableMarkdown: true,
-          autoScroll: true,
-          showTimestamps: false
-        }}
       />
       {showChatInput && (
         <ChatInput
           isSceneActive={isSceneActive}
-          onSendMessage={(_message: string) => {}}
           registration={chatInputRegistration}
         />
       )}

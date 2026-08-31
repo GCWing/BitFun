@@ -4,10 +4,9 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button, Icon, IconButton, KeyHint, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, KeyHint, ScrollArea, useDismissibleLayer } from '@bitfun/ui';
 import { Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { ThumbnailCard } from './ThumbnailCard';
 import { SearchFilter } from './SearchFilter';
 import { useCanvasStore } from '../stores';
@@ -44,10 +43,11 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   const togglePinTab = useCanvasStore(state => state.togglePinTab);
   const setSplitMode = useCanvasStore(state => state.setSplitMode);
   useDismissibleLayer({
+    dismissOnPointerOutside: false,
     enabled: isOpen,
+    layerRef: rootRef,
     scope: 'canvas',
     onDismiss: onClose,
-    id: 'canvas-mission-control',
   });
 
   // Organize tabs by group

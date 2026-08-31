@@ -28,14 +28,6 @@ vi.mock('@bitfun/ui', async (importOriginal) => ({
   ),
 }));
 
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: () => null,
-  ConfigPageMessage: () => null,
-  Select: ({ triggerTestId }: { triggerTestId?: string }) => (
-    <button type="button" data-testid={triggerTestId} />
-  ),
-}));
-
 vi.mock('@/infrastructure/appearance', () => ({
   SYSTEM_APPEARANCE_ID: 'system',
   getAppearancePackageValidationError: () => null,

@@ -13,8 +13,8 @@ describe('GalleryDetailModal presentation contract', () => {
     const appearance = readSource('./GalleryDetailModal.appearance.ts');
 
     expect(source).toContain("titlePlacement = 'header'");
-    expect(source).toContain('title={usesHeroTitle ? undefined : title}');
-    expect(source).toContain('ariaLabelledBy={usesHeroTitle ? heroTitleId : undefined}');
+    expect(source).toContain('aria-labelledby={usesHeroTitle ? heroTitleId : undefined}');
+    expect(source).toContain('<DialogTitle data-testid={titleTestId}>{title}</DialogTitle>');
     expect(source).toContain('data-bf-part="title"');
     expect(appearance).toContain("{ id: 'title' }");
   });
@@ -25,10 +25,10 @@ describe('GalleryDetailModal presentation contract', () => {
     const agentsScene = readSource('../../scenes/agents/AgentsScene.tsx');
     const agentCardStyles = readSource('../../scenes/agents/components/AgentCard.scss');
 
-    expect(source).toContain("size = 'medium'");
+    expect(source).toContain("size = 'md'");
     expect(source).toContain('size={size}');
     expect(agentsScene).toContain('titlePlacement="hero"');
-    expect(agentsScene).toContain('size="xxlarge"');
+    expect(agentsScene).toContain('size="2xl"');
     expect(agentsScene).toContain('stableHeight');
     expect(agentsScene).toContain('agent-card__configuration');
     expect(agentsScene).toContain('agent-card__config-nav');
@@ -38,7 +38,7 @@ describe('GalleryDetailModal presentation contract', () => {
     expect(agentsScene).toContain('agent-detail-basic-section');
     expect(agentsScene).toContain('agent-detail-capabilities-section');
     expect(styles).toContain('container-name: gallery-detail-modal;');
-    expect(styles).toContain('width: min(900px, 100%);');
+    expect(styles).not.toContain('width: min(900px, 100%);');
     expect(styles).toContain('height: min(540px, calc(100vh - 48px));');
     expect(styles).toContain('@container gallery-detail-modal (max-width: 360px)');
     expect(styles).not.toContain('@media (max-width: 720px)');

@@ -2,9 +2,6 @@
  * EditorStatusBar Styles
  * Modern design following VS Code style
  */
-
-@use '@/component-library/styles/tokens' as *;
-
 // Variables
 $_statusbar-height: 22px;
 $_statusbar-padding: 0 12px;
@@ -25,7 +22,7 @@ $_section-gap: 12px;
   color: var(--bf-color-content-muted);
   user-select: none;
   flex-shrink: 0;
-  
+
   // Left/Right Sections
   &__left,
   &__right {
@@ -46,15 +43,15 @@ $_section-gap: 12px;
       background-color 140ms ease,
       color 140ms ease;
     white-space: nowrap;
-    
+
     &--clickable {
       cursor: pointer;
-      
+
       &:hover {
         background: var(--bf-color-surface-subtle);
         color: var(--bf-color-content-secondary);
       }
-      
+
       &:active {
         background: var(--bf-color-action-neutral-surface-hover);
       }
@@ -96,11 +93,11 @@ $_section-gap: 12px;
     &__selection {
       display: none;
     }
-    
+
     &__item {
       padding: 2px 4px;
     }
-    
+
     &__separator {
       margin: 0 4px;
     }
@@ -111,12 +108,12 @@ $_section-gap: 12px;
 @media (prefers-contrast: high) {
   .editor-status-bar {
     border-top-width: 2px;
-    
+
     &__indicator--modified {
       fill: var(--bf-color-status-warning-content);
       color: var(--bf-color-status-warning-content);
     }
-    
+
     &__indicator--saved {
       color: var(--bf-color-status-success-content);
     }

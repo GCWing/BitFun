@@ -2,7 +2,7 @@ import { Button } from '@bitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Copy, Eye, Play, RotateCcw } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import type { ReviewActionPhase } from '../../store/deepReviewActionBarStore';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 

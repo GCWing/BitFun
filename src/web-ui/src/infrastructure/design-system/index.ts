@@ -1,6 +1,2 @@
-export { DesignSystemThemeBridge } from './DesignSystemThemeBridge';
-export {
-  LocalizedCombobox,
-  type LocalizedComboboxProps,
-} from './LocalizedCombobox';
+export { BitFunDesignSystemProvider } from './BitFunDesignSystemProvider';
 export * from './typographyRuntime';

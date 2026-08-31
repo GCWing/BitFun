@@ -10,7 +10,6 @@ export interface ConfirmDialogOptions {
   confirmText?: ReactNode;
   message?: ReactNode;
   preview?: ReactNode;
-  previewMaxHeight?: number | string;
   secondaryText?: ReactNode;
   showCancel?: boolean;
   title: ReactNode;

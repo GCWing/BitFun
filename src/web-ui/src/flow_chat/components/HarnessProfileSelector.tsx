@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, type IconName } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip, type IconName } from '@bitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
@@ -327,6 +326,7 @@ export const HarnessProfileSelector: React.FC<HarnessProfileSelectorProps> = ({
       data-bf-component="harness-selector"
       data-bf-part="root"
       data-bf-presentation={presentation}
+      data-bf-profile={knownSelectedProfile}
     >
       <Tooltip content={triggerTooltip}>
         {presentation === 'menu-item' ? (

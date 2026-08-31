@@ -30,7 +30,7 @@ import {
   SquareCheck,
 } from 'lucide-react';
 import { Menu, MenuItem, MenuSection, MenuSeparator } from '@bitfun/ui';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { BranchQuickSwitch } from '@/tools/git/components/BranchQuickSwitch';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';

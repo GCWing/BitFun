@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, IconButton, Tooltip } from '@bitfun/ui';
 import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { IconButton } from '../../component-library';
 import type { FlowToolItem, ToolRejectOptions } from '../types/flow-chat';
 import type { AcpPermissionOption } from '@/infrastructure/api/service-api/ACPClientAPI';
 import './AcpPermissionActions.scss';
@@ -55,10 +54,6 @@ function optionIcon(kind: AcpPermissionOption['kind']): React.ReactNode {
     default:
       return <X size={12} />;
   }
-}
-
-function buttonVariant(kind: AcpPermissionOption['kind']): 'success' | 'danger' {
-  return isApprovalKind(kind) ? 'success' : 'danger';
 }
 
 export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
@@ -117,21 +112,21 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
         }
 
         return (
-          <IconButton
-            key={option.optionId}
-            data-bf-component="acp-permission-actions"
-            data-bf-part="action"
-            data-bf-decision={approve ? 'allow' : 'reject'}
-            className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind}`}
-            variant={buttonVariant(option.kind)}
-            size="xs"
-            onClick={handleClick}
-            disabled={disabled}
-            tooltip={tooltip}
-            aria-label={tooltip}
-          >
-            {optionIcon(option.kind)}
-          </IconButton>
+          <Tooltip key={option.optionId} content={tooltip}>
+            <IconButton
+              data-bf-component="acp-permission-actions"
+              data-bf-part="action"
+              data-bf-decision={approve ? 'allow' : 'reject'}
+              className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind}`}
+              variant={approve ? 'primary' : 'fill'}
+              tone={approve ? 'neutral' : 'danger'}
+              size="xs"
+              onClick={handleClick}
+              disabled={disabled}
+              icon={optionIcon(option.kind)}
+              aria-label={tooltip}
+            />
+          </Tooltip>
         );
       })}
     </span>

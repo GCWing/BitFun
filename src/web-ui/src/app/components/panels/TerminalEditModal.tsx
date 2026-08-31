@@ -3,7 +3,17 @@
  * Supports editing terminal name and startup command
  */
 
-import { Button, Field, Input, Modal } from '@bitfun/ui';
+import {
+  Button,
+  Field,
+  Input,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -82,7 +92,18 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
   const canSave = name.trim().length > 0;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('dialog.editTerminal.title')} size="small">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      size="sm"
+    >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('dialog.editTerminal.title')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody inset="none">
       <div data-bf-component="terminal-edit-modal" data-bf-part="content" className="terminal-edit-dialog__content">
         <Field label={t('dialog.editTerminal.nameLabel')}>
           <Input
@@ -131,7 +152,8 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
           {t('dialog.editTerminal.save')}
         </Button>
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

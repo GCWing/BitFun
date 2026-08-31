@@ -1,4 +1,18 @@
-import { Button, Icon, IconButton, Input, Modal, ScrollArea, Switch, Tooltip } from '@bitfun/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  ScrollArea,
+  Switch,
+  Tooltip,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 
@@ -264,17 +278,24 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        closeEditor();
-        onClose();
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          closeEditor();
+          onClose();
+        }
       }}
-      title={t('agentsOverview.skillGroupPicker.manageTitle')}
-      size="large"
-      contentPadding="lg"
-      testId="skill-group-manager"
+      size="lg"
+      data-testid="skill-group-manager"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('agentsOverview.skillGroupPicker.manageTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div className="skill-group-manager" data-bf-component="skill-group-picker" data-bf-part="manager">
         {isEditing ? (
           <div className="skill-group-manager__editor" data-bf-component="skill-group-picker" data-bf-part="managerEditor">
@@ -418,7 +439,8 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
           </>
         )}
       </div>
-    </Modal>
+          </DialogBody>
+    </Dialog>
   );
 };
 

@@ -2,10 +2,9 @@
  * MiniAppToolDisplay — InitMiniApp result on the prominent FlowChat framework.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button, Spinner } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { AppWindow, ExternalLink } from 'lucide-react';
-import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardHeader } from '@bitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -80,15 +79,14 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
 
   const renderStatusIcon = () => {
     if (isLoading) {
-      return <CubeLoading size="small" />;
+      return <Spinner size="sm" />;
     }
     return null;
   };
 
   const renderHeader = () => (
     <ProminentToolCardHeader
-      icon={<AppWindow size={16} />}
-      iconClassName="miniapp-icon"
+      icon={<span className="miniapp-icon"><AppWindow size={16} /></span>}
       action={`${t('toolCards.initMiniApp.title')}:`}
       content={
         <span data-bf-component="mini-app-tool-display" data-bf-part="info" className="miniapp-tool-info">

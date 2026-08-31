@@ -48,11 +48,12 @@ catalog asset.
 
 ## Advanced selection and menus
 
-Use native `Select` for simple options. `Combobox` adds search, grouped options,
-multiple selection with removable tags, custom values and async loading states.
-`value` is authoritative when controlled; option discovery remains host-owned.
-Wrap consumers in `ComboboxProvider` to supply translated labels and the host's
-overlay container. Explicit `portalContainer` overrides that default.
+Use native `Select` for simple options. `Combobox` adds searchable single
+selection, grouped options, explicit custom-value creation and async loading
+states. `MultiSelect` owns multiple selection, removable tags and select-all.
+Controlled values are authoritative; option discovery remains host-owned.
+Wrap the product once in `DesignSystemProvider` to supply translated messages,
+the portal host, theme facts and the shared overlay layer stack.
 The Web UI's legacy Select implementation is retired. Like retired Button and
 Switch overrides, legacy `components.select` Appearance rules are ignored at
 the existing read-only migration boundary; original packages are not rewritten.
@@ -66,11 +67,11 @@ restores focus before dispatching `onSelect`; the host owns asynchronous work
 and error handling. The popup flips and clamps to the viewport, keeps keyboard
 navigation in the active menu, and supports safe pointer travel to either side.
 
-Portals default to the nearest ThemeRoot. Supply `portalContainer` for a
-host-managed overlay layer; use `portalled={false}` only inside an existing
-overlay host. Stable `parts` wrappers preserve host data hooks; they must forward
-all props and refs and retain public component ownership. `useSubmenuIntent` is available
-for staged migration of other product popovers using the same pointer corridor.
+Portals resolve through `DesignSystemProvider.portalHost`, then fall back to the
+nearest design-system root. Stable `parts` wrappers preserve host data hooks;
+they must forward all props and refs and retain public component ownership.
+`useSubmenuIntent` is available for product popovers that need the same pointer
+corridor behavior.
 
 ## FlowChat tool cards
 

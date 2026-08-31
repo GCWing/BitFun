@@ -36,7 +36,7 @@ Self-Hosted entries must open `RelayDeployWizard`, not an external README.
 ## Local rules
 
 - Do not call Tauri APIs directly from UI components; go through the adapter / infrastructure layer
-- Reuse existing theme, i18n, component-library, and Zustand stores before adding new frontend primitives
+- Reuse `@bitfun/ui`, design tokens, theme, i18n, and Zustand stores before adding new frontend primitives
 - Theme and color-token changes must follow
   `docs/architecture/theme-token-optimization.md`: failing audits should be
   fixed by reusing tokens, merging redundant values, or adding a scoped owner

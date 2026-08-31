@@ -12,16 +12,14 @@ import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ChatInputApprovalBand} from '../ChatInputApprovalBand';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
-import type {DialogTurn, FlowChatConfig, FlowChatState, Session} from '../../types/flow-chat';
+import type {DialogTurn, FlowChatState, Session} from '../../types/flow-chat';
 import {sessionToVirtualItems} from '../../store/modernFlowChatStore';
 import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../events/flowchatNavigation';
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
-import { type LineRange, Tooltip } from '@/component-library';
-import {
-  PRESENCE_BOUNDARY_MIN_EXIT_MS,
-  PresenceBoundary,
-} from '@/component-library/components/PresenceBoundary';
+import { type LineRange } from '@/shared/editor/LineRange';
+import { Tooltip } from '@bitfun/ui';
+import { DEFAULT_RETAINED_MOUNT_MS, RetainedMountBoundary } from '@/shared/presence';
 import {resolveSessionRelationship} from '../../utils/sessionMetadata';
 import {agentAPI} from '@/infrastructure/api';
 import {globalEventBus} from '@/infrastructure/event-bus';
@@ -95,14 +93,6 @@ export interface BtwSessionPanelProps {
   viewKind?: BtwSessionViewKind;
   displayTitle?: string;
 }
-
-const PANEL_CONFIG: FlowChatConfig = {
-  enableMarkdown: true,
-  autoScroll: true,
-  showTimestamps: false,
-  maxHistoryRounds: 50,
-  enableVirtualScroll: false,
-};
 
 const resolveSessionTitle = (session?: Session | null, fallback = 'Side thread') =>
   session?.title?.trim() || fallback;
@@ -379,7 +369,6 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     activeSessionOverride: childSession ?? null,
     allowUserMessageEdit: false,
     allowTranscriptExport: viewKind !== 'review-check',
-    config: PANEL_CONFIG,
     onExploreGroupToggle,
     onExpandGroup,
     onExpandAllInTurn,
@@ -451,7 +440,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       setRetainedReviewActionBarOwnerId((currentOwnerId) =>
         currentOwnerId === ownerId ? null : currentOwnerId,
       );
-    }, PRESENCE_BOUNDARY_MIN_EXIT_MS);
+    }, DEFAULT_RETAINED_MOUNT_MS);
     return () => window.clearTimeout(timer);
   }, [childSessionId, retainedReviewActionBarOwnerId, showReviewActionBar]);
   const retainsReviewActionBarLayout = Boolean(
@@ -1192,7 +1181,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             </button>
         </div>
 
-        <PresenceBoundary active={showReviewActionBar}>
+        <RetainedMountBoundary present={showReviewActionBar}>
           <div
             ref={actionBarRef}
             className="btw-session-panel__action-bar-wrapper"
@@ -1204,7 +1193,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           >
             <ReviewActionBar childSessionId={childSessionId} />
           </div>
-        </PresenceBoundary>
+        </RetainedMountBoundary>
       </div>
       </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>

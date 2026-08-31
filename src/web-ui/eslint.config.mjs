@@ -16,8 +16,6 @@ export default tseslint.config(
       'src/**/*.spec.ts',
       'src/**/*.spec.tsx',
       'src/**/*.example.tsx',
-      'src/component-library/components/registry.tsx',
-      'src/component-library/preview/**',
     ],
   },
   {

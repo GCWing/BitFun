@@ -14,6 +14,8 @@ test("IconButton requires an accessible label and keeps its icon decorative", ()
   );
 
   assert.match(markup, /data-bf-component="icon-button"/);
+  assert.match(markup, /data-bf-part="progress"/);
+  assert.match(markup, /data-bf-part="icon"/);
   assert.match(markup, /aria-label="Show list"/);
   assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, /data-icon="list"/);

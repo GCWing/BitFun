@@ -2,9 +2,6 @@
  * Session menu shared by the floating chat surfaces.
  * Moved here from ToolbarMode.scss so both surfaces render the same menu.
  */
-
-@use '../../../component-library/styles/tokens' as tokens;
-
 $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
 .bitfun-session-menu {
@@ -57,7 +54,7 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   --bf-overlay-menu-inline-size: min(220px, calc(100vw - 16px));
   --bf-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
   position: fixed;
-  z-index: tokens.$z-popover;
+  z-index: var(--bf-layer-popover);
   animation: session-menu-appear 0.2s $session-menu-timing;
   transform-origin: top left;
 
