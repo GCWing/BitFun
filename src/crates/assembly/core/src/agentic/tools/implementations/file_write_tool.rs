@@ -1,3 +1,6 @@
+use super::plan_artifact_diagnostics::{
+    diagnose_plan_artifact, is_plan_artifact_path, PlanArtifactIssue,
+};
 use crate::agentic::tools::file_permissions::file_permission_intents_allowing_managed_plan_edits;
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
@@ -240,6 +243,7 @@ impl FileWriteTool {
         missing_path_fallback: bool,
         path_format_warning: Option<&str>,
         ignored_parameter_names: &[String],
+        plan_artifact_issues: Option<&[PlanArtifactIssue]>,
     ) -> ToolResult {
         let mut assistant_message = if missing_path_fallback {
             format!(
@@ -264,19 +268,42 @@ impl FileWriteTool {
                 formatted_names
             ));
         }
+        if let Some(issues) = plan_artifact_issues.filter(|issues| !issues.is_empty()) {
+            assistant_message.push_str("\nThe `.plan.md` artifact does not match the plan format:");
+            for issue in issues {
+                assistant_message.push_str("\n- ");
+                assistant_message.push_str(&issue.message);
+            }
+            assistant_message.push_str(
+                "\nUse Edit on the written file to fix these issues before finishing.",
+            );
+        }
+        let mut data = json!({
+            "file_path": logical_path,
+            "bytes_written": outcome.bytes_written,
+            "lines_written": outcome.lines_written,
+            "success": true,
+            "status": outcome.status.as_str(),
+            "missing_path_fallback": missing_path_fallback,
+            "rename_required": missing_path_fallback,
+            "path_format_corrected": path_format_warning.is_some(),
+            "path_format_warning": path_format_warning,
+            "message": assistant_message,
+        });
+        if let Some(issues) = plan_artifact_issues {
+            data["plan_format"] = json!({
+                "valid": issues.is_empty(),
+                "issues": issues
+                    .iter()
+                    .map(|issue| json!({
+                        "code": issue.code,
+                        "message": issue.message.as_str(),
+                    }))
+                    .collect::<Vec<_>>(),
+            });
+        }
         ToolResult::Result {
-            data: json!({
-                "file_path": logical_path,
-                "bytes_written": outcome.bytes_written,
-                "lines_written": outcome.lines_written,
-                "success": true,
-                "status": outcome.status.as_str(),
-                "missing_path_fallback": missing_path_fallback,
-                "rename_required": missing_path_fallback,
-                "path_format_corrected": path_format_warning.is_some(),
-                "path_format_warning": path_format_warning,
-                "message": assistant_message,
-            }),
+            data,
             result_for_assistant: Some(assistant_message),
             image_attachments: None,
         }
@@ -543,6 +570,8 @@ impl Tool for FileWriteTool {
 
         let resolved = context.resolve_tool_path(&file_path)?;
         let path_format_warning = Self::path_format_correction_warning(&resolved);
+        let plan_artifact_issues =
+            is_plan_artifact_path(&resolved.logical_path).then(|| diagnose_plan_artifact(&content));
         context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
         context
             .record_light_checkpoint(
@@ -562,6 +591,7 @@ impl Tool for FileWriteTool {
                 missing_path_fallback,
                 path_format_warning.as_deref(),
                 &ignored_parameter_names,
+                plan_artifact_issues.as_deref(),
             );
             return Ok(vec![result]);
         }
@@ -598,6 +628,7 @@ impl Tool for FileWriteTool {
                 missing_path_fallback,
                 path_format_warning.as_deref(),
                 &ignored_parameter_names,
+                plan_artifact_issues.as_deref(),
             );
             return Ok(vec![result]);
         }
@@ -634,6 +665,7 @@ impl Tool for FileWriteTool {
             missing_path_fallback,
             path_format_warning.as_deref(),
             &ignored_parameter_names,
+            plan_artifact_issues.as_deref(),
         );
 
         Ok(vec![result])
@@ -642,7 +674,7 @@ impl Tool for FileWriteTool {
 
 #[cfg(test)]
 mod tests {
-    use super::FileWriteTool;
+    use super::{diagnose_plan_artifact, FileWriteTool};
     use crate::agentic::tools::file_tool_guidance::{
         file_tool_guidance_message, is_file_tool_guidance_message, FILE_TOOL_GUIDANCE_PREFIX,
     };
@@ -893,6 +925,39 @@ mod tests {
         assert!(validation.message.is_none());
     }
 
+    #[test]
+    fn write_success_result_reports_non_blocking_plan_issues() {
+        let logical_path = ".bitfun/plans/example.plan.md";
+        let content = "---\nname: Example\noverview: Overview\ntodos: []\n---\n";
+        let issues = diagnose_plan_artifact(content);
+
+        let result = FileWriteTool::write_success_result(
+            logical_path,
+            super::write_file_success_outcome(logical_path, false, content),
+            false,
+            None,
+            &[],
+            Some(&issues),
+        );
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = result
+        else {
+            panic!("expected result");
+        };
+
+        assert_eq!(data["success"], true);
+        assert_eq!(data["plan_format"]["valid"], false);
+        assert_eq!(
+            data["plan_format"]["issues"][0]["code"],
+            "missing_markdown_body"
+        );
+        let assistant_message = result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant_message.contains("does not match the plan format"));
+    }
+
     #[cfg(windows)]
     #[tokio::test]
     async fn write_result_reports_normalized_windows_drive_path() {
@@ -927,6 +992,7 @@ mod tests {
             false,
             Some(&warning),
             &[],
+            None,
         );
         let ToolResult::Result {
             data,

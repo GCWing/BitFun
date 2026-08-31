@@ -28,7 +28,6 @@ interface PlanTodo {
   id: string;
   content: string;
   status?: string;
-  dependencies?: string[];
 }
 
 interface PlanData {
@@ -718,43 +717,42 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
   // Build button click handler
   const handleBuild = useCallback(async () => {
-    if (!filePath || buildStatus !== 'build' || !planData) return;
+    if (!filePath || buildStatus !== 'build' || !planData || hasUnsavedChanges) return;
 
     try {
+      const sessionId = flowChatManager.getCurrentSession()?.sessionId;
+      if (!sessionId) {
+        throw new Error('No active session');
+      }
       // Register build in shared service (notifies all PlanDisplay and PlanViewer subscribers).
       const todoIds = planData.todos.map(t => t.id);
-      planBuildStateService.startBuild({
+      const turnId = planBuildStateService.startBuild({
+        sessionId,
         planFilePath: filePath,
         todoIds,
         workspacePath: effectiveWorkspacePath,
         remoteConnectionId: effectiveRemoteConnectionId,
       });
+      if (!turnId) return;
 
-      // Process todos, keep only id, content, and status
-      const simpleTodos = planData.todos.map(t => ({
-        id: t.id,
-        content: t.content,
-        status: t.status,
-      }));
+      const message = `Implement the plan at \`${filePath}\`.
 
-      const message = `Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself. To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
-
-<attached_file path="${filePath}">
-<plan>
-${planContent}
-</plan>
-<todos>
-${JSON.stringify(simpleTodos, null, 2)}
-</todos>
-</attached_file>`;
+Read the plan file before making changes and treat it as the source of truth. Do not edit the plan file directly. Track progress with TodoWrite using the existing todo IDs from the plan frontmatter; do not rename or invent IDs. Start with the first pending todo and continue until all todos are completed.`;
 
       const displayMessage = t('editor.planViewer.buildPlanTitle', { name: planData.name });
-      await flowChatManager.sendMessage(message, undefined, displayMessage, 'agentic', 'agentic');
+      await flowChatManager.sendMessage(
+        message,
+        sessionId,
+        displayMessage,
+        undefined,
+        undefined,
+        { turnId },
+      );
     } catch (err) {
       log.error('Build failed', err);
       planBuildStateService.cancelBuild(planFileRef);
     }
-  }, [filePath, planFileRef, buildStatus, effectiveRemoteConnectionId, effectiveWorkspacePath, planData, planContent, t]);
+  }, [filePath, planFileRef, buildStatus, effectiveRemoteConnectionId, effectiveWorkspacePath, hasUnsavedChanges, planData, t]);
 
   // Get todo status icon
   function getTodoIcon(status?: string) {
@@ -841,7 +839,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
                       : undefined
                 }
                 onClick={handleBuild}
-                disabled={buildStatus !== 'build'}
+                disabled={buildStatus !== 'build' || hasUnsavedChanges}
               >
                 {buildStatus === 'building'
                   ? t('editor.planViewer.building')

@@ -1406,7 +1406,7 @@ console.log(user.greet());`);
             <h3 style={{ color: 'var(--bf-color-content-on-dark)', marginTop: '16px', marginBottom: '8px' }}>创建计划 - 已完成</h3>
             <FileOperationToolCard
               toolItem={createMockToolItem('Write', {
-                payload: '+++ .bitfun/plans/refactor-module.plan.md\n---\nname: Refactor Module\noverview: Refactor the module safely.\ntodos:\n  - id: update-api\n    content: Update the API\n    status: in_progress\n    dependencies: []\n  - id: add-tests\n    content: Add focused tests\n    status: pending\n    dependencies:\n      - update-api\n---\n\n# Refactor Module\n\nImplement the refactor in focused steps.',
+                payload: '+++ .bitfun/plans/refactor-module.plan.md\n---\nname: Refactor Module\noverview: Refactor the module safely.\ntodos:\n  - id: update-api\n    content: Update the API\n    status: in_progress\n  - id: add-tests\n    content: Add focused tests\n    status: pending\n---\n\n# Refactor Module\n\nImplement the refactor in focused steps.',
               }, {
                 file_path: '.bitfun/plans/refactor-module.plan.md',
                 success: true,

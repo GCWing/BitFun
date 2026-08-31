@@ -363,6 +363,10 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     if (!planFilePath || buildStatus !== 'build') return;
     
     try {
+      const sessionId = flowChatManager.getCurrentSession()?.sessionId;
+      if (!sessionId) {
+        throw new Error('No active session');
+      }
       const content = await workspaceAPI.readFileContent(
         planFilePath,
         undefined,
@@ -383,33 +387,28 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
       // Register build in shared service (notifies all subscribers including PlanViewer).
       const todoIds = latestPlanData.todos.map(t => t.id);
-      planBuildStateService.startBuild({
+      const turnId = planBuildStateService.startBuild({
+        sessionId,
         planFilePath,
         todoIds,
         workspacePath: effectiveWorkspacePath,
         remoteConnectionId: effectiveRemoteConnectionId,
       });
+      if (!turnId) return;
 
-      // Send message using the latest data.
-      const simpleTodos = latestPlanData.todos.map(t => ({ 
-        id: t.id, 
-        content: t.content,
-        status: t.status
-      }));
+      const message = `Implement the plan at \`${latestPlanData.planFilePath}\`.
 
-      const message = `Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself. To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
-
-<attached_file path="${latestPlanData.planFilePath}">
-<plan>
-${parsed.planContent}
-</plan>
-<todos>
-${JSON.stringify(simpleTodos, null, 2)}
-</todos>
-</attached_file>`;
+Read the plan file before making changes and treat it as the source of truth. Do not edit the plan file directly. Track progress with TodoWrite using the existing todo IDs from the plan frontmatter; do not rename or invent IDs. Start with the first pending todo and continue until all todos are completed.`;
 
       const displayMessage = `Build Plan: ${latestPlanData.name}`;
-      await flowChatManager.sendMessage(message, undefined, displayMessage, 'agentic', 'agentic');
+      await flowChatManager.sendMessage(
+        message,
+        sessionId,
+        displayMessage,
+        undefined,
+        undefined,
+        { turnId },
+      );
     } catch (error) {
       log.error('Build failed', { cacheKey: effectiveCacheKey, planFilePath, error });
       planBuildStateService.cancelBuild(planFileRef);

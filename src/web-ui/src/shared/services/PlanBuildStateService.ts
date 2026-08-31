@@ -7,6 +7,7 @@
  */
 
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 import {
   parsePlanMarkdown,
@@ -21,7 +22,7 @@ function yamlFrontmatter(content: string): string {
 }
 
 export interface PlanBuildStateEvent {
-  type: 'build-started' | 'build-completed' | 'build-cancelled' | 'todos-updated';
+  type: 'build-started' | 'build-completed' | 'build-cancelled' | 'build-stopped' | 'todos-updated';
   /** Whether the plan is still building after this event. */
   isBuilding: boolean;
   /** Updated todo list (present for todos-updated and build-completed). */
@@ -35,6 +36,8 @@ export interface PlanBuildStateEvent {
 export type BuildStateCallback = (event: PlanBuildStateEvent) => void;
 
 interface BuildEntry {
+  sessionId: string;
+  turnId: string;
   todoIds: Set<string>;
   /** Original file path (preserves platform separators for API calls). */
   planFilePath: string;
@@ -50,6 +53,7 @@ export interface PlanFileRef {
 }
 
 export interface StartPlanBuildRequest extends PlanFileRef {
+  sessionId: string;
   todoIds: string[];
 }
 
@@ -80,17 +84,30 @@ class PlanBuildStateService {
 
   // ==================== Public API ====================
 
-  /** Mark a plan as building and notify all subscribers. */
-  startBuild(request: StartPlanBuildRequest): void {
+  /** Mark a plan as building and return the turn ID that must own the build. */
+  startBuild(request: StartPlanBuildRequest): string | null {
+    const todoIds = request.todoIds.filter(id => id.trim().length > 0);
+    if (todoIds.length === 0) {
+      log.warn('Ignored plan build without valid todo IDs', {
+        planFilePath: request.planFilePath,
+        sessionId: request.sessionId,
+      });
+      return null;
+    }
+
+    const turnId = `dialog_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     const key = this.targetKey(request);
     this.buildingPlans.set(key, {
-      todoIds: new Set(request.todoIds),
+      sessionId: request.sessionId,
+      turnId,
+      todoIds: new Set(todoIds),
       planFilePath: request.planFilePath,
       workspacePath: request.workspacePath ?? '',
       remoteConnectionId: request.remoteConnectionId,
       startedAt: Date.now(),
     });
     this.notify(key, { type: 'build-started', isBuilding: true });
+    return turnId;
   }
 
   /** Check whether a plan is currently building. */
@@ -168,6 +185,10 @@ class PlanBuildStateService {
   private setupGlobalListeners(): void {
     window.addEventListener('bitfun:todowrite-update', this.handleTodoWriteUpdate);
     window.addEventListener('bitfun:dialog-cancelled', this.handleDialogCancelled);
+    agentAPI.onDialogTurnCompleted(this.handleDialogTurnSettled);
+    agentAPI.onDialogTurnFailed(this.handleDialogTurnSettled);
+    agentAPI.onDialogTurnCancelled(this.handleDialogTurnSettled);
+    agentAPI.onDialogTurnInterrupted(this.handleDialogTurnSettled);
   }
 
   /**
@@ -181,11 +202,12 @@ class PlanBuildStateService {
       todos: Array<{ id: string; content: string; status: string }>;
       merge: boolean;
     }>;
-    const { todos: incomingTodos } = customEvent.detail;
+    const { sessionId, todos: incomingTodos } = customEvent.detail;
 
-    if (!incomingTodos.length) return;
+    if (!sessionId || !incomingTodos.length) return;
 
     for (const [key, entry] of this.buildingPlans.entries()) {
+      if (entry.sessionId !== sessionId || entry.turnId !== customEvent.detail.turnId) continue;
       const matchedTodos = incomingTodos.filter(t => entry.todoIds.has(t.id));
       if (matchedTodos.length === 0) continue;
 
@@ -236,14 +258,37 @@ class PlanBuildStateService {
     }
   };
 
-  /** Cancel all active builds when a dialog is cancelled. */
-  private handleDialogCancelled = (): void => {
-    if (this.buildingPlans.size === 0) return;
+  /** Stop a build when the exact turn that owns it reaches any terminal state. */
+  private handleDialogTurnSettled = (event: {
+    sessionId?: string;
+    session_id?: string;
+    turnId?: string;
+    turn_id?: string;
+  }): void => {
+    const sessionId = event.sessionId ?? event.session_id;
+    const turnId = event.turnId ?? event.turn_id;
+    if (!sessionId || !turnId) return;
 
-    for (const key of Array.from(this.buildingPlans.keys())) {
-      this.notify(key, { type: 'build-cancelled', isBuilding: false });
+    for (const [key, entry] of this.buildingPlans.entries()) {
+      if (entry.sessionId !== sessionId || entry.turnId !== turnId) continue;
+      this.notify(key, { type: 'build-stopped', isBuilding: false });
+      this.buildingPlans.delete(key);
     }
-    this.buildingPlans.clear();
+  };
+
+  /** Cancel active builds owned by the cancelled session. */
+  private handleDialogCancelled = (event: Event): void => {
+    const sessionId = (event as CustomEvent<{ sessionId?: unknown }>).detail?.sessionId;
+    if (typeof sessionId !== 'string' || !sessionId) {
+      log.warn('Ignored dialog cancellation without a session ID');
+      return;
+    }
+
+    for (const [key, entry] of this.buildingPlans.entries()) {
+      if (entry.sessionId !== sessionId) continue;
+      this.notify(key, { type: 'build-cancelled', isBuilding: false });
+      this.buildingPlans.delete(key);
+    }
   };
 }
 
