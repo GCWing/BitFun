@@ -1,6 +1,6 @@
 import { Button, Icon, Modal, ScrollArea } from '@bitfun/ui';
 import React, { useMemo, useRef } from 'react';
-import { Bot, Cpu, Database, FolderKanban, Play, ShieldCheck, Square, Trash2 } from 'lucide-react';
+import { Bot, Cpu, Database, FolderKanban, Play, ShieldCheck, Square } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -295,7 +295,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
               className="miniapp-detail-modal__delete"
               onClick={() => onDelete(displayedApp.id)}
               data-testid="miniapp-detail-delete"
-              leadingIcon={<Trash2 size={18} />}
+              leadingIcon={<Icon name="delete" size="lg" style={{ width: 18, height: 18 }} />}
             >
 
               {t('detail.delete')}

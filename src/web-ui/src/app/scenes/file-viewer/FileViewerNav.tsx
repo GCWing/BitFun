@@ -8,7 +8,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Icon, IconButton, NavigationPanel, Tooltip } from '@bitfun/ui';
-import { List, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
+import { List, FilePlus, FolderPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
@@ -68,7 +68,7 @@ const FileViewerNav: React.FC = () => {
                   <IconButton
                     size="sm"
                     aria-label={tTools('fileTree.refresh')}
-                    icon={<RefreshCw />}
+                    icon={<Icon name="refresh" size="lg" />}
                     onClick={explorerToolbar.onRefresh}
                   />
                 </Tooltip>

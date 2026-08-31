@@ -1,6 +1,6 @@
 import { Button, Icon, Input, Select, type SelectOption } from '@bitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronUp, CircleStop, FileClock, Globe, HardDrive, Lock, PanelsTopLeft, RefreshCw, Rocket, Save, Trash2, Users, type LucideIcon } from 'lucide-react';
+import { CircleStop, FileClock, Globe, HardDrive, Lock, PanelsTopLeft, Rocket, Save, Users, type LucideIcon } from 'lucide-react';
 import { PresenceBoundary } from '@/component-library';
 import { confirmDanger, confirmWarning } from '@/infrastructure/confirm-dialog';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
@@ -673,7 +673,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
       size="sm"
       onClick={() => void loadPages()}
       disabled={loading || Object.keys(pendingBySlug).length > 0}
-      leadingIcon={<RefreshCw size={14} className={loading ? 'pages-scene__spinning' : undefined} />}
+      leadingIcon={<Icon name="refresh" size="sm" className={loading ? 'pages-scene__spinning' : undefined} />}
     >
 
       {t('actions.refresh')}
@@ -863,7 +863,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     {versions.length > 0 && (
                       <span className="pages-scene__count-badge">{formatNumber(versions.length)}</span>
                     )}
-                    {expanded ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
+                    {expanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="xs" />}
                   </Button>
                   <span className="pages-scene__actions-spacer" />
                   <Button
@@ -876,7 +876,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                     leadingIcon={<Icon name="settings" size="xs" />}
                   >
                      {t('actions.manage')}
-                    {managing ? <ChevronUp size={13} /> : <Icon name="chevron-down" size="xs" />}
+                    {managing ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="xs" />}
                   </Button>
                 </footer>
 
@@ -975,7 +975,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                         onClick={() => void deletePage(page, pageOwnerEpoch)}
                         disabled={pageBusy}
                         loading={pendingAction === `delete-page:${page.slug}`}
-                        leadingIcon={<Trash2 size={13} />}
+                        leadingIcon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                       >
                          {t('actions.deletePage')}
                       </Button>
@@ -999,7 +999,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                         size="sm"
                         disabled={pageBusy}
                         onClick={() => void loadVersions(page, pageOwnerEpoch)}
-                        leadingIcon={<RefreshCw size={12} />}
+                        leadingIcon={<Icon name="refresh" size="xs" />}
                       >
                          {t('actions.refresh')}
                       </Button>
@@ -1069,7 +1069,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
                                   loading={pendingAction === `delete-version:${page.slug}:${version.version_id}`}
                                   aria-label={t('actions.deleteVersionAria', { version: version.version_id })}
                                 >
-                                  <Trash2 size={13} />
+                                  <Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />
                                 </Button>
                               )}
                             </div>

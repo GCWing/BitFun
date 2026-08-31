@@ -2,7 +2,7 @@
 
 import { Button, Checkbox, Field, Icon, IconButton, Input, Select, TabGroup, ScrollArea } from '@bitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
-import { Mail, Key, Save, RefreshCw } from 'lucide-react';
+import { Mail, Key, Save } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import './GitSettingsView.scss';
 
@@ -332,7 +332,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
     return (
       <div className={`bitfun-git-settings-view bitfun-git-settings-view--loading ${className}`} data-bf-component="git-settings-view" data-bf-part="root" data-bf-state="loading">
         <div data-bf-component="git-settings-view" data-bf-part="loading" className="bitfun-git-settings-view__empty-state">
-          <RefreshCw size={24} className="bitfun-git-settings-view__loading-spinner" />
+          <Icon name="refresh" size="lg" className="bitfun-git-settings-view__loading-spinner" />
           <p>{t('settingsView.loading')}</p>
         </div>
       </div>
@@ -369,7 +369,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
             disabled={loading}
             title={t('settingsView.refresh')}
             size="sm"
-            icon={<RefreshCw size={16} />}
+            icon={<Icon name="refresh" size="md" />}
           />
           
           <Button 

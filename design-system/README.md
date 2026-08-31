@@ -61,6 +61,11 @@ pnpm run design-system:check
 
 The Design Lab development entry uses source aliases for component HMR. Its production build consumes the public package exports, so authoring convenience cannot silently become the published contract.
 
+Design Lab and Web UI also register `tooling/vite/watch-source.mjs` to watch
+the aliased UI source directory outside their application roots. Source aliases
+alone do not watch imported SVG assets: without this registration an icon edit
+can leave the previous inline asset module cached until the dev server restarts.
+
 ## Dependency direction
 
 ```text

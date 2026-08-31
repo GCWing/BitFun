@@ -1,7 +1,7 @@
 import { Button, Card, Icon, IconButton, Input, Modal, NumberInput, SearchField, Select, Switch, Textarea, Tooltip, ScrollArea, type ComboboxOption } from '@bitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Trash2, Wifi, Loader, RefreshCw, AlertTriangle, EyeOff, ChevronUp, Brain, FolderOpen } from 'lucide-react';
+import { Wifi, Loader, AlertTriangle, EyeOff, FolderOpen } from 'lucide-react';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 import {
   AIModelConfig as AIModelConfigType, 
@@ -2006,7 +2006,7 @@ const ModelSettingsPage: React.FC = () => {
                   {isProviderListCollapsed
                     ? t('providerSelection.showAllProviders', { count: matchedProviders.length })
                     : t('providerSelection.collapseProviders')}
-                  {isProviderListCollapsed ? <Icon name="chevron-down" size="sm" /> : <ChevronUp size={14} />}
+                  {isProviderListCollapsed ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-up" size="sm" />}
                 </button>
               )}
             </div>
@@ -2344,7 +2344,7 @@ const ModelSettingsPage: React.FC = () => {
                       data-testid="settings-model-reasoning-edit"
                     >
                       <span className="bitfun-model-settings__reasoning-summary-icon">
-                        <Brain size={16} aria-hidden="true" />
+                        <Icon name="thinking" size="md" aria-hidden="true" />
                       </span>
                       <span className="bitfun-model-settings__reasoning-summary-content">
                         <strong>{t('reasoningPresets.configTitle')}</strong>
@@ -3049,7 +3049,7 @@ const ModelSettingsPage: React.FC = () => {
             tone="danger"
             size="sm"
             onClick={() => void handleDelete(config.id!)}
-            icon={<Trash2 size={14} />}
+            icon={<Icon name="delete" size="sm" />}
           />
         </Tooltip>
       </div>
@@ -3158,7 +3158,7 @@ const ModelSettingsPage: React.FC = () => {
                 onClick={refreshSubscriptionAccounts}
                 aria-label={t('subscriptionAuth.rescan')}
                 disabled={isLoadingSubscriptions}
-                icon={<RefreshCw size={16} className={isLoadingSubscriptions ? 'bitfun-model-settings__spin' : ''} />}
+                icon={<Icon name="refresh" size="md" className={isLoadingSubscriptions ? 'bitfun-model-settings__spin' : ''} />}
               />
             </Tooltip>
           )}
@@ -3487,10 +3487,7 @@ const ModelSettingsPage: React.FC = () => {
                   size="sm"
                   onClick={() => void handleRefreshModelsDev()}
                   disabled={isRefreshingModelsDev}
-                  icon={<RefreshCw
-                    size={14}
-                    className={isRefreshingModelsDev ? 'bitfun-model-settings__spin' : ''}
-                  />}
+                  icon={<Icon name="refresh" size="sm" className={isRefreshingModelsDev ? 'bitfun-model-settings__spin' : ''} />}
                 />
               </Tooltip>
             </div>

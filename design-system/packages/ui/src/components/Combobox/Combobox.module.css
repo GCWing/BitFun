@@ -147,7 +147,8 @@
     block-size: var(--bf-control-select-indicator-size);
   }
 
-  .valueLeading > :where(svg, img) {
+  .valueLeading > :where(svg, img),
+  .valueLeading > [data-bf-component="icon"] {
     inline-size: 100%;
     block-size: 100%;
   }
@@ -241,7 +242,8 @@
     transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
   }
 
-  .indicator > svg {
+  .indicator > svg,
+  .indicator > [data-bf-component="icon"] {
     inline-size: 100%;
     block-size: 100%;
   }

@@ -9,22 +9,7 @@ import React, {
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { ActionCard, Button, Icon, KeyHint, Modal, SearchField, type IconName, type IconSize, ScrollArea } from '@bitfun/ui';
-import {
-  BarChart3,
-  Blocks,
-  Bot,
-  CheckSquare2,
-  ChevronLeft,
-  FileText,
-  Keyboard,
-  MessageSquareText,
-  MessagesSquare,
-  Network,
-  SlidersHorizontal,
-  SquareTerminal,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, SlidersHorizontal, Users, type LucideIcon } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -64,7 +49,7 @@ function catalogLucide(name: IconName): LucideIcon {
   return function CatalogLucide({ size }: { size?: number | string }) {
     const n = typeof size === 'number' ? size : 20;
     const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return <Icon name={name} size={mapped} />;
+    return <Icon name={name} size={mapped} style={{ width: n, height: n }} />;
   } as LucideIcon;
 }
 
@@ -86,7 +71,7 @@ const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
   folder: catalogLucide('folder'),
   plus: catalogLucide('plus'),
   globe: catalogLucide('browser'),
-  terminal: SquareTerminal,
+  terminal: catalogLucide('terminal'),
   files: FileText,
   users: Users,
   puzzle: catalogLucide('extension'),
@@ -534,7 +519,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                       aria-label={tCommon('nav.search.backToOverview')}
                       data-testid={`${testIdPrefix}-group-back`}
                     >
-                      <ChevronLeft size={15} strokeWidth={1.8} aria-hidden="true" />
+                      <Icon name="chevron-left" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
                       <span>{tCommon('nav.search.back')}</span>
                     </button>
                     <div className="global-search__detail-heading">

@@ -16,7 +16,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Icon } from "../Icon";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { classNames } from "../../internal/classNames";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
@@ -643,7 +643,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal({
                 className={classNames(styles.close, closeButtonProps?.className)}
                 data-bf-part="close"
                 data-testid={closeButtonTestId}
-                icon={closeIcon ?? <X aria-hidden="true" />}
+                icon={closeIcon ?? <Icon name="xmark" />}
                 onClick={() => requestClose("close-button")}
                 size="sm"
                 variant="quiet"

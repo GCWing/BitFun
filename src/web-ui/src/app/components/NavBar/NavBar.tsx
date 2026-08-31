@@ -14,7 +14,6 @@ import React, { useCallback, useMemo, useRef } from 'react';
 
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
-import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
@@ -95,7 +94,7 @@ const NavBar: React.FC<NavBarProps> = ({
             onClick={onExpandNav}
             aria-label={t('header.expandLeftPanel')}
           >
-            <PanelLeftIcon size={13} />
+            <Icon name="sidebar-left" size="sm" style={{ width: 13, height: 13 }} />
           </button>
         </Tooltip>
       </div>
@@ -113,7 +112,7 @@ const NavBar: React.FC<NavBarProps> = ({
           onClick={onExpandNav}
           aria-label={t('header.collapseLeftPanel')}
         >
-          <PanelLeftIcon size={13} />
+          <Icon name="sidebar-left" size="sm" style={{ width: 13, height: 13 }} />
         </button>
       </Tooltip>
 

@@ -13,7 +13,8 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, LoaderCircle, Plus, X } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
 import { IconButton } from "../IconButton";
 import {
@@ -623,7 +624,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
         description={renderOption ? undefined : option.description}
         disabled={option.disabled || loading}
         id={optionId(navigationIndex)}
-        indicator={selected ? <Check /> : null}
+        indicator={selected ? <Icon name="check-line" /> : null}
         key={`${typeof option.value}:${option.value}`}
         leading={renderOption ? undefined : option.leading ?? option.icon}
         metadata={renderOption ? undefined : option.metadata}
@@ -718,7 +719,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
               <ListboxOption
                 active={activeIndex === 0}
                 id={optionId(0)}
-                indicator={allFilteredSelected ? <Check /> : null}
+                indicator={allFilteredSelected ? <Icon name="check-line" /> : null}
                 onClick={toggleSelectAll}
                 onMouseDown={event => event.preventDefault()}
                 selected={allFilteredSelected}
@@ -738,7 +739,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
                 <ListboxOption
                   active={activeIndex === customIndex}
                   id={optionId(customIndex)}
-                  leading={<Plus />}
+                  leading={<Icon name="plus" />}
                   onClick={() => submitCustomValue(customCandidate)}
                   onMouseDown={event => event.preventDefault()}
                   selected={selectedValues.includes(customCandidate)}
@@ -786,7 +787,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
                 <IconButton
                   aria-label={`${clearLabel}: ${option.label}`}
                   disabled={disabled}
-                  icon={<X aria-hidden="true" />}
+                  icon={<Icon name="xmark" />}
                   onClick={event => {
                     event.stopPropagation();
                     commitValue(selectedValues.filter(candidate => candidate !== option.value));
@@ -833,7 +834,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
           <IconButton
             aria-label={clearLabel}
             className={styles.clear}
-            icon={<X aria-hidden="true" />}
+            icon={<Icon name="xmark" />}
             onClick={event => {
               event.stopPropagation();
               commitValue(multiple ? [] : "");
@@ -844,7 +845,7 @@ export const Combobox = forwardRef<HTMLDivElement, ComboboxProps>(function Combo
           />
         )}
         <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
-          {indicator ?? <ChevronDown />}
+          {indicator ?? <Icon name="chevron-down" />}
         </span>
       </div>
       {errorMessage ? (

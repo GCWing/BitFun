@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { Button, Icon, IconButton, ScrollArea, type ComboboxOption } from '@bitfun/ui';
-import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge, Brain } from 'lucide-react';
+import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
@@ -439,7 +439,7 @@ const ReportMetaCard: React.FC<{
         <div className="insights-meta-card__generation-meta">
           {generationModels.length > 0 && (
             <span title={generationModels.join(', ')}>
-              <Brain size={10} /> {generationModels.join(' + ')}
+              <Icon name="thinking" size="lg" style={{ width: 10, height: 10 }} /> {generationModels.join(' + ')}
             </span>
           )}
           {hasGenerationCalls && (

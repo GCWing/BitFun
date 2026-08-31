@@ -1,6 +1,6 @@
 import { Button, Icon, IconButton, ScrollArea, StatusPill } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Package, RefreshCw, RotateCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Package, RotateCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { configAPI } from '@/infrastructure/api';
@@ -424,7 +424,7 @@ const SkillsSuiteView: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            leadingIcon={<RefreshCw size={13} />}
+            leadingIcon={<Icon name="refresh" size="lg" style={{ width: 13, height: 13 }} />}
             onClick={() => void refresh()}
             title={t('suite.refreshTooltip')}
             aria-label={t('suite.refreshTooltip')}
@@ -472,7 +472,7 @@ const SkillsSuiteView: React.FC = () => {
 
       {loading && (
         <div className="skills-suite__loading" aria-busy="true" aria-label={t('suite.loading')} data-bf-scene="skills" data-bf-part="suiteLoading">
-          <RefreshCw size={16} className="skills-suite__loading-icon" />
+          <Icon name="refresh" size="md" className="skills-suite__loading-icon" />
           <span>{t('suite.loading')}</span>
         </div>
       )}

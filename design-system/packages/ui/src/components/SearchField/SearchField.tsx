@@ -4,7 +4,7 @@ import {
   type MouseEventHandler,
   type ReactNode,
 } from "react";
-import { X } from "lucide-react";
+import { Icon } from "../Icon";
 import { IconButton } from "../IconButton";
 import { Input, type InputProps } from "../Input";
 import { classNames } from "../../internal/classNames";
@@ -42,7 +42,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
     ? (
         <IconButton
           aria-label={clearLabel}
-          icon={<X aria-hidden="true" />}
+          icon={<Icon name="xmark" />}
           onClick={onClear}
           size="sm"
           variant="quiet"

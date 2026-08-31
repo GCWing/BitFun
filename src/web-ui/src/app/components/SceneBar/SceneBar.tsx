@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { ChevronLeft } from 'lucide-react';
+
 import { Icon, TabGroup, type TabGroupItem } from '@bitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
@@ -143,7 +143,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
             data-bf-component="scene-bar"
             data-bf-part="scrollPrevious"
           >
-            <ChevronLeft size={14} aria-hidden="true" />
+            <Icon name="chevron-left" size="sm" aria-hidden="true" />
           </button>
         )}
 

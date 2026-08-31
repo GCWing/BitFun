@@ -6,14 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  FolderGit2,
-  LoaderCircle,
-  MessageSquareText,
-  RotateCcw,
-  Save,
-  Trash2,
-} from 'lucide-react';
+import { FolderGit2, LoaderCircle, MessageSquareText, RotateCcw, Save } from 'lucide-react';
 import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
 import { ConfigPageLoading, ConfigPageMessage, ConfigPageRefreshButton } from '@/component-library';
 
@@ -623,7 +616,7 @@ const WorktreeSettingsPage: React.FC = () => {
                   worktree,
                 })}
                 aria-label={t('management.delete.actionLabel', { path: worktree.path })}
-                icon={<Trash2 size={14} aria-hidden />}
+                icon={<Icon name="delete" size="sm" aria-hidden />}
               />
             </Tooltip>
           </div>

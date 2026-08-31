@@ -1,11 +1,5 @@
-import {
-  ArrowRight,
-  Blocks,
-  Check,
-  FileCode2,
-  Layers3,
-  Palette,
-} from "lucide-react";
+import { Icon as CatalogIcon, type IconName } from "@bitfun/ui";
+import { Blocks, FileCode2, Layers3 } from "lucide-react";
 import { useI18n, type MessageKey } from "../i18n";
 
 interface GettingStartedPageProps {
@@ -14,7 +8,7 @@ interface GettingStartedPageProps {
 
 const steps: readonly {
   description: MessageKey;
-  icon: typeof Layers3;
+  icon: typeof Layers3 | IconName;
   title: MessageKey;
 }[] = [
   {
@@ -24,7 +18,7 @@ const steps: readonly {
   },
   {
     description: "gettingStarted.stepThemeDescription",
-    icon: Palette,
+    icon: "palette",
     title: "gettingStarted.stepThemeTitle",
   },
   {
@@ -56,7 +50,7 @@ export function GettingStartedPage({ onNavigate }: GettingStartedPageProps) {
             type="button"
           >
             {t("gettingStarted.browseComponents")}
-            <ArrowRight aria-hidden="true" size={16} />
+            <CatalogIcon name="arrow-right" size="md" aria-hidden="true" />
           </button>
           <button className="lab-button" onClick={() => onNavigate("tokens")} type="button">
             {t("gettingStarted.openTokens")}
@@ -70,7 +64,7 @@ export function GettingStartedPage({ onNavigate }: GettingStartedPageProps) {
           return (
             <article key={step.title}>
               <span className="guide-step-number">0{index + 1}</span>
-              <span className="guide-step-icon"><Icon aria-hidden="true" size={19} /></span>
+              <span className="guide-step-icon">{typeof Icon === "string" ? <CatalogIcon name={Icon} size="lg" style={{ width: 19, height: 19 }} /> : <Icon aria-hidden="true" size={19} />}</span>
               <h2>{t(step.title)}</h2>
               <p>{t(step.description)}</p>
             </article>
@@ -85,7 +79,7 @@ export function GettingStartedPage({ onNavigate }: GettingStartedPageProps) {
           <p>{t("gettingStarted.workspaceDescription")}</p>
           <ul>
             {contractKeys.map((key) => (
-              <li key={key}><Check aria-hidden="true" size={15} />{t(key)}</li>
+              <li key={key}><CatalogIcon name="check-line" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />{t(key)}</li>
             ))}
           </ul>
         </div>
@@ -111,7 +105,7 @@ export function App() {
         </div>
         <button className="lab-button" onClick={() => onNavigate("resources")} type="button">
           {t("gettingStarted.viewResources")}
-          <ArrowRight aria-hidden="true" size={15} />
+          <CatalogIcon name="arrow-right" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
         </button>
       </section>
     </main>

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Bookmark, SquareTerminal } from 'lucide-react';
-import { Tooltip } from '@bitfun/ui';
+import { Bookmark } from 'lucide-react';
+import { Icon as CatalogIcon, Tooltip } from '@bitfun/ui';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import type { ShellEntry } from '../hooks/shellEntryTypes';
 
@@ -80,7 +80,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
             {showSavedBadge ? (
               <Bookmark size={14} className="bitfun-shell-nav__terminal-icon bitfun-shell-nav__terminal-icon--saved" />
             ) : (
-              <SquareTerminal size={14} className="bitfun-shell-nav__terminal-icon" />
+              <CatalogIcon name="terminal" size="sm" className="bitfun-shell-nav__terminal-icon" />
             )}
 
             <span className="bitfun-shell-nav__terminal-label" data-testid="shell-command-text">{entry.name}</span>

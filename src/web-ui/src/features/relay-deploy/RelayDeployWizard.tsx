@@ -13,21 +13,7 @@
 import { Alert, Button, Field, Icon, IconButton, Input as DesignInput, Modal, Select, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import {
-  Server,
-  Lock,
-  Key,
-  FolderOpen,
-  Loader2,
-  Play,
-  ArrowDownToLine,
-  AlertTriangle,
-  RefreshCw,
-  EyeOff,
-  ChevronLeft,
-  Rocket,
-  PartyPopper,
-} from 'lucide-react';
+import { Server, Lock, Key, FolderOpen, Loader2, Play, ArrowDownToLine, AlertTriangle, EyeOff, Rocket, PartyPopper } from 'lucide-react';
 import { sshApi } from '../ssh-remote/sshApi';
 import { pickSshPrivateKeyPath } from '../ssh-remote/pickSshPrivateKeyPath';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from '../ssh-remote/SSHAuthPromptDialog';
@@ -1144,7 +1130,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 </>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={taskRunning || preflightLoading} leadingIcon={<ChevronLeft size={14} />}>
+                  <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={taskRunning || preflightLoading} leadingIcon={<Icon name="chevron-left" size="sm" />}>
 
                     {t('relayDeploy.back')}
                   </Button>
@@ -1218,12 +1204,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       <div className="relay-deploy-wizard__actions">
         <Button variant="outline" size="sm" onClick={handleBackToPreflight}
           disabled={taskStatus === 'running'}
-          leadingIcon={<ChevronLeft size={14} />}>
+          leadingIcon={<Icon name="chevron-left" size="sm" />}>
 
           {t('relayDeploy.back')}
         </Button>
         {taskStatus === 'failed' && (
-          <Button variant="fill" size="sm" onClick={handleStartDeploy} leadingIcon={<RefreshCw size={14} />}>
+          <Button variant="fill" size="sm" onClick={handleStartDeploy} leadingIcon={<Icon name="refresh" size="sm" />}>
 
             {t('relayDeploy.retry')}
           </Button>
@@ -1304,7 +1290,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
         )}
       </div>
       <div className="relay-deploy-wizard__actions">
-        <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={regLoading} leadingIcon={<ChevronLeft size={14} />}>
+        <Button variant="outline" size="sm" onClick={handleBackToPreflight} disabled={regLoading} leadingIcon={<Icon name="chevron-left" size="sm" />}>
 
           {t('relayDeploy.back')}
         </Button>

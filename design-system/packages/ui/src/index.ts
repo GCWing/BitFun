@@ -96,6 +96,8 @@ export {
 export {
   Icon,
   iconNames,
+  canonicalIconNames,
+  iconAliases,
   type IconName,
   type IconProps,
   type IconSize,
@@ -116,6 +118,7 @@ export {
   type ListboxValue,
 } from "./components/Listbox";
 export { NumberInput, type NumberInputProps } from "./components/NumberInput";
+export { NumberBadge, type NumberBadgeProps } from "./components/NumberBadge";
 export {
   Menu,
   MenuPopover,

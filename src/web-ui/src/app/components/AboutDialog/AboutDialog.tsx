@@ -7,14 +7,7 @@
 import { Alert, Button, Icon, Modal, ScrollArea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import {
-  CalendarDays,
-  Code2,
-  RefreshCw,
-  ShieldCheck,
-  Sparkle,
-  Tag,
-} from 'lucide-react';
+import { CalendarDays, Code2, ShieldCheck, Sparkle, Tag } from 'lucide-react';
 import {
   formatBuildDate,
   formatDisplayedVersion,
@@ -259,7 +252,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<RefreshCw size={14} aria-hidden="true" />}
+                          leadingIcon={<Icon name="refresh" size="sm" aria-hidden="true" />}
                           loading={manualCheckBusy}
                           disabled={updateBusy}
                           onClick={() => void handleCheckForUpdates()}

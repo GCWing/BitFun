@@ -6,13 +6,7 @@ import { Button, Icon, IconButton, SearchField, Textarea, Tooltip } from '@bitfu
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useTranslation } from 'react-i18next';
-import {
-  Minus,
-  RotateCcw,
-  ArrowDown,
-  Square,
-  FileCode2,
-} from 'lucide-react';
+import { Minus, RotateCcw, Square, FileCode2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { ContentCanvas } from '@/app/components/panels/content-canvas';
 import { CanvasStoreModeContext } from '@/app/components/panels/content-canvas/stores';
@@ -413,7 +407,7 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({
                 size="sm"
                 onClick={handlePull}
                 disabled={isOperating}
-                icon={<ArrowDown size={14} />}
+                icon={<Icon name="arrow-down" size="sm" />}
               />
             </Tooltip>
             <Tooltip content={t('actions.push')}>

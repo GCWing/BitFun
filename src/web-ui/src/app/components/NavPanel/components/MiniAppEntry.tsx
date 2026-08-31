@@ -1,13 +1,9 @@
 import React, { useMemo } from 'react';
-import {
-  BITFUN_ICON_SIZE,
-  NavigationMiniAppIcon,
-} from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import { useMiniAppActivity } from '@/app/scenes/miniapps/hooks/useMiniAppActivity';
 import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
-import { Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 const MAX_VISIBLE_ACTIVE_APPS = 3;
 
@@ -71,7 +67,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
       >
         <span className="bitfun-nav-panel__miniapp-entry-main">
           <span className="bitfun-nav-panel__miniapp-entry-icon" aria-hidden="true">
-            <NavigationMiniAppIcon size={BITFUN_ICON_SIZE.navigation} />
+            <Icon name="mini-app" size="md" />
           </span>
           <span className="bitfun-nav-panel__miniapp-entry-copy">
             <span className="bitfun-nav-panel__miniapp-entry-title">{t('scenes.miniApps')}</span>

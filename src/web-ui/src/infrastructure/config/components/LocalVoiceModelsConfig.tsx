@@ -1,12 +1,7 @@
 import { Button, Icon, IconButton, Modal, StatusPill, type StatusPillTone, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  FolderOpen,
-  RefreshCw,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { FolderOpen, ShieldCheck } from 'lucide-react';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -260,7 +255,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
       {
         id: `voice-model-delete:${model.modelId}`,
         label: t('model.delete'),
-        icon: <Trash2 size={14} />,
+        icon: <Icon name="delete" size="sm" />,
         className: 'context-menu-item--danger',
         disabled: busyAction !== null,
         onClick: () => handleDelete(model),
@@ -437,7 +432,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
               size="sm"
               onClick={() => void loadModels()}
               disabled={loading || busyAction !== null || anyDownloading}
-              icon={<RefreshCw size={14} />}
+              icon={<Icon name="refresh" size="sm" />}
             />
           </Tooltip>
         </div>

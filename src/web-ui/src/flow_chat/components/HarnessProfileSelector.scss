@@ -67,8 +67,8 @@
   width: 100%;
 }
 
-// The execution gears grow from focus corners to a 2 x 2 plan and finally a
-// 3 x 3 coverage grid. Creative and Other branch from that density scale.
+// Catalog marks share one slot; their geometry already includes each profile's
+// internal detail, so no additional center mark is layered over the asset.
 .bitfun-harness-selector__density-mark {
   position: relative;
   display: inline-grid;
@@ -79,18 +79,10 @@
   color: var(--bf-color-content-secondary);
 }
 
-.bitfun-harness-selector__density-frame,
-.bitfun-harness-selector__density-core {
+.bitfun-harness-selector__density-frame {
   position: absolute;
   flex: none;
-}
-
-.bitfun-harness-selector__density-frame {
   color: currentColor;
-}
-
-.bitfun-harness-selector__density-core {
-  color: var(--bf-color-accent-default);
 }
 
 // One surface swaps between the fixed-Session summary, Harness profiles, and

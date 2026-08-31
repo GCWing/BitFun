@@ -5,6 +5,7 @@ import {
 } from "react";
 import { classNames } from "../../internal/classNames";
 import styles from "./Toolbar.module.css";
+import { NumberBadge } from "../NumberBadge";
 
 export type ToolbarSize = "sm" | "md";
 export type ToolbarLeadingOverflow = "visible" | "scroll";
@@ -86,14 +87,7 @@ export const ToolbarGroup = forwardRef<HTMLDivElement, ToolbarGroupProps>(
 export const ToolbarBadge = forwardRef<HTMLSpanElement, ToolbarBadgeProps>(
   function ToolbarBadge({ children, className, ...props }, ref) {
     return (
-      <span
-        {...props}
-        className={classNames(styles.badge, className)}
-        data-bf-part="badge"
-        ref={ref}
-      >
-        {children}
-      </span>
+      <NumberBadge {...props} className={classNames(styles.badge, className)} data-bf-part="badge" ref={ref} value={children} />
     );
   },
 );

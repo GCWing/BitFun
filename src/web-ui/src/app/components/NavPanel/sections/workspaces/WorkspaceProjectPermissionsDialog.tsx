@@ -1,6 +1,6 @@
 import { Button, Icon, IconButton, Input, Modal, Select, type SelectOption, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { Save, ShieldCheck } from 'lucide-react';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -254,7 +254,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                 variant="outline"
                 onClick={() => void handleClearPermissionGrants()}
                 disabled={isBusy}
-                leadingIcon={<Trash2 size={14} />}
+                leadingIcon={<Icon name="delete" size="sm" />}
               >
 
                 {t('projectPermissions.clearGrants')}
@@ -283,7 +283,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                       aria-label={t('projectPermissions.removeGrant')}
                       disabled={isBusy}
                       onClick={() => void handleRemovePermissionGrant(grant)}
-                      icon={<Trash2 size={14} />}
+                      icon={<Icon name="delete" size="sm" />}
                     />
                   </Tooltip>
                 </div>
@@ -366,7 +366,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                         aria-label={t('projectPermissions.moveRuleDown')}
                         disabled={isBusy || index === draftRules.length - 1}
                         onClick={() => moveDraftRule(index, 1)}
-                        icon={<ArrowDown size={14} />}
+                        icon={<Icon name="arrow-down" size="sm" />}
                       />
                     </Tooltip>
                     <Tooltip content={t('projectPermissions.removeRule')}>
@@ -376,7 +376,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                         aria-label={t('projectPermissions.removeRule')}
                         disabled={isBusy}
                         onClick={() => setDraftRules((rules) => rules.filter(({ localId }) => localId !== rule.localId))}
-                        icon={<Trash2 size={14} />}
+                        icon={<Icon name="delete" size="sm" />}
                       />
                     </Tooltip>
                   </div>

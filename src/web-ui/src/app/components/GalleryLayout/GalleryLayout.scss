@@ -342,8 +342,7 @@ $content-max: 1360px;
 }
 
 .gallery-filter-count,
-.gallery-zone-count,
-.gallery-zone-badge {
+.gallery-zone-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -371,18 +370,6 @@ $content-max: 1360px;
   font-weight: var(--bf-font-weight-semibold);
   color: var(--bf-color-content-muted);
   white-space: nowrap;
-}
-
-.gallery-zone-badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: $size-radius-full;
-  background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-success-content) 28%, transparent);
-  color: var(--bf-color-status-success-content);
-  font-size: var(--bf-font-size-meta);
-  font-weight: var(--bf-font-weight-semibold);
 }
 
 .gallery-run-empty {

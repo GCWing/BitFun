@@ -1,10 +1,7 @@
 import { Button, Icon, IconButton, Input, Modal, ScrollArea, Switch, Tooltip } from '@bitfun/ui';
 import React, { useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import {
-  ArrowDown,
-  Trash2,
-} from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
@@ -389,7 +386,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.moveDown')}
                             onClick={() => void moveGroup(index, 1)}
                             disabled={saving || index === groups.length - 1}
-                            icon={<ArrowDown size={13} />}
+                            icon={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                         <Tooltip content={t('agentsOverview.skillGroupPicker.editGroup')}>
@@ -409,7 +406,7 @@ export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
                             aria-label={t('agentsOverview.skillGroupPicker.deleteGroup')}
                             onClick={() => void deleteGroup(group)}
                             disabled={saving}
-                            icon={<Trash2 size={13} />}
+                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                           />
                         </Tooltip>
                       </div>

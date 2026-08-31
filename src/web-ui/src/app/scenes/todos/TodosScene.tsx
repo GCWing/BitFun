@@ -20,11 +20,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  CalendarClock,
-  CalendarDays,
-  ChevronLeft,
-} from 'lucide-react';
+import { CalendarClock, CalendarDays } from 'lucide-react';
 import { PresenceBoundary } from '@/component-library';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
@@ -429,7 +425,7 @@ const TodosScene: React.FC = () => {
                 type="button"
                 size="sm"
                 aria-label={t('calendar.previousMonth')}
-                icon={<ChevronLeft />}
+                icon={<Icon name="chevron-left" size="lg" />}
                 onClick={() => shiftMonth(-1)}
                 data-testid="todos-calendar-prev"
               />

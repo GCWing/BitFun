@@ -11,7 +11,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import type { RemoteFileEntry } from './types';
 import { sshApi } from './sshApi';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { Download, FolderOpen, Home, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { FolderOpen, Home, Loader2 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
 
 interface RemoteFileBrowserProps {
@@ -472,7 +472,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             title={t('actions.refresh')}
             disabled={transferBusy}
           >
-            <RefreshCw size={16} />
+            <Icon name="refresh" size="md" />
           </button>
           <button
             className="remote-file-browser__toolbar-btn"
@@ -514,7 +514,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 title={t('actions.retry') || 'Retry'}
                 style={{ marginLeft: 'auto', marginRight: 8 }}
               >
-                <RefreshCw size={14} />
+                <Icon name="refresh" size="sm" />
               </button>
               <button onClick={() => setError(null)}>×</button>
             </div>
@@ -607,21 +607,21 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             </MenuItem>
             {!contextMenu.entry.isDir && (
               <MenuItem
-                leading={<Download size={14} aria-hidden />}
+                leading={<Icon name="arrow-down" size="sm" aria-hidden />}
                 onClick={() => handleContextMenuAction('download')}
               >
                 {t('ssh.remote.download')}
               </MenuItem>
             )}
             <MenuItem
-              leading={<Pencil size={14} aria-hidden />}
+              leading={<Icon name="edit" size="sm" aria-hidden />}
               onClick={() => handleContextMenuAction('rename')}
             >
               {t('ssh.remote.rename')}
             </MenuItem>
             <MenuSeparator />
             <MenuItem
-              leading={<Trash2 size={14} aria-hidden />}
+              leading={<Icon name="delete" size="sm" aria-hidden />}
               tone="danger"
               onClick={() => handleContextMenuAction('delete')}
             >

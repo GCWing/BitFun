@@ -1,7 +1,7 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { CheckCheck, Trash2, ChevronUp, Loader2 } from 'lucide-react';
+import { CheckCheck, Loader2 } from 'lucide-react';
 import { Icon, IconButton, Modal, ScrollArea, SearchField } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
@@ -341,7 +341,7 @@ export const NotificationCenter: React.FC = () => {
             }}
             title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
           >
-            {isExpanded ? <ChevronUp size={14} /> : <Icon name="chevron-down" size="sm" />}
+            {isExpanded ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
           </button>
           <button
             className="notification-center__item-delete"
@@ -383,7 +383,7 @@ export const NotificationCenter: React.FC = () => {
               title={t('components:notificationCenter.actions.clearAll')}
               aria-label={t('components:notificationCenter.actions.clearAll')}
             >
-              <Trash2 size={16} />
+              <Icon name="delete" size="md" />
             </button>
             <IconButton
               className="notification-center__close"

@@ -22,6 +22,7 @@ import { menuMeta } from "./components/Menu/Menu.meta";
 import { modalMeta } from "./components/Modal/Modal.meta";
 import { navigationPanelMeta } from "./components/NavigationPanel/NavigationPanel.meta";
 import { numberInputMeta } from "./components/NumberInput/NumberInput.meta";
+import { numberBadgeMeta } from "./components/NumberBadge/NumberBadge.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { radioMeta } from "./components/Radio/Radio.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
@@ -115,6 +116,7 @@ export const componentRegistry = [
   modalMeta,
   navigationPanelMeta,
   numberInputMeta,
+  numberBadgeMeta,
   pageDeployToolCardMeta,
   pageHeaderMeta,
   radioMeta,

@@ -2,7 +2,7 @@ import { Alert, Button, Checkbox, Icon, Input, Modal, ScrollArea } from '@bitfun
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { dispatchApi } from './dispatchApi';
 import type {
   DispatchSelection,
@@ -466,7 +466,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   size="sm"
                   disabled={probing}
                   onClick={() => void runProbe()}
-                  leadingIcon={<RefreshCw size={14} aria-hidden />}
+                  leadingIcon={<Icon name="refresh" size="sm" aria-hidden />}
                 >
 
                   {t('dispatch.retryCheck')}
@@ -550,7 +550,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   {preparationPhase === 'provisioning' ? (
                     <Loader2 size={14} className="dispatch-install-dialog__spin" />
                   ) : (
-                    <RefreshCw size={14} aria-hidden />
+                    <Icon name="refresh" size="sm" aria-hidden />
                   )}
                   {t('dispatch.retryProvision')}
                 </Button>
@@ -566,7 +566,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   size="sm"
                   disabled={probing}
                   onClick={() => void runProbe()}
-                  leadingIcon={<RefreshCw size={14} aria-hidden />}
+                  leadingIcon={<Icon name="refresh" size="sm" aria-hidden />}
                 >
 
                   {t('dispatch.retryCheck')}

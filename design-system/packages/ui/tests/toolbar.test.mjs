@@ -30,7 +30,8 @@ test("Toolbar keeps leading, centered, and trailing regions independent", () => 
   assert.match(markup, /data-bf-part="leading"/);
   assert.match(markup, /data-bf-part="center"/);
   assert.match(markup, /data-bf-part="trailing"/);
-  assert.match(markup, /data-bf-part="badge">18<\/span>/);
+  assert.match(markup, /data-bf-part="badge"/);
+  assert.match(markup, /data-bf-part="value">18<\/span>/);
   assert.match(markup, /data-bf-part="separator"/);
   assert.match(markup, /aria-hidden="true"/);
 });

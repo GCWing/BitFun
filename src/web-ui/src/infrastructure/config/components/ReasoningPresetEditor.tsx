@@ -1,11 +1,7 @@
 import { Button, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, NumberInput, Select, Switch, Textarea, Tooltip, type SelectOption } from '@bitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  AlertTriangle,
-  ArrowDown,
-  Trash2,
-} from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedCombobox } from '@/infrastructure/design-system';
 import type {
@@ -725,7 +721,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           size="sm"
                           disabled={disabled || presetIndex === presets.length - 1}
                           onClick={() => movePreset(presetIndex, 1)}
-                          icon={<ArrowDown size={14} />}
+                          icon={<Icon name="arrow-down" size="sm" />}
                         />
                       </Tooltip>
                       <Tooltip content={t('reasoningPresets.remove')}>
@@ -746,7 +742,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                               default_preset: value.default_preset === preset.id ? undefined : value.default_preset,
                             });
                           }}
-                          icon={<Trash2 size={14} />}
+                          icon={<Icon name="delete" size="sm" />}
                         />
                       </Tooltip>
                     </div>
@@ -872,7 +868,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                               size="sm"
                               disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1}
                               onClick={() => moveAction(presetIndex, actionIndex, 1)}
-                              icon={<ArrowDown size={14} />}
+                              icon={<Icon name="arrow-down" size="sm" />}
                             />
                           </Tooltip>
                           <Tooltip content={t('reasoningPresets.remove')}>
@@ -884,7 +880,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                                 resetJsonDraftState();
                                 updatePreset(presetIndex, { actions: preset.actions?.filter((_, index) => index !== actionIndex) });
                               }}
-                              icon={<Trash2 size={14} />}
+                              icon={<Icon name="delete" size="sm" />}
                             />
                           </Tooltip>
                         </div>

@@ -1,14 +1,6 @@
 import { Fragment, useMemo, useState, type CSSProperties } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Contrast,
-  LayoutGrid,
-  Moon,
-  Search,
-  Sun,
-} from "lucide-react";
-import type { DensityMode } from "@bitfun/ui";
+import { Contrast, LayoutGrid, Moon, Sun } from "lucide-react";
+import { Icon, type DensityMode } from "@bitfun/ui";
 import {
   themeContractVersion,
   themeTokenCatalog,
@@ -226,7 +218,7 @@ export function ColorsPage({
     <main className="lab-page lab-page--colors" id="colors">
       <nav aria-label={t("colors.breadcrumbLabel")} className="colors-breadcrumb">
         <span>{t("nav.foundations")}</span>
-        <ChevronRight aria-hidden="true" size={14} />
+        <Icon name="chevron-right" size="sm" aria-hidden="true" />
         <strong>Colors</strong>
       </nav>
 
@@ -249,7 +241,7 @@ export function ColorsPage({
                   {t("colors.themeName", { version: themeContractVersion })}
                 </option>
               </select>
-              <ChevronDown aria-hidden="true" size={15} />
+              <Icon name="chevron-down" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </span>
           </label>
 
@@ -266,7 +258,7 @@ export function ColorsPage({
                   <option key={value} value={value}>{t(label)}</option>
                 ))}
               </select>
-              <ChevronDown aria-hidden="true" size={15} />
+              <Icon name="chevron-down" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </span>
           </label>
 
@@ -283,7 +275,7 @@ export function ColorsPage({
                 <option value="comfortable">{t("settings.comfortable")}</option>
                 <option value="touch">{t("settings.touch")}</option>
               </select>
-              <ChevronDown aria-hidden="true" size={15} />
+              <Icon name="chevron-down" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </span>
           </label>
         </div>
@@ -309,7 +301,7 @@ export function ColorsPage({
           <h2>{t("colors.semantic.title")}</h2>
           <div className="colors-semantic-tools">
             <label className="colors-search-field">
-              <Search aria-hidden="true" size={16} />
+              <Icon name="search" size="md" aria-hidden="true" />
               <input
                 aria-label={t("colors.semantic.searchLabel")}
                 onChange={(event) => setQuery(event.target.value)}
@@ -329,7 +321,7 @@ export function ColorsPage({
                   <option key={group} value={group}>{t(groupLabelKeys[group])}</option>
                 ))}
               </select>
-              <ChevronDown aria-hidden="true" size={15} />
+              <Icon name="chevron-down" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </label>
           </div>
         </header>
@@ -403,7 +395,7 @@ export function ColorsPage({
             type="button"
           >
             {expanded ? t("colors.collapse") : t("colors.expand")}
-            <ChevronDown aria-hidden="true" data-expanded={expanded || undefined} size={15} />
+            <Icon name="chevron-down" size="lg" aria-hidden="true" data-expanded={expanded || undefined} style={{ width: 15, height: 15 }} />
           </button>
         )}
       </section>
@@ -425,7 +417,7 @@ export function ColorsPage({
                   </option>
                 ))}
               </select>
-              <ChevronDown aria-hidden="true" size={15} />
+              <Icon name="chevron-down" size="lg" aria-hidden="true" style={{ width: 15, height: 15 }} />
             </span>
           </label>
         </header>

@@ -20,7 +20,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { AlertTriangle, Network, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Network } from 'lucide-react';
 import { sshApi } from './sshApi';
 import type { PortForward, RemoteListeningPort } from './types';
 import './PortForwardDialog.scss';
@@ -272,11 +272,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                 aria-label={t('ssh.portForward.detect')}
                 data-testid="ssh-port-forward-detect"
                 onClick={() => void detect()}
-                icon={<RefreshCw
-                  size={14}
-                  className={isDetecting ? 'port-forward-dialog__spin' : undefined}
-                  aria-hidden="true"
-                />}
+                icon={<Icon name="refresh" size="sm" className={isDetecting ? 'port-forward-dialog__spin' : undefined} aria-hidden="true" />}
               />
             </Tooltip>
           )}

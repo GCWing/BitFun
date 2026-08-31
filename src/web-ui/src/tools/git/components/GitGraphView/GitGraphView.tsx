@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button, Icon, SearchField, ScrollArea } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { ChevronUp, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
@@ -333,7 +333,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
                     title={t('graph.searchPrevious')}
                     disabled={searchFilter.totalMatches === 0}
                   >
-                    <ChevronUp size={14} />
+                    <Icon name="chevron-up" size="sm" />
                   </button>
                   <button
                     className="git-graph-view__search-nav-btn"

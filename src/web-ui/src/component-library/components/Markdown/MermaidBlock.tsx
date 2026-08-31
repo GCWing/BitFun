@@ -1,3 +1,4 @@
+import { Icon as CatalogIcon } from '@bitfun/ui';
 /**
  * MermaidBlock component
  * Renders Mermaid diagrams in Markdown
@@ -7,7 +8,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { MermaidService } from '../../../tools/mermaid-editor/services/MermaidService';
 import { mermaidAppearanceAdapter } from '@/infrastructure/appearance/adapters/MermaidAppearanceAdapter';
-import { Loader2, AlertCircle, Code2, Copy, Check } from 'lucide-react';
+import { Loader2, AlertCircle, Code2 } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import './MermaidBlock.scss';
 
@@ -227,7 +228,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <CatalogIcon name="check-line" size="sm" /> : <CatalogIcon name="duplicate" size="sm" />}
               </button>
             </div>
 
@@ -262,7 +263,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
                 onClick={handleCopy}
                 title={t('mermaidBlock.copyCode')}
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <CatalogIcon name="check-line" size="sm" /> : <CatalogIcon name="duplicate" size="sm" />}
               </button>
             </div>
           </div>

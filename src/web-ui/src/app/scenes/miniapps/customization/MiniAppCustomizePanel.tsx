@@ -1,6 +1,6 @@
 import { Button, Icon, IconButton, Textarea, Tooltip } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, EyeOff, Loader2, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { AlertTriangle, EyeOff, Loader2, Send } from 'lucide-react';
 
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { MiniApp, MiniAppCustomizationMetadata, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -490,7 +490,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
             onClick={() => void handleRefreshPreview()}
             disabled={busy}
             loading={refreshing}
-            leadingIcon={<RefreshCw size={14} />}
+            leadingIcon={<Icon name="refresh" size="sm" />}
           >
 
             {t('customize.refreshPreview')}
@@ -547,7 +547,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
           onClick={() => void handleDiscard()}
           disabled={busy}
           loading={discarding}
-          leadingIcon={<Trash2 size={14} />}
+          leadingIcon={<Icon name="delete" size="sm" />}
         >
 
           {t('customize.discard')}

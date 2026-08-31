@@ -1,27 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import {
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Clipboard,
-  Command,
-  Copy,
-  Download,
-  Eye,
-  ExternalLink,
-  Info,
-  List,
-  MessageCircle,
-  Mic,
-  Monitor,
-  MoreHorizontal,
-  Plus,
-  Search as SearchIcon,
-  Settings,
-  Terminal,
-  X,
-} from "lucide-react";
+import { Clipboard, List } from "lucide-react";
 import {
   ActionCard,
   ActionItem,
@@ -51,7 +29,8 @@ import {
   FormSection,
   Icon,
   IconButton,
-  iconNames,
+  canonicalIconNames,
+  NumberBadge,
   Input,
   KeyHint,
   Listbox,
@@ -289,6 +268,7 @@ export function ComponentDetailPage({
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [iconName, setIconName] = useState<IconName>("search");
+  const [numberBadgeValue, setNumberBadgeValue] = useState("18");
   const [iconSize, setIconSize] = useState<IconSize>("lg");
   const [iconTone, setIconTone] = useState<IconTone>("inherit");
   const [selectValue, setSelectValue] = useState<string>("ask");
@@ -411,6 +391,7 @@ export function ComponentDetailPage({
     if (component.name === "Alert") return `import { Alert } from "@bitfun/ui";\n\n<Alert tone="info" title="${t("components.preview.notifications")}" message="${t("components.preview.fieldDescription")}" />`;
     if (component.name === "Avatar") return 'import { Avatar } from "@bitfun/ui";\n\n<Avatar>BF</Avatar>';
     if (component.name === "Checkbox" || component.name === "Radio") return `import { ${component.name} } from "@bitfun/ui";\n\n<${component.name} label="${t("components.preview.notifications")}" defaultChecked />`;
+    if (component.name === "NumberBadge") return `import { NumberBadge } from "@bitfun/ui";\n\n<NumberBadge value={${JSON.stringify(numberBadgeValue)}} />;`;
     if (component.name === "NumberInput") return 'import { useState } from "react";\nimport { NumberInput } from "@bitfun/ui";\n\nfunction Example() {\n  const [value, setValue] = useState(8);\n  return <NumberInput value={value} onChange={setValue} />;\n}';
     if (component.name === "Empty") return `import { Empty } from "@bitfun/ui";\n\n<Empty title="${t("components.preview.cardTitle")}" description="${t("components.preview.cardDescription")}" />`;
     if (flowChatPreview) {
@@ -418,20 +399,20 @@ export function ComponentDetailPage({
     }
 
     if (component.name === "ActionCard") {
-      return `import { ActionCard } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal } from "lucide-react";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<MessageCircle />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
+      return `import { Icon, ActionCard } from "@bitfun/ui";\n\n<ActionCard\n  actions={[\n    { id: "more", icon: <Icon name="more" />, label: "${t("components.preview.more")}" },\n  ]}\n  description="${t("components.preview.actionCardDescription")}"\n  leading={<Icon name="session" />}\n  size="${actionCardSize}"\n>\n  ${t("components.preview.actionCardTitle")}\n</ActionCard>`;
     }
     if (component.name === "ActionItem") {
       const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
-      return `import { ActionItem, KeyHint } from "@bitfun/ui";\nimport { MessageCircle, MoreHorizontal, Plus } from "lucide-react";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Plus />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <MoreHorizontal />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<MessageCircle />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
+      return `import { Icon, ActionItem, KeyHint } from "@bitfun/ui";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Icon name="plus" />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <Icon name="more" />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<Icon name="session" />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
     }
     if (component.name === "ActivityItem") {
       if (activityItemAppearance === "inline") {
-        return `import { ActivityItem } from "@bitfun/ui";\nimport { Check } from "lucide-react";\n\n<ActivityItem\n  appearance="inline"\n  leading={<Check />}\n>\n  ${t("components.preview.activityStatus")}\n</ActivityItem>`;
+        return `import { Icon, ActivityItem } from "@bitfun/ui";\n\n<ActivityItem\n  appearance="inline"\n  leading={<Icon name="check-line" />}\n>\n  ${t("components.preview.activityStatus")}\n</ActivityItem>`;
       }
       const detailProp = activityShowDetail
         ? `\n  detail={<code>${t("components.preview.activityDetail")}</code>}`
         : "";
-      return `import { ActivityItem, ChangeCount } from "@bitfun/ui";\nimport { Copy, Download, ExternalLink, Terminal } from "lucide-react";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Copy />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Download />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <ExternalLink />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"${detailProp}\n  label="${t("components.preview.activityAction")}"\n  leading={<Terminal />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
+      return `import { Icon, ActivityItem, ChangeCount } from "@bitfun/ui";\n\n<ActivityItem\n  actions={[\n    { id: "copy", icon: <Icon name="duplicate" />, label: "${t("components.preview.activityCopy")}" },\n    { id: "download", icon: <Icon name="arrow-down" />, label: "${t("components.preview.activityDownload")}" },\n    { id: "open", icon: <Icon name="arrow-up-right" />, label: "${t("components.preview.activityOpen")}" },\n  ]}\n  appearance="surface"${detailProp}\n  label="${t("components.preview.activityAction")}"\n  leading={<Icon name="terminal" />}\n  metadata={<ChangeCount additions={6} deletions={0} />}\n  onActivate={() => openActivity()}\n>\n  ${t("components.preview.activityDescription")}\n</ActivityItem>`;
     }
     if (component.name === "Button") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
@@ -439,7 +420,7 @@ export function ComponentDetailPage({
         ? "\nimport { ChevronRight } from \"lucide-react\";"
         : "";
       const iconProp = previewIcon === "chevron"
-        ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<ChevronRight />}`
+        ? ` ${previewIconPosition === "left" ? "leadingIcon" : "trailingIcon"}={<Icon name="chevron-right" />}`
         : "";
       return `import { Button } from "@bitfun/ui";${iconImport}\n\n<Button variant="${variant}" size="${size}"${stateProps}${iconProp}>\n  ${t("components.preview.session")}\n</Button>`;
     }
@@ -455,9 +436,9 @@ export function ComponentDetailPage({
         ? `\n  contextBar={<ComposerContextBar\n    leading={<><span>${t("components.preview.composerDevice")}</span><ComposerDivider /><span>${t("components.preview.composerWorkspace")}</span></>}\n    trailing={<span>${t("components.preview.composerMode")}</span>}\n  />}`
         : "";
       const toolbarProp = composerShowToolbar
-        ? `\n  toolbar={<ComposerToolbar\n    leading={<IconButton aria-label="${t("components.preview.composerAdd")}" icon={<Plus />} />}\n    trailing={<><Button variant="text">${t("components.preview.composerModel")}</Button><IconButton aria-label="${t("components.preview.composerSend")}" icon={<ArrowUp />} variant="primary" /></>}\n  />}`
+        ? `\n  toolbar={<ComposerToolbar\n    leading={<IconButton aria-label="${t("components.preview.composerAdd")}" icon={<Icon name="plus" />} />}\n    trailing={<><Button variant="text">${t("components.preview.composerModel")}</Button><IconButton aria-label="${t("components.preview.composerSend")}" icon={<Icon name="arrow-up" />} variant="primary" /></>}\n  />}`
         : "";
-      return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\nimport { ArrowUp, Plus } from "lucide-react";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
+      return `import { Button, Composer, ComposerContextBar, ComposerDivider, ComposerToolbar, IconButton } from "@bitfun/ui";\n\n<Composer\n  aria-label="${t("components.preview.composerLabel")}"${contextProp}${toolbarProp}${stateProps}\n>\n  <textarea\n    aria-label="${t("components.preview.composerEditorLabel")}"\n    placeholder="${t("components.preview.composerPlaceholder")}"\n  />\n</Composer>`;
     }
     if (component.name === "ConfirmDialog") {
       return `import { ConfirmDialog } from "@bitfun/ui";\n\n<ConfirmDialog\n  cancelText="${t("components.preview.modalCancel")}"\n  confirmDanger\n  confirmText="${t("components.preview.confirmDelete")}"\n  isOpen={open}\n  message="${t("components.preview.confirmMessage")}"\n  onClose={() => setOpen(false)}\n  onConfirm={() => deleteItem()}\n  preview="/workspace/project"\n  title="${t("components.preview.confirmTitle")}"\n  type="error"\n/>`;
@@ -471,15 +452,15 @@ export function ComponentDetailPage({
     }
     if (component.name === "Field") {
       const labelAction = fieldShowLabelAction
-        ? `\n  labelAction={<IconButton aria-label="${t("components.preview.fieldHelp")}" icon={<Info />} size="xs" />}`
+        ? `\n  labelAction={<IconButton aria-label="${t("components.preview.fieldHelp")}" icon={<Icon name="info" />} size="xs" />}`
         : "";
       const controlLeading = fieldShowControlLeading
         ? `\n  controlLeading={<Switch aria-label="${t("components.preview.notifications")}" />}`
         : "";
       const controlTrailing = fieldShowControlTrailing
-        ? `\n  controlTrailing={<IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />}`
+        ? `\n  controlTrailing={<IconButton aria-label="${t("components.preview.more")}" icon={<Icon name="more" />} size="xs" />}`
         : "";
-      return `import { Field, IconButton, Input, Switch } from "@bitfun/ui";\nimport { ChevronDown, Info, MoreHorizontal } from "lucide-react";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.appearance")}"${labelAction}${controlLeading}${controlTrailing}\n  orientation="${fieldOrientation}"\n  required\n>\n  <Input defaultValue="${t("components.preview.fieldValue")}" trailing={<ChevronDown />} />\n</Field>`;
+      return `import { Icon, Field, IconButton, Input, Switch } from "@bitfun/ui";\n\n<Field\n  description="${t("components.preview.fieldDescription")}"\n  label="${t("components.preview.appearance")}"${labelAction}${controlLeading}${controlTrailing}\n  orientation="${fieldOrientation}"\n  required\n>\n  <Input defaultValue="${t("components.preview.fieldValue")}" trailing={<Icon name="chevron-down" />} />\n</Field>`;
     }
     if (component.name === "Input") {
       const stateProps = previewState === "disabled"
@@ -487,26 +468,26 @@ export function ComponentDetailPage({
         : previewState === "invalid"
           ? " invalid"
           : "";
-      return `import { Input } from "@bitfun/ui";\nimport { Eye } from "lucide-react";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Eye />}${stateProps}\n/>`;
+      return `import { Icon, Input } from "@bitfun/ui";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Icon name="eye" />}${stateProps}\n/>`;
     }
     if (component.name === "KeyHint") {
-      return `import { KeyHint } from "@bitfun/ui";\nimport { Command } from "lucide-react";\n\n<KeyHint icon={<Command />}>K</KeyHint>`;
+      return `import { Icon, KeyHint } from "@bitfun/ui";\n\n<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>`;
     }
     if (component.name === "FieldGroup") {
-      return `import { Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\nimport { Settings } from "lucide-react";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  leading={<Settings />}\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
+      return `import { Icon, Field, FieldGroup, FieldRow, FormSection, Input } from "@bitfun/ui";\n\n<FormSection\n  description="${t("components.preview.fieldDescription")}"\n  headingAs="h3"\n  leading={<Icon name="gear" />}\n  title="${t("components.preview.modalSectionTitle")}"\n>\n  <FieldGroup appearance="subtle" dividers>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalProviderName")}" labelWidth="md" orientation="horizontal" required>\n        <Input defaultValue="OpenBitFun" />\n      </Field>\n    </FieldRow>\n    <FieldRow>\n      <Field controlWidth="fill" label="${t("components.preview.modalApiUrl")}" labelWidth="md" orientation="horizontal">\n        <Input defaultValue="https://api.openbitfun.com" />\n      </Field>\n    </FieldRow>\n  </FieldGroup>\n</FormSection>`;
     }
     if (component.name === "Tooltip") {
       return `import { Tooltip } from "@bitfun/ui";\n\n<Tooltip\n  content="${t("components.preview.tooltipContent")}"\n  placement="${previewState}"\n>\n  <Button>${t("components.preview.tooltipTrigger")}</Button>\n</Tooltip>`;
     }
     if (component.name === "Menu") {
-      return `import { Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<MessageCircle />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
+      return `import { Icon, Menu, MenuItem, MenuSection, MenuSeparator } from "@bitfun/ui";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
     if (component.name === "Modal") {
       return `import { Button, Modal } from "@bitfun/ui";\n\n<Modal\n  contentPadding="lg"\n  footer={<>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </>}\n  isOpen={open}\n  onClose={() => setOpen(false)}\n  showScrollbar={${modalShowScrollbar}}\n  size="xxlarge"\n  title="${t("components.preview.modalTitle")}"\n>\n  <ProviderConfigurationFields />\n</Modal>`;
     }
     if (component.name === "PageHeader") {
       const requiredProp = pageHeaderRequired ? "\n  required" : "";
-      return `import { IconButton, PageHeader } from "@bitfun/ui";\nimport { Settings, X } from "lucide-react";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<X />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Settings />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
+      return `import { Icon, IconButton, PageHeader } from "@bitfun/ui";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<Icon name="xmark" />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Icon name="gear" />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
     }
     if (component.name === "SearchField") {
       const stateProps = previewState === "disabled"
@@ -514,7 +495,7 @@ export function ComponentDetailPage({
         : previewState === "invalid"
           ? " invalid"
           : "";
-      return `import { KeyHint, SearchField } from "@bitfun/ui";\nimport { Command, Search } from "lucide-react";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Search />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Command />}>K</KeyHint>}${stateProps}\n/>`;
+      return `import { Icon, KeyHint, SearchField } from "@bitfun/ui";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Icon name="search" />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${stateProps}\n/>`;
     }
     if (component.name === "Combobox") {
       return `import { Combobox } from "@bitfun/ui";\n\n<Combobox\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  searchable\n  triggerAriaLabel="Mode"\n  value={mode}\n/>`;
@@ -523,31 +504,31 @@ export function ComponentDetailPage({
       return `import { Listbox, ListboxOption } from "@bitfun/ui";\n\n<Listbox aria-label="Mode">\n  <ListboxOption selected value="ask">Ask</ListboxOption>\n  <ListboxOption value="plan">Plan</ListboxOption>\n  <ListboxOption disabled value="agent">Agent</ListboxOption>\n</Listbox>`;
     }
     if (component.name === "Select") {
-      return `import { Icon, Select } from "@bitfun/ui";\n\n<Select\n  aria-label="Mode"\n  leading={<Icon name="circle" />}\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value="${selectValue}"\n/>`;
+      return `import { Icon, Select } from "@bitfun/ui";\n\n<Select\n  aria-label="Mode"\n  leading={<Icon name="unselected" />}\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value="${selectValue}"\n/>`;
     }
     if (component.name === "SegmentedControl") {
       const defaultMode = previewState === "unselected" ? "agent" : "chat";
-      return `import { SegmentedControl } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <MessageCircle />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
+      return `import { Icon, SegmentedControl } from "@bitfun/ui";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
-      return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="circle" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+      return `import { Icon, StatusPill } from "@bitfun/ui";\n\n<StatusPill leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
     }
     if (component.name === "Disclosure") {
       const stateProps = previewState === "open" ? " defaultOpen" : previewState === "disabled" ? " disabled" : "";
       return `import { Disclosure } from "@bitfun/ui";\n\n<Disclosure summary="${t("components.preview.appearance")}"${stateProps}>\n  ${t("components.preview.appearanceDescription")}\n</Disclosure>`;
     }
     if (component.name === "NavigationPanel") {
-      return `import { IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\nimport { Monitor, Search, Settings } from "lucide-react";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Monitor />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Settings />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Search />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
+      return `import { Icon, IconButton, NavigationPanel, NavigationPanelItem, NavigationPanelSection, SearchField } from "@bitfun/ui";\n\n<NavigationPanel\n  aria-label="${t("components.preview.navigationPanelLabel")}"\n  footer={<>\n    <NavigationPanelItem leading={<Icon name="device-mac" />}>${t("components.preview.navigationPanelDevice")}</NavigationPanelItem>\n    <IconButton aria-label="${t("components.preview.settings")}" icon={<Icon name="gear" />} />\n  </>}\n  header={<SearchField aria-label="${t("components.preview.searchLabel")}" leadingIcon={<Icon name="search" />} />}\n  scrollbarVisibility="${navigationPanelShowScrollbar ? "auto" : "hidden"}"\n>\n  <NavigationPanelSection title="${t("components.preview.navigationPanelSectionTitle")}">\n    <NavigationPanelItem selected>${t("components.preview.menuItemOne")}</NavigationPanelItem>\n    <NavigationPanelItem>${t("components.preview.menuItemTwo")}</NavigationPanelItem>\n  </NavigationPanelSection>\n</NavigationPanel>`;
     }
     if (component.name === "ScrollArea") {
       return `import { ScrollArea } from "@bitfun/ui";\n\n<ScrollArea\n  aria-label="${t("components.preview.scrollAreaLabel")}"\n  className="activity-scroll-area"\n  orientation="${scrollAreaOrientation}"\n  scrollbarVisibility="${previewState}"\n>\n  {items.map((item) => <div key={item.id}>{item.label}</div>)}\n</ScrollArea>`;
     }
     if (component.name === "TabGroup") {
       const defaultTab = previewState === "unselected" ? "settings" : "welcome";
-      return `import { TabGroup } from "@bitfun/ui";\nimport { MessageCircle } from "lucide-react";\n\nconst items = [\n  { icon: <MessageCircle />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <MessageCircle />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
+      return `import { Icon, TabGroup } from "@bitfun/ui";\n\nconst items = [\n  { icon: <Icon name="session" />, label: "${t("components.preview.welcome")}", value: "welcome" },\n  { icon: <Icon name="session" />, label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<TabGroup\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  defaultValue="${defaultTab}"\n  items={items}\n/>`;
     }
     if (component.name === "Toolbar") {
-      return `import { ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\nimport { MoreHorizontal, Search } from "lucide-react";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Search />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<MoreHorizontal />} size="xs" />\n  </ToolbarGroup>}\n/>`;
+      return `import { Icon, ChangeCount, IconButton, TabGroup, Toolbar, ToolbarBadge, ToolbarGroup, ToolbarSeparator } from "@bitfun/ui";\n\nconst items = [\n  { label: "${t("components.preview.welcome")}", value: "welcome" },\n  { label: "${t("components.preview.settings")}", value: "settings" },\n];\n\n<Toolbar\n  aria-label="${t("components.preview.tabGroupLabel")}"\n  center={<ToolbarGroup>\n    <ToolbarBadge>18</ToolbarBadge>\n    <strong>${t("components.preview.session")}</strong>\n  </ToolbarGroup>}\n  leading={<TabGroup defaultValue="welcome" items={items} />}\n  size="${toolbarSize}"\n  trailing={<ToolbarGroup>\n    <ChangeCount additions={6} deletions={0} />\n    <ToolbarSeparator />\n    <IconButton aria-label="${t("components.preview.searchLabel")}" icon={<Icon name="search" />} size="xs" />\n    <IconButton aria-label="${t("components.preview.more")}" icon={<Icon name="more" />} size="xs" />\n  </ToolbarGroup>}\n/>`;
     }
     if (component.name !== "Switch") return `// ${t("detail.previewUnavailable")}: ${component.name}`;
     const stateProps = previewState === "on"
@@ -572,6 +553,7 @@ export function ComponentDetailPage({
     iconName,
     iconSize,
     iconTone,
+    numberBadgeValue,
     inspectorDisabled,
     inspectorLoading,
     menuShowScrollbar,
@@ -634,7 +616,7 @@ export function ComponentDetailPage({
               <Input
                 defaultValue="API Key"
                 readOnly
-                trailing={<ChevronDown aria-hidden="true" />}
+                trailing={<Icon name="chevron-down" size="lg" aria-hidden="true" />}
               />
             </Field>
           </FieldRow>
@@ -650,7 +632,7 @@ export function ComponentDetailPage({
               <Input
                 defaultValue="bitfun-provider-api-key"
                 readOnly
-                trailing={<Eye aria-hidden="true" />}
+                trailing={<Icon name="eye" size="lg" aria-hidden="true" />}
                 type="password"
               />
             </Field>
@@ -679,7 +661,7 @@ export function ComponentDetailPage({
               <Input
                 defaultValue="Anthropic (messages)"
                 readOnly
-                trailing={<ChevronDown aria-hidden="true" />}
+                trailing={<Icon name="chevron-down" size="lg" aria-hidden="true" />}
               />
             </Field>
           </FieldRow>
@@ -694,7 +676,7 @@ export function ComponentDetailPage({
             >
               <Input
                 defaultValue="k3-256k"
-                trailing={<Plus aria-hidden="true" />}
+                trailing={<Icon name="plus" size="lg" aria-hidden="true" />}
               />
             </Field>
           </FieldRow>
@@ -831,6 +813,7 @@ export function ComponentDetailPage({
       );
     }
     if (component.name === "NumberInput") return <NumberInputPreview key={state} state={state} />;
+    if (component.name === "NumberBadge") return <NumberBadge value={numberBadgeValue} />;
     if (component.name === "Empty") {
       return (
         <Empty
@@ -860,7 +843,7 @@ export function ComponentDetailPage({
         <ActionCard
           actions={[
             {
-              icon: <MoreHorizontal aria-hidden="true" />,
+              icon: <Icon name="more" size="lg" aria-hidden="true" />,
               id: "more",
               label: t("components.preview.more"),
             },
@@ -869,7 +852,7 @@ export function ComponentDetailPage({
           data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
           description={t("components.preview.actionCardDescription")}
           disabled={state === "disabled"}
-          leading={<MessageCircle aria-hidden="true" />}
+          leading={<Icon name="session" size="lg" aria-hidden="true" />}
           selected={state === "selected"}
           size={actionCardSize}
           tabIndex={-1}
@@ -882,7 +865,7 @@ export function ComponentDetailPage({
     if (component.name === "StatusPill") {
       return (
         <StatusPill
-          leading={<Icon name="circle" />}
+          leading={<Icon name="unselected" />}
           tone={state as StatusPillTone}
         >
           Ask
@@ -944,7 +927,7 @@ export function ComponentDetailPage({
           data-bf-preview-state={state === "hover" || state === "focus-visible" ? state : undefined}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
-          leading={<Icon name="circle" />}
+          leading={<Icon name="unselected" />}
           onValueChange={(value) => setSelectValue(String(value))}
           options={[
             { label: "Ask", value: "ask" },
@@ -961,19 +944,19 @@ export function ComponentDetailPage({
         <ActionItem
           actions={[
             {
-              icon: <Plus aria-hidden="true" />,
+              icon: <Icon name="plus" size="lg" aria-hidden="true" />,
               id: "add",
               label: t("components.preview.add"),
             },
             {
-              icon: <MoreHorizontal aria-hidden="true" />,
+              icon: <Icon name="more" size="lg" aria-hidden="true" />,
               id: "more",
               label: t("components.preview.more"),
             },
           ]}
           data-bf-preview-state={state === "hover" || state === "active" ? state : undefined}
           disabled={state === "disabled"}
-          leading={<MessageCircle aria-hidden="true" />}
+          leading={<Icon name="session" size="lg" aria-hidden="true" />}
           metadata={actionItemShowMetadata ? "12" : undefined}
           shortcut={<KeyHint>K</KeyHint>}
         >
@@ -988,17 +971,17 @@ export function ComponentDetailPage({
         <ActivityItem
           actions={surface ? [
             {
-              icon: <Copy aria-hidden="true" />,
+              icon: <Icon name="duplicate" size="lg" aria-hidden="true" />,
               id: "copy",
               label: t("components.preview.activityCopy"),
             },
             {
-              icon: <Download aria-hidden="true" />,
+              icon: <Icon name="arrow-down" aria-hidden="true" />,
               id: "download",
               label: t("components.preview.activityDownload"),
             },
             {
-              icon: <ExternalLink aria-hidden="true" />,
+              icon: <Icon name="arrow-up-right" aria-hidden="true" />,
               id: "open",
               label: t("components.preview.activityOpen"),
             },
@@ -1014,8 +997,8 @@ export function ComponentDetailPage({
           disabled={state === "disabled"}
           label={surface ? t("components.preview.activityAction") : undefined}
           leading={surface
-            ? <Terminal aria-hidden="true" />
-            : <Check aria-hidden="true" />}
+            ? <Icon name="terminal" size="lg" aria-hidden="true" />
+            : <Icon name="check-line" size="lg" aria-hidden="true" />}
           metadata={surface ? <ChangeCount additions={6} deletions={0} /> : undefined}
           onActivate={surface ? () => undefined : undefined}
           triggerProps={{ tabIndex: -1 }}
@@ -1029,14 +1012,14 @@ export function ComponentDetailPage({
 
     if (component.name === "Button") {
       const inspectorIcon = applyInspectorControls && previewIcon === "chevron"
-        ? <ChevronRight aria-hidden="true" size={14} />
+        ? <Icon name="chevron-right" size="sm" aria-hidden="true" />
         : undefined;
       const leadingIcon = applyInspectorControls
         ? previewIconPosition === "left" ? inspectorIcon : undefined
-        : <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />;
+        : <Icon name="session" size="sm" aria-hidden="true" />;
       const trailingIcon = applyInspectorControls
         ? previewIconPosition === "right" ? inspectorIcon : undefined
-        : <ChevronDown aria-hidden="true" size={12} strokeWidth={1.75} />;
+        : <Icon name="chevron-down" size="xs" aria-hidden="true" />;
       return (
         <Button
           className={state === "focus-visible" ? "lab-force-focus" : undefined}
@@ -1066,7 +1049,7 @@ export function ComponentDetailPage({
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           placeholder={t("components.preview.inputPlaceholder")}
-          trailing={<Eye aria-hidden="true" />}
+          trailing={<Icon name="eye" size="lg" aria-hidden="true" />}
         />
       );
     }
@@ -1081,7 +1064,7 @@ export function ComponentDetailPage({
           controlTrailing={fieldShowControlTrailing ? (
             <IconButton
               aria-label={t("components.preview.more")}
-              icon={<MoreHorizontal aria-hidden="true" />}
+              icon={<Icon name="more" size="lg" aria-hidden="true" />}
               size="xs"
             />
           ) : undefined}
@@ -1090,7 +1073,7 @@ export function ComponentDetailPage({
           labelAction={fieldShowLabelAction ? (
             <IconButton
               aria-label={t("components.preview.fieldHelp")}
-              icon={<Info aria-hidden="true" />}
+              icon={<Icon name="info" size="lg" aria-hidden="true" />}
               size="xs"
             />
           ) : undefined}
@@ -1100,14 +1083,14 @@ export function ComponentDetailPage({
           <Input
             aria-label={t("components.preview.appearance")}
             defaultValue={t("components.preview.fieldValue")}
-            trailing={<ChevronDown aria-hidden="true" />}
+            trailing={<Icon name="chevron-down" size="lg" aria-hidden="true" />}
           />
         </Field>
       );
     }
 
     if (component.name === "KeyHint") {
-      return <KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>;
+      return <KeyHint icon={<Icon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>;
     }
 
     if (component.name === "FieldGroup") {
@@ -1117,7 +1100,7 @@ export function ComponentDetailPage({
           className="component-field-group-example"
           description={t("components.preview.fieldDescription")}
           headingAs="h3"
-          leading={<Settings aria-hidden="true" />}
+          leading={<Icon name="gear" size="lg" aria-hidden="true" />}
           title={t("components.preview.modalSectionTitle")}
         >
           <FieldGroup appearance={plain ? "plain" : "subtle"} dividers={state === "divided"}>
@@ -1158,7 +1141,7 @@ export function ComponentDetailPage({
           >
             <CardMedia>
               <div className="component-card-media-visual">
-                <Monitor aria-hidden="true" />
+                <Icon name="device-mac" size="lg" aria-hidden="true" />
               </div>
             </CardMedia>
             <CardBody align={cardContentAlign} padding="sm">
@@ -1185,14 +1168,14 @@ export function ComponentDetailPage({
               actions={(
                 <IconButton
                   aria-label={t("components.preview.more")}
-                  icon={<MoreHorizontal aria-hidden="true" />}
+                  icon={<Icon name="more" size="lg" aria-hidden="true" />}
                   size="xs"
                 />
               )}
               align="center"
               contentAlign={cardContentAlign}
               description={t("components.preview.activityDescription")}
-              leading={<Terminal aria-hidden="true" />}
+              leading={<Icon name="terminal" size="lg" aria-hidden="true" />}
               title={t("components.preview.session")}
             />
           </Card>
@@ -1218,7 +1201,7 @@ export function ComponentDetailPage({
                 <Card appearance="subtle" key={key} padding="sm" radius="sm">
                   <CardHeader
                     align="center"
-                    leading={<Command aria-hidden="true" />}
+                    leading={<Icon name="command-mac" size="lg" aria-hidden="true" />}
                     title={t(key as MessageKey)}
                   />
                 </Card>
@@ -1255,7 +1238,7 @@ export function ComponentDetailPage({
         >
           <MenuSection
             actions={[{
-              icon: <Plus aria-hidden="true" />,
+              icon: <Icon name="plus" size="lg" aria-hidden="true" />,
               id: "add",
               label: t("components.preview.add"),
             }]}
@@ -1267,7 +1250,7 @@ export function ComponentDetailPage({
                 className={state === "focus-within" && index === 0 ? "lab-force-focus" : undefined}
                 disabled={state === "disabled-item" && index === 1}
                 key={index}
-                leading={<MessageCircle aria-hidden="true" />}
+                leading={<Icon name="session" size="lg" aria-hidden="true" />}
                 role={state === "checked-item" && index === 0 ? "menuitemcheckbox" : "menuitem"}
               >
                 {index === 0
@@ -1297,14 +1280,14 @@ export function ComponentDetailPage({
               leading={(
                 <>
                   <span className="component-composer-context-label">
-                    <Monitor aria-hidden="true" />
+                    <Icon name="device-mac" size="lg" aria-hidden="true" />
                     {t("components.preview.composerDevice")}
-                    <ChevronDown aria-hidden="true" />
+                    <Icon name="chevron-down" size="lg" aria-hidden="true" />
                   </span>
                   <ComposerDivider />
                   <span className="component-composer-context-label">
                     {t("components.preview.composerWorkspace")}
-                    <ChevronDown aria-hidden="true" />
+                    <Icon name="chevron-down" size="lg" aria-hidden="true" />
                   </span>
                 </>
               )}
@@ -1323,7 +1306,7 @@ export function ComponentDetailPage({
                 <>
                   <IconButton
                     aria-label={t("components.preview.composerAdd")}
-                    icon={<Plus aria-hidden="true" />}
+                    icon={<Icon name="plus" size="lg" aria-hidden="true" />}
                     shape="circle"
                     size="sm"
                     variant="fill"
@@ -1337,21 +1320,21 @@ export function ComponentDetailPage({
                 <>
                   <Button
                     size="sm"
-                    trailingIcon={<ChevronDown aria-hidden="true" />}
+                    trailingIcon={<Icon name="chevron-down" size="lg" aria-hidden="true" />}
                     variant="text"
                   >
                     {t("components.preview.composerModel")}
                   </Button>
                   <IconButton
                     aria-label={t("components.preview.composerVoice")}
-                    icon={<Mic aria-hidden="true" />}
+                    icon={<Icon name="mic" size="lg" aria-hidden="true" />}
                     shape="circle"
                     size="sm"
                     variant="quiet"
                   />
                   <IconButton
                     aria-label={t("components.preview.composerSend")}
-                    icon={<ArrowUp aria-hidden="true" />}
+                    icon={<Icon name="arrow-up" size="lg" aria-hidden="true" />}
                     shape="circle"
                     size="sm"
                     variant="primary"
@@ -1410,12 +1393,12 @@ export function ComponentDetailPage({
           action={(
             <IconButton
               aria-label={t("components.preview.close")}
-              icon={<X aria-hidden="true" />}
+              icon={<Icon name="xmark" size="lg" aria-hidden="true" />}
             />
           )}
           align={pageHeaderAlign}
           description={t("components.preview.appearanceDescription")}
-          leading={<Settings aria-hidden="true" />}
+          leading={<Icon name="gear" size="lg" aria-hidden="true" />}
           level={2}
           required={pageHeaderRequired}
           size={pageHeaderSize}
@@ -1436,9 +1419,9 @@ export function ComponentDetailPage({
           className={previewClassName}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
-          leadingIcon={<SearchIcon aria-hidden="true" />}
+          leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
           placeholder={t("components.preview.searchPlaceholder")}
-          shortcut={<KeyHint icon={<Command aria-hidden="true" />}>K</KeyHint>}
+          shortcut={<KeyHint icon={<Icon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>}
         />
       );
     }
@@ -1453,13 +1436,13 @@ export function ComponentDetailPage({
             <>
               <NavigationPanelItem
                 className="component-navigation-panel-example__device"
-                leading={<Monitor aria-hidden="true" />}
+                leading={<Icon name="device-mac" size="lg" aria-hidden="true" />}
               >
                 {t("components.preview.navigationPanelDevice")}
               </NavigationPanelItem>
               <IconButton
                 aria-label={t("components.preview.settings")}
-                icon={<Settings aria-hidden="true" />}
+                icon={<Icon name="gear" size="lg" aria-hidden="true" />}
                 size="sm"
                 variant="quiet"
               />
@@ -1468,7 +1451,7 @@ export function ComponentDetailPage({
           header={(
             <SearchField
               aria-label={t("components.preview.searchLabel")}
-              leadingIcon={<SearchIcon aria-hidden="true" />}
+              leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
               placeholder={t("components.preview.searchPlaceholder")}
             />
           )}
@@ -1479,7 +1462,7 @@ export function ComponentDetailPage({
               <NavigationPanelItem
                 disabled={state === "disabled-item" && index === 1}
                 key={index}
-                leading={index % 3 === 0 ? <MessageCircle aria-hidden="true" /> : undefined}
+                leading={index % 3 === 0 ? <Icon name="session" size="lg" aria-hidden="true" /> : undefined}
                 reserveLeadingSpace
                 selected={state === "selected-item" && index === 0}
               >
@@ -1531,7 +1514,7 @@ export function ComponentDetailPage({
           key={state}
           options={[
             {
-              icon: <MessageCircle aria-hidden="true" size={12} strokeWidth={1.75} />,
+              icon: <Icon name="session" size="xs" aria-hidden="true" />,
               label: t("components.preview.segmentedChat"),
               value: "chat",
             },
@@ -1553,13 +1536,13 @@ export function ComponentDetailPage({
           defaultValue={defaultTab}
           items={[
             {
-              icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+              icon: <Icon name="session" size="sm" aria-hidden="true" />,
               label: t("components.preview.welcome"),
               value: "welcome",
             },
             {
               disabled: state === "disabled",
-              icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+              icon: <Icon name="session" size="sm" aria-hidden="true" />,
               label: t("components.preview.settings"),
               value: "settings",
             },
@@ -1571,7 +1554,7 @@ export function ComponentDetailPage({
 
     if (component.name === "Toolbar") {
       const tabItems = Array.from({ length: state === "overflow" ? 9 : 2 }, (_, index) => ({
-        icon: <MessageCircle aria-hidden="true" size={14} strokeWidth={1.75} />,
+        icon: <Icon name="session" size="sm" aria-hidden="true" />,
         label: index === 0
           ? t("components.preview.welcome")
           : index === 1
@@ -1592,7 +1575,7 @@ export function ComponentDetailPage({
           className="component-toolbar-example"
           leading={state === "with-center" ? (
             <ToolbarGroup>
-              <Button size="xs" trailingIcon={<ChevronDown aria-hidden="true" />} variant="text">
+              <Button size="xs" trailingIcon={<Icon name="chevron-down" size="lg" aria-hidden="true" />} variant="text">
                 {t("components.preview.welcome")}
               </Button>
               <ChangeCount additions={6} deletions={0} />
@@ -1612,12 +1595,12 @@ export function ComponentDetailPage({
               <ToolbarSeparator />
               <IconButton
                 aria-label={t("components.preview.searchLabel")}
-                icon={<SearchIcon aria-hidden="true" />}
+                icon={<Icon name="search" size="lg" aria-hidden="true" />}
                 size="xs"
               />
               <IconButton
                 aria-label={t("components.preview.more")}
-                icon={<MoreHorizontal aria-hidden="true" />}
+                icon={<Icon name="more" size="lg" aria-hidden="true" />}
                 size="xs"
               />
             </ToolbarGroup>
@@ -1657,7 +1640,7 @@ export function ComponentDetailPage({
         <button onClick={onBack} type="button">
           {t(isFlowChatComponent ? "detail.backFlowChat" : "detail.back")}
         </button>
-        <ChevronRight aria-hidden="true" size={13} />
+        <Icon name="chevron-right" size="lg" aria-hidden="true" style={{ width: 13, height: 13 }} />
         <span aria-current="page">{component.name}</span>
       </nav>
 
@@ -1808,7 +1791,7 @@ export function ComponentDetailPage({
                 <>
                   <IconCompositionPreview />
                   <div className="component-icon-catalog">
-                    {iconNames.map((name) => (
+                    {canonicalIconNames.map((name) => (
                       <div className="component-icon-catalog__item" key={name}>
                         <Icon name={name} size="lg" />
                         <code>{name}</code>
@@ -2046,10 +2029,15 @@ export function ComponentDetailPage({
                     <InspectorSelect
                       label={t("detail.name")}
                       onChange={(value) => setIconName(value as IconName)}
-                      options={iconNames}
+                      options={canonicalIconNames}
                       translateOptions={false}
                       value={iconName}
                     />
+                  )}
+                  {component.name === "NumberBadge" && (
+                    <Field label="value">
+                      <Input value={numberBadgeValue} onChange={(event) => setNumberBadgeValue(event.target.value)} />
+                    </Field>
                   )}
                   {component.name === "Icon" && (
                     <InspectorSelect

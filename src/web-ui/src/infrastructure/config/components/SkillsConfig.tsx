@@ -2,7 +2,7 @@
 import { Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Trash2, RefreshCw, FolderOpen, TrendingUp } from 'lucide-react';
+import { FolderOpen, TrendingUp } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
@@ -339,7 +339,7 @@ const SkillsConfig: React.FC = () => {
           onClick={() => setDeleteConfirm({ show: true, skill })}
           title={t('list.item.deleteTooltip')}
         >
-          <Trash2 size={14} />
+          <Icon name="delete" size="sm" />
         </button>
     ) : null;
     const details = (
@@ -542,7 +542,7 @@ const SkillsConfig: React.FC = () => {
         aria-label={t('toolbar.refreshTooltip')}
         size="sm"
         onClick={() => loadSkills(true)}
-        icon={<RefreshCw size={16} />}
+        icon={<Icon name="refresh" size="md" />}
       />
     </Tooltip>
   );
@@ -654,7 +654,7 @@ const SkillsConfig: React.FC = () => {
                 aria-label={t('market.refreshTooltip')}
                 size="sm"
                 onClick={() => loadMarketSkills(marketKeyword)}
-                icon={<RefreshCw size={16} />}
+                icon={<Icon name="refresh" size="md" />}
               />
             </Tooltip>
           )}
