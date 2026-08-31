@@ -1639,6 +1639,50 @@ fn host_path_contract_keeps_local_workspace_resolution_semantics() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn host_path_contract_normalizes_posix_prefixed_windows_drive_paths() {
+    let workspace = PathBuf::from(r"E:\workspace");
+
+    for (malformed, expected) in [
+        (
+            "/E:/workspace/project/example.txt",
+            r"E:\workspace\project\example.txt",
+        ),
+        (
+            "/e:/workspace/project/example.txt",
+            r"e:\workspace\project\example.txt",
+        ),
+        (
+            r"/E:\workspace\project\example.txt",
+            r"E:\workspace\project\example.txt",
+        ),
+    ] {
+        let resolved = resolve_host_path_with_workspace(malformed, Some(workspace.as_path()))
+            .expect("mixed POSIX and Windows drive syntax should be normalized");
+
+        assert_eq!(PathBuf::from(resolved), PathBuf::from(expected));
+    }
+
+    let valid = resolve_host_path_with_workspace(
+        "E:/workspace/project/example.txt",
+        Some(workspace.as_path()),
+    )
+    .expect("native Windows drive syntax must remain valid");
+    assert_eq!(
+        PathBuf::from(valid),
+        PathBuf::from(r"E:\workspace\project\example.txt")
+    );
+
+    let remote = resolve_workspace_tool_path(
+        "/E:/workspace/project/example.txt",
+        Some("/workspace"),
+        true,
+    )
+    .expect("remote workspaces keep POSIX path semantics");
+    assert_eq!(remote, "/E:/workspace/project/example.txt");
+}
+
 #[test]
 fn unified_tool_path_contract_selects_host_or_remote_semantics() {
     let local = resolve_workspace_tool_path("src/lib.rs", Some("/repo/project"), false)
